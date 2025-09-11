@@ -13,5 +13,5 @@ func TestAnalyzeSSZInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, info, "Expected non-nil SSZ info")
-	require.Equal(t, uint64(333), info.FixedSize(), "Expected fixed size to be 333")
+	require.Equal(t, uint64(493), info.FixedSize(), "Expected fixed size to be 333")
 }

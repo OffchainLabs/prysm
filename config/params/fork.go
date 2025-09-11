@@ -57,8 +57,11 @@ func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork 
 // ForkDataFromDigest performs the inverse, where it tries to determine the fork version
 // and epoch from a provided digest by looping through our current fork schedule.
 func ForkDataFromDigest(digest [4]byte) ([fieldparams.VersionLength]byte, primitives.Epoch, error) {
-	cfg := BeaconConfig()
-	entry, ok := cfg.networkSchedule.byDigest[digest]
+	ns := BeaconConfig().networkSchedule
+	ns.mu.RLock()
+	defer ns.mu.RUnlock()
+	// Look up the digest in our map of digests to fork versions and epochs.
+	entry, ok := ns.byDigest[digest]
 	if !ok {
 		return [fieldparams.VersionLength]byte{}, 0, errors.Errorf("no fork exists for a digest of %#x", digest)
 	}

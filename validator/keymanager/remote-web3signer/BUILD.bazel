@@ -20,7 +20,7 @@ go_library(
         "//io/file:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1/validator-client:go_default_library",
-        "//runtime/version:go_default_library",
+        "//time/slots:go_default_library",
         "//validator/accounts/petnames:go_default_library",
         "//validator/keymanager:go_default_library",
         "//validator/keymanager/remote-web3signer/internal:go_default_library",

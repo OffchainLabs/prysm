@@ -1017,6 +1017,11 @@ func TestPublishBlobs_BadBlockRoot(t *testing.T) {
 }
 
 func TestPublishBlobs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 0 // Set Deneb fork to epoch 0 so slot 0 is valid
+	params.OverrideBeaconConfig(cfg)
+
 	server := &Server{
 		BlobReceiver: &chainMock.ChainService{},
 		Broadcaster:  &mockp2p.MockBroadcaster{},
@@ -1031,4 +1036,95 @@ func TestPublishBlobs(t *testing.T) {
 
 	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 1)
 	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), true)
+}
+
+func TestPublishBlobs_PreDeneb(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 10 // Set Deneb fork to epoch 10, so slot 0 is pre-Deneb
+	params.OverrideBeaconConfig(cfg)
+
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.PublishBlobsRequest)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Blob sidecars not supported for pre deneb", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
+}
+
+func TestPublishBlobs_PostFulu(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 0
+	cfg.FuluForkEpoch = 0 // Set Fulu fork to epoch 0
+	params.OverrideBeaconConfig(cfg)
+
+	server := &Server{
+		BlobReceiver: &chainMock.ChainService{},
+		Broadcaster:  &mockp2p.MockBroadcaster{},
+		SyncChecker:  &mockSync.Sync{IsSyncing: false},
+	}
+
+	// Create a custom request with a slot in epoch 1 (which is > FuluForkEpoch of 0)
+	postFuluRequest := fmt.Sprintf(`{
+		"block_root" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+		"blob_sidecars" : {
+		   "sidecars" : [
+			  {
+				 "blob" : "%s",
+				 "index" : "0",
+				 "kzg_commitment" : "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				 "kzg_commitment_inclusion_proof" : [
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000",
+					"0x0000000000000000000000000000000000000000000000000000000000000000"
+				 ],
+				 "kzg_proof" : "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				 "signed_block_header" : {
+					"message" : {
+					   "body_root" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+					   "parent_root" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+					   "proposer_index" : "0",
+					   "slot" : "33",
+					   "state_root" : "0x0000000000000000000000000000000000000000000000000000000000000000"
+					},
+					"signature" : "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+				 }
+			  }
+		   ]
+		}
+	 }`, rpctesting.Blob)
+
+	request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(postFuluRequest)))
+	writer := httptest.NewRecorder()
+	writer.Body = &bytes.Buffer{}
+	server.PublishBlobs(writer, request)
+	assert.Equal(t, http.StatusBadRequest, writer.Code)
+	assert.StringContains(t, "Blob sidecars not supported for post fulu blobs", writer.Body.String())
+
+	assert.Equal(t, len(server.BlobReceiver.(*chainMock.ChainService).Blobs), 0)
+	assert.Equal(t, server.Broadcaster.(*mockp2p.MockBroadcaster).BroadcastCalled.Load(), false)
 }
