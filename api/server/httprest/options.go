@@ -1,9 +1,8 @@
 package httprest
 
 import (
-	"time"
-
 	"net/http"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 )
