@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"path"
 	"strconv"
 	"testing"
@@ -80,7 +79,6 @@ func TestVerifyCellKZGProofBatch(t *testing.T) {
 				proofs = append(proofs, kzgPrysm.Bytes48(proof))
 			}
 			ok, err := kzgPrysm.VerifyCellKZGProofBatch(commitments, cellIndices, cells, proofs)
-			fmt.Printf("folderName %s %+v %+v\n", folder.Name(), ok, err)
 			if test.Output {
 				require.Equal(t, true, ok)
 				require.NoError(t, err)
