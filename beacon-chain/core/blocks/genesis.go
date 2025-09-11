@@ -192,6 +192,46 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Block:     electraGenesisBlock(root),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
+	case *ethpb.BeaconStateGloas:
+		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{
+			Block: &ethpb.BeaconBlockGloas{
+				ParentRoot: params.BeaconConfig().ZeroHash[:],
+				StateRoot:  root[:],
+				Body: &ethpb.BeaconBlockBodyGloas{
+					RandaoReveal: make([]byte, 96),
+					Eth1Data: &ethpb.Eth1Data{
+						DepositRoot: make([]byte, 32),
+						BlockHash:   make([]byte, 32),
+					},
+					Graffiti: make([]byte, 32),
+					SyncAggregate: &ethpb.SyncAggregate{
+						SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
+						SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+					},
+					ExecutionPayload: &enginev1.ExecutionPayloadGloas{
+						ParentHash:    make([]byte, 32),
+						FeeRecipient:  make([]byte, 20),
+						StateRoot:     make([]byte, 32),
+						ReceiptsRoot:  make([]byte, 32),
+						LogsBloom:     make([]byte, 256),
+						PrevRandao:    make([]byte, 32),
+						ExtraData:     make([]byte, 0),
+						BaseFeePerGas: make([]byte, 32),
+						BlockHash:     make([]byte, 32),
+						Transactions:  make([][]byte, 0),
+						Withdrawals:   make([]*enginev1.Withdrawal, 0),
+					},
+					BlsToExecutionChanges: make([]*ethpb.SignedBLSToExecutionChange, 0),
+					BlobKzgCommitments:    make([][]byte, 0),
+					ExecutionRequests: &enginev1.ExecutionRequests{
+						Withdrawals:    make([]*enginev1.WithdrawalRequest, 0),
+						Deposits:       make([]*enginev1.DepositRequest, 0),
+						Consolidations: make([]*enginev1.ConsolidationRequest, 0),
+					},
+				},
+			},
+			Signature: params.BeaconConfig().EmptySignature[:],
+		})
 	default:
 		return nil, ErrUnrecognizedState
 	}

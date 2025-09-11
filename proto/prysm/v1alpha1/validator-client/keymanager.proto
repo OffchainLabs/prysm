@@ -80,6 +80,8 @@ message SignRequest {
     // Fulu objects.
     ethereum.eth.v1alpha1.BeaconBlockElectra block_fulu = 121;
     ethereum.eth.v1alpha1.BlindedBeaconBlockFulu blinded_block_fulu = 122;
+
+    ethereum.eth.v1alpha1.BeaconBlockGloas block_gloas = 123;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.

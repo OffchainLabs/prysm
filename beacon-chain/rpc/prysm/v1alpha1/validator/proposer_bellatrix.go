@@ -473,6 +473,11 @@ func isVersionCompatible(bidVersion, headBlockVersion int) bool {
 		return true
 	}
 
+	// Allow Electra bids for Gloas blocks - they have compatible payload formats
+	if bidVersion == version.Electra && headBlockVersion == version.Gloas {
+		return true
+	}
+
 	// For all other cases, require exact version match
 	return false
 }

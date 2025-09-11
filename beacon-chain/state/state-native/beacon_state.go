@@ -52,6 +52,7 @@ type BeaconState struct {
 	latestExecutionPayloadHeader        *enginev1.ExecutionPayloadHeader
 	latestExecutionPayloadHeaderCapella *enginev1.ExecutionPayloadHeaderCapella
 	latestExecutionPayloadHeaderDeneb   *enginev1.ExecutionPayloadHeaderDeneb
+	latestExecutionPayloadHeaderGloas   *enginev1.ExecutionPayloadHeaderGloas
 
 	// Capella fields
 	nextWithdrawalIndex          uint64
