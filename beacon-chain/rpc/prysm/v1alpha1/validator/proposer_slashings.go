@@ -4,16 +4,23 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 )
 
 func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*ethpb.ProposerSlashing, []ethpb.AttSlashing) {
+	var err error
+
+	exitInfo := v.ExitInformation(head)
+	if err := helpers.UpdateTotalActiveBalanceCache(head, exitInfo.TotalActiveBalance); err != nil {
+		log.WithError(err).Warn("Could not update total active balance cache")
+	}
 	proposerSlashings := vs.SlashingsPool.PendingProposerSlashings(ctx, head, false /*noLimit*/)
 	validProposerSlashings := make([]*ethpb.ProposerSlashing, 0, len(proposerSlashings))
 	for _, slashing := range proposerSlashings {
-		_, err := blocks.ProcessProposerSlashing(ctx, head, slashing, v.SlashValidator)
+		_, err = blocks.ProcessProposerSlashing(ctx, head, slashing, exitInfo)
 		if err != nil {
 			log.WithError(err).Warn("Could not validate proposer slashing for block inclusion")
 			continue
@@ -23,7 +30,7 @@ func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*
 	attSlashings := vs.SlashingsPool.PendingAttesterSlashings(ctx, head, false /*noLimit*/)
 	validAttSlashings := make([]ethpb.AttSlashing, 0, len(attSlashings))
 	for _, slashing := range attSlashings {
-		_, err := blocks.ProcessAttesterSlashing(ctx, head, slashing, v.SlashValidator)
+		_, err = blocks.ProcessAttesterSlashing(ctx, head, slashing, exitInfo)
 		if err != nil {
 			log.WithError(err).Warn("Could not validate attester slashing for block inclusion")
 			continue

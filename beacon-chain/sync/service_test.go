@@ -69,7 +69,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 	}
 
 	topic := "/eth2/%x/beacon_block"
-	go r.startTasksPostInitialSync()
+	go r.startDiscoveryAndSubscriptions()
 	time.Sleep(100 * time.Millisecond)
 
 	var vr [32]byte
@@ -150,7 +150,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 
 	syncCompleteCh := make(chan bool)
 	go func() {
-		r.startTasksPostInitialSync()
+		r.startDiscoveryAndSubscriptions()
 		syncCompleteCh <- true
 	}()
 
@@ -206,8 +206,9 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
+	markInitSyncComplete(t, &r)
 
-	go r.startTasksPostInitialSync()
+	go r.startDiscoveryAndSubscriptions()
 	var vr [32]byte
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
 	r.waitForChainStart()
@@ -219,9 +220,6 @@ func TestSyncService_StopCleanly(t *testing.T) {
 	// wait for chainstart to be sent
 	time.Sleep(2 * time.Second)
 	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
-
-	close(r.initialSyncComplete)
-	time.Sleep(1 * time.Second)
 
 	require.NotEqual(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 	require.NotEqual(t, 0, len(r.cfg.p2p.Host().Mux().Protocols()))

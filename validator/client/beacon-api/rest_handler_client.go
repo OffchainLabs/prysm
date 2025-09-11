@@ -25,6 +25,7 @@ type RestHandler interface {
 	Get(ctx context.Context, endpoint string, resp interface{}) error
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp interface{}) error
+	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
 	HttpClient() *http.Client
 	Host() string
 	SetHost(host string)
@@ -177,6 +178,75 @@ func (c *BeaconApiRestHandler) Post(
 	}()
 
 	return decodeResp(httpResp, resp)
+}
+
+// PostSSZ sends a POST request and prefers an SSZ (application/octet-stream) response body.
+func (c *BeaconApiRestHandler) PostSSZ(
+	ctx context.Context,
+	apiEndpoint string,
+	headers map[string]string,
+	data *bytes.Buffer,
+) ([]byte, http.Header, error) {
+	if data == nil {
+		return nil, nil, errors.New("data is nil")
+	}
+	url := c.host + apiEndpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, data)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+	}
+
+	// Accept header: prefer octet-stream (SSZ), fall back to JSON
+	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
+	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
+	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
+	req.Header.Set("Accept", acceptHeaderString)
+
+	// User-supplied headers
+	for headerKey, headerValue := range headers {
+		req.Header.Set(headerKey, headerValue)
+	}
+
+	for _, o := range c.reqOverrides {
+		o(req)
+	}
+	req.Header.Set("Content-Type", api.OctetStreamMediaType)
+	req.Header.Set("User-Agent", version.BuildData())
+	httpResp, err := c.client.Do(req)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+	}
+	defer func() {
+		if err := httpResp.Body.Close(); err != nil {
+			return
+		}
+	}()
+
+	accept := req.Header.Get("Accept")
+	contentType := httpResp.Header.Get("Content-Type")
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
+	}
+
+	if !apiutil.PrimaryAcceptMatches(accept, contentType) {
+		log.WithFields(logrus.Fields{
+			"Accept":       accept,
+			"Content-Type": contentType,
+		}).Debug("Server responded with non primary accept type")
+	}
+
+	// non-2XX codes are a failure
+	if !strings.HasPrefix(httpResp.Status, "2") {
+		decoder := json.NewDecoder(bytes.NewBuffer(body))
+		errorJson := &httputil.DefaultJsonError{}
+		if err = decoder.Decode(errorJson); err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+		}
+		return nil, nil, errorJson
+	}
+
+	return body, httpResp.Header, nil
 }
 
 func decodeResp(httpResp *http.Response, resp interface{}) error {
