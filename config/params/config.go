@@ -180,6 +180,8 @@ type BeaconChainConfig struct {
 	ElectraForkEpoch     primitives.Epoch `yaml:"ELECTRA_FORK_EPOCH" spec:"true"`     // ElectraForkEpoch is used to represent the assigned fork epoch for electra.
 	FuluForkVersion      []byte           `yaml:"FULU_FORK_VERSION" spec:"true"`      // FuluForkVersion is used to represent the fork version for fulu.
 	FuluForkEpoch        primitives.Epoch `yaml:"FULU_FORK_EPOCH" spec:"true"`        // FuluForkEpoch is used to represent the assigned fork epoch for fulu.
+	GloasForkVersion     []byte           `yaml:"GLOAS_FORK_VERSION" spec:"true"`     // GloasForkVersion is used to represent the fork version for gloas.
+	GloasForkEpoch       primitives.Epoch `yaml:"GLOAS_FORK_EPOCH" spec:"true"`       // GloasForkEpoch is used to represent the assigned fork epoch for gloas.
 
 	ForkVersionSchedule map[[fieldparams.VersionLength]byte]primitives.Epoch // Schedule of fork epochs by version.
 	ForkVersionNames    map[[fieldparams.VersionLength]byte]string           // Human-readable names of fork versions.
@@ -601,6 +603,7 @@ func initForkSchedule(b *BeaconChainConfig) *NetworkSchedule {
 		{Epoch: b.DenebForkEpoch, isFork: true, ForkVersion: to4(b.DenebForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlock), VersionEnum: version.Deneb},
 		{Epoch: b.ElectraForkEpoch, isFork: true, ForkVersion: to4(b.ElectraForkVersion), MaxBlobsPerBlock: uint64(b.DeprecatedMaxBlobsPerBlockElectra), VersionEnum: version.Electra},
 		{Epoch: b.FuluForkEpoch, isFork: true, ForkVersion: to4(b.FuluForkVersion), VersionEnum: version.Fulu},
+		{Epoch: b.GloasForkEpoch, isFork: true, ForkVersion: to4(b.GloasForkVersion), VersionEnum: version.Gloas},
 	})
 }
 
@@ -625,6 +628,7 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
 	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
+	fvs[bytesutil.ToBytes4(b.GloasForkVersion)] = b.GloasForkEpoch
 	return fvs
 }
 
@@ -648,6 +652,7 @@ func ConfigForkVersions(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 		bytesutil.ToBytes4(b.DenebForkVersion):     version.Deneb,
 		bytesutil.ToBytes4(b.ElectraForkVersion):   version.Electra,
 		bytesutil.ToBytes4(b.FuluForkVersion):      version.Fulu,
+		bytesutil.ToBytes4(b.GloasForkVersion):     version.Gloas,
 	}
 }
 
@@ -764,6 +769,12 @@ func ElectraEnabled() bool {
 // This will make it easier to find call sites that do this kind of check and remove them post-fulu.
 func FuluEnabled() bool {
 	return BeaconConfig().FuluForkEpoch < math.MaxUint64
+}
+
+// GloasEnabled centralizes the check to determine if code paths that are specific to Gloas should be allowed to execute.
+// This will make it easier to find call sites that do this kind of check and remove them post-gloas.
+func GloasEnabled() bool {
+	return BeaconConfig().GloasForkEpoch < math.MaxUint64
 }
 
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.

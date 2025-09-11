@@ -57,6 +57,12 @@ func (vs *Server) constructGenericBeaconBlock(
 			return nil, fmt.Errorf("expected *BlobsBundleV2, got %T", blobsBundler)
 		}
 		return vs.constructFuluBlock(blockProto, isBlinded, bidStr, bundle), nil
+	case version.Gloas:
+		bundle, ok := blobsBundler.(*enginev1.BlobsBundleV2)
+		if blobsBundler != nil && !ok {
+			return nil, fmt.Errorf("expected *BlobsBundleV2, got %T", blobsBundler)
+		}
+		return vs.constructGloasBlock(blockProto, isBlinded, bidStr, bundle), nil
 	default:
 		return nil, fmt.Errorf("unknown block version: %d", sBlk.Version())
 	}
@@ -119,4 +125,13 @@ func (vs *Server) constructFuluBlock(blockProto proto.Message, isBlinded bool, p
 		fuluContents.Blobs = bundle.Blobs
 	}
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Fulu{Fulu: fuluContents}, IsBlinded: false, PayloadValue: payloadValue}
+}
+
+func (vs *Server) constructGloasBlock(blockProto proto.Message, isBlinded bool, payloadValue string, bundle *enginev1.BlobsBundleV2) *ethpb.GenericBeaconBlock {
+	gloasContents := &ethpb.BeaconBlockContentsGloas{Block: blockProto.(*ethpb.BeaconBlockGloas)}
+	if bundle != nil {
+		gloasContents.KzgProofs = bundle.Proofs
+		gloasContents.Blobs = bundle.Blobs
+	}
+	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Gloas{Gloas: gloasContents}, IsBlinded: false, PayloadValue: payloadValue}
 }

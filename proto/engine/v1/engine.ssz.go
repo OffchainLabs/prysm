@@ -1791,6 +1791,864 @@ func (e *ExecutionPayloadDeneb) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayloadGloas object to a target array
+func (e *ExecutionPayloadGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(532)
+
+	// Field (0) 'ParentHash'
+	if size := len(e.ParentHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentHash", size, 32)
+		return
+	}
+	dst = append(dst, e.ParentHash...)
+
+	// Field (1) 'FeeRecipient'
+	if size := len(e.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	dst = append(dst, e.FeeRecipient...)
+
+	// Field (2) 'StateRoot'
+	if size := len(e.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.StateRoot...)
+
+	// Field (3) 'ReceiptsRoot'
+	if size := len(e.ReceiptsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ReceiptsRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.ReceiptsRoot...)
+
+	// Field (4) 'LogsBloom'
+	if size := len(e.LogsBloom); size != 256 {
+		err = ssz.ErrBytesLengthFn("--.LogsBloom", size, 256)
+		return
+	}
+	dst = append(dst, e.LogsBloom...)
+
+	// Field (5) 'PrevRandao'
+	if size := len(e.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	dst = append(dst, e.PrevRandao...)
+
+	// Field (6) 'BlockNumber'
+	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+
+	// Field (7) 'GasLimit'
+	dst = ssz.MarshalUint64(dst, e.GasLimit)
+
+	// Field (8) 'GasUsed'
+	dst = ssz.MarshalUint64(dst, e.GasUsed)
+
+	// Field (9) 'Timestamp'
+	dst = ssz.MarshalUint64(dst, e.Timestamp)
+
+	// Offset (10) 'ExtraData'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.ExtraData)
+
+	// Field (11) 'BaseFeePerGas'
+	if size := len(e.BaseFeePerGas); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BaseFeePerGas", size, 32)
+		return
+	}
+	dst = append(dst, e.BaseFeePerGas...)
+
+	// Field (12) 'BlockHash'
+	if size := len(e.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	dst = append(dst, e.BlockHash...)
+
+	// Offset (13) 'Transactions'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(e.Transactions); ii++ {
+		offset += 4
+		offset += len(e.Transactions[ii])
+	}
+
+	// Offset (14) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.Withdrawals) * 44
+
+	// Field (15) 'BlobGasUsed'
+	dst = ssz.MarshalUint64(dst, e.BlobGasUsed)
+
+	// Field (16) 'ExcessBlobGas'
+	dst = ssz.MarshalUint64(dst, e.ExcessBlobGas)
+
+	// Offset (17) 'BlockAccessList'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BlockAccessList)
+
+	// Field (10) 'ExtraData'
+	if size := len(e.ExtraData); size > 32 {
+		err = ssz.ErrBytesLengthFn("--.ExtraData", size, 32)
+		return
+	}
+	dst = append(dst, e.ExtraData...)
+
+	// Field (13) 'Transactions'
+	if size := len(e.Transactions); size > 1048576 {
+		err = ssz.ErrListTooBigFn("--.Transactions", size, 1048576)
+		return
+	}
+	{
+		offset = 4 * len(e.Transactions)
+		for ii := 0; ii < len(e.Transactions); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(e.Transactions[ii])
+		}
+	}
+	for ii := 0; ii < len(e.Transactions); ii++ {
+		if size := len(e.Transactions[ii]); size > 1073741824 {
+			err = ssz.ErrBytesLengthFn("--.Transactions[ii]", size, 1073741824)
+			return
+		}
+		dst = append(dst, e.Transactions[ii]...)
+	}
+
+	// Field (14) 'Withdrawals'
+	if size := len(e.Withdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("--.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.Withdrawals); ii++ {
+		if dst, err = e.Withdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (17) 'BlockAccessList'
+	if size := len(e.BlockAccessList); size > 1073741824 {
+		err = ssz.ErrBytesLengthFn("--.BlockAccessList", size, 1073741824)
+		return
+	}
+	dst = append(dst, e.BlockAccessList...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 532 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o10, o13, o14, o17 uint64
+
+	// Field (0) 'ParentHash'
+	if cap(e.ParentHash) == 0 {
+		e.ParentHash = make([]byte, 0, len(buf[0:32]))
+	}
+	e.ParentHash = append(e.ParentHash, buf[0:32]...)
+
+	// Field (1) 'FeeRecipient'
+	if cap(e.FeeRecipient) == 0 {
+		e.FeeRecipient = make([]byte, 0, len(buf[32:52]))
+	}
+	e.FeeRecipient = append(e.FeeRecipient, buf[32:52]...)
+
+	// Field (2) 'StateRoot'
+	if cap(e.StateRoot) == 0 {
+		e.StateRoot = make([]byte, 0, len(buf[52:84]))
+	}
+	e.StateRoot = append(e.StateRoot, buf[52:84]...)
+
+	// Field (3) 'ReceiptsRoot'
+	if cap(e.ReceiptsRoot) == 0 {
+		e.ReceiptsRoot = make([]byte, 0, len(buf[84:116]))
+	}
+	e.ReceiptsRoot = append(e.ReceiptsRoot, buf[84:116]...)
+
+	// Field (4) 'LogsBloom'
+	if cap(e.LogsBloom) == 0 {
+		e.LogsBloom = make([]byte, 0, len(buf[116:372]))
+	}
+	e.LogsBloom = append(e.LogsBloom, buf[116:372]...)
+
+	// Field (5) 'PrevRandao'
+	if cap(e.PrevRandao) == 0 {
+		e.PrevRandao = make([]byte, 0, len(buf[372:404]))
+	}
+	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
+
+	// Field (6) 'BlockNumber'
+	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+
+	// Field (7) 'GasLimit'
+	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+
+	// Field (8) 'GasUsed'
+	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+
+	// Field (9) 'Timestamp'
+	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+
+	// Offset (10) 'ExtraData'
+	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
+		return ssz.ErrOffset
+	}
+
+	if o10 != 532 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	if cap(e.BaseFeePerGas) == 0 {
+		e.BaseFeePerGas = make([]byte, 0, len(buf[440:472]))
+	}
+	e.BaseFeePerGas = append(e.BaseFeePerGas, buf[440:472]...)
+
+	// Field (12) 'BlockHash'
+	if cap(e.BlockHash) == 0 {
+		e.BlockHash = make([]byte, 0, len(buf[472:504]))
+	}
+	e.BlockHash = append(e.BlockHash, buf[472:504]...)
+
+	// Offset (13) 'Transactions'
+	if o13 = ssz.ReadOffset(buf[504:508]); o13 > size || o10 > o13 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (14) 'Withdrawals'
+	if o14 = ssz.ReadOffset(buf[508:512]); o14 > size || o13 > o14 {
+		return ssz.ErrOffset
+	}
+
+	// Field (15) 'BlobGasUsed'
+	e.BlobGasUsed = ssz.UnmarshallUint64(buf[512:520])
+
+	// Field (16) 'ExcessBlobGas'
+	e.ExcessBlobGas = ssz.UnmarshallUint64(buf[520:528])
+
+	// Offset (17) 'BlockAccessList'
+	if o17 = ssz.ReadOffset(buf[528:532]); o17 > size || o14 > o17 {
+		return ssz.ErrOffset
+	}
+
+	// Field (10) 'ExtraData'
+	{
+		buf = tail[o10:o13]
+		if len(buf) > 32 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.ExtraData) == 0 {
+			e.ExtraData = make([]byte, 0, len(buf))
+		}
+		e.ExtraData = append(e.ExtraData, buf...)
+	}
+
+	// Field (13) 'Transactions'
+	{
+		buf = tail[o13:o14]
+		num, err := ssz.DecodeDynamicLength(buf, 1048576)
+		if err != nil {
+			return err
+		}
+		e.Transactions = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1073741824 {
+				return ssz.ErrBytesLength
+			}
+			if cap(e.Transactions[indx]) == 0 {
+				e.Transactions[indx] = make([]byte, 0, len(buf))
+			}
+			e.Transactions[indx] = append(e.Transactions[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (14) 'Withdrawals'
+	{
+		buf = tail[o14:o17]
+		num, err := ssz.DivideInt2(len(buf), 44, 16)
+		if err != nil {
+			return err
+		}
+		e.Withdrawals = make([]*Withdrawal, num)
+		for ii := 0; ii < num; ii++ {
+			if e.Withdrawals[ii] == nil {
+				e.Withdrawals[ii] = new(Withdrawal)
+			}
+			if err = e.Withdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Field (17) 'BlockAccessList'
+	{
+		buf = tail[o17:]
+		if len(buf) > 1073741824 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.BlockAccessList) == 0 {
+			e.BlockAccessList = make([]byte, 0, len(buf))
+		}
+		e.BlockAccessList = append(e.BlockAccessList, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) SizeSSZ() (size int) {
+	size = 532
+
+	// Field (10) 'ExtraData'
+	size += len(e.ExtraData)
+
+	// Field (13) 'Transactions'
+	for ii := 0; ii < len(e.Transactions); ii++ {
+		size += 4
+		size += len(e.Transactions[ii])
+	}
+
+	// Field (14) 'Withdrawals'
+	size += len(e.Withdrawals) * 44
+
+	// Field (17) 'BlockAccessList'
+	size += len(e.BlockAccessList)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayloadGloas object
+func (e *ExecutionPayloadGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayloadGloas object with a hasher
+func (e *ExecutionPayloadGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ParentHash'
+	if size := len(e.ParentHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentHash", size, 32)
+		return
+	}
+	hh.PutBytes(e.ParentHash)
+
+	// Field (1) 'FeeRecipient'
+	if size := len(e.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	hh.PutBytes(e.FeeRecipient)
+
+	// Field (2) 'StateRoot'
+	if size := len(e.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.StateRoot)
+
+	// Field (3) 'ReceiptsRoot'
+	if size := len(e.ReceiptsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ReceiptsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.ReceiptsRoot)
+
+	// Field (4) 'LogsBloom'
+	if size := len(e.LogsBloom); size != 256 {
+		err = ssz.ErrBytesLengthFn("--.LogsBloom", size, 256)
+		return
+	}
+	hh.PutBytes(e.LogsBloom)
+
+	// Field (5) 'PrevRandao'
+	if size := len(e.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	hh.PutBytes(e.PrevRandao)
+
+	// Field (6) 'BlockNumber'
+	hh.PutUint64(e.BlockNumber)
+
+	// Field (7) 'GasLimit'
+	hh.PutUint64(e.GasLimit)
+
+	// Field (8) 'GasUsed'
+	hh.PutUint64(e.GasUsed)
+
+	// Field (9) 'Timestamp'
+	hh.PutUint64(e.Timestamp)
+
+	// Field (10) 'ExtraData'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.ExtraData))
+		if byteLen > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(e.ExtraData)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	if size := len(e.BaseFeePerGas); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BaseFeePerGas", size, 32)
+		return
+	}
+	hh.PutBytes(e.BaseFeePerGas)
+
+	// Field (12) 'BlockHash'
+	if size := len(e.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(e.BlockHash)
+
+	// Field (13) 'Transactions'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Transactions))
+		if num > 1048576 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Transactions {
+			{
+				elemIndx := hh.Index()
+				byteLen := uint64(len(elem))
+				if byteLen > 1073741824 {
+					err = ssz.ErrIncorrectListSize
+					return
+				}
+				hh.AppendBytes32(elem)
+				hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1048576)
+	}
+
+	// Field (14) 'Withdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.Withdrawals))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.Withdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (15) 'BlobGasUsed'
+	hh.PutUint64(e.BlobGasUsed)
+
+	// Field (16) 'ExcessBlobGas'
+	hh.PutUint64(e.ExcessBlobGas)
+
+	// Field (17) 'BlockAccessList'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.BlockAccessList))
+		if byteLen > 1073741824 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(e.BlockAccessList)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the ExecutionPayloadHeaderGloas object
+func (e *ExecutionPayloadHeaderGloas) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayloadHeaderGloas object to a target array
+func (e *ExecutionPayloadHeaderGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(616)
+
+	// Field (0) 'ParentHash'
+	if size := len(e.ParentHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentHash", size, 32)
+		return
+	}
+	dst = append(dst, e.ParentHash...)
+
+	// Field (1) 'FeeRecipient'
+	if size := len(e.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	dst = append(dst, e.FeeRecipient...)
+
+	// Field (2) 'StateRoot'
+	if size := len(e.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.StateRoot...)
+
+	// Field (3) 'ReceiptsRoot'
+	if size := len(e.ReceiptsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ReceiptsRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.ReceiptsRoot...)
+
+	// Field (4) 'LogsBloom'
+	if size := len(e.LogsBloom); size != 256 {
+		err = ssz.ErrBytesLengthFn("--.LogsBloom", size, 256)
+		return
+	}
+	dst = append(dst, e.LogsBloom...)
+
+	// Field (5) 'PrevRandao'
+	if size := len(e.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	dst = append(dst, e.PrevRandao...)
+
+	// Field (6) 'BlockNumber'
+	dst = ssz.MarshalUint64(dst, e.BlockNumber)
+
+	// Field (7) 'GasLimit'
+	dst = ssz.MarshalUint64(dst, e.GasLimit)
+
+	// Field (8) 'GasUsed'
+	dst = ssz.MarshalUint64(dst, e.GasUsed)
+
+	// Field (9) 'Timestamp'
+	dst = ssz.MarshalUint64(dst, e.Timestamp)
+
+	// Offset (10) 'ExtraData'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.ExtraData)
+
+	// Field (11) 'BaseFeePerGas'
+	if size := len(e.BaseFeePerGas); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BaseFeePerGas", size, 32)
+		return
+	}
+	dst = append(dst, e.BaseFeePerGas...)
+
+	// Field (12) 'BlockHash'
+	if size := len(e.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	dst = append(dst, e.BlockHash...)
+
+	// Field (13) 'TransactionsRoot'
+	if size := len(e.TransactionsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.TransactionsRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.TransactionsRoot...)
+
+	// Field (14) 'WithdrawalsRoot'
+	if size := len(e.WithdrawalsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.WithdrawalsRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.WithdrawalsRoot...)
+
+	// Field (15) 'BlobGasUsed'
+	dst = ssz.MarshalUint64(dst, e.BlobGasUsed)
+
+	// Field (16) 'ExcessBlobGas'
+	dst = ssz.MarshalUint64(dst, e.ExcessBlobGas)
+
+	// Field (17) 'BlockAccessListRoot'
+	if size := len(e.BlockAccessListRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockAccessListRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.BlockAccessListRoot...)
+
+	// Field (10) 'ExtraData'
+	if size := len(e.ExtraData); size > 32 {
+		err = ssz.ErrBytesLengthFn("--.ExtraData", size, 32)
+		return
+	}
+	dst = append(dst, e.ExtraData...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayloadHeaderGloas object
+func (e *ExecutionPayloadHeaderGloas) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 616 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o10 uint64
+
+	// Field (0) 'ParentHash'
+	if cap(e.ParentHash) == 0 {
+		e.ParentHash = make([]byte, 0, len(buf[0:32]))
+	}
+	e.ParentHash = append(e.ParentHash, buf[0:32]...)
+
+	// Field (1) 'FeeRecipient'
+	if cap(e.FeeRecipient) == 0 {
+		e.FeeRecipient = make([]byte, 0, len(buf[32:52]))
+	}
+	e.FeeRecipient = append(e.FeeRecipient, buf[32:52]...)
+
+	// Field (2) 'StateRoot'
+	if cap(e.StateRoot) == 0 {
+		e.StateRoot = make([]byte, 0, len(buf[52:84]))
+	}
+	e.StateRoot = append(e.StateRoot, buf[52:84]...)
+
+	// Field (3) 'ReceiptsRoot'
+	if cap(e.ReceiptsRoot) == 0 {
+		e.ReceiptsRoot = make([]byte, 0, len(buf[84:116]))
+	}
+	e.ReceiptsRoot = append(e.ReceiptsRoot, buf[84:116]...)
+
+	// Field (4) 'LogsBloom'
+	if cap(e.LogsBloom) == 0 {
+		e.LogsBloom = make([]byte, 0, len(buf[116:372]))
+	}
+	e.LogsBloom = append(e.LogsBloom, buf[116:372]...)
+
+	// Field (5) 'PrevRandao'
+	if cap(e.PrevRandao) == 0 {
+		e.PrevRandao = make([]byte, 0, len(buf[372:404]))
+	}
+	e.PrevRandao = append(e.PrevRandao, buf[372:404]...)
+
+	// Field (6) 'BlockNumber'
+	e.BlockNumber = ssz.UnmarshallUint64(buf[404:412])
+
+	// Field (7) 'GasLimit'
+	e.GasLimit = ssz.UnmarshallUint64(buf[412:420])
+
+	// Field (8) 'GasUsed'
+	e.GasUsed = ssz.UnmarshallUint64(buf[420:428])
+
+	// Field (9) 'Timestamp'
+	e.Timestamp = ssz.UnmarshallUint64(buf[428:436])
+
+	// Offset (10) 'ExtraData'
+	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
+		return ssz.ErrOffset
+	}
+
+	if o10 != 616 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	if cap(e.BaseFeePerGas) == 0 {
+		e.BaseFeePerGas = make([]byte, 0, len(buf[440:472]))
+	}
+	e.BaseFeePerGas = append(e.BaseFeePerGas, buf[440:472]...)
+
+	// Field (12) 'BlockHash'
+	if cap(e.BlockHash) == 0 {
+		e.BlockHash = make([]byte, 0, len(buf[472:504]))
+	}
+	e.BlockHash = append(e.BlockHash, buf[472:504]...)
+
+	// Field (13) 'TransactionsRoot'
+	if cap(e.TransactionsRoot) == 0 {
+		e.TransactionsRoot = make([]byte, 0, len(buf[504:536]))
+	}
+	e.TransactionsRoot = append(e.TransactionsRoot, buf[504:536]...)
+
+	// Field (14) 'WithdrawalsRoot'
+	if cap(e.WithdrawalsRoot) == 0 {
+		e.WithdrawalsRoot = make([]byte, 0, len(buf[536:568]))
+	}
+	e.WithdrawalsRoot = append(e.WithdrawalsRoot, buf[536:568]...)
+
+	// Field (15) 'BlobGasUsed'
+	e.BlobGasUsed = ssz.UnmarshallUint64(buf[568:576])
+
+	// Field (16) 'ExcessBlobGas'
+	e.ExcessBlobGas = ssz.UnmarshallUint64(buf[576:584])
+
+	// Field (17) 'BlockAccessListRoot'
+	if cap(e.BlockAccessListRoot) == 0 {
+		e.BlockAccessListRoot = make([]byte, 0, len(buf[584:616]))
+	}
+	e.BlockAccessListRoot = append(e.BlockAccessListRoot, buf[584:616]...)
+
+	// Field (10) 'ExtraData'
+	{
+		buf = tail[o10:]
+		if len(buf) > 32 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.ExtraData) == 0 {
+			e.ExtraData = make([]byte, 0, len(buf))
+		}
+		e.ExtraData = append(e.ExtraData, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadHeaderGloas object
+func (e *ExecutionPayloadHeaderGloas) SizeSSZ() (size int) {
+	size = 616
+
+	// Field (10) 'ExtraData'
+	size += len(e.ExtraData)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayloadHeaderGloas object
+func (e *ExecutionPayloadHeaderGloas) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayloadHeaderGloas object with a hasher
+func (e *ExecutionPayloadHeaderGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ParentHash'
+	if size := len(e.ParentHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ParentHash", size, 32)
+		return
+	}
+	hh.PutBytes(e.ParentHash)
+
+	// Field (1) 'FeeRecipient'
+	if size := len(e.FeeRecipient); size != 20 {
+		err = ssz.ErrBytesLengthFn("--.FeeRecipient", size, 20)
+		return
+	}
+	hh.PutBytes(e.FeeRecipient)
+
+	// Field (2) 'StateRoot'
+	if size := len(e.StateRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.StateRoot)
+
+	// Field (3) 'ReceiptsRoot'
+	if size := len(e.ReceiptsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.ReceiptsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.ReceiptsRoot)
+
+	// Field (4) 'LogsBloom'
+	if size := len(e.LogsBloom); size != 256 {
+		err = ssz.ErrBytesLengthFn("--.LogsBloom", size, 256)
+		return
+	}
+	hh.PutBytes(e.LogsBloom)
+
+	// Field (5) 'PrevRandao'
+	if size := len(e.PrevRandao); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.PrevRandao", size, 32)
+		return
+	}
+	hh.PutBytes(e.PrevRandao)
+
+	// Field (6) 'BlockNumber'
+	hh.PutUint64(e.BlockNumber)
+
+	// Field (7) 'GasLimit'
+	hh.PutUint64(e.GasLimit)
+
+	// Field (8) 'GasUsed'
+	hh.PutUint64(e.GasUsed)
+
+	// Field (9) 'Timestamp'
+	hh.PutUint64(e.Timestamp)
+
+	// Field (10) 'ExtraData'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.ExtraData))
+		if byteLen > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(e.ExtraData)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	if size := len(e.BaseFeePerGas); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BaseFeePerGas", size, 32)
+		return
+	}
+	hh.PutBytes(e.BaseFeePerGas)
+
+	// Field (12) 'BlockHash'
+	if size := len(e.BlockHash); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockHash", size, 32)
+		return
+	}
+	hh.PutBytes(e.BlockHash)
+
+	// Field (13) 'TransactionsRoot'
+	if size := len(e.TransactionsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.TransactionsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.TransactionsRoot)
+
+	// Field (14) 'WithdrawalsRoot'
+	if size := len(e.WithdrawalsRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.WithdrawalsRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.WithdrawalsRoot)
+
+	// Field (15) 'BlobGasUsed'
+	hh.PutUint64(e.BlobGasUsed)
+
+	// Field (16) 'ExcessBlobGas'
+	hh.PutUint64(e.ExcessBlobGas)
+
+	// Field (17) 'BlockAccessListRoot'
+	if size := len(e.BlockAccessListRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockAccessListRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.BlockAccessListRoot)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the ExecutionPayloadDenebAndBlobsBundle object
 func (e *ExecutionPayloadDenebAndBlobsBundle) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)

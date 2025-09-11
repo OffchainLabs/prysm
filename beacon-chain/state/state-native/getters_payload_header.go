@@ -17,6 +17,10 @@ func (b *BeaconState) LatestExecutionPayloadHeader() (interfaces.ExecutionData, 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	if b.version >= version.Gloas {
+		return blocks.WrappedExecutionPayloadHeaderGloas(b.latestExecutionPayloadHeaderGloas.Copy())
+	}
+
 	if b.version >= version.Deneb {
 		return blocks.WrappedExecutionPayloadHeaderDeneb(b.latestExecutionPayloadHeaderDeneb.Copy())
 	}

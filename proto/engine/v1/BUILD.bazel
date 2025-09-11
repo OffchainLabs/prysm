@@ -43,6 +43,8 @@ ssz_gen_marshal(
         "ExecutionPayloadDeneb",
         "ExecutionPayloadDenebAndBlobsBundle",
         "ExecutionPayloadDenebAndBlobsBundleV2",
+        "ExecutionPayloadGloas",
+        "ExecutionPayloadHeaderGloas",
         "BlindedBlobsBundle",
         "BlobsBundle",
         "BlobsBundleV2",
@@ -116,6 +118,7 @@ ssz_proto_files(
         "electra.proto",
         "execution_engine.proto",
         "fulu.proto",
+        "gloas.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

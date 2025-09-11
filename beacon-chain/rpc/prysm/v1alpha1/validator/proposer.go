@@ -300,7 +300,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
 
-	// For post-Fulu blinded blocks, submit to relay and return early
+	// For post-Fulu blinded blocks (including Gloas), submit to relay and return early
 	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
 		err := vs.BlockBuilder.SubmitBlindedBlockPostFulu(ctx, block)
 		if err != nil {
@@ -365,7 +365,7 @@ func (vs *Server) broadcastAndReceiveSidecars(
 }
 
 // handleBlindedBlock processes blinded beacon blocks (pre-Fulu only).
-// Post-Fulu blinded blocks are handled directly in ProposeBeaconBlock.
+// Post-Fulu blinded blocks (including Gloas) are handled directly in ProposeBeaconBlock.
 func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.SignedBeaconBlock) (interfaces.SignedBeaconBlock, []*ethpb.BlobSidecar, error) {
 	if block.Version() < version.Bellatrix {
 		return nil, nil, errors.New("pre-Bellatrix blinded block")
@@ -631,6 +631,9 @@ func blobsAndProofs(req *ethpb.GenericSignedBeaconBlock) ([][]byte, [][]byte, er
 		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
 	case req.GetFulu() != nil:
 		dbBlockContents := req.GetFulu()
+		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
+	case req.GetGloas() != nil:
+		dbBlockContents := req.GetGloas()
 		return dbBlockContents.Blobs, dbBlockContents.KzgProofs, nil
 	default:
 		return nil, nil, errors.Errorf("unknown request type provided: %T", req)
