@@ -78,7 +78,10 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 	}
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	return s.cfg.ForkChoiceStore.InsertChain(s.ctx, chain)
+	if err := s.cfg.ForkChoiceStore.InsertChain(s.ctx, chain); err != nil {
+		return errors.Wrap(err, "could not insert forkchoice chain")
+	}
+	return s.cfg.ForkChoiceStore.InsertNode(s.ctx, st, chain[0].Block)
 }
 
 func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.ReadOnlySignedBeaconBlock) ([]*forkchoicetypes.BlockAndCheckpoints, error) {
