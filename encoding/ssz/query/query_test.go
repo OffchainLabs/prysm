@@ -171,11 +171,9 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				path, err := query.ParsePath(tt.path)
 				require.NoError(t, err)
 
-				info, err := query.AnalyzeObject(&sszquerypb.VariableTestContainer{})
-				require.NoError(t, err)
-
 				testContainer := createVariableTestContainer()
-				err = query.PopulateVariableLengthInfo(info, testContainer)
+
+				info, err := query.AnalyzeObject(testContainer)
 				require.NoError(t, err)
 
 				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
