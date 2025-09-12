@@ -113,11 +113,11 @@ func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 	})
 
 	// Parse IP colocation whitelist CIDR strings
-	var ipNets []*net.IPNet
+	ipNets := make([]*net.IPNet, 0, len(config.IPColocationWhitelist))
 	for _, cidr := range config.IPColocationWhitelist {
 		_, ipNet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			log.WithError(err).Errorf("Invalid CIDR in IP colocation whitelist: %s", cidr)
+			log.WithError(err).WithField("cidr", cidr).Error("Invalid CIDR in IP colocation whitelist")
 			continue
 		}
 		ipNets = append(ipNets, ipNet)
