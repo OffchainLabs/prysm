@@ -149,6 +149,7 @@ var appHelpFlagGroups = []flagGroup{
 			checkpoint.BlockPath,
 			checkpoint.RemoteURL,
 			checkpoint.StatePath,
+			flags.SyncFromGenesis,
 			flags.WeakSubjectivityCheckpoint,
 			genesis.BeaconAPIURL,
 			genesis.StatePath,

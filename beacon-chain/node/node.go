@@ -551,6 +551,11 @@ func (b *BeaconNode) startDB(cliCtx *cli.Context, depositAddress string) error {
 		return errors.Wrap(err, "could not ensure embedded genesis")
 	}
 
+	// Validate sync options when starting with an empty database
+	if err := b.validateSyncFlags(); err != nil {
+		return err
+	}
+
 	if b.CheckpointInitializer != nil {
 		log.Info("Checkpoint sync - Downloading origin state and block")
 		if err := b.CheckpointInitializer.Initialize(b.ctx, b.db); err != nil {
@@ -565,6 +570,52 @@ func (b *BeaconNode) startDB(cliCtx *cli.Context, depositAddress string) error {
 	log.WithField("address", depositAddress).Info("Deposit contract")
 	return nil
 }
+
+// validateSyncFlags ensures that when starting with an empty database,
+// the user has explicitly chosen either genesis sync or checkpoint sync.
+func (b *BeaconNode) validateSyncFlags() error {
+	// Check if database has an origin checkpoint (indicating it's not empty)
+	_, err := b.db.OriginCheckpointBlockRoot(b.ctx)
+	if err == nil {
+		// Database is not empty, validation is not needed
+		return nil
+	}
+	if !errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
+		// Some other error occurred
+		return errors.Wrap(err, "could not check origin checkpoint block root")
+	}
+
+	// if genesis exists, also consider DB non-empty.
+	if gb, err := b.db.GenesisBlock(b.ctx); err == nil && gb != nil && !gb.IsNil() {
+		return nil
+	}
+
+	// Database is empty, check if user has provided required flags
+	syncFromGenesis := b.cliCtx.Bool(flags.SyncFromGenesis.Name)
+	hasCheckpointSync := b.CheckpointInitializer != nil
+
+	if !syncFromGenesis && !hasCheckpointSync {
+		return errors.New("when starting with an empty database, you must specify either:\n" +
+			"  --sync-from-genesis (to sync from genesis)\n" +
+			"  --checkpoint-sync-url <url> (to sync from a remote beacon node)\n" +
+			"  --checkpoint-state <path> and --checkpoint-block <path> (to sync from local files)\n\n" +
+			"Checkpoint sync is recommended for faster syncing.")
+	}
+
+	// Check for conflicting sync options
+	if syncFromGenesis && hasCheckpointSync {
+		return errors.New("conflicting sync options: cannot use both --sync-from-genesis and checkpoint sync flags. " +
+			"Please choose either genesis sync or checkpoint sync, not both.")
+	}
+
+	if syncFromGenesis {
+		log.Warn("Syncing from genesis is enabled. This will take a very long time and is not recommended. " +
+			"Consider using checkpoint sync instead with --checkpoint-sync-url.")
+	}
+
+	return nil
+}
+
 func (b *BeaconNode) startSlasherDB(cliCtx *cli.Context, clearer *dbClearer) error {
 	if !b.slasherEnabled {
 		return nil

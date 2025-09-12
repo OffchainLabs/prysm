@@ -271,6 +271,13 @@ var (
 			"If such a sync is not possible, the node will treat it as a critical and irrecoverable failure",
 		Value: "",
 	}
+	// SyncFromGenesis enables syncing from genesis when starting with an empty database.
+	SyncFromGenesis = &cli.BoolFlag{
+		Name: "sync-from-genesis",
+		Usage: "Explicitly enables syncing from genesis when starting with an empty database. " +
+			"Alternately you can checkpoint sync instead with " +
+			"--checkpoint-sync-url, --checkpoint-state, or --checkpoint-block flags.",
+	}
 	// MinPeersPerSubnet defines a flag to set the minimum number of peers that a node will attempt to peer with for a subnet.
 	MinPeersPerSubnet = &cli.Uint64Flag{
 		Name:  "minimum-peers-per-subnet",

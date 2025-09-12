@@ -70,6 +70,7 @@ var appFlags = []cli.Flag{
 	flags.ChainID,
 	flags.NetworkID,
 	flags.WeakSubjectivityCheckpoint,
+	flags.SyncFromGenesis,
 	flags.Eth1HeaderReqLimit,
 	flags.MinPeersPerSubnet,
 	flags.MaxConcurrentDials,
