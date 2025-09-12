@@ -376,15 +376,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	if err != nil {
 		return err
 	}
-	// The first block can have a bogus root since the block is not inserted in forkchoice
-	roblock, err := consensus_blocks.NewROBlockWithRoot(signed, [32]byte{})
-	if err != nil {
-		return err
-	}
-	pendingNodes = append(pendingNodes, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
-		JustifiedCheckpoint: jCheckpoint, FinalizedCheckpoint: fCheckpoint})
+	root := signed.Block().ParentRoot()
 	// As long as parent node is not in fork choice store, and parent node is in DB.
-	root := roblock.Block().ParentRoot()
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
 		b, err := s.getBlock(ctx, root)
 		if err != nil {
@@ -403,13 +396,17 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 			FinalizedCheckpoint: fCheckpoint}
 		pendingNodes = append(pendingNodes, args)
 	}
-	if len(pendingNodes) == 1 {
+	if len(pendingNodes) == 0 {
 		return nil
 	}
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
-	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
+	orderedNodes := make([]*forkchoicetypes.BlockAndCheckpoints, 0, len(pendingNodes))
+	for i := len(pendingNodes) - 1; i >= 0; i-- {
+		orderedNodes = append(orderedNodes, pendingNodes[i])
+	}
+	return s.cfg.ForkChoiceStore.InsertChain(ctx, orderedNodes)
 }
 
 // inserts finalized deposits into our finalized deposit trie, needs to be

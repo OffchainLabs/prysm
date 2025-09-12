@@ -78,10 +78,7 @@ func (s *Service) setupForkchoiceTree(st state.BeaconState) error {
 	}
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
-	if err := s.cfg.ForkChoiceStore.InsertChain(s.ctx, chain); err != nil {
-		return errors.Wrap(err, "could not insert forkchoice chain")
-	}
-	return s.cfg.ForkChoiceStore.InsertNode(s.ctx, st, chain[0].Block)
+	return s.cfg.ForkChoiceStore.InsertChain(s.ctx, chain)
 }
 
 func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.ReadOnlySignedBeaconBlock) ([]*forkchoicetypes.BlockAndCheckpoints, error) {
@@ -115,7 +112,11 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 			return nil, errors.New("head block is not a descendant of the finalized checkpoint")
 		}
 	}
-	return chain, nil
+	ret := make([]*forkchoicetypes.BlockAndCheckpoints, 0, len(chain))
+	for i := len(chain) - 1; i >= 0; i-- {
+		ret = append(ret, chain[i])
+	}
+	return ret, nil
 }
 
 func (s *Service) setupForkchoiceRoot(st state.BeaconState) error {

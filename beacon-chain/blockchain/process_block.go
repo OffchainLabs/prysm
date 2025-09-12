@@ -247,7 +247,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
-		pendingNodes[len(blks)-i-1] = args
+		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)
 			return err
@@ -284,13 +284,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if err := s.cfg.StateGen.SaveState(ctx, lastBR, preState); err != nil {
 		return err
 	}
-	// Insert all nodes but the last one to forkchoice
+	// Insert all nodes to forkchoice
 	if err := s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes); err != nil {
 		return errors.Wrap(err, "could not insert batch to forkchoice")
-	}
-	// Insert the last block to forkchoice
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastB); err != nil {
-		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	// Set their optimistic status
 	if isValidPayload {
