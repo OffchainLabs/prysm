@@ -24,6 +24,9 @@ type sszInfo struct {
 
 	// For List types.
 	listInfo *listInfo
+
+	// For Vector types.
+	vectorInfo *vectorInfo
 }
 
 func (info *sszInfo) FixedSize() uint64 {
@@ -95,6 +98,41 @@ func (info *sszInfo) ListInfo() (*listInfo, error) {
 	return info.listInfo, nil
 }
 
+func (info *sszInfo) VectorInfo() (*vectorInfo, error) {
+	if info == nil {
+		return nil, errors.New("sszInfo is nil")
+	}
+
+	if info.sszType != Vector {
+		return nil, fmt.Errorf("sszInfo is not a Vector type, got %s", info.sszType)
+	}
+
+	return info.vectorInfo, nil
+}
+
+// String implements the Stringer interface for sszInfo.
+// This follows the notation used in the consensus specs.
+func (info *sszInfo) String() string {
+	if info == nil {
+		return "<nil>"
+	}
+
+	switch info.sszType {
+	case List:
+		return fmt.Sprintf("List[%s, %d]", info.listInfo.element, info.listInfo.limit)
+	case Vector:
+		if info.vectorInfo.element.String() == "uint8" {
+			// Handle byte vectors as BytesN
+			// See Aliases section in SSZ spec:
+			// https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#aliases
+			return fmt.Sprintf("Bytes%d", info.vectorInfo.length)
+		}
+		return fmt.Sprintf("Vector[%s, %d]", info.vectorInfo.element, info.vectorInfo.length)
+	default:
+		return info.typ.Name()
+	}
+}
+
 // Print returns a string representation of the sszInfo, which is useful for debugging.
 func (info *sszInfo) Print() string {
 	if info == nil {
@@ -115,7 +153,7 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 
 	switch info.sszType {
 	case Container:
-		builder.WriteString(fmt.Sprintf("%s: %s (%s / fixed size: %d, total size: %d)\n", info.sszType, info.typ.Name(), sizeDesc, info.FixedSize(), info.Size()))
+		builder.WriteString(fmt.Sprintf("%s (%s / fixed size: %d, total size: %d)\n", info, sizeDesc, info.FixedSize(), info.Size()))
 
 		for i, key := range info.containerInfo.order {
 			connector := "├─"
@@ -135,9 +173,9 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 		}
 
 	case List:
-		builder.WriteString(fmt.Sprintf("%s[%s] (%s / limit: %d, length: %d, size: %d)\n", info.sszType, info.listInfo.element.typ.Name(), sizeDesc, info.listInfo.limit, info.listInfo.length, info.Size()))
+		builder.WriteString(fmt.Sprintf("%s (%s / length: %d, size: %d)\n", info, sizeDesc, info.listInfo.length, info.Size()))
 
 	default:
-		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info.sszType, sizeDesc, info.Size()))
+		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info, sizeDesc, info.Size()))
 	}
 }

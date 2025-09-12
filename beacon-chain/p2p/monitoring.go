@@ -18,6 +18,7 @@ var (
 		"lodestar",
 		"js-libp2p",
 		"rust-libp2p",
+		"erigon/caplin",
 	}
 	p2pPeerCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "p2p_peer_count",

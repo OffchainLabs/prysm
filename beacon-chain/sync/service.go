@@ -164,6 +164,7 @@ type Service struct {
 	syncContributionBitsOverlapLock  sync.RWMutex
 	syncContributionBitsOverlapCache *lru.Cache
 	signatureChan                    chan *signatureVerifier
+	kzgChan                          chan *kzgVerifier
 	clockWaiter                      startup.ClockWaiter
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
@@ -178,6 +179,7 @@ type Service struct {
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
 	registeredNetworkEntry           params.NetworkScheduleEntry
+	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
 
 // NewService initializes new regular sync service.
@@ -202,6 +204,10 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
+	// Initialize KZG channel with fixed buffer size of 100.
+	// This buffer size is designed to handle burst traffic of data column gossip messages:
+	// - Data columns arrive less frequently than attestations (default batchVerifierLimit=1000)
+	r.kzgChan = make(chan *kzgVerifier, 100)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
@@ -254,7 +260,8 @@ func (s *Service) Start() {
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
-	go s.startTasksPostInitialSync()
+	go s.kzgVerifierRoutine()
+	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
@@ -384,32 +391,31 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
-func (s *Service) startTasksPostInitialSync() {
+func (s *Service) startDiscoveryAndSubscriptions() {
 	// Wait for the chain to start.
 	s.waitForChainStart()
 
-	select {
-	case <-s.initialSyncComplete:
-		// Compute the current epoch.
-		currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
-		currentEpoch := slots.ToEpoch(currentSlot)
-
-		// Compute the current fork forkDigest.
-		forkDigest, err := s.currentForkDigest()
-		if err != nil {
-			log.WithError(err).Error("Could not retrieve current fork digest")
-			return
-		}
-
-		// Register respective pubsub handlers at state synced event.
-		s.registerSubscribers(currentEpoch, forkDigest)
-
-		// Start the fork watcher.
-		go s.forkWatcher()
-
-	case <-s.ctx.Done():
-		log.Debug("Context closed, exiting goroutine")
+	if s.ctx.Err() != nil {
+		log.Debug("Context closed, exiting StartDiscoveryAndSubscription")
+		return
 	}
+
+	// Compute the current epoch.
+	currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	// Compute the current fork forkDigest.
+	forkDigest, err := s.currentForkDigest()
+	if err != nil {
+		log.WithError(err).Error("Could not retrieve current fork digest")
+		return
+	}
+
+	// Register respective pubsub handlers at state synced event.
+	s.registerSubscribers(currentEpoch, forkDigest)
+
+	// Start the fork watcher.
+	go s.forkWatcher()
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

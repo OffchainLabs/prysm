@@ -16,10 +16,10 @@ func ProcessEpoch(ctx context.Context, state state.BeaconState) error {
 	if err := electra.ProcessEpoch(ctx, state); err != nil {
 		return errors.Wrap(err, "could not process epoch in fulu transition")
 	}
-	return processProposerLookahead(ctx, state)
+	return ProcessProposerLookahead(ctx, state)
 }
 
-func processProposerLookahead(ctx context.Context, state state.BeaconState) error {
+func ProcessProposerLookahead(ctx context.Context, state state.BeaconState) error {
 	_, span := trace.StartSpan(ctx, "fulu.processProposerLookahead")
 	defer span.End()
 

@@ -2,10 +2,12 @@ package mock
 
 import (
 	"fmt"
+	"strings"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -53,33 +55,9 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			},
 			SigningSlot: 0,
 		}
-	case "AGGREGATE_AND_PROOF":
-		return &validatorpb.SignRequest{
-			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
-			SigningRoot:     make([]byte, fieldparams.RootLength),
-			SignatureDomain: make([]byte, 4),
-			Object: &validatorpb.SignRequest_AggregateAttestationAndProof{
-				AggregateAttestationAndProof: &eth.AggregateAttestationAndProof{
-					AggregatorIndex: 0,
-					Aggregate: &eth.Attestation{
-						AggregationBits: bitfield.Bitlist{0b1101},
-						Data: &eth.AttestationData{
-							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
-							Source: &eth.Checkpoint{
-								Root: make([]byte, fieldparams.RootLength),
-							},
-							Target: &eth.Checkpoint{
-								Root: make([]byte, fieldparams.RootLength),
-							},
-						},
-						Signature: make([]byte, 96),
-					},
-					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
-				},
-			},
-			SigningSlot: 0,
-		}
 	case "AGGREGATE_AND_PROOF_V2":
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(0, true)
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
 			SigningRoot:     make([]byte, fieldparams.RootLength),
@@ -99,7 +77,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 							},
 						},
 						Signature:     make([]byte, 96),
-						CommitteeBits: bitfield.Bitvector64{0x01},
+						CommitteeBits: committeeBits,
 					},
 					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
 				},
@@ -426,6 +404,24 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 				BlindedBlockElectra: util.HydrateBlindedBeaconBlockElectra(&eth.BlindedBeaconBlockElectra{}),
 			},
 		}
+	case "BLOCK_V2_FULU":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_BlockFulu{
+				BlockFulu: util.HydrateBeaconBlockFulu(&eth.BeaconBlockElectra{}),
+			},
+		}
+	case "BLOCK_V2_BLINDED_FULU":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_BlindedBlockFulu{
+				BlindedBlockFulu: util.HydrateBlindedBeaconBlockFulu(&eth.BlindedBeaconBlockFulu{}),
+			},
+		}
 	case "RANDAO_REVEAL":
 		return &validatorpb.SignRequest{
 			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
@@ -523,16 +519,19 @@ func AggregationSlotSignRequest() *types.AggregationSlotSignRequest {
 	}
 }
 
-// AggregateAndProofSignRequest is a mock implementation of the AggregateAndProofSignRequest.
-func AggregateAndProofSignRequest() *types.AggregateAndProofSignRequest {
-	return &types.AggregateAndProofSignRequest{
-		Type:        "AGGREGATE_AND_PROOF",
+// AggregateAndProofV2SignRequest is a mock implementation of the AggregateAndProofV2SignRequest.
+func AggregateAndProofV2SignRequest(ver int) *types.AggregateAndProofV2SignRequest {
+	return &types.AggregateAndProofV2SignRequest{
+		Type:        "AGGREGATE_AND_PROOF_V2",
 		ForkInfo:    ForkInfo(),
 		SigningRoot: make([]byte, fieldparams.RootLength),
-		AggregateAndProof: &types.AggregateAndProof{
-			AggregatorIndex: "0",
-			Aggregate:       Attestation(),
-			SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+		AggregateAndProof: &types.AggregateAndProofV2{
+			Version: strings.ToUpper(version.String(ver)),
+			Data: &types.AggregateAndProofElectra{
+				AggregatorIndex: "0",
+				Aggregate:       AttestationElectra(),
+				SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+			},
 		},
 	}
 }
