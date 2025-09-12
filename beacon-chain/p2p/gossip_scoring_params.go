@@ -86,11 +86,11 @@ func peerScoringParams(ipWhitelist []string) (*pubsub.PeerScoreParams, *pubsub.P
 	}
 
 	// Parse IP whitelist CIDR strings
-	var ipNets []*net.IPNet
+	ipNets := make([]*net.IPNet, 0, len(ipWhitelist))
 	for _, cidr := range ipWhitelist {
 		_, ipNet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			log.WithError(err).Errorf("Invalid CIDR in IP colocation whitelist: %s", cidr)
+			log.WithError(err).WithField("cidr", cidr).Error("Invalid CIDR in IP colocation whitelist")
 			continue
 		}
 		ipNets = append(ipNets, ipNet)
