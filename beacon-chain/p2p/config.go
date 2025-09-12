@@ -11,11 +11,13 @@ import (
 // This is the default queue size used if we have specified an invalid one.
 const defaultPubsubQueueSize = 600
 const (
-	// defaultConnManagerHighWater  is set based on the internal value of the libp2p
-	// DefaultConectionManager high water mark.
-	// 32 is the size of the gap between the default high and low water marks.
-	defaultConnManagerHighWater = 192
-	connManagerHiLowGap         = 32
+	// defaultConnManagerPruneAbove sets the number of peers where ConnectionManager
+	// will begin to internally prune peers. This value is set based on the internal
+	// value of the libp2p DefaultConectionManager "high water mark". The "low water mark"
+	// is the number of peers where ConnManager will stop pruning. This value is computed
+	// by subtracting connManagerPruneAmount from the high water mark.
+	defaultConnManagerPruneAbove = 192
+	connManagerPruneAmount       = 32
 )
 
 // Config for the p2p service. These parameters are set from application level flags
@@ -53,9 +55,9 @@ type Config struct {
 // the high water mark. This is done to ensure the ConnManager never prunes peers that the
 // node has connected to based on the MaxPeers setting.
 func (cfg *Config) connManagerLowHigh() (int, int) {
-	maxPeersPlusMargin := int(cfg.MaxPeers) + connManagerHiLowGap
-	high := max(maxPeersPlusMargin, defaultConnManagerHighWater)
-	low := high - connManagerHiLowGap
+	maxPeersPlusMargin := int(cfg.MaxPeers) + connManagerPruneAmount
+	high := max(maxPeersPlusMargin, defaultConnManagerPruneAbove)
+	low := high - connManagerPruneAmount
 	return low, high
 }
 

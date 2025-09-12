@@ -143,18 +143,18 @@ func TestSetConnManagerOption(t *testing.T) {
 	}{
 		{
 			name:      "MaxPeers lower than default high water mark",
-			maxPeers:  defaultConnManagerHighWater - 1,
-			highWater: defaultConnManagerHighWater,
+			maxPeers:  defaultConnManagerPruneAbove - 1,
+			highWater: defaultConnManagerPruneAbove,
 		},
 		{
 			name:      "MaxPeers equal to default high water mark",
-			maxPeers:  defaultConnManagerHighWater,
-			highWater: defaultConnManagerHighWater,
+			maxPeers:  defaultConnManagerPruneAbove,
+			highWater: defaultConnManagerPruneAbove,
 		},
 		{
 			name:      "MaxPeers higher than default high water mark",
-			maxPeers:  defaultConnManagerHighWater + 1,
-			highWater: defaultConnManagerHighWater + 1 + connManagerHiLowGap,
+			maxPeers:  defaultConnManagerPruneAbove + 1,
+			highWater: defaultConnManagerPruneAbove + 1 + connManagerPruneAmount,
 		},
 	}
 	for _, tt := range cases {
