@@ -76,25 +76,13 @@ var (
 	tenEpochs          = 10 * oneEpochDuration()
 )
 
-func peerScoringParams(ipWhitelist []string) (*pubsub.PeerScoreParams, *pubsub.PeerScoreThresholds) {
+func peerScoringParams(colocationWhitelist []*net.IPNet) (*pubsub.PeerScoreParams, *pubsub.PeerScoreThresholds) {
 	thresholds := &pubsub.PeerScoreThresholds{
 		GossipThreshold:             -4000,
 		PublishThreshold:            -8000,
 		GraylistThreshold:           -16000,
 		AcceptPXThreshold:           100,
 		OpportunisticGraftThreshold: 5,
-	}
-
-	// Parse IP whitelist CIDR strings
-	ipNets := make([]*net.IPNet, 0, len(ipWhitelist))
-	for _, cidr := range ipWhitelist {
-		_, ipNet, err := net.ParseCIDR(cidr)
-		if err != nil {
-			log.WithError(err).WithField("cidr", cidr).Error("Invalid CIDR in IP colocation whitelist")
-			continue
-		}
-		ipNets = append(ipNets, ipNet)
-		log.WithField("cidr", cidr).Info("Added IP to colocation whitelist")
 	}
 
 	scoreParams := &pubsub.PeerScoreParams{
@@ -106,7 +94,7 @@ func peerScoringParams(ipWhitelist []string) (*pubsub.PeerScoreParams, *pubsub.P
 		AppSpecificWeight:           1,
 		IPColocationFactorWeight:    -35.11,
 		IPColocationFactorThreshold: 10,
-		IPColocationFactorWhitelist: ipNets,
+		IPColocationFactorWhitelist: colocationWhitelist,
 		BehaviourPenaltyWeight:      -15.92,
 		BehaviourPenaltyThreshold:   6,
 		BehaviourPenaltyDecay:       scoreDecay(tenEpochs),

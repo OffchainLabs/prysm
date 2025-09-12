@@ -103,7 +103,7 @@ type StatusConfig struct {
 	// ScorerParams holds peer scorer configuration params.
 	ScorerParams *scorers.Config
 	// IPColocationWhitelist contains CIDR ranges that are exempt from IP colocation limits.
-	IPColocationWhitelist []string
+	IPColocationWhitelist []*net.IPNet
 }
 
 // NewStatus creates a new status entity.
@@ -112,24 +112,12 @@ func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 		MaxPeers: maxLimitBuffer + config.PeerLimit,
 	})
 
-	// Parse IP colocation whitelist CIDR strings
-	ipNets := make([]*net.IPNet, 0, len(config.IPColocationWhitelist))
-	for _, cidr := range config.IPColocationWhitelist {
-		_, ipNet, err := net.ParseCIDR(cidr)
-		if err != nil {
-			log.WithError(err).WithField("cidr", cidr).Error("Invalid CIDR in IP colocation whitelist")
-			continue
-		}
-		ipNets = append(ipNets, ipNet)
-		log.WithField("cidr", cidr).Info("Added IP to colocation whitelist")
-	}
-
 	return &Status{
 		ctx:                   ctx,
 		store:                 store,
 		scorers:               scorers.NewService(ctx, store, config.ScorerParams),
 		ipTracker:             map[string]uint64{},
-		ipColocationWhitelist: ipNets,
+		ipColocationWhitelist: config.IPColocationWhitelist,
 		// Random generator used to calculate dial backoff period.
 		// It is ok to use deterministic generator, no need for true entropy.
 		rand: rand.NewDeterministicGenerator(),

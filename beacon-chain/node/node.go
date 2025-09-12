@@ -621,10 +621,29 @@ func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBl
 	return nil
 }
 
+func parseIPNetStrings(ipWhitelist []string) ([]*net.IPNet, error) {
+	ipNets := make([]*net.IPNet, 0, len(ipWhitelist))
+	for _, cidr := range ipWhitelist {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			log.WithError(err).WithField("cidr", cidr).Error("Invalid CIDR in IP colocation whitelist")
+			return nil, err
+		}
+		ipNets = append(ipNets, ipNet)
+		log.WithField("cidr", cidr).Info("Added IP to colocation whitelist")
+	}
+	return ipNets, nil
+}
+
 func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 	bootstrapNodeAddrs, dataDir, err := registration.P2PPreregistration(cliCtx)
 	if err != nil {
 		return errors.Wrapf(err, "could not register p2p service")
+	}
+
+	colocationWhitelist, err := parseIPNetStrings(slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PColocationWhitelist.Name)))
+	if err != nil {
+		return fmt.Errorf("failed to register p2p service: %w", err)
 	}
 
 	svc, err := p2p.NewService(b.ctx, &p2p.Config{
@@ -646,7 +665,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		QueueSize:             cliCtx.Uint(cmd.PubsubQueueSize.Name),
 		AllowListCIDR:         cliCtx.String(cmd.P2PAllowList.Name),
 		DenyListCIDR:          slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PDenyList.Name)),
-		IPColocationWhitelist: slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PColocationWhitelist.Name)),
+		IPColocationWhitelist: colocationWhitelist,
 		EnableUPnP:            cliCtx.Bool(cmd.EnableUPnPFlag.Name),
 		StateNotifier:         b,
 		DB:                    b.db,

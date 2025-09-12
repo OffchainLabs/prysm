@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"net"
 	"time"
 
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
@@ -35,7 +36,7 @@ type Config struct {
 	QueueSize             uint
 	AllowListCIDR         string
 	DenyListCIDR          []string
-	IPColocationWhitelist []string
+	IPColocationWhitelist []*net.IPNet
 	StateNotifier         statefeed.Notifier
 	DB                    db.ReadOnlyDatabaseWithSeqNum
 	ClockWaiter           startup.ClockWaiter
