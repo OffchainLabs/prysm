@@ -27,7 +27,7 @@ go_library(
         "receive_block.go",
         "receive_data_column.go",
         "service.go",
-        "setup_forchoice.go",
+        "setup_forkchoice.go",
         "tracked_proposer.go",
         "weak_subjectivity_checks.go",
     ],

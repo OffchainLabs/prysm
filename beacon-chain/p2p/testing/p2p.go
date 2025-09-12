@@ -50,6 +50,7 @@ const (
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
+	mu                    sync.Mutex
 	t                     *testing.T
 	BHost                 host.Host
 	EnodeID               enode.ID
@@ -63,6 +64,7 @@ type TestP2P struct {
 	custodyInfoMut        sync.RWMutex // protects custodyGroupCount and earliestAvailableSlot
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
+	enr                   *enr.Record
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -103,6 +105,7 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 		pubsub:       ps,
 		joinedTopics: map[string]*pubsub.Topic{},
 		peers:        peerStatuses,
+		enr:          new(enr.Record),
 	}
 }
 
@@ -241,6 +244,8 @@ func (p *TestP2P) SetStreamHandler(topic string, handler network.StreamHandler) 
 
 // JoinTopic will join PubSub topic, if not already joined.
 func (p *TestP2P) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if _, ok := p.joinedTopics[topic]; !ok {
 		joinedTopic, err := p.pubsub.Join(topic, opts...)
 		if err != nil {
@@ -310,8 +315,8 @@ func (p *TestP2P) Host() host.Host {
 }
 
 // ENR returns the enr of the local peer.
-func (*TestP2P) ENR() *enr.Record {
-	return new(enr.Record)
+func (p *TestP2P) ENR() *enr.Record {
+	return p.enr
 }
 
 // NodeID returns the node id of the local peer.

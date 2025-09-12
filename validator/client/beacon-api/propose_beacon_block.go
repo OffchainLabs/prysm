@@ -15,8 +15,10 @@ import (
 type blockProcessingResult struct {
 	consensusVersion string
 	beaconBlockRoot  [32]byte
-	marshalledJSON   []byte
+	marshalledSSZ    []byte
 	blinded          bool
+	// Function to marshal JSON on demand
+	marshalJSON func() ([]byte, error)
 }
 
 func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
@@ -62,17 +64,54 @@ func (c *beaconApiValidatorClient) proposeBeaconBlock(ctx context.Context, in *e
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": res.consensusVersion}
-	err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledJSON), nil)
-	errJson := &httputil.DefaultJsonError{}
-	if err != nil {
-		if !errors.As(err, &errJson) {
-			return nil, err
+
+	// Try PostSSZ first with SSZ data
+	if res.marshalledSSZ != nil {
+		_, _, err = c.jsonRestHandler.PostSSZ(ctx, endpoint, headers, bytes.NewBuffer(res.marshalledSSZ))
+		if err != nil {
+			errJson := &httputil.DefaultJsonError{}
+			// If PostSSZ fails with 406 (Not Acceptable), fall back to JSON
+			if !errors.As(err, &errJson) {
+				return nil, err
+			}
+			if errJson.Code == http.StatusNotAcceptable && res.marshalJSON != nil {
+				log.WithError(err).Warn("Failed to submit block ssz, falling back to JSON")
+				jsonData, jsonErr := res.marshalJSON()
+				if jsonErr != nil {
+					return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
+				}
+				// Reset headers for JSON
+				err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
+				// If JSON also fails, return that error
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to submit block via JSON fallback")
+				}
+			} else {
+				// For non-406 errors or when no JSON fallback is available, return the SSZ error
+				return nil, errors.Wrap(errJson, "failed to submit block ssz")
+			}
 		}
-		// Error 202 means that the block was successfully broadcast, but validation failed
-		if errJson.Code == http.StatusAccepted {
-			return nil, errors.New("block was successfully broadcast but failed validation")
+	} else if res.marshalJSON == nil {
+		return nil, errors.New("no marshalling functions available")
+	} else {
+		// No SSZ data available, marshal and use JSON
+		jsonData, jsonErr := res.marshalJSON()
+		if jsonErr != nil {
+			return nil, errors.Wrap(jsonErr, "failed to marshal JSON")
 		}
-		return nil, errJson
+		// Reset headers for JSON
+		err = c.jsonRestHandler.Post(ctx, endpoint, headers, bytes.NewBuffer(jsonData), nil)
+		errJson := &httputil.DefaultJsonError{}
+		if err != nil {
+			if !errors.As(err, &errJson) {
+				return nil, err
+			}
+			// Error 202 means that the block was successfully broadcast, but validation failed
+			if errJson.Code == http.StatusAccepted {
+				return nil, errors.New("block was successfully broadcast but failed validation")
+			}
+			return nil, errJson
+		}
 	}
 
 	return &ethpb.ProposeResponse{BlockRoot: res.beaconBlockRoot[:]}, nil
@@ -89,11 +128,19 @@ func handlePhase0Block(block *ethpb.GenericSignedBeaconBlock_Phase0) (*blockProc
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock := structs.SignedBeaconBlockPhase0FromConsensus(block.Phase0)
-	res.marshalledJSON, err = json.Marshal(signedBlock)
+	// Marshal SSZ
+	ssz, err := block.Phase0.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall phase0 beacon block to json")
+		return nil, errors.Wrap(err, "failed to serialize block for phase0 beacon block")
 	}
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock := structs.SignedBeaconBlockPhase0FromConsensus(block.Phase0)
+		return json.Marshal(signedBlock)
+	}
+
 	return &res, nil
 }
 
@@ -108,11 +155,19 @@ func handleAltairBlock(block *ethpb.GenericSignedBeaconBlock_Altair) (*blockProc
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock := structs.SignedBeaconBlockAltairFromConsensus(block.Altair)
-	res.marshalledJSON, err = json.Marshal(signedBlock)
+	// Marshal SSZ
+	ssz, err := block.Altair.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall altair beacon block to json")
+		return nil, errors.Wrap(err, "failed to serialize block for altair beacon block")
 	}
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock := structs.SignedBeaconBlockAltairFromConsensus(block.Altair)
+		return json.Marshal(signedBlock)
+	}
+
 	return &res, nil
 }
 
@@ -127,13 +182,20 @@ func handleBellatrixBlock(block *ethpb.GenericSignedBeaconBlock_Bellatrix) (*blo
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBeaconBlockBellatrixFromConsensus(block.Bellatrix)
+	// Marshal SSZ
+	ssz, err := block.Bellatrix.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall bellatrix beacon block")
+		return nil, errors.Wrap(err, "failed to serialize block for bellatrix beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall bellatrix beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBeaconBlockBellatrixFromConsensus(block.Bellatrix)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert bellatrix beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -150,13 +212,20 @@ func handleBlindedBellatrixBlock(block *ethpb.GenericSignedBeaconBlock_BlindedBe
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBlindedBeaconBlockBellatrixFromConsensus(block.BlindedBellatrix)
+	// Marshal SSZ
+	ssz, err := block.BlindedBellatrix.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall blinded bellatrix beacon block")
+		return nil, errors.Wrap(err, "failed to serialize block for bellatrix beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall blinded bellatrix beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBlindedBeaconBlockBellatrixFromConsensus(block.BlindedBellatrix)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert blinded bellatrix beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -173,13 +242,20 @@ func handleCapellaBlock(block *ethpb.GenericSignedBeaconBlock_Capella) (*blockPr
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBeaconBlockCapellaFromConsensus(block.Capella)
+	// Marshal SSZ
+	ssz, err := block.Capella.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall capella beacon block")
+		return nil, errors.Wrap(err, "failed to serialize capella beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall capella beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBeaconBlockCapellaFromConsensus(block.Capella)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert capella beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -196,13 +272,20 @@ func handleBlindedCapellaBlock(block *ethpb.GenericSignedBeaconBlock_BlindedCape
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBlindedBeaconBlockCapellaFromConsensus(block.BlindedCapella)
+	// Marshal SSZ
+	ssz, err := block.BlindedCapella.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall blinded capella beacon block")
+		return nil, errors.Wrap(err, "failed to serialize blinded capella beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall blinded capella beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBlindedBeaconBlockCapellaFromConsensus(block.BlindedCapella)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert blinded capella beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -219,13 +302,20 @@ func handleDenebBlockContents(block *ethpb.GenericSignedBeaconBlock_Deneb) (*blo
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBeaconBlockContentsDenebFromConsensus(block.Deneb)
+	// Marshal SSZ
+	ssz, err := block.Deneb.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall deneb beacon block contents")
+		return nil, errors.Wrap(err, "failed to serialize deneb beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall deneb beacon block contents to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBeaconBlockContentsDenebFromConsensus(block.Deneb)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert deneb beacon block contents")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -242,13 +332,20 @@ func handleBlindedDenebBlock(block *ethpb.GenericSignedBeaconBlock_BlindedDeneb)
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBlindedBeaconBlockDenebFromConsensus(block.BlindedDeneb)
+	// Marshal SSZ
+	ssz, err := block.BlindedDeneb.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall deneb blinded beacon block ")
+		return nil, errors.Wrap(err, "failed to serialize blinded deneb  beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall deneb blinded beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBlindedBeaconBlockDenebFromConsensus(block.BlindedDeneb)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert deneb blinded beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -265,13 +362,20 @@ func handleElectraBlockContents(block *ethpb.GenericSignedBeaconBlock_Electra) (
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
+	// Marshal SSZ
+	ssz, err := block.Electra.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall electra beacon block contents")
+		return nil, errors.Wrap(err, "failed to serialize electra beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall electra beacon block contents to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert electra beacon block contents")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -288,13 +392,20 @@ func handleBlindedElectraBlock(block *ethpb.GenericSignedBeaconBlock_BlindedElec
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBlindedBeaconBlockElectraFromConsensus(block.BlindedElectra)
+	// Marshal SSZ
+	ssz, err := block.BlindedElectra.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall electra blinded beacon block")
+		return nil, errors.Wrap(err, "failed to serialize blinded electra beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall electra blinded beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBlindedBeaconBlockElectraFromConsensus(block.BlindedElectra)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert electra blinded beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -311,13 +422,20 @@ func handleFuluBlockContents(block *ethpb.GenericSignedBeaconBlock_Fulu) (*block
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBeaconBlockContentsFuluFromConsensus(block.Fulu)
+	// Marshal SSZ
+	ssz, err := block.Fulu.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall fulu beacon block contents")
+		return nil, errors.Wrap(err, "failed to serialize fulu beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall fulu beacon block contents to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBeaconBlockContentsFuluFromConsensus(block.Fulu)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert fulu beacon block contents")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil
@@ -334,13 +452,20 @@ func handleBlindedFuluBlock(block *ethpb.GenericSignedBeaconBlock_BlindedFulu) (
 	}
 	res.beaconBlockRoot = beaconBlockRoot
 
-	signedBlock, err := structs.SignedBlindedBeaconBlockFuluFromConsensus(block.BlindedFulu)
+	// Marshal SSZ
+	ssz, err := block.BlindedFulu.MarshalSSZ()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall fulu blinded beacon block")
+		return nil, errors.Wrap(err, "failed to serialize blinded fulu beacon block")
 	}
-	res.marshalledJSON, err = json.Marshal(signedBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshall fulu blinded beacon block to json")
+	res.marshalledSSZ = ssz
+
+	// Set up JSON marshalling function for fallback
+	res.marshalJSON = func() ([]byte, error) {
+		signedBlock, err := structs.SignedBlindedBeaconBlockFuluFromConsensus(block.BlindedFulu)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert fulu blinded beacon block")
+		}
+		return json.Marshal(signedBlock)
 	}
 
 	return &res, nil

@@ -84,6 +84,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.NoDiscovery,
 			cmd.P2PAllowList,
 			cmd.P2PDenyList,
+			cmd.P2PColocationWhitelist,
 			cmd.P2PHost,
 			cmd.P2PHostDNS,
 			cmd.P2PIP,
@@ -127,6 +128,7 @@ var appHelpFlagGroups = []flagGroup{
 			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
+			storage.DataColumnStoragePathFlag,
 		},
 	},
 	{ // Flags relevant to configuring local block production or external builders such as mev-boost.

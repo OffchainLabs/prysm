@@ -7,9 +7,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
@@ -18,11 +18,6 @@ import (
 
 // ErrCouldNotVerifyBlockHeader is returned when a block header's signature cannot be verified.
 var ErrCouldNotVerifyBlockHeader = errors.New("could not verify beacon block header")
-
-type slashValidatorFunc func(
-	ctx context.Context,
-	st state.BeaconState,
-	vid primitives.ValidatorIndex) (state.BeaconState, error)
 
 // ProcessProposerSlashings is one of the operations performed
 // on each processed beacon block to slash proposers based on
@@ -54,11 +49,11 @@ func ProcessProposerSlashings(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []*ethpb.ProposerSlashing,
-	slashFunc slashValidatorFunc,
+	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, slashFunc)
+		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, exitInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +66,7 @@ func ProcessProposerSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing *ethpb.ProposerSlashing,
-	slashFunc slashValidatorFunc,
+	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	var err error
 	if slashing == nil {
@@ -80,7 +75,7 @@ func ProcessProposerSlashing(
 	if err = VerifyProposerSlashing(beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify proposer slashing")
 	}
-	beaconState, err = slashFunc(ctx, beaconState, slashing.Header_1.Header.ProposerIndex)
+	beaconState, err = validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not slash proposer index %d", slashing.Header_1.Header.ProposerIndex)
 	}

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api/client"
@@ -1571,5 +1572,5 @@ type voteStats struct {
 
 // This tracks all validators' submissions for sync committees.
 type syncCommitteeStats struct {
-	totalMessagesSubmitted uint64
+	totalMessagesSubmitted atomic.Uint64
 }
