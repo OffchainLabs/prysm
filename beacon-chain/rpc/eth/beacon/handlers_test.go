@@ -923,7 +923,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			sb, err := blocks.NewSignedBeaconBlock(b)
 			require.NoError(t, err)
 
-			mockChainService := &chainMock.ChainService{
+			mockChainService := &mockChain.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -953,7 +953,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
 			sb, err := blocks.NewSignedBeaconBlock(b)
 			require.NoError(t, err)
-			mockChainService := &chainMock.ChainService{
+			mockChainService := &mockChain.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -983,7 +983,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			esb, err := blocks.NewSignedBeaconBlock(eb)
 			require.NoError(t, err)
 
-			mockChainService := &chainMock.ChainService{
+			mockChainService := &mockChain.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
