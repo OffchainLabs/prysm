@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -112,7 +111,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return err
 	}
 
-	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
+	daWaitedTime, err := s.handleDA(ctx, avs, roblock)
 	if err != nil {
 		return err
 	}
@@ -240,41 +239,19 @@ func (s *Service) validateExecutionAndConsensus(
 	return postState, isValidPayload, nil
 }
 
-func (s *Service) handleDA(
-	ctx context.Context,
-	block interfaces.SignedBeaconBlock,
-	blockRoot [fieldparams.RootLength]byte,
-	avs das.AvailabilityStore,
-) (elapsed time.Duration, err error) {
-	defer func(start time.Time) {
-		elapsed = time.Since(start)
-
-		if err == nil {
-			dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
-		}
-	}(time.Now())
-
-	if avs == nil {
-		roBlock, roErr := blocks.NewROBlockWithRoot(block, blockRoot)
-		if roErr != nil {
-			return elapsed, errors.Wrap(roErr, "failed to create ROBlock")
-		}
-		if err = s.isDataAvailable(ctx, roBlock); err != nil {
-			return
-		}
-
-		return
+func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityStore, block blocks.ROBlock) (time.Duration, error) {
+	var err error
+	start := time.Now()
+	if avs != nil {
+		err = avs.IsDataAvailable(ctx, s.CurrentSlot(), block)
+	} else {
+		err = s.isDataAvailable(ctx, block)
 	}
-
-	var rob blocks.ROBlock
-	rob, err = blocks.NewROBlockWithRoot(block, blockRoot)
+	elapsed := time.Since(start)
 	if err != nil {
-		return
+		dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
 	}
-
-	err = avs.IsDataAvailable(ctx, s.CurrentSlot(), rob)
-
-	return
+	return elapsed, err
 }
 
 func (s *Service) reportPostBlockProcessing(

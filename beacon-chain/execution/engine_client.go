@@ -124,8 +124,7 @@ type Reconstructor interface {
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecarsFromBlock(ctx context.Context, roblock blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error)
-	ConstructDataColumnSidecarsFromColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -653,26 +652,15 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-// ConstructDataColumnSidecarsFromBlock reconstructs the verified data column sidecars for a given beacon block.
-// It retrieves the KZG commitments from the block body, fetches the associated blobs and cell proofs from the EL,
-// and constructs the corresponding verified read-only data column sidecars.
-func (s *Service) ConstructDataColumnSidecarsFromBlock(ctx context.Context, roBlock blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error) {
-	root := roBlock.Root()
-	block := roBlock.Block()
-
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
+	root := populator.Root()
 	log := log.WithFields(logrus.Fields{
 		"root": fmt.Sprintf("%#x", root),
-		"slot": roBlock.Block().Slot(),
+		"slot": populator.Slot(),
 	})
 
-	// Extract commitments from block.
-	commitments, err := block.Body().BlobKzgCommitments()
-	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "blob kzg commitments")
-	}
-
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
-	cellsAndProofs, err := s.cellsAndProofFromExecutionClient(ctx, commitments)
+	cellsAndProofs, err := s.cellsAndProofsForCommitments(ctx, populator.Commitments())
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
@@ -683,56 +671,22 @@ func (s *Service) ConstructDataColumnSidecarsFromBlock(ctx context.Context, roBl
 	}
 
 	// Construct data column sidears from the signed block and cells and proofs.
-	roSidecars, err := peerdas.DataColumnSidecarsFromBlock(roBlock, cellsAndProofs)
+	roSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, populator)
 	if err != nil {
-		return nil, errors.Wrap(err, "data column sidcars")
+		return nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
 	}
 
 	// Upgrade the sidecars to verified sidecars.
 	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
 
-	log.Debug("Data columns sidecars constructed from the execution client via a beacon block")
+	log.WithField("sourceType", populator.Type()).Debug("Data columns sidecars constructed from the execution client")
 
 	return verifiedROSidecars, nil
 }
 
-func (s *Service) ConstructDataColumnSidecarsFromColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
-	root := sidecar.BlockRoot()
-
-	log := log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", root),
-		"slot": sidecar.Slot(),
-	})
-
-	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
-	cellsAndProofs, err := s.cellsAndProofFromExecutionClient(ctx, sidecar.KzgCommitments)
-	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
-	}
-
-	// Return early if nothing is returned from the EL.
-	if len(cellsAndProofs) == 0 {
-		return nil, nil
-	}
-
-	// Construct data column sidears from the signed block and cells and proofs.
-	roSidecars, err := peerdas.DataColumnSidecarsFromColumnSidecar(sidecar, cellsAndProofs)
-	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "data column sidcars from column sidecar")
-	}
-
-	// Upgrade the sidecars to verified sidecars.
-	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
-	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
-
-	log.Debug("Data columns sidecars constructed from the execution client via a data column sidecar")
-
-	return verifiedROSidecars, nil
-}
-
-// cellsAndProofFromExecutionClient fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) cellsAndProofFromExecutionClient(ctx context.Context, kzgCommitments [][]byte) ([]kzg.CellsAndProofs, error) {
+// cellsAndProofsForCommitments fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
+func (s *Service) cellsAndProofsForCommitments(ctx context.Context, kzgCommitments [][]byte) ([]kzg.CellsAndProofs, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {

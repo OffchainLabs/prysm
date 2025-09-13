@@ -244,7 +244,7 @@ func TestReconstructBlobs(t *testing.T) {
 		require.NoError(t, err)
 
 		// Construct data column sidears from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecarsFromBlock(roBlock, cellsAndProofs)
+		roDataColumnSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 
 		// Convert to verified data column sidecars.

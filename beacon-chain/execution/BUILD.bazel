@@ -104,6 +104,7 @@ go_test(
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",

@@ -61,12 +61,6 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	// Sidecars are verified and are committed to the same block.
-	// All signed block headers, KZG commitments, and inclusion proofs are the same.
-	signedBlockHeader := referenceSidecar.SignedBlockHeader
-	kzgCommitments := referenceSidecar.KzgCommitments
-	kzgCommitmentsInclusionProof := referenceSidecar.KzgCommitmentsInclusionProof
-
 	// Recover cells and compute proofs in parallel.
 	var wg errgroup.Group
 	cellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
@@ -99,7 +93,7 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 		return nil, errors.Wrap(err, "wait for RecoverCellsAndKZGProofs")
 	}
 
-	outSidecars, err := dataColumnSidecars(signedBlockHeader, kzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
+	outSidecars, err := ConstructDataColumnSidecar(cellsAndProofs, PopulateFromSidecar(referenceSidecar.RODataColumn))
 	if err != nil {
 		return nil, errors.Wrap(err, "data column sidecars from items")
 	}

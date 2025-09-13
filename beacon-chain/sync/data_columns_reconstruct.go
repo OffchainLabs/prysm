@@ -254,7 +254,7 @@ func (s *Service) processDataColumnSidecarsFromExecutionFromBlock(ctx context.Co
 		}
 
 		// Try to reconstruct data column sidecars from the execution client.
-		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		if err != nil {
 			return errors.Wrap(err, "reconstruct data column sidecars")
 		}
@@ -327,7 +327,7 @@ func (s *Service) processDataColumnSidecarsFromExecutionFromColumnSidecar(ctx co
 		}
 
 		// Try to reconstruct data column sidecars from the execution client.
-		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar.RODataColumn))
 		if err != nil {
 			return errors.Wrap(err, "reconstruct data column sidecars")
 		}

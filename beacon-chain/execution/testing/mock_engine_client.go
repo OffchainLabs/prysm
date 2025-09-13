@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -116,11 +117,8 @@ func (e *EngineClient) ReconstructBlobSidecars(context.Context, interfaces.ReadO
 	return e.BlobSidecars, e.ErrorBlobSidecars
 }
 
-func (e *EngineClient) ConstructDataColumnSidecarsFromBlock(context.Context, blocks.ROBlock) ([]blocks.VerifiedRODataColumn, error) {
-	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
-}
-
-func (e *EngineClient) ConstructDataColumnSidecarsFromColumnSidecar(context.Context, blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+// ConstructDataColumnSidecars is a mock implementation of the ConstructDataColumnSidecars method.
+func (e *EngineClient) ConstructDataColumnSidecars(context.Context, peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
 	return e.DataColumnSidecars, e.ErrorDataColumnSidecars
 }
 

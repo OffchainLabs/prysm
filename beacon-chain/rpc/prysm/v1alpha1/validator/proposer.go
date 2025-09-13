@@ -309,10 +309,11 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 	}
 
+	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 	} else if block.Version() >= version.Deneb {
-		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(block, req)
+		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -398,7 +399,7 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 }
 
 func (vs *Server) handleUnblindedBlock(
-	signedRoBlock interfaces.SignedBeaconBlock,
+	block blocks.ROBlock,
 	req *ethpb.GenericSignedBeaconBlock,
 ) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
@@ -406,15 +407,15 @@ func (vs *Server) handleUnblindedBlock(
 		return nil, nil, err
 	}
 
-	if signedRoBlock.Version() >= version.Fulu {
+	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
 		cellsAndProofs, err := peerdas.ComputeCellsAndProofs(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
-		// Construct data column sidears from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecarsFromBlock(signedRoBlock, cellsAndProofs)
+		// Construct data column sidecars from the signed block and cells and proofs.
+		roDataColumnSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "data column sidcars")
 		}
@@ -422,7 +423,7 @@ func (vs *Server) handleUnblindedBlock(
 		return nil, roDataColumnSidecars, nil
 	}
 
-	blobSidecars, err := BuildBlobSidecars(signedRoBlock, rawBlobs, proofs)
+	blobSidecars, err := BuildBlobSidecars(block, rawBlobs, proofs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "build blob sidecars")
 	}

@@ -7,7 +7,6 @@ import (
 	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
@@ -42,119 +41,153 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }
 
-// DataColumnSidecarsFromBlock, given a signed block and the cells/proofs associated with each blob in the
-// block, assemble the sidecars which can be distributed to peers.
+// ConstructDataColumnSidecar, given ConstructionPopulator and the cells/proofs associated with each blob in the
+// block, assembles sidecars which can be distributed to peers.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_block
-func DataColumnSidecarsFromBlock(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsAndKzgProofs []kzg.CellsAndProofs) ([]blocks.RODataColumn, error) {
-	if signedBlock == nil || signedBlock.IsNil() {
-		return nil, ErrNilSignedBlockOrEmptyCellsAndProofs
+func ConstructDataColumnSidecar(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
+	if len(rows) == 0 {
+		return nil, nil
 	}
-
-	block := signedBlock.Block()
-	blockBody := block.Body()
-	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
-	if err != nil {
-		return nil, errors.Wrap(err, "blob KZG commitments")
-	}
-
-	signedBlockHeader, err := signedBlock.Header()
-	if err != nil {
-		return nil, errors.Wrap(err, "signed block header")
-	}
-
-	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
-	if err != nil {
-		return nil, errors.Wrap(err, "merkle proof KZG commitments")
-	}
-
-	dataColumnSidecars, err := dataColumnSidecars(signedBlockHeader, blobKzgCommitments, kzgCommitmentsInclusionProof, cellsAndKzgProofs)
-	if err != nil {
-		return nil, errors.Wrap(err, "data column sidecars")
-	}
-
-	return dataColumnSidecars, nil
-}
-
-// DataColumnSidecarsFromColumnSidecar, given a DataColumnSidecar and the cells/proofs associated with each blob corresponding
-// to the commitments it contains, assemble all sidecars for distribution to peers.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_column_sidecar
-func DataColumnSidecarsFromColumnSidecar(sidecar blocks.VerifiedRODataColumn, cellsAndKzgProofs []kzg.CellsAndProofs) ([]blocks.RODataColumn, error) {
-	dataColumnSidecars, err := dataColumnSidecars(sidecar.SignedBlockHeader, sidecar.KzgCommitments, sidecar.KzgCommitmentsInclusionProof, cellsAndKzgProofs)
-	if err != nil {
-		return nil, errors.Wrap(err, "data column sidecars")
-	}
-
-	return dataColumnSidecars, nil
-}
-
-// dataColumnSidecars, given a signed block header and the commitments, inclusion proof, cells/proofs associated with
-// each blob in the block, assemble the sidecars which can be distributed to peers.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars
-func dataColumnSidecars(
-	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
-	blobKzgCommitments [][]byte,
-	kzgCommitmentsInclusionProof [][]byte,
-	cellsAndProofs []kzg.CellsAndProofs,
-) ([]blocks.RODataColumn, error) {
 	start := time.Now()
-	if len(cellsAndProofs) != len(blobKzgCommitments) {
-		return nil, ErrSizeMismatch
+	cells, proofs, err := rotateRowsToCols(rows, params.BeaconConfig().NumberOfColumns)
+	if err != nil {
+		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	blobsCount := len(cellsAndProofs)
-	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
-	for columnIndex := range numberOfColumns {
-		column := make([]kzg.Cell, 0, blobsCount)
-		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
-
-		for rowIndex := range blobsCount {
-			cellsForRow := cellsAndProofs[rowIndex].Cells
-			proofsForRow := cellsAndProofs[rowIndex].Proofs
-
-			// Validate that we have enough cells and proofs for this column index
-			if columnIndex >= uint64(len(cellsForRow)) {
-				return nil, errors.Errorf("column index %d exceeds cells length %d for blob %d", columnIndex, len(cellsForRow), rowIndex)
-			}
-			if columnIndex >= uint64(len(proofsForRow)) {
-				return nil, errors.Errorf("column index %d exceeds proofs length %d for blob %d", columnIndex, len(proofsForRow), rowIndex)
-			}
-
-			cell := cellsForRow[columnIndex]
-			column = append(column, cell)
-
-			kzgProof := proofsForRow[columnIndex]
-			kzgProofOfColumn = append(kzgProofOfColumn, kzgProof)
-		}
-
-		columnBytes := make([][]byte, 0, blobsCount)
-		for i := range column {
-			columnBytes = append(columnBytes, column[i][:])
-		}
-
-		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
-		for _, kzgProof := range kzgProofOfColumn {
-			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, kzgProof[:])
-		}
-
+	maxIdx := params.BeaconConfig().NumberOfColumns
+	roSidecars := make([]blocks.RODataColumn, 0, maxIdx)
+	for idx := range maxIdx {
 		sidecar := &ethpb.DataColumnSidecar{
-			Index:                        columnIndex,
-			Column:                       columnBytes,
-			KzgCommitments:               blobKzgCommitments,
-			KzgProofs:                    kzgProofOfColumnBytes,
-			SignedBlockHeader:            signedBlockHeader,
-			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+			Index:     idx,
+			Column:    cells[idx],
+			KzgProofs: proofs[idx],
+		}
+		if err := src.Populate(sidecar); err != nil {
+			return nil, errors.Wrap(err, "column field setter set")
+		}
+		if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
+			return nil, ErrSizeMismatch
 		}
 
-		roSidecar, err := blocks.NewRODataColumn(sidecar)
+		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, src.Root())
 		if err != nil {
 			return nil, errors.Wrap(err, "new ro data column")
 		}
-
 		roSidecars = append(roSidecars, roSidecar)
 	}
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return roSidecars, nil
 }
+
+// rotateRowsToCols takes a 2D slice of cells and proofs, where the x is rows (blobs) and y is columns,
+// and returns a 2D slice where x is columns and y is rows.
+func rotateRowsToCols(rows []kzg.CellsAndProofs, numCols uint64) ([][][]byte, [][][]byte, error) {
+	if len(rows) == 0 {
+		return nil, nil, nil
+	}
+	cellCols := make([][][]byte, numCols)
+	proofCols := make([][][]byte, numCols)
+	for i, cp := range rows {
+		if uint64(len(cp.Cells)) != numCols {
+			return nil, nil, errors.Wrap(ErrNotEnoughDataColumnSidecars, "not enough cells")
+		}
+		if len(cp.Cells) != len(cp.Proofs) {
+			return nil, nil, errors.Wrap(ErrNotEnoughDataColumnSidecars, "not enough proofs")
+		}
+		for j := uint64(0); j < numCols; j++ {
+			if i == 0 {
+				cellCols[j] = make([][]byte, len(rows))
+				proofCols[j] = make([][]byte, len(rows))
+			}
+			cellCols[j][i] = cp.Cells[j][:]
+			proofCols[j][i] = cp.Proofs[j][:]
+		}
+	}
+	return cellCols, proofCols, nil
+}
+
+// ConstructionPopulator is an interface that can be satisfied by a type that can use data from a struct
+// like a DataColumnSidecar or a BeaconBlock to set the fields in a data column sidecar that cannot
+// be obtained from the engine api.
+type ConstructionPopulator interface {
+	Populate(*ethpb.DataColumnSidecar) error
+	Slot() primitives.Slot
+	Root() [32]byte
+	Commitments() [][]byte
+	Type() string
+}
+
+func PopulateFromSidecar(sidecar blocks.RODataColumn) *SidecarReconstructionSource {
+	return &SidecarReconstructionSource{RODataColumn: sidecar}
+}
+
+type SidecarReconstructionSource struct {
+	blocks.RODataColumn
+}
+
+func (s *SidecarReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
+	dc.SignedBlockHeader = s.SignedBlockHeader
+	dc.KzgCommitments = s.KzgCommitments
+	dc.KzgCommitmentsInclusionProof = s.KzgCommitmentsInclusionProof
+	return nil
+}
+
+func (s *SidecarReconstructionSource) Root() [32]byte {
+	return s.BlockRoot()
+}
+
+func (s *SidecarReconstructionSource) Commitments() [][]byte {
+	return s.KzgCommitments
+}
+
+func (s *SidecarReconstructionSource) Type() string {
+	return "DataColumnSidecar"
+}
+
+var _ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
+
+func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
+	return &BlockReconstructionSource{ROBlock: block}
+}
+
+type BlockReconstructionSource struct {
+	blocks.ROBlock
+}
+
+func (b *BlockReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
+	block := b.Block()
+	blockBody := block.Body()
+	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "blob KZG commitments")
+	}
+	dc.KzgCommitments = blobKzgCommitments
+	dc.SignedBlockHeader, err = b.Header()
+	if err != nil {
+		return errors.Wrap(err, "signed block header")
+	}
+	dc.KzgCommitmentsInclusionProof, err = blocks.MerkleProofKZGCommitments(blockBody)
+	if err != nil {
+		return errors.Wrap(err, "merkle proof KZG commitments")
+	}
+	return nil
+}
+
+func (s *BlockReconstructionSource) Slot() primitives.Slot {
+	return s.Block().Slot()
+}
+
+func (s *BlockReconstructionSource) Commitments() [][]byte {
+	c, err := s.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		log.WithField("root", s.Root()).Trace("Unable to get kzg commitments from block")
+	}
+	return c
+}
+
+func (s *BlockReconstructionSource) Type() string {
+	return "BeaconBlock"
+}
+
+var _ ConstructionPopulator = (*BlockReconstructionSource)(nil)

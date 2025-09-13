@@ -59,11 +59,6 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 }
 
 func TestDataColumnSidecarsFromBlock(t *testing.T) {
-	t.Run("nil signed block", func(t *testing.T) {
-		_, err := peerdas.DataColumnSidecarsFromBlock(nil, []kzg.CellsAndProofs{})
-		require.ErrorIs(t, err, peerdas.ErrNilSignedBlockOrEmptyCellsAndProofs)
-	})
-
 	t.Run("sizes mismatch", func(t *testing.T) {
 		// Create a protobuf signed beacon block.
 		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
@@ -73,9 +68,16 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create cells and proofs.
-		cellsAndProofs := make([]kzg.CellsAndProofs, 1)
+		cellsAndProofs := []kzg.CellsAndProofs{
+			{
+				Cells:  make([]kzg.Cell, params.BeaconConfig().NumberOfColumns),
+				Proofs: make([]kzg.Proof, params.BeaconConfig().NumberOfColumns),
+			},
+		}
 
-		_, err = peerdas.DataColumnSidecarsFromBlock(signedBeaconBlock, cellsAndProofs)
+		rob, err := blocks.NewROBlock(signedBeaconBlock)
+		require.NoError(t, err)
+		_, err = peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrSizeMismatch)
 	})
 
@@ -99,9 +101,10 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 
 		// This should fail because the function will try to access columns up to NumberOfColumns
 		// but we only have 10 cells/proofs.
-		_, err = peerdas.DataColumnSidecarsFromBlock(signedBeaconBlock, cellsAndProofs)
-		require.ErrorContains(t, "column index", err)
-		require.ErrorContains(t, "exceeds cells length", err)
+		rob, err := blocks.NewROBlock(signedBeaconBlock)
+		require.NoError(t, err)
+		_, err = peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
 	t.Run("proofs array too short for column index", func(t *testing.T) {
@@ -123,9 +126,11 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 		}
 
 		// This should fail when trying to access proof beyond index 4.
-		_, err = peerdas.DataColumnSidecarsFromBlock(signedBeaconBlock, cellsAndProofs)
-		require.ErrorContains(t, "column index", err)
-		require.ErrorContains(t, "exceeds proofs length", err)
+		rob, err := blocks.NewROBlock(signedBeaconBlock)
+		require.NoError(t, err)
+		_, err = peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
+		require.ErrorContains(t, "not enough proofs", err)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
@@ -164,7 +169,9 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 			cellsAndProofs[1].Proofs[i][0] = byte(i + 128)
 		}
 
-		sidecars, err := peerdas.DataColumnSidecarsFromBlock(signedBeaconBlock, cellsAndProofs)
+		rob, err := blocks.NewROBlock(signedBeaconBlock)
+		require.NoError(t, err)
+		sidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 		require.NoError(t, err)
 		require.NotNil(t, sidecars)
 		require.Equal(t, int(numberOfColumns), len(sidecars))
@@ -260,7 +267,7 @@ func TestDataColumnSidecarsFromColumnSidecar(t *testing.T) {
 	}
 
 	// Call the function
-	sidecars, err := peerdas.DataColumnSidecarsFromColumnSidecar(verifiedInputSidecar, cellsAndProofs)
+	sidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromSidecar(verifiedInputSidecar.RODataColumn))
 	require.NoError(t, err)
 	require.NotNil(t, sidecars)
 	require.Equal(t, int(numberOfColumns), len(sidecars))

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	mocks "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -2586,7 +2587,7 @@ func TestConstructDataColumnSidecarsFromBlock(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
@@ -2597,7 +2598,7 @@ func TestConstructDataColumnSidecarsFromBlock(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2610,7 +2611,7 @@ func TestConstructDataColumnSidecarsFromBlock(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
@@ -2623,7 +2624,7 @@ func TestConstructDataColumnSidecarsFromBlock(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		_, err := client.ConstructDataColumnSidecarsFromBlock(ctx, roBlock)
+		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
 	})
 }
@@ -2687,7 +2688,7 @@ func TestConstructDataColumnSidecarsFromSidecar(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar.RODataColumn))
 		require.NotNil(t, err)
 		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
@@ -2699,7 +2700,7 @@ func TestConstructDataColumnSidecarsFromSidecar(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar.RODataColumn))
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2712,7 +2713,7 @@ func TestConstructDataColumnSidecarsFromSidecar(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar.RODataColumn))
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns)) // NumberOfColumns
 
@@ -2748,7 +2749,7 @@ func TestConstructDataColumnSidecarsFromSidecar(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		_, err := client.ConstructDataColumnSidecarsFromColumnSidecar(ctx, sidecar)
+		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar.RODataColumn))
 		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
 	})
 }
