@@ -54,10 +54,32 @@ func (e BlockIdParseError) Error() string {
 	return e.message
 }
 
+// BlobsOption is a functional option for configuring blob retrieval
+type BlobsOption func(*blobsConfig)
+
+type blobsConfig struct {
+	indices         []int
+	versionedHashes [][]byte
+}
+
+// WithIndices specifies blob indices to retrieve
+func WithIndices(indices []int) BlobsOption {
+	return func(c *blobsConfig) {
+		c.indices = indices
+	}
+}
+
+// WithVersionedHashes specifies versioned hashes to retrieve blobs by
+func WithVersionedHashes(hashes [][]byte) BlobsOption {
+	return func(c *blobsConfig) {
+		c.versionedHashes = hashes
+	}
+}
+
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	Blobs(ctx context.Context, id string, opts ...BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
@@ -147,7 +169,9 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 	return blk, nil
 }
 
-// Blobs returns the blobs for a given block id identifier and blob indices. The identifier can be one of:
+// Blobs returns the fetched blobs for a given block ID with configurable options.
+// Options can specify either blob indices or versioned hashes for retrieval.
+// The identifier can be one of:
 //   - "head" (canonical head in node's view)
 //   - "genesis"
 //   - "finalized"
@@ -162,7 +186,14 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //   - block exists, has commitments, inside retention period (greater of protocol- or user-specified) serve then w/ 200 unless we hit an error reading them.
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
-func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	// Apply options
+	cfg := &blobsConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	// Resolve block ID to root
 	var rootSlice []byte
 	switch id {
 	case "genesis":
@@ -266,16 +297,73 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) (
 		}
 	}
 
+	// Handle versioned hashes if provided - return blobs in the order of the requested hashes
+	if len(cfg.versionedHashes) > 0 {
+		return p.blobsByVersionedHashesInOrder(commitments, root, roSignedBlock, cfg.versionedHashes, fuluForkSlot)
+	}
+
 	if roBlock.Slot() >= fuluForkSlot {
 		roBlock, err := blocks.NewROBlockWithRoot(roSignedBlock, root)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
 		}
 
-		return p.blobsFromStoredDataColumns(roBlock, indices)
+		return p.blobsFromStoredDataColumns(roBlock, cfg.indices)
 	}
 
-	return p.blobsFromStoredBlobs(commitments, root, indices)
+	return p.blobsFromStoredBlobs(commitments, root, cfg.indices)
+}
+
+// blobsByVersionedHashesInOrder retrieves blobs for the specified versioned hashes in the exact order requested
+func (p *BeaconDbBlocker) blobsByVersionedHashesInOrder(commitments [][]byte, root [32]byte, roSignedBlock interfaces.ReadOnlySignedBeaconBlock, versionedHashes [][]byte, fuluForkSlot primitives.Slot) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	// Build a map of versioned hash to blob index
+	hashToIndex := make(map[string]int)
+	for i, commitment := range commitments {
+		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+		hashToIndex[string(versionedHash[:])] = i
+	}
+
+	// Retrieve blobs in the order of the requested versioned hashes
+	blobs := make([]*blocks.VerifiedROBlob, 0, len(versionedHashes))
+
+	for _, versionedHash := range versionedHashes {
+		index, exists := hashToIndex[string(versionedHash)]
+		if !exists {
+			return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}
+		}
+
+		var blobSidecar blocks.VerifiedROBlob
+		var err error
+
+		if roSignedBlock.Block().Slot() >= fuluForkSlot {
+			// Use data columns for Fulu blocks
+			roBlockWithRoot, blockErr := blocks.NewROBlockWithRoot(roSignedBlock, root)
+			if blockErr != nil {
+				return nil, &core.RpcError{Err: errors.Wrapf(blockErr, "failed to create roBlock with root %#x", root), Reason: core.Internal}
+			}
+
+			// For Fulu blocks, we need to reconstruct from data columns
+			verifiedRoBlobs, rpcErr := p.blobsFromStoredDataColumns(roBlockWithRoot, []int{index})
+			if rpcErr != nil {
+				return nil, rpcErr
+			}
+			if len(verifiedRoBlobs) > 0 {
+				blobSidecar = *verifiedRoBlobs[0]
+			} else {
+				return nil, &core.RpcError{Err: errors.New("blob not found from stored data columns"), Reason: core.NotFound}
+			}
+		} else {
+			// Use blob storage for pre-Fulu blocks
+			blobSidecar, err = p.BlobStorage.Get(root, uint64(index))
+			if err != nil {
+				return nil, &core.RpcError{Err: errors.Wrap(err, "blob not found from storage"), Reason: core.NotFound}
+			}
+		}
+
+		blobs = append(blobs, &blobSidecar)
+	}
+
+	return blobs, nil
 }
 
 // blobsFromStoredBlobs retrieves blob sidercars corresponding to `indices` and `root` from the store.
