@@ -145,7 +145,7 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		pubsub.WithPeerOutboundQueueSize(int(s.cfg.QueueSize)),
 		pubsub.WithMaxMessageSize(int(MaxMessageSize())), // lint:ignore uintcast -- Max Message Size is a config value and is naturally bounded by networking limitations.
 		pubsub.WithValidateQueueSize(int(s.cfg.QueueSize)),
-		pubsub.WithPeerScore(peerScoringParams()),
+		pubsub.WithPeerScore(peerScoringParams(s.cfg.IPColocationWhitelist)),
 		pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
 		pubsub.WithRawTracer(gossipTracer{host: s.host}),
