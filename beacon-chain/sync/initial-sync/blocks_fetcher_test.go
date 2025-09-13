@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
@@ -908,6 +909,55 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 			}
 		})
 	}
+}
+
+func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	topic := p2p.RPCBlocksByRangeTopicV1
+	protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+		p2p:   p1,
+		chain: &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}},
+	})
+	fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 640, 1*time.Second, false)
+
+	// Set up handler that returns blocks in wrong order (will trigger ErrInvalidFetchedData)
+	p2.BHost.SetStreamHandler(protocol, func(stream network.Stream) {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 163
+		tor := startup.NewClock(time.Now(), [32]byte{})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+
+		blk = util.NewBeaconBlock()
+		blk.Block.Slot = 162
+		wsb, err = blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+		assert.NoError(t, stream.Close())
+	})
+
+	// Verify the peer has no bad responses before the request
+	scoreBeforeRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+	require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
+	assert.Equal(t, -1, scoreBeforeRequest)
+
+	// Use fetchBlocksFromPeer which includes the downscoring logic
+	_, _, err = fetcher.fetchBlocksFromPeer(ctx, 100, 64, []peer.ID{p2.PeerID()})
+	assert.ErrorContains(t, errNoPeersAvailable.Error(), err)
+
+	// Verify the peer was downscored
+	scoreAfterRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, scoreAfterRequest)
 }
 
 func TestTimeToWait(t *testing.T) {
