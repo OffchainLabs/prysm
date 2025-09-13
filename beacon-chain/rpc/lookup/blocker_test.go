@@ -581,18 +581,12 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 			fakeHash[i] = 0xFF
 		}
 		
-		// Request mix of real and fake hash
-		requestedHashes := [][]byte{hash0[:], fakeHash, hash2[:]}
+		// Request only the fake hash
+		requestedHashes := [][]byte{fakeHash}
 		
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", WithVersionedHashes(requestedHashes))
-		if rpcErr != nil {
-			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
-			return
-		}
-		require.Equal(t, 2, len(verifiedBlobs))  // Should skip the non-existent hash
-
-		// Verify only the valid hashes are returned in correct order
-		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First valid was index 0
-		assert.Equal(t, uint64(2), verifiedBlobs[1].Index)  // Third valid was index 2
+		_, rpcErr := blocker.Blobs(ctx, "finalized", WithVersionedHashes(requestedHashes))
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "versioned hash does not exist in given block", rpcErr.Err.Error())
 	})
 }
