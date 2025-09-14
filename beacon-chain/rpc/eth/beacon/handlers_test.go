@@ -6267,6 +6267,110 @@ func TestGetBlobs(t *testing.T) {
 		blbs := unmarshalBlobs(t, writer.Body.Bytes())
 		require.Equal(t, 4, len(blbs))
 	})
+
+	t.Run("versioned_hashes invalid hex", func(t *testing.T) {
+		u := "http://foo.example/finalized?versioned_hashes=invalidhex"
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		s.GetBlobs(writer, request)
+
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.StringContains(t, "Invalid versioned hash invalidhex", e.Message)
+		assert.StringContains(t, "hex string without 0x prefix", e.Message)
+	})
+
+	t.Run("versioned_hashes invalid length", func(t *testing.T) {
+		// Using 16 bytes instead of 32
+		shortHash := "0x1234567890abcdef1234567890abcdef"
+		u := fmt.Sprintf("http://foo.example/finalized?versioned_hashes=%s", shortHash)
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		s.GetBlobs(writer, request)
+
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.StringContains(t, "Invalid versioned hash length for", e.Message)
+		assert.StringContains(t, "expected 32 bytes, got 16", e.Message)
+	})
+
+	t.Run("versioned_hashes valid single hash", func(t *testing.T) {
+		// Get the first blob's commitment and convert to versioned hash
+		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(blobs[0].KzgCommitment)
+
+		u := fmt.Sprintf("http://foo.example/finalized?versioned_hashes=%s", hexutil.Encode(versionedHash[:]))
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		s.GetBlobs(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlobsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 1, len(resp.Data)) // Should return only the requested blob
+		blob := resp.Data[0]
+		require.NotNil(t, blob)
+		assert.Equal(t, hexutil.Encode(blobs[0].Blob), blob)
+	})
+
+	t.Run("versioned_hashes multiple hashes", func(t *testing.T) {
+		// Get commitments for blobs 1 and 3 and convert to versioned hashes
+		versionedHash1 := primitives.ConvertKzgCommitmentToVersionedHash(blobs[1].KzgCommitment)
+		versionedHash3 := primitives.ConvertKzgCommitmentToVersionedHash(blobs[3].KzgCommitment)
+
+		u := fmt.Sprintf("http://foo.example/finalized?versioned_hashes=%s&versioned_hashes=%s",
+			hexutil.Encode(versionedHash1[:]), hexutil.Encode(versionedHash3[:]))
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
+		s.GetBlobs(writer, request)
+
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlobsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 2, len(resp.Data)) // Should return 2 requested blobs in order
+		// Verify blobs are returned in the requested order (1, 3)
+		assert.Equal(t, hexutil.Encode(blobs[1].Blob), resp.Data[0])
+		assert.Equal(t, hexutil.Encode(blobs[3].Blob), resp.Data[1])
+	})
 }
 
 func TestBlobs_After_Deneb(t *testing.T) {
