@@ -1901,31 +1901,35 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlobs")
 	defer span.End()
 
-	// Check if versioned_hashes parameter is provided
-	versionedHashesStr := r.URL.Query()["versioned_hashes"]
 	segments := strings.Split(r.URL.Path, "/")
 	blockId := segments[len(segments)-1]
 
 	var verifiedBlobs []*blocks.VerifiedROBlob
 	var rpcErr *core.RpcError
 
-	// Parse versioned hashes
-	versionedHashes := make([][]byte, 0, len(versionedHashesStr))
-	for _, hashStr := range versionedHashesStr {
-		hash, err := hexutil.Decode(hashStr)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Invalid versioned hash %s: %v", hashStr, err), http.StatusBadRequest)
-			return
+	// Check if versioned_hashes parameter is provided
+	versionedHashesStr := r.URL.Query()["versioned_hashes"]
+	if len(versionedHashesStr) > 0 {
+		// Parse versioned hashes
+		versionedHashes := make([][]byte, 0, len(versionedHashesStr))
+		for _, hashStr := range versionedHashesStr {
+			hash, err := hexutil.Decode(hashStr)
+			if err != nil {
+				httputil.HandleError(w, fmt.Sprintf("Invalid versioned hash %s: %v", hashStr, err), http.StatusBadRequest)
+				return
+			}
+			if len(hash) != 32 {
+				httputil.HandleError(w, fmt.Sprintf("Invalid versioned hash length for %s: expected 32 bytes, got %d", hashStr, len(hash)), http.StatusBadRequest)
+				return
+			}
+			versionedHashes = append(versionedHashes, hash)
 		}
-		if len(hash) != 32 {
-			httputil.HandleError(w, fmt.Sprintf("Invalid versioned hash length for %s: expected 32 bytes, got %d", hashStr, len(hash)), http.StatusBadRequest)
-			return
-		}
-		versionedHashes = append(versionedHashes, hash)
+		// Use Blobs with versioned hash option
+		verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, lookup.WithVersionedHashes(versionedHashes))
+	} else {
+		// No versioned hashes provided - return all blobs
+		verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId)
 	}
-
-	// Use Blobs with versioned hash option
-	verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, lookup.WithVersionedHashes(versionedHashes))
 	if rpcErr != nil {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {
