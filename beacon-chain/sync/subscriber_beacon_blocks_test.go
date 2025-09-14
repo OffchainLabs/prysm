@@ -192,7 +192,9 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 					},
 					seenBlobCache: lruwrpr.New(1),
 				}
-				s.processSidecarsFromExecutionFromBlock(context.Background(), sb)
+				rob, err := blocks.NewROBlock(sb)
+				require.NoError(t, err)
+				s.processSidecarsFromExecutionFromBlock(context.Background(), rob)
 				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
 			})
 		}
@@ -288,7 +290,9 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 				sb, err := blocks.NewSignedBeaconBlock(b)
 				require.NoError(t, err)
 
-				s.processSidecarsFromExecutionFromBlock(t.Context(), sb)
+				rob, err := blocks.NewROBlock(sb)
+				require.NoError(t, err)
+				s.processSidecarsFromExecutionFromBlock(t.Context(), rob)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})
 		}

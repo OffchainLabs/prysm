@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,7 +36,11 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	go s.processSidecarsFromExecutionFromBlock(ctx, signed)
+	roBlock, err := blocks.NewROBlockWithRoot(signed, root)
+	if err != nil {
+		return errors.Wrap(err, "new roblock with root")
+	}
+	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -61,17 +66,12 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, block blocks.ROBlock) {
 	if block.Version() >= version.Fulu {
-		roBlock, err := blocks.NewROBlock(block)
-		if err != nil {
-			log.WithError(err).Error("Failed to create RO block")
-			return
-		}
 
-		key := fmt.Sprintf("%#x", roBlock.Root())
+		key := fmt.Sprintf("%#x", block.Root())
 		if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-			if err := s.processDataColumnSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+			if err := s.processDataColumnSidecarsFromExecutionFromBlock(ctx, block); err != nil {
 				return nil, err
 			}
 
