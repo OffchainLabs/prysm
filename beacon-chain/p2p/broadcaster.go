@@ -123,9 +123,6 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 	if !hasPeer {
 		attestationBroadcastAttempts.Inc()
 		if err := func() error {
-			s.subnetLocker(subnet).Lock()
-			defer s.subnetLocker(subnet).Unlock()
-
 			if err := s.FindAndDialPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}

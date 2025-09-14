@@ -110,6 +110,11 @@ func (s *Service) FindAndDialPeersWithSubnets(
 		}
 
 		peersToDial, err := func() ([]*enode.Node, error) {
+			for subnet := range defectiveSubnets {
+				s.subnetLocker(subnet).Lock()
+				defer s.subnetLocker(subnet).Unlock()
+			}
+
 			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
 			defer cancel()
 
