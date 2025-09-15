@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -25,6 +24,13 @@ const (
 	// defaultNumBatchesToPrune is the number of batches to prune in one pruning window.
 	defaultNumBatchesToPrune = 15
 )
+
+// custodyUpdater is a tiny interface that p2p service implements; kept here to avoid
+// importing the p2p package and creating a cycle.
+type custodyUpdater interface {
+	CustodyGroupCount() (uint64, error)
+	UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+}
 
 type ServiceOption func(*Service)
 
@@ -49,10 +55,10 @@ func WithSlotTicker(slotTicker slots.Ticker) ServiceOption {
 	}
 }
 
-// WithP2PService allows setting the P2P service for updating custody info.
-func WithP2PService(p2pService p2p.CustodyManager) ServiceOption {
+// WithCustodyUpdater injects the updater without importing p2p here.
+func WithCustodyUpdater(u custodyUpdater) ServiceOption {
 	return func(s *Service) {
-		s.p2pService = p2pService
+		s.custody = u
 	}
 }
 
@@ -66,7 +72,7 @@ type Service struct {
 	slotTicker     slots.Ticker
 	backfillWaiter func() error
 	initSyncWaiter func() error
-	p2pService     p2p.CustodyManager
+	custody        custodyUpdater
 }
 
 func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
@@ -177,20 +183,20 @@ func (p *Service) prune(slot primitives.Slot) error {
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
 
-	// Update the earliest available slot in P2P service after pruning.
+	// Update the earliest available slot via injected updater (if any).
 	// The earliest available slot is pruneUpto + 1 since pruneUpto is inclusive.
-	if p.p2pService != nil {
+	if p.custody != nil {
 		earliestAvailableSlot := pruneUpto + 1
 
 		// Get current custody group count to preserve it during update
-		custodyGroupCount, err := p.p2pService.CustodyGroupCount()
+		custodyGroupCount, err := p.custody.CustodyGroupCount()
 		if err != nil {
 			log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after pruning")
 			return nil
 		}
 
 		// Update the custody info with new earliest available slot
-		_, _, err = p.p2pService.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+		_, _, err = p.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
 		if err != nil {
 			log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
 				Error("Failed to update earliest available slot after pruning")

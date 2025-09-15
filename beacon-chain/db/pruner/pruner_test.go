@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	logTest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func TestPruner_PruningConditions(t *testing.T) {
@@ -137,8 +136,8 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	require.NoError(t, p.Stop())
 }
 
-// Mock P2P service for testing
-type mockP2PService struct {
+// Mock custody updater for testing
+type mockCustodyUpdater struct {
 	custodyGroupCount     uint64
 	earliestAvailableSlot primitives.Slot
 	updateCallCount       int
@@ -146,24 +145,16 @@ type mockP2PService struct {
 	lastUpdatedCount      uint64
 }
 
-func (m *mockP2PService) EarliestAvailableSlot() (primitives.Slot, error) {
-	return m.earliestAvailableSlot, nil
-}
-
-func (m *mockP2PService) CustodyGroupCount() (uint64, error) {
+func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
 	return m.custodyGroupCount, nil
 }
 
-func (m *mockP2PService) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+func (m *mockCustodyUpdater) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
 	m.lastUpdatedSlot = earliestAvailableSlot
 	m.lastUpdatedCount = custodyGroupCount
 	m.earliestAvailableSlot = earliestAvailableSlot
 	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
-func (m *mockP2PService) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
-	return m.custodyGroupCount
 }
 
 func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
@@ -177,13 +168,13 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 
 	slotTicker := &slottest.MockTicker{Channel: make(chan primitives.Slot)}
 
-	// Create mock P2P service
-	mockP2P := &mockP2PService{
+	// Create mock custody updater
+	mockCustody := &mockCustodyUpdater{
 		custodyGroupCount:     4,
 		earliestAvailableSlot: 0,
 	}
 
-	// Create pruner with mock P2P service
+	// Create pruner with mock custody updater
 	p, err := New(
 		ctx,
 		beaconDB,
@@ -191,7 +182,7 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 		nil,
 		nil,
 		WithSlotTicker(slotTicker),
-		WithP2PService(mockP2P),
+		WithCustodyUpdater(mockCustody),
 	)
 	require.NoError(t, err)
 
@@ -217,14 +208,14 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Check that UpdateCustodyInfo was called
-	assert.Equal(t, true, mockP2P.updateCallCount > 0, "UpdateCustodyInfo should have been called")
+	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateCustodyInfo should have been called")
 
 	// The earliest available slot should be pruneUpto + 1
 	// pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16
 	// So earliest available slot should be 16 + 1 = 17
 	expectedEarliestSlot := primitives.Slot(17)
-	require.Equal(t, expectedEarliestSlot, mockP2P.lastUpdatedSlot, "Earliest available slot should be updated correctly")
-	require.Equal(t, mockP2P.custodyGroupCount, mockP2P.lastUpdatedCount, "Custody group count should be preserved")
+	require.Equal(t, expectedEarliestSlot, mockCustody.lastUpdatedSlot, "Earliest available slot should be updated correctly")
+	require.Equal(t, mockCustody.custodyGroupCount, mockCustody.lastUpdatedCount, "Custody group count should be preserved")
 
 	// Check log entries
 	found := false
@@ -239,30 +230,18 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	require.NoError(t, p.Stop())
 }
 
-// Mock P2P service that returns an error for CustodyGroupCount
-type mockP2PServiceWithError struct {
-	updateCallCount  int
-	lastUpdatedSlot  primitives.Slot
-	lastUpdatedCount uint64
+// Mock custody updater that returns an error for CustodyGroupCount
+type mockCustodyUpdaterWithError struct {
+	updateCallCount int
 }
 
-func (m *mockP2PServiceWithError) EarliestAvailableSlot() (primitives.Slot, error) {
-	return 0, nil
-}
-
-func (m *mockP2PServiceWithError) CustodyGroupCount() (uint64, error) {
+func (m *mockCustodyUpdaterWithError) CustodyGroupCount() (uint64, error) {
 	return 0, errors.New("custody group count error")
 }
 
-func (m *mockP2PServiceWithError) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+func (m *mockCustodyUpdaterWithError) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
-	m.lastUpdatedSlot = earliestAvailableSlot
-	m.lastUpdatedCount = custodyGroupCount
 	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
-func (m *mockP2PServiceWithError) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
-	return 4
 }
 
 func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
@@ -276,10 +255,10 @@ func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
 
 	slotTicker := &slottest.MockTicker{Channel: make(chan primitives.Slot)}
 
-	// Create mock P2P service that returns an error for CustodyGroupCount
-	mockP2P := &mockP2PServiceWithError{}
+	// Create mock custody updater that returns an error for CustodyGroupCount
+	mockCustody := &mockCustodyUpdaterWithError{}
 
-	// Create pruner with mock P2P service
+	// Create pruner with mock custody updater
 	p, err := New(
 		ctx,
 		beaconDB,
@@ -287,7 +266,7 @@ func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
 		nil,
 		nil,
 		WithSlotTicker(slotTicker),
-		WithP2PService(mockP2P),
+		WithCustodyUpdater(mockCustody),
 	)
 	require.NoError(t, err)
 
@@ -313,7 +292,7 @@ func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Should not have called UpdateCustodyInfo due to error
-	assert.Equal(t, 0, mockP2P.updateCallCount, "UpdateCustodyInfo should not be called when CustodyGroupCount fails")
+	assert.Equal(t, 0, mockCustody.updateCallCount, "UpdateCustodyInfo should not be called when CustodyGroupCount fails")
 
 	// Check error log
 	found := false

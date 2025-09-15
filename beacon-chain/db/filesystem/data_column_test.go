@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/afero"
 )
 
@@ -728,36 +727,28 @@ func TestPrune(t *testing.T) {
 	})
 }
 
-// Mock P2P service for data column storage testing
-type mockDataColumnP2PService struct {
+// Mock custody updater for data column storage testing
+type mockCustodyUpdater struct {
 	custodyGroupCount     uint64
 	earliestAvailableSlot primitives.Slot
 	updateCallCount       int
 }
 
-func (m *mockDataColumnP2PService) EarliestAvailableSlot() (primitives.Slot, error) {
-	return m.earliestAvailableSlot, nil
-}
-
-func (m *mockDataColumnP2PService) CustodyGroupCount() (uint64, error) {
+func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
 	return m.custodyGroupCount, nil
 }
 
-func (m *mockDataColumnP2PService) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+func (m *mockCustodyUpdater) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
 	m.earliestAvailableSlot = earliestAvailableSlot
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
-func (m *mockDataColumnP2PService) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
-	return m.custodyGroupCount
-}
-
 func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
 	ctx := t.Context()
 
-	// Create mock P2P service
-	mockP2P := &mockDataColumnP2PService{
+	// Create mock custody updater
+	mockCustody := &mockCustodyUpdater{
 		custodyGroupCount:     4,
 		earliestAvailableSlot: 0,
 	}
@@ -769,7 +760,7 @@ func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
 		WithDataColumnBasePath(t.TempDir()),
 		WithDataColumnRetentionEpochs(retentionEpochs),
 		WithDataColumnFs(afero.NewMemMapFs()),
-		WithDataColumnP2PService(mockP2P),
+		WithDataColumnCustodyUpdater(mockCustody),
 	)
 	require.NoError(t, err)
 
@@ -795,12 +786,12 @@ func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
 	storage.prune()
 
 	// Check that UpdateCustodyInfo was called
-	assert.Equal(t, true, mockP2P.updateCallCount > 0, "UpdateCustodyInfo should have been called")
+	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateCustodyInfo should have been called")
 
 	// The highest epoch to prune is 3 - 2 = 1
 	// So earliest available slot should be the first slot of epoch 2 = epoch 2 * 32 = 64
 	expectedEarliestSlot := primitives.Slot(64) // First slot of epoch 2
-	require.Equal(t, expectedEarliestSlot, mockP2P.earliestAvailableSlot, "Earliest available slot should be updated correctly")
+	require.Equal(t, expectedEarliestSlot, mockCustody.earliestAvailableSlot, "Earliest available slot should be updated correctly")
 }
 
 func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
@@ -808,7 +799,7 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 
 	// Test case 1: Should not prune if highestStoredEpoch <= retentionEpochs
 	t.Run("No pruning when not enough epochs", func(t *testing.T) {
-		mockP2P := &mockDataColumnP2PService{
+		mockCustody := &mockCustodyUpdater{
 			custodyGroupCount:     4,
 			earliestAvailableSlot: 0,
 		}
@@ -819,7 +810,7 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 			WithDataColumnBasePath(t.TempDir()),
 			WithDataColumnRetentionEpochs(10),
 			WithDataColumnFs(afero.NewMemMapFs()),
-			WithDataColumnP2PService(mockP2P),
+			WithDataColumnCustodyUpdater(mockCustody),
 		)
 		require.NoError(t, err)
 
@@ -840,11 +831,11 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 		storage.prune()
 
 		// Should not have called UpdateCustodyInfo since no pruning should happen
-		assert.Equal(t, 0, mockP2P.updateCallCount, "Should not prune when highestStoredEpoch <= retentionEpochs")
+		assert.Equal(t, 0, mockCustody.updateCallCount, "Should not prune when highestStoredEpoch <= retentionEpochs")
 	})
 
 	t.Run("Pruning when enough epochs", func(t *testing.T) {
-		mockP2P := &mockDataColumnP2PService{
+		mockCustody := &mockCustodyUpdater{
 			custodyGroupCount:     4,
 			earliestAvailableSlot: 0,
 		}
@@ -855,7 +846,7 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 			WithDataColumnBasePath(t.TempDir()),
 			WithDataColumnRetentionEpochs(2),
 			WithDataColumnFs(afero.NewMemMapFs()),
-			WithDataColumnP2PService(mockP2P),
+			WithDataColumnCustodyUpdater(mockCustody),
 		)
 		require.NoError(t, err)
 
@@ -882,8 +873,8 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 		// highestStoredEpoch = 5, retentionEpochs = 2
 		// highestEpochToPrune = 5 - 2 = 3
 		// earliestAvailableSlot = first slot of epoch 4 = 4 * 32 = 128
-		assert.Equal(t, true, mockP2P.updateCallCount > 0, "Should prune when highestStoredEpoch > retentionEpochs")
+		assert.Equal(t, true, mockCustody.updateCallCount > 0, "Should prune when highestStoredEpoch > retentionEpochs")
 		expectedEarliestSlot := primitives.Slot(128) // First slot of epoch 4
-		require.Equal(t, expectedEarliestSlot, mockP2P.earliestAvailableSlot, "Should update earliest available slot correctly")
+		require.Equal(t, expectedEarliestSlot, mockCustody.earliestAvailableSlot, "Should update earliest available slot correctly")
 	})
 }

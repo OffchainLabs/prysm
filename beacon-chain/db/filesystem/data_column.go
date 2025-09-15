@@ -16,7 +16,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -54,6 +53,12 @@ var (
 	errNoDataColumnBasePath                 = errors.New("DataColumnStorage base path not specified in init")
 )
 
+// custodyUpdater is used to update custody info especially earliestAvailableSlot; implemented by the P2P service.
+type custodyUpdater interface {
+	CustodyGroupCount() (uint64, error)
+	UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+}
+
 type (
 	// DataColumnStorage is the concrete implementation of the filesystem backend for saving and retrieving DataColumnSidecars.
 	DataColumnStorage struct {
@@ -63,7 +68,7 @@ type (
 		cache           *dataColumnStorageSummaryCache
 		dataColumnFeed  *event.Feed
 		pruneMu         sync.RWMutex
-		p2pService      p2p.CustodyManager
+		custody         custodyUpdater
 
 		mu      sync.Mutex // protects muChans
 		muChans map[[fieldparams.RootLength]byte]*muChan
@@ -135,10 +140,10 @@ func WithDataColumnFs(fs afero.Fs) DataColumnStorageOption {
 	}
 }
 
-// WithDataColumnP2PService allows setting the P2P service for updating custody info.
-func WithDataColumnP2PService(p2pService p2p.CustodyManager) DataColumnStorageOption {
+// WithDataColumnCustodyUpdater injects a custody updater without importing p2p.
+func WithDataColumnCustodyUpdater(u custodyUpdater) DataColumnStorageOption {
 	return func(b *DataColumnStorage) error {
-		b.p2pService = p2pService
+		b.custody = u
 		return nil
 	}
 }
@@ -605,9 +610,9 @@ func (dcs *DataColumnStorage) prune() {
 	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
 
-	// Update the earliest available slot in P2P service after pruning.
+	// Update the earliest available slot via injected updater after pruning.
 	// The earliest available slot is the first slot after the pruned epochs.
-	if dcs.p2pService != nil {
+	if dcs.custody != nil {
 		earliestAvailableSlot, err := slots.EpochStart(highestEpochToPrune + 1)
 		if err != nil {
 			log.WithError(err).Error("Failed to calculate earliest available slot after data column pruning")
@@ -615,14 +620,14 @@ func (dcs *DataColumnStorage) prune() {
 		}
 
 		// Get current custody group count to preserve it during update
-		custodyGroupCount, err := dcs.p2pService.CustodyGroupCount()
+		custodyGroupCount, err := dcs.custody.CustodyGroupCount()
 		if err != nil {
 			log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after data column pruning")
 			return
 		}
 
 		// Update the custody info with new earliest available slot
-		_, _, err = dcs.p2pService.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+		_, _, err = dcs.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
 		if err != nil {
 			log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
 				Error("Failed to update earliest available slot after data column pruning")
