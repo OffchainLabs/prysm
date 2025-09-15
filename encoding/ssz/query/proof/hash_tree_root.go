@@ -40,7 +40,7 @@ func hashTreeRootFromBytes(info *sszquery.SSZInfo, data []byte) ([32]byte, error
 	case sszquery.Union:
 		return computeUnionHashTreeRoot(data)
 	default:
-		return [32]byte{}, fmt.Errorf("unsupported SSZ type: %s", info.Type())
+		return [32]byte{}, fmt.Errorf("unsupported SSZ type %s", info.Type())
 	}
 }
 
@@ -58,6 +58,34 @@ func computeBitHashTreeRoot(_ *sszquery.SSZInfo, _ []byte) ([32]byte, error) {
 	return [32]byte{}, fmt.Errorf("computeBitHashTreeRoot not implemented yet")
 }
 
+// computeListHashTreeRoot computes the hash tree root for lists
+func computeListHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, error) {
+	listInfo, err := info.ListInfo()
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("ListInfo %w", err)
+	}
+	elementInfo, err := listInfo.Element()
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("Element %w", err)
+	}
+
+	// 1. For list of basic objects: mix_in_length(merkleize(pack(value), limit=chunk_count(type)), len(value)) if value is a list of basic objects.
+	if elementInfo.Type() == sszquery.Boolean || elementInfo.Type() == sszquery.Byte || elementInfo.Type() == sszquery.UintN {
+		// Pack the data into 32-byte chunks
+		packed, err := ssz.PackByChunk([][]byte{data})
+		if err != nil {
+			return [32]byte{}, fmt.Errorf("pack %w", err)
+		}
+		maxElems := listInfo.Limit()
+		limitChunks := (maxElems*elementInfo.FixedSize() + 31) / 32
+		body := ssz.MerkleizeVector(packed, limitChunks)
+		var lenChunk [32]byte
+		binary.LittleEndian.PutUint64(lenChunk[:8], listInfo.Length())
+		return ssz.MixInLength(body, lenChunk[:]), nil
+	} else {
+	}
+}
+
 // computeContainerHashTreeRoot computes the hash tree root for containers
 func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, error) {
 	// 1. For vector of composite objects or a container: merkleize([hash_tree_root(element) for element in value])
@@ -67,7 +95,7 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 
 	containerInfo, err := info.ContainerInfo()
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("ContainerInfo: %w", err)
+		return [32]byte{}, fmt.Errorf("ContainerInfo %w", err)
 	}
 
 	var elementRoots [][32]byte
@@ -83,19 +111,11 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 		fieldSSZ := fieldInfo.SSZ()
 		fieldSize := fieldSSZ.FixedSize()
 		if fieldSSZ.IsVariable() {
-			// For variable-sized fields, we need to read the offset from the fixed part
-			if len(data) < int(fieldInfo.Offset()+4) {
-				return [32]byte{}, fmt.Errorf("data too short to read offset for field %s", fieldInfo.Name())
+			endDelimiter := fieldInfo.Offset() + fieldSSZ.Size()
+			if uint64(len(data)) < endDelimiter {
+				return [32]byte{}, fmt.Errorf("data shorter than endDelimiter %s", fieldInfo.Name())
 			}
-			// Read the offset (4 bytes little-endian)
-			fieldOffset := binary.LittleEndian.Uint32(data[fieldInfo.Offset() : fieldInfo.Offset()+4])
-			// Get the length of the variable field
-			fieldLength := fieldSSZ.Size()
-			// Extract the variable data starting from the offset
-			if uint64(fieldOffset)+fieldLength >= uint64(len(data)) {
-				return [32]byte{}, fmt.Errorf("offset + field length %d exceeds data length %d for field %s", uint64(fieldOffset)+fieldLength, len(data), fieldInfo.Name())
-			}
-			fieldData := data[fieldOffset : uint64(fieldOffset)+fieldLength]
+			fieldData := data[fieldInfo.Offset():endDelimiter]
 			fieldRoot, err := hashTreeRootFromBytes(fieldSSZ, fieldData)
 			if err != nil {
 				return [32]byte{}, fmt.Errorf("hashTreeRootFromBytes for field %s: %w", fieldInfo.Name(), err)
@@ -118,16 +138,23 @@ func computeContainerHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte
 }
 
 // computeVectorHashTreeRoot computes the hash tree root for vectors
+// merkleize(pack(value)) if value is a basic object or a vector of basic objects.
 func computeVectorHashTreeRoot(info *sszquery.SSZInfo, data []byte) ([32]byte, error) {
 	if info.Type() != sszquery.Vector {
-		return [32]byte{}, fmt.Errorf("computeVectorHashTreeRoot called with non-vector type: %s", info.Type())
+		return [32]byte{}, fmt.Errorf("computeVectorHashTreeRoot called with non-vector type %s", info.Type())
 	}
 
-	return computeBasicHashTreeRoot(info, data)
+	chunks, err := ssz.PackByChunk([][]byte{data})
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("PackByChunk %w", err)
+	}
+
+	return ssz.MerkleizeVector(chunks, uint64(len(chunks))), nil
 }
 
 // computeUnionHashTreeRoot computes the hash tree root for unions
 // Placeholder
-func computeUnionHashTreeRoot(_ *sszquery.SSZInfo, _ []byte) ([32]byte, error) {
+func computeUnionHashTreeRoot(_ []byte) ([32]byte, error) {
+	// NOTE: handle union types
 	return [32]byte{}, fmt.Errorf("computeUnionHashTreeRoot not implemented yet")
 }
