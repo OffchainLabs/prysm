@@ -19,7 +19,7 @@ func TestServer_GetBeaconConfig(t *testing.T) {
 	conf := params.BeaconConfig()
 	confType := reflect.TypeOf(conf).Elem()
 	numFields := confType.NumField()
-	
+
 	// Count only exported fields, as unexported fields are not included in the config
 	exportedFields := 0
 	for i := 0; i < numFields; i++ {

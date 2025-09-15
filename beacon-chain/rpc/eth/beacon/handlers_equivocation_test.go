@@ -17,16 +17,16 @@ func TestBlocks_NewSignedBeaconBlock_EquivocationFix(t *testing.T) {
 	var block structs.SignedBeaconBlock
 	err := json.Unmarshal([]byte(rpctesting.Phase0Block), &block)
 	require.NoError(t, err)
-	
+
 	// Convert to generic format
 	genericBlock, err := block.ToGeneric()
 	require.NoError(t, err)
-	
+
 	// Test the FIX: pass genericBlock.Block instead of genericBlock
 	// This is what our fix changed in handlers.go line 704 and 858
 	_, err = blocks.NewSignedBeaconBlock(genericBlock.Block)
 	require.NoError(t, err, "NewSignedBeaconBlock should work with genericBlock.Block")
-	
+
 	// Test the BROKEN version: pass genericBlock directly (this should fail)
 	_, err = blocks.NewSignedBeaconBlock(genericBlock)
 	if err == nil {

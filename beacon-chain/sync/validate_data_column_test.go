@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -25,6 +26,9 @@ import (
 )
 
 func TestValidateDataColumn(t *testing.T) {
+	err := kzg.Start()
+	require.NoError(t, err)
+
 	ctx := t.Context()
 
 	t.Run("from self", func(t *testing.T) {
@@ -63,10 +67,14 @@ func TestValidateDataColumn(t *testing.T) {
 
 		clock := startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 		service := &Service{
-			cfg:                 &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService},
+			cfg:                 &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService, batchVerifierLimit: 10},
+			ctx:                 ctx,
 			newColumnsVerifier:  newDataColumnsVerifier,
 			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+			kzgChan:             make(chan *kzgVerifier, 100),
 		}
+		// Start the KZG verifier routine for batch verification
+		go service.kzgVerifierRoutine()
 
 		// Encode a `beaconBlock` message instead of expected.
 		buf := new(bytes.Buffer)
@@ -174,12 +182,6 @@ func TestValidateDataColumn(t *testing.T) {
 		{
 			name:           "sidecar inclusion proven",
 			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarInclusionProven: genericError}),
-			expectedResult: pubsub.ValidationReject,
-			expectedError:  genericError,
-		},
-		{
-			name:           "sidecar kzg proof verified",
-			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarKzgProofVerified: genericError}),
 			expectedResult: pubsub.ValidationReject,
 			expectedError:  genericError,
 		},

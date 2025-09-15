@@ -3683,8 +3683,6 @@
   sources:
     - file: beacon-chain/core/validators/validator.go
       search: func InitiateValidatorExit(
-    - file: beacon-chain/core/validators/validator.go
-      search: if s.Version() < version.Electra {
   spec: |
     <spec fn="initiate_validator_exit" fork="phase0" hash="0483a058">
     def initiate_validator_exit(state: BeaconState, index: ValidatorIndex) -> None:
@@ -6534,7 +6532,7 @@
 - name: process_proposer_lookahead
   sources:
     - file: beacon-chain/core/fulu/transition.go
-      search: func processProposerLookahead(
+      search: func ProcessProposerLookahead(
   spec: |
     <spec fn="process_proposer_lookahead" fork="fulu" hash="3ff130cc">
     def process_proposer_lookahead(state: BeaconState) -> None:

@@ -262,3 +262,46 @@ func TestCORS(t *testing.T) {
 		})
 	}
 }
+
+func TestParseIPNetStrings(t *testing.T) {
+	tests := []struct {
+		name      string
+		whitelist []string
+		wantCount int
+		wantError string
+	}{
+		{
+			name:      "empty whitelist",
+			whitelist: []string{},
+			wantCount: 0,
+		},
+		{
+			name:      "single IP whitelist",
+			whitelist: []string{"192.168.1.1/32"},
+			wantCount: 1,
+		},
+		{
+			name:      "multiple IPs whitelist",
+			whitelist: []string{"192.168.1.0/24", "10.0.0.0/8", "34.42.19.170/32"},
+			wantCount: 3,
+		},
+		{
+			name:      "invalid CIDR returns error",
+			whitelist: []string{"192.168.1.0/24", "invalid-cidr", "10.0.0.0/8"},
+			wantCount: 0,
+			wantError: "invalid CIDR address",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseIPNetStrings(tt.whitelist)
+			assert.Equal(t, tt.wantCount, len(result))
+			if len(tt.wantError) == 0 {
+				assert.Equal(t, nil, err)
+			} else {
+				assert.ErrorContains(t, tt.wantError, err)
+			}
+		})
+	}
+}
