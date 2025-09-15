@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -54,32 +55,11 @@ func (e BlockIdParseError) Error() string {
 	return e.message
 }
 
-// BlobsOption is a functional option for configuring blob retrieval
-type BlobsOption func(*blobsConfig)
-
-type blobsConfig struct {
-	indices         []int
-	versionedHashes [][]byte
-}
-
-// WithIndices specifies blob indices to retrieve
-func WithIndices(indices []int) BlobsOption {
-	return func(c *blobsConfig) {
-		c.indices = indices
-	}
-}
-
-// WithVersionedHashes specifies versioned hashes to retrieve blobs by
-func WithVersionedHashes(hashes [][]byte) BlobsOption {
-	return func(c *blobsConfig) {
-		c.versionedHashes = hashes
-	}
-}
 
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	Blobs(ctx context.Context, id string, opts ...interface{}) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
@@ -186,13 +166,11 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //   - block exists, has commitments, inside retention period (greater of protocol- or user-specified) serve then w/ 200 unless we hit an error reading them.
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
-func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...interface{}) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	// Apply options
-	cfg := &blobsConfig{}
+	cfg := &options.BlobsConfig{}
 	for _, opt := range opts {
-		if blobOpt, ok := opt.(BlobsOption); ok {
-			blobOpt(cfg)
-		}
+		opt(cfg)
 	}
 
 	// Resolve block ID to root
@@ -300,8 +278,8 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...interfac
 	}
 
 	// Convert versioned hashes to indices if provided
-	indices := cfg.indices
-	if len(cfg.versionedHashes) > 0 {
+	indices := cfg.Indices
+	if len(cfg.VersionedHashes) > 0 {
 		// Build a map of versioned hash to blob index
 		hashToIndex := make(map[string]int)
 		for i, commitment := range commitments {
@@ -310,8 +288,8 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...interfac
 		}
 
 		// Create indices array in the order of requested versioned hashes
-		indices = make([]int, 0, len(cfg.versionedHashes))
-		for _, versionedHash := range cfg.versionedHashes {
+		indices = make([]int, 0, len(cfg.VersionedHashes))
+		for _, versionedHash := range cfg.VersionedHashes {
 			index, exists := hashToIndex[string(versionedHash)]
 			if !exists {
 				return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}

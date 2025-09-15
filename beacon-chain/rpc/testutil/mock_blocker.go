@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -36,6 +37,6 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 }
 
 // Blobs --
-func (*MockBlocker) Blobs(_ context.Context, _ string, _ ...interface{}) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (*MockBlocker) Blobs(_ context.Context, _ string, _ ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	return nil, &core.RpcError{}
 }

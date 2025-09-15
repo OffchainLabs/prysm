@@ -14,6 +14,7 @@ go_library(
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/rpc/core:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
+        "//beacon-chain/rpc/options:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",

@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -354,7 +355,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		retrievedVerifiedSidecars, rpcErr := blocker.Blobs(ctx, "123", WithIndices([]int{index}))
+		retrievedVerifiedSidecars, rpcErr := blocker.Blobs(ctx, "123", options.WithIndices([]int{index}))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, 1, len(retrievedVerifiedSidecars))
 
@@ -398,7 +399,7 @@ func TestGetBlob(t *testing.T) {
 		}
 
 		noBlobIndex := len(storedBlobSidecars) + 1
-		_, rpcErr := blocker.Blobs(ctx, "123", WithIndices([]int{0, noBlobIndex}))
+		_, rpcErr := blocker.Blobs(ctx, "123", options.WithIndices([]int{0, noBlobIndex}))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
@@ -414,7 +415,7 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: blobStorage,
 		}
-		_, rpcErr := blocker.Blobs(ctx, "123", WithIndices([]int{0, math.MaxInt}))
+		_, rpcErr := blocker.Blobs(ctx, "123", options.WithIndices([]int{0, math.MaxInt}))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})
@@ -545,7 +546,7 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 		// Request versioned hashes in reverse order: 2, 1, 0
 		requestedHashes := [][]byte{hash2[:], hash1[:], hash0[:]}
 		
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", WithVersionedHashes(requestedHashes))
+		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
 			return
@@ -562,7 +563,7 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 		// Request only hash1 and hash0 (indices 1, 0)
 		requestedHashes := [][]byte{hash1[:], hash0[:]}
 		
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", WithVersionedHashes(requestedHashes))
+		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
 			return
@@ -584,7 +585,7 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 		// Request only the fake hash
 		requestedHashes := [][]byte{fakeHash}
 		
-		_, rpcErr := blocker.Blobs(ctx, "finalized", WithVersionedHashes(requestedHashes))
+		_, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash does not exist in given block", rpcErr.Err.Error())
