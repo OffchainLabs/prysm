@@ -129,17 +129,6 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	block.Block.Body.BlobKzgCommitments = commitments
 
-	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
-	require.NoError(t, err)
-
-	inclusion := make([][][]byte, blobCount)
-	for i := range blobCount {
-		proof, err := blocks.MerkleProofKZGCommitment(body, i)
-		require.NoError(t, err)
-
-		inclusion[i] = proof
-	}
-
 	if generator.sign {
 		epoch := slots.ToEpoch(block.Block.Slot)
 		fork := params.ForkFromConfig(params.BeaconConfig(), epoch)

@@ -170,20 +170,27 @@ func (s *BlockReconstructionSource) Type() string {
 
 // extract extracts the block information from the source
 func (b *BlockReconstructionSource) extract() (*blockInfo, error) {
+	block := b.Block()
+
 	header, err := b.Header()
 	if err != nil {
 		return nil, errors.Wrap(err, "header")
 	}
 
-	commitments, err := b.Block().Body().BlobKzgCommitments()
+	commitments, err := block.Body().BlobKzgCommitments()
 	if err != nil {
 		return nil, errors.Wrap(err, "commitments")
+	}
+
+	inclusionProof, err := blocks.MerkleProofKZGCommitments(block.Body())
+	if err != nil {
+		return nil, errors.Wrap(err, "merkle proof kzg commitments")
 	}
 
 	info := &blockInfo{
 		signedBlockHeader: header,
 		kzgCommitments:    commitments,
-		kzgInclusionProof: commitments,
+		kzgInclusionProof: inclusionProof,
 	}
 
 	return info, nil
