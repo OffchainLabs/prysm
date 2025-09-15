@@ -30,7 +30,7 @@ func GenerateTestDataColumns(t *testing.T, parent [fieldparams.RootLength]byte, 
 	}
 
 	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	roDataColumnSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
 	require.NoError(t, err)
 
 	return roDataColumnSidecars

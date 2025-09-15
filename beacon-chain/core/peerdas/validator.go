@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -18,6 +19,44 @@ var (
 	ErrNotEnoughDataColumnSidecars         = errors.New("not enough columns")
 	ErrDataColumnSidecarsNotSortedByIndex  = errors.New("data column sidecars are not sorted by index")
 )
+
+var (
+	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
+	_ ConstructionPopulator = (*BlockReconstructionSource)(nil)
+)
+
+type (
+	// ConstructionPopulator is an interface that can be satisfied by a type that can use data from a struct
+	// like a DataColumnSidecar or a BeaconBlock to set the fields in a data column sidecar that cannot
+	// be obtained from the engine api.
+	ConstructionPopulator interface {
+		Populate(*ethpb.DataColumnSidecar) error
+		Slot() primitives.Slot
+		Root() [fieldparams.RootLength]byte
+		Commitments() ([][]byte, error)
+		Type() string
+	}
+
+	// BlockReconstructionSource is a ConstructionPopulator that uses a beacon block as the source of data
+	BlockReconstructionSource struct {
+		blocks.ROBlock
+	}
+
+	// DataColumnSidecar is a ConstructionPopulator that uses a data column sidecar as the source of data
+	SidecarReconstructionSource struct {
+		blocks.RODataColumn
+	}
+)
+
+// PopulateFromBlock creates a BlockReconstructionSource from a beacon block
+func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
+	return &BlockReconstructionSource{ROBlock: block}
+}
+
+// PopulateFromSidecar creates a SidecarReconstructionSource from a data column sidecar
+func PopulateFromSidecar(sidecar blocks.RODataColumn) *SidecarReconstructionSource {
+	return &SidecarReconstructionSource{RODataColumn: sidecar}
+}
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#validator-custody
@@ -41,10 +80,14 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }
 
-// ConstructDataColumnSidecar, given ConstructionPopulator and the cells/proofs associated with each blob in the
+// DataColumnSidecars, given ConstructionPopulator and the cells/proofs associated with each blob in the
 // block, assembles sidecars which can be distributed to peers.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_block
-func ConstructDataColumnSidecar(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
+// This is an adapted version of
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars,
+// which is designed to be used both when constructing sidecars from a block and from a sidecar, replacing
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_block and
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_column_sidecar
+func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
 	if len(rows) == 0 {
 		return nil, nil
 	}
@@ -80,6 +123,45 @@ func ConstructDataColumnSidecar(rows []kzg.CellsAndProofs, src ConstructionPopul
 	return roSidecars, nil
 }
 
+func (b *BlockReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
+	block := b.Block()
+	blockBody := block.Body()
+	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
+	if err != nil {
+		return errors.Wrap(err, "blob KZG commitments")
+	}
+	dc.KzgCommitments = blobKzgCommitments
+	dc.SignedBlockHeader, err = b.Header()
+	if err != nil {
+		return errors.Wrap(err, "signed block header")
+	}
+	dc.KzgCommitmentsInclusionProof, err = blocks.MerkleProofKZGCommitments(blockBody)
+	if err != nil {
+		return errors.Wrap(err, "merkle proof KZG commitments")
+	}
+	return nil
+}
+
+// Slot returns the slot of the source
+func (s *BlockReconstructionSource) Slot() primitives.Slot {
+	return s.Block().Slot()
+}
+
+// Commitments returns the blob KZG commitments of the source
+func (s *BlockReconstructionSource) Commitments() ([][]byte, error) {
+	c, err := s.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "blob KZG commitments")
+	}
+
+	return c, nil
+}
+
+// Type returns the type of the source
+func (s *BlockReconstructionSource) Type() string {
+	return "BeaconBlock"
+}
+
 // rotateRowsToCols takes a 2D slice of cells and proofs, where the x is rows (blobs) and y is columns,
 // and returns a 2D slice where x is columns and y is rows.
 func rotateRowsToCols(rows []kzg.CellsAndProofs, numCols uint64) ([][][]byte, [][][]byte, error) {
@@ -107,25 +189,6 @@ func rotateRowsToCols(rows []kzg.CellsAndProofs, numCols uint64) ([][][]byte, []
 	return cellCols, proofCols, nil
 }
 
-// ConstructionPopulator is an interface that can be satisfied by a type that can use data from a struct
-// like a DataColumnSidecar or a BeaconBlock to set the fields in a data column sidecar that cannot
-// be obtained from the engine api.
-type ConstructionPopulator interface {
-	Populate(*ethpb.DataColumnSidecar) error
-	Slot() primitives.Slot
-	Root() [32]byte
-	Commitments() [][]byte
-	Type() string
-}
-
-func PopulateFromSidecar(sidecar blocks.RODataColumn) *SidecarReconstructionSource {
-	return &SidecarReconstructionSource{RODataColumn: sidecar}
-}
-
-type SidecarReconstructionSource struct {
-	blocks.RODataColumn
-}
-
 func (s *SidecarReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
 	dc.SignedBlockHeader = s.SignedBlockHeader
 	dc.KzgCommitments = s.KzgCommitments
@@ -133,61 +196,17 @@ func (s *SidecarReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) erro
 	return nil
 }
 
-func (s *SidecarReconstructionSource) Root() [32]byte {
+// Root returns the block root of the source
+func (s *SidecarReconstructionSource) Root() [fieldparams.RootLength]byte {
 	return s.BlockRoot()
 }
 
-func (s *SidecarReconstructionSource) Commitments() [][]byte {
-	return s.KzgCommitments
+// Commmitments returns the blob KZG commitments of the source
+func (s *SidecarReconstructionSource) Commitments() ([][]byte, error) {
+	return s.KzgCommitments, nil
 }
 
+// Type returns the type of the source
 func (s *SidecarReconstructionSource) Type() string {
 	return "DataColumnSidecar"
 }
-
-var _ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
-
-func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
-	return &BlockReconstructionSource{ROBlock: block}
-}
-
-type BlockReconstructionSource struct {
-	blocks.ROBlock
-}
-
-func (b *BlockReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
-	block := b.Block()
-	blockBody := block.Body()
-	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
-	if err != nil {
-		return errors.Wrap(err, "blob KZG commitments")
-	}
-	dc.KzgCommitments = blobKzgCommitments
-	dc.SignedBlockHeader, err = b.Header()
-	if err != nil {
-		return errors.Wrap(err, "signed block header")
-	}
-	dc.KzgCommitmentsInclusionProof, err = blocks.MerkleProofKZGCommitments(blockBody)
-	if err != nil {
-		return errors.Wrap(err, "merkle proof KZG commitments")
-	}
-	return nil
-}
-
-func (s *BlockReconstructionSource) Slot() primitives.Slot {
-	return s.Block().Slot()
-}
-
-func (s *BlockReconstructionSource) Commitments() [][]byte {
-	c, err := s.Block().Body().BlobKzgCommitments()
-	if err != nil {
-		log.WithField("root", s.Root()).Trace("Unable to get kzg commitments from block")
-	}
-	return c
-}
-
-func (s *BlockReconstructionSource) Type() string {
-	return "BeaconBlock"
-}
-
-var _ ConstructionPopulator = (*BlockReconstructionSource)(nil)

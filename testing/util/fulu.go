@@ -161,7 +161,7 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	rob, err := blocks.NewROBlockWithRoot(signedBeaconBlock, root)
 	require.NoError(t, err)
-	roSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	roSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))

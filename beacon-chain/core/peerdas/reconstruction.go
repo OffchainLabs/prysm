@@ -93,7 +93,7 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 		return nil, errors.Wrap(err, "wait for RecoverCellsAndKZGProofs")
 	}
 
-	outSidecars, err := ConstructDataColumnSidecar(cellsAndProofs, PopulateFromSidecar(referenceSidecar.RODataColumn))
+	outSidecars, err := DataColumnSidecars(cellsAndProofs, PopulateFromSidecar(referenceSidecar.RODataColumn))
 	if err != nil {
 		return nil, errors.Wrap(err, "data column sidecars from items")
 	}

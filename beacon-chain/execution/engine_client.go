@@ -660,7 +660,12 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	})
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
-	cellsAndProofs, err := s.cellsAndProofsForCommitments(ctx, populator.Commitments())
+	commitments, err := populator.Commitments()
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, root, "commitments")
+	}
+
+	cellsAndProofs, err := s.cellsAndProofsForCommitments(ctx, commitments)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
@@ -671,7 +676,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	}
 
 	// Construct data column sidears from the signed block and cells and proofs.
-	roSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, populator)
+	roSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, populator)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
 	}

@@ -77,7 +77,7 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		_, err = peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		_, err = peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrSizeMismatch)
 	})
 
@@ -103,7 +103,7 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 		// but we only have 10 cells/proofs.
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		_, err = peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		_, err = peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
@@ -128,7 +128,7 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 		// This should fail when trying to access proof beyond index 4.
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		_, err = peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		_, err = peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 		require.ErrorContains(t, "not enough proofs", err)
 	})
@@ -171,7 +171,7 @@ func TestDataColumnSidecarsFromBlock(t *testing.T) {
 
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		sidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 		require.NoError(t, err)
 		require.NotNil(t, sidecars)
 		require.Equal(t, int(numberOfColumns), len(sidecars))
@@ -267,7 +267,7 @@ func TestDataColumnSidecarsFromColumnSidecar(t *testing.T) {
 	}
 
 	// Call the function
-	sidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromSidecar(verifiedInputSidecar.RODataColumn))
+	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromSidecar(verifiedInputSidecar.RODataColumn))
 	require.NoError(t, err)
 	require.NotNil(t, sidecars)
 	require.Equal(t, int(numberOfColumns), len(sidecars))

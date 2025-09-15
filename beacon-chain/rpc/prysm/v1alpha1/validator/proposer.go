@@ -415,7 +415,7 @@ func (vs *Server) handleUnblindedBlock(
 		}
 
 		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.ConstructDataColumnSidecar(cellsAndProofs, peerdas.PopulateFromBlock(block))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "data column sidcars")
 		}
