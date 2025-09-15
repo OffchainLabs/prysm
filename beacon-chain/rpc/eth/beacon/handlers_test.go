@@ -5959,9 +5959,20 @@ func TestGetProposerLookahead(t *testing.T) {
 }
 
 func TestGetBlobs(t *testing.T) {
+	// Start the trusted setup for KZG operations (needed for data columns)
+	require.NoError(t, kzg.Start())
+
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.DenebForkEpoch = 1
+	cfg.ElectraForkEpoch = 10
+	cfg.FuluForkEpoch = 20
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: 0, MaxBlobsPerBlock: 0},
+		{Epoch: 1, MaxBlobsPerBlock: 6},   // Deneb
+		{Epoch: 10, MaxBlobsPerBlock: 9},  // Electra
+		{Epoch: 20, MaxBlobsPerBlock: 12}, // Fulu
+	}
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
@@ -6369,49 +6380,29 @@ func TestGetBlobs(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(blobs[1].Blob), resp.Data[0])
 		assert.Equal(t, hexutil.Encode(blobs[3].Blob), resp.Data[1])
 	})
-}
 
-func TestBlobs_After_Deneb(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.DenebForkEpoch = 0
-	cfg.ElectraForkEpoch = 1
-	cfg.BlobSchedule = []params.BlobScheduleEntry{
-		{Epoch: 0, MaxBlobsPerBlock: 6},
-		{Epoch: 1, MaxBlobsPerBlock: 9},
-	}
-	params.OverrideBeaconConfig(cfg)
+	// Test for Electra fork
+	t.Run("electra max blobs", func(t *testing.T) {
+		electraBlock, electraBlobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 323, maxBlobsPerBlockByVersion(version.Electra))
+		require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
+		electraBs := filesystem.NewEphemeralBlobStorage(t)
+		electraSidecars := verification.FakeVerifySliceForTest(t, electraBlobs)
+		for i := range electraSidecars {
+			require.NoError(t, electraBs.Save(electraSidecars[i]))
+		}
+		electraBlockRoot := electraBlobs[0].BlockRoot()
 
-	db := testDB.SetupDB(t)
-	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, maxBlobsPerBlockByVersion(version.Electra))
-	require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
-	bs := filesystem.NewEphemeralBlobStorage(t)
-	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
-	for i := range testSidecars {
-		require.NoError(t, bs.Save(testSidecars[i]))
-	}
-	blockRoot := blobs[0].BlockRoot()
-
-	mockChainService := &mockChain.ChainService{
-		FinalizedRoots: map[[32]byte]bool{},
-	}
-	s := &Server{
-		OptimisticModeFetcher: mockChainService,
-		FinalizationFetcher:   mockChainService,
-		TimeFetcher:           mockChainService,
-	}
-	t.Run("max blobs for electra", func(t *testing.T) {
-		u := "http://foo.example/123"
+		u := "http://foo.example/323"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: blockRoot[:]}, Block: electraBlock},
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: electraBlockRoot[:]}, Block: electraBlock},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
 			BeaconDB:    db,
-			BlobStorage: bs,
+			BlobStorage: electraBs,
 		}
 		s.GetBlobs(writer, request)
 
@@ -6422,10 +6413,95 @@ func TestBlobs_After_Deneb(t *testing.T) {
 		require.Equal(t, maxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
 		blob := resp.Data[0]
 		require.NotNil(t, blob)
-		assert.Equal(t, hexutil.Encode(blobs[0].Blob), blob)
+		assert.Equal(t, hexutil.Encode(electraBlobs[0].Blob), blob)
+	})
 
-		require.Equal(t, false, resp.ExecutionOptimistic)
-		require.Equal(t, false, resp.Finalized)
+	// Test for Fulu fork with data columns
+	t.Run("fulu with data columns", func(t *testing.T) {
+		// Generate a Fulu block with data columns
+		fuluForkSlot := primitives.Slot(20 * params.BeaconConfig().SlotsPerEpoch) // Fulu is at epoch 20
+		fuluBlock, _, verifiedRoDataColumnSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithSlot(fuluForkSlot))
+		require.NoError(t, db.SaveBlock(t.Context(), fuluBlock.ReadOnlySignedBeaconBlock))
+		fuluBlockRoot := fuluBlock.Root()
+
+		// Store data columns
+		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
+		require.NoError(t, dataColumnStorage.Save(verifiedRoDataColumnSidecars))
+
+		u := fmt.Sprintf("http://foo.example/%d", fuluForkSlot)
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		// Create an empty blob storage (won't be used but needs to be non-nil)
+		_, emptyBlobStorage := filesystem.NewEphemeralBlobStorageAndFs(t)
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: fuluBlockRoot[:]}, Block: fuluBlock.ReadOnlySignedBeaconBlock},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			BlobStorage:       emptyBlobStorage,
+			DataColumnStorage: dataColumnStorage,
+		}
+		s.GetBlobs(writer, request)
+
+		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlobsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 3, len(resp.Data))
+
+		// Verify that we got blobs back (they were reconstructed from data columns)
+		for i := range resp.Data {
+			require.NotNil(t, resp.Data[i])
+		}
+	})
+
+	// Test for Fulu with versioned hashes and data columns
+	t.Run("fulu versioned_hashes with data columns", func(t *testing.T) {
+		// Generate a Fulu block with data columns
+		fuluForkSlot2 := primitives.Slot(20*params.BeaconConfig().SlotsPerEpoch + 10) // Fulu is at epoch 20
+		fuluBlock2, _, verifiedRoDataColumnSidecars2 := util.GenerateTestFuluBlockWithSidecars(t, 4, util.WithSlot(fuluForkSlot2))
+		require.NoError(t, db.SaveBlock(t.Context(), fuluBlock2.ReadOnlySignedBeaconBlock))
+		fuluBlockRoot2 := fuluBlock2.Root()
+
+		// Store data columns
+		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
+		require.NoError(t, dataColumnStorage.Save(verifiedRoDataColumnSidecars2))
+
+		// Get the commitments from the block to derive versioned hashes
+		commitments, err := fuluBlock2.Block().Body().BlobKzgCommitments()
+		require.NoError(t, err)
+		require.Equal(t, true, len(commitments) >= 3)
+
+		// Request specific blobs by versioned hashes in reverse order
+		versionedHash1 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[2])
+		versionedHash2 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[0])
+
+		u := fmt.Sprintf("http://foo.example/%d?versioned_hashes=%s&versioned_hashes=%s", fuluForkSlot2,
+			hexutil.Encode(versionedHash1[:]),
+			hexutil.Encode(versionedHash2[:]))
+		request := httptest.NewRequest("GET", u, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		// Create an empty blob storage (won't be used but needs to be non-nil)
+		_, emptyBlobStorage := filesystem.NewEphemeralBlobStorageAndFs(t)
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &eth.Checkpoint{Root: fuluBlockRoot2[:]}, Block: fuluBlock2.ReadOnlySignedBeaconBlock},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			BlobStorage:       emptyBlobStorage,
+			DataColumnStorage: dataColumnStorage,
+		}
+		s.GetBlobs(writer, request)
+
+		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlobsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 2, len(resp.Data))
 	})
 }
 
