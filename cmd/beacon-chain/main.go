@@ -105,6 +105,7 @@ var appFlags = []cli.Flag{
 	cmd.P2PStaticID,
 	cmd.P2PAllowList,
 	cmd.P2PDenyList,
+	cmd.P2PColocationWhitelist,
 	cmd.PubsubQueueSize,
 	cmd.DataDirFlag,
 	cmd.VerbosityFlag,
