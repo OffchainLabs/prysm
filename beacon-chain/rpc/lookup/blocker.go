@@ -10,8 +10,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -54,7 +54,6 @@ func NewBlockIdParseError(reason error) BlockIdParseError {
 func (e BlockIdParseError) Error() string {
 	return e.message
 }
-
 
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
