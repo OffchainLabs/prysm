@@ -299,9 +299,25 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...interfac
 		}
 	}
 
-	// Handle versioned hashes if provided - return blobs in the order of the requested hashes
+	// Convert versioned hashes to indices if provided
+	indices := cfg.indices
 	if len(cfg.versionedHashes) > 0 {
-		return p.blobsByVersionedHashesInOrder(commitments, root, roSignedBlock, cfg.versionedHashes, fuluForkSlot)
+		// Build a map of versioned hash to blob index
+		hashToIndex := make(map[string]int)
+		for i, commitment := range commitments {
+			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+			hashToIndex[string(versionedHash[:])] = i
+		}
+
+		// Create indices array in the order of requested versioned hashes
+		indices = make([]int, 0, len(cfg.versionedHashes))
+		for _, versionedHash := range cfg.versionedHashes {
+			index, exists := hashToIndex[string(versionedHash)]
+			if !exists {
+				return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}
+			}
+			indices = append(indices, index)
+		}
 	}
 
 	if roBlock.Slot() >= fuluForkSlot {
@@ -310,63 +326,12 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...interfac
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
 		}
 
-		return p.blobsFromStoredDataColumns(roBlock, cfg.indices)
+		return p.blobsFromStoredDataColumns(roBlock, indices)
 	}
 
-	return p.blobsFromStoredBlobs(commitments, root, cfg.indices)
+	return p.blobsFromStoredBlobs(commitments, root, indices)
 }
 
-// blobsByVersionedHashesInOrder retrieves blobs for the specified versioned hashes in the exact order requested
-func (p *BeaconDbBlocker) blobsByVersionedHashesInOrder(commitments [][]byte, root [32]byte, roSignedBlock interfaces.ReadOnlySignedBeaconBlock, versionedHashes [][]byte, fuluForkSlot primitives.Slot) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	// Build a map of versioned hash to blob index
-	hashToIndex := make(map[string]int)
-	for i, commitment := range commitments {
-		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-		hashToIndex[string(versionedHash[:])] = i
-	}
-
-	// Retrieve blobs in the order of the requested versioned hashes
-	blobs := make([]*blocks.VerifiedROBlob, 0, len(versionedHashes))
-
-	for _, versionedHash := range versionedHashes {
-		index, exists := hashToIndex[string(versionedHash)]
-		if !exists {
-			return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}
-		}
-
-		var blobSidecar blocks.VerifiedROBlob
-		var err error
-
-		if roSignedBlock.Block().Slot() >= fuluForkSlot {
-			// Use data columns for Fulu blocks
-			roBlockWithRoot, blockErr := blocks.NewROBlockWithRoot(roSignedBlock, root)
-			if blockErr != nil {
-				return nil, &core.RpcError{Err: errors.Wrapf(blockErr, "failed to create roBlock with root %#x", root), Reason: core.Internal}
-			}
-
-			// For Fulu blocks, we need to reconstruct from data columns
-			verifiedRoBlobs, rpcErr := p.blobsFromStoredDataColumns(roBlockWithRoot, []int{index})
-			if rpcErr != nil {
-				return nil, rpcErr
-			}
-			if len(verifiedRoBlobs) > 0 {
-				blobSidecar = *verifiedRoBlobs[0]
-			} else {
-				return nil, &core.RpcError{Err: errors.New("blob not found from stored data columns"), Reason: core.NotFound}
-			}
-		} else {
-			// Use blob storage for pre-Fulu blocks
-			blobSidecar, err = p.BlobStorage.Get(root, uint64(index))
-			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "blob not found from storage"), Reason: core.NotFound}
-			}
-		}
-
-		blobs = append(blobs, &blobSidecar)
-	}
-
-	return blobs, nil
-}
 
 // blobsFromStoredBlobs retrieves blob sidercars corresponding to `indices` and `root` from the store.
 // This function expects blob sidecars to be stored (aka. no data column sidecars).

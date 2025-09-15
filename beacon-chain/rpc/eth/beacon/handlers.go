@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1909,9 +1908,8 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 
 	// Check if versioned_hashes parameter is provided
 	versionedHashesStr := r.URL.Query()["versioned_hashes"]
+	versionedHashes := make([][]byte, 0, len(versionedHashesStr))
 	if len(versionedHashesStr) > 0 {
-		// Parse versioned hashes
-		versionedHashes := make([][]byte, 0, len(versionedHashesStr))
 		for _, hashStr := range versionedHashesStr {
 			hash, err := hexutil.Decode(hashStr)
 			if err != nil {
@@ -1924,12 +1922,8 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 			}
 			versionedHashes = append(versionedHashes, hash)
 		}
-		// Use Blobs with versioned hash option
-		verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, lookup.WithVersionedHashes(versionedHashes))
-	} else {
-		// No versioned hashes provided - return all blobs
-		verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId)
 	}
+	verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, lookup.WithVersionedHashes(versionedHashes))
 	if rpcErr != nil {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {
@@ -2018,35 +2012,4 @@ func serializeItems[T interface{ MarshalSSZ() ([]byte, error) }](items []T) ([]b
 		result = append(result, b...)
 	}
 	return result, nil
-}
-
-// parseIndices filters out invalid and duplicate blob indices
-func parseIndices(url *url.URL, s primitives.Slot) ([]int, error) {
-	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(s)
-	rawIndices := url.Query()["indices"]
-	indices := make([]int, 0, maxBlobsPerBlock)
-	invalidIndices := make([]string, 0)
-loop:
-	for _, raw := range rawIndices {
-		ix, err := strconv.Atoi(raw)
-		if err != nil {
-			invalidIndices = append(invalidIndices, raw)
-			continue
-		}
-		if !(0 <= ix && ix < maxBlobsPerBlock) {
-			invalidIndices = append(invalidIndices, raw)
-			continue
-		}
-		for i := range indices {
-			if ix == indices[i] {
-				continue loop
-			}
-		}
-		indices = append(indices, ix)
-	}
-
-	if len(invalidIndices) > 0 {
-		return nil, fmt.Errorf("requested blob indices %v are invalid", invalidIndices)
-	}
-	return indices, nil
 }
