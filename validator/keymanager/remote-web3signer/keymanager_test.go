@@ -400,14 +400,6 @@ func TestKeymanager_Sign(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "AGGREGATE_AND_PROOF",
-			args: args{
-				request: mock.GetMockSignRequest("AGGREGATE_AND_PROOF"),
-			},
-			want:    desiredSig,
-			wantErr: false,
-		},
-		{
 			name: "AGGREGATE_AND_PROOF_V2",
 			args: args{
 				request: mock.GetMockSignRequest("AGGREGATE_AND_PROOF_V2"),

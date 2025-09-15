@@ -186,6 +186,7 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
+// Warning: no longer supported post Fulu blobs
 func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlobs")
 	defer span.End()
@@ -213,6 +214,15 @@ func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 		sc, err := blobSidecar.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not decode blob sidecar: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		scEpoch := slots.ToEpoch(sc.SignedBlockHeader.Header.Slot)
+		if scEpoch < params.BeaconConfig().DenebForkEpoch {
+			httputil.HandleError(w, "Blob sidecars not supported for pre deneb", http.StatusBadRequest)
+			return
+		}
+		if scEpoch > params.BeaconConfig().FuluForkEpoch {
+			httputil.HandleError(w, "Blob sidecars not supported for post fulu blobs", http.StatusBadRequest)
 			return
 		}
 

@@ -118,7 +118,20 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = ssz.MarshalUint64(dst, f.VectorField[ii])
 	}
 
-	// Field (6) 'TrailingField'
+	// Field (6) 'TwoDimensionBytesField'
+	if size := len(f.TwoDimensionBytesField); size != 5 {
+		err = ssz.ErrVectorLengthFn("--.TwoDimensionBytesField", size, 5)
+		return
+	}
+	for ii := 0; ii < 5; ii++ {
+		if size := len(f.TwoDimensionBytesField[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.TwoDimensionBytesField[ii]", size, 32)
+			return
+		}
+		dst = append(dst, f.TwoDimensionBytesField[ii]...)
+	}
+
+	// Field (7) 'TrailingField'
 	if size := len(f.TrailingField); size != 56 {
 		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
@@ -132,7 +145,7 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 333 {
+	if size != 493 {
 		return ssz.ErrSize
 	}
 
@@ -168,18 +181,27 @@ func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 		f.VectorField[ii] = ssz.UnmarshallUint64(buf[85:277][ii*8 : (ii+1)*8])
 	}
 
-	// Field (6) 'TrailingField'
-	if cap(f.TrailingField) == 0 {
-		f.TrailingField = make([]byte, 0, len(buf[277:333]))
+	// Field (6) 'TwoDimensionBytesField'
+	f.TwoDimensionBytesField = make([][]byte, 5)
+	for ii := 0; ii < 5; ii++ {
+		if cap(f.TwoDimensionBytesField[ii]) == 0 {
+			f.TwoDimensionBytesField[ii] = make([]byte, 0, len(buf[277:437][ii*32:(ii+1)*32]))
+		}
+		f.TwoDimensionBytesField[ii] = append(f.TwoDimensionBytesField[ii], buf[277:437][ii*32:(ii+1)*32]...)
 	}
-	f.TrailingField = append(f.TrailingField, buf[277:333]...)
+
+	// Field (7) 'TrailingField'
+	if cap(f.TrailingField) == 0 {
+		f.TrailingField = make([]byte, 0, len(buf[437:493]))
+	}
+	f.TrailingField = append(f.TrailingField, buf[437:493]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the FixedTestContainer object
 func (f *FixedTestContainer) SizeSSZ() (size int) {
-	size = 333
+	size = 493
 	return
 }
 
@@ -226,7 +248,24 @@ func (f *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.Merkleize(subIndx)
 	}
 
-	// Field (6) 'TrailingField'
+	// Field (6) 'TwoDimensionBytesField'
+	{
+		if size := len(f.TwoDimensionBytesField); size != 5 {
+			err = ssz.ErrVectorLengthFn("--.TwoDimensionBytesField", size, 5)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range f.TwoDimensionBytesField {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (7) 'TrailingField'
 	if size := len(f.TrailingField); size != 56 {
 		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
@@ -354,7 +393,7 @@ func (v *VariableTestContainer) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the VariableTestContainer object to a target array
 func (v *VariableTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(100)
+	offset := int(104)
 
 	// Field (0) 'LeadingField'
 	if size := len(v.LeadingField); size != 32 {
@@ -371,14 +410,18 @@ func (v *VariableTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(v.FieldListContainer) * 40
 
-	// Offset (3) 'Nested'
+	// Offset (3) 'FieldListBytes32'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(v.FieldListBytes32) * 32
+
+	// Offset (4) 'Nested'
 	dst = ssz.WriteOffset(dst, offset)
 	if v.Nested == nil {
 		v.Nested = new(VariableNestedContainer)
 	}
 	offset += v.Nested.SizeSSZ()
 
-	// Field (4) 'TrailingField'
+	// Field (5) 'TrailingField'
 	if size := len(v.TrailingField); size != 56 {
 		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
@@ -405,7 +448,20 @@ func (v *VariableTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error)
 		}
 	}
 
-	// Field (3) 'Nested'
+	// Field (3) 'FieldListBytes32'
+	if size := len(v.FieldListBytes32); size > 100 {
+		err = ssz.ErrListTooBigFn("--.FieldListBytes32", size, 100)
+		return
+	}
+	for ii := 0; ii < len(v.FieldListBytes32); ii++ {
+		if size := len(v.FieldListBytes32[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.FieldListBytes32[ii]", size, 32)
+			return
+		}
+		dst = append(dst, v.FieldListBytes32[ii]...)
+	}
+
+	// Field (4) 'Nested'
 	if dst, err = v.Nested.MarshalSSZTo(dst); err != nil {
 		return
 	}
@@ -417,12 +473,12 @@ func (v *VariableTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error)
 func (v *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 100 {
+	if size < 104 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o1, o2, o3 uint64
+	var o1, o2, o3, o4 uint64
 
 	// Field (0) 'LeadingField'
 	if cap(v.LeadingField) == 0 {
@@ -435,7 +491,7 @@ func (v *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o1 != 100 {
+	if o1 != 104 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -444,16 +500,21 @@ func (v *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Offset (3) 'Nested'
+	// Offset (3) 'FieldListBytes32'
 	if o3 = ssz.ReadOffset(buf[40:44]); o3 > size || o2 > o3 {
 		return ssz.ErrOffset
 	}
 
-	// Field (4) 'TrailingField'
-	if cap(v.TrailingField) == 0 {
-		v.TrailingField = make([]byte, 0, len(buf[44:100]))
+	// Offset (4) 'Nested'
+	if o4 = ssz.ReadOffset(buf[44:48]); o4 > size || o3 > o4 {
+		return ssz.ErrOffset
 	}
-	v.TrailingField = append(v.TrailingField, buf[44:100]...)
+
+	// Field (5) 'TrailingField'
+	if cap(v.TrailingField) == 0 {
+		v.TrailingField = make([]byte, 0, len(buf[48:104]))
+	}
+	v.TrailingField = append(v.TrailingField, buf[48:104]...)
 
 	// Field (1) 'FieldListUint64'
 	{
@@ -486,9 +547,25 @@ func (v *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (3) 'Nested'
+	// Field (3) 'FieldListBytes32'
 	{
-		buf = tail[o3:]
+		buf = tail[o3:o4]
+		num, err := ssz.DivideInt2(len(buf), 32, 100)
+		if err != nil {
+			return err
+		}
+		v.FieldListBytes32 = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(v.FieldListBytes32[ii]) == 0 {
+				v.FieldListBytes32[ii] = make([]byte, 0, len(buf[ii*32:(ii+1)*32]))
+			}
+			v.FieldListBytes32[ii] = append(v.FieldListBytes32[ii], buf[ii*32:(ii+1)*32]...)
+		}
+	}
+
+	// Field (4) 'Nested'
+	{
+		buf = tail[o4:]
 		if v.Nested == nil {
 			v.Nested = new(VariableNestedContainer)
 		}
@@ -501,7 +578,7 @@ func (v *VariableTestContainer) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the VariableTestContainer object
 func (v *VariableTestContainer) SizeSSZ() (size int) {
-	size = 100
+	size = 104
 
 	// Field (1) 'FieldListUint64'
 	size += len(v.FieldListUint64) * 8
@@ -509,7 +586,10 @@ func (v *VariableTestContainer) SizeSSZ() (size int) {
 	// Field (2) 'FieldListContainer'
 	size += len(v.FieldListContainer) * 40
 
-	// Field (3) 'Nested'
+	// Field (3) 'FieldListBytes32'
+	size += len(v.FieldListBytes32) * 32
+
+	// Field (4) 'Nested'
 	if v.Nested == nil {
 		v.Nested = new(VariableNestedContainer)
 	}
@@ -566,12 +646,31 @@ func (v *VariableTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.MerkleizeWithMixin(subIndx, num, 128)
 	}
 
-	// Field (3) 'Nested'
+	// Field (3) 'FieldListBytes32'
+	{
+		if size := len(v.FieldListBytes32); size > 100 {
+			err = ssz.ErrListTooBigFn("--.FieldListBytes32", size, 100)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range v.FieldListBytes32 {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+
+		numItems := uint64(len(v.FieldListBytes32))
+		hh.MerkleizeWithMixin(subIndx, numItems, 100)
+	}
+
+	// Field (4) 'Nested'
 	if err = v.Nested.HashTreeRootWith(hh); err != nil {
 		return
 	}
 
-	// Field (4) 'TrailingField'
+	// Field (5) 'TrailingField'
 	if size := len(v.TrailingField); size != 56 {
 		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return

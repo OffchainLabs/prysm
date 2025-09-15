@@ -92,22 +92,72 @@ func SendBeaconBlocksByRangeRequest(
 		// The response MUST contain no more than `count` blocks, and no more than
 		// MAX_REQUEST_BLOCKS blocks.
 		currentEpoch := slots.ToEpoch(tor.CurrentSlot())
-		if i >= req.Count || i >= params.MaxRequestBlock(currentEpoch) {
+		maxBlocks := params.MaxRequestBlock(currentEpoch)
+		if i >= req.Count {
+			log.WithFields(logrus.Fields{
+				"blockIndex":     i,
+				"requestedCount": req.Count,
+				"blockSlot":      blk.Block().Slot(),
+				"peer":           pid,
+				"reason":         "exceeded requested count",
+			}).Debug("Peer returned invalid data: too many blocks")
+			return nil, ErrInvalidFetchedData
+		}
+		if i >= maxBlocks {
+			log.WithFields(logrus.Fields{
+				"blockIndex":   i,
+				"maxBlocks":    maxBlocks,
+				"currentEpoch": currentEpoch,
+				"blockSlot":    blk.Block().Slot(),
+				"peer":         pid,
+				"reason":       "exceeded MAX_REQUEST_BLOCKS",
+			}).Debug("Peer returned invalid data: exceeded protocol limit")
 			return nil, ErrInvalidFetchedData
 		}
 		// Returned blocks MUST be in the slot range [start_slot, start_slot + count * step).
-		if blk.Block().Slot() < req.StartSlot || blk.Block().Slot() >= req.StartSlot.Add(req.Count*req.Step) {
+		endSlot := req.StartSlot.Add(req.Count * req.Step)
+		if blk.Block().Slot() < req.StartSlot {
+			log.WithFields(logrus.Fields{
+				"blockSlot":      blk.Block().Slot(),
+				"requestedStart": req.StartSlot,
+				"peer":           pid,
+				"reason":         "block slot before requested start",
+			}).Debug("Peer returned invalid data: block too early")
+			return nil, ErrInvalidFetchedData
+		}
+		if blk.Block().Slot() >= endSlot {
+			log.WithFields(logrus.Fields{
+				"blockSlot":      blk.Block().Slot(),
+				"requestedStart": req.StartSlot,
+				"requestedEnd":   endSlot,
+				"requestedCount": req.Count,
+				"requestedStep":  req.Step,
+				"peer":           pid,
+				"reason":         "block slot >= start + count*step",
+			}).Debug("Peer returned invalid data: block beyond range")
 			return nil, ErrInvalidFetchedData
 		}
 		// Returned blocks, where they exist, MUST be sent in a consecutive order.
 		// Consecutive blocks MUST have values in `step` increments (slots may be skipped in between).
 		isSlotOutOfOrder := false
+		outOfOrderReason := ""
 		if prevSlot >= blk.Block().Slot() {
 			isSlotOutOfOrder = true
+			outOfOrderReason = "slot not increasing"
 		} else if req.Step != 0 && blk.Block().Slot().SubSlot(prevSlot).Mod(req.Step) != 0 {
 			isSlotOutOfOrder = true
+			slotDiff := blk.Block().Slot().SubSlot(prevSlot)
+			outOfOrderReason = fmt.Sprintf("slot diff %d not multiple of step %d", slotDiff, req.Step)
 		}
 		if !isFirstChunk && isSlotOutOfOrder {
+			log.WithFields(logrus.Fields{
+				"blockSlot":     blk.Block().Slot(),
+				"prevSlot":      prevSlot,
+				"requestedStep": req.Step,
+				"blockIndex":    i,
+				"peer":          pid,
+				"reason":        outOfOrderReason,
+			}).Debug("Peer returned invalid data: blocks out of order")
 			return nil, ErrInvalidFetchedData
 		}
 		prevSlot = blk.Block().Slot()

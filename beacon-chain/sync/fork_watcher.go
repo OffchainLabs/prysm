@@ -12,6 +12,7 @@ import (
 // Is a background routine that observes for new incoming forks. Depending on the epoch
 // it will be in charge of subscribing/unsubscribing the relevant topics at the fork boundaries.
 func (s *Service) forkWatcher() {
+	<-s.initialSyncComplete
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	for {
 		select {
@@ -28,9 +29,6 @@ func (s *Service) forkWatcher() {
 				log.WithError(err).Error("Unable to check for fork in the previous epoch")
 				continue
 			}
-			// Broadcast BLS changes at the Capella fork boundary
-			s.broadcastBLSChanges(currSlot)
-
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting goroutine")
 			slotTicker.Done()

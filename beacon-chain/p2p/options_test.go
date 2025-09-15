@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -132,6 +133,59 @@ func TestDefaultMultiplexers(t *testing.T) {
 
 	assert.Equal(t, protocol.ID("/yamux/1.0.0"), cfg.Muxers[0].ID)
 	assert.Equal(t, protocol.ID("/mplex/6.7.0"), cfg.Muxers[1].ID)
+}
+
+func TestSetConnManagerOption(t *testing.T) {
+	cases := []struct {
+		name      string
+		maxPeers  uint
+		highWater int
+	}{
+		{
+			name:      "MaxPeers lower than default high water mark",
+			maxPeers:  defaultConnManagerPruneAbove - 1,
+			highWater: defaultConnManagerPruneAbove,
+		},
+		{
+			name:      "MaxPeers equal to default high water mark",
+			maxPeers:  defaultConnManagerPruneAbove,
+			highWater: defaultConnManagerPruneAbove,
+		},
+		{
+			name:      "MaxPeers higher than default high water mark",
+			maxPeers:  defaultConnManagerPruneAbove + 1,
+			highWater: defaultConnManagerPruneAbove + 1 + connManagerPruneAmount,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{MaxPeers: tt.maxPeers}
+			opts, err := setConnManagerOption(cfg, []libp2p.Option{})
+			assert.NoError(t, err)
+			_, high := cfg.connManagerLowHigh()
+			require.Equal(t, true, high > int(cfg.MaxPeers))
+
+			var libCfg libp2p.Config
+			require.NoError(t, libCfg.Apply(append(opts, libp2p.FallbackDefaults)...))
+			checkLimit(t, libCfg.ConnManager, high)
+		})
+	}
+}
+
+type connLimitGetter int
+
+func (m connLimitGetter) GetConnLimit() int {
+	return int(m)
+}
+
+// CheckLimit will return an error if the result of calling lg.GetConnLimit is greater than
+// the high water mark. So by checking the result of calling it with a value equal to and lower
+// than the expected value, we can determine the value it holds internally.
+func checkLimit(t *testing.T, cm connmgr.ConnManager, expected int) {
+	require.NoError(t, cm.CheckLimit(connLimitGetter(expected)), "Connection manager limit check failed")
+	if err := cm.CheckLimit(connLimitGetter(expected - 1)); err == nil {
+		t.Errorf("connection manager limit is below the expected value of %d", expected)
+	}
 }
 
 func TestMultiAddressBuilderWithID(t *testing.T) {

@@ -145,9 +145,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
-	if err := verifier.SidecarKzgProofVerified(); err != nil {
-		return pubsub.ValidationReject, err
+	validationResult, err := s.validateWithKzgBatchVerifier(ctx, roDataColumns)
+	if validationResult != pubsub.ValidationAccept {
+		return validationResult, err
 	}
+	// Mark KZG verification as satisfied since we did it via batch verifier
+	verifier.SatisfyRequirement(verification.RequireSidecarKzgProofVerified)
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.

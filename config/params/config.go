@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -404,6 +405,8 @@ func (b *BeaconChainConfig) InitializeForkSchedule() {
 
 func LogDigests(b *BeaconChainConfig) {
 	schedule := b.networkSchedule
+	schedule.mu.RLock()
+	defer schedule.mu.RUnlock()
 	for _, e := range schedule.entries {
 		log.WithFields(e.LogFields()).Debug("Network schedule entry initialized")
 		digests := make([]string, 0, len(schedule.byDigest))
@@ -415,6 +418,7 @@ func LogDigests(b *BeaconChainConfig) {
 }
 
 type NetworkSchedule struct {
+	mu        sync.RWMutex
 	entries   []NetworkScheduleEntry
 	byEpoch   map[primitives.Epoch]*NetworkScheduleEntry
 	byVersion map[[fieldparams.VersionLength]byte]*NetworkScheduleEntry
@@ -482,6 +486,11 @@ func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry
 }
 
 func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
+	ns.mu.RLock()
+	defer ns.mu.RUnlock()
+	if ns.byEpoch == nil {
+		return nil, false
+	}
 	entry, ok := ns.byEpoch[epoch]
 	return entry, ok
 }
@@ -503,6 +512,8 @@ func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
 }
 
 func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
+	ns.mu.Lock()
+	defer ns.mu.Unlock()
 	if _, ok := ns.byDigest[e.ForkDigest]; !ok {
 		ns.byDigest[e.ForkDigest] = &e
 	}
@@ -762,4 +773,24 @@ func WithinDAPeriod(block, current primitives.Epoch) bool {
 	}
 
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
+}
+
+// EpochsDuration returns the time duration of the given number of epochs.
+func EpochsDuration(count primitives.Epoch, b *BeaconChainConfig) time.Duration {
+	return SlotsDuration(SlotsForEpochs(count, b), b)
+}
+
+// SlotsForEpochs returns the number of slots in the given number of epochs.
+func SlotsForEpochs(count primitives.Epoch, b *BeaconChainConfig) primitives.Slot {
+	return primitives.Slot(count) * b.SlotsPerEpoch
+}
+
+// SlotsDuration returns the time duration of the given number of slots.
+func SlotsDuration(count primitives.Slot, b *BeaconChainConfig) time.Duration {
+	return time.Duration(count) * SecondsPerSlot(b)
+}
+
+// SecondsPerSlot returns the time duration of a single slot.
+func SecondsPerSlot(b *BeaconChainConfig) time.Duration {
+	return time.Duration(b.SecondsPerSlot) * time.Second
 }

@@ -10,6 +10,8 @@ go_library(
         "query.go",
         "ssz_info.go",
         "ssz_type.go",
+        "tag_parser.go",
+        "vector.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz/query",
     visibility = ["//visibility:public"],
@@ -21,6 +23,7 @@ go_test(
         "analyzer_test.go",
         "path_test.go",
         "query_test.go",
+        "tag_parser_test.go",
     ],
     deps = [
         ":go_default_library",

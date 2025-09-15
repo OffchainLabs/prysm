@@ -44,11 +44,27 @@ func (b *BeaconState) ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (prim
 		return 0, err
 	}
 
+	return b.exitEpochAndUpdateChurn(primitives.Gwei(activeBal), exitBalance)
+}
+
+// ExitEpochAndUpdateChurnForTotalBal has the same functionality as ExitEpochAndUpdateChurn,
+// the only difference being how total active balance is obtained. In ExitEpochAndUpdateChurn
+// it is calculated inside the function and in ExitEpochAndUpdateChurnForTotalBal it's a
+// function argument.
+func (b *BeaconState) ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error) {
+	if b.version < version.Electra {
+		return 0, errNotSupported("ExitEpochAndUpdateChurnForTotalBal", b.version)
+	}
+
+	return b.exitEpochAndUpdateChurn(totalActiveBalance, exitBalance)
+}
+
+func (b *BeaconState) exitEpochAndUpdateChurn(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
 	earliestExitEpoch := max(b.earliestExitEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(b.slot)))
-	perEpochChurn := helpers.ActivationExitChurnLimit(primitives.Gwei(activeBal)) // Guaranteed to be non-zero.
+	perEpochChurn := helpers.ActivationExitChurnLimit(totalActiveBalance) // Guaranteed to be non-zero.
 
 	// New epoch for exits
 	var exitBalanceToConsume primitives.Gwei
