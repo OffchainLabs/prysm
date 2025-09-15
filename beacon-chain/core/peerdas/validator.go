@@ -21,8 +21,8 @@ var (
 )
 
 var (
-	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
 	_ ConstructionPopulator = (*BlockReconstructionSource)(nil)
+	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
 )
 
 type (
@@ -32,6 +32,7 @@ type (
 	ConstructionPopulator interface {
 		Slot() primitives.Slot
 		Root() [fieldparams.RootLength]byte
+		ProposerIndex() primitives.ValidatorIndex
 		Commitments() ([][]byte, error)
 		Type() string
 
@@ -45,7 +46,7 @@ type (
 
 	// DataColumnSidecar is a ConstructionPopulator that uses a data column sidecar as the source of data
 	SidecarReconstructionSource struct {
-		blocks.RODataColumn
+		blocks.VerifiedRODataColumn
 	}
 
 	blockInfo struct {
@@ -61,8 +62,8 @@ func PopulateFromBlock(block blocks.ROBlock) *BlockReconstructionSource {
 }
 
 // PopulateFromSidecar creates a SidecarReconstructionSource from a data column sidecar
-func PopulateFromSidecar(sidecar blocks.RODataColumn) *SidecarReconstructionSource {
-	return &SidecarReconstructionSource{RODataColumn: sidecar}
+func PopulateFromSidecar(sidecar blocks.VerifiedRODataColumn) *SidecarReconstructionSource {
+	return &SidecarReconstructionSource{VerifiedRODataColumn: sidecar}
 }
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
@@ -139,6 +140,11 @@ func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([
 // Slot returns the slot of the source
 func (s *BlockReconstructionSource) Slot() primitives.Slot {
 	return s.Block().Slot()
+}
+
+// ProposerIndex returns the proposer index of the source
+func (s *BlockReconstructionSource) ProposerIndex() primitives.ValidatorIndex {
+	return s.Block().ProposerIndex()
 }
 
 // Commitments returns the blob KZG commitments of the source

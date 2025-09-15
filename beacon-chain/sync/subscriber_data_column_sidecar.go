@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -25,9 +26,11 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
 	}
 
+	source := peerdas.PopulateFromSidecar(sidecar)
+
 	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
 	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-		if err := s.processDataColumnSidecarsFromExecutionFromColumnSidecar(ctx, sidecar); err != nil {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, source); err != nil {
 			return nil, err
 		}
 

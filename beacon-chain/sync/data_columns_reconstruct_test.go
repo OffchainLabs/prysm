@@ -4,12 +4,9 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -244,43 +241,4 @@ func TestMissingDataColumnSidecars(t *testing.T) {
 			require.Equal(t, false, missing[storedIndex], "Index %d should not be missing", storedIndex)
 		}
 	})
-}
-
-func TestProcessDataColumnSidecarsFromExecutionFromColumnSidecar(t *testing.T) {
-	const (
-		earliestAvailableSlot = 0
-		custodyGroupCount     = 8
-		blobCount             = 2
-	)
-
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
-
-	p2p := mockp2p.NewTestP2P(t)
-	_, _, err = p2p.UpdateCustodyInfo(0, custodyGroupCount)
-	require.NoError(t, err)
-
-	executionReconstructor := &mockExecution.EngineClient{
-		DataColumnSidecars: verifiedRoSidecars,
-	}
-
-	chain := new(chainMock.ChainService)
-
-	service := Service{
-		cfg: &config{
-			p2p:                    p2p,
-			dataColumnStorage:      filesystem.NewEphemeralDataColumnStorage(t),
-			executionReconstructor: executionReconstructor,
-			chain:                  chain,
-			operationNotifier:      new(chainMock.MockOperationNotifier),
-		},
-		seenDataColumnCache: newSlotAwareCache(1),
-	}
-
-	err = service.processDataColumnSidecarsFromExecutionFromColumnSidecar(t.Context(), verifiedRoSidecars[0])
-	require.NoError(t, err)
-	require.Equal(t, custodyGroupCount, len(chain.DataColumns))
 }

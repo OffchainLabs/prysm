@@ -267,7 +267,7 @@ func TestDataColumnSidecarsFromColumnSidecar(t *testing.T) {
 	}
 
 	// Call the function
-	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromSidecar(verifiedInputSidecar.RODataColumn))
+	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromSidecar(verifiedInputSidecar))
 	require.NoError(t, err)
 	require.NotNil(t, sidecars)
 	require.Equal(t, int(numberOfColumns), len(sidecars))

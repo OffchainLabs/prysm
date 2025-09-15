@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -158,6 +157,9 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
+		roBlock, err := blocks.NewROBlock(sb)
+		require.NoError(t, err)
+
 		tests := []struct {
 			name              string
 			blobSidecars      []blocks.VerifiedROBlob
@@ -192,7 +194,7 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 					},
 					seenBlobCache: lruwrpr.New(1),
 				}
-				s.processSidecarsFromExecutionFromBlock(context.Background(), sb)
+				s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
 				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
 			})
 		}
@@ -288,7 +290,10 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 				sb, err := blocks.NewSignedBeaconBlock(b)
 				require.NoError(t, err)
 
-				s.processSidecarsFromExecutionFromBlock(t.Context(), sb)
+				roBlock, err := blocks.NewROBlock(sb)
+				require.NoError(t, err)
+
+				s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})
 		}

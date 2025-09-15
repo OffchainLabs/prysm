@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -14,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,7 +37,12 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	go s.processSidecarsFromExecutionFromBlock(ctx, signed)
+	roBlock, err := blocks.NewROBlockWithRoot(signed, root)
+	if err != nil {
+		return errors.Wrap(err, "new ro block with root")
+	}
+
+	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -61,17 +68,11 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	if block.Version() >= version.Fulu {
-		roBlock, err := blocks.NewROBlock(block)
-		if err != nil {
-			log.WithError(err).Error("Failed to create RO block")
-			return
-		}
-
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
+	if roBlock.Version() >= version.Fulu {
 		key := fmt.Sprintf("%#x", roBlock.Root())
 		if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-			if err := s.processDataColumnSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
 				return nil, err
 			}
 
@@ -84,8 +85,8 @@ func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, blo
 		return
 	}
 
-	if block.Version() >= version.Deneb {
-		s.processBlobSidecarsFromExecution(ctx, block)
+	if roBlock.Version() >= version.Deneb {
+		s.processBlobSidecarsFromExecution(ctx, roBlock)
 		return
 	}
 }
