@@ -29,19 +29,19 @@ func MinimumColumnCountToReconstruct() uint64 {
 // ReconstructDataColumnSidecars reconstructs all the data column sidecars from the given input data column sidecars.
 // All input sidecars must be committed to the same block.
 // `inVerifiedRoSidecars` should contain enough (unique) sidecars to reconstruct the missing columns.
-func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	// Check if there is at least one input sidecar.
-	if len(inVerifiedRoSidecars) == 0 {
+	if len(verifiedRoSidecars) == 0 {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
 	// Safely retrieve the first sidecar as a reference.
-	referenceSidecar := inVerifiedRoSidecars[0]
+	referenceSidecar := verifiedRoSidecars[0]
 
 	// Check if all columns have the same length and are commmitted to the same block.
 	blobCount := len(referenceSidecar.Column)
 	blockRoot := referenceSidecar.BlockRoot()
-	for _, sidecar := range inVerifiedRoSidecars[1:] {
+	for _, sidecar := range verifiedRoSidecars[1:] {
 		if len(sidecar.Column) != blobCount {
 			return nil, ErrColumnLengthsDiffer
 		}
@@ -52,8 +52,8 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 	}
 
 	// Deduplicate sidecars.
-	sidecarByIndex := make(map[uint64]blocks.VerifiedRODataColumn, len(inVerifiedRoSidecars))
-	for _, inVerifiedRoSidecar := range inVerifiedRoSidecars {
+	sidecarByIndex := make(map[uint64]blocks.VerifiedRODataColumn, len(verifiedRoSidecars))
+	for _, inVerifiedRoSidecar := range verifiedRoSidecars {
 		sidecarByIndex[inVerifiedRoSidecar.Index] = inVerifiedRoSidecar
 	}
 
@@ -102,13 +102,13 @@ func ReconstructDataColumnSidecars(inVerifiedRoSidecars []blocks.VerifiedRODataC
 
 	// Input sidecars are verified, and we reconstructed ourselves the missing sidecars.
 	// As a consequence, reconstructed sidecars are also verified.
-	outVerifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(outSidecars))
+	reconstructedVerifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(outSidecars))
 	for _, sidecar := range outSidecars {
 		verifiedRoSidecar := blocks.NewVerifiedRODataColumn(sidecar)
-		outVerifiedRoSidecars = append(outVerifiedRoSidecars, verifiedRoSidecar)
+		reconstructedVerifiedRoSidecars = append(reconstructedVerifiedRoSidecars, verifiedRoSidecar)
 	}
 
-	return outVerifiedRoSidecars, nil
+	return reconstructedVerifiedRoSidecars, nil
 }
 
 // ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.

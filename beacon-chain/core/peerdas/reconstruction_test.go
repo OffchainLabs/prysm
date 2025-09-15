@@ -390,7 +390,6 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		require.NoError(t, err)
 
 		const blobCount = 2
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		// Generate test blobs
 		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
