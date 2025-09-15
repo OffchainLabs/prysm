@@ -11,14 +11,15 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -176,18 +177,23 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		return errors.Wrap(err, "blob kzg commitments")
 	}
 
+	// Exit early if there are no commitments.
+	if len(commitments) == 0 {
+		return nil
+	}
+
+	// Retrieve the indices of sidecars we should sample.
+	indicesToSample, err := s.columnIndicesToSample()
+	if err != nil {
+		return errors.Wrap(err, "column indices to sample")
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
 	defer cancel()
 
-	for {
-		// Check if some data column sidecars to custody are missing.
-		missingIndices, err := s.missingDataColumnSidecars(source.Root(), commitments)
-		if err != nil {
-			return errors.Wrap(err, "missing data column sidecars")
-		}
-
-		// Return early if all needed data column sidecars are already available in storage.
-		if len(missingIndices) == 0 {
+	for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
+		// Exit early if all sidecars to sample have been seen.
+		if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), indicesToSample) {
 			return nil
 		}
 
@@ -205,7 +211,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			time.Sleep(delay)
-
 			continue
 		}
 
@@ -215,7 +220,8 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		}
 
 		// Broadcast and save data column sidecars to custody but not yet received.
-		for index := range missingIndices {
+		reconstructedIndices := make(map[uint64]bool, len(indicesToSample))
+		for index := range indicesToSample {
 			if index >= sidecarCount {
 				return errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
 			}
@@ -234,20 +240,38 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 				return errors.Wrap(err, "receive data column sidecar")
 			}
+
+			reconstructedIndices[index] = true
+		}
+
+		if len(reconstructedIndices) > 0 {
+			log.WithFields(logrus.Fields{
+				"root":          fmt.Sprintf("%#x", source.Root()),
+				"slot":          source.Slot(),
+				"proposerIndex": source.ProposerIndex(),
+				"iteration":     iteration,
+				"type":          source.Type(),
+				"count":         len(reconstructedIndices),
+				"indices":       sortedSliceFromMap(reconstructedIndices),
+			}).Debug("Constructed data column sidecars from the execution client")
 		}
 
 		return nil
 	}
 }
 
-// missingDataColumnSidecars returns the data column indices we should custody and that are missing in our storage
-// for the given read only beacon block.
-func (s *Service) missingDataColumnSidecars(root [fieldparams.RootLength]byte, commitments [][]byte) (map[uint64]bool, error) {
-	// Return early if there is not commitments.
-	if len(commitments) == 0 {
-		return nil, nil
+// haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
+func (s *Service) haveAllSidecarsBeenSeen(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
+	for index := range indices {
+		if !s.hasSeenDataColumnIndex(slot, proposerIndex, index) {
+			return false
+		}
 	}
+	return true
+}
 
+// columnIndicesToSample returns the data column indices we should sample for the node.
+func (s *Service) columnIndicesToSample() (map[uint64]bool, error) {
 	// Retrieve our node ID.
 	nodeID := s.cfg.p2p.NodeID()
 
@@ -268,18 +292,7 @@ func (s *Service) missingDataColumnSidecars(root [fieldparams.RootLength]byte, c
 		return nil, errors.Wrap(err, "peer info")
 	}
 
-	// Get the indices of the data column sidecars we have in the store.
-	storedIndices := s.cfg.dataColumnStorage.Summary(root).Stored()
-
-	// List indices we should custody and that are missing in our storage.
-	missingIndices := make(map[uint64]bool, samplingSize)
-	for index := range peerInfo.CustodyColumns {
-		if !storedIndices[index] {
-			missingIndices[index] = true
-		}
-	}
-
-	return missingIndices, nil
+	return peerInfo.CustodyColumns, nil
 }
 
 // WriteInvalidBlockToDisk as a block ssz. Writes to temp directory.

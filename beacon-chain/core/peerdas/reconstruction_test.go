@@ -432,14 +432,6 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		err = wg.Wait()
 		require.NoError(t, err)
 
-		// Flatten proofs
-		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
-		for _, cp := range expectedCellsAndProofs {
-			for _, proof := range cp.Proofs {
-				cellProofs = append(cellProofs, proof[:])
-			}
-		}
-
 		// Test ComputeCellsAndProofs
 		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromStructured(blobsAndProofs)
 		require.NoError(t, err)

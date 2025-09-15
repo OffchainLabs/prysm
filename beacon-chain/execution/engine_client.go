@@ -102,10 +102,7 @@ const (
 	defaultEngineTimeout = time.Second
 )
 
-var (
-	errInvalidPayloadBodyResponse  = errors.New("engine api payload body response is invalid")
-	errMissingBlobsAndProofsFromEL = errors.New("engine api payload body response is missing blobs and proofs")
-)
+var errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
 
 // ForkchoiceUpdatedResponse is the response kind received by the
 // engine_forkchoiceUpdatedV1 endpoint.
@@ -654,10 +651,6 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
 	root := populator.Root()
-	log := log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", root),
-		"slot": populator.Slot(),
-	})
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
 	commitments, err := populator.Commitments()
@@ -684,8 +677,6 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	// Upgrade the sidecars to verified sidecars.
 	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
 	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
-
-	log.WithField("sourceType", populator.Type()).Debug("Data columns sidecars constructed from the execution client")
 
 	return verifiedROSidecars, nil
 }

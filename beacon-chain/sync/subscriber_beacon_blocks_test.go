@@ -12,10 +12,8 @@ import (
 	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -302,71 +300,81 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 	})
 }
 
-func TestMissingDataColumnSidecars(t *testing.T) {
-	ctx := t.Context()
+func TestHaveAllSidecarsBeenSeen(t *testing.T) {
+	const (
+		slot          = 42
+		proposerIndex = 1664
+	)
+	service := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
+	service.initCaches()
 
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
+	service.setSeenDataColumnIndex(slot, proposerIndex, 1)
+	service.setSeenDataColumnIndex(slot, proposerIndex, 3)
 
-	t.Run("no commitments", func(t *testing.T) {
-		service := NewService(ctx, WithP2P(p2ptest.NewTestP2P(t)))
+	testCases := []struct {
+		name     string
+		toSample map[uint64]bool
+		expected bool
+	}{
+		{
+			name:     "all sidecars seen",
+			toSample: map[uint64]bool{1: true, 3: true},
+			expected: true,
+		},
+		{
+			name:     "not all sidecars seen",
+			toSample: map[uint64]bool{1: true, 2: true, 3: true},
+			expected: false,
+		},
+	}
 
-		root := [fieldparams.RootLength]byte{0x01, 0x02, 0x03} // Some test root
-		commitments := [][]byte{}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := service.haveAllSidecarsBeenSeen(slot, proposerIndex, tc.toSample)
+			require.Equal(t, tc.expected, actual)
+		})
+	}
+}
 
-		missing, err := service.missingDataColumnSidecars(root, commitments)
-		require.NoError(t, err)
-		require.Equal(t, 0, len(missing))
-	})
+func TestColumnIndicesToSample(t *testing.T) {
+	const earliestAvailableSlot = 0
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.SamplesPerSlot = 4
+	params.OverrideBeaconConfig(cfg)
 
-	t.Run("some sidecars missing", func(t *testing.T) {
-		const (
-			blobCount = 2
-			cgc       = 8 // custody group count
-		)
-		// Generate test data
-		roBlock, _, verifiedRoDataColumns := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
-		root := roBlock.Root()
+	testCases := []struct {
+		name              string
+		custodyGroupCount uint64
+		expected          map[uint64]bool
+	}{
+		{
+			name:              "custody group count lower than samples per slot",
+			custodyGroupCount: 3,
+			expected:          map[uint64]bool{1: true, 17: true, 87: true, 102: true},
+		},
+		{
+			name:              "custody group count higher than samples per slot",
+			custodyGroupCount: 5,
+			expected:          map[uint64]bool{1: true, 17: true, 75: true, 87: true, 102: true},
+		},
+	}
 
-		// Create commitments from the block
-		commitments, err := roBlock.Block().Body().BlobKzgCommitments()
-		require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p2p := mockp2p.NewTestP2P(t)
+			_, _, err := p2p.UpdateCustodyInfo(earliestAvailableSlot, tc.custodyGroupCount)
+			require.NoError(t, err)
 
-		// Setup storage with only some of the sidecars
-		storage := filesystem.NewEphemeralDataColumnStorage(t)
-		p2p := p2ptest.NewTestP2P(t)
-		service := NewService(ctx, WithP2P(p2p), WithDataColumnStorage(storage))
+			service := NewService(t.Context(), WithP2P(p2p))
 
-		// Update custody info to set custody group count
-		_, _, err = service.cfg.p2p.UpdateCustodyInfo(0, cgc)
-		require.NoError(t, err)
+			actual, err := service.columnIndicesToSample()
+			require.NoError(t, err)
 
-		// Save only some of the sidecars that the node should custody
-		// The node should custody indices: [1, 17, 19, 42, 75, 87, 102, 117]
-		// Save only indices 1, 42, and 102
-		storedIndices := []uint64{1, 42, 102}
-		toSave := make([]blocks.VerifiedRODataColumn, 0, len(storedIndices))
-		for _, index := range storedIndices {
-			toSave = append(toSave, verifiedRoDataColumns[index])
-		}
-		err = storage.Save(toSave)
-		require.NoError(t, err)
-
-		// Test function
-		missing, err := service.missingDataColumnSidecars(root, commitments)
-		require.NoError(t, err)
-
-		// Should be missing indices: 17, 19, 75, 87, 117
-		expectedMissing := map[uint64]bool{17: true, 19: true, 75: true, 87: true, 117: true}
-		require.Equal(t, len(expectedMissing), len(missing))
-		for index := range expectedMissing {
-			require.Equal(t, true, missing[index], "Index %d should be missing", index)
-		}
-
-		// Should NOT be missing stored indices
-		for _, storedIndex := range storedIndices {
-			require.Equal(t, false, missing[storedIndex], "Index %d should not be missing", storedIndex)
-		}
-	})
+			require.Equal(t, len(tc.expected), len(actual))
+			for index := range tc.expected {
+				require.Equal(t, true, actual[index])
+			}
+		})
+	}
 }
