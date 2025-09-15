@@ -23,6 +23,8 @@ import (
 )
 
 // Blobs is an HTTP handler for Beacon API getBlobs.
+// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} in favor of /eth/v1/beacon/blobs/{block_id}
+// the endpoint will continue to work post fulu for some time however
 func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.Blobs")
 	defer span.End()

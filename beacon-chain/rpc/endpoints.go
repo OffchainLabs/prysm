@@ -194,7 +194,8 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	const namespace = "blob"
 	return []endpoint{
 		{
-			// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} post FULU
+			// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} in favor of /eth/v1/beacon/blobs/{block_id}
+			// the endpoint will continue to work post fulu for some time however
 			template: "/eth/v1/beacon/blob_sidecars/{block_id}",
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
