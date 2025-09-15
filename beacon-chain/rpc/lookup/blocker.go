@@ -332,7 +332,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...interfac
 	return p.blobsFromStoredBlobs(commitments, root, indices)
 }
 
-
 // blobsFromStoredBlobs retrieves blob sidercars corresponding to `indices` and `root` from the store.
 // This function expects blob sidecars to be stored (aka. no data column sidecars).
 func (p *BeaconDbBlocker) blobsFromStoredBlobs(commitments [][]byte, root [fieldparams.RootLength]byte, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
