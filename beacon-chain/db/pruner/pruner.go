@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -48,6 +49,13 @@ func WithSlotTicker(slotTicker slots.Ticker) ServiceOption {
 	}
 }
 
+// WithP2PService allows setting the P2P service for updating custody info.
+func WithP2PService(p2pService p2p.CustodyManager) ServiceOption {
+	return func(s *Service) {
+		s.p2pService = p2pService
+	}
+}
+
 // Service defines a service that prunes beacon chain DB based on MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 type Service struct {
 	ctx            context.Context
@@ -58,6 +66,7 @@ type Service struct {
 	slotTicker     slots.Ticker
 	backfillWaiter func() error
 	initSyncWaiter func() error
+	p2pService     p2p.CustodyManager
 }
 
 func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
@@ -167,6 +176,29 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
+
+	// Update the earliest available slot in P2P service after pruning.
+	// The earliest available slot is pruneUpto + 1 since pruneUpto is inclusive.
+	if p.p2pService != nil {
+		earliestAvailableSlot := pruneUpto + 1
+
+		// Get current custody group count to preserve it during update
+		custodyGroupCount, err := p.p2pService.CustodyGroupCount()
+		if err != nil {
+			log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after pruning")
+			return nil
+		}
+
+		// Update the custody info with new earliest available slot
+		_, _, err = p.p2pService.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+		if err != nil {
+			log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
+				Error("Failed to update earliest available slot after pruning")
+		} else {
+			log.WithField("earliestAvailableSlot", earliestAvailableSlot).
+				Debug("Updated earliest available slot after pruning")
+		}
+	}
 
 	return nil
 }

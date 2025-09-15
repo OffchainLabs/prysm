@@ -9,8 +9,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spf13/afero"
 )
 
@@ -723,5 +725,165 @@ func TestPrune(t *testing.T) {
 		dirs, err = listDir(dataColumnStorage.fs, "3/14098")
 		require.NoError(t, err)
 		require.Equal(t, true, compareSlices([]string{"0x0de28a18cae63cbc6f0b20dc1afb0b1df38da40824a5f09f92d485ade04de97f.sszs"}, dirs))
+	})
+}
+
+// Mock P2P service for data column storage testing
+type mockDataColumnP2PService struct {
+	custodyGroupCount     uint64
+	earliestAvailableSlot primitives.Slot
+	updateCallCount       int
+}
+
+func (m *mockDataColumnP2PService) EarliestAvailableSlot() (primitives.Slot, error) {
+	return m.earliestAvailableSlot, nil
+}
+
+func (m *mockDataColumnP2PService) CustodyGroupCount() (uint64, error) {
+	return m.custodyGroupCount, nil
+}
+
+func (m *mockDataColumnP2PService) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	m.updateCallCount++
+	m.earliestAvailableSlot = earliestAvailableSlot
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+func (m *mockDataColumnP2PService) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
+	return m.custodyGroupCount
+}
+
+func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
+	ctx := t.Context()
+
+	// Create mock P2P service
+	mockP2P := &mockDataColumnP2PService{
+		custodyGroupCount:     4,
+		earliestAvailableSlot: 0,
+	}
+
+	// Create data column storage with short retention period
+	retentionEpochs := primitives.Epoch(2)
+	storage, err := NewDataColumnStorage(
+		ctx,
+		WithDataColumnBasePath(t.TempDir()),
+		WithDataColumnRetentionEpochs(retentionEpochs),
+		WithDataColumnFs(afero.NewMemMapFs()),
+		WithDataColumnP2PService(mockP2P),
+	)
+	require.NoError(t, err)
+
+	// Create test data column sidecars for different epochs
+	// Epoch 0 (slots 0-31), Epoch 1 (slots 32-63), Epoch 2 (slots 64-95), Epoch 3 (slots 96-127)
+	_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+		t,
+		[]util.DataColumnParam{
+			{Slot: 10, Index: 1, Column: [][]byte{{1}, {2}, {3}}},     // Epoch 0 - should be pruned
+			{Slot: 42, Index: 1, Column: [][]byte{{4}, {5}, {6}}},     // Epoch 1 - should be pruned
+			{Slot: 74, Index: 1, Column: [][]byte{{7}, {8}, {9}}},     // Epoch 2 - should remain
+			{Slot: 106, Index: 1, Column: [][]byte{{10}, {11}, {12}}}, // Epoch 3 - should remain
+		},
+	)
+
+	// Store the data column sidecars - this will update the cache
+	for _, roDataColumn := range verifiedRoDataColumnSidecars {
+		require.NoError(t, storage.Save([]blocks.VerifiedRODataColumn{roDataColumn}))
+	}
+
+	// Trigger pruning by calling prune() directly
+	// This should prune epochs 0 and 1 (keeping only epochs 2 and 3)
+	storage.prune()
+
+	// Check that UpdateCustodyInfo was called
+	assert.Equal(t, true, mockP2P.updateCallCount > 0, "UpdateCustodyInfo should have been called")
+
+	// The highest epoch to prune is 3 - 2 = 1
+	// So earliest available slot should be the first slot of epoch 2 = epoch 2 * 32 = 64
+	expectedEarliestSlot := primitives.Slot(64) // First slot of epoch 2
+	require.Equal(t, expectedEarliestSlot, mockP2P.earliestAvailableSlot, "Earliest available slot should be updated correctly")
+}
+
+func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
+	ctx := t.Context()
+
+	// Test case 1: Should not prune if highestStoredEpoch <= retentionEpochs
+	t.Run("No pruning when not enough epochs", func(t *testing.T) {
+		mockP2P := &mockDataColumnP2PService{
+			custodyGroupCount:     4,
+			earliestAvailableSlot: 0,
+		}
+
+		// retention = 10, but we only have data up to epoch 5
+		storage, err := NewDataColumnStorage(
+			ctx,
+			WithDataColumnBasePath(t.TempDir()),
+			WithDataColumnRetentionEpochs(10),
+			WithDataColumnFs(afero.NewMemMapFs()),
+			WithDataColumnP2PService(mockP2P),
+		)
+		require.NoError(t, err)
+
+		// Create data only up to epoch 5 (slots 160-191)
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Slot: 180, Index: 1, Column: [][]byte{{1}, {2}, {3}}}, // Epoch 5
+			},
+		)
+
+		// Store the data
+		for _, roDataColumn := range verifiedRoDataColumnSidecars {
+			require.NoError(t, storage.Save([]blocks.VerifiedRODataColumn{roDataColumn}))
+		}
+
+		// Trigger pruning
+		storage.prune()
+
+		// Should not have called UpdateCustodyInfo since no pruning should happen
+		assert.Equal(t, 0, mockP2P.updateCallCount, "Should not prune when highestStoredEpoch <= retentionEpochs")
+	})
+
+	t.Run("Pruning when enough epochs", func(t *testing.T) {
+		mockP2P := &mockDataColumnP2PService{
+			custodyGroupCount:     4,
+			earliestAvailableSlot: 0,
+		}
+
+		// retention = 2, but we have data up to epoch 5
+		storage, err := NewDataColumnStorage(
+			ctx,
+			WithDataColumnBasePath(t.TempDir()),
+			WithDataColumnRetentionEpochs(2),
+			WithDataColumnFs(afero.NewMemMapFs()),
+			WithDataColumnP2PService(mockP2P),
+		)
+		require.NoError(t, err)
+
+		// Create data for epochs 0, 1, 2, 5 (epoch 5 = slots 160-191)
+		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Slot: 10, Index: 1, Column: [][]byte{{1}, {2}, {3}}},     // Epoch 0
+				{Slot: 42, Index: 1, Column: [][]byte{{4}, {5}, {6}}},     // Epoch 1
+				{Slot: 74, Index: 1, Column: [][]byte{{7}, {8}, {9}}},     // Epoch 2
+				{Slot: 180, Index: 1, Column: [][]byte{{10}, {11}, {12}}}, // Epoch 5
+			},
+		)
+
+		// Store the data
+		for _, roDataColumn := range verifiedRoDataColumnSidecars {
+			require.NoError(t, storage.Save([]blocks.VerifiedRODataColumn{roDataColumn}))
+		}
+
+		// Trigger pruning
+		storage.prune()
+
+		// Should have called UpdateCustodyInfo since pruning should happen
+		// highestStoredEpoch = 5, retentionEpochs = 2
+		// highestEpochToPrune = 5 - 2 = 3
+		// earliestAvailableSlot = first slot of epoch 4 = 4 * 32 = 128
+		assert.Equal(t, true, mockP2P.updateCallCount > 0, "Should prune when highestStoredEpoch > retentionEpochs")
+		expectedEarliestSlot := primitives.Slot(128) // First slot of epoch 4
+		require.Equal(t, expectedEarliestSlot, mockP2P.earliestAvailableSlot, "Should update earliest available slot correctly")
 	})
 }

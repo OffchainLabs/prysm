@@ -16,6 +16,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -62,6 +63,7 @@ type (
 		cache           *dataColumnStorageSummaryCache
 		dataColumnFeed  *event.Feed
 		pruneMu         sync.RWMutex
+		p2pService      p2p.CustodyManager
 
 		mu      sync.Mutex // protects muChans
 		muChans map[[fieldparams.RootLength]byte]*muChan
@@ -129,6 +131,14 @@ func WithDataColumnRetentionEpochs(e primitives.Epoch) DataColumnStorageOption {
 func WithDataColumnFs(fs afero.Fs) DataColumnStorageOption {
 	return func(b *DataColumnStorage) error {
 		b.fs = fs
+		return nil
+	}
+}
+
+// WithDataColumnP2PService allows setting the P2P service for updating custody info.
+func WithDataColumnP2PService(p2pService p2p.CustodyManager) DataColumnStorageOption {
+	return func(b *DataColumnStorage) error {
+		b.p2pService = p2pService
 		return nil
 	}
 }
@@ -594,6 +604,33 @@ func (dcs *DataColumnStorage) prune() {
 	dcs.mu.Lock()
 	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
+
+	// Update the earliest available slot in P2P service after pruning.
+	// The earliest available slot is the first slot after the pruned epochs.
+	if dcs.p2pService != nil {
+		earliestAvailableSlot, err := slots.EpochStart(highestEpochToPrune + 1)
+		if err != nil {
+			log.WithError(err).Error("Failed to calculate earliest available slot after data column pruning")
+			return
+		}
+
+		// Get current custody group count to preserve it during update
+		custodyGroupCount, err := dcs.p2pService.CustodyGroupCount()
+		if err != nil {
+			log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after data column pruning")
+			return
+		}
+
+		// Update the custody info with new earliest available slot
+		_, _, err = dcs.p2pService.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+		if err != nil {
+			log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
+				Error("Failed to update earliest available slot after data column pruning")
+		} else {
+			log.WithField("earliestAvailableSlot", earliestAvailableSlot).
+				Debug("Updated earliest available slot after data column pruning")
+		}
+	}
 }
 
 // saveDataColumnSidecarsExistingFile saves data column sidecars into an existing file.

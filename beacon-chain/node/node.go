@@ -349,6 +349,16 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		return errors.Wrap(err, "could not register P2P service")
 	}
 
+	// Connect P2P service to DataColumnStorage for updating earliest available slot after pruning
+	if beacon.DataColumnStorage != nil {
+		p2pService := beacon.fetchP2P()
+		if p2pService != nil {
+			if err := filesystem.WithDataColumnP2PService(p2pService)(beacon.DataColumnStorage); err != nil {
+				log.WithError(err).Warn("Failed to set P2P service on DataColumnStorage")
+			}
+		}
+	}
+
 	log.Debugln("Registering Backfill Service")
 	if err := beacon.RegisterBackfillService(cliCtx, bfs); err != nil {
 		return errors.Wrap(err, "could not register Back Fill service")
@@ -1112,6 +1122,12 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	if cliCtx.IsSet(flags.PrunerRetentionEpochs.Name) {
 		uv := cliCtx.Uint64(flags.PrunerRetentionEpochs.Name)
 		opts = append(opts, pruner.WithRetentionPeriod(primitives.Epoch(uv)))
+	}
+
+	// Add P2P service to update earliest available slot after pruning
+	p2pService := b.fetchP2P()
+	if p2pService != nil {
+		opts = append(opts, pruner.WithP2PService(p2pService))
 	}
 
 	p, err := pruner.New(
