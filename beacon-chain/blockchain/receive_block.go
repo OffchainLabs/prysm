@@ -92,7 +92,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	blockCopy, err := block.Copy()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "block copy")
 	}
 
 	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
@@ -103,17 +103,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "new ro block with root")
 	}
 
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "validator execution and consensus")
 	}
 
 	daWaitedTime, err := s.handleDA(ctx, avs, roblock)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "handle da")
 	}
 
 	// Defragment the state before continuing block processing.
@@ -134,10 +134,10 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err := s.postBlockProcess(args); err != nil {
 		err := errors.Wrap(err, "could not process block")
 		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrap(err, "post block process")
 	}
 	if err := s.updateCheckpoints(ctx, currentCheckpoints, preState, postState, blockRoot); err != nil {
-		return err
+		return errors.Wrap(err, "update checkpoints")
 	}
 	// If slasher is configured, forward the attestations in the block via an event feed for processing.
 	if s.slasherEnabled {
@@ -151,12 +151,12 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "check save hot state db")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
 	if err := s.handleCaches(); err != nil {
-		return err
+		return errors.Wrap(err, "handle caches")
 	}
 	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
 	return nil
