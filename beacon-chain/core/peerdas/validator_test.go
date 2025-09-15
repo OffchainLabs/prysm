@@ -197,3 +197,78 @@ func TestDataColumnSidecars(t *testing.T) {
 		}
 	})
 }
+
+func TestReconstructionSource(t *testing.T) {
+	// Create a Fulu block with blob commitments.
+	signedBeaconBlockPb := util.NewBeaconBlockFulu()
+	commitment1 := make([]byte, 48)
+	commitment2 := make([]byte, 48)
+
+	// Set different values to distinguish commitments
+	commitment1[0] = 0x01
+	commitment2[0] = 0x02
+	signedBeaconBlockPb.Block.Body.BlobKzgCommitments = [][]byte{commitment1, commitment2}
+
+	// Create a signed beacon block from the protobuf.
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+	require.NoError(t, err)
+
+	// Create cells and proofs with correct dimensions.
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	cellsAndProofs := []kzg.CellsAndProofs{
+		{
+			Cells:  make([]kzg.Cell, numberOfColumns),
+			Proofs: make([]kzg.Proof, numberOfColumns),
+		},
+		{
+			Cells:  make([]kzg.Cell, numberOfColumns),
+			Proofs: make([]kzg.Proof, numberOfColumns),
+		},
+	}
+
+	// Set distinct values in cells and proofs for testing
+	for i := range numberOfColumns {
+		cellsAndProofs[0].Cells[i][0] = byte(i)
+		cellsAndProofs[0].Proofs[i][0] = byte(i)
+		cellsAndProofs[1].Cells[i][0] = byte(i + 128)
+		cellsAndProofs[1].Proofs[i][0] = byte(i + 128)
+	}
+
+	rob, err := blocks.NewROBlock(signedBeaconBlock)
+	require.NoError(t, err)
+	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	require.NoError(t, err)
+	require.NotNil(t, sidecars)
+	require.Equal(t, int(numberOfColumns), len(sidecars))
+
+	t.Run("from block", func(t *testing.T) {
+		src := peerdas.PopulateFromBlock(rob)
+		require.Equal(t, rob.Block().Slot(), src.Slot())
+		require.Equal(t, rob.Root(), src.Root())
+		require.Equal(t, rob.Block().ProposerIndex(), src.ProposerIndex())
+
+		commitments, err := src.Commitments()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(commitments))
+		require.DeepEqual(t, commitment1, commitments[0])
+		require.DeepEqual(t, commitment2, commitments[1])
+
+		require.Equal(t, peerdas.BlockType, src.Type())
+	})
+
+	t.Run("from sidecar", func(t *testing.T) {
+		referenceSidecar := blocks.NewVerifiedRODataColumn(sidecars[0])
+		src := peerdas.PopulateFromSidecar(referenceSidecar)
+		require.Equal(t, referenceSidecar.Slot(), src.Slot())
+		require.Equal(t, referenceSidecar.BlockRoot(), src.Root())
+		require.Equal(t, referenceSidecar.ProposerIndex(), src.ProposerIndex())
+
+		commitments, err := src.Commitments()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(commitments))
+		require.DeepEqual(t, commitment1, commitments[0])
+		require.DeepEqual(t, commitment2, commitments[1])
+
+		require.Equal(t, peerdas.SidecarType, src.Type())
+	})
+}

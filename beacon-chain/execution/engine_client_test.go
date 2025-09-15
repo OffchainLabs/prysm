@@ -2557,7 +2557,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	})
 }
 
-func TestConstructDataColumnSidecarsFromBlock(t *testing.T) {
+func TestConstructDataColumnSidecars(t *testing.T) {
 	// Start the trusted setup.
 	err := kzg.Start()
 	require.NoError(t, err)

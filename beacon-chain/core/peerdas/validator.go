@@ -25,6 +25,11 @@ var (
 	_ ConstructionPopulator = (*SidecarReconstructionSource)(nil)
 )
 
+const (
+	BlockType   = "BeaconBlock"
+	SidecarType = "DataColumnSidecar"
+)
+
 type (
 	// ConstructionPopulator is an interface that can be satisfied by a type that can use data from a struct
 	// like a DataColumnSidecar or a BeaconBlock to set the fields in a data column sidecar that cannot
@@ -150,6 +155,7 @@ func (s *BlockReconstructionSource) ProposerIndex() primitives.ValidatorIndex {
 // Commitments returns the blob KZG commitments of the source
 func (s *BlockReconstructionSource) Commitments() ([][]byte, error) {
 	c, err := s.Block().Body().BlobKzgCommitments()
+
 	if err != nil {
 		return nil, errors.Wrap(err, "blob KZG commitments")
 	}
@@ -159,7 +165,7 @@ func (s *BlockReconstructionSource) Commitments() ([][]byte, error) {
 
 // Type returns the type of the source
 func (s *BlockReconstructionSource) Type() string {
-	return "BeaconBlock"
+	return BlockType
 }
 
 // extract extracts the block information from the source
@@ -222,7 +228,7 @@ func (s *SidecarReconstructionSource) Commitments() ([][]byte, error) {
 
 // Type returns the type of the source
 func (s *SidecarReconstructionSource) Type() string {
-	return "DataColumnSidecar"
+	return SidecarType
 }
 
 // extract extracts the block information from the source
