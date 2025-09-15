@@ -5,6 +5,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -15,6 +16,7 @@ var (
 	ErrBlobIndexTooHigh         = errors.New("blob index is too high")
 	ErrBlockRootMismatch        = errors.New("block root mismatch")
 	ErrBlobsCellsProofsMismatch = errors.New("blobs and cells proofs mismatch")
+	ErrNilBlobAndProof          = errors.New("nil blob and proof")
 )
 
 // MinimumColumnCountToReconstruct return the minimum number of columns needed to proceed to a reconstruction.
@@ -191,8 +193,8 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 	return blobSidecars, nil
 }
 
-// ComputeCellsAndProofs computes the cells and proofs from blobs and cell proofs.
-func ComputeCellsAndProofs(blobs [][]byte, cellProofs [][]byte) ([]kzg.CellsAndProofs, error) {
+// ComputeCellsAndProofsFromFlat computes the cells and proofs from blobs and cell flat proofs.
+func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([]kzg.CellsAndProofs, error) {
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	blobCount := uint64(len(blobs))
 	cellProofsCount := uint64(len(cellProofs))
@@ -226,6 +228,48 @@ func ComputeCellsAndProofs(blobs [][]byte, cellProofs [][]byte) ([]kzg.CellsAndP
 		}
 
 		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: proofs}
+		cellsAndProofs = append(cellsAndProofs, cellsProofs)
+	}
+
+	return cellsAndProofs, nil
+}
+
+// ComputeCellsAndProofs computes the cells and proofs from blobs and cell proofs.
+func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([]kzg.CellsAndProofs, error) {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	cellsAndProofs := make([]kzg.CellsAndProofs, 0, len(blobsAndProofs))
+	for _, blobAndProof := range blobsAndProofs {
+		if blobAndProof == nil {
+			return nil, ErrNilBlobAndProof
+		}
+
+		var kzgBlob kzg.Blob
+		if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
+			return nil, errors.New("wrong blob size - should never happen")
+		}
+
+		// Compute the extended cells from the (non-extended) blob.
+		cells, err := kzg.ComputeCells(&kzgBlob)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute cells")
+		}
+
+		kzgProofs := make([]kzg.Proof, 0, numberOfColumns*kzg.BytesPerProof)
+		for _, kzgProofBytes := range blobAndProof.KzgProofs {
+			if len(kzgProofBytes) != kzg.BytesPerProof {
+				return nil, errors.New("wrong KZG proof size - should never happen")
+			}
+
+			var kzgProof kzg.Proof
+			if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
+				return nil, errors.New("wrong copied KZG proof size - should never happen")
+			}
+
+			kzgProofs = append(kzgProofs, kzgProof)
+		}
+
+		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: kzgProofs}
 		cellsAndProofs = append(cellsAndProofs, cellsProofs)
 	}
 

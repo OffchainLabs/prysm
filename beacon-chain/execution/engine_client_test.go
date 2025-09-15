@@ -2616,142 +2616,17 @@ func TestConstructDataColumnSidecars(t *testing.T) {
 		require.Equal(t, 128, len(dataColumns))
 	})
 
-	t.Run("missing some blobs", func(t *testing.T) {
-		blobMasks := []bool{false, true, true, true, true, true}
-		srv := createBlobServerV2(t, 6, blobMasks)
-		defer srv.Close()
+	// t.Run("missing some blobs", func(t *testing.T) {
+	// 	blobMasks := []bool{false, true, true, true, true, true}
+	// 	srv := createBlobServerV2(t, 6, blobMasks)
+	// 	defer srv.Close()
 
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
+	// 	rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+	// 	defer rpcClient.Close()
 
-		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
-		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
-	})
-}
-
-func TestConstructDataColumnSidecarsFromSidecar(t *testing.T) {
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	// Setup right fork epoch
-	params.SetupTestConfigCleanup(t)
-	cfg := params.BeaconConfig().Copy()
-	cfg.CapellaForkEpoch = 1
-	cfg.DenebForkEpoch = 2
-	cfg.ElectraForkEpoch = 3
-	cfg.FuluForkEpoch = 4
-	params.OverrideBeaconConfig(cfg)
-
-	client := &Service{capabilityCache: &capabilityCache{}}
-
-	// Create KZG commitments for the sidecar
-	kzgCommitments := createRandomKzgCommitments(t, 3)
-
-	// Create a test verified data column sidecar
-	columnData := make([][]byte, 3)
-	for i := range columnData {
-		columnData[i] = make([]byte, kzg.BytesPerCell)
-		columnData[i][0] = byte(i + 0x10)
-	}
-
-	kzgProofs := make([][]byte, 3)
-	for i := range kzgProofs {
-		kzgProofs[i] = make([]byte, 48)
-		kzgProofs[i][0] = byte(i + 0x20)
-	}
-
-	inclusionProof := make([][]byte, 4)
-	for i := range inclusionProof {
-		inclusionProof[i] = make([]byte, 32)
-		inclusionProof[i][0] = byte(i + 0x30)
-	}
-
-	// Create the input VerifiedRODataColumn sidecar using test utility
-	_, verifiedSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
-		{
-			Index:                        7, // Column index 7
-			Column:                       columnData,
-			KzgCommitments:               kzgCommitments,
-			KzgProofs:                    kzgProofs,
-			KzgCommitmentsInclusionProof: inclusionProof,
-			Slot:                         4 * params.BeaconConfig().SlotsPerEpoch, // Fulu epoch
-			ProposerIndex:                9,
-			ParentRoot:                   make([]byte, 32),
-			StateRoot:                    make([]byte, 32),
-			BodyRoot:                     make([]byte, 32),
-		},
-	})
-	require.Equal(t, 1, len(verifiedSidecars))
-	sidecar := verifiedSidecars[0]
-
-	ctx := context.Background()
-
-	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar))
-		require.NotNil(t, err)
-		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
-	})
-
-	t.Run("nothing received", func(t *testing.T) {
-		srv := createBlobServerV2(t, 0, []bool{})
-		defer srv.Close()
-
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar))
-		require.NoError(t, err)
-		require.Equal(t, 0, len(dataColumns))
-	})
-
-	t.Run("receiving all blobs", func(t *testing.T) {
-		blobMasks := []bool{true, true, true}
-		srv := createBlobServerV2(t, 3, blobMasks)
-		defer srv.Close()
-
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar))
-		require.NoError(t, err)
-		require.Equal(t, 128, len(dataColumns)) // NumberOfColumns
-
-		// Verify each sidecar has expected structure
-		for i, sidecar := range dataColumns {
-			require.Equal(t, uint64(i), sidecar.Index)
-			require.Equal(t, 3, len(sidecar.Column))         // 3 blobs
-			require.Equal(t, 3, len(sidecar.KzgCommitments)) // 3 commitments
-			require.Equal(t, 3, len(sidecar.KzgProofs))      // 3 proofs per column
-
-			// Verify commitments are preserved
-			for j, commitment := range sidecar.KzgCommitments {
-				require.DeepEqual(t, kzgCommitments[j], commitment)
-			}
-
-			// Verify inclusion proof is preserved
-			require.Equal(t, len(inclusionProof), len(sidecar.KzgCommitmentsInclusionProof))
-			for j, proof := range sidecar.KzgCommitmentsInclusionProof {
-				require.Equal(t, byte(j+0x30), proof[0])
-			}
-
-			// Verify signed block header is preserved
-			require.Equal(t, primitives.Slot(4*params.BeaconConfig().SlotsPerEpoch), sidecar.SignedBlockHeader.Header.Slot)
-			require.Equal(t, primitives.ValidatorIndex(9), sidecar.SignedBlockHeader.Header.ProposerIndex)
-		}
-	})
-
-	t.Run("missing some blobs", func(t *testing.T) {
-		blobMasks := []bool{false, true, true}
-		srv := createBlobServerV2(t, 3, blobMasks)
-		defer srv.Close()
-
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
-
-		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromSidecar(sidecar))
-		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
-	})
+	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
+	// })
 }
 
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {

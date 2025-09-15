@@ -9,6 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
@@ -240,7 +241,7 @@ func TestReconstructBlobs(t *testing.T) {
 		}
 
 		// Compute celles and proofs from the blobs and cell proofs.
-		cellsAndProofs, err := peerdas.ComputeCellsAndProofs(blobs, cellProofs)
+		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
 		require.NoError(t, err)
 
 		// Construct data column sidears from the signed block and cells and proofs.
@@ -294,7 +295,7 @@ func TestReconstructBlobs(t *testing.T) {
 
 }
 
-func TestComputeCellsAndProofs(t *testing.T) {
+func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 	// Start the trusted setup.
 	err := kzg.Start()
 	require.NoError(t, err)
@@ -308,7 +309,7 @@ func TestComputeCellsAndProofs(t *testing.T) {
 		// Create proofs for 2 blobs worth of columns
 		cellProofs := make([][]byte, 2*numberOfColumns)
 
-		_, err := peerdas.ComputeCellsAndProofs(blobs, cellProofs)
+		_, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
 		require.ErrorIs(t, err, peerdas.ErrBlobsCellsProofsMismatch)
 	})
 
@@ -355,7 +356,92 @@ func TestComputeCellsAndProofs(t *testing.T) {
 		}
 
 		// Test ComputeCellsAndProofs
-		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofs(blobs, cellProofs)
+		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		require.NoError(t, err)
+		require.Equal(t, blobCount, len(actualCellsAndProofs))
+
+		// Verify the results match expected
+		for i := range blobCount {
+			require.Equal(t, len(expectedCellsAndProofs[i].Cells), len(actualCellsAndProofs[i].Cells))
+			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), len(actualCellsAndProofs[i].Proofs))
+
+			// Compare cells
+			for j, expectedCell := range expectedCellsAndProofs[i].Cells {
+				require.Equal(t, expectedCell, actualCellsAndProofs[i].Cells[j])
+			}
+
+			// Compare proofs
+			for j, expectedProof := range expectedCellsAndProofs[i].Proofs {
+				require.Equal(t, expectedProof, actualCellsAndProofs[i].Proofs[j])
+			}
+		}
+	})
+}
+
+func TestComputeCellsAndProofsFromStructured(t *testing.T) {
+	t.Run("nil blob and proof", func(t *testing.T) {
+		_, err := peerdas.ComputeCellsAndProofsFromStructured([]*pb.BlobAndProofV2{nil})
+		require.ErrorIs(t, err, peerdas.ErrNilBlobAndProof)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		// Start the trusted setup.
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		const blobCount = 2
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+		// Generate test blobs
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		// Extract blobs and compute expected cells and proofs
+		blobsAndProofs := make([]*pb.BlobAndProofV2, blobCount)
+		expectedCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+
+		var wg errgroup.Group
+		for i := range blobCount {
+			blob := roBlobSidecars[i].Blob
+
+			wg.Go(func() error {
+				var kzgBlob kzg.Blob
+				count := copy(kzgBlob[:], blob)
+				require.Equal(t, len(kzgBlob), count)
+
+				cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+				if err != nil {
+					return errors.Wrapf(err, "compute cells and kzg proofs for blob %d", i)
+				}
+				expectedCellsAndProofs[i] = cellsAndProofs
+
+				kzgProofs := make([][]byte, 0, len(cellsAndProofs.Proofs))
+				for _, proof := range cellsAndProofs.Proofs {
+					kzgProofs = append(kzgProofs, proof[:])
+				}
+
+				blobAndProof := &pb.BlobAndProofV2{
+					Blob:      blob,
+					KzgProofs: kzgProofs,
+				}
+				blobsAndProofs[i] = blobAndProof
+
+				return nil
+			})
+		}
+
+		err = wg.Wait()
+		require.NoError(t, err)
+
+		// Flatten proofs
+		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
+		for _, cp := range expectedCellsAndProofs {
+			for _, proof := range cp.Proofs {
+				cellProofs = append(cellProofs, proof[:])
+			}
+		}
+
+		// Test ComputeCellsAndProofs
+		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromStructured(blobsAndProofs)
 		require.NoError(t, err)
 		require.Equal(t, blobCount, len(actualCellsAndProofs))
 

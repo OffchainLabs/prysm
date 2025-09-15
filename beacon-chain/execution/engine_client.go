@@ -665,7 +665,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, wrapWithBlockRoot(err, root, "commitments")
 	}
 
-	cellsAndProofs, err := s.cellsAndProofsForCommitments(ctx, commitments)
+	cellsAndProofs, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
@@ -690,8 +690,8 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	return verifiedROSidecars, nil
 }
 
-// cellsAndProofsForCommitments fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) cellsAndProofsForCommitments(ctx context.Context, kzgCommitments [][]byte) ([]kzg.CellsAndProofs, error) {
+// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) ([]kzg.CellsAndProofs, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
@@ -710,19 +710,8 @@ func (s *Service) cellsAndProofsForCommitments(ctx context.Context, kzgCommitmen
 		return nil, nil
 	}
 
-	// Extract the blobs and proofs from the blobAndProofV2s.
-	blobs, cellProofs := make([][]byte, 0, len(blobAndProofV2s)), make([][]byte, 0, len(blobAndProofV2s))
-	for _, blobsAndProofs := range blobAndProofV2s {
-		if blobsAndProofs == nil {
-			return nil, errMissingBlobsAndProofsFromEL
-		}
-
-		blobs = append(blobs, blobsAndProofs.Blob)
-		cellProofs = append(cellProofs, blobsAndProofs.KzgProofs...)
-	}
-
 	// Compute cells and proofs from the blobs and cell proofs.
-	cellsAndProofs, err := peerdas.ComputeCellsAndProofs(blobs, cellProofs)
+	cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromStructured(blobAndProofV2s)
 	if err != nil {
 		return nil, errors.Wrap(err, "compute cells and proofs")
 	}

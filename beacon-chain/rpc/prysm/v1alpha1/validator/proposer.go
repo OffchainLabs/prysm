@@ -409,7 +409,7 @@ func (vs *Server) handleUnblindedBlock(
 
 	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
-		cellsAndProofs, err := peerdas.ComputeCellsAndProofs(rawBlobs, proofs)
+		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
