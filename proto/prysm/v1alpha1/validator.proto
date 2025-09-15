@@ -22,6 +22,7 @@ import "google/protobuf/wrappers.proto";
 import "proto/eth/ext/options.proto";
 
 import "proto/prysm/v1alpha1/beacon_block.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 

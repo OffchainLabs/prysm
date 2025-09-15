@@ -3,7 +3,7 @@ syntax = "proto3";
 package ethereum.eth.v1alpha1;
 
 import "proto/prysm/v1alpha1/attestation.proto";
-import "proto/prysm/v1alpha1/beacon_block.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/validator.proto";
 import "proto/engine/v1/execution_engine.proto";
 import "proto/eth/ext/options.proto";
