@@ -11,8 +11,9 @@ var (
 	// EnableExperimentalBackfill enables backfill for checkpoint synced nodes.
 	// This flag will be removed once backfill is enabled by default.
 	EnableExperimentalBackfill = &cli.BoolFlag{
-		Name:  "enable-backfill",
-		Usage: "Backfill will only be enabled when this flag is specified on a node using checkpoint sync.",
+		Name:    "enable-backfill",
+		Aliases: []string{"enable-experimental-backfill"},
+		Usage:   "Backfill will only be enabled when this flag is specified on a node using checkpoint sync.",
 	}
 	// BackfillBatchSize allows users to tune block backfill request sizes to maximize network utilization
 	// at the cost of higher memory.
