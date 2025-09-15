@@ -171,6 +171,7 @@ go_test(
         "decode_pubsub_test.go",
         "error_test.go",
         "fork_watcher_test.go",
+        "kzg_batch_verifier_test.go",
         "pending_attestations_queue_test.go",
         "pending_blocks_queue_test.go",
         "rate_limiter_test.go",
