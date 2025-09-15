@@ -30,11 +30,12 @@ type (
 	// like a DataColumnSidecar or a BeaconBlock to set the fields in a data column sidecar that cannot
 	// be obtained from the engine api.
 	ConstructionPopulator interface {
-		Populate(*ethpb.DataColumnSidecar) error
 		Slot() primitives.Slot
 		Root() [fieldparams.RootLength]byte
 		Commitments() ([][]byte, error)
 		Type() string
+
+		extract() (*blockInfo, error)
 	}
 
 	// BlockReconstructionSource is a ConstructionPopulator that uses a beacon block as the source of data
@@ -45,6 +46,12 @@ type (
 	// DataColumnSidecar is a ConstructionPopulator that uses a data column sidecar as the source of data
 	SidecarReconstructionSource struct {
 		blocks.RODataColumn
+	}
+
+	blockInfo struct {
+		signedBlockHeader *ethpb.SignedBeaconBlockHeader
+		kzgCommitments    [][]byte
+		kzgInclusionProof [][]byte
 	}
 )
 
@@ -100,14 +107,20 @@ func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([
 	maxIdx := params.BeaconConfig().NumberOfColumns
 	roSidecars := make([]blocks.RODataColumn, 0, maxIdx)
 	for idx := range maxIdx {
+		info, err := src.extract()
+		if err != nil {
+			return nil, errors.Wrap(err, "extract block info")
+		}
+
 		sidecar := &ethpb.DataColumnSidecar{
-			Index:     idx,
-			Column:    cells[idx],
-			KzgProofs: proofs[idx],
+			Index:                        idx,
+			Column:                       cells[idx],
+			KzgCommitments:               info.kzgCommitments,
+			KzgProofs:                    proofs[idx],
+			SignedBlockHeader:            info.signedBlockHeader,
+			KzgCommitmentsInclusionProof: info.kzgInclusionProof,
 		}
-		if err := src.Populate(sidecar); err != nil {
-			return nil, errors.Wrap(err, "column field setter set")
-		}
+
 		if len(sidecar.KzgCommitments) != len(sidecar.Column) || len(sidecar.KzgCommitments) != len(sidecar.KzgProofs) {
 			return nil, ErrSizeMismatch
 		}
@@ -121,25 +134,6 @@ func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return roSidecars, nil
-}
-
-func (b *BlockReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
-	block := b.Block()
-	blockBody := block.Body()
-	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
-	if err != nil {
-		return errors.Wrap(err, "blob KZG commitments")
-	}
-	dc.KzgCommitments = blobKzgCommitments
-	dc.SignedBlockHeader, err = b.Header()
-	if err != nil {
-		return errors.Wrap(err, "signed block header")
-	}
-	dc.KzgCommitmentsInclusionProof, err = blocks.MerkleProofKZGCommitments(blockBody)
-	if err != nil {
-		return errors.Wrap(err, "merkle proof KZG commitments")
-	}
-	return nil
 }
 
 // Slot returns the slot of the source
@@ -160,6 +154,27 @@ func (s *BlockReconstructionSource) Commitments() ([][]byte, error) {
 // Type returns the type of the source
 func (s *BlockReconstructionSource) Type() string {
 	return "BeaconBlock"
+}
+
+// extract extracts the block information from the source
+func (b *BlockReconstructionSource) extract() (*blockInfo, error) {
+	header, err := b.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "header")
+	}
+
+	commitments, err := b.Block().Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, errors.Wrap(err, "commitments")
+	}
+
+	info := &blockInfo{
+		signedBlockHeader: header,
+		kzgCommitments:    commitments,
+		kzgInclusionProof: commitments,
+	}
+
+	return info, nil
 }
 
 // rotateRowsToCols takes a 2D slice of cells and proofs, where the x is rows (blobs) and y is columns,
@@ -189,13 +204,6 @@ func rotateRowsToCols(rows []kzg.CellsAndProofs, numCols uint64) ([][][]byte, []
 	return cellCols, proofCols, nil
 }
 
-func (s *SidecarReconstructionSource) Populate(dc *ethpb.DataColumnSidecar) error {
-	dc.SignedBlockHeader = s.SignedBlockHeader
-	dc.KzgCommitments = s.KzgCommitments
-	dc.KzgCommitmentsInclusionProof = s.KzgCommitmentsInclusionProof
-	return nil
-}
-
 // Root returns the block root of the source
 func (s *SidecarReconstructionSource) Root() [fieldparams.RootLength]byte {
 	return s.BlockRoot()
@@ -209,4 +217,15 @@ func (s *SidecarReconstructionSource) Commitments() ([][]byte, error) {
 // Type returns the type of the source
 func (s *SidecarReconstructionSource) Type() string {
 	return "DataColumnSidecar"
+}
+
+// extract extracts the block information from the source
+func (s *SidecarReconstructionSource) extract() (*blockInfo, error) {
+	info := &blockInfo{
+		signedBlockHeader: s.SignedBlockHeader,
+		kzgCommitments:    s.KzgCommitments,
+		kzgInclusionProof: s.KzgCommitmentsInclusionProof,
+	}
+
+	return info, nil
 }
