@@ -141,8 +141,6 @@ type mockCustodyUpdater struct {
 	custodyGroupCount     uint64
 	earliestAvailableSlot primitives.Slot
 	updateCallCount       int
-	lastUpdatedSlot       primitives.Slot
-	lastUpdatedCount      uint64
 }
 
 func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
@@ -151,9 +149,8 @@ func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
 
 func (m *mockCustodyUpdater) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
-	m.lastUpdatedSlot = earliestAvailableSlot
-	m.lastUpdatedCount = custodyGroupCount
 	m.earliestAvailableSlot = earliestAvailableSlot
+	m.custodyGroupCount = custodyGroupCount
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
@@ -214,8 +211,8 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	// pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16
 	// So earliest available slot should be 16 + 1 = 17
 	expectedEarliestSlot := primitives.Slot(17)
-	require.Equal(t, expectedEarliestSlot, mockCustody.lastUpdatedSlot, "Earliest available slot should be updated correctly")
-	require.Equal(t, mockCustody.custodyGroupCount, mockCustody.lastUpdatedCount, "Custody group count should be preserved")
+	require.Equal(t, expectedEarliestSlot, mockCustody.earliestAvailableSlot, "Earliest available slot should be updated correctly")
+	require.Equal(t, uint64(4), mockCustody.custodyGroupCount, "Custody group count should be preserved")
 
 	// Check log entries
 	found := false
