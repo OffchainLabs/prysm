@@ -638,7 +638,7 @@
 
 - name: DepositData
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Data {
   spec: |
     <spec ssz_object="DepositData" fork="phase0" hash="44ba3a61">
@@ -677,7 +677,7 @@
 
 - name: Eth1Data
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Eth1Data {
   spec: |
     <spec ssz_object="Eth1Data" fork="phase0" hash="1d7be228">
@@ -1136,7 +1136,7 @@
 
 - name: SignedBeaconBlockHeader
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SignedBeaconBlockHeader {
   spec: |
     <spec ssz_object="SignedBeaconBlockHeader" fork="phase0" hash="5784d47c">
@@ -1158,7 +1158,7 @@
 
 - name: SignedVoluntaryExit
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SignedVoluntaryExit {
   spec: |
     <spec ssz_object="SignedVoluntaryExit" fork="phase0" hash="89ba48b3">

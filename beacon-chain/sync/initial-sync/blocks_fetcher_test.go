@@ -1385,6 +1385,11 @@ func TestFetchSidecars(t *testing.T) {
 		nower := func() time.Time { return now }
 		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
 
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
 		// Define a Deneb block with blobs out of retention period.
 		denebBlock := util.NewBeaconBlockDeneb()
 		denebBlock.Block.Slot = 0 // Genesis slot, out of retention period.
@@ -1393,33 +1398,52 @@ func TestFetchSidecars(t *testing.T) {
 		roDebebBlock, err := blocks.NewROBlock(signedDenebBlock)
 		require.NoError(t, err)
 
-		// Define a Fulu block with blobs in the retention period.
-		fuluBlock := util.NewBeaconBlockFulu()
-		fuluBlock.Block.Slot = slotsPerEpoch                                                            // Within retention period.
-		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
-		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		// Define a Fulu block with blobs before the retention period.
+		fuluBlock1 := util.NewBeaconBlockFulu()
+		fuluBlock1.Block.Slot = slotsPerEpoch.Sub(1)                                                     // Before the retention period.
+		fuluBlock1.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock1, err := blocks.NewSignedBeaconBlock(fuluBlock1)
 		require.NoError(t, err)
-		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
-		require.NoError(t, err)
-
-		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
+		roFuluBlock1, err := blocks.NewROBlock(signedFuluBlock1)
 		require.NoError(t, err)
 
-		// Create and save data column sidecars for this fulu block in the database.
-		params := make([]util.DataColumnParam, 0, numberOfColumns)
+		bodyRootFulu1, err := fuluBlock1.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for fulu block 2 in the database.
+		paramsFulu1 := make([]util.DataColumnParam, 0, numberOfColumns)
 		for i := range numberOfColumns {
-			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]}
-			params = append(params, param)
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRootFulu1[:]}
+			paramsFulu1 = append(paramsFulu1, param)
 		}
-		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+		_, verifiedRoDataColumnSidecarsFulu1 := util.CreateTestVerifiedRoDataColumnSidecars(t, paramsFulu1)
 
-		// Create a data columns storage.
-		dir := t.TempDir()
-		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		// Save the data column sidecars for block fulu 1 to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu1)
 		require.NoError(t, err)
 
-		// Save the data column sidecars to the storage.
-		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+		// Define a Fulu block with blobs in the retention period.
+		fuluBlock2 := util.NewBeaconBlockFulu()
+		fuluBlock2.Block.Slot = slotsPerEpoch                                                            // Within retention period.
+		fuluBlock2.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock2, err := blocks.NewSignedBeaconBlock(fuluBlock2)
+		require.NoError(t, err)
+		roFuluBlock2, err := blocks.NewROBlock(signedFuluBlock2)
+		require.NoError(t, err)
+
+		bodyRootFulu2, err := fuluBlock2.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for fulu block 2 in the database.
+		paramsFulu2 := make([]util.DataColumnParam, 0, numberOfColumns)
+		for i := range numberOfColumns {
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRootFulu2[:]}
+			paramsFulu2 = append(paramsFulu2, param)
+		}
+		_, verifiedRoDataColumnSidecarsFulu2 := util.CreateTestVerifiedRoDataColumnSidecars(t, paramsFulu2)
+
+		// Save the data column sidecars for block fulu 2 to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu2)
 		require.NoError(t, err)
 
 		// Create a blocks fetcher.
@@ -1432,7 +1456,8 @@ func TestFetchSidecars(t *testing.T) {
 		// Fetch sidecars.
 		blocksWithSidecars := []blocks.BlockWithROSidecars{
 			{Block: roDebebBlock},
-			{Block: roFuluBlock},
+			{Block: roFuluBlock1},
+			{Block: roFuluBlock2},
 		}
 		pid, err := fetcher.fetchSidecars(ctx, "", nil, blocksWithSidecars)
 		require.NoError(t, err)
@@ -1442,12 +1467,15 @@ func TestFetchSidecars(t *testing.T) {
 		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
 		require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
 		require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
+		require.Equal(t, 0, len(blocksWithSidecars[1].Columns))
+		require.Equal(t, 0, len(blocksWithSidecars[2].Blobs))
 
 		// We don't check the content of the columns here. The extensive test is done
 		// in TestFetchDataColumnsSidecars.
-		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[1].Columns)))
+		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[2].Columns)))
 	})
 }
+
 func TestFirstFuluIndex(t *testing.T) {
 	bellatrix := util.NewBeaconBlockBellatrix()
 	signedBellatrix, err := blocks.NewSignedBeaconBlock(bellatrix)
