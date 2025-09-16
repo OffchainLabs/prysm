@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// dataColumnSubscriber is the subscriber function for data column sidecars.
 func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
 	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
 	if !ok {
@@ -28,11 +29,9 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
 	}
 
-	source := peerdas.PopulateFromSidecar(sidecar)
-
 	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
 	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-		if err := s.processDataColumnSidecarsFromExecution(ctx, source); err != nil {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
 			return nil, err
 		}
 
