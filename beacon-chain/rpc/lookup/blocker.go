@@ -291,7 +291,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		for _, versionedHash := range cfg.VersionedHashes {
 			index, exists := hashToIndex[string(versionedHash)]
 			if !exists {
-				return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}
+				return nil, &core.RpcError{Err: fmt.Errorf("versioned hash %#x does not exist in given block", versionedHash), Reason: core.NotFound}
 			}
 			indices = append(indices, index)
 		}
