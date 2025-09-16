@@ -9,6 +9,8 @@ tests/minimal/bellatrix/light_client/data_collection
 tests/minimal/capella/light_client/data_collection
 tests/minimal/deneb/light_client/data_collection
 tests/minimal/electra/light_client/data_collection
+tests/minimal/fulu/light_client/single_merkle_proof
+tests/mainnet/fulu/light_client/single_merkle_proof
 
 # SSZ Generic
 tests/general/phase0/ssz_generic/basic_vector
@@ -113,3 +115,6 @@ tests/minimal/whisk/ssz_static/Validator
 tests/minimal/whisk/ssz_static/VoluntaryExit
 tests/minimal/whisk/ssz_static/WhiskTracker
 tests/minimal/whisk/ssz_static/Withdrawal
+
+# Fulu
+tests/general/fulu/kzg/compute_verify_cell_kzg_proof_batch_challenge
