@@ -496,53 +496,84 @@ func TestGetBlob(t *testing.T) {
 	})
 }
 
-func TestBlobs_VersionedHashesOrdering(t *testing.T) {
+func TestBlobs_CommitmentOrdering(t *testing.T) {
+	// Set up Fulu fork configuration
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 1
+	cfg.FuluForkEpoch = 2
+	params.OverrideBeaconConfig(cfg)
+
 	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()
 
-	// Create block with multiple blob commitments using the test utility
-	denebSlot := primitives.Slot(123)
+	// Start the trusted setup for KZG
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Create Fulu/Electra block with multiple blob commitments
+	fuluForkSlot := primitives.Slot(cfg.FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch
 	parent := [32]byte{}
-	denebBlock, denebBlobs := util.GenerateTestDenebBlockWithSidecar(t, parent, denebSlot, 3)
+	fuluBlock, fuluBlobs := util.GenerateTestElectraBlockWithSidecar(t, parent, fuluForkSlot, 3)
 	
 	// Save the block
-	err := beaconDB.SaveBlock(ctx, denebBlock)
+	err = beaconDB.SaveBlock(ctx, fuluBlock)
 	require.NoError(t, err)
-	denebBlockRoot := denebBlock.Root()
+	fuluBlockRoot := fuluBlock.Root()
 
 	// Get the commitments from the generated block
-	commitments, err := denebBlock.Block().Body().BlobKzgCommitments()
+	commitments, err := fuluBlock.Block().Body().BlobKzgCommitments()
 	require.NoError(t, err)
 	require.Equal(t, 3, len(commitments))
 
-	blobStorage := filesystem.NewEphemeralBlobStorage(t)
-	verifiedBlobs := verification.FakeVerifySliceForTest(t, denebBlobs)
-	for i := range verifiedBlobs {
-		err := blobStorage.Save(verifiedBlobs[i])
+	// Convert blob sidecars to data column sidecars for Fulu
+	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobs))
+	for _, blob := range fuluBlobs {
+		var kzgBlob kzg.Blob
+		copy(kzgBlob[:], blob.Blob)
+		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
+		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
 	}
+
+	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(fuluBlock, cellsAndProofsList)
+	require.NoError(t, err)
+
+	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecarPb))
+	for _, sidecarPb := range dataColumnSidecarPb {
+		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecarPb, fuluBlockRoot)
+		require.NoError(t, err)
+		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumn)
+	}
+
+	// Set up data column storage and save data columns
+	_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
+	err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+	require.NoError(t, err)
 
 	// Set up the blocker
 	chainService := &mockChain.ChainService{
 		Genesis:        time.Now(),
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
-			Root:  denebBlockRoot[:],
+			Root:  fuluBlockRoot[:],
 		},
 	}
 	blocker := &BeaconDbBlocker{
 		BeaconDB:           beaconDB,
 		ChainInfoFetcher:   chainService,
 		GenesisTimeFetcher: chainService,
-		BlobStorage:        blobStorage,
+		BlobStorage:        filesystem.NewEphemeralBlobStorage(t),
+		DataColumnStorage:  dataColumnStorage,
 	}
 
-	// Compute versioned hashes in original order (0, 1, 2)
+	// Compute versioned hashes for commitments in their block order
 	hash0 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[0])
 	hash1 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[1])
 	hash2 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[2])
 
-	t.Run("request hashes in reverse order", func(t *testing.T) {
+	t.Run("blobs returned in commitment order regardless of request order", func(t *testing.T) {
 		// Request versioned hashes in reverse order: 2, 1, 0
 		requestedHashes := [][]byte{hash2[:], hash1[:], hash0[:]}
 		
@@ -553,14 +584,22 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 		}
 		require.Equal(t, 3, len(verifiedBlobs))
 
-		// Verify the blobs are returned in KZG commitment order (0, 1, 2), not requested order
-		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First in block order is index 0
-		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second in block order is index 1
-		assert.Equal(t, uint64(2), verifiedBlobs[2].Index)  // Third in block order is index 2
+		// Verify blobs are returned in commitment order from the block (0, 1, 2)
+		// In Fulu, blobs are reconstructed from data columns
+		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First commitment in block
+		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second commitment in block
+		assert.Equal(t, uint64(2), verifiedBlobs[2].Index)  // Third commitment in block
+		
+		// Verify the blob content matches what we expect
+		for i, verifiedBlob := range verifiedBlobs {
+			require.NotNil(t, verifiedBlob.BlobSidecar)
+			require.DeepEqual(t, fuluBlobs[i].Blob, verifiedBlob.Blob)
+			require.DeepEqual(t, fuluBlobs[i].KzgCommitment, verifiedBlob.KzgCommitment)
+		}
 	})
 
-	t.Run("request subset of hashes in different order", func(t *testing.T) {
-		// Request only hash1 and hash0 (indices 1, 0)
+	t.Run("subset of blobs maintains commitment order", func(t *testing.T) {
+		// Request hashes for indices 1 and 0 (out of order)
 		requestedHashes := [][]byte{hash1[:], hash0[:]}
 		
 		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
@@ -570,9 +609,13 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 		}
 		require.Equal(t, 2, len(verifiedBlobs))
 
-		// Verify the blobs are returned in the requested order (1, 0)
-		assert.Equal(t, uint64(1), verifiedBlobs[0].Index)  // First requested was index 1
-		assert.Equal(t, uint64(0), verifiedBlobs[1].Index)  // Second requested was index 0
+		// Verify blobs are returned in commitment order from the block
+		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First commitment in block
+		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second commitment in block
+		
+		// Verify the blob content matches what we expect
+		require.DeepEqual(t, fuluBlobs[0].Blob, verifiedBlobs[0].Blob)
+		require.DeepEqual(t, fuluBlobs[1].Blob, verifiedBlobs[1].Blob)
 	})
 
 	t.Run("request non-existent hash", func(t *testing.T) {
