@@ -106,7 +106,7 @@ func (s *Service) endpoints(
 	}
 
 	if enableDebug {
-		endpoints = append(endpoints, s.debugEndpoints(stater)...)
+		endpoints = append(endpoints, s.debugEndpoints(stater, blocker)...)
 	}
 
 	return endpoints
@@ -1084,7 +1084,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 	}
 }
 
-func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
+func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) []endpoint {
 	server := &debug.Server{
 		BeaconDB:              s.cfg.BeaconDB,
 		HeadFetcher:           s.cfg.HeadFetcher,
@@ -1094,6 +1094,8 @@ func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
 		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		FinalizationFetcher:   s.cfg.FinalizationFetcher,
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
+		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
+		Blocker:               blocker,
 	}
 
 	const namespace = "debug"
@@ -1126,6 +1128,16 @@ func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetForkChoice,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/debug/beacon/data_column_sidecars/{block_id}",
+			name:     namespace + ".DataColumnSidecars",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.DataColumnSidecars,
 			methods: []string{http.MethodGet},
 		},
 	}

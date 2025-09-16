@@ -58,6 +58,7 @@ func (e BlockIdParseError) Error() string {
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
@@ -416,4 +417,163 @@ func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]
 	}
 
 	return verifiedRoSidecars, nil
+}
+
+// DataColumns returns the data column sidecars for a given block id identifier and column indices. The identifier can be one of:
+//   - "head" (canonical head in node's view)
+//   - "genesis"
+//   - "finalized"
+//   - "justified"
+//   - <slot>
+//   - <hex encoded block root with '0x' prefix>
+//   - <block root>
+//
+// cases:
+//   - no block, 404
+//   - block exists, before Fulu fork, 400 (data columns are not supported before Fulu fork)
+//   - block exists, no commitment, 200 w/ empty list
+//   - block exists, has commitments, inside retention period serve them w/ 200 unless we hit an error reading them.
+//     we are technically not supposed to import a block to forkchoice unless we have the data columns, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
+//   - block exists, has commitments, outside retention period - ie just like block exists, no commitment
+func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+	var rootSlice []byte
+	switch id {
+	case "genesis":
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported for Phase 0 fork"), Reason: core.BadRequest}
+	case "head":
+		var err error
+		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		if err != nil {
+			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
+		}
+	case "finalized":
+		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
+		if fcp == nil {
+			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
+		}
+		rootSlice = fcp.Root
+	case "justified":
+		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
+		if jcp == nil {
+			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
+		}
+		rootSlice = jcp.Root
+	default:
+		if bytesutil.IsHex([]byte(id)) {
+			var err error
+			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
+			if err != nil {
+				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+		} else {
+			slot, err := strconv.ParseUint(id, 10, 64)
+			if err != nil {
+				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+			fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+			if err != nil {
+				return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
+			}
+			if primitives.Slot(slot) < fuluStart {
+				return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
+			}
+			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
+			if !ok {
+				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
+			}
+			if err != nil {
+				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
+			}
+			rootSlice = roots[0][:]
+			if len(roots) == 1 {
+				break
+			}
+			for _, blockRoot := range roots {
+				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
+				if err != nil {
+					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
+				}
+				if canonical {
+					rootSlice = blockRoot[:]
+					break
+				}
+			}
+		}
+	}
+
+	root := bytesutil.ToBytes32(rootSlice)
+
+	roSignedBlock, err := p.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
+	}
+
+	if roSignedBlock == nil {
+		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	}
+
+	// Check if the block is after Fulu fork
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	fuluForkSlot := primitives.Slot(math.MaxUint64)
+	if fuluForkEpoch != primitives.Epoch(math.MaxUint64) {
+		fuluForkSlot, err = slots.EpochStart(fuluForkEpoch)
+		if err != nil {
+			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
+		}
+	}
+
+	if roSignedBlock.Block().Slot() < fuluForkSlot {
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
+	}
+
+	// If block is not in the retention window, return 200 w/ empty list
+	if !p.DataColumnStorage.WithinRetentionPeriod(slots.ToEpoch(roSignedBlock.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
+		return make([]blocks.VerifiedRODataColumn, 0), nil
+	}
+
+	roBlock := roSignedBlock.Block()
+
+	commitments, err := roBlock.Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", rootSlice), Reason: core.Internal}
+	}
+
+	// If there are no commitments return 200 w/ empty list
+	if len(commitments) == 0 {
+		return make([]blocks.VerifiedRODataColumn, 0), nil
+	}
+
+	// Get column indices to retrieve
+	columnIndices := make([]uint64, 0)
+	if len(indices) == 0 {
+		// If no indices specified, return all columns this node is custodying
+		summary := p.DataColumnStorage.Summary(root)
+		stored := summary.Stored()
+		for index := range stored {
+			columnIndices = append(columnIndices, index)
+		}
+	} else {
+		// Validate and convert indices
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		for _, index := range indices {
+			if index < 0 || uint64(index) >= numberOfColumns {
+				return nil, &core.RpcError{
+					Err:    fmt.Errorf("requested index %d is outside valid range [0, %d)", index, numberOfColumns),
+					Reason: core.BadRequest,
+				}
+			}
+			columnIndices = append(columnIndices, uint64(index))
+		}
+	}
+
+	// Retrieve data column sidecars from storage
+	verifiedRoDataColumns, err := p.DataColumnStorage.Get(root, columnIndices)
+	if err != nil {
+		return nil, &core.RpcError{
+			Err:    errors.Wrapf(err, "could not retrieve data columns for block root %#x", root),
+			Reason: core.Internal,
+		}
+	}
+
+	return verifiedRoDataColumns, nil
 }
