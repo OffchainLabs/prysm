@@ -1928,10 +1928,10 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {
 		case http.StatusBadRequest:
-			httputil.HandleError(w, "Invalid block ID: "+rpcErr.Err.Error(), code)
+			httputil.HandleError(w, "Bad request: "+rpcErr.Err.Error(), code)
 			return
 		case http.StatusNotFound:
-			httputil.HandleError(w, "Block not found: "+rpcErr.Err.Error(), code)
+			httputil.HandleError(w, "Not found: "+rpcErr.Err.Error(), code)
 			return
 		case http.StatusInternalServerError:
 			httputil.HandleError(w, "Internal server error: "+rpcErr.Err.Error(), code)
