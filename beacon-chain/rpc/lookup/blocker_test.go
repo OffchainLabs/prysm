@@ -553,10 +553,10 @@ func TestBlobs_VersionedHashesOrdering(t *testing.T) {
 		}
 		require.Equal(t, 3, len(verifiedBlobs))
 
-		// Verify the blobs are returned in the requested order (2, 1, 0)
-		assert.Equal(t, uint64(2), verifiedBlobs[0].Index)  // First requested was index 2
-		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second requested was index 1  
-		assert.Equal(t, uint64(0), verifiedBlobs[2].Index)  // Third requested was index 0
+		// Verify the blobs are returned in KZG commitment order (0, 1, 2), not requested order
+		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First in block order is index 0
+		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second in block order is index 1
+		assert.Equal(t, uint64(2), verifiedBlobs[2].Index)  // Third in block order is index 2
 	})
 
 	t.Run("request subset of hashes in different order", func(t *testing.T) {

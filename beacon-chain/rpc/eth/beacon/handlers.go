@@ -18,10 +18,8 @@ import (
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -1893,111 +1891,6 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteJson(w, resp)
 	}
-}
-
-// GetBlobs retrieves blobs for a given block id.
-func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlobs")
-	defer span.End()
-
-	segments := strings.Split(r.URL.Path, "/")
-	blockId := segments[len(segments)-1]
-
-	var verifiedBlobs []*blocks.VerifiedROBlob
-	var rpcErr *core.RpcError
-
-	// Check if versioned_hashes parameter is provided
-	versionedHashesStr := r.URL.Query()["versioned_hashes"]
-	versionedHashes := make([][]byte, 0, len(versionedHashesStr))
-	if len(versionedHashesStr) > 0 {
-		for _, hashStr := range versionedHashesStr {
-			hash, err := hexutil.Decode(hashStr)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Invalid versioned hash %s: %v", hashStr, err), http.StatusBadRequest)
-				return
-			}
-			if len(hash) != 32 {
-				httputil.HandleError(w, fmt.Sprintf("Invalid versioned hash length for %s: expected 32 bytes, got %d", hashStr, len(hash)), http.StatusBadRequest)
-				return
-			}
-			versionedHashes = append(versionedHashes, hash)
-		}
-	}
-	verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, options.WithVersionedHashes(versionedHashes))
-	if rpcErr != nil {
-		code := core.ErrorReasonToHTTP(rpcErr.Reason)
-		switch code {
-		case http.StatusBadRequest:
-			httputil.HandleError(w, "Bad request: "+rpcErr.Err.Error(), code)
-			return
-		case http.StatusNotFound:
-			httputil.HandleError(w, "Not found: "+rpcErr.Err.Error(), code)
-			return
-		case http.StatusInternalServerError:
-			httputil.HandleError(w, "Internal server error: "+rpcErr.Err.Error(), code)
-			return
-		default:
-			httputil.HandleError(w, rpcErr.Err.Error(), code)
-			return
-		}
-	}
-
-	blk, err := s.Blocker.Block(ctx, []byte(blockId))
-	if err != nil {
-		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if blk == nil {
-		httputil.HandleError(w, "Block not found", http.StatusNotFound)
-		return
-	}
-
-	if httputil.RespondWithSsz(r) {
-		sszResp, err := marshalOnlyBlobsSSZ(verifiedBlobs)
-		if err != nil {
-			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-		httputil.WriteSsz(w, sszResp)
-		return
-	}
-
-	blkRoot, err := blk.Block().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
-	if err != nil {
-		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	data := make([]string, len(verifiedBlobs))
-	for i, v := range verifiedBlobs {
-		data[i] = hexutil.Encode(v.Blob)
-	}
-	resp := &structs.GetBlobsResponse{
-		Data:                data,
-		ExecutionOptimistic: isOptimistic,
-		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
-	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
-	httputil.WriteJson(w, resp)
-}
-
-func marshalOnlyBlobsSSZ(blobs []*blocks.VerifiedROBlob) ([]byte, error) {
-	sszLen := fieldparams.BlobSize
-	sszData := make([]byte, len(blobs)*sszLen)
-	for i := range blobs {
-		if size := len(blobs[i].Blob); size != sszLen {
-			return nil, fmt.Errorf("--.Blobs[%d] wrong length: got %d, want %d", i, size, sszLen)
-		}
-		copy(sszData[i*sszLen:(i+1)*sszLen], blobs[i].Blob)
-	}
-	return sszData, nil
 }
 
 // SerializeItems serializes a slice of items, each of which implements the MarshalSSZ method,

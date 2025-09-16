@@ -205,6 +205,16 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 			handler: server.Blobs,
 			methods: []string{http.MethodGet},
 		},
+		{
+			template: "/eth/v1/beacon/blobs/{block_id}",
+			name:     namespace + ".GetBlobs",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBlobs,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
@@ -995,16 +1005,6 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetProposerLookahead,
-			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/beacon/blobs/{block_id}",
-			name:     namespace + ".GetBlobs",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetBlobs,
 			methods: []string{http.MethodGet},
 		},
 	}

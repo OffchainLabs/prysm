@@ -249,11 +249,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
 	}
 
-	// If block is not in the retention window, return 200 w/ empty list
-	if !p.BlobStorage.WithinRetentionPeriod(slots.ToEpoch(roSignedBlock.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
-		return make([]*blocks.VerifiedROBlob, 0), nil
-	}
-
 	roBlock := roSignedBlock.Block()
 
 	commitments, err := roBlock.Body().BlobKzgCommitments()
@@ -279,21 +274,24 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	// Convert versioned hashes to indices if provided
 	indices := cfg.Indices
 	if len(cfg.VersionedHashes) > 0 {
-		// Build a map of versioned hash to blob index
-		hashToIndex := make(map[string]int)
-		for i, commitment := range commitments {
-			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-			hashToIndex[string(versionedHash[:])] = i
+		// Build a set of requested versioned hashes for fast lookup
+		requestedHashes := make(map[string]bool)
+		for _, versionedHash := range cfg.VersionedHashes {
+			requestedHashes[string(versionedHash)] = true
 		}
 
-		// Create indices array in the order of requested versioned hashes
+		// Create indices array in the order of KZG commitments in the block
 		indices = make([]int, 0, len(cfg.VersionedHashes))
-		for _, versionedHash := range cfg.VersionedHashes {
-			index, exists := hashToIndex[string(versionedHash)]
-			if !exists {
-				return nil, &core.RpcError{Err: fmt.Errorf("versioned hash %#x does not exist in given block", versionedHash), Reason: core.NotFound}
+		for i, commitment := range commitments {
+			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+			if requestedHashes[string(versionedHash[:])] {
+				indices = append(indices, i)
 			}
-			indices = append(indices, index)
+		}
+
+		// Verify all requested hashes were found
+		if len(indices) != len(cfg.VersionedHashes) {
+			return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}
 		}
 	}
 
