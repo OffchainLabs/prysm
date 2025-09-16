@@ -527,7 +527,11 @@
     </spec>
 
 - name: compute_fork_digest#fulu
-  sources: []
+  sources:
+    - file: config/params/fork.go
+      search: func ForkDigest(
+    - file: config/params/config.go
+      search: func entryWithForkDigest(
   spec: |
     <spec fn="compute_fork_digest" fork="fulu" hash="e916a595">
     def compute_fork_digest(
