@@ -1132,7 +1132,7 @@ func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) [
 		},
 		{
 			template: "/eth/v1/debug/beacon/data_column_sidecars/{block_id}",
-			name:     namespace + ".DataColumnSidecars",
+			name:     namespace + ".GetDataColumnSidecars",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
