@@ -999,7 +999,7 @@ func (s *Service) beaconEndpoints(
 		},
 		{
 			template: "/eth/v1/beacon/blobs/{block_id}",
-			name:     namespace + ".getBlobs",
+			name:     namespace + ".GetBlobs",
 			middleware: []middleware.Middleware{
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
