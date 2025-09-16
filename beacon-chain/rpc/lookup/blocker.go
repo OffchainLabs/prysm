@@ -431,7 +431,6 @@ func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]
 // cases:
 //   - no block, 404
 //   - block exists, before Fulu fork, 400 (data columns are not supported before Fulu fork)
-//   - block exists, no commitment, 200 w/ empty list
 //   - block exists, has commitments, inside retention period serve them w/ 200 unless we hit an error reading them.
 //     we are technically not supposed to import a block to forkchoice unless we have the data columns, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period - ie just like block exists, no commitment
