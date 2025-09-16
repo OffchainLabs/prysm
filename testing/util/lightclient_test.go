@@ -53,7 +53,7 @@ func TestLightClientUtils(t *testing.T) {
 		for i := 1; i < 6; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l1 := util.NewTestLightClient(t, i)
-				l2 := util.NewTestLightClient(t, i, util.WithSupermajority())
+				l2 := util.NewTestLightClient(t, i, util.WithSupermajority(0))
 				l1SyncAgg, err := l1.Block.Block().Body().SyncAggregate()
 				require.NoError(t, err)
 				l1Bits := l1SyncAgg.SyncCommitteeBits.Count()

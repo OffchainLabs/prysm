@@ -9,8 +9,6 @@ tests/minimal/bellatrix/light_client/data_collection
 tests/minimal/capella/light_client/data_collection
 tests/minimal/deneb/light_client/data_collection
 tests/minimal/electra/light_client/data_collection
-tests/minimal/fulu/light_client/single_merkle_proof
-tests/mainnet/fulu/light_client/single_merkle_proof
 
 # SSZ Generic
 tests/general/phase0/ssz_generic/basic_vector

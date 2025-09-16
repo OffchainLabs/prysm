@@ -220,16 +220,13 @@ func TestGetBlob(t *testing.T) {
 		cellsAndProofsList = append(cellsAndProofsList, cellsAndProogs)
 	}
 
-	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(fuluBlock, cellsAndProofsList)
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
-	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecarPb))
-	for _, sidecarPb := range dataColumnSidecarPb {
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecarPb, fuluBlockRoot)
-		require.NoError(t, err)
-
-		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
-		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumn)
+	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+	for _, roDataColumnSidecar := range roDataColumnSidecars {
+		verifiedRoDataColumnSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumnSidecar)
 	}
 
 	err = db.SaveBlock(t.Context(), fuluBlock)

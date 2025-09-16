@@ -27,9 +27,6 @@ func TestReconstructDataColumns(t *testing.T) {
 	roBlock, _, verifiedRoDataColumns := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 	require.Equal(t, numberOfColumns, uint64(len(verifiedRoDataColumns)))
 
-	root, block := roBlock.Root(), roBlock.Block()
-	slot, proposerIndex := block.Slot(), block.ProposerIndex()
-
 	minimumCount := peerdas.MinimumColumnCountToReconstruct()
 
 	t.Run("not enough stored sidecars", func(t *testing.T) {
@@ -38,7 +35,7 @@ func TestReconstructDataColumns(t *testing.T) {
 		require.NoError(t, err)
 
 		service := NewService(ctx, WithP2P(p2ptest.NewTestP2P(t)), WithDataColumnStorage(storage))
-		err = service.reconstructSaveBroadcastDataColumnSidecars(ctx, slot, proposerIndex, root)
+		err = service.reconstructSaveBroadcastDataColumnSidecars(ctx, verifiedRoDataColumns[0])
 		require.NoError(t, err)
 	})
 
@@ -48,7 +45,7 @@ func TestReconstructDataColumns(t *testing.T) {
 		require.NoError(t, err)
 
 		service := NewService(ctx, WithP2P(p2ptest.NewTestP2P(t)), WithDataColumnStorage(storage))
-		err = service.reconstructSaveBroadcastDataColumnSidecars(ctx, slot, proposerIndex, root)
+		err = service.reconstructSaveBroadcastDataColumnSidecars(ctx, verifiedRoDataColumns[0])
 		require.NoError(t, err)
 	})
 
@@ -72,7 +69,7 @@ func TestReconstructDataColumns(t *testing.T) {
 			WithChainService(&mockChain.ChainService{}),
 		)
 
-		err = service.reconstructSaveBroadcastDataColumnSidecars(ctx, slot, proposerIndex, root)
+		err = service.reconstructSaveBroadcastDataColumnSidecars(ctx, verifiedRoDataColumns[0])
 		require.NoError(t, err)
 
 		expected := make(map[uint64]bool, minimumCount+cgc)
@@ -85,7 +82,7 @@ func TestReconstructDataColumns(t *testing.T) {
 			expected[i] = true
 		}
 
-		summary := storage.Summary(root)
+		summary := storage.Summary(roBlock.Root())
 		actual := summary.Stored()
 
 		require.Equal(t, len(expected), len(actual))

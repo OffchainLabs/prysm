@@ -132,7 +132,7 @@
 
 - name: apply_light_client_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientUpdateFromBeaconState(
   spec: |
     <spec fn="apply_light_client_update" fork="altair" hash="211a52c9">
@@ -181,7 +181,7 @@
 
 - name: block_to_light_client_header#altair
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func BlockToLightClientHeader(
   spec: |
     <spec fn="block_to_light_client_header" fork="altair" hash="94342f64">
@@ -199,7 +199,7 @@
 
 - name: block_to_light_client_header#capella
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func BlockToLightClientHeader(
   spec: |
     <spec fn="block_to_light_client_header" fork="capella" hash="597ddeac">
@@ -251,7 +251,7 @@
 
 - name: block_to_light_client_header#deneb
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func BlockToLightClientHeader(
   spec: |
     <spec fn="block_to_light_client_header" fork="deneb" hash="b5ed5bf8">
@@ -1137,7 +1137,7 @@
 
 - name: create_light_client_bootstrap
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientBootstrapFromBeaconState(
   spec: |
     <spec fn="create_light_client_bootstrap" fork="altair" hash="54e41304">
@@ -1162,7 +1162,7 @@
 
 - name: create_light_client_finality_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientFinalityUpdateFromBeaconState(
   spec: |
     <spec fn="create_light_client_finality_update" fork="altair" hash="21956507">
@@ -1178,7 +1178,7 @@
 
 - name: create_light_client_optimistic_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientOptimisticUpdateFromBeaconState(
   spec: |
     <spec fn="create_light_client_optimistic_update" fork="altair" hash="5a993ad2">
@@ -1192,7 +1192,7 @@
 
 - name: create_light_client_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientUpdateFromBeaconState(
   spec: |
     <spec fn="create_light_client_update" fork="altair" hash="cde7d86c">
@@ -2076,7 +2076,7 @@
 
 - name: get_data_column_sidecars
   sources:
-    - file: beacon-chain/core/peerdas/das_core.go
+    - file: beacon-chain/core/peerdas/validator.go
       search: func DataColumnSidecars(
   spec: |
     <spec fn="get_data_column_sidecars" fork="fulu" hash="317fc596">
@@ -2111,60 +2111,6 @@
                 )
             )
         return sidecars
-    </spec>
-
-- name: get_data_column_sidecars_from_block
-  sources:
-    - file: beacon-chain/core/peerdas/das_core.go
-      search: func dataColumnsSidecars(
-  spec: |
-    <spec fn="get_data_column_sidecars_from_block" fork="fulu" hash="02ffae23">
-    def get_data_column_sidecars_from_block(
-        signed_block: SignedBeaconBlock,
-        cells_and_kzg_proofs: Sequence[
-            Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
-        ],
-    ) -> Sequence[DataColumnSidecar]:
-        """
-        Given a signed block and the cells/proofs associated with each blob in the
-        block, assemble the sidecars which can be distributed to peers.
-        """
-        blob_kzg_commitments = signed_block.message.body.blob_kzg_commitments
-        signed_block_header = compute_signed_block_header(signed_block)
-        kzg_commitments_inclusion_proof = compute_merkle_proof(
-            signed_block.message.body,
-            get_generalized_index(BeaconBlockBody, "blob_kzg_commitments"),
-        )
-        return get_data_column_sidecars(
-            signed_block_header,
-            blob_kzg_commitments,
-            kzg_commitments_inclusion_proof,
-            cells_and_kzg_proofs,
-        )
-    </spec>
-
-- name: get_data_column_sidecars_from_column_sidecar
-  sources: []
-  spec: |
-    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="fulu" hash="4304cdec">
-    def get_data_column_sidecars_from_column_sidecar(
-        sidecar: DataColumnSidecar,
-        cells_and_kzg_proofs: Sequence[
-            Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
-        ],
-    ) -> Sequence[DataColumnSidecar]:
-        """
-        Given a DataColumnSidecar and the cells/proofs associated with each blob corresponding
-        to the commitments it contains, assemble all sidecars for distribution to peers.
-        """
-        assert len(cells_and_kzg_proofs) == len(sidecar.kzg_commitments)
-
-        return get_data_column_sidecars(
-            sidecar.signed_block_header,
-            sidecar.kzg_commitments,
-            sidecar.kzg_commitments_inclusion_proof,
-            cells_and_kzg_proofs,
-        )
     </spec>
 
 - name: get_domain
@@ -3685,7 +3631,7 @@
 
 - name: initialize_light_client_store
   sources:
-    - file: beacon-chain/core/light-client/store.go
+    - file: beacon-chain/light-client/store.go
       search: func NewLightClientStore(
   spec: |
     <spec fn="initialize_light_client_store" fork="altair" hash="f3de55b9">
@@ -3852,7 +3798,7 @@
 
 - name: is_better_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func IsBetterUpdate(
   spec: |
     <spec fn="is_better_update" fork="altair" hash="b99582ff">
@@ -4324,7 +4270,7 @@
 
 - name: is_sync_committee_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func HasRelevantSyncCommittee(
   spec: |
     <spec fn="is_sync_committee_update" fork="altair" hash="af6f8cb0">
@@ -6250,7 +6196,7 @@
 
 - name: process_light_client_finality_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientFinalityUpdateFromBeaconState(
   spec: |
     <spec fn="process_light_client_finality_update" fork="altair" hash="befaba5b">
@@ -6274,7 +6220,7 @@
 
 - name: process_light_client_optimistic_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientOptimisticUpdateFromBeaconState(
   spec: |
     <spec fn="process_light_client_optimistic_update" fork="altair" hash="06c0365a">

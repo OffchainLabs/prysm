@@ -664,14 +664,14 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+	roBlock consensusblocks.ROBlock,
 ) error {
-	block := signedBlock.Block()
+	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
 
+	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
 		return s.areDataColumnsAvailable(ctx, root, block)
@@ -691,8 +691,6 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
@@ -726,6 +724,7 @@ func (s *Service) areDataColumnsAvailable(
 
 	// Compute the sampling size.
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 	samplingSize := max(samplesPerSlot, custodyGroupCount)
 
 	// Get the peer info for the node.

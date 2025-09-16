@@ -102,7 +102,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
 
 	if features.Get().EnableLightClient {
-		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
+		endpoints = append(endpoints, s.lightClientEndpoints()...)
 	}
 
 	if enableDebug {
@@ -1034,9 +1034,10 @@ func (*Service) configEndpoints() []endpoint {
 	}
 }
 
-func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
+func (s *Service) lightClientEndpoints() []endpoint {
 	server := &lightclient.Server{
-		LCStore: s.cfg.LCStore,
+		LCStore:     s.cfg.LCStore,
+		HeadFetcher: s.cfg.HeadFetcher,
 	}
 
 	const namespace = "lightclient"
