@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -1035,13 +1034,4 @@ func extractFileMetadata(path string) (*fileMetadata, error) {
 // period computes the period of a given epoch.
 func period(epoch primitives.Epoch) uint64 {
 	return uint64(epoch / params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
-}
-
-// WithinRetentionPeriod determines if the given epoch is within the data column retention period.
-func (dcs *DataColumnStorage) WithinRetentionPeriod(requested, current primitives.Epoch) bool {
-	if requested > math.MaxUint64-dcs.retentionEpochs {
-		// If there is an overflow, then the retention period was set to an extremely large number.
-		return true
-	}
-	return requested+dcs.retentionEpochs >= current
 }

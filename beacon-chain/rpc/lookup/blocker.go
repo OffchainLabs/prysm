@@ -526,11 +526,6 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 		return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
 	}
 
-	// If block is not in the retention window, return 200 w/ empty list
-	if !p.DataColumnStorage.WithinRetentionPeriod(slots.ToEpoch(roSignedBlock.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
-		return make([]blocks.VerifiedRODataColumn, 0), nil
-	}
-
 	roBlock := roSignedBlock.Block()
 
 	commitments, err := roBlock.Body().BlobKzgCommitments()
