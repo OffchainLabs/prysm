@@ -512,7 +512,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	fuluForkSlot := primitives.Slot(cfg.FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch
 	parent := [32]byte{}
 	fuluBlock, fuluBlobs := util.GenerateTestElectraBlockWithSidecar(t, parent, fuluForkSlot, 3)
-	
+
 	// Save the block
 	err = beaconDB.SaveBlock(ctx, fuluBlock)
 	require.NoError(t, err)
@@ -533,13 +533,11 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
 	}
 
-	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(fuluBlock, cellsAndProofsList)
+	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecarPb))
-	for _, sidecarPb := range dataColumnSidecarPb {
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecarPb, fuluBlockRoot)
-		require.NoError(t, err)
+	for _, roDataColumn := range dataColumnSidecarPb {
 		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumn)
 	}
@@ -551,7 +549,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 
 	// Set up the blocker
 	chainService := &mockChain.ChainService{
-		Genesis:        time.Now(),
+		Genesis: time.Now(),
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  fuluBlockRoot[:],
@@ -573,7 +571,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	t.Run("blobs returned in commitment order regardless of request order", func(t *testing.T) {
 		// Request versioned hashes in reverse order: 2, 1, 0
 		requestedHashes := [][]byte{hash2[:], hash1[:], hash0[:]}
-		
+
 		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
@@ -583,10 +581,10 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 
 		// Verify blobs are returned in commitment order from the block (0, 1, 2)
 		// In Fulu, blobs are reconstructed from data columns
-		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First commitment in block
-		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second commitment in block
-		assert.Equal(t, uint64(2), verifiedBlobs[2].Index)  // Third commitment in block
-		
+		assert.Equal(t, uint64(0), verifiedBlobs[0].Index) // First commitment in block
+		assert.Equal(t, uint64(1), verifiedBlobs[1].Index) // Second commitment in block
+		assert.Equal(t, uint64(2), verifiedBlobs[2].Index) // Third commitment in block
+
 		// Verify the blob content matches what we expect
 		for i, verifiedBlob := range verifiedBlobs {
 			require.NotNil(t, verifiedBlob.BlobSidecar)
@@ -598,7 +596,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	t.Run("subset of blobs maintains commitment order", func(t *testing.T) {
 		// Request hashes for indices 1 and 0 (out of order)
 		requestedHashes := [][]byte{hash1[:], hash0[:]}
-		
+
 		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
@@ -607,9 +605,9 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		require.Equal(t, 2, len(verifiedBlobs))
 
 		// Verify blobs are returned in commitment order from the block
-		assert.Equal(t, uint64(0), verifiedBlobs[0].Index)  // First commitment in block
-		assert.Equal(t, uint64(1), verifiedBlobs[1].Index)  // Second commitment in block
-		
+		assert.Equal(t, uint64(0), verifiedBlobs[0].Index) // First commitment in block
+		assert.Equal(t, uint64(1), verifiedBlobs[1].Index) // Second commitment in block
+
 		// Verify the blob content matches what we expect
 		require.DeepEqual(t, fuluBlobs[0].Blob, verifiedBlobs[0].Blob)
 		require.DeepEqual(t, fuluBlobs[1].Blob, verifiedBlobs[1].Blob)
@@ -621,10 +619,10 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		for i := 0; i < 32; i++ {
 			fakeHash[i] = 0xFF
 		}
-		
+
 		// Request only the fake hash
 		requestedHashes := [][]byte{fakeHash}
-		
+
 		_, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
