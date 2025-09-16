@@ -90,10 +90,21 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		return
 	}
 
+	if startPeriod*uint64(config.EpochsPerSyncCommitteePeriod) < uint64(config.AltairForkEpoch) {
+		httputil.HandleError(w, "Invalid 'start_period': before Altair fork", http.StatusBadRequest)
+		return
+	}
+
 	endPeriod := startPeriod + count - 1
 
+	headBlock, err := s.HeadFetcher.HeadBlock(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// get updates
-	updates, err := s.LCStore.LightClientUpdates(ctx, startPeriod, endPeriod)
+	updates, err := s.LCStore.LightClientUpdates(ctx, startPeriod, endPeriod, headBlock)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client updates from DB: "+err.Error(), http.StatusInternalServerError)
 		return

@@ -16,6 +16,7 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -43,6 +44,8 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -54,7 +57,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -159,6 +162,8 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -170,7 +175,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -274,6 +279,8 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -285,7 +292,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -384,11 +391,19 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 	p1.Connect(p2)
 	require.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
+	blk := util.NewBeaconBlock()
+	signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
 		Genesis:        time.Unix(time.Now().Unix(), 0),
+		Block:          signedBlk,
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+	require.NoError(t, err)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -400,7 +415,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -472,7 +487,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 					t.Fatalf("unsupported version %d", i)
 				}
 
-				updates, err := r.lcStore.LightClientUpdates(ctx, 0, 4)
+				updates, err := r.lcStore.LightClientUpdates(ctx, 0, 4, signedBlk)
 				require.NoError(t, err)
 				updateSSZ, err := updates[uint64(responseCounter)].MarshalSSZ()
 				require.NoError(t, err)

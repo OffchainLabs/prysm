@@ -592,6 +592,10 @@ func HasFinality(update interfaces.LightClientUpdate) (bool, error) {
 }
 
 func IsBetterUpdate(newUpdate, oldUpdate interfaces.LightClientUpdate) (bool, error) {
+	if oldUpdate == nil || oldUpdate.IsNil() {
+		return true, nil
+	}
+
 	maxActiveParticipants := newUpdate.SyncAggregate().SyncCommitteeBits.Len()
 	newNumActiveParticipants := newUpdate.SyncAggregate().SyncCommitteeBits.Count()
 	oldNumActiveParticipants := oldUpdate.SyncAggregate().SyncCommitteeBits.Count()
@@ -778,7 +782,7 @@ func IsFinalityUpdateValidForBroadcast(newUpdate, oldUpdate interfaces.LightClie
 // This does not concern broadcasting, but rather the decision of whether to save the new update.
 // For broadcasting checks, use IsFinalityUpdateValidForBroadcast.
 func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityUpdate) bool {
-	if oldUpdate == nil {
+	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true
 	}
 
@@ -804,7 +808,7 @@ func IsBetterFinalityUpdate(newUpdate, oldUpdate interfaces.LightClientFinalityU
 }
 
 func IsBetterOptimisticUpdate(newUpdate, oldUpdate interfaces.LightClientOptimisticUpdate) bool {
-	if oldUpdate == nil {
+	if oldUpdate == nil || oldUpdate.IsNil() {
 		return true
 	}
 	// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates

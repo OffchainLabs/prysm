@@ -594,11 +594,7 @@ func TestProcessLightClientBootstrap(t *testing.T) {
 
 			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: [32]byte(cp.Root)}))
 
-			sss, err := s.cfg.BeaconDB.State(ctx, finalizedBlockRoot)
-			require.NoError(t, err)
-			require.NotNil(t, sss)
-
-			s.executePostFinalizationTasks(s.ctx, l.FinalizedState)
+			s.executePostFinalizationTasks(s.ctx, l.AttestedState)
 
 			// wait for the goroutine to finish processing
 			time.Sleep(1 * time.Second)

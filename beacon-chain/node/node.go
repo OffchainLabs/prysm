@@ -253,10 +253,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
 
-	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
-	}
-
 	return beacon, nil
 }
 
@@ -347,6 +343,11 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering P2P Service")
 	if err := beacon.registerP2P(cliCtx); err != nil {
 		return errors.Wrap(err, "could not register P2P service")
+	}
+
+	if features.Get().EnableLightClient {
+		log.Debugln("Registering Light Client Store")
+		beacon.registerLightClientStore()
 	}
 
 	log.Debugln("Registering Backfill Service")
@@ -1137,6 +1138,11 @@ func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.
 	}
 
 	return b.services.RegisterService(bf)
+}
+
+func (b *BeaconNode) registerLightClientStore() {
+	lcs := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
+	b.lcStore = lcs
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {

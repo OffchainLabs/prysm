@@ -2795,6 +2795,11 @@ func TestProcessLightClientUpdate(t *testing.T) {
 	s, tr := minimalTestService(t, WithLCStore())
 	ctx := tr.ctx
 
+	headState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, headState, [32]byte{1, 2}))
+	require.NoError(t, s.cfg.BeaconDB.SaveHeadBlockRoot(ctx, [32]byte{1, 2}))
+
 	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
@@ -2817,6 +2822,8 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			require.NoError(t, err)
 			err = s.cfg.BeaconDB.SaveState(ctx, l.State, currentBlockRoot)
 			require.NoError(t, err)
+			err = s.cfg.BeaconDB.SaveHeadBlockRoot(ctx, currentBlockRoot)
+			require.NoError(t, err)
 
 			err = s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock)
 			require.NoError(t, err)
@@ -2831,10 +2838,9 @@ func TestProcessLightClientUpdate(t *testing.T) {
 			period := slots.SyncCommitteePeriod(slots.ToEpoch(l.AttestedState.Slot()))
 
 			t.Run("no old update", func(t *testing.T) {
-				require.NoError(t, s.processLightClientUpdate(cfg))
-
+				s.processLightClientUpdates(cfg)
 				// Check that the light client update is saved
-				u, err := s.lcStore.LightClientUpdate(ctx, period)
+				u, err := s.lcStore.LightClientUpdate(ctx, period, l.Block)
 				require.NoError(t, err)
 				require.NotNil(t, u)
 				attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
@@ -2848,12 +2854,12 @@ func TestProcessLightClientUpdate(t *testing.T) {
 				oldUpdate, err := lightClient.CreateDefaultLightClientUpdate(l.AttestedBlock)
 				require.NoError(t, err)
 
-				err = s.lcStore.SaveLightClientUpdate(ctx, period, oldUpdate)
+				err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 				require.NoError(t, err)
 
-				require.NoError(t, s.processLightClientUpdate(cfg))
+				s.processLightClientUpdates(cfg)
 
-				u, err := s.lcStore.LightClientUpdate(ctx, period)
+				u, err := s.lcStore.LightClientUpdate(ctx, period, l.Block)
 				require.NoError(t, err)
 				require.NotNil(t, u)
 				attestedStateRoot, err := l.AttestedState.HashTreeRoot(ctx)
@@ -2877,12 +2883,12 @@ func TestProcessLightClientUpdate(t *testing.T) {
 					SyncCommitteeSignature: make([]byte, 96),
 				})
 
-				err = s.lcStore.SaveLightClientUpdate(ctx, period, oldUpdate)
+				err = s.cfg.BeaconDB.SaveLightClientUpdate(ctx, period, oldUpdate)
 				require.NoError(t, err)
 
-				require.NoError(t, s.processLightClientUpdate(cfg))
+				s.processLightClientUpdates(cfg)
 
-				u, err := s.lcStore.LightClientUpdate(ctx, period)
+				u, err := s.lcStore.LightClientUpdate(ctx, period, l.Block)
 				require.NoError(t, err)
 				require.NotNil(t, u)
 				require.DeepEqual(t, oldUpdate, u)
@@ -3190,6 +3196,11 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 	s.cfg.P2P = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
 
+	headState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, headState, [32]byte{1, 2}))
+	require.NoError(t, s.cfg.BeaconDB.SaveHeadBlockRoot(ctx, [32]byte{1, 2}))
+
 	testCases := []struct {
 		name          string
 		oldOptions    []util.LightClientOption
@@ -3205,7 +3216,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 		{
 			name:          "Same age",
 			oldOptions:    []util.LightClientOption{},
-			newOptions:    []util.LightClientOption{util.WithSupermajority()}, // supermajority does not matter here and is only added to result in two different updates
+			newOptions:    []util.LightClientOption{util.WithSupermajority(0)}, // supermajority does not matter here and is only added to result in two different updates
 			expectReplace: false,
 		},
 		{
@@ -3249,14 +3260,14 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 
 				var oldActualUpdate interfaces.LightClientOptimisticUpdate
 				var err error
 				if tc.oldOptions != nil {
 					// config for old update
 					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
-					require.NoError(t, s.processLightClientOptimisticUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
+					s.processLightClientUpdates(cfgOld)
 
 					oldActualUpdate, err = lightClient.NewLightClientOptimisticUpdateFromBeaconState(lOld.Ctx, lOld.State, lOld.Block, lOld.AttestedState, lOld.AttestedBlock)
 					require.NoError(t, err)
@@ -3270,7 +3281,7 @@ func TestProcessLightClientOptimisticUpdate(t *testing.T) {
 
 				// config for new update
 				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
-				require.NoError(t, s.processLightClientOptimisticUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
+				s.processLightClientUpdates(cfgNew)
 
 				newActualUpdate, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(lNew.Ctx, lNew.State, lNew.Block, lNew.AttestedState, lNew.AttestedBlock)
 				require.NoError(t, err)
@@ -3311,6 +3322,7 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 	s, tr := minimalTestService(t)
 	s.cfg.P2P = &mockp2p.FakeP2P{}
 	ctx := tr.ctx
+	s.head = &head{}
 
 	testCases := []struct {
 		name          string
@@ -3389,15 +3401,18 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 			t.Run(version.String(testVersion)+"_"+tc.name, func(t *testing.T) {
 				s.genesisTime = time.Unix(time.Now().Unix()-(int64(forkEpoch)*int64(params.BeaconConfig().SlotsPerEpoch)*int64(params.BeaconConfig().SecondsPerSlot)), 0)
-				s.lcStore = lightClient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
+				s.lcStore = lightClient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 
 				var actualOldUpdate, actualNewUpdate interfaces.LightClientFinalityUpdate
-				var err error
 
 				if tc.oldOptions != nil {
 					// config for old update
 					lOld, cfgOld := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.oldOptions...)
-					require.NoError(t, s.processLightClientFinalityUpdate(cfgOld.ctx, cfgOld.roblock, cfgOld.postState))
+					blkRoot, err := lOld.Block.Block().HashTreeRoot()
+					require.NoError(t, err)
+					s.head.block = lOld.Block
+					s.head.root = blkRoot
+					s.processLightClientUpdates(cfgOld)
 
 					// check that the old update is saved
 					actualOldUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgOld.postState, cfgOld.roblock, lOld.AttestedState, lOld.AttestedBlock, lOld.FinalizedBlock)
@@ -3408,7 +3423,11 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 
 				// config for new update
 				lNew, cfgNew := setupLightClientTestRequirements(ctx, t, s, testVersion, tc.newOptions...)
-				require.NoError(t, s.processLightClientFinalityUpdate(cfgNew.ctx, cfgNew.roblock, cfgNew.postState))
+				blkRoot, err := lNew.Block.Block().HashTreeRoot()
+				require.NoError(t, err)
+				s.head.block = lNew.Block
+				s.head.root = blkRoot
+				s.processLightClientUpdates(cfgNew)
 
 				// check that the actual old update and the actual new update are different
 				actualNewUpdate, err = lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, cfgNew.postState, cfgNew.roblock, lNew.AttestedState, lNew.AttestedBlock, lNew.FinalizedBlock)
