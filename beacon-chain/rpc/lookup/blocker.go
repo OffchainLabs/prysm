@@ -161,7 +161,6 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //
 // cases:
 //   - no block, 404
-//   - block exists, no commitment, 200 w/ empty list
 //   - block exists, has commitments, inside retention period (greater of protocol- or user-specified) serve then w/ 200 unless we hit an error reading them.
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
