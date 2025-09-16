@@ -22,7 +22,7 @@ import (
 
 type Service struct {
 	ctx             context.Context
-	enabled         bool // service is disabled by default while feature is experimental
+	enabled         bool // service is disabled by default
 	clock           *startup.Clock
 	store           *Store
 	ms              minimumSlotter
