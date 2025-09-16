@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
@@ -402,11 +403,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
-	orderedNodes := make([]*forkchoicetypes.BlockAndCheckpoints, 0, len(pendingNodes))
-	for i := len(pendingNodes) - 1; i >= 0; i-- {
-		orderedNodes = append(orderedNodes, pendingNodes[i])
-	}
-	return s.cfg.ForkChoiceStore.InsertChain(ctx, orderedNodes)
+	slices.Reverse(pendingNodes)
+	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
 }
 
 // inserts finalized deposits into our finalized deposit trie, needs to be

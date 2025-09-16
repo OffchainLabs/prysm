@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -112,11 +113,8 @@ func (s *Service) buildForkchoiceChain(ctx context.Context, head interfaces.Read
 			return nil, errors.New("head block is not a descendant of the finalized checkpoint")
 		}
 	}
-	ret := make([]*forkchoicetypes.BlockAndCheckpoints, 0, len(chain))
-	for i := len(chain) - 1; i >= 0; i-- {
-		ret = append(ret, chain[i])
-	}
-	return ret, nil
+	slices.Reverse(chain)
+	return chain, nil
 }
 
 func (s *Service) setupForkchoiceRoot(st state.BeaconState) error {
