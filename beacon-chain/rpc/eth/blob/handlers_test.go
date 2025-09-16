@@ -834,7 +834,7 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.Equal(t, true, strings.Contains(e.Message, "Invalid block ID"))
+		assert.Equal(t, true, strings.Contains(e.Message, "could not parse block ID"))
 	})
 	t.Run("ssz", func(t *testing.T) {
 		u := "http://foo.example/finalized"
@@ -898,7 +898,7 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "Invalid versioned hash invalidhex", e.Message)
+		assert.StringContains(t, "versioned_hash is invalid", e.Message)
 		assert.StringContains(t, "hex string without 0x prefix", e.Message)
 	})
 
@@ -923,8 +923,8 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "Invalid versioned hash length for", e.Message)
-		assert.StringContains(t, "expected 32 bytes, got 16", e.Message)
+		assert.StringContains(t, "Invalid versioned_hash:", e.Message)
+		assert.StringContains(t, "is not length 32", e.Message)
 	})
 
 	t.Run("versioned_hashes valid single hash", func(t *testing.T) {
@@ -977,8 +977,9 @@ func TestGetBlobs(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetBlobsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, 2, len(resp.Data)) // Should return 2 requested blobs in order
-		// Verify blobs are returned in the requested order (1, 3)
+		require.Equal(t, 2, len(resp.Data)) // Should return 2 requested blobs
+		// Verify blobs are returned in KZG commitment order from the block (1, 3)
+		// not in the requested order
 		assert.Equal(t, hexutil.Encode(blobs[1].Blob), resp.Data[0])
 		assert.Equal(t, hexutil.Encode(blobs[3].Blob), resp.Data[1])
 	})
@@ -1077,6 +1078,8 @@ func TestGetBlobs(t *testing.T) {
 		require.Equal(t, true, len(commitments) >= 3)
 
 		// Request specific blobs by versioned hashes in reverse order
+		// We request commitments[2] and commitments[0], but they should be returned
+		// in commitment order from the block (0, 2), not in the requested order
 		versionedHash1 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[2])
 		versionedHash2 := primitives.ConvertKzgCommitmentToVersionedHash(commitments[0])
 
@@ -1104,6 +1107,7 @@ func TestGetBlobs(t *testing.T) {
 		resp := &structs.GetBlobsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		require.Equal(t, 2, len(resp.Data))
+		// Blobs are returned in commitment order, regardless of request order
 	})
 }
 
