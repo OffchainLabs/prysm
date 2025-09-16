@@ -215,9 +215,9 @@ func TestGetBlob(t *testing.T) {
 	for _, blob := range fuluBlobSidecars {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProogs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProogs)
+		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
 	}
 
 	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
@@ -493,7 +493,6 @@ func TestGetBlob(t *testing.T) {
 
 func TestGetDataColumns(t *testing.T) {
 	const (
-		slot          = 456
 		blobCount     = 4
 		fuluForkEpoch = 2
 	)
@@ -535,14 +534,11 @@ func TestGetDataColumns(t *testing.T) {
 		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
 	}
 
-	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(fuluBlock, cellsAndProofsList)
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
-	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecarPb))
-	for _, sidecarPb := range dataColumnSidecarPb {
-		roDataColumn, err := blocks.NewRODataColumnWithRoot(sidecarPb, fuluBlockRoot)
-		require.NoError(t, err)
-
+	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+	for _, roDataColumn := range roDataColumnSidecars {
 		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
 		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumn)
 	}
@@ -745,7 +741,7 @@ func TestGetDataColumns(t *testing.T) {
 		setupFulu(t)
 
 		// Create a data column storage with very short retention period
-		shortRetentionStorage, err := filesystem.NewDataColumnStorage(ctx, 
+		shortRetentionStorage, err := filesystem.NewDataColumnStorage(ctx,
 			filesystem.WithDataColumnBasePath(t.TempDir()),
 			filesystem.WithDataColumnRetentionEpochs(1), // Only 1 epoch retention
 		)
