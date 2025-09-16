@@ -56,6 +56,7 @@ type LightClientUpdate interface {
 	SetSyncAggregate(sa *pb.SyncAggregate)
 	SignatureSlot() primitives.Slot
 	SetSignatureSlot(slot primitives.Slot)
+	IsNil() bool
 }
 
 type LightClientFinalityUpdate interface {

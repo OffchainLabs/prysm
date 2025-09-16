@@ -319,18 +319,6 @@ message BeaconBlockBodyAltair {
   SyncAggregate sync_aggregate = 9;
 }
 
-// The sync aggregate object for the beacon chain to track sync committee votes
-// and to support light client infra.
-message SyncAggregate {
-  // Sync committee bits as Bitvector to track votes.
-  bytes sync_committee_bits = 1 [
-    (ethereum.eth.ext.ssz_size) = "sync_committee_bytes.size",
-    (ethereum.eth.ext.cast_type) = "sync_committee_bits.type"
-  ];
-
-  // BLS aggregated signature of the sync committee for the ones that voted.
-  bytes sync_committee_signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
-}
 
 // ----------------------------------------------------------------------------
 // Bellatrix
@@ -1052,24 +1040,6 @@ message BlindedBeaconBlockBodyElectra {
 
   // Execution requests. New in Electra network upgrade.
   ethereum.engine.v1.ExecutionRequests execution_requests = 13;
-}
-
-message AttesterSlashingElectra {
-  // First conflicting attestation.
-  IndexedAttestationElectra attestation_1 = 1;
-
-  // Second conflicting attestation.
-  IndexedAttestationElectra attestation_2 = 2;
-}
-
-message IndexedAttestationElectra {
-  repeated uint64 attesting_indices = 1
-      [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
-
-  AttestationData data = 2;
-
-  // 96 bytes aggregate signature.
-  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
 // ----------------------------------------------------------------------------

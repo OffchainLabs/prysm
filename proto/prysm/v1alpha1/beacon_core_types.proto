@@ -5,6 +5,7 @@ syntax = "proto3";
 package ethereum.eth.v1alpha1;
 
 import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/attestation.proto";
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
 option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
@@ -123,4 +124,113 @@ message VoluntaryExit {
       [ (ethereum.eth.ext.cast_type) =
             "github.com/OffchainLabs/prysm/v6/consensus-types/"
             "primitives.ValidatorIndex" ];
+}
+
+message AttesterSlashingElectra {
+  // First conflicting attestation.
+  IndexedAttestationElectra attestation_1 = 1;
+
+  // Second conflicting attestation.
+  IndexedAttestationElectra attestation_2 = 2;
+}
+
+message IndexedAttestationElectra {
+  repeated uint64 attesting_indices = 1
+  [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
+
+  AttestationData data = 2;
+
+  // 96 bytes aggregate signature.
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// The sync aggregate object for the beacon chain to track sync committee votes
+// and to support light client infra.
+message SyncAggregate {
+  // Sync committee bits as Bitvector to track votes.
+  bytes sync_committee_bits = 1 [
+    (ethereum.eth.ext.ssz_size) = "sync_committee_bytes.size",
+    (ethereum.eth.ext.cast_type) = "sync_committee_bits.type"
+  ];
+
+  // BLS aggregated signature of the sync committee for the ones that voted.
+  bytes sync_committee_signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+message Fork {
+  bytes previous_version = 1 [ (ethereum.eth.ext.ssz_size) = "4" ];
+  bytes current_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
+  uint64 epoch = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+}
+
+// SyncCommittee serves as committees to facilitate light client syncing to
+// beacon chain.
+message SyncCommittee {
+  repeated bytes pubkeys = 1
+  [ (ethereum.eth.ext.ssz_size) = "sync_committee_bits.size,48" ];
+  bytes aggregate_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+}
+
+// HistoricalSummary matches the components of the phase0 `HistoricalBatch`
+// making the two hash_tree_root-compatible.
+message HistoricalSummary {
+  bytes block_summary_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_summary_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message Validator {
+  // 48 byte BLS public key used for the validator's activities.
+  bytes public_key = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // 32 byte hash of the withdrawal destination public key.
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // The validators current effective balance in gwei.
+  uint64 effective_balance = 3;
+
+  // Whether or not the validator has been slashed.
+  bool slashed = 4;
+
+  // Epoch when the validator became eligible for activation. This field may
+  // be zero if the validator was present in the Ethereum proof of stake
+  // genesis. This field is FAR_FUTURE_EPOCH if the validator has not been
+  // activated.
+  uint64 activation_eligibility_epoch = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Epoch when the validator was activated. This field may be zero if the
+  // validator was present in the Ethereum proof of stake genesis. This field is
+  // FAR_FUTURE_EPOCH if the validator has not been activated.
+  uint64 activation_epoch = 6 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Epoch when the validator was exited. This field is FAR_FUTURE_EPOCH if
+  // the validator has not exited.
+  // FAR_FUTURE_EPOCH is a constant defined by the official Ethereum Beacon
+  // Chain specification:
+  // https://github.com/ethereum/consensus-specs/blob/v0.9.2/specs/core/0_beacon-chain.md#constants
+  uint64 exit_epoch = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Epoch when the validator is eligible to withdraw their funds. This field
+  // is FAR_FUTURE_EPOCH if the validator has not exited.
+  // FAR_FUTURE_EPOCH is a constant defined by the official Ethereum Beacon
+  // Chain specification:
+  // https://github.com/ethereum/consensus-specs/blob/v0.9.2/specs/core/0_beacon-chain.md#constants
+  uint64 withdrawable_epoch = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
 }

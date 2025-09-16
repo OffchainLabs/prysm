@@ -702,6 +702,8 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -713,7 +715,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -732,7 +734,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 
 	r.markForChainStart()
 
-	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority(0))
 	update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err, "Error generating light client optimistic update")
 
@@ -770,6 +772,8 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -781,7 +785,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
@@ -800,7 +804,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 
 	r.markForChainStart()
 
-	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority(0))
 	update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err, "Error generating light client finality update")
 
