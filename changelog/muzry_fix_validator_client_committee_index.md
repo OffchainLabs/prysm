@@ -1,4 +1,3 @@
 ### Fixed
 
-- Fixed incorrect attestation data where the committee index was always set to 0 after Electra, instead of using the assigned committee index.
-
+- Fixed incorrect attestation data request where the assigned committee index was used after Electra, instead of 0.
