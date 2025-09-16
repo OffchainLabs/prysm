@@ -42,7 +42,8 @@ func TestPoolDetectAllEnded(t *testing.T) {
 	p2p := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
 	ma := &mockAssigner{}
-	pool := newP2PBatchWorkerPool(p2p, nw)
+	tg := sync.NewServiceToggler()
+	pool := newP2PBatchWorkerPool(p2p, nw, tg)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
 	keys, err := st.PublicKeys()

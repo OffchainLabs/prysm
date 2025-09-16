@@ -128,6 +128,7 @@ type BeaconNode struct {
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
 	ConfigOptions            []params.Option
+	syncToggle               *regularsync.ServiceToggler
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -161,6 +162,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
 		slasherEnabled:          cliCtx.Bool(flags.SlasherFlag.Name),
+		syncToggle:              regularsync.NewServiceToggler(),
 	}
 
 	for _, opt := range opts {
@@ -234,6 +236,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		beacon.BackfillOpts,
 		backfill.WithVerifierWaiter(beacon.verifyInitWaiter),
 		backfill.WithInitSyncWaiter(initSyncWaiter(ctx, beacon.initialSyncComplete)),
+		backfill.WithServiceToggle(beacon.syncToggle),
 	)
 
 	if err := registerServices(cliCtx, beacon, synchronizer, bfs); err != nil {
@@ -371,7 +374,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	}
 
 	log.Debugln("Registering Initial Sync Service")
-	if err := beacon.registerInitialSyncService(beacon.initialSyncComplete); err != nil {
+	if err := beacon.registerInitialSyncService(beacon.initialSyncComplete, beacon.syncToggle); err != nil {
 		return errors.Wrap(err, "could not register initial sync service")
 	}
 
@@ -848,7 +851,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 	return b.services.RegisterService(rs)
 }
 
-func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
+func (b *BeaconNode) registerInitialSyncService(complete chan struct{}, toggler *regularsync.ServiceToggler) error {
 	var chainService *blockchain.Service
 	if err := b.services.FetchService(&chainService); err != nil {
 		return err
@@ -857,6 +860,7 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 	opts := []initialsync.Option{
 		initialsync.WithVerifierWaiter(b.verifyInitWaiter),
 		initialsync.WithSyncChecker(b.syncChecker),
+		initialsync.WithServiceToggle(toggler),
 	}
 	is := initialsync.NewService(b.ctx, &initialsync.Config{
 		DB:                  b.db,

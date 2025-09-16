@@ -41,6 +41,7 @@ type Service struct {
 	blobStore       *filesystem.BlobStorage
 	initSyncWaiter  func() error
 	complete        chan struct{}
+	toggler         *sync.ServiceToggler
 }
 
 var _ runtime.Service = (*Service)(nil)
@@ -104,6 +105,15 @@ func WithInitSyncWaiter(w func() error) ServiceOption {
 	}
 }
 
+// WithServiceToggle sets the ServiceToggler, which is used to coordinate
+// with backfill, so that only one service runs at a time.
+func WithServiceToggle(toggler *sync.ServiceToggler) ServiceOption {
+	return func(s *Service) error {
+		s.toggler = toggler
+		return nil
+	}
+}
+
 // InitializerWaiter is an interface that is satisfied by verification.InitializerWaiter.
 // Using this interface enables node init to satisfy this requirement for the backfill service
 // while also allowing backfill to mock it in tests.
@@ -157,7 +167,7 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 			return nil, err
 		}
 	}
-	s.pool = newP2PBatchWorkerPool(p, s.nWorkers)
+	s.pool = newP2PBatchWorkerPool(p, s.nWorkers, s.toggler)
 
 	return s, nil
 }

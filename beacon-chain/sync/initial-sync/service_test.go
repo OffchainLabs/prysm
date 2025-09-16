@@ -327,7 +327,7 @@ func TestService_markSynced(t *testing.T) {
 	assert.ErrorContains(t, "syncing", s.Status())
 
 	go func() {
-		s.markSynced()
+		s.completeSync()
 	}()
 
 	select {

@@ -45,11 +45,12 @@ type p2pBatchWorkerPool struct {
 	endSeq      []batch
 	ctx         context.Context
 	cancel      func()
+	toggle      *sync.ServiceToggler
 }
 
 var _ batchWorkerPool = &p2pBatchWorkerPool{}
 
-func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
+func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int, tg *sync.ServiceToggler) *p2pBatchWorkerPool {
 	nw := defaultNewWorker(p)
 	return &p2pBatchWorkerPool{
 		newWorker:   nw,
@@ -59,6 +60,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
 		fromWorkers: make(chan batch),
 		maxBatches:  maxBatches,
 		shutdownErr: make(chan error),
+		toggle:      tg,
 	}
 }
 
@@ -115,6 +117,7 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			// This ticker exists to periodically break out of the channel select
 			// to retry failed assignments.
 		case b := <-p.fromWorkers:
+			p.toggle.Release(sync.ToggleGroupBackfill)
 			pid := b.busy
 			busy[pid] = false
 			if b.state == batchBlobSync {
@@ -143,6 +146,9 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			return
 		}
 		for _, pid := range assigned {
+			if err := p.toggle.Acquire(p.ctx, sync.ToggleGroupBackfill); err != nil {
+				p.shutdown(err)
+			}
 			if err := todo[0].waitUntilReady(p.ctx); err != nil {
 				log.WithError(p.ctx.Err()).Info("p2pBatchWorkerPool context canceled, shutting down")
 				p.shutdown(p.ctx.Err())

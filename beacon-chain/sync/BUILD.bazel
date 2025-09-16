@@ -14,7 +14,6 @@ go_library(
         "doc.go",
         "error.go",
         "fork_watcher.go",
-        "fuzz_exports.go",  # keep
         "log.go",
         "metrics.go",
         "options.go",
@@ -49,6 +48,7 @@ go_library(
         "subscriber_sync_committee_message.go",
         "subscriber_sync_contribution_proof.go",
         "subscription_topic_handler.go",
+        "toggle.go",
         "validate_aggregate_proof.go",
         "validate_attester_slashing.go",
         "validate_beacon_attestation.go",
@@ -63,11 +63,7 @@ go_library(
         "validate_voluntary_exit.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync",
-    visibility = [
-        "//beacon-chain:__subpackages__",
-        "//cmd:__subpackages__",
-        "//testing:__subpackages__",
-    ],
+    visibility = ["//visibility:public"],
     deps = [
         "//async:go_default_library",
         "//async/abool:go_default_library",
@@ -161,7 +157,6 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    size = "small",
     srcs = [
         "batch_verifier_test.go",
         "blobs_test.go",
@@ -200,6 +195,7 @@ go_test(
         "subscription_topic_handler_test.go",
         "sync_fuzz_test.go",
         "sync_test.go",
+        "toggle_test.go",
         "validate_aggregate_proof_test.go",
         "validate_attester_slashing_test.go",
         "validate_beacon_attestation_test.go",
@@ -214,7 +210,6 @@ go_test(
         "validate_voluntary_exit_test.go",
     ],
     embed = [":go_default_library"],
-    shard_count = 4,
     deps = [
         "//async/abool:go_default_library",
         "//async/event:go_default_library",
