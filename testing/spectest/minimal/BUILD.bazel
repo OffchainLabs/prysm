@@ -185,6 +185,7 @@ go_test(
         "fulu__fork__upgrade_to_fulu_test.go",
         "fulu__fork_transition__transition_test.go",
         "fulu__forkchoice__forkchoice_test.go",
+        "fulu__light_client__single_merkle_proof_test.go",
         "fulu__merkle_proof__merkle_proof_test.go",
         "fulu__networking__custody_columns_test.go",
         "fulu__operations__attestation_test.go",

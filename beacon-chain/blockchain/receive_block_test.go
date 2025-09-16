@@ -9,9 +9,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -594,11 +594,7 @@ func TestProcessLightClientBootstrap(t *testing.T) {
 
 			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: [32]byte(cp.Root)}))
 
-			sss, err := s.cfg.BeaconDB.State(ctx, finalizedBlockRoot)
-			require.NoError(t, err)
-			require.NotNil(t, sss)
-
-			s.executePostFinalizationTasks(s.ctx, l.FinalizedState)
+			s.executePostFinalizationTasks(s.ctx, l.AttestedState)
 
 			// wait for the goroutine to finish processing
 			time.Sleep(1 * time.Second)

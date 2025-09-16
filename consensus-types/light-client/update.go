@@ -89,6 +89,10 @@ func NewWrappedUpdateAltair(p *pb.LightClientUpdateAltair) (interfaces.LightClie
 	}, nil
 }
 
+func (u *updateAltair) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 func (u *updateAltair) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
@@ -254,6 +258,10 @@ func NewWrappedUpdateCapella(p *pb.LightClientUpdateCapella) (interfaces.LightCl
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
 	}, nil
+}
+
+func (u *updateCapella) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 func (u *updateCapella) MarshalSSZTo(dst []byte) ([]byte, error) {
@@ -423,6 +431,10 @@ func NewWrappedUpdateDeneb(p *pb.LightClientUpdateDeneb) (interfaces.LightClient
 	}, nil
 }
 
+func (u *updateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 func (u *updateDeneb) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
@@ -589,6 +601,10 @@ func NewWrappedUpdateElectra(p *pb.LightClientUpdateElectra) (interfaces.LightCl
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
 	}, nil
+}
+
+func (u *updateElectra) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 func (u *updateElectra) MarshalSSZTo(dst []byte) ([]byte, error) {

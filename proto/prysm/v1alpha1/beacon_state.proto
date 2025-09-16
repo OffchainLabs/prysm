@@ -4,7 +4,6 @@ package ethereum.eth.v1alpha1;
 
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/beacon_core_types.proto";
-import "proto/prysm/v1alpha1/validator.proto";
 import "proto/engine/v1/execution_engine.proto";
 import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/eip_7251.proto";
@@ -77,15 +76,6 @@ message BeaconState {
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
   Checkpoint finalized_checkpoint = 8004;
-}
-
-message Fork {
-  bytes previous_version = 1 [ (ethereum.eth.ext.ssz_size) = "4" ];
-  bytes current_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
-  uint64 epoch = 3 [
-    (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
-  ];
 }
 
 message PendingAttestation {
@@ -259,14 +249,6 @@ message BeaconStateAltair {
   SyncCommittee next_sync_committee = 9003;             // [New in Altair]
 }
 
-// SyncCommittee serves as committees to facilitate light client syncing to
-// beacon chain.
-message SyncCommittee {
-  repeated bytes pubkeys = 1
-      [ (ethereum.eth.ext.ssz_size) = "sync_committee_bits.size,48" ];
-  bytes aggregate_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
-}
-
 // SyncAggregatorSelectionData is used to sign over and then check whether the
 // aggregator is selected within a subcommittee.
 message SyncAggregatorSelectionData {
@@ -432,13 +414,6 @@ message BeaconStateCapella {
             "primitives.ValidatorIndex" ]; // [New in Capella]
   repeated HistoricalSummary historical_summaries = 11003
       [ (ethereum.eth.ext.ssz_max) = "16777216" ]; // [New in Capella]
-}
-
-// HistoricalSummary matches the components of the phase0 `HistoricalBatch`
-// making the two hash_tree_root-compatible.
-message HistoricalSummary {
-  bytes block_summary_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  bytes state_summary_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // ----------------------------------------------------------------------------

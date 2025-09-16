@@ -6,11 +6,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
@@ -35,7 +35,7 @@ func WithMaxGoroutines(x int) Option {
 // WithLCStore for light client store access.
 func WithLCStore() Option {
 	return func(s *Service) error {
-		s.lcStore = lightclient.NewLightClientStore(s.cfg.BeaconDB, s.cfg.P2P, s.cfg.StateNotifier.StateFeed())
+		s.lcStore = lightclient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 		return nil
 	}
 }
