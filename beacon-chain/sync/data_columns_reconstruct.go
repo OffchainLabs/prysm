@@ -47,7 +47,7 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context
 	}
 
 	// Retrieve column indices to sample.
-	custodyColumns, err := s.columnIndicesToSample()
+	columnIndicesToSample, err := s.columnIndicesToSample()
 	if err != nil {
 		return errors.Wrap(err, "column indices to sample")
 	}
@@ -65,9 +65,9 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context
 	}
 
 	// Filter reconstructed sidecars to save.
-	toSaveSidecars := make([]blocks.VerifiedRODataColumn, 0, len(custodyColumns))
+	toSaveSidecars := make([]blocks.VerifiedRODataColumn, 0, len(columnIndicesToSample))
 	for _, sidecar := range reconstructedSidecars {
-		if custodyColumns[sidecar.Index] {
+		if columnIndicesToSample[sidecar.Index] {
 			toSaveSidecars = append(toSaveSidecars, sidecar)
 		}
 	}
