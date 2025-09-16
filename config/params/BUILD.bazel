@@ -16,10 +16,10 @@ go_library(
         "mainnet_config.go",
         "minimal_config.go",
         "network_config.go",
+        "network_config_develop.go",  # keep
+        "network_config_prod.go",
         "opts.go",
         "testnet_custom_network_config.go",
-        "network_config_develop.go", # keep
-        "network_config_prod.go",
         "testnet_e2e_config.go",
         "testnet_holesky_config.go",
         "testnet_hoodi_config.go",
