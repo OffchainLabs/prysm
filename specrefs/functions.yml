@@ -2076,7 +2076,7 @@
 
 - name: get_data_column_sidecars
   sources:
-    - file: beacon-chain/core/peerdas/das_core.go
+    - file: beacon-chain/core/peerdas/validator.go
       search: func DataColumnSidecars(
   spec: |
     <spec fn="get_data_column_sidecars" fork="fulu" hash="317fc596">
@@ -2111,60 +2111,6 @@
                 )
             )
         return sidecars
-    </spec>
-
-- name: get_data_column_sidecars_from_block
-  sources:
-    - file: beacon-chain/core/peerdas/das_core.go
-      search: func dataColumnsSidecars(
-  spec: |
-    <spec fn="get_data_column_sidecars_from_block" fork="fulu" hash="02ffae23">
-    def get_data_column_sidecars_from_block(
-        signed_block: SignedBeaconBlock,
-        cells_and_kzg_proofs: Sequence[
-            Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
-        ],
-    ) -> Sequence[DataColumnSidecar]:
-        """
-        Given a signed block and the cells/proofs associated with each blob in the
-        block, assemble the sidecars which can be distributed to peers.
-        """
-        blob_kzg_commitments = signed_block.message.body.blob_kzg_commitments
-        signed_block_header = compute_signed_block_header(signed_block)
-        kzg_commitments_inclusion_proof = compute_merkle_proof(
-            signed_block.message.body,
-            get_generalized_index(BeaconBlockBody, "blob_kzg_commitments"),
-        )
-        return get_data_column_sidecars(
-            signed_block_header,
-            blob_kzg_commitments,
-            kzg_commitments_inclusion_proof,
-            cells_and_kzg_proofs,
-        )
-    </spec>
-
-- name: get_data_column_sidecars_from_column_sidecar
-  sources: []
-  spec: |
-    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="fulu" hash="4304cdec">
-    def get_data_column_sidecars_from_column_sidecar(
-        sidecar: DataColumnSidecar,
-        cells_and_kzg_proofs: Sequence[
-            Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
-        ],
-    ) -> Sequence[DataColumnSidecar]:
-        """
-        Given a DataColumnSidecar and the cells/proofs associated with each blob corresponding
-        to the commitments it contains, assemble all sidecars for distribution to peers.
-        """
-        assert len(cells_and_kzg_proofs) == len(sidecar.kzg_commitments)
-
-        return get_data_column_sidecars(
-            sidecar.signed_block_header,
-            sidecar.kzg_commitments,
-            sidecar.kzg_commitments_inclusion_proof,
-            cells_and_kzg_proofs,
-        )
     </spec>
 
 - name: get_domain

@@ -283,6 +283,7 @@ exceptions:
     - compute_fork_digest#fulu
     - compute_matrix#fulu
     - get_blob_parameters#fulu
+    - get_data_column_sidecars_from_block#fulu
     - get_data_column_sidecars_from_column_sidecar#fulu
     - get_extended_sample_count#fulu
     - recover_matrix#fulu

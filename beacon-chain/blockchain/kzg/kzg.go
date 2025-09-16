@@ -14,7 +14,10 @@ const BytesPerBlob = ckzg4844.BytesPerBlob
 type Blob [BytesPerBlob]byte
 
 // BytesPerCell is the number of bytes in a single cell.
-const BytesPerCell = ckzg4844.BytesPerCell
+const (
+	BytesPerCell  = ckzg4844.BytesPerCell
+	BytesPerProof = ckzg4844.BytesPerProof
+)
 
 // Cell represents a chunk of an encoded Blob.
 type Cell [BytesPerCell]byte
@@ -23,7 +26,7 @@ type Cell [BytesPerCell]byte
 type Commitment [48]byte
 
 // Proof represents a KZG proof that attests to the validity of a Blob or parts of it.
-type Proof [48]byte
+type Proof [BytesPerProof]byte
 
 // Bytes48 is a 48-byte array.
 type Bytes48 = ckzg4844.Bytes48

@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -135,7 +134,7 @@ func TestService_BeaconBlockSubscribe_UndefinedEeError(t *testing.T) {
 	require.Equal(t, 1, len(s.seenBlockCache.Keys()))
 }
 
-func TestReconstructAndBroadcastBlobs(t *testing.T) {
+func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 	t.Run("blobs", func(t *testing.T) {
 		rob, err := blocks.NewROBlob(
 			&ethpb.BlobSidecar{
@@ -156,6 +155,9 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 
 		b := util.NewBeaconBlockDeneb()
 		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+
+		roBlock, err := blocks.NewROBlock(sb)
 		require.NoError(t, err)
 
 		tests := []struct {
@@ -192,7 +194,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 					},
 					seenBlobCache: lruwrpr.New(1),
 				}
-				s.processSidecarsFromExecution(context.Background(), sb)
+				s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
 				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
 			})
 		}
@@ -253,7 +255,7 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				name:                    "Constructed 128 data columns with all blobs",
 				blobCount:               1,
 				dataColumnSidecars:      allColumns,
-				expectedDataColumnCount: 4, // default is 4
+				expectedDataColumnCount: 8,
 			},
 		}
 
@@ -261,10 +263,10 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				s := Service{
 					cfg: &config{
-						p2p:         mockp2p.NewTestP2P(t),
-						chain:       chainService,
-						clock:       startup.NewClock(time.Now(), [32]byte{}),
-						blobStorage: filesystem.NewEphemeralBlobStorage(t),
+						p2p:               mockp2p.NewTestP2P(t),
+						chain:             chainService,
+						clock:             startup.NewClock(time.Now(), [32]byte{}),
+						dataColumnStorage: filesystem.NewEphemeralDataColumnStorage(t),
 						executionReconstructor: &mockExecution.EngineClient{
 							DataColumnSidecars: tt.dataColumnSidecars,
 						},
@@ -288,10 +290,91 @@ func TestReconstructAndBroadcastBlobs(t *testing.T) {
 				sb, err := blocks.NewSignedBeaconBlock(b)
 				require.NoError(t, err)
 
-				s.processSidecarsFromExecution(context.Background(), sb)
+				roBlock, err := blocks.NewROBlock(sb)
+				require.NoError(t, err)
+
+				s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})
 		}
 	})
+}
 
+func TestHaveAllSidecarsBeenSeen(t *testing.T) {
+	const (
+		slot          = 42
+		proposerIndex = 1664
+	)
+	service := NewService(t.Context(), WithP2P(mockp2p.NewTestP2P(t)))
+	service.initCaches()
+
+	service.setSeenDataColumnIndex(slot, proposerIndex, 1)
+	service.setSeenDataColumnIndex(slot, proposerIndex, 3)
+
+	testCases := []struct {
+		name     string
+		toSample map[uint64]bool
+		expected bool
+	}{
+		{
+			name:     "all sidecars seen",
+			toSample: map[uint64]bool{1: true, 3: true},
+			expected: true,
+		},
+		{
+			name:     "not all sidecars seen",
+			toSample: map[uint64]bool{1: true, 2: true, 3: true},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := service.haveAllSidecarsBeenSeen(slot, proposerIndex, tc.toSample)
+			require.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestColumnIndicesToSample(t *testing.T) {
+	const earliestAvailableSlot = 0
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.SamplesPerSlot = 4
+	params.OverrideBeaconConfig(cfg)
+
+	testCases := []struct {
+		name              string
+		custodyGroupCount uint64
+		expected          map[uint64]bool
+	}{
+		{
+			name:              "custody group count lower than samples per slot",
+			custodyGroupCount: 3,
+			expected:          map[uint64]bool{1: true, 17: true, 87: true, 102: true},
+		},
+		{
+			name:              "custody group count higher than samples per slot",
+			custodyGroupCount: 5,
+			expected:          map[uint64]bool{1: true, 17: true, 75: true, 87: true, 102: true},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p2p := mockp2p.NewTestP2P(t)
+			_, _, err := p2p.UpdateCustodyInfo(earliestAvailableSlot, tc.custodyGroupCount)
+			require.NoError(t, err)
+
+			service := NewService(t.Context(), WithP2P(p2p))
+
+			actual, err := service.columnIndicesToSample()
+			require.NoError(t, err)
+
+			require.Equal(t, len(tc.expected), len(actual))
+			for index := range tc.expected {
+				require.Equal(t, true, actual[index])
+			}
+		})
+	}
 }
