@@ -27,7 +27,6 @@ const (
 // (but reconstructed) sidecars.
 func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
 	startTime := time.Now()
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	root := sidecar.BlockRoot()
 	slot := sidecar.Slot()
@@ -47,17 +46,10 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context
 		return nil
 	}
 
-	// Retrieve our local node info.
-	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	// Retrieve column indices to sample.
+	custodyColumns, err := s.columnIndicesToSample()
 	if err != nil {
-		return errors.Wrap(err, "custody group count")
-	}
-
-	samplingSize := max(custodyGroupCount, samplesPerSlot)
-	localNodeInfo, _, err := peerdas.Info(nodeID, samplingSize)
-	if err != nil {
-		return errors.Wrap(err, "peer info")
+		return errors.Wrap(err, "column indices to sample")
 	}
 
 	// Load all the possible data column sidecars, to minimize reconstruction time.
@@ -73,7 +65,6 @@ func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context
 	}
 
 	// Filter reconstructed sidecars to save.
-	custodyColumns := localNodeInfo.CustodyColumns
 	toSaveSidecars := make([]blocks.VerifiedRODataColumn, 0, len(custodyColumns))
 	for _, sidecar := range reconstructedSidecars {
 		if custodyColumns[sidecar.Index] {
