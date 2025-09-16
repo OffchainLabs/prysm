@@ -44,23 +44,34 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	return nil
 }
 
+// receiveDataColumnSidecar receives a single data column sidecar: marks it as seen and saves it to the chain.
+// Do not loop over this function to receive multiple sidecars, use receiveDataColumnSidecars instead.
 func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	slot := sidecar.SignedBlockHeader.Header.Slot
-	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
-	columnIndex := sidecar.Index
+	return s.receiveDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar})
+}
 
-	s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
+// receiveDataColumnSidecars receives multiple data column sidecars: marks them as seen and saves them to the chain.
+func (s *Service) receiveDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
+	for _, sidecar := range sidecars {
+		slot := sidecar.SignedBlockHeader.Header.Slot
+		proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
+		columnIndex := sidecar.Index
 
-	if err := s.cfg.chain.ReceiveDataColumn(sidecar); err != nil {
+		s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
+	}
+
+	if err := s.cfg.chain.ReceiveDataColumns(sidecars); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
 
-	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
-		Type: opfeed.DataColumnSidecarReceived,
-		Data: &opfeed.DataColumnSidecarReceivedData{
-			DataColumn: &sidecar,
-		},
-	})
+	for _, sidecar := range sidecars {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: opfeed.DataColumnSidecarReceived,
+			Data: &opfeed.DataColumnSidecarReceivedData{
+				DataColumn: &sidecar,
+			},
+		})
+	}
 
 	return nil
 }
