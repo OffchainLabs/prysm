@@ -7,8 +7,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"

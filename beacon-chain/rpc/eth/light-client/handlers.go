@@ -6,7 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"

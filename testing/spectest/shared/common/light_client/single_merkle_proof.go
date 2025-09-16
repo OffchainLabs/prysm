@@ -85,6 +85,11 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
 		beaconState, err = state_native.InitializeFromProtoElectra(beaconStateBase)
 		require.NoError(t, err)
+	case version.Fulu:
+		beaconStateBase := &ethpb.BeaconStateFulu{}
+		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
+		beaconState, err = state_native.InitializeFromProtoFulu(beaconStateBase)
+		require.NoError(t, err)
 	default:
 		t.Fatalf("Unsupported version: %d", v)
 	}
@@ -157,7 +162,7 @@ func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolder
 		require.NoError(t, err)
 		executionPayloadRoot, err = beaconBlockBody.ExecutionPayload.HashTreeRoot()
 		require.NoError(t, err)
-	case version.Electra:
+	case version.Electra, version.Fulu:
 		beaconBlockBody := &ethpb.BeaconBlockBodyElectra{}
 		require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
 		beaconBlockBodyRoot, err = beaconBlockBody.HashTreeRoot()
