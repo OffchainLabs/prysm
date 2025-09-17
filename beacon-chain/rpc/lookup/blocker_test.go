@@ -61,11 +61,12 @@ func TestGetBlock(t *testing.T) {
 	fetcher := &BeaconDbBlocker{
 		BeaconDB: beaconDB,
 		ChainInfoFetcher: &mockChain.ChainService{
-			DB:                  beaconDB,
-			Block:               wsb,
-			Root:                headBlock.BlockRoot,
-			FinalizedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
-			CanonicalRoots:      canonicalRoots,
+			DB:                           beaconDB,
+			Block:                        wsb,
+			Root:                         headBlock.BlockRoot,
+			FinalizedCheckPoint:          &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
+			CurrentJustifiedCheckPoint:   &ethpb.Checkpoint{Root: blkContainers[32].BlockRoot},
+			CanonicalRoots:               canonicalRoots,
 		},
 	}
 
@@ -240,7 +241,7 @@ func TestGetBlob(t *testing.T) {
 		blocker := &BeaconDbBlocker{}
 		_, rpcErr := blocker.Blobs(ctx, "genesis")
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
-		require.StringContains(t, "blobs are not supported for Phase 0 fork", rpcErr.Err.Error())
+		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
 	})
 
 	t.Run("head", func(t *testing.T) {
@@ -329,8 +330,9 @@ func TestGetBlob(t *testing.T) {
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
-			BeaconDB:    db,
-			BlobStorage: blobStorage,
+			ChainInfoFetcher: &mockChain.ChainService{},
+			BeaconDB:         db,
+			BlobStorage:      blobStorage,
 		}
 
 		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123")
@@ -725,13 +727,14 @@ func TestGetDataColumns(t *testing.T) {
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
-			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{},
+			BeaconDB:         db,
 		}
 
 		_, rpcErr := blocker.DataColumns(ctx, "123", nil)
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
-		require.StringContains(t, "data columns are not supported before Fulu fork", rpcErr.Err.Error())
+		require.StringContains(t, "not supported before Fulu fork", rpcErr.Err.Error())
 	})
 
 	t.Run("genesis", func(t *testing.T) {
@@ -741,12 +744,13 @@ func TestGetDataColumns(t *testing.T) {
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
+			ChainInfoFetcher: &mockChain.ChainService{},
 		}
 
 		_, rpcErr := blocker.DataColumns(ctx, "genesis", nil)
 		require.NotNil(t, rpcErr)
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
-		require.StringContains(t, "data columns are not supported for Phase 0 fork", rpcErr.Err.Error())
+		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
 	})
 
 	t.Run("head", func(t *testing.T) {
@@ -834,6 +838,7 @@ func TestGetDataColumns(t *testing.T) {
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
+			ChainInfoFetcher:  &mockChain.ChainService{},
 			BeaconDB:          db,
 			DataColumnStorage: dataColumnStorage,
 		}
