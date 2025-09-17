@@ -9,7 +9,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
@@ -124,50 +124,6 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	})
 }
 
-func TestConstructDataColumnSidecars(t *testing.T) {
-	const (
-		blobCount    = 3
-		cellsPerBlob = fieldparams.CellsPerBlob
-	)
-
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
-
-	roBlock, _, baseVerifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
-
-	// Extract blobs and proofs from the sidecars.
-	blobs := make([][]byte, 0, blobCount)
-	cellProofs := make([][]byte, 0, cellsPerBlob)
-	for blobIndex := range blobCount {
-		blob := make([]byte, 0, cellsPerBlob)
-		for columnIndex := range cellsPerBlob {
-			cell := baseVerifiedRoSidecars[columnIndex].Column[blobIndex]
-			blob = append(blob, cell...)
-		}
-
-		blobs = append(blobs, blob)
-
-		for columnIndex := range numberOfColumns {
-			cellProof := baseVerifiedRoSidecars[columnIndex].KzgProofs[blobIndex]
-			cellProofs = append(cellProofs, cellProof)
-		}
-	}
-
-	actual, err := peerdas.ConstructDataColumnSidecars(roBlock, blobs, cellProofs)
-	require.NoError(t, err)
-
-	// Extract the base verified ro sidecars into sidecars.
-	expected := make([]*ethpb.DataColumnSidecar, 0, len(baseVerifiedRoSidecars))
-	for _, verifiedRoSidecar := range baseVerifiedRoSidecars {
-		expected = append(expected, verifiedRoSidecar.DataColumnSidecar)
-	}
-
-	require.DeepSSZEqual(t, expected, actual)
-}
-
 func TestReconstructBlobs(t *testing.T) {
 	// Start the trusted setup.
 	err := kzg.Start()
@@ -250,7 +206,7 @@ func TestReconstructBlobs(t *testing.T) {
 		// Compute cells and proofs from blob sidecars.
 		var wg errgroup.Group
 		blobs := make([][]byte, blobCount)
-		cellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+		inputCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
 		for i := range blobCount {
 			blob := roBlobSidecars[i].Blob
 			blobs[i] = blob
@@ -267,7 +223,7 @@ func TestReconstructBlobs(t *testing.T) {
 
 				// It is safe for multiple goroutines to concurrently write to the same slice,
 				// as long as they are writing to different indices, which is the case here.
-				cellsAndProofs[i] = cp
+				inputCellsAndProofs[i] = cp
 
 				return nil
 			})
@@ -278,25 +234,24 @@ func TestReconstructBlobs(t *testing.T) {
 
 		// Flatten proofs.
 		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
-		for _, cp := range cellsAndProofs {
+		for _, cp := range inputCellsAndProofs {
 			for _, proof := range cp.Proofs {
 				cellProofs = append(cellProofs, proof[:])
 			}
 		}
 
-		// Construct data column sidecars.
-		// It is OK to use the public function `ConstructDataColumnSidecars`, as long as
-		// `TestConstructDataColumnSidecars` tests pass.
-		dataColumnSidecars, err := peerdas.ConstructDataColumnSidecars(roBlock, blobs, cellProofs)
+		// Compute celles and proofs from the blobs and cell proofs.
+		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		require.NoError(t, err)
+
+		// Construct data column sidears from the signed block and cells and proofs.
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 
 		// Convert to verified data column sidecars.
-		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecars))
-		for _, dataColumnSidecar := range dataColumnSidecars {
-			roSidecar, err := blocks.NewRODataColumn(dataColumnSidecar)
-			require.NoError(t, err)
-
-			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
 			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
 		}
 
@@ -338,4 +293,163 @@ func TestReconstructBlobs(t *testing.T) {
 
 	})
 
+}
+
+func TestComputeCellsAndProofsFromFlat(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	t.Run("mismatched blob and proof counts", func(t *testing.T) {
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+		// Create one blob but proofs for two blobs
+		blobs := [][]byte{{}}
+
+		// Create proofs for 2 blobs worth of columns
+		cellProofs := make([][]byte, 2*numberOfColumns)
+
+		_, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		require.ErrorIs(t, err, peerdas.ErrBlobsCellsProofsMismatch)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		const blobCount = 2
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+		// Generate test blobs
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		// Extract blobs and compute expected cells and proofs
+		blobs := make([][]byte, blobCount)
+		expectedCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+		var wg errgroup.Group
+
+		for i := range blobCount {
+			blob := roBlobSidecars[i].Blob
+			blobs[i] = blob
+
+			wg.Go(func() error {
+				var kzgBlob kzg.Blob
+				count := copy(kzgBlob[:], blob)
+				require.Equal(t, len(kzgBlob), count)
+
+				cp, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+				if err != nil {
+					return errors.Wrapf(err, "compute cells and kzg proofs for blob %d", i)
+				}
+
+				expectedCellsAndProofs[i] = cp
+				return nil
+			})
+		}
+
+		err := wg.Wait()
+		require.NoError(t, err)
+
+		// Flatten proofs
+		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
+		for _, cp := range expectedCellsAndProofs {
+			for _, proof := range cp.Proofs {
+				cellProofs = append(cellProofs, proof[:])
+			}
+		}
+
+		// Test ComputeCellsAndProofs
+		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		require.NoError(t, err)
+		require.Equal(t, blobCount, len(actualCellsAndProofs))
+
+		// Verify the results match expected
+		for i := range blobCount {
+			require.Equal(t, len(expectedCellsAndProofs[i].Cells), len(actualCellsAndProofs[i].Cells))
+			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), len(actualCellsAndProofs[i].Proofs))
+
+			// Compare cells
+			for j, expectedCell := range expectedCellsAndProofs[i].Cells {
+				require.Equal(t, expectedCell, actualCellsAndProofs[i].Cells[j])
+			}
+
+			// Compare proofs
+			for j, expectedProof := range expectedCellsAndProofs[i].Proofs {
+				require.Equal(t, expectedProof, actualCellsAndProofs[i].Proofs[j])
+			}
+		}
+	})
+}
+
+func TestComputeCellsAndProofsFromStructured(t *testing.T) {
+	t.Run("nil blob and proof", func(t *testing.T) {
+		_, err := peerdas.ComputeCellsAndProofsFromStructured([]*pb.BlobAndProofV2{nil})
+		require.ErrorIs(t, err, peerdas.ErrNilBlobAndProof)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		// Start the trusted setup.
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		const blobCount = 2
+
+		// Generate test blobs
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		// Extract blobs and compute expected cells and proofs
+		blobsAndProofs := make([]*pb.BlobAndProofV2, blobCount)
+		expectedCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+
+		var wg errgroup.Group
+		for i := range blobCount {
+			blob := roBlobSidecars[i].Blob
+
+			wg.Go(func() error {
+				var kzgBlob kzg.Blob
+				count := copy(kzgBlob[:], blob)
+				require.Equal(t, len(kzgBlob), count)
+
+				cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+				if err != nil {
+					return errors.Wrapf(err, "compute cells and kzg proofs for blob %d", i)
+				}
+				expectedCellsAndProofs[i] = cellsAndProofs
+
+				kzgProofs := make([][]byte, 0, len(cellsAndProofs.Proofs))
+				for _, proof := range cellsAndProofs.Proofs {
+					kzgProofs = append(kzgProofs, proof[:])
+				}
+
+				blobAndProof := &pb.BlobAndProofV2{
+					Blob:      blob,
+					KzgProofs: kzgProofs,
+				}
+				blobsAndProofs[i] = blobAndProof
+
+				return nil
+			})
+		}
+
+		err = wg.Wait()
+		require.NoError(t, err)
+
+		// Test ComputeCellsAndProofs
+		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromStructured(blobsAndProofs)
+		require.NoError(t, err)
+		require.Equal(t, blobCount, len(actualCellsAndProofs))
+
+		// Verify the results match expected
+		for i := range blobCount {
+			require.Equal(t, len(expectedCellsAndProofs[i].Cells), len(actualCellsAndProofs[i].Cells))
+			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), len(actualCellsAndProofs[i].Proofs))
+
+			// Compare cells
+			for j, expectedCell := range expectedCellsAndProofs[i].Cells {
+				require.Equal(t, expectedCell, actualCellsAndProofs[i].Cells[j])
+			}
+
+			// Compare proofs
+			for j, expectedProof := range expectedCellsAndProofs[i].Proofs {
+				require.Equal(t, expectedProof, actualCellsAndProofs[i].Proofs[j])
+			}
+		}
+	})
 }

@@ -1,0 +1,236 @@
+// Common beacon chain types shared between beacon blocks, beacon state, and other components
+
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/attestation.proto";
+
+option csharp_namespace = "Ethereum.Eth.v1alpha1";
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "BeaconCoreTypesProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+// A beacon block header is essentially a beacon block with only a reference to
+// the beacon body as a 32 byte merkle tree root. This type of message is more
+// lightweight than a full beacon block. The message does not contain
+// a validator signature.
+message BeaconBlockHeader {
+  // Beacon chain slot that this block represents.
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+
+  // Validator index of the validator that proposed the block header.
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v6/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+
+  // 32 byte merkle tree root of the parent ssz encoded block.
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // 32 byte merkle tree root of the resulting ssz encoded state after
+  // processing this block.
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // 32 byte merkle tree root of the ssz encoded block body.
+  bytes body_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// The signed version of beacon block header.
+message SignedBeaconBlockHeader {
+  // The unsigned beacon block header itself.
+  BeaconBlockHeader header = 1;
+
+  // 96 byte BLS signature from the validator that produced this block header.
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// Eth1Data represents references to the Ethereum 1.x deposit contract.
+message Eth1Data {
+  // The 32 byte deposit tree root for the last deposit included in this
+  // block.
+  bytes deposit_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // The total number of deposits included in the beacon chain since genesis
+  // including the deposits in this block.
+  uint64 deposit_count = 2;
+
+  // The 32 byte block hash of the Ethereum 1.x block considered for deposit
+  // inclusion.
+  bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// Proposer slashings are proofs that a slashable offense has been committed by
+// proposing two conflicting blocks from the same validator.
+message ProposerSlashing {
+  // First conflicting signed block header.
+  SignedBeaconBlockHeader header_1 = 2;
+
+  // Second conflicting signed block header.
+  SignedBeaconBlockHeader header_2 = 3;
+}
+
+// Deposit into the Ethereum consensus from the Ethereum 1.x deposit contract.
+message Deposit {
+  // DepositData that is encoded into a deposit signature.
+  message Data {
+    // 48 byte BLS public key of the validator.
+    bytes public_key = 1 [
+      (ethereum.eth.ext.ssz_size) = "48",
+      (ethereum.eth.ext.spec_name) = "pubkey"
+    ];
+
+    // A 32 byte hash of the withdrawal address public key.
+    bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+    // Deposit amount in gwei.
+    uint64 amount = 3;
+
+    // 96 byte signature from the validators public key.
+    bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  }
+  // 32 byte roots in the deposit tree branch.
+  repeated bytes proof = 1 [ (ethereum.eth.ext.ssz_size) = "33,32" ];
+
+  Data data = 2;
+}
+
+// The signed version of voluntary exit.
+message SignedVoluntaryExit {
+  // The unsigned voluntary exit itself.
+  VoluntaryExit exit = 1;
+
+  // Validator's 96 byte signature
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// A message that represents a validator signaling that they want to voluntarily
+// withdraw from the active validator set. The message does not contain a
+// validator signature.
+message VoluntaryExit {
+  // The epoch on when exit request becomes valid.
+  uint64 epoch = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Index of the exiting validator.
+  uint64 validator_index = 2
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v6/consensus-types/"
+            "primitives.ValidatorIndex" ];
+}
+
+message AttesterSlashingElectra {
+  // First conflicting attestation.
+  IndexedAttestationElectra attestation_1 = 1;
+
+  // Second conflicting attestation.
+  IndexedAttestationElectra attestation_2 = 2;
+}
+
+message IndexedAttestationElectra {
+  repeated uint64 attesting_indices = 1
+  [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size" ];
+
+  AttestationData data = 2;
+
+  // 96 bytes aggregate signature.
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// The sync aggregate object for the beacon chain to track sync committee votes
+// and to support light client infra.
+message SyncAggregate {
+  // Sync committee bits as Bitvector to track votes.
+  bytes sync_committee_bits = 1 [
+    (ethereum.eth.ext.ssz_size) = "sync_committee_bytes.size",
+    (ethereum.eth.ext.cast_type) = "sync_committee_bits.type"
+  ];
+
+  // BLS aggregated signature of the sync committee for the ones that voted.
+  bytes sync_committee_signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+message Fork {
+  bytes previous_version = 1 [ (ethereum.eth.ext.ssz_size) = "4" ];
+  bytes current_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
+  uint64 epoch = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+}
+
+// SyncCommittee serves as committees to facilitate light client syncing to
+// beacon chain.
+message SyncCommittee {
+  repeated bytes pubkeys = 1
+  [ (ethereum.eth.ext.ssz_size) = "sync_committee_bits.size,48" ];
+  bytes aggregate_pubkey = 2 [ (ethereum.eth.ext.ssz_size) = "48" ];
+}
+
+// HistoricalSummary matches the components of the phase0 `HistoricalBatch`
+// making the two hash_tree_root-compatible.
+message HistoricalSummary {
+  bytes block_summary_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_summary_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message Validator {
+  // 48 byte BLS public key used for the validator's activities.
+  bytes public_key = 1 [
+    (ethereum.eth.ext.ssz_size) = "48",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+
+  // 32 byte hash of the withdrawal destination public key.
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // The validators current effective balance in gwei.
+  uint64 effective_balance = 3;
+
+  // Whether or not the validator has been slashed.
+  bool slashed = 4;
+
+  // Epoch when the validator became eligible for activation. This field may
+  // be zero if the validator was present in the Ethereum proof of stake
+  // genesis. This field is FAR_FUTURE_EPOCH if the validator has not been
+  // activated.
+  uint64 activation_eligibility_epoch = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Epoch when the validator was activated. This field may be zero if the
+  // validator was present in the Ethereum proof of stake genesis. This field is
+  // FAR_FUTURE_EPOCH if the validator has not been activated.
+  uint64 activation_epoch = 6 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Epoch when the validator was exited. This field is FAR_FUTURE_EPOCH if
+  // the validator has not exited.
+  // FAR_FUTURE_EPOCH is a constant defined by the official Ethereum Beacon
+  // Chain specification:
+  // https://github.com/ethereum/consensus-specs/blob/v0.9.2/specs/core/0_beacon-chain.md#constants
+  uint64 exit_epoch = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+
+  // Epoch when the validator is eligible to withdraw their funds. This field
+  // is FAR_FUTURE_EPOCH if the validator has not exited.
+  // FAR_FUTURE_EPOCH is a constant defined by the official Ethereum Beacon
+  // Chain specification:
+  // https://github.com/ethereum/consensus-specs/blob/v0.9.2/specs/core/0_beacon-chain.md#constants
+  uint64 withdrawable_epoch = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+}

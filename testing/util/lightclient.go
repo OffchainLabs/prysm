@@ -30,6 +30,8 @@ type TestLightClient struct {
 	increaseAttestedSlotBy        uint64
 	increaseFinalizedSlotBy       uint64
 	increaseSignatureSlotBy       uint64
+	increaseActiveParticipantsBy  uint64
+	attestedParentRoot            [32]byte
 
 	T              *testing.T
 	Ctx            context.Context
@@ -66,6 +68,13 @@ func NewTestLightClient(t *testing.T, forkVersion int, options ...LightClientOpt
 	}
 }
 
+// WithAttestedParentRoot sets the parent root of the attested block.
+func WithAttestedParentRoot(parentRoot [32]byte) LightClientOption {
+	return func(l *TestLightClient) {
+		l.attestedParentRoot = parentRoot
+	}
+}
+
 // WithBlinded specifies whether the signature block is blinded or not
 func WithBlinded() LightClientOption {
 	return func(l *TestLightClient) {
@@ -94,9 +103,10 @@ func WithFinalizedCheckpointInPrevFork() LightClientOption {
 }
 
 // WithSupermajority specifies whether the sync committee bits have supermajority or not
-func WithSupermajority() LightClientOption {
+func WithSupermajority(increaseActiveParticipantsBy uint64) LightClientOption {
 	return func(l *TestLightClient) {
 		l.supermajority = true
+		l.increaseActiveParticipantsBy = increaseActiveParticipantsBy
 	}
 }
 
@@ -180,6 +190,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 	// Attested Block
 	attestedBlock := NewBeaconBlockAltair()
 	attestedBlock.Block.Slot = attestedSlot
+	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
@@ -204,7 +215,7 @@ func (l *TestLightClient) setupTestAltair() *TestLightClient {
 
 	var trueBitNum uint64
 	if l.supermajority {
-		trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+		trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 	} else {
 		trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 	}
@@ -318,6 +329,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 	attestedBlock := NewBeaconBlockBellatrix()
 	attestedBlock.Block.Slot = attestedSlot
+	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
@@ -344,7 +356,7 @@ func (l *TestLightClient) setupTestBellatrix() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -494,6 +506,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 	// Attested Block
 	attestedBlock := NewBeaconBlockCapella()
 	attestedBlock.Block.Slot = attestedSlot
+	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
@@ -520,7 +533,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -551,7 +564,7 @@ func (l *TestLightClient) setupTestCapella() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -671,6 +684,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 	// Attested Block
 	attestedBlock := NewBeaconBlockDeneb()
 	attestedBlock.Block.Slot = attestedSlot
+	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
@@ -697,7 +711,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -728,7 +742,7 @@ func (l *TestLightClient) setupTestDeneb() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -848,6 +862,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 	// Attested Block
 	attestedBlock := NewBeaconBlockElectra()
 	attestedBlock.Block.Slot = attestedSlot
+	attestedBlock.Block.ParentRoot = l.attestedParentRoot[:]
 	signedAttestedBlock, err := blocks.NewSignedBeaconBlock(attestedBlock)
 	require.NoError(l.T, err)
 	attestedBlockHeader, err := signedAttestedBlock.Header()
@@ -874,7 +889,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}
@@ -905,7 +920,7 @@ func (l *TestLightClient) setupTestElectra() *TestLightClient {
 
 		var trueBitNum uint64
 		if l.supermajority {
-			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1)
+			trueBitNum = uint64((float64(params.BeaconConfig().SyncCommitteeSize) * 2.0 / 3.0) + 1 + float64(l.increaseActiveParticipantsBy))
 		} else {
 			trueBitNum = params.BeaconConfig().MinSyncCommitteeParticipants
 		}

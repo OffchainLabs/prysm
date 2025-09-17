@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/proto"
@@ -63,7 +63,7 @@ func (m *MockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, 
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (m *MockBroadcaster) BroadcastDataColumnSidecar([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
+func (m *MockBroadcaster) BroadcastDataColumnSidecar(uint64, blocks.VerifiedRODataColumn) error {
 	m.BroadcastCalled.Store(true)
 	return nil
 }

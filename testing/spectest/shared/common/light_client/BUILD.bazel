@@ -11,7 +11,7 @@ go_library(
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
-        "//beacon-chain/core/light-client:go_default_library",
+        "//beacon-chain/light-client:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//config/params:go_default_library",

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -308,18 +309,12 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 // BroadcastDataColumnSidecar broadcasts a data column to the p2p network, the message is assumed to be
 // broadcasted to the current fork and to the input column subnet.
 func (s *Service) BroadcastDataColumnSidecar(
-	root [fieldparams.RootLength]byte,
 	dataColumnSubnet uint64,
-	dataColumnSidecar *ethpb.DataColumnSidecar,
+	dataColumnSidecar blocks.VerifiedRODataColumn,
 ) error {
 	// Add tracing to the function.
 	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumnSidecar")
 	defer span.End()
-
-	// Ensure the data column sidecar is not nil.
-	if dataColumnSidecar == nil {
-		return errors.Errorf("attempted to broadcast nil data column sidecar at subnet %d", dataColumnSubnet)
-	}
 
 	// Retrieve the current fork digest.
 	forkDigest, err := s.currentForkDigest()
@@ -330,16 +325,15 @@ func (s *Service) BroadcastDataColumnSidecar(
 	}
 
 	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumnSidecar(ctx, root, dataColumnSubnet, dataColumnSidecar, forkDigest)
+	go s.internalBroadcastDataColumnSidecar(ctx, dataColumnSubnet, dataColumnSidecar, forkDigest)
 
 	return nil
 }
 
 func (s *Service) internalBroadcastDataColumnSidecar(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
 	columnSubnet uint64,
-	dataColumnSidecar *ethpb.DataColumnSidecar,
+	dataColumnSidecar blocks.VerifiedRODataColumn,
 	forkDigest [fieldparams.VersionLength]byte,
 ) {
 	// Add tracing to the function.
@@ -385,7 +379,7 @@ func (s *Service) internalBroadcastDataColumnSidecar(
 	log.WithFields(logrus.Fields{
 		"slot":               slot,
 		"timeSinceSlotStart": time.Since(slotStartTime),
-		"root":               fmt.Sprintf("%#x", root),
+		"root":               fmt.Sprintf("%#x", dataColumnSidecar.BlockRoot()),
 		"columnSubnet":       columnSubnet,
 	}).Debug("Broadcasted data column sidecar")
 

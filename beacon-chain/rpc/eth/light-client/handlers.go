@@ -6,7 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -90,10 +90,21 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		return
 	}
 
+	if startPeriod*uint64(config.EpochsPerSyncCommitteePeriod) < uint64(config.AltairForkEpoch) {
+		httputil.HandleError(w, "Invalid 'start_period': before Altair fork", http.StatusBadRequest)
+		return
+	}
+
 	endPeriod := startPeriod + count - 1
 
+	headBlock, err := s.HeadFetcher.HeadBlock(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// get updates
-	updates, err := s.LCStore.LightClientUpdates(ctx, startPeriod, endPeriod)
+	updates, err := s.LCStore.LightClientUpdates(ctx, startPeriod, endPeriod, headBlock)
 	if err != nil {
 		httputil.HandleError(w, "Could not get light client updates from DB: "+err.Error(), http.StatusInternalServerError)
 		return
