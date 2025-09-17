@@ -74,14 +74,7 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
 	if roBlock.Version() >= version.Fulu {
-		key := fmt.Sprintf("%#x", roBlock.Root())
-		if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
-				return nil, err
-			}
-
-			return nil, nil
-		}); err != nil {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
 			log.WithError(err).Error("Failed to process data column sidecars from execution")
 			return
 		}
@@ -167,97 +160,104 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 // processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
-	const delay = 250 * time.Millisecond
-	secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+	key := fmt.Sprintf("%#x", source.Root())
+	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+		const delay = 250 * time.Millisecond
+		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	commitments, err := source.Commitments()
-	if err != nil {
-		return errors.Wrap(err, "blob kzg commitments")
-	}
-
-	// Exit early if there are no commitments.
-	if len(commitments) == 0 {
-		return nil
-	}
-
-	// Retrieve the indices of sidecars we should sample.
-	indicesToSample, err := s.columnIndicesToSample()
-	if err != nil {
-		return errors.Wrap(err, "column indices to sample")
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
-	defer cancel()
-
-	for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
-		// Exit early if all sidecars to sample have been seen.
-		if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), indicesToSample) {
-			return nil
-		}
-
-		// Try to reconstruct data column sidecars from the execution client.
-		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+		commitments, err := source.Commitments()
 		if err != nil {
-			return errors.Wrap(err, "reconstruct data column sidecars")
+			return nil, errors.Wrap(err, "blob kzg commitments")
 		}
 
-		// No sidecars are retrieved from the EL, retry later
-		sidecarCount := uint64(len(sidecars))
-		if sidecarCount == 0 {
-			if ctx.Err() != nil {
-				return ctx.Err()
+		// Exit early if there are no commitments.
+		if len(commitments) == 0 {
+			return nil, nil
+		}
+
+		// Retrieve the indices of sidecars we should sample.
+		indicesToSample, err := s.columnIndicesToSample()
+		if err != nil {
+			return nil, errors.Wrap(err, "column indices to sample")
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
+		defer cancel()
+
+		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
+			// Exit early if all sidecars to sample have been seen.
+			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), indicesToSample) {
+				return nil, nil
 			}
 
-			time.Sleep(delay)
-			continue
-		}
-
-		// Boundary check.
-		if sidecarCount != numberOfColumns {
-			return errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
-		}
-
-		// Broadcast and save data column sidecars to custody but not yet received.
-		reconstructedIndices := make(map[uint64]bool, len(indicesToSample))
-		for index := range indicesToSample {
-			if index >= sidecarCount {
-				return errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
+			// Try to reconstruct data column sidecars from the execution client.
+			sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			if err != nil {
+				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
 
-			// This sidecar has been received in the meantime, skip it.
-			if s.hasSeenDataColumnIndex(source.Slot(), source.ProposerIndex(), index) {
+			// No sidecars are retrieved from the EL, retry later
+			sidecarCount := uint64(len(sidecars))
+			if sidecarCount == 0 {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+
+				time.Sleep(delay)
 				continue
 			}
 
-			sidecar := sidecars[index]
-
-			if err := s.cfg.p2p.BroadcastDataColumnSidecar(sidecar.Index, sidecar); err != nil {
-				return errors.Wrap(err, "broadcast data column sidecar")
+			// Boundary check.
+			if sidecarCount != numberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
 			}
 
-			if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
-				return errors.Wrap(err, "receive data column sidecar")
+			// Broadcast and save data column sidecars to custody but not yet received.
+			reconstructedIndices := make(map[uint64]bool, len(indicesToSample))
+			for index := range indicesToSample {
+				if index >= sidecarCount {
+					return nil, errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
+				}
+
+				// This sidecar has been received in the meantime, skip it.
+				if s.hasSeenDataColumnIndex(source.Slot(), source.ProposerIndex(), index) {
+					continue
+				}
+
+				sidecar := sidecars[index]
+
+				if err := s.cfg.p2p.BroadcastDataColumnSidecar(sidecar.Index, sidecar); err != nil {
+					return nil, errors.Wrap(err, "broadcast data column sidecar")
+				}
+
+				if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+					return nil, errors.Wrap(err, "receive data column sidecar")
+				}
+
+				reconstructedIndices[index] = true
 			}
 
-			reconstructedIndices[index] = true
-		}
+			if len(reconstructedIndices) > 0 {
+				log.WithFields(logrus.Fields{
+					"root":          fmt.Sprintf("%#x", source.Root()),
+					"slot":          source.Slot(),
+					"proposerIndex": source.ProposerIndex(),
+					"iteration":     iteration,
+					"type":          source.Type(),
+					"count":         len(reconstructedIndices),
+					"indices":       sortedSliceFromMap(reconstructedIndices),
+				}).Debug("Constructed data column sidecars from the execution client")
+			}
 
-		if len(reconstructedIndices) > 0 {
-			log.WithFields(logrus.Fields{
-				"root":          fmt.Sprintf("%#x", source.Root()),
-				"slot":          source.Slot(),
-				"proposerIndex": source.ProposerIndex(),
-				"iteration":     iteration,
-				"type":          source.Type(),
-				"count":         len(reconstructedIndices),
-				"indices":       sortedSliceFromMap(reconstructedIndices),
-			}).Debug("Constructed data column sidecars from the execution client")
+			return nil, nil
 		}
-
-		return nil
+	}); err != nil {
+		return err
 	}
+
+	return nil
 }
 
 // haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
