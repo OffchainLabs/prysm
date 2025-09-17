@@ -273,24 +273,40 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	// Convert versioned hashes to indices if provided
 	indices := cfg.Indices
 	if len(cfg.VersionedHashes) > 0 {
-		// Build a set of requested versioned hashes for fast lookup
+		// Build a map of requested versioned hashes for fast lookup and tracking
 		requestedHashes := make(map[string]bool)
 		for _, versionedHash := range cfg.VersionedHashes {
 			requestedHashes[string(versionedHash)] = true
 		}
 
-		// Create indices array in the order of KZG commitments in the block
+		// Create indices array and track which hashes we found
 		indices = make([]int, 0, len(cfg.VersionedHashes))
+		foundHashes := make(map[string]bool)
+		
 		for i, commitment := range commitments {
 			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
-			if requestedHashes[string(versionedHash[:])] {
+			hashStr := string(versionedHash[:])
+			if requestedHashes[hashStr] {
 				indices = append(indices, i)
+				foundHashes[hashStr] = true
 			}
 		}
 
-		// Verify all requested hashes were found
+		// Check if all requested hashes were found
 		if len(indices) != len(cfg.VersionedHashes) {
-			return nil, &core.RpcError{Err: errors.New("versioned hash does not exist in given block"), Reason: core.NotFound}
+			// Collect missing hashes
+			missingHashes := make([]string, 0, len(cfg.VersionedHashes)-len(indices))
+			for _, requestedHash := range cfg.VersionedHashes {
+				if !foundHashes[string(requestedHash)] {
+					missingHashes = append(missingHashes, hexutil.Encode(requestedHash))
+				}
+			}
+			
+			// Create detailed error message
+			errMsg := fmt.Sprintf("versioned hash(es) not found in block: requested %d hashes, found %d. Missing: %v",
+				len(cfg.VersionedHashes), len(indices), missingHashes)
+			
+			return nil, &core.RpcError{Err: errors.New(errMsg), Reason: core.NotFound}
 		}
 	}
 
