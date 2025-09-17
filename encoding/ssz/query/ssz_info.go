@@ -128,6 +128,9 @@ func (info *sszInfo) String() string {
 			return fmt.Sprintf("Bytes%d", info.vectorInfo.length)
 		}
 		return fmt.Sprintf("Vector[%s, %d]", info.vectorInfo.element, info.vectorInfo.length)
+	case Bitvector:
+		// Bitvector is a vector of bits, so length is in bytes * 8
+		return fmt.Sprintf("Bitvector[%d]", info.vectorInfo.length*8)
 	default:
 		return info.typ.Name()
 	}
