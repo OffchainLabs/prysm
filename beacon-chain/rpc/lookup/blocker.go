@@ -282,7 +282,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		// Create indices array and track which hashes we found
 		indices = make([]int, 0, len(cfg.VersionedHashes))
 		foundHashes := make(map[string]bool)
-		
+
 		for i, commitment := range commitments {
 			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
 			hashStr := string(versionedHash[:])
@@ -301,11 +301,11 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 					missingHashes = append(missingHashes, hexutil.Encode(requestedHash))
 				}
 			}
-			
+
 			// Create detailed error message
 			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d hashes, found %d, missing: %v)",
 				len(cfg.VersionedHashes), len(indices), missingHashes)
-			
+
 			return nil, &core.RpcError{Err: errors.New(errMsg), Reason: core.NotFound}
 		}
 	}
