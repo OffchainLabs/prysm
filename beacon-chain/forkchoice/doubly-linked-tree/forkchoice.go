@@ -463,22 +463,20 @@ func (f *ForkChoice) CommonAncestor(ctx context.Context, r1 [32]byte, r2 [32]byt
 }
 
 // InsertChain inserts all nodes corresponding to blocks in the slice
-// `blocks`. This slice must be ordered from child to parent. It includes all
-// blocks **except** the first one (that is the one with the highest slot
-// number). All blocks are assumed to be a strict chain
-// where blocks[i].Parent = blocks[i+1]. Also, we assume that the parent of the
-// last block in this list is already included in forkchoice store.
+// `blocks`. This slice must be ordered in increasing slot order and
+// each consecutive entry must be a child of the previous one.
+// The parent of the first block in this list must already be present in forkchoice.
 func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.BlockAndCheckpoints) error {
 	if len(chain) == 0 {
 		return nil
 	}
-	for i := len(chain) - 1; i > 0; i-- {
+	for _, bcp := range chain {
 		if _, err := f.store.insert(ctx,
-			chain[i].Block,
-			chain[i].JustifiedCheckpoint.Epoch, chain[i].FinalizedCheckpoint.Epoch); err != nil {
+			bcp.Block,
+			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
-		if err := f.updateCheckpoints(ctx, chain[i].JustifiedCheckpoint, chain[i].FinalizedCheckpoint); err != nil {
+		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err
 		}
 	}
