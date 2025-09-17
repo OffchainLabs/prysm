@@ -21,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -536,14 +535,10 @@ func TestDataColumnSidecars(t *testing.T) {
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{}
-		
+
 		// Create a mock blocker to avoid nil pointer
-		mockBlocker := &mockBlocker{
-			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
-				return nil, &core.RpcError{Err: errors.New("Fulu fork not configured"), Reason: core.BadRequest}
-			},
-		}
-		
+		mockBlocker := &testutil.MockBlocker{}
+
 		s := &Server{
 			GenesisTimeFetcher: chainService,
 			Blocker:            mockBlocker,
@@ -571,14 +566,14 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService := &blockchainmock.ChainService{}
 		currentSlot := primitives.Slot(0) // Current slot 0 (epoch 0, before epoch 100)
 		chainService.Slot = &currentSlot
-		
+
 		// Create a mock blocker to avoid nil pointer
-		mockBlocker := &mockBlocker{
-			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
 				return nil, &core.RpcError{Err: errors.New("before Fulu fork"), Reason: core.BadRequest}
 			},
 		}
-		
+
 		s := &Server{
 			GenesisTimeFetcher: chainService,
 			Blocker:            mockBlocker,
@@ -606,14 +601,14 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService := &blockchainmock.ChainService{}
 		currentSlot := primitives.Slot(0) // Current slot 0 (epoch 0, at fork)
 		chainService.Slot = &currentSlot
-		
+
 		// Create a mock blocker to avoid nil pointer
-		mockBlocker := &mockBlocker{
-			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
 				return nil, &core.RpcError{Err: errors.New("invalid index"), Reason: core.BadRequest}
 			},
 		}
-		
+
 		s := &Server{
 			GenesisTimeFetcher: chainService,
 			Blocker:            mockBlocker,
@@ -644,13 +639,11 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService.Slot = &currentSlot
 
 		// Create a mock blocker that returns block not found
-		mockBlocker := &mockBlocker{
-			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
 				return nil, &core.RpcError{Err: errors.New("block not found"), Reason: core.NotFound}
 			},
-			blockFunc: func(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
-				return nil, nil // Block not found
-			},
+			BlockToReturn: nil, // Block not found
 		}
 
 		s := &Server{
@@ -687,13 +680,11 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService.OptimisticRoots = make(map[[32]byte]bool)
 		chainService.FinalizedRoots = make(map[[32]byte]bool)
 
-		mockBlocker := &mockBlocker{
-			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
 				return []blocks.VerifiedRODataColumn{}, nil // Empty data columns
 			},
-			blockFunc: func(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
-				return roBlock, nil
-			},
+			BlockToReturn: roBlock,
 		}
 
 		s := &Server{
@@ -812,32 +803,4 @@ func TestBuildDataColumnSidecarsSSZResponse(t *testing.T) {
 		size := getDataColumnSidecarSSZSize()
 		assert.Equal(t, true, size > 0)
 	})
-}
-
-// mockBlocker is a mock implementation of the Blocker interface for testing
-type mockBlocker struct {
-	blockFunc       func(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	blobsFunc       func(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError)
-	dataColumnsFunc func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
-}
-
-func (m *mockBlocker) Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	if m.blockFunc != nil {
-		return m.blockFunc(ctx, id)
-	}
-	return nil, nil
-}
-
-func (m *mockBlocker) Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
-	if m.blobsFunc != nil {
-		return m.blobsFunc(ctx, id, indices)
-	}
-	return nil, nil
-}
-
-func (m *mockBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
-	if m.dataColumnsFunc != nil {
-		return m.dataColumnsFunc(ctx, id, indices)
-	}
-	return nil, nil
 }
