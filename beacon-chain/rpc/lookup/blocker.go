@@ -113,7 +113,7 @@ func (p *BeaconDbBlocker) resolveBlockToRootAndBlock(ctx context.Context, id str
 				return [32]byte{}, nil, &core.RpcError{Err: errors.Wrapf(err, "could not calculate fork start slot for epoch %d", minForkEpoch), Reason: core.Internal}
 			}
 			if primitives.Slot(slot) < minForkStart {
-				return [32]byte{}, nil, &core.RpcError{Err: fmt.Errorf("current slot %d is less than %d min fork slot start %d for this feature", slot, minForkStart), Reason: core.BadRequest}
+				return [32]byte{}, nil, &core.RpcError{Err: fmt.Errorf("current slot %d is less than min fork slot start %d for this feature", slot, minForkStart), Reason: core.BadRequest}
 			}
 			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
 			if !ok {
