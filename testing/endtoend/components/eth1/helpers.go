@@ -30,23 +30,26 @@ var _ e2etypes.ComponentRunner = (*Node)(nil)
 var _ e2etypes.EngineProxy = (*Proxy)(nil)
 
 // WaitForBlocks waits for a certain amount of blocks to be mined by the ETH1 chain before returning.
-func WaitForBlocks(web3 *ethclient.Client, key *keystore.Key, blocksToWait uint64) error {
-	nonce, err := web3.PendingNonceAt(context.Background(), key.Address)
+func WaitForBlocks(ctx context.Context, web3 *ethclient.Client, key *keystore.Key, blocksToWait uint64) error {
+	nonce, err := web3.PendingNonceAt(ctx, key.Address)
 	if err != nil {
 		return err
 	}
-	chainID, err := web3.NetworkID(context.Background())
+	chainID, err := web3.NetworkID(ctx)
 	if err != nil {
 		return err
 	}
-	block, err := web3.BlockByNumber(context.Background(), nil)
+	block, err := web3.BlockByNumber(ctx, nil)
 	if err != nil {
 		return err
 	}
 	finishBlock := block.NumberU64() + blocksToWait
 
 	for block.NumberU64() <= finishBlock {
-		gasPrice, err := web3.SuggestGasPrice(context.Background())
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		gasPrice, err := web3.SuggestGasPrice(ctx)
 		if err != nil {
 			return err
 		}
@@ -55,12 +58,12 @@ func WaitForBlocks(web3 *ethclient.Client, key *keystore.Key, blocksToWait uint6
 		if err != nil {
 			return err
 		}
-		if err = web3.SendTransaction(context.Background(), signed); err != nil {
+		if err = web3.SendTransaction(ctx, signed); err != nil {
 			return err
 		}
 		nonce++
 		time.Sleep(timeGapPerMiningTX)
-		block, err = web3.BlockByNumber(context.Background(), nil)
+		block, err = web3.BlockByNumber(ctx, nil)
 		if err != nil {
 			return err
 		}
