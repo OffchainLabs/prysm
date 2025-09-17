@@ -610,31 +610,36 @@ func (dcs *DataColumnStorage) prune() {
 	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
 
-	// Update the earliest available slot via injected updater after pruning.
-	// The earliest available slot is the first slot after the pruned epochs.
-	if dcs.custody != nil {
-		earliestAvailableSlot, err := slots.EpochStart(highestEpochToPrune + 1)
-		if err != nil {
-			log.WithError(err).Error("Failed to calculate earliest available slot after data column pruning")
-			return
-		}
+	// Update the earliest available slot after pruning
+	earliestAvailableSlot, err := slots.EpochStart(highestEpochToPrune + 1)
+	if err != nil {
+		log.WithError(err).Error("Failed to calculate earliest available slot after data column pruning")
+		return
+	}
+	dcs.updateEarliestSlot(earliestAvailableSlot)
+}
 
-		// Get current custody group count to preserve it during update
-		custodyGroupCount, err := dcs.custody.CustodyGroupCount()
-		if err != nil {
-			log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after data column pruning")
-			return
-		}
+// updateEarliestSlot updates the earliest available slot via the injected custody updater.
+func (dcs *DataColumnStorage) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
+	if dcs.custody == nil {
+		return
+	}
 
-		// Update the custody info with new earliest available slot
-		_, _, err = dcs.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
-		if err != nil {
-			log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
-				Error("Failed to update earliest available slot after data column pruning")
-		} else {
-			log.WithField("earliestAvailableSlot", earliestAvailableSlot).
-				Debug("Updated earliest available slot after data column pruning")
-		}
+	// Get current custody group count to preserve it during update
+	custodyGroupCount, err := dcs.custody.CustodyGroupCount()
+	if err != nil {
+		log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after data column pruning")
+		return
+	}
+
+	// Update the custody info with new earliest available slot
+	_, _, err = dcs.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+	if err != nil {
+		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
+			Error("Failed to update earliest available slot after data column pruning")
+	} else {
+		log.WithField("earliestAvailableSlot", earliestAvailableSlot).
+			Debug("Updated earliest available slot after data column pruning")
 	}
 }
 

@@ -183,30 +183,34 @@ func (p *Service) prune(slot primitives.Slot) error {
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
 
-	// Update the earliest available slot via injected updater (if any).
-	// The earliest available slot is pruneUpto + 1 since pruneUpto is inclusive.
-	if p.custody != nil {
-		earliestAvailableSlot := pruneUpto + 1
-
-		// Get current custody group count to preserve it during update
-		custodyGroupCount, err := p.custody.CustodyGroupCount()
-		if err != nil {
-			log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after pruning")
-			return nil
-		}
-
-		// Update the custody info with new earliest available slot
-		_, _, err = p.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
-		if err != nil {
-			log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
-				Error("Failed to update earliest available slot after pruning")
-		} else {
-			log.WithField("earliestAvailableSlot", earliestAvailableSlot).
-				Debug("Updated earliest available slot after pruning")
-		}
-	}
+	// Update the earliest available slot after pruning
+	p.updateEarliestSlot(pruneUpto + 1)
 
 	return nil
+}
+
+// updateEarliestSlot updates the earliest available slot via the injected custody updater.
+func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
+	if p.custody == nil {
+		return
+	}
+
+	// Get current custody group count to preserve it during update
+	custodyGroupCount, err := p.custody.CustodyGroupCount()
+	if err != nil {
+		log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after pruning")
+		return
+	}
+
+	// Update the custody info with new earliest available slot
+	_, _, err = p.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+	if err != nil {
+		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
+			Error("Failed to update earliest available slot after pruning")
+	} else {
+		log.WithField("earliestAvailableSlot", earliestAvailableSlot).
+			Debug("Updated earliest available slot after pruning")
+	}
 }
 
 func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
