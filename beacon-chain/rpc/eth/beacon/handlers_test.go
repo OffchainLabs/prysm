@@ -19,7 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
@@ -3655,7 +3655,7 @@ func TestValidateEquivocation(t *testing.T) {
 }
 
 func TestServer_GetBlockRoot(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
+	beaconDB := dbTest.SetupDB(t)
 	ctx := t.Context()
 
 	url := "http://example.com/eth/v1/beacon/blocks/{block_id}/root"
@@ -3884,7 +3884,7 @@ func TestGetStateFork(t *testing.T) {
 	}
 	fakeState, err := util.NewBeaconState(fillFork)
 	require.NoError(t, err)
-	db := testDB.SetupDB(t)
+	db := dbTest.SetupDB(t)
 
 	chainService := &chainMock.ChainService{}
 	server := &Server{
@@ -3976,7 +3976,7 @@ func TestGetStateFork(t *testing.T) {
 }
 
 func TestGetCommittees(t *testing.T) {
-	db := testDB.SetupDB(t)
+	db := dbTest.SetupDB(t)
 	ctx := t.Context()
 	url := "http://example.com/eth/v1/beacon/states/{state_id}/committees"
 
@@ -4222,7 +4222,7 @@ func TestGetCommittees(t *testing.T) {
 }
 
 func TestGetBlockHeaders(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
+	beaconDB := dbTest.SetupDB(t)
 	ctx := t.Context()
 
 	_, blkContainers := fillDBTestBlocks(ctx, t, beaconDB)
@@ -4791,7 +4791,7 @@ func TestGetGenesis(t *testing.T) {
 }
 
 func TestGetDepositSnapshot(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
+	beaconDB := dbTest.SetupDB(t)
 	mockTrie := depositsnapshot.NewDepositTree()
 	deposits := [][32]byte{
 		bytesutil.ToBytes32([]byte{1}),
