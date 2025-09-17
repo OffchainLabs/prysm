@@ -73,23 +73,6 @@ type BeaconDbBlocker struct {
 	DataColumnStorage  *filesystem.DataColumnStorage
 }
 
-// getForkNameFromEpoch returns the human-readable fork name for a given fork epoch.
-func getForkNameFromEpoch(forkEpoch primitives.Epoch) string {
-	// Create a reverse lookup from epoch to version
-	versionToEpochMap := params.BeaconConfig().VersionToForkEpochMap()
-	for versionID, epoch := range versionToEpochMap {
-		if epoch == forkEpoch {
-			name := version.String(versionID)
-			// Capitalize the first letter to match test expectations
-			if len(name) > 0 {
-				return strings.ToUpper(name[:1]) + name[1:]
-			}
-			return name
-		}
-	}
-	return "unknown"
-}
-
 // resolveBlockID resolves a block ID to root and signed block.
 // Fork validation is handled outside this function by the calling methods.
 func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([fieldparams.RootLength]byte, interfaces.ReadOnlySignedBeaconBlock, error) {
@@ -300,7 +283,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Deneb start slot"), Reason: core.Internal}
 		}
 		if slot < denebForkSlot {
-			forkName := getForkNameFromEpoch(denebForkEpoch)
+			forkName := version.String(slots.ToForkVersion(slot))
 			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
 		}
 	}
@@ -567,7 +550,7 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
 		}
 		if slot < fuluForkSlot {
-			forkName := getForkNameFromEpoch(fuluForkEpoch)
+			forkName := version.String(slots.ToForkVersion(slot))
 			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
 		}
 	}
@@ -581,7 +564,7 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 		if roSignedBlock == nil {
 			return nil, &core.RpcError{Err: errors.Errorf("block not found for root %#x", root), Reason: core.NotFound}
 		}
-		
+
 		// Validate fork epoch for the fetched block
 		slot := roSignedBlock.Block().Slot()
 		fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
@@ -590,7 +573,7 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
 		}
 		if slot < fuluForkSlot {
-			forkName := getForkNameFromEpoch(fuluForkEpoch)
+			forkName := version.String(slots.ToForkVersion(slot))
 			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
 		}
 	}
