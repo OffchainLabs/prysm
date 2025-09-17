@@ -204,7 +204,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get vector length: %w", err)
 		}
 
-		return analyzeVectorType(typ, elementInfo, length)
+		return analyzeVectorType(typ, elementInfo, length, sszDimension.isBitfield)
 	}
 
 	// Parsing ssz tag doesn't provide enough information to determine the collection type,
@@ -232,20 +232,25 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 	}, nil
 }
 
-// analyzeVectorType analyzes SSZ Vector type and returns its SSZ info.
-func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*sszInfo, error) {
+// analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
+func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
 	if elementInfo == nil {
-		return nil, errors.New("element info is required for Vector")
+		return nil, errors.New("element info is required for Vector/Bitvector")
 	}
 
 	// Validate the given length.
 	// https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#illegal-types
 	if length == 0 {
-		return nil, fmt.Errorf("vector length must be greater than 0, got %d", length)
+		return nil, fmt.Errorf("vector/bitvector length must be greater than 0, got %d", length)
+	}
+
+	sszType := Vector
+	if isBitfield {
+		sszType = Bitvector
 	}
 
 	return &sszInfo{
-		sszType: Vector,
+		sszType: sszType,
 		typ:     typ,
 
 		fixedSize:  length * elementInfo.Size(),
