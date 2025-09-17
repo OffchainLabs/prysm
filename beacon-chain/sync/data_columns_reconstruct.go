@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // processDataColumnSidecarsFromReconstruction, after a random delay, attempts to reconstruct,
@@ -80,34 +81,20 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
-			// Compute sidecars we need to broadcast and receive.
-			unseenSidecars := make([]blocks.VerifiedRODataColumn, 0, len(reconstructedSidecars))
-			for _, sidecar := range reconstructedSidecars {
-				// Skip already seen data column sidecars.
-				if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
-					continue
-				}
-
-				if columnIndicesToSample[sidecar.Index] {
-					unseenSidecars = append(unseenSidecars, sidecar)
-				}
-			}
-
-			// Broadcast all the data column sidecars we reconstructed but did not see via gossip.
-			for _, sidecar := range unseenSidecars {
-				// Compute the subnet for this data column sidecar.
-				subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-
-				// Broadcast the data column sidecar.
-				if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, sidecar); err != nil {
-					log.WithError(err).Error("Broadcast data column")
-				}
-			}
-
-			// Receive data column sidecars.
-			if err := s.receiveDataColumnSidecars(ctx, unseenSidecars); err != nil {
-				log.WithError(err).Error("Failed to receive data column sidecars")
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars)
+			if err != nil {
+				log.WithError(err).Error("Failed to broadcast and receive unseen data column sidecars")
 				return
+			}
+
+			if len(unseenIndices) > 0 {
+				log.WithFields(logrus.Fields{
+					"root":          fmt.Sprintf("%#x", root),
+					"slot":          slot,
+					"proposerIndex": proposerIndex,
+					"count":         len(unseenIndices),
+					"indices":       sortedSliceFromMap(unseenIndices),
+				}).Debug("Reconstructed data column sidecars")
 			}
 		})
 
