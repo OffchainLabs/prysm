@@ -30,17 +30,10 @@ func GenerateTestDataColumns(t *testing.T, parent [fieldparams.RootLength]byte, 
 	}
 
 	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	dataColumnSidecars, err := peerdas.DataColumnSidecars(roBlock, cellsAndProofs)
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
 	require.NoError(t, err)
 
-	roDataColumns := make([]blocks.RODataColumn, 0, len(dataColumnSidecars))
-	for i := range dataColumnSidecars {
-		roDataColumn, err := blocks.NewRODataColumn(dataColumnSidecars[i])
-		require.NoError(t, err)
-		roDataColumns = append(roDataColumns, roDataColumn)
-	}
-
-	return roDataColumns
+	return roDataColumnSidecars
 }
 
 func TestColumnSatisfyRequirement(t *testing.T) {

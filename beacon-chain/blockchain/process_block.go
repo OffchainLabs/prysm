@@ -247,7 +247,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
-		pendingNodes[len(blks)-i-1] = args
+		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)
 			return err
@@ -284,13 +284,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if err := s.cfg.StateGen.SaveState(ctx, lastBR, preState); err != nil {
 		return err
 	}
-	// Insert all nodes but the last one to forkchoice
+	// Insert all nodes to forkchoice
 	if err := s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes); err != nil {
 		return errors.Wrap(err, "could not insert batch to forkchoice")
-	}
-	// Insert the last block to forkchoice
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastB); err != nil {
-		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	// Set their optimistic status
 	if isValidPayload {
@@ -664,14 +660,14 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+	roBlock consensusblocks.ROBlock,
 ) error {
-	block := signedBlock.Block()
+	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
 
+	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
 		return s.areDataColumnsAvailable(ctx, root, block)
@@ -691,8 +687,6 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
@@ -726,6 +720,7 @@ func (s *Service) areDataColumnsAvailable(
 
 	// Compute the sampling size.
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 	samplingSize := max(samplesPerSlot, custodyGroupCount)
 
 	// Get the peer info for the node.

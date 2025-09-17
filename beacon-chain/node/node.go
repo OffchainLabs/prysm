@@ -25,7 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
@@ -34,6 +33,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/monitor"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
@@ -253,10 +253,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
 
-	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
-	}
-
 	return beacon, nil
 }
 
@@ -357,6 +353,10 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 				log.WithError(err).Warn("Failed to set custody updater on DataColumnStorage")
 			}
 		}
+	}
+	if features.Get().EnableLightClient {
+		log.Debugln("Registering Light Client Store")
+		beacon.registerLightClientStore()
 	}
 
 	log.Debugln("Registering Backfill Service")
@@ -1153,6 +1153,11 @@ func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.
 	}
 
 	return b.services.RegisterService(bf)
+}
+
+func (b *BeaconNode) registerLightClientStore() {
+	lcs := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
+	b.lcStore = lcs
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {

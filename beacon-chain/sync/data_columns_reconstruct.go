@@ -25,14 +25,13 @@ const (
 // all data column sidecars. Then, it saves missing sidecars to the store.
 // After a delay, it broadcasts in the background not seen via gossip
 // (but reconstructed) sidecars.
-func (s *Service) reconstructSaveBroadcastDataColumnSidecars(
-	ctx context.Context,
-	slot primitives.Slot,
-	proposerIndex primitives.ValidatorIndex,
-	root [fieldparams.RootLength]byte,
-) error {
+func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
 	startTime := time.Now()
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+	root := sidecar.BlockRoot()
+	slot := sidecar.Slot()
+	proposerIndex := sidecar.ProposerIndex()
 
 	// Lock to prevent concurrent reconstructions.
 	s.reconstructionLock.Lock()
@@ -198,7 +197,7 @@ func (s *Service) broadcastMissingDataColumnSidecars(
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.Index)
 
 		// Broadcast the missing data column.
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(root, subnet, verifiedRODataColumn.DataColumnSidecar); err != nil {
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, verifiedRODataColumn); err != nil {
 			log.WithError(err).Error("Broadcast data column")
 		}
 

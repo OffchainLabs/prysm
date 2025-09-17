@@ -77,7 +77,7 @@
 
 - name: AttesterSlashing#electra
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message AttesterSlashingElectra {
   spec: |
     <spec ssz_object="AttesterSlashing" fork="electra" hash="2b9f773d">
@@ -856,7 +856,7 @@
 
 - name: Fork
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Fork {
   spec: |
     <spec ssz_object="Fork" fork="phase0" hash="d210b04e">
@@ -890,7 +890,7 @@
 
 - name: HistoricalSummary
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message HistoricalSummary {
   spec: |
     <spec ssz_object="HistoricalSummary" fork="capella" hash="bfff1483">
@@ -913,7 +913,7 @@
 
 - name: IndexedAttestation#electra
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message IndexedAttestationElectra {
   spec: |
     <spec ssz_object="IndexedAttestation" fork="electra" hash="2f924640">
@@ -1193,7 +1193,7 @@
 
 - name: SyncAggregate
   sources:
-    - file: proto/prysm/v1alpha1/beacon_block.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SyncAggregate {
   spec: |
     <spec ssz_object="SyncAggregate" fork="altair" hash="51e247e5">
@@ -1215,7 +1215,7 @@
 
 - name: SyncCommittee
   sources:
-    - file: proto/prysm/v1alpha1/beacon_state.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SyncCommittee {
   spec: |
     <spec ssz_object="SyncCommittee" fork="altair" hash="b1d52376">
@@ -1253,7 +1253,7 @@
 
 - name: Validator
   sources:
-    - file: proto/prysm/v1alpha1/validator.proto
+    - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Validator {
   spec: |
     <spec ssz_object="Validator" fork="phase0" hash="54f88c17">
