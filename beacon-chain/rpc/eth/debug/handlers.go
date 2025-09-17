@@ -239,7 +239,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Data columns are not supported - Fulu fork not configured", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Check if we're before Fulu fork based on current slot
 	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
 	currentEpoch := primitives.Epoch(currentSlot / params.BeaconConfig().SlotsPerEpoch)
