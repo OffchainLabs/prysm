@@ -21,8 +21,6 @@ import (
 func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
 	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
 	if _, err, _ := s.reconstructionSingleFlight.Do(key, func() (interface{}, error) {
-		const maxReconstructionDelaySec = 2.
-
 		var wg sync.WaitGroup
 
 		root := sidecar.BlockRoot()
@@ -41,8 +39,7 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 		}
 
 		// Randomly choose value before starting reconstruction.
-		randFloat := s.reconstructionRandGen.Float64()
-		timeIntoSlot := time.Duration(maxReconstructionDelaySec*randFloat) * time.Second
+		timeIntoSlot := s.computeRandomDelay(slotStartTime)
 		broadcastTime := slotStartTime.Add(timeIntoSlot)
 		waitingTime := time.Until(broadcastTime)
 
@@ -125,4 +122,13 @@ func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
 	}
 
 	return true
+}
+
+// computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.
+func (s *Service) computeRandomDelay(slotStartTime time.Time) time.Duration {
+	const maxReconstructionDelaySec = 2.
+
+	randFloat := s.reconstructionRandGen.Float64()
+	timeIntoSlot := time.Duration(maxReconstructionDelaySec * randFloat * float64(time.Second))
+	return timeIntoSlot
 }

@@ -1,7 +1,11 @@
 package sync
 
 import (
+	"fmt"
 	"testing"
+	"time"
+
+	"math/rand"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -113,4 +117,22 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 
 		require.Equal(t, true, p2p.BroadcastCalled.Load())
 	})
+}
+
+func TestComputeRandomDelay(t *testing.T) {
+	const (
+		seed     = 42
+		expected = 746056722 * time.Nanosecond // = 0.746056722 seconds
+	)
+	slotStartTime := time.Date(2020, 12, 30, 0, 0, 0, 0, time.UTC)
+
+	service := NewService(
+		t.Context(),
+		WithP2P(p2ptest.NewTestP2P(t)),
+		WithReconstructionRandGen(rand.New(rand.NewSource(seed))),
+	)
+
+	waitingTime := service.computeRandomDelay(slotStartTime)
+	fmt.Print(waitingTime)
+	require.Equal(t, expected, waitingTime)
 }
