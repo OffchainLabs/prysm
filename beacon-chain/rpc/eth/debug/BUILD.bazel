@@ -44,7 +44,6 @@ go_test(
         "//beacon-chain/rpc/testutil:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
-        "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//runtime/version:go_default_library",
