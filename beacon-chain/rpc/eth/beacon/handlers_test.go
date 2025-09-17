@@ -15,7 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
+	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -89,7 +89,7 @@ func fillDBTestBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (
 func TestGetBlockV2(t *testing.T) {
 	t.Run("Unsycned Block", func(t *testing.T) {
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: nil}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -111,7 +111,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -144,7 +144,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -177,7 +177,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -211,7 +211,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -245,7 +245,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -277,7 +277,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -309,7 +309,7 @@ func TestGetBlockV2(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{},
 		}
 		s := &Server{
@@ -342,7 +342,7 @@ func TestGetBlockV2(t *testing.T) {
 		r, err := sb.Block().HashTreeRoot()
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			OptimisticRoots: map[[32]byte]bool{r: true},
 			FinalizedRoots:  map[[32]byte]bool{},
 		}
@@ -372,7 +372,7 @@ func TestGetBlockV2(t *testing.T) {
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
 
 		t.Run("true", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
+			mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
 			s := &Server{
 				OptimisticModeFetcher: mockChainService,
 				FinalizationFetcher:   mockChainService,
@@ -391,7 +391,7 @@ func TestGetBlockV2(t *testing.T) {
 			assert.Equal(t, true, resp.Finalized)
 		})
 		t.Run("false", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
+			mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
 			s := &Server{
 				OptimisticModeFetcher: mockChainService,
 				FinalizationFetcher:   mockChainService,
@@ -669,7 +669,7 @@ func TestGetBlockAttestations(t *testing.T) {
 
 	t.Run("v1", func(t *testing.T) {
 		t.Run("ok", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -701,7 +701,7 @@ func TestGetBlockAttestations(t *testing.T) {
 		t.Run("execution-optimistic", func(t *testing.T) {
 			r, err := bsb.Block().HashTreeRoot()
 			require.NoError(t, err)
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				OptimisticRoots: map[[32]byte]bool{r: true},
 				FinalizedRoots:  map[[32]byte]bool{},
 			}
@@ -727,7 +727,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run("true", func(t *testing.T) {
-				mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
+				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
 				s := &Server{
 					OptimisticModeFetcher: mockChainService,
 					FinalizationFetcher:   mockChainService,
@@ -746,7 +746,7 @@ func TestGetBlockAttestations(t *testing.T) {
 				assert.Equal(t, true, resp.Finalized)
 			})
 			t.Run("false", func(t *testing.T) {
-				mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
+				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
 				s := &Server{
 					OptimisticModeFetcher: mockChainService,
 					FinalizationFetcher:   mockChainService,
@@ -769,7 +769,7 @@ func TestGetBlockAttestations(t *testing.T) {
 
 	t.Run("V2", func(t *testing.T) {
 		t.Run("ok-pre-electra", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -803,7 +803,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			assert.Equal(t, "phase0", resp.Version)
 		})
 		t.Run("ok-post-electra", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -842,7 +842,7 @@ func TestGetBlockAttestations(t *testing.T) {
 		t.Run("execution-optimistic", func(t *testing.T) {
 			r, err := bsb.Block().HashTreeRoot()
 			require.NoError(t, err)
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				OptimisticRoots: map[[32]byte]bool{r: true},
 				FinalizedRoots:  map[[32]byte]bool{},
 			}
@@ -869,7 +869,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run("true", func(t *testing.T) {
-				mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
+				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
 				s := &Server{
 					OptimisticModeFetcher: mockChainService,
 					FinalizationFetcher:   mockChainService,
@@ -889,7 +889,7 @@ func TestGetBlockAttestations(t *testing.T) {
 				assert.Equal(t, "phase0", resp.Version)
 			})
 			t.Run("false", func(t *testing.T) {
-				mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
+				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
 				s := &Server{
 					OptimisticModeFetcher: mockChainService,
 					FinalizationFetcher:   mockChainService,
@@ -918,7 +918,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			sb, err := blocks.NewSignedBeaconBlock(b)
 			require.NoError(t, err)
 
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -948,7 +948,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
 			sb, err := blocks.NewSignedBeaconBlock(b)
 			require.NoError(t, err)
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -978,7 +978,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			esb, err := blocks.NewSignedBeaconBlock(eb)
 			require.NoError(t, err)
 
-			mockChainService := &mockChain.ChainService{
+			mockChainService := &chainMock.ChainService{
 				FinalizedRoots: map[[32]byte]bool{},
 			}
 
@@ -1013,7 +1013,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		s := &Server{
-			FinalizationFetcher: &mockChain.ChainService{},
+			FinalizationFetcher: &chainMock.ChainService{},
 			Blocker:             &testutil.MockBlocker{BlockToReturn: sb},
 		}
 
@@ -1042,7 +1042,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		s := &Server{
-			FinalizationFetcher: &mockChain.ChainService{},
+			FinalizationFetcher: &chainMock.ChainService{},
 			Blocker:             &testutil.MockBlocker{BlockToReturn: sb},
 		}
 
@@ -1070,7 +1070,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{}
+		mockChainService := &chainMock.ChainService{}
 		s := &Server{
 			OptimisticModeFetcher: mockChainService,
 			FinalizationFetcher:   mockChainService,
@@ -1101,7 +1101,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{}
+		mockChainService := &chainMock.ChainService{}
 		s := &Server{
 			OptimisticModeFetcher: mockChainService,
 			FinalizationFetcher:   mockChainService,
@@ -1132,7 +1132,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{}
+		mockChainService := &chainMock.ChainService{}
 		s := &Server{
 			OptimisticModeFetcher: mockChainService,
 			FinalizationFetcher:   mockChainService,
@@ -1161,7 +1161,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{}
+		mockChainService := &chainMock.ChainService{}
 		s := &Server{
 			OptimisticModeFetcher: mockChainService,
 			FinalizationFetcher:   mockChainService,
@@ -1190,7 +1190,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{}
+		mockChainService := &chainMock.ChainService{}
 		s := &Server{
 			OptimisticModeFetcher: mockChainService,
 			FinalizationFetcher:   mockChainService,
@@ -1221,7 +1221,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		r, err := sb.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			OptimisticRoots: map[[32]byte]bool{r: true},
 		}
 		s := &Server{
@@ -1248,7 +1248,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		root, err := sb.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{root: true},
 		}
 		s := &Server{
@@ -1274,7 +1274,7 @@ func TestGetBlindedBlock(t *testing.T) {
 		root, err := sb.Block().HashTreeRoot()
 		require.NoError(t, err)
 
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{root: false},
 		}
 		s := &Server{
@@ -1675,7 +1675,7 @@ func TestPublishBlock(t *testing.T) {
 		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -2097,7 +2097,7 @@ func TestPublishBlockSSZ(t *testing.T) {
 		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -2354,7 +2354,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -2598,7 +2598,7 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -2821,7 +2821,7 @@ func TestPublishBlockV2(t *testing.T) {
 		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -3086,7 +3086,7 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -3309,7 +3309,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -3566,7 +3566,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
-		chainService := &mockChain.ChainService{}
+		chainService := &chainMock.ChainService{}
 		server := &Server{
 			SyncChecker:           &mockSync.Sync{IsSyncing: true},
 			HeadFetcher:           chainService,
@@ -3598,7 +3598,7 @@ func TestValidateConsensus(t *testing.T) {
 	require.NoError(t, err)
 	parentRoot, err := parentSbb.Block().HashTreeRoot()
 	require.NoError(t, err)
-	mockChainService := &mockChain.ChainService{
+	mockChainService := &chainMock.ChainService{
 		State: parentState,
 		Root:  parentRoot[:],
 	}
@@ -3627,7 +3627,7 @@ func TestValidateEquivocation(t *testing.T) {
 		fc := doublylinkedtree.New()
 		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
-			ForkchoiceFetcher: &mockChain.ChainService{ForkChoiceStore: fc},
+			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
 		blk.SetSlot(st.Slot() + 1)
 
@@ -3646,7 +3646,7 @@ func TestValidateEquivocation(t *testing.T) {
 		fc := doublylinkedtree.New()
 		require.NoError(t, fc.InsertNode(t.Context(), st, roblock))
 		server := &Server{
-			ForkchoiceFetcher: &mockChain.ChainService{ForkChoiceStore: fc},
+			ForkchoiceFetcher: &chainMock.ChainService{ForkChoiceStore: fc},
 		}
 		err = server.validateEquivocation(blk.Block())
 		assert.ErrorContains(t, "already exists", err)
@@ -3665,7 +3665,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*eth.BeaconBlockContainer_Phase0Block).Phase0Block)
 		require.NoError(t, err)
 
-		mockChainFetcher := &mockChain.ChainService{
+		mockChainFetcher := &chainMock.ChainService{
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
@@ -3785,7 +3785,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*eth.BeaconBlockContainer_Phase0Block).Phase0Block)
 		require.NoError(t, err)
 
-		mockChainFetcher := &mockChain.ChainService{
+		mockChainFetcher := &chainMock.ChainService{
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
@@ -3820,7 +3820,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*eth.BeaconBlockContainer_Phase0Block).Phase0Block)
 		require.NoError(t, err)
 
-		mockChainFetcher := &mockChain.ChainService{
+		mockChainFetcher := &chainMock.ChainService{
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
@@ -3886,7 +3886,7 @@ func TestGetStateFork(t *testing.T) {
 	require.NoError(t, err)
 	db := testDB.SetupDB(t)
 
-	chainService := &mockChain.ChainService{}
+	chainService := &chainMock.ChainService{}
 	server := &Server{
 		Stater: &testutil.MockStater{
 			BeaconState: fakeState,
@@ -3920,7 +3920,7 @@ func TestGetStateFork(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		chainService = &mockChain.ChainService{Optimistic: true}
+		chainService = &chainMock.ChainService{Optimistic: true}
 		server = &Server{
 			Stater: &testutil.MockStater{
 				BeaconState: fakeState,
@@ -3953,7 +3953,7 @@ func TestGetStateFork(t *testing.T) {
 
 		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
-		chainService = &mockChain.ChainService{
+		chainService = &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
 				headerRoot: true,
 			},
@@ -3984,7 +3984,7 @@ func TestGetCommittees(t *testing.T) {
 	st, _ = util.DeterministicGenesisState(t, 8192)
 	epoch := slots.ToEpoch(st.Slot())
 
-	chainService := &mockChain.ChainService{}
+	chainService := &chainMock.ChainService{}
 	s := &Server{
 		Stater: &testutil.MockStater{
 			BeaconState: st,
@@ -4118,7 +4118,7 @@ func TestGetCommittees(t *testing.T) {
 		util.SaveBlock(t, ctx, db, blk)
 		require.NoError(t, db.SaveGenesisBlockRoot(ctx, root))
 
-		chainService = &mockChain.ChainService{Optimistic: true}
+		chainService = &chainMock.ChainService{Optimistic: true}
 		s = &Server{
 			Stater: &testutil.MockStater{
 				BeaconState: st,
@@ -4151,7 +4151,7 @@ func TestGetCommittees(t *testing.T) {
 
 		headerRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
-		chainService = &mockChain.ChainService{
+		chainService = &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
 				headerRoot: true,
 			},
@@ -4253,7 +4253,7 @@ func TestGetBlockHeaders(t *testing.T) {
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
 		require.NoError(t, st.SetSlot(30))
-		mockChainFetcher := &mockChain.ChainService{
+		mockChainFetcher := &chainMock.ChainService{
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
@@ -4339,7 +4339,7 @@ func TestGetBlockHeaders(t *testing.T) {
 	t.Run("execution optimistic", func(t *testing.T) {
 		wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*eth.BeaconBlockContainer_Phase0Block).Phase0Block)
 		require.NoError(t, err)
-		mockChainFetcher := &mockChain.ChainService{
+		mockChainFetcher := &chainMock.ChainService{
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
@@ -4385,7 +4385,7 @@ func TestGetBlockHeaders(t *testing.T) {
 		require.NoError(t, err)
 		child2Root, err := child2.Block.HashTreeRoot()
 		require.NoError(t, err)
-		mockChainFetcher := &mockChain.ChainService{
+		mockChainFetcher := &chainMock.ChainService{
 			DB:                  beaconDB,
 			Block:               wsb,
 			Root:                headBlock.BlockRoot,
@@ -4469,7 +4469,7 @@ func TestServer_GetBlockHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
-	mockChainService := &mockChain.ChainService{
+	mockChainService := &chainMock.ChainService{
 		FinalizedRoots: map[[32]byte]bool{},
 	}
 	s := &Server{
@@ -4513,7 +4513,7 @@ func TestServer_GetBlockHeader(t *testing.T) {
 	t.Run("execution optimistic", func(t *testing.T) {
 		r, err := sb.Block().HashTreeRoot()
 		require.NoError(t, err)
-		mockChainService := &mockChain.ChainService{
+		mockChainService := &chainMock.ChainService{
 			OptimisticRoots: map[[32]byte]bool{r: true},
 			FinalizedRoots:  map[[32]byte]bool{},
 		}
@@ -4540,7 +4540,7 @@ func TestServer_GetBlockHeader(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("true", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
+			mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
 			s := &Server{
 				ChainInfoFetcher:      mockChainService,
 				OptimisticModeFetcher: mockChainService,
@@ -4560,7 +4560,7 @@ func TestServer_GetBlockHeader(t *testing.T) {
 			assert.Equal(t, true, resp.Finalized)
 		})
 		t.Run("false", func(t *testing.T) {
-			mockChainService := &mockChain.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
+			mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
 			s := &Server{
 				ChainInfoFetcher:      mockChainService,
 				OptimisticModeFetcher: mockChainService,
@@ -4608,7 +4608,7 @@ func TestGetFinalityCheckpoints(t *testing.T) {
 		return fakeState, nil
 	}
 
-	chainService := &mockChain.ChainService{}
+	chainService := &chainMock.ChainService{}
 	s := &Server{
 		Stater: &testutil.MockStater{
 			BeaconState:       fakeState,
@@ -4663,7 +4663,7 @@ func TestGetFinalityCheckpoints(t *testing.T) {
 		assert.StringContains(t, "State not found", e.Message)
 	})
 	t.Run("execution optimistic", func(t *testing.T) {
-		chainService := &mockChain.ChainService{Optimistic: true}
+		chainService := &chainMock.ChainService{Optimistic: true}
 		s := &Server{
 			Stater: &testutil.MockStater{
 				BeaconState: fakeState,
@@ -4687,7 +4687,7 @@ func TestGetFinalityCheckpoints(t *testing.T) {
 	t.Run("finalized", func(t *testing.T) {
 		headerRoot, err := fakeState.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
-		chainService := &mockChain.ChainService{
+		chainService := &chainMock.ChainService{
 			FinalizedRoots: map[[32]byte]bool{
 				headerRoot: true,
 			},
@@ -4723,7 +4723,7 @@ func TestGetGenesis(t *testing.T) {
 	validatorsRoot := [32]byte{1, 2, 3, 4, 5, 6}
 
 	t.Run("ok", func(t *testing.T) {
-		chainService := &mockChain.ChainService{
+		chainService := &chainMock.ChainService{
 			Genesis:        genesis,
 			ValidatorsRoot: validatorsRoot,
 		}
@@ -4747,7 +4747,7 @@ func TestGetGenesis(t *testing.T) {
 		assert.DeepEqual(t, hexutil.Encode([]byte("genesis")), resp.Data.GenesisForkVersion)
 	})
 	t.Run("no genesis time", func(t *testing.T) {
-		chainService := &mockChain.ChainService{
+		chainService := &chainMock.ChainService{
 			Genesis:        time.Time{},
 			ValidatorsRoot: validatorsRoot,
 		}
@@ -4768,7 +4768,7 @@ func TestGetGenesis(t *testing.T) {
 		assert.StringContains(t, "Chain genesis info is not yet known", e.Message)
 	})
 	t.Run("no genesis validators root", func(t *testing.T) {
-		chainService := &mockChain.ChainService{
+		chainService := &chainMock.ChainService{
 			Genesis:        genesis,
 			ValidatorsRoot: [32]byte{},
 		}
@@ -4862,7 +4862,7 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 
 	server := &Server{
 		Broadcaster:         &mockp2p.MockBroadcaster{},
-		FinalizationFetcher: &mockChain.ChainService{NotFinalized: true},
+		FinalizationFetcher: &chainMock.ChainService{NotFinalized: true},
 	}
 
 	blk, err := blocks.NewSignedBeaconBlock(b.Block)
@@ -4870,7 +4870,7 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsDoNotContain(t, hook, "Broadcasted blob sidecar for already seen block")
 
-	server.FinalizationFetcher = &mockChain.ChainService{NotFinalized: false}
+	server.FinalizationFetcher = &chainMock.ChainService{NotFinalized: false}
 	require.NoError(t, server.broadcastSeenBlockSidecars(t.Context(), blk, b.GetDeneb().Blobs, b.GetDeneb().KzgProofs))
 	require.LogsContain(t, hook, "Broadcasted blob sidecar for already seen block")
 }
@@ -5212,7 +5212,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 	}
 	require.NoError(t, st.SetPendingConsolidations(cs))
 
-	chainService := &mockChain.ChainService{
+	chainService := &chainMock.ChainService{
 		Optimistic:     false,
 		FinalizedRoots: map[[32]byte]bool{},
 	}
@@ -5334,7 +5334,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 		require.Equal(t, "state_id is required in URL params", errResp.Message)
 	})
 	t.Run("optimistic node", func(t *testing.T) {
-		optimisticChainService := &mockChain.ChainService{
+		optimisticChainService := &chainMock.ChainService{
 			Optimistic:     true,
 			FinalizedRoots: map[[32]byte]bool{},
 		}
@@ -5361,7 +5361,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
 
-		finalizedChainService := &mockChain.ChainService{
+		finalizedChainService := &chainMock.ChainService{
 			Optimistic:     false,
 			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
 		}
@@ -5405,7 +5405,7 @@ func TestGetPendingDeposits(t *testing.T) {
 	}
 	require.NoError(t, st.SetPendingDeposits(deps))
 
-	chainService := &mockChain.ChainService{
+	chainService := &chainMock.ChainService{
 		Optimistic:     false,
 		FinalizedRoots: map[[32]byte]bool{},
 	}
@@ -5527,7 +5527,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		require.Equal(t, "state_id is required in URL params", errResp.Message)
 	})
 	t.Run("optimistic node", func(t *testing.T) {
-		optimisticChainService := &mockChain.ChainService{
+		optimisticChainService := &chainMock.ChainService{
 			Optimistic:     true,
 			FinalizedRoots: map[[32]byte]bool{},
 		}
@@ -5554,7 +5554,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
 
-		finalizedChainService := &mockChain.ChainService{
+		finalizedChainService := &chainMock.ChainService{
 			Optimistic:     false,
 			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
 		}
@@ -5592,7 +5592,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 	withdrawals, err := st.PendingPartialWithdrawals()
 	require.NoError(t, err)
 
-	chainService := &mockChain.ChainService{
+	chainService := &chainMock.ChainService{
 		Optimistic:     false,
 		FinalizedRoots: map[[32]byte]bool{},
 	}
@@ -5717,7 +5717,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 	})
 
 	t.Run("optimistic node", func(t *testing.T) {
-		optimisticChainService := &mockChain.ChainService{
+		optimisticChainService := &chainMock.ChainService{
 			Optimistic:     true,
 			FinalizedRoots: map[[32]byte]bool{},
 		}
@@ -5744,7 +5744,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
 
-		finalizedChainService := &mockChain.ChainService{
+		finalizedChainService := &chainMock.ChainService{
 			Optimistic:     false,
 			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
 		}
@@ -5780,7 +5780,7 @@ func TestGetProposerLookahead(t *testing.T) {
 
 	require.NoError(t, st.SetProposerLookahead(lookahead))
 
-	chainService := &mockChain.ChainService{
+	chainService := &chainMock.ChainService{
 		Optimistic:     false,
 		FinalizedRoots: map[[32]byte]bool{},
 	}
@@ -5904,7 +5904,7 @@ func TestGetProposerLookahead(t *testing.T) {
 	})
 
 	t.Run("optimistic node", func(t *testing.T) {
-		optimisticChainService := &mockChain.ChainService{
+		optimisticChainService := &chainMock.ChainService{
 			Optimistic:     true,
 			FinalizedRoots: map[[32]byte]bool{},
 		}
@@ -5931,7 +5931,7 @@ func TestGetProposerLookahead(t *testing.T) {
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
 		require.NoError(t, err)
 
-		finalizedChainService := &mockChain.ChainService{
+		finalizedChainService := &chainMock.ChainService{
 			Optimistic:     false,
 			FinalizedRoots: map[[32]byte]bool{blockRoot: true},
 		}
