@@ -214,34 +214,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
 			}
 
-			// Compute sidecars we need to broadcast and receive.
-			unseenSidecars := make([]blocks.VerifiedRODataColumn, 0, len(constructedSidecars))
-			unseenIndices := make(map[uint64]bool, len(constructedSidecars))
-			for _, sidecar := range constructedSidecars {
-				// Skip already seen data column sidecars.
-				if s.hasSeenDataColumnIndex(source.Slot(), source.ProposerIndex(), sidecar.Index) {
-					continue
-				}
-
-				if columnIndicesToSample[sidecar.Index] {
-					unseenSidecars = append(unseenSidecars, sidecar)
-				}
-			}
-
-			// Broadcast all the data column sidecars we reconstructed but did not see via gossip.
-			for _, sidecar := range unseenSidecars {
-				// Compute the subnet for this data column sidecar.
-				subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-
-				// Broadcast the data column sidecar.
-				if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, sidecar); err != nil {
-					log.WithError(err).Error("Broadcast data column")
-				}
-			}
-
-			// Receive data column sidecars.
-			if err := s.receiveDataColumnSidecars(ctx, unseenSidecars); err != nil {
-				return nil, errors.Wrap(err, "receive data column sidecars")
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), source.ProposerIndex(), columnIndicesToSample, constructedSidecars)
+			if err != nil {
+				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
 
 			if len(unseenIndices) > 0 {
@@ -263,6 +238,52 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	}
 
 	return nil
+}
+
+// broadcastAndReceiveUnseenDataColumnSidecars broadcasts and receives unseen data column sidecars.
+func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
+	ctx context.Context,
+	slot primitives.Slot,
+	proposerIndex primitives.ValidatorIndex,
+	neededIndices map[uint64]bool,
+	sidecars []blocks.VerifiedRODataColumn,
+) (map[uint64]bool, error) {
+	// Compute sidecars we need to broadcast and receive.
+	unseenSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	unseenIndices := make(map[uint64]bool, len(sidecars))
+	for _, sidecar := range sidecars {
+		// Skip data column sidecars we don't need.
+		if !neededIndices[sidecar.Index] {
+			continue
+		}
+
+		// Skip already seen data column sidecars.
+		if s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
+			continue
+		}
+
+		unseenSidecars = append(unseenSidecars, sidecar)
+		unseenIndices[sidecar.Index] = true
+	}
+
+	// Broadcast all the data column sidecars we reconstructed but did not see via gossip.
+	for _, sidecar := range unseenSidecars {
+		// Compute the subnet for this data column sidecar.
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+
+		// Broadcast the data column sidecar.
+		if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, sidecar); err != nil {
+			// Don't return on error on broadcast failure, just log it.
+			log.WithError(err).Error("Broadcast data column")
+		}
+	}
+
+	// Receive data column sidecars.
+	if err := s.receiveDataColumnSidecars(ctx, unseenSidecars); err != nil {
+		return nil, errors.Wrap(err, "receive data column sidecars")
+	}
+
+	return unseenIndices, nil
 }
 
 // haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
