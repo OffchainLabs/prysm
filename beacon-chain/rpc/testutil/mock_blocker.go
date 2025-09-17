@@ -14,12 +14,12 @@ import (
 
 // MockBlocker is a fake implementation of lookup.Blocker.
 type MockBlocker struct {
-	BlockToReturn           interfaces.ReadOnlySignedBeaconBlock
-	ErrorToReturn           error
-	SlotBlockMap            map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock
-	RootBlockMap            map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
-	DataColumnsFunc         func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
-	DataColumnsToReturn     []blocks.VerifiedRODataColumn
+	BlockToReturn            interfaces.ReadOnlySignedBeaconBlock
+	ErrorToReturn            error
+	SlotBlockMap             map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock
+	RootBlockMap             map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	DataColumnsFunc          func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
+	DataColumnsToReturn      []blocks.VerifiedRODataColumn
 	DataColumnsErrorToReturn *core.RpcError
 }
 
