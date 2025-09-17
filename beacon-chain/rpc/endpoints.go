@@ -33,6 +33,9 @@ type endpoint struct {
 	middleware []middleware.Middleware
 	handler    http.HandlerFunc
 	methods    []string
+
+	errorMiddlewareIncompatible bool
+	timeoutHandlerIncompatible  bool
 }
 
 // responseWriter is the wrapper to http Response writer.
@@ -63,9 +66,9 @@ func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 	)
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// SSE errors are handled separately to avoid interference with the streaming
-		// mechanism and ensure accurate error tracking.
-		if e.template == "/eth/v1/events" {
+		// Some handlers (i.e. SSE) handle errors separately to avoid interference with
+		// the streaming mechanism and ensure accurate error tracking.
+		if e.errorMiddlewareIncompatible {
 			handler.ServeHTTP(w, r)
 			return
 		}
@@ -1164,6 +1167,12 @@ func (s *Service) eventsEndpoints() []endpoint {
 			},
 			handler: server.StreamEvents,
 			methods: []string{http.MethodGet},
+
+			// events endpoint handles errors separately
+			errorMiddlewareIncompatible: true,
+			// http.TimeoutHandler causes this handler to behave incorrectly, since it uses SetDeadline
+			// on the underlying net/http response
+			timeoutHandlerIncompatible: true,
 		},
 	}
 }

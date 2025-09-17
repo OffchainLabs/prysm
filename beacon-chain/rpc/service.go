@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
@@ -125,6 +126,7 @@ type Config struct {
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 	LCStore                   *lightClient.Store
+	ApiTimeout                time.Duration
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -301,9 +303,13 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	endpoints := s.endpoints(s.cfg.EnableDebugRPCEndpoints, blocker, stater, rewardFetcher, validatorServer, coreService, ch)
 	for _, e := range endpoints {
 		for i := range e.methods {
+			handler := e.handlerWithMiddleware()
+			if s.cfg.ApiTimeout > 0 && !e.timeoutHandlerIncompatible {
+				handler = http.TimeoutHandler(handler, s.cfg.ApiTimeout, "request timed out").ServeHTTP
+			}
 			s.cfg.Router.HandleFunc(
 				fmt.Sprintf("%s %s", e.methods[i], e.template),
-				e.handlerWithMiddleware(),
+				handler,
 			)
 		}
 	}
