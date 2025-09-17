@@ -63,17 +63,14 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	t.Run("invalid proof", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
 		sidecars[0].Column[0][0]++ // It is OK to overflow
-		roDataColumnSidecars := generateRODataColumnSidecars(t, sidecars)
 
-		err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.ErrorIs(t, err, peerdas.ErrInvalidKZGProof)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
-		roDataColumnSidecars := generateRODataColumnSidecars(t, sidecars)
-
-		err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.NoError(t, err)
 	})
 }
@@ -256,9 +253,8 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_SameCommitments_NoBatch(b *testin
 	for i := range int64(b.N) {
 		// Generate new random sidecars to ensure the KZG backend does not cache anything.
 		sidecars := generateRandomSidecars(b, i, blobCount)
-		roDataColumnSidecars := generateRODataColumnSidecars(b, sidecars)
 
-		for _, sidecar := range roDataColumnSidecars {
+		for _, sidecar := range sidecars {
 			sidecars := []blocks.RODataColumn{sidecar}
 			b.StartTimer()
 			err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
@@ -282,7 +278,7 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 			b.ResetTimer()
 
 			for j := range int64(b.N) {
-				allSidecars := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns)
+				allSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
 				for k := int64(0); k < numberOfColumns; k += columnsCount {
 					// Use different seeds to generate different blobs/commitments
 					seed := int64(b.N*i) + numberOfColumns*j + blobCount*k
@@ -292,10 +288,8 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 					allSidecars = append(allSidecars, sidecars[k:k+columnsCount]...)
 				}
 
-				roDataColumnSidecars := generateRODataColumnSidecars(b, allSidecars)
-
 				b.StartTimer()
-				err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
+				err := peerdas.VerifyDataColumnsSidecarKZGProofs(allSidecars)
 				b.StopTimer()
 				require.NoError(b, err)
 			}
@@ -323,8 +317,7 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing
 		for j := range int64(batchCount) {
 			// Use different seeds to generate different blobs/commitments
 			sidecars := generateRandomSidecars(b, int64(batchCount)*i+j*blobCount, blobCount)
-			roDataColumnSidecars := generateRODataColumnSidecars(b, sidecars[:columnsCount])
-			allSidecars = append(allSidecars, roDataColumnSidecars)
+			allSidecars = append(allSidecars, sidecars)
 		}
 
 		for _, sidecars := range allSidecars {
@@ -358,7 +351,7 @@ func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgPr
 	return roSidecar
 }
 
-func generateRandomSidecars(t testing.TB, seed, blobCount int64) []*ethpb.DataColumnSidecar {
+func generateRandomSidecars(t testing.TB, seed, blobCount int64) []blocks.RODataColumn {
 	dbBlock := util.NewBeaconBlockDeneb()
 
 	commitments := make([][]byte, 0, blobCount)
@@ -379,20 +372,10 @@ func generateRandomSidecars(t testing.TB, seed, blobCount int64) []*ethpb.DataCo
 	require.NoError(t, err)
 
 	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	sidecars, err := peerdas.DataColumnSidecars(sBlock, cellsAndProofs)
+	rob, err := blocks.NewROBlock(sBlock)
+	require.NoError(t, err)
+	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	return sidecars
-}
-
-func generateRODataColumnSidecars(t testing.TB, sidecars []*ethpb.DataColumnSidecar) []blocks.RODataColumn {
-	roDataColumnSidecars := make([]blocks.RODataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		roCol, err := blocks.NewRODataColumn(sidecar)
-		require.NoError(t, err)
-
-		roDataColumnSidecars = append(roDataColumnSidecars, roCol)
-	}
-
-	return roDataColumnSidecars
 }

@@ -129,17 +129,6 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	block.Block.Body.BlobKzgCommitments = commitments
 
-	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
-	require.NoError(t, err)
-
-	inclusion := make([][][]byte, blobCount)
-	for i := range blobCount {
-		proof, err := blocks.MerkleProofKZGCommitment(body, i)
-		require.NoError(t, err)
-
-		inclusion[i] = proof
-	}
-
 	if generator.sign {
 		epoch := slots.ToEpoch(block.Block.Slot)
 		fork := params.ForkFromConfig(params.BeaconConfig(), epoch)
@@ -159,15 +148,13 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
 
-	sidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+	rob, err := blocks.NewROBlockWithRoot(signedBeaconBlock, root)
+	require.NoError(t, err)
+	roSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
-	roSidecars := make([]blocks.RODataColumn, 0, len(sidecars))
-	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, root)
-		require.NoError(t, err)
-
+	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
+	for _, roSidecar := range roSidecars {
 		roVerifiedSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
 
 		roSidecars = append(roSidecars, roSidecar)

@@ -6,10 +6,10 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 )
 
 type Option func(s *Service) error
@@ -226,6 +227,14 @@ func WithLightClientStore(lcs *lightClient.Store) Option {
 func WithBatchVerifierLimit(limit int) Option {
 	return func(s *Service) error {
 		s.cfg.batchVerifierLimit = limit
+		return nil
+	}
+}
+
+// WithReconstructionRandGen sets the random generator for reconstruction delays.
+func WithReconstructionRandGen(rg *rand.Rand) Option {
+	return func(s *Service) error {
+		s.reconstructionRandGen = rg
 		return nil
 	}
 }

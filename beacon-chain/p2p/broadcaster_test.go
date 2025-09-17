@@ -711,13 +711,8 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 	topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
 
-	roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
-	sidecar := roSidecars[0].DataColumnSidecar
-
-	// Attempt to broadcast nil object should fail.
-	var emptyRoot [fieldparams.RootLength]byte
-	err = service.BroadcastDataColumnSidecar(emptyRoot, subnet, nil)
-	require.ErrorContains(t, "attempted to broadcast nil", err)
+	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
+	verifiedRoSidecar := verifiedRoSidecars[0]
 
 	// Subscribe to the topic.
 	sub, err := p2.SubscribeToTopic(topic)
@@ -727,7 +722,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Broadcast to peers and wait.
-	err = service.BroadcastDataColumnSidecar(emptyRoot, subnet, sidecar)
+	err = service.BroadcastDataColumnSidecar(subnet, verifiedRoSidecar)
 	require.NoError(t, err)
 
 	// Receive the message.
@@ -739,5 +734,5 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	var result ethpb.DataColumnSidecar
 	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
-	require.DeepEqual(t, &result, sidecar)
+	require.DeepEqual(t, &result, verifiedRoSidecar)
 }

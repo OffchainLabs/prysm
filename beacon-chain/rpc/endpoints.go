@@ -102,7 +102,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
 
 	if features.Get().EnableLightClient {
-		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
+		endpoints = append(endpoints, s.lightClientEndpoints()...)
 	}
 
 	if enableDebug {
@@ -194,6 +194,8 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	const namespace = "blob"
 	return []endpoint{
 		{
+			// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} in favor of /eth/v1/beacon/blobs/{block_id}
+			// the endpoint will continue to work post fulu for some time however
 			template: "/eth/v1/beacon/blob_sidecars/{block_id}",
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
@@ -201,6 +203,16 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.Blobs,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/blobs/{block_id}",
+			name:     namespace + ".GetBlobs",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBlobs,
 			methods: []string{http.MethodGet},
 		},
 	}
@@ -1034,9 +1046,10 @@ func (*Service) configEndpoints() []endpoint {
 	}
 }
 
-func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
+func (s *Service) lightClientEndpoints() []endpoint {
 	server := &lightclient.Server{
-		LCStore: s.cfg.LCStore,
+		LCStore:     s.cfg.LCStore,
+		HeadFetcher: s.cfg.HeadFetcher,
 	}
 
 	const namespace = "lightclient"

@@ -17,10 +17,10 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
@@ -50,6 +50,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
+	"golang.org/x/sync/singleflight"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -170,8 +171,9 @@ type Service struct {
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
+	columnSidecarsExecSingleFlight   singleflight.Group
+	reconstructionSingleFlight       singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
-	reconstructionLock               sync.Mutex
 	reconstructionRandGen            *rand.Rand
 	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	ctxMap                           ContextByteVersions

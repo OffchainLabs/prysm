@@ -178,7 +178,8 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	s.pubsub = gs
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
-		PeerLimit: int(s.cfg.MaxPeers),
+		PeerLimit:             int(s.cfg.MaxPeers),
+		IPColocationWhitelist: s.cfg.IPColocationWhitelist,
 		ScorerParams: &scorers.Config{
 			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
 				Threshold:     maxBadResponses,

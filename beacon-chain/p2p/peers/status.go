@@ -25,6 +25,7 @@ package peers
 import (
 	"context"
 	"math"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -87,11 +88,12 @@ const (
 
 // Status is the structure holding the peer status information.
 type Status struct {
-	ctx       context.Context
-	scorers   *scorers.Service
-	store     *peerdata.Store
-	ipTracker map[string]uint64
-	rand      *rand.Rand
+	ctx                   context.Context
+	scorers               *scorers.Service
+	store                 *peerdata.Store
+	ipTracker             map[string]uint64
+	rand                  *rand.Rand
+	ipColocationWhitelist []*net.IPNet
 }
 
 // StatusConfig represents peer status service params.
@@ -100,6 +102,8 @@ type StatusConfig struct {
 	PeerLimit int
 	// ScorerParams holds peer scorer configuration params.
 	ScorerParams *scorers.Config
+	// IPColocationWhitelist contains CIDR ranges that are exempt from IP colocation limits.
+	IPColocationWhitelist []*net.IPNet
 }
 
 // NewStatus creates a new status entity.
@@ -107,11 +111,13 @@ func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 	store := peerdata.NewStore(ctx, &peerdata.StoreConfig{
 		MaxPeers: maxLimitBuffer + config.PeerLimit,
 	})
+
 	return &Status{
-		ctx:       ctx,
-		store:     store,
-		scorers:   scorers.NewService(ctx, store, config.ScorerParams),
-		ipTracker: map[string]uint64{},
+		ctx:                   ctx,
+		store:                 store,
+		scorers:               scorers.NewService(ctx, store, config.ScorerParams),
+		ipTracker:             map[string]uint64{},
+		ipColocationWhitelist: config.IPColocationWhitelist,
 		// Random generator used to calculate dial backoff period.
 		// It is ok to use deterministic generator, no need for true entropy.
 		rand: rand.NewDeterministicGenerator(),
@@ -1046,6 +1052,13 @@ func (p *Status) isfromBadIP(pid peer.ID) error {
 
 	if val, ok := p.ipTracker[ip.String()]; ok {
 		if val > CollocationLimit {
+			// Check if IP is in the whitelist
+			for _, ipNet := range p.ipColocationWhitelist {
+				if ipNet.Contains(ip) {
+					// IP is whitelisted, skip colocation limit check
+					return nil
+				}
+			}
 			return errors.Errorf(
 				"colocation limit exceeded: got %d - limit %d for peer %v with IP %v",
 				val, CollocationLimit, pid, ip.String(),
