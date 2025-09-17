@@ -525,7 +525,6 @@ func TestGetForkChoice(t *testing.T) {
 }
 
 func TestDataColumnSidecars(t *testing.T) {
-
 	t.Run("Fulu fork not configured", func(t *testing.T) {
 		// Save the original config
 		originalConfig := params.BeaconConfig()
@@ -537,8 +536,17 @@ func TestDataColumnSidecars(t *testing.T) {
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{}
+		
+		// Create a mock blocker to avoid nil pointer
+		mockBlocker := &mockBlocker{
+			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return nil, &core.RpcError{Err: errors.New("Fulu fork not configured"), Reason: core.BadRequest}
+			},
+		}
+		
 		s := &Server{
 			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
@@ -547,7 +555,7 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		s.DataColumnSidecars(writer, request)
 		require.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, writer.Body.String(), "Fulu fork not configured")
+		assert.StringContains(t, "Data columns are not supported - Fulu fork not configured", writer.Body.String())
 	})
 
 	t.Run("Before Fulu fork", func(t *testing.T) {
@@ -563,8 +571,17 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService := &blockchainmock.ChainService{}
 		currentSlot := primitives.Slot(0) // Current slot 0 (epoch 0, before epoch 100)
 		chainService.Slot = &currentSlot
+		
+		// Create a mock blocker to avoid nil pointer
+		mockBlocker := &mockBlocker{
+			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return nil, &core.RpcError{Err: errors.New("before Fulu fork"), Reason: core.BadRequest}
+			},
+		}
+		
 		s := &Server{
 			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
@@ -573,11 +590,11 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		s.DataColumnSidecars(writer, request)
 		require.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, writer.Body.String(), "before Fulu fork")
+		assert.StringContains(t, "Data columns are not supported - before Fulu fork", writer.Body.String())
 	})
 
 	t.Run("Invalid indices", func(t *testing.T) {
-		// Save the original config  
+		// Save the original config
 		originalConfig := params.BeaconConfig()
 		defer func() { params.OverrideBeaconConfig(originalConfig) }()
 
@@ -589,8 +606,17 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService := &blockchainmock.ChainService{}
 		currentSlot := primitives.Slot(0) // Current slot 0 (epoch 0, at fork)
 		chainService.Slot = &currentSlot
+		
+		// Create a mock blocker to avoid nil pointer
+		mockBlocker := &mockBlocker{
+			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return nil, &core.RpcError{Err: errors.New("invalid index"), Reason: core.BadRequest}
+			},
+		}
+		
 		s := &Server{
 			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
 		}
 
 		// Test with invalid index (out of range)
@@ -600,7 +626,7 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		s.DataColumnSidecars(writer, request)
 		require.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, writer.Body.String(), "invalid")
+		assert.StringContains(t, "requested data column indices [9999] are invalid", writer.Body.String())
 	})
 
 	t.Run("Block not found", func(t *testing.T) {
@@ -616,7 +642,7 @@ func TestDataColumnSidecars(t *testing.T) {
 		chainService := &blockchainmock.ChainService{}
 		currentSlot := primitives.Slot(0) // Current slot 0
 		chainService.Slot = &currentSlot
-		
+
 		// Create a mock blocker that returns block not found
 		mockBlocker := &mockBlocker{
 			dataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
@@ -754,7 +780,7 @@ func TestParseDataColumnIndices(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			u, err := url.Parse("http://example.com/test")
 			require.NoError(t, err)
-			
+
 			q := u.Query()
 			for key, values := range tt.queryParams {
 				for _, value := range values {
@@ -764,7 +790,7 @@ func TestParseDataColumnIndices(t *testing.T) {
 			u.RawQuery = q.Encode()
 
 			result, err := parseDataColumnIndices(u)
-			
+
 			if tt.expectError {
 				assert.NotNil(t, err)
 			} else {
@@ -779,9 +805,9 @@ func TestBuildDataColumnSidecarsSSZResponse(t *testing.T) {
 	t.Run("empty data columns", func(t *testing.T) {
 		result, err := buildDataColumnSidecarsSSZResponse([]blocks.VerifiedRODataColumn{})
 		require.NoError(t, err)
-		require.Equal(t, []byte{}, result)
+		require.DeepEqual(t, []byte{}, result)
 	})
-	
+
 	t.Run("get SSZ size", func(t *testing.T) {
 		size := getDataColumnSidecarSSZSize()
 		assert.Equal(t, true, size > 0)

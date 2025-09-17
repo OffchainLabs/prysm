@@ -17,8 +17,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -30,9 +32,9 @@ const (
 
 // getDataColumnSidecarSSZSize returns the SSZ size of a data column sidecar
 func getDataColumnSidecarSSZSize() int {
-	// Create a zero value to get the size
-	var zeroValue blocks.VerifiedRODataColumn
-	return zeroValue.SizeSSZ()
+	// Create a zero value DataColumnSidecar to get the size
+	var sidecar ethpb.DataColumnSidecar
+	return sidecar.SizeSSZ()
 }
 
 // GetBeaconStateV2 returns the full beacon state for a given state ID.
@@ -235,6 +237,14 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 	if fuluForkEpoch == math.MaxUint64 {
 		httputil.HandleError(w, "Data columns are not supported - Fulu fork not configured", http.StatusBadRequest)
+		return
+	}
+	
+	// Check if we're before Fulu fork based on current slot
+	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
+	currentEpoch := primitives.Epoch(currentSlot / params.BeaconConfig().SlotsPerEpoch)
+	if currentEpoch < fuluForkEpoch {
+		httputil.HandleError(w, "Data columns are not supported - before Fulu fork", http.StatusBadRequest)
 		return
 	}
 
