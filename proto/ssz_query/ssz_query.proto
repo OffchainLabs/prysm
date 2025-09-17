@@ -89,7 +89,14 @@ message VariableTestContainer {
   // Variable nested container - test nested container access within variable container
   VariableNestedContainer nested = 5;
 
+  // Bitlist type - test bitlist serialization
+  bytes bitlist_field = 6 [
+    (ethereum.eth.ext.ssz_max) = "2048",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+  ];
+
   // Fixed-size trailing field - test fixed field after variable fields
   // Verifies correct offset calculation after variable-size fields
-  bytes trailing_field = 6 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 = 48
+  bytes trailing_field = 7 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 + 4 = 52
 }

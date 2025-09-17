@@ -133,26 +133,26 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "field_list_uint64",
 				path:           ".field_list_uint64",
-				expectedOffset: 104, // First part of variable-sized type.
+				expectedOffset: 108, // First part of variable-sized type.
 				expectedLength: 40,  // 5 elements * uint64 (8 bytes each)
 			},
 			{
 				name:           "field_list_container",
 				path:           ".field_list_container",
-				expectedOffset: 144, // Second part of variable-sized type.
+				expectedOffset: 148, // Second part of variable-sized type.
 				expectedLength: 120, // 3 elements * FixedNestedContainer (40 bytes each)
 			},
 			{
 				name:           "field_list_bytes32",
 				path:           ".field_list_bytes32",
-				expectedOffset: 264,
+				expectedOffset: 268,
 				expectedLength: 96, // 3 elements * 32 bytes each
 			},
 			// Nested paths
 			{
 				name:           "nested",
 				path:           ".nested",
-				expectedOffset: 360,
+				expectedOffset: 364,
 				// Calculated with:
 				// - Value1: 8 bytes
 				// - field_list_uint64 offset: 4 bytes
@@ -162,20 +162,27 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "nested.value1",
 				path:           ".nested.value1",
-				expectedOffset: 360,
+				expectedOffset: 364,
 				expectedLength: 8,
 			},
 			{
 				name:           "nested.field_list_uint64",
 				path:           ".nested.field_list_uint64",
-				expectedOffset: 372,
+				expectedOffset: 376,
 				expectedLength: 40,
+			},
+			// Bitlist field
+			{
+				name:           "bitlist_field",
+				path:           ".bitlist_field",
+				expectedOffset: 416,
+				expectedLength: 33, // 32 bytes + 1 byte for length delimiter
 			},
 			// Fixed trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 48, // After leading_field + 4 offset pointers
+				expectedOffset: 52, // After leading_field + 5 offset pointers
 				expectedLength: 56,
 			},
 		}
@@ -363,6 +370,13 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 		}
 	}
 
+	bitlistField := bitfield.NewBitlist(256)
+	bitlistField.SetBitAt(0, true)
+	bitlistField.SetBitAt(10, true)
+	bitlistField.SetBitAt(50, true)
+	bitlistField.SetBitAt(100, true)
+	bitlistField.SetBitAt(255, true)
+
 	return &sszquerypb.VariableTestContainer{
 		// Fixed leading field
 		LeadingField: leadingField,
@@ -381,6 +395,9 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 			Value1:          42,
 			FieldListUint64: []uint64{1, 2, 3, 4, 5},
 		},
+
+		// Bitlist field
+		BitlistField: bitlistField,
 
 		// Fixed trailing field
 		TrailingField: trailingField,
@@ -427,6 +444,11 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".nested.field_list_uint64",
 				Expected: testContainer.Nested.FieldListUint64,
+			},
+			// Bitlist field
+			{
+				Path:     ".bitlist_field",
+				Expected: testContainer.BitlistField,
 			},
 			// Fixed trailing field
 			{
