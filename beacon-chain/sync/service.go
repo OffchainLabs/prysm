@@ -172,8 +172,8 @@ type Service struct {
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
 	columnSidecarsExecSingleFlight   singleflight.Group
+	reconstructionSingleFlight       singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
-	reconstructionLock               sync.Mutex
 	reconstructionRandGen            *rand.Rand
 	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	ctxMap                           ContextByteVersions
