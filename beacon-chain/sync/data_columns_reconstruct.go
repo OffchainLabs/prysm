@@ -116,12 +116,9 @@ func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
 	storedDataColumns := s.cfg.dataColumnStorage.Summary(root)
 	storedColumnsCount := storedDataColumns.Count()
 
-	// Do not reconstruct if we don't have enough columns or if we already have all columns.
-	if storedColumnsCount < peerdas.MinimumColumnCountToReconstruct() || storedColumnsCount == numberOfColumns {
-		return false
-	}
-
-	return true
+	// Reconstruct only if we have at least the minimum number of columns to reconstruct, but not all the columns.
+	// (If we have not enough columns, reconstruction is impossible. If we have all the columns, reconstruction is unnecessary.)
+	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != numberOfColumns
 }
 
 // computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.
