@@ -58,17 +58,17 @@ type ForkChoiceNodeExtraData struct {
 }
 
 type GetDebugDataColumnSidecarsResponse struct {
-	Version             string                `json:"version"`
-	ExecutionOptimistic bool                  `json:"execution_optimistic"`
-	Finalized           bool                  `json:"finalized"`
-	Data                []*DataColumnSidecar  `json:"data"`
+	Version             string               `json:"version"`
+	ExecutionOptimistic bool                 `json:"execution_optimistic"`
+	Finalized           bool                 `json:"finalized"`
+	Data                []*DataColumnSidecar `json:"data"`
 }
 
 type DataColumnSidecar struct {
-	Index                        string                       `json:"index"`
-	Column                       []string                     `json:"column"`
-	KzgCommitments               []string                     `json:"kzg_commitments"`
-	KzgProofs                    []string                     `json:"kzg_proofs"`
-	SignedBeaconBlockHeader      *SignedBeaconBlockHeader     `json:"signed_block_header"`
-	KzgCommitmentsInclusionProof []string                     `json:"kzg_commitments_inclusion_proof"`
+	Index                        string                   `json:"index"`
+	Column                       []string                 `json:"column"`
+	KzgCommitments               []string                 `json:"kzg_commitments"`
+	KzgProofs                    []string                 `json:"kzg_proofs"`
+	SignedBeaconBlockHeader      *SignedBeaconBlockHeader `json:"signed_block_header"`
+	KzgCommitmentsInclusionProof []string                 `json:"kzg_commitments_inclusion_proof"`
 }
