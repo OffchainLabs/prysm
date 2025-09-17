@@ -67,6 +67,25 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 		}
 
 		return nil
+
+	// In Bitlist case, we have to set the actual length of the bitlist.
+	case Bitlist:
+		bitlistInfo, err := sszInfo.BitlistInfo()
+		if err != nil {
+			return fmt.Errorf("could not get bitlist info: %w", err)
+		}
+
+		if bitlistInfo == nil {
+			return errors.New("bitlistInfo is nil")
+		}
+
+		val := reflect.ValueOf(value)
+		if err := bitlistInfo.SetLengthFromBytes(val.Bytes()); err != nil {
+			return fmt.Errorf("could not set bitlist length from bytes: %w", err)
+		}
+
+		return nil
+
 	// In Container case, we need to recursively populate variable-sized fields.
 	case Container:
 		containerInfo, err := sszInfo.ContainerInfo()
@@ -194,6 +213,10 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get list limit: %w", err)
 		}
 
+		if sszDimension.isBitfield {
+			return analyzeBitlistType(typ, limit)
+		}
+
 		return analyzeListType(typ, elementInfo, limit)
 	}
 
@@ -259,6 +282,21 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, is
 		vectorInfo: &vectorInfo{
 			length:  length,
 			element: elementInfo,
+		},
+	}, nil
+}
+
+// analyzeBitlistType creates SSZ info for Bitlist type with given limit.
+func analyzeBitlistType(typ reflect.Type, limit uint64) (*sszInfo, error) {
+	return &sszInfo{
+		sszType: Bitlist,
+		typ:     typ,
+
+		fixedSize:  offsetBytes,
+		isVariable: true,
+
+		bitlistInfo: &bitlistInfo{
+			limit: limit,
 		},
 	}, nil
 }
