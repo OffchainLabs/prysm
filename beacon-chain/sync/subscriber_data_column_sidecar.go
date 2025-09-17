@@ -11,11 +11,14 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
 // dataColumnSubscriber is the subscriber function for data column sidecars.
 func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
+	var wg errgroup.Group
+
 	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
 	if !ok {
 		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
@@ -25,12 +28,24 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return errors.Wrap(err, "receive data column sidecar")
 	}
 
-	if err := s.reconstructSaveBroadcastDataColumnSidecars(ctx, sidecar); err != nil {
-		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
-	}
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return errors.Wrap(err, "process data column sidecars from reconstruction")
+		}
 
-	if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
-		return errors.Wrap(err, "process data column sidecars from execution")
+		return nil
+	})
+
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
+			return errors.Wrap(err, "process data column sidecars from execution")
+		}
+
+		return nil
+	})
+
+	if err := wg.Wait(); err != nil {
+		return err
 	}
 
 	return nil
