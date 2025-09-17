@@ -19,7 +19,7 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	prysmSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
+	bcsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -174,6 +174,7 @@ func TestService_InitStartStop(t *testing.T) {
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
 			})
+			s.toggler = bcsync.NewServiceToggler()
 			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
 			time.Sleep(500 * time.Millisecond)
 			assert.NotNil(t, s)
@@ -218,6 +219,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			genesisChan:  make(chan time.Time),
 		}
 		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil)
+		s.toggler = bcsync.NewServiceToggler()
 		return s, cs
 	}
 
@@ -318,11 +320,13 @@ func TestService_markSynced(t *testing.T) {
 		StateNotifier:       mc.StateNotifier(),
 		InitialSyncComplete: make(chan struct{}),
 	})
+	s.toggler = bcsync.NewServiceToggler()
 	require.NotNil(t, s)
 	assert.Equal(t, false, s.chainStarted.IsSet())
 	assert.Equal(t, false, s.synced.IsSet())
 	assert.Equal(t, true, s.Syncing())
 	assert.NoError(t, s.Status())
+	require.NoError(t, s.beginSync())
 	s.chainStarted.Set()
 	assert.ErrorContains(t, "syncing", s.Status())
 
@@ -398,12 +402,14 @@ func TestService_Resync(t *testing.T) {
 				mc = tt.chainService()
 			}
 			s := NewService(ctx, &Config{
-				DB:            beaconDB,
-				P2P:           p,
-				Chain:         mc,
-				StateNotifier: mc.StateNotifier(),
-				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
+				DB:                  beaconDB,
+				P2P:                 p,
+				Chain:               mc,
+				StateNotifier:       mc.StateNotifier(),
+				BlobStorage:         filesystem.NewEphemeralBlobStorage(t),
+				InitialSyncComplete: make(chan struct{}),
 			})
+			s.toggler = bcsync.NewServiceToggler()
 			assert.NotNil(t, s)
 			s.genesisTime = mc.Genesis
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
@@ -793,7 +799,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		// Create a block with blob commitments and sidecars
 		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		ctxMap, err := prysmSync.ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+		ctxMap, err := bcsync.ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 		require.NoError(t, err)
 
 		service := &Service{
@@ -816,7 +822,7 @@ func TestFetchOriginColumns(t *testing.T) {
 			assert.DeepEqual(t, expectedRequests[attempt], actualRequest)
 
 			for _, column := range toRespondByAttempt[attempt] {
-				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar)
+				err = bcsync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar)
 				assert.NoError(t, err)
 			}
 
