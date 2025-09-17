@@ -29,15 +29,8 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
 	}
 
-	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
-	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
-			return nil, err
-		}
-
-		return nil, nil
-	}); err != nil {
-		return errors.Wrap(err, "process data column sidecars from execution from sidecar")
+	if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
+		return errors.Wrap(err, "process data column sidecars from execution")
 	}
 
 	return nil
