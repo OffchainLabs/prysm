@@ -52,7 +52,7 @@ func (l *bitlistInfo) SetLengthFromBytes(rawBytes []byte) error {
 }
 
 // Size returns the size in bytes for this bitlist.
-// Note that adding 1 byte for the delimiter bit.
+// Note that adding 1 bit for the delimiter bit.
 // Reference: https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#bitlistn-progressivebitlist
 func (l *bitlistInfo) Size() uint64 {
 	if l == nil {
