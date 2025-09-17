@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query/testutil"
 	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestCalculateOffsetAndLength(t *testing.T) {
@@ -80,11 +81,24 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				expectedOffset: 277,
 				expectedLength: 160, // 5 * 32 bytes
 			},
+			// Bitvector fields
+			{
+				name:           "bitvector64_field",
+				path:           ".bitvector64_field",
+				expectedOffset: 437,
+				expectedLength: 8,
+			},
+			{
+				name:           "bitvector512_field",
+				path:           ".bitvector512_field",
+				expectedOffset: 445,
+				expectedLength: 64,
+			},
 			// Trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 437,
+				expectedOffset: 509,
 				expectedLength: 56,
 			},
 		}
@@ -208,6 +222,16 @@ func createFixedTestContainer() *sszquerypb.FixedTestContainer {
 		nestedValue2[i] = byte(i + 56)
 	}
 
+	bitvector64 := bitfield.NewBitvector64()
+	for i := range bitvector64 {
+		bitvector64[i] = 0x42
+	}
+
+	bitvector512 := bitfield.NewBitvector512()
+	for i := range bitvector512 {
+		bitvector512[i] = 0x24
+	}
+
 	trailingField := make([]byte, 56)
 	for i := range trailingField {
 		trailingField[i] = byte(i + 88)
@@ -239,6 +263,10 @@ func createFixedTestContainer() *sszquerypb.FixedTestContainer {
 			make([]byte, 32),
 			make([]byte, 32),
 		},
+
+		// Bitvector fields
+		Bitvector64Field:  bitvector64,
+		Bitvector512Field: bitvector512,
 
 		// Trailing field
 		TrailingField: trailingField,
@@ -293,6 +321,15 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".two_dimension_bytes_field",
 				Expected: testContainer.TwoDimensionBytesField,
+			},
+			// Bitvector fields
+			{
+				Path:     ".bitvector64_field",
+				Expected: testContainer.Bitvector64Field,
+			},
+			{
+				Path:     ".bitvector512_field",
+				Expected: testContainer.Bitvector512Field,
 			},
 			// Trailing field
 			{

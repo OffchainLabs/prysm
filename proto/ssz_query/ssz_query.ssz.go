@@ -131,7 +131,21 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, f.TwoDimensionBytesField[ii]...)
 	}
 
-	// Field (7) 'TrailingField'
+	// Field (7) 'Bitvector64Field'
+	if size := len(f.Bitvector64Field); size != 8 {
+		err = ssz.ErrBytesLengthFn("--.Bitvector64Field", size, 8)
+		return
+	}
+	dst = append(dst, f.Bitvector64Field...)
+
+	// Field (8) 'Bitvector512Field'
+	if size := len(f.Bitvector512Field); size != 64 {
+		err = ssz.ErrBytesLengthFn("--.Bitvector512Field", size, 64)
+		return
+	}
+	dst = append(dst, f.Bitvector512Field...)
+
+	// Field (9) 'TrailingField'
 	if size := len(f.TrailingField); size != 56 {
 		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
@@ -145,7 +159,7 @@ func (f *FixedTestContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 493 {
+	if size != 565 {
 		return ssz.ErrSize
 	}
 
@@ -190,18 +204,30 @@ func (f *FixedTestContainer) UnmarshalSSZ(buf []byte) error {
 		f.TwoDimensionBytesField[ii] = append(f.TwoDimensionBytesField[ii], buf[277:437][ii*32:(ii+1)*32]...)
 	}
 
-	// Field (7) 'TrailingField'
-	if cap(f.TrailingField) == 0 {
-		f.TrailingField = make([]byte, 0, len(buf[437:493]))
+	// Field (7) 'Bitvector64Field'
+	if cap(f.Bitvector64Field) == 0 {
+		f.Bitvector64Field = make([]byte, 0, len(buf[437:445]))
 	}
-	f.TrailingField = append(f.TrailingField, buf[437:493]...)
+	f.Bitvector64Field = append(f.Bitvector64Field, buf[437:445]...)
+
+	// Field (8) 'Bitvector512Field'
+	if cap(f.Bitvector512Field) == 0 {
+		f.Bitvector512Field = make([]byte, 0, len(buf[445:509]))
+	}
+	f.Bitvector512Field = append(f.Bitvector512Field, buf[445:509]...)
+
+	// Field (9) 'TrailingField'
+	if cap(f.TrailingField) == 0 {
+		f.TrailingField = make([]byte, 0, len(buf[509:565]))
+	}
+	f.TrailingField = append(f.TrailingField, buf[509:565]...)
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the FixedTestContainer object
 func (f *FixedTestContainer) SizeSSZ() (size int) {
-	size = 493
+	size = 565
 	return
 }
 
@@ -265,7 +291,21 @@ func (f *FixedTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		hh.Merkleize(subIndx)
 	}
 
-	// Field (7) 'TrailingField'
+	// Field (7) 'Bitvector64Field'
+	if size := len(f.Bitvector64Field); size != 8 {
+		err = ssz.ErrBytesLengthFn("--.Bitvector64Field", size, 8)
+		return
+	}
+	hh.PutBytes(f.Bitvector64Field)
+
+	// Field (8) 'Bitvector512Field'
+	if size := len(f.Bitvector512Field); size != 64 {
+		err = ssz.ErrBytesLengthFn("--.Bitvector512Field", size, 64)
+		return
+	}
+	hh.PutBytes(f.Bitvector512Field)
+
+	// Field (9) 'TrailingField'
 	if size := len(f.TrailingField); size != 56 {
 		err = ssz.ErrBytesLengthFn("--.TrailingField", size, 56)
 		return
