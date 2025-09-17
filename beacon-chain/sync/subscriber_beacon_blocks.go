@@ -178,7 +178,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		}
 
 		// Retrieve the indices of sidecars we should sample.
-		indicesToSample, err := s.columnIndicesToSample()
+		columnIndicesToSample, err := s.columnIndicesToSample()
 		if err != nil {
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
@@ -188,18 +188,18 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
 			// Exit early if all sidecars to sample have been seen.
-			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), indicesToSample) {
+			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), columnIndicesToSample) {
 				return nil, nil
 			}
 
-			// Try to reconstruct data column sidecars from the execution client.
-			sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			// Try to reconstruct data column constructedSidecars from the execution client.
+			constructedSidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
 			}
 
 			// No sidecars are retrieved from the EL, retry later
-			sidecarCount := uint64(len(sidecars))
+			sidecarCount := uint64(len(constructedSidecars))
 			if sidecarCount == 0 {
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
@@ -214,40 +214,45 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
 			}
 
-			// Broadcast and save data column sidecars to custody but not yet received.
-			reconstructedIndices := make(map[uint64]bool, len(indicesToSample))
-			for index := range indicesToSample {
-				if index >= sidecarCount {
-					return nil, errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
-				}
-
-				// This sidecar has been received in the meantime, skip it.
-				if s.hasSeenDataColumnIndex(source.Slot(), source.ProposerIndex(), index) {
+			// Compute sidecars we need to broadcast and receive.
+			unseenSidecars := make([]blocks.VerifiedRODataColumn, 0, len(constructedSidecars))
+			unseenIndices := make(map[uint64]bool, len(constructedSidecars))
+			for _, sidecar := range constructedSidecars {
+				// Skip already seen data column sidecars.
+				if s.hasSeenDataColumnIndex(source.Slot(), source.ProposerIndex(), sidecar.Index) {
 					continue
 				}
 
-				sidecar := sidecars[index]
-
-				if err := s.cfg.p2p.BroadcastDataColumnSidecar(sidecar.Index, sidecar); err != nil {
-					return nil, errors.Wrap(err, "broadcast data column sidecar")
+				if columnIndicesToSample[sidecar.Index] {
+					unseenSidecars = append(unseenSidecars, sidecar)
 				}
-
-				if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
-					return nil, errors.Wrap(err, "receive data column sidecar")
-				}
-
-				reconstructedIndices[index] = true
 			}
 
-			if len(reconstructedIndices) > 0 {
+			// Broadcast all the data column sidecars we reconstructed but did not see via gossip.
+			for _, sidecar := range unseenSidecars {
+				// Compute the subnet for this data column sidecar.
+				subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+
+				// Broadcast the data column sidecar.
+				if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, sidecar); err != nil {
+					log.WithError(err).Error("Broadcast data column")
+				}
+			}
+
+			// Receive data column sidecars.
+			if err := s.receiveDataColumnSidecars(ctx, unseenSidecars); err != nil {
+				return nil, errors.Wrap(err, "receive data column sidecars")
+			}
+
+			if len(unseenIndices) > 0 {
 				log.WithFields(logrus.Fields{
 					"root":          fmt.Sprintf("%#x", source.Root()),
 					"slot":          source.Slot(),
 					"proposerIndex": source.ProposerIndex(),
 					"iteration":     iteration,
 					"type":          source.Type(),
-					"count":         len(reconstructedIndices),
-					"indices":       sortedSliceFromMap(reconstructedIndices),
+					"count":         len(unseenIndices),
+					"indices":       sortedSliceFromMap(unseenIndices),
 				}).Debug("Constructed data column sidecars from the execution client")
 			}
 
