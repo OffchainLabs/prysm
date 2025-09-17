@@ -303,7 +303,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 			}
 			
 			// Create detailed error message
-			errMsg := fmt.Sprintf("versioned hash(es) not found in block: requested %d hashes, found %d. Missing: %v",
+			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d hashes, found %d, missing: %v)",
 				len(cfg.VersionedHashes), len(indices), missingHashes)
 			
 			return nil, &core.RpcError{Err: errors.New(errMsg), Reason: core.NotFound}
