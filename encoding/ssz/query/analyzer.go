@@ -227,7 +227,11 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get vector length: %w", err)
 		}
 
-		return analyzeVectorType(typ, elementInfo, length, sszDimension.isBitfield)
+		if sszDimension.isBitfield {
+			return analyzeBitvectorType(typ, length)
+		}
+
+		return analyzeVectorType(typ, elementInfo, length)
 	}
 
 	// Parsing ssz tag doesn't provide enough information to determine the collection type,
@@ -256,7 +260,7 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 }
 
 // analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
-func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*sszInfo, error) {
 	if elementInfo == nil {
 		return nil, errors.New("element info is required for Vector/Bitvector")
 	}
@@ -264,16 +268,11 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, is
 	// Validate the given length.
 	// https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#illegal-types
 	if length == 0 {
-		return nil, fmt.Errorf("vector/bitvector length must be greater than 0, got %d", length)
-	}
-
-	sszType := Vector
-	if isBitfield {
-		sszType = Bitvector
+		return nil, fmt.Errorf("vector length must be greater than 0, got %d", length)
 	}
 
 	return &sszInfo{
-		sszType: sszType,
+		sszType: Vector,
 		typ:     typ,
 
 		fixedSize:  length * elementInfo.Size(),
@@ -297,6 +296,22 @@ func analyzeBitlistType(typ reflect.Type, limit uint64) (*sszInfo, error) {
 
 		bitlistInfo: &bitlistInfo{
 			limit: limit,
+		},
+	}, nil
+}
+
+// analyzeBitvectorType creates SSZ info for Bitvector type with given length.
+func analyzeBitvectorType(typ reflect.Type, length uint64) (*sszInfo, error) {
+	return &sszInfo{
+		sszType: Bitvector,
+		typ:     typ,
+
+		// Size in bytes
+		fixedSize:  length,
+		isVariable: false,
+
+		bitvectorInfo: &bitvectorInfo{
+			length: length * 8, // length in bits
 		},
 	}, nil
 }

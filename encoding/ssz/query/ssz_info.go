@@ -30,6 +30,9 @@ type sszInfo struct {
 
 	// For Bitlist types.
 	bitlistInfo *bitlistInfo
+
+	// For Bitvector types.
+	bitvectorInfo *bitvectorInfo
 }
 
 func (info *sszInfo) FixedSize() uint64 {
@@ -103,6 +106,18 @@ func (info *sszInfo) ListInfo() (*listInfo, error) {
 	return info.listInfo, nil
 }
 
+func (info *sszInfo) VectorInfo() (*vectorInfo, error) {
+	if info == nil {
+		return nil, errors.New("sszInfo is nil")
+	}
+
+	if info.sszType != Vector {
+		return nil, fmt.Errorf("sszInfo is not a Vector type, got %s", info.sszType)
+	}
+
+	return info.vectorInfo, nil
+}
+
 func (info *sszInfo) BitlistInfo() (*bitlistInfo, error) {
 	if info == nil {
 		return nil, errors.New("sszInfo is nil")
@@ -115,16 +130,16 @@ func (info *sszInfo) BitlistInfo() (*bitlistInfo, error) {
 	return info.bitlistInfo, nil
 }
 
-func (info *sszInfo) VectorInfo() (*vectorInfo, error) {
+func (info *sszInfo) BitvectorInfo() (*bitvectorInfo, error) {
 	if info == nil {
 		return nil, errors.New("sszInfo is nil")
 	}
 
-	if info.sszType != Vector {
-		return nil, fmt.Errorf("sszInfo is not a Vector type, got %s", info.sszType)
+	if info.sszType != Bitvector {
+		return nil, fmt.Errorf("sszInfo is not a Bitvector type, got %s", info.sszType)
 	}
 
-	return info.vectorInfo, nil
+	return info.bitvectorInfo, nil
 }
 
 // String implements the Stringer interface for sszInfo.
@@ -148,8 +163,7 @@ func (info *sszInfo) String() string {
 	case Bitlist:
 		return fmt.Sprintf("Bitlist[%d]", info.bitlistInfo.limit)
 	case Bitvector:
-		// Bitvector is a vector of bits, so length is in bytes * 8
-		return fmt.Sprintf("Bitvector[%d]", info.vectorInfo.length*8)
+		return fmt.Sprintf("Bitvector[%d]", info.bitvectorInfo.length)
 	default:
 		return info.typ.Name()
 	}
