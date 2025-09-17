@@ -279,15 +279,13 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if v > version.Altair {
 			// set ttd to zero so EL goes post-merge immediately
 			gen.Config.TerminalTotalDifficulty = big.NewInt(0)
-			// EIP-1559 requires baseFeePerGas to be specified in genesis for post-merge blocks
 			if gen.BaseFee == nil {
-				return nil, errors.New("baseFeePerGas is required in genesis.json for post-merge networks (EIP-1559)")
+				return nil, errors.New("baseFeePerGas must be set in genesis.json for Post-Merge networks (after Altair)")
 			}
 		} else {
-			// For pre-merge networks (Phase0, Altair), provide default baseFeePerGas if missing
 			if gen.BaseFee == nil {
 				gen.BaseFee = big.NewInt(1000000000) // 1 Gwei default
-				log.WithField("baseFeePerGas", "1000000000").Warn("baseFeePerGas not specified in genesis.json, using default value of 1 Gwei")
+				log.WithField("baseFeePerGas", "1000000000").Warn("BaseFeePerGas not specified in genesis.json, using default value of 1 Gwei")
 			}
 		}
 	} else {
