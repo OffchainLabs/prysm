@@ -70,6 +70,7 @@ func Test_endpoints(t *testing.T) {
 
 	blobRoutes := map[string][]string{
 		"/eth/v1/beacon/blob_sidecars/{block_id}": {http.MethodGet},
+		"/eth/v1/beacon/blobs/{block_id}":         {http.MethodGet},
 	}
 
 	configRoutes := map[string][]string{
