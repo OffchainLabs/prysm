@@ -147,7 +147,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	versionedHashes := make([][]byte, len(versionedHashesStr))
 	if len(versionedHashesStr) > 0 {
 		for i, hashStr := range versionedHashesStr {
-			hash, ok := shared.ValidateHex(w, "versioned_hash", hashStr, 32)
+			hash, ok := shared.ValidateHex(w, fmt.Sprintf("versioned_hashes[%d]", i), hashStr, 32)
 			if !ok {
 				return
 			}
