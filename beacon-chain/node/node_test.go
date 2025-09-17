@@ -74,7 +74,9 @@ func TestNodeStart_Ok(t *testing.T) {
 	set := flag.NewFlagSet("test", 0)
 	set.String("datadir", tmp, "node data directory")
 	set.String("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A", "fee recipient")
+	set.Bool("enable-light-client", true, "enable light client")
 	require.NoError(t, set.Set("suggested-fee-recipient", "0x6e35733c5af9B61374A128e6F85f553aF09ff89A"))
+	require.NoError(t, set.Set("enable-light-client", "true"))
 
 	ctx, cancel := newCliContextWithCancel(&app, set)
 
@@ -88,6 +90,7 @@ func TestNodeStart_Ok(t *testing.T) {
 
 	node, err := New(ctx, cancel, options...)
 	require.NoError(t, err)
+	require.NotNil(t, node.lcStore)
 	node.services = &runtime.ServiceRegistry{}
 	go func() {
 		node.Start()
@@ -258,6 +261,49 @@ func TestCORS(t *testing.T) {
 			}
 			if !tc.expectAllow && rr.Header().Get("Access-Control-Allow-Origin") != "" {
 				t.Errorf("Expected Access-Control-Allow-Origin header to be empty for disallowed origin, got %v", rr.Header().Get("Access-Control-Allow-Origin"))
+			}
+		})
+	}
+}
+
+func TestParseIPNetStrings(t *testing.T) {
+	tests := []struct {
+		name      string
+		whitelist []string
+		wantCount int
+		wantError string
+	}{
+		{
+			name:      "empty whitelist",
+			whitelist: []string{},
+			wantCount: 0,
+		},
+		{
+			name:      "single IP whitelist",
+			whitelist: []string{"192.168.1.1/32"},
+			wantCount: 1,
+		},
+		{
+			name:      "multiple IPs whitelist",
+			whitelist: []string{"192.168.1.0/24", "10.0.0.0/8", "34.42.19.170/32"},
+			wantCount: 3,
+		},
+		{
+			name:      "invalid CIDR returns error",
+			whitelist: []string{"192.168.1.0/24", "invalid-cidr", "10.0.0.0/8"},
+			wantCount: 0,
+			wantError: "invalid CIDR address",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseIPNetStrings(tt.whitelist)
+			assert.Equal(t, tt.wantCount, len(result))
+			if len(tt.wantError) == 0 {
+				assert.Equal(t, nil, err)
+			} else {
+				assert.ErrorContains(t, tt.wantError, err)
 			}
 		})
 	}

@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
@@ -237,14 +236,14 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginColumns(roBlock, delay); err != nil {
+		if err := s.fetchOriginDataColumnSidecars(roBlock, delay); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
 	}
 
 	if blockVersion >= version.Deneb {
-		if err := s.fetchOriginBlobs(peers, roBlock); err != nil {
+		if err := s.fetchOriginBlobSidecars(peers, roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin blobs")
 		}
 	}
@@ -356,7 +355,7 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	return req, nil
 }
 
-func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
+func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) error {
 	r := rob.Root()
 
 	req, err := missingBlobRequest(rob, s.cfg.BlobStorage)
@@ -394,11 +393,12 @@ func (s *Service) fetchOriginBlobs(pids []peer.ID, rob blocks.ROBlock) error {
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration) error {
+func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay time.Duration) error {
 	const (
 		errorMessage     = "Failed to fetch origin data column sidecars"
 		warningIteration = 10
 	)
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	// Return early if the origin block has no blob commitments.
@@ -411,7 +411,7 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration
 		return nil
 	}
 
-	// Compute the columns to request.
+	// Compute the indices we need to custody.
 	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
@@ -423,8 +423,29 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration
 		return errors.Wrap(err, "fetch peer info")
 	}
 
-	// Fetch origin data column sidecars.
 	root := roBlock.Root()
+
+	log := log.WithFields(logrus.Fields{
+		"blockRoot":       fmt.Sprintf("%#x", roBlock.Root()),
+		"blobCount":       len(commitments),
+		"dataColumnCount": len(info.CustodyColumns),
+	})
+
+	// Check if some needed data column sidecars are missing.
+	stored := s.cfg.DataColumnStorage.Summary(root).Stored()
+	missing := make(map[uint64]bool, len(info.CustodyColumns))
+	for column := range info.CustodyColumns {
+		if !stored[column] {
+			missing[column] = true
+		}
+	}
+
+	if len(missing) == 0 {
+		// All needed data column sidecars are present, exit early.
+		log.Info("All needed origin data column sidecars are already present")
+
+		return nil
+	}
 
 	params := sync.DataColumnSidecarsParams{
 		Ctx:                     s.ctx,
@@ -436,46 +457,39 @@ func (s *Service) fetchOriginColumns(roBlock blocks.ROBlock, delay time.Duration
 		DownscorePeerOnRPCFault: true,
 	}
 
-	var verifiedRoDataColumnsByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn
 	for attempt := uint64(0); ; attempt++ {
-		verifiedRoDataColumnsByRoot, err = sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, info.CustodyColumns)
-		if err == nil {
-			break
+		// Retrieve missing data column sidecars.
+		verifiedRoSidecarsByRoot, missingIndicesByRoot, err := sync.FetchDataColumnSidecars(params, []blocks.ROBlock{roBlock}, missing)
+		if err != nil {
+			return errors.Wrap(err, "fetch data column sidecars")
 		}
 
-		log := log.WithError(err).WithFields(logrus.Fields{
-			"attempt": attempt,
-			"delay":   delay,
+		// Save retrieved data column sidecars.
+		if err := s.cfg.DataColumnStorage.Save(verifiedRoSidecarsByRoot[root]); err != nil {
+			return errors.Wrap(err, "save data column sidecars")
+		}
+
+		// Check if some needed data column sidecars are missing.
+		if len(missingIndicesByRoot) == 0 {
+			log.Info("Retrieved all needed origin data column sidecars")
+
+			return nil
+		}
+
+		// Some sidecars are still missing.
+		log := log.WithFields(logrus.Fields{
+			"attempt":        attempt,
+			"missingIndices": sortedSliceFromMap(missingIndicesByRoot[root]),
+			"delay":          delay,
 		})
 
-		if attempt%warningIteration == 0 && attempt > 0 {
-			log.Warning(errorMessage)
-			time.Sleep(delay)
-
-			continue
+		logFunc := log.Debug
+		if attempt > 0 && attempt%warningIteration == 0 {
+			logFunc = log.Warning
 		}
 
-		log.Debug(errorMessage)
-		time.Sleep(delay)
+		logFunc("Failed to fetch some origin data column sidecars, retrying later")
 	}
-
-	// Save origin data columns to disk.
-	verifiedRoDataColumnsSidecars, ok := verifiedRoDataColumnsByRoot[root]
-	if !ok {
-		return fmt.Errorf("cannot extract origins data column sidecars for block root %#x - should never happen", root)
-	}
-
-	if err := s.cfg.DataColumnStorage.Save(verifiedRoDataColumnsSidecars); err != nil {
-		return errors.Wrap(err, "save data column sidecars")
-	}
-
-	log.WithFields(logrus.Fields{
-		"blockRoot":   fmt.Sprintf("%#x", roBlock.Root()),
-		"blobCount":   len(commitments),
-		"columnCount": len(verifiedRoDataColumnsSidecars),
-	}).Info("Successfully downloaded data column sidecars for checkpoint sync block")
-
-	return nil
 }
 
 func shufflePeers(pids []peer.ID) {

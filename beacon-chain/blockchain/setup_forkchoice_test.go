@@ -124,5 +124,5 @@ func Test_setupForkchoiceTree_Head(t *testing.T) {
 	require.NotEqual(t, fRoot, root)
 	require.Equal(t, root, service.startupHeadRoot())
 	require.NoError(t, service.setupForkchoiceTree(st))
-	require.Equal(t, 2, service.cfg.ForkChoiceStore.NodeCount())
+	require.Equal(t, 3, service.cfg.ForkChoiceStore.NodeCount())
 }

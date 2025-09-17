@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
@@ -910,6 +911,55 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 	}
 }
 
+func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	topic := p2p.RPCBlocksByRangeTopicV1
+	protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+		p2p:   p1,
+		chain: &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}},
+	})
+	fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 640, 1*time.Second, false)
+
+	// Set up handler that returns blocks in wrong order (will trigger ErrInvalidFetchedData)
+	p2.BHost.SetStreamHandler(protocol, func(stream network.Stream) {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 163
+		tor := startup.NewClock(time.Now(), [32]byte{})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+
+		blk = util.NewBeaconBlock()
+		blk.Block.Slot = 162
+		wsb, err = blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+		assert.NoError(t, stream.Close())
+	})
+
+	// Verify the peer has no bad responses before the request
+	scoreBeforeRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+	require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
+	assert.Equal(t, -1, scoreBeforeRequest)
+
+	// Use fetchBlocksFromPeer which includes the downscoring logic
+	_, _, err = fetcher.fetchBlocksFromPeer(ctx, 100, 64, []peer.ID{p2.PeerID()})
+	assert.ErrorContains(t, errNoPeersAvailable.Error(), err)
+
+	// Verify the peer was downscored
+	scoreAfterRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, scoreAfterRequest)
+}
+
 func TestTimeToWait(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -1335,6 +1385,11 @@ func TestFetchSidecars(t *testing.T) {
 		nower := func() time.Time { return now }
 		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
 
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
 		// Define a Deneb block with blobs out of retention period.
 		denebBlock := util.NewBeaconBlockDeneb()
 		denebBlock.Block.Slot = 0 // Genesis slot, out of retention period.
@@ -1343,33 +1398,52 @@ func TestFetchSidecars(t *testing.T) {
 		roDebebBlock, err := blocks.NewROBlock(signedDenebBlock)
 		require.NoError(t, err)
 
-		// Define a Fulu block with blobs in the retention period.
-		fuluBlock := util.NewBeaconBlockFulu()
-		fuluBlock.Block.Slot = slotsPerEpoch                                                            // Within retention period.
-		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
-		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		// Define a Fulu block with blobs before the retention period.
+		fuluBlock1 := util.NewBeaconBlockFulu()
+		fuluBlock1.Block.Slot = slotsPerEpoch.Sub(1)                                                     // Before the retention period.
+		fuluBlock1.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock1, err := blocks.NewSignedBeaconBlock(fuluBlock1)
 		require.NoError(t, err)
-		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
-		require.NoError(t, err)
-
-		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
+		roFuluBlock1, err := blocks.NewROBlock(signedFuluBlock1)
 		require.NoError(t, err)
 
-		// Create and save data column sidecars for this fulu block in the database.
-		params := make([]util.DataColumnParam, 0, numberOfColumns)
+		bodyRootFulu1, err := fuluBlock1.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for fulu block 2 in the database.
+		paramsFulu1 := make([]util.DataColumnParam, 0, numberOfColumns)
 		for i := range numberOfColumns {
-			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]}
-			params = append(params, param)
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRootFulu1[:]}
+			paramsFulu1 = append(paramsFulu1, param)
 		}
-		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+		_, verifiedRoDataColumnSidecarsFulu1 := util.CreateTestVerifiedRoDataColumnSidecars(t, paramsFulu1)
 
-		// Create a data columns storage.
-		dir := t.TempDir()
-		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		// Save the data column sidecars for block fulu 1 to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu1)
 		require.NoError(t, err)
 
-		// Save the data column sidecars to the storage.
-		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+		// Define a Fulu block with blobs in the retention period.
+		fuluBlock2 := util.NewBeaconBlockFulu()
+		fuluBlock2.Block.Slot = slotsPerEpoch                                                            // Within retention period.
+		fuluBlock2.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock2, err := blocks.NewSignedBeaconBlock(fuluBlock2)
+		require.NoError(t, err)
+		roFuluBlock2, err := blocks.NewROBlock(signedFuluBlock2)
+		require.NoError(t, err)
+
+		bodyRootFulu2, err := fuluBlock2.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for fulu block 2 in the database.
+		paramsFulu2 := make([]util.DataColumnParam, 0, numberOfColumns)
+		for i := range numberOfColumns {
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRootFulu2[:]}
+			paramsFulu2 = append(paramsFulu2, param)
+		}
+		_, verifiedRoDataColumnSidecarsFulu2 := util.CreateTestVerifiedRoDataColumnSidecars(t, paramsFulu2)
+
+		// Save the data column sidecars for block fulu 2 to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu2)
 		require.NoError(t, err)
 
 		// Create a blocks fetcher.
@@ -1382,7 +1456,8 @@ func TestFetchSidecars(t *testing.T) {
 		// Fetch sidecars.
 		blocksWithSidecars := []blocks.BlockWithROSidecars{
 			{Block: roDebebBlock},
-			{Block: roFuluBlock},
+			{Block: roFuluBlock1},
+			{Block: roFuluBlock2},
 		}
 		pid, err := fetcher.fetchSidecars(ctx, "", nil, blocksWithSidecars)
 		require.NoError(t, err)
@@ -1392,12 +1467,15 @@ func TestFetchSidecars(t *testing.T) {
 		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
 		require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
 		require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
+		require.Equal(t, 0, len(blocksWithSidecars[1].Columns))
+		require.Equal(t, 0, len(blocksWithSidecars[2].Blobs))
 
 		// We don't check the content of the columns here. The extensive test is done
 		// in TestFetchDataColumnsSidecars.
-		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[1].Columns)))
+		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[2].Columns)))
 	})
 }
+
 func TestFirstFuluIndex(t *testing.T) {
 	bellatrix := util.NewBeaconBlockBellatrix()
 	signedBellatrix, err := blocks.NewSignedBeaconBlock(bellatrix)

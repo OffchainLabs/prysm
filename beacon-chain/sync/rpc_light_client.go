@@ -112,7 +112,15 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 	logger.Infof("LC: requesting updates by range (StartPeriod: %d, EndPeriod: %d)", r.StartPeriod, r.StartPeriod+r.Count-1)
 
-	updates, err := s.lcStore.LightClientUpdates(ctx, r.StartPeriod, endPeriod)
+	headBlock, err := s.cfg.chain.HeadBlock(ctx)
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+		tracing.AnnotateError(span, err)
+		logger.WithError(err).Error("Cannot retrieve head block")
+		return err
+	}
+
+	updates, err := s.lcStore.LightClientUpdates(ctx, r.StartPeriod, endPeriod, headBlock)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)

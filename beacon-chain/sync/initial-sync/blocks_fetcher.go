@@ -395,6 +395,25 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		return blobsPid, errors.Wrap(err, "custody info")
 	}
 
+	currentSlot := f.clock.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	for _, blockWithSidecars := range postFulu {
+		blockSlot := blockWithSidecars.Block.Block().Slot()
+		blockEpoch := slots.ToEpoch(blockSlot)
+
+		if params.WithinDAPeriod(blockEpoch, currentEpoch) {
+			roBlocks = append(roBlocks, blockWithSidecars.Block)
+		}
+	}
+
+	// Return early if there are no blocks that need data column sidecars.
+	if len(roBlocks) == 0 {
+		return blobsPid, nil
+	}
+
+	// Some blocks neesd data column sidecars, fetch them.
 	params := prysmsync.DataColumnSidecarsParams{
 		Ctx:         ctx,
 		Tor:         f.clock,
@@ -405,14 +424,17 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		NewVerifier: f.cv,
 	}
 
-	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
-	for _, block := range postFulu {
-		roBlocks = append(roBlocks, block.Block)
-	}
-
-	verifiedRoDataColumnsByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
+	verifiedRoDataColumnsByRoot, missingIndicesByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
 	if err != nil {
 		return "", errors.Wrap(err, "fetch data column sidecars")
+	}
+
+	if len(missingIndicesByRoot) > 0 {
+		prettyMissingIndicesByRoot := make(map[string][]uint64, len(missingIndicesByRoot))
+		for root, indices := range missingIndicesByRoot {
+			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = sortedSliceFromMap(indices)
+		}
+		return "", errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}
 
 	// Populate the response.
@@ -456,6 +478,9 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 				"count":     req.Count,
 				"step":      req.Step,
 			}).WithError(err).Debug("Could not request blocks by range from peer")
+			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+				f.downscorePeer(p, err)
+			}
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
@@ -874,6 +899,12 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
+}
+
+// downscorePeer increments the bad responses score for the peer and logs the event.
+func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
+	newScore := f.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
 // findFirstFuluIndex returns the index of the first block with a version >= Fulu.

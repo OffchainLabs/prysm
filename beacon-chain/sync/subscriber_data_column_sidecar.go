@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -23,12 +24,21 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return errors.Wrap(err, "receive data column sidecar")
 	}
 
-	slot := sidecar.Slot()
-	proposerIndex := sidecar.ProposerIndex()
-	root := sidecar.BlockRoot()
-
-	if err := s.reconstructSaveBroadcastDataColumnSidecars(ctx, slot, proposerIndex, root); err != nil {
+	if err := s.reconstructSaveBroadcastDataColumnSidecars(ctx, sidecar); err != nil {
 		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
+	}
+
+	source := peerdas.PopulateFromSidecar(sidecar)
+
+	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
+	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, source); err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	}); err != nil {
+		return errors.Wrap(err, "process data column sidecars from execution from sidecar")
 	}
 
 	return nil

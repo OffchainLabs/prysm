@@ -4,15 +4,10 @@ import (
 	"encoding/binary"
 	"math"
 	"slices"
-	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
@@ -20,12 +15,9 @@ import (
 
 var (
 	// Custom errors
-	ErrCustodyGroupTooLarge               = errors.New("custody group too large")
-	ErrCustodyGroupCountTooLarge          = errors.New("custody group count too large")
-	ErrSizeMismatch                       = errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
-	ErrNotEnoughDataColumnSidecars        = errors.New("not enough columns")
-	ErrDataColumnSidecarsNotSortedByIndex = errors.New("data column sidecars are not sorted by index")
-	errWrongComputedCustodyGroupCount     = errors.New("wrong computed custody group count, should never happen")
+	ErrCustodyGroupTooLarge           = errors.New("custody group too large")
+	ErrCustodyGroupCountTooLarge      = errors.New("custody group count too large")
+	errWrongComputedCustodyGroupCount = errors.New("wrong computed custody group count, should never happen")
 
 	// maxUint256 is the maximum value of an uint256.
 	maxUint256 = &uint256.Int{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
@@ -117,44 +109,6 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 	return columns, nil
 }
 
-// DataColumnSidecars computes the data column sidecars from the signed block, cells and cell proofs.
-// The returned value contains pointers to function parameters.
-// (If the caller alterates `cellsAndProofs` afterwards, the returned value will be modified as well.)
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_block
-func DataColumnSidecars(signedBlock interfaces.ReadOnlySignedBeaconBlock, cellsAndProofs []kzg.CellsAndProofs) ([]*ethpb.DataColumnSidecar, error) {
-	if signedBlock == nil || signedBlock.IsNil() || len(cellsAndProofs) == 0 {
-		return nil, nil
-	}
-
-	block := signedBlock.Block()
-	blockBody := block.Body()
-	blobKzgCommitments, err := blockBody.BlobKzgCommitments()
-	if err != nil {
-		return nil, errors.Wrap(err, "blob KZG commitments")
-	}
-
-	if len(blobKzgCommitments) != len(cellsAndProofs) {
-		return nil, ErrSizeMismatch
-	}
-
-	signedBlockHeader, err := signedBlock.Header()
-	if err != nil {
-		return nil, errors.Wrap(err, "signed block header")
-	}
-
-	kzgCommitmentsInclusionProof, err := blocks.MerkleProofKZGCommitments(blockBody)
-	if err != nil {
-		return nil, errors.Wrap(err, "merkle proof KZG commitments")
-	}
-
-	dataColumnSidecars, err := dataColumnsSidecars(signedBlockHeader, blobKzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
-	if err != nil {
-		return nil, errors.Wrap(err, "data column sidecars")
-	}
-
-	return dataColumnSidecars, nil
-}
-
 // ComputeCustodyGroupForColumn computes the custody group for a given column.
 // It is the reciprocal function of ComputeColumnsForCustodyGroup.
 func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
@@ -193,73 +147,4 @@ func CustodyColumns(custodyGroups []uint64) (map[uint64]bool, error) {
 	}
 
 	return columns, nil
-}
-
-// dataColumnsSidecars computes the data column sidecars from the signed block header, the blob KZG commiments,
-// the KZG commitment includion proofs and cells and cell proofs.
-// The returned value contains pointers to function parameters.
-// (If the caller alterates input parameters afterwards, the returned value will be modified as well.)
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars
-func dataColumnsSidecars(
-	signedBlockHeader *ethpb.SignedBeaconBlockHeader,
-	blobKzgCommitments [][]byte,
-	kzgCommitmentsInclusionProof [][]byte,
-	cellsAndProofs []kzg.CellsAndProofs,
-) ([]*ethpb.DataColumnSidecar, error) {
-	start := time.Now()
-	if len(blobKzgCommitments) != len(cellsAndProofs) {
-		return nil, ErrSizeMismatch
-	}
-
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	blobsCount := len(cellsAndProofs)
-	sidecars := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns)
-	for columnIndex := range numberOfColumns {
-		column := make([]kzg.Cell, 0, blobsCount)
-		kzgProofOfColumn := make([]kzg.Proof, 0, blobsCount)
-
-		for rowIndex := range blobsCount {
-			cellsForRow := cellsAndProofs[rowIndex].Cells
-			proofsForRow := cellsAndProofs[rowIndex].Proofs
-
-			// Validate that we have enough cells and proofs for this column index
-			if columnIndex >= uint64(len(cellsForRow)) {
-				return nil, errors.Errorf("column index %d exceeds cells length %d for blob %d", columnIndex, len(cellsForRow), rowIndex)
-			}
-			if columnIndex >= uint64(len(proofsForRow)) {
-				return nil, errors.Errorf("column index %d exceeds proofs length %d for blob %d", columnIndex, len(proofsForRow), rowIndex)
-			}
-
-			cell := cellsForRow[columnIndex]
-			column = append(column, cell)
-
-			kzgProof := proofsForRow[columnIndex]
-			kzgProofOfColumn = append(kzgProofOfColumn, kzgProof)
-		}
-
-		columnBytes := make([][]byte, 0, blobsCount)
-		for i := range column {
-			columnBytes = append(columnBytes, column[i][:])
-		}
-
-		kzgProofOfColumnBytes := make([][]byte, 0, blobsCount)
-		for _, kzgProof := range kzgProofOfColumn {
-			kzgProofOfColumnBytes = append(kzgProofOfColumnBytes, kzgProof[:])
-		}
-
-		sidecar := &ethpb.DataColumnSidecar{
-			Index:                        columnIndex,
-			Column:                       columnBytes,
-			KzgCommitments:               blobKzgCommitments,
-			KzgProofs:                    kzgProofOfColumnBytes,
-			SignedBlockHeader:            signedBlockHeader,
-			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
-		}
-
-		sidecars = append(sidecars, sidecar)
-	}
-
-	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
-	return sidecars, nil
 }
