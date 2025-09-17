@@ -192,7 +192,9 @@ func TestHandleDA(t *testing.T) {
 	require.NoError(t, err)
 
 	s, _ := minimalTestService(t)
-	elapsed, err := s.handleDA(t.Context(), signedBeaconBlock, [fieldparams.RootLength]byte{}, nil)
+	block, err := blocks.NewROBlockWithRoot(signedBeaconBlock, [32]byte{})
+	require.NoError(t, err)
+	elapsed, err := s.handleDA(t.Context(), nil, block)
 	require.NoError(t, err)
 	require.Equal(t, true, elapsed > 0, "Elapsed time should be greater than 0")
 }

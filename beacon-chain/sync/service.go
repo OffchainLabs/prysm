@@ -50,6 +50,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
+	"golang.org/x/sync/singleflight"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -170,6 +171,7 @@ type Service struct {
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
+	columnSidecarsExecSingleFlight   singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
 	reconstructionLock               sync.Mutex
 	reconstructionRandGen            *rand.Rand

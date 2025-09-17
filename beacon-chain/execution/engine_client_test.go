@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	mocks "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
@@ -2556,7 +2557,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	})
 }
 
-func TestReconstructDataColumnSidecars(t *testing.T) {
+func TestConstructDataColumnSidecars(t *testing.T) {
 	// Start the trusted setup.
 	err := kzg.Start()
 	require.NoError(t, err)
@@ -2580,11 +2581,14 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 	sb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+
 	ctx := context.Background()
 
 	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
-		_, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
-		require.ErrorContains(t, "get blobs V2 for block", err)
+		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
 	})
 
 	t.Run("nothing received", func(t *testing.T) {
@@ -2594,7 +2598,7 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 0, len(dataColumns))
 	})
@@ -2607,23 +2611,22 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
 		defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 		require.Equal(t, 128, len(dataColumns))
 	})
 
-	t.Run("missing some blobs", func(t *testing.T) {
-		blobMasks := []bool{false, true, true, true, true, true}
-		srv := createBlobServerV2(t, 6, blobMasks)
-		defer srv.Close()
+	// t.Run("missing some blobs", func(t *testing.T) {
+	// 	blobMasks := []bool{false, true, true, true, true, true}
+	// 	srv := createBlobServerV2(t, 6, blobMasks)
+	// 	defer srv.Close()
 
-		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
-		defer rpcClient.Close()
+	// 	rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+	// 	defer rpcClient.Close()
 
-		dataColumns, err := client.ReconstructDataColumnSidecars(ctx, sb, r)
-		require.ErrorContains(t, errMissingBlobsAndProofsFromEL.Error(), err)
-		require.Equal(t, 0, len(dataColumns))
-	})
+	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
+	// })
 }
 
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {

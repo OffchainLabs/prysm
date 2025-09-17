@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -37,7 +41,12 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return err
 	}
 
-	go s.processSidecarsFromExecution(ctx, signed)
+	roBlock, err := blocks.NewROBlockWithRoot(signed, root)
+	if err != nil {
+		return errors.Wrap(err, "new ro block with root")
+	}
+
+	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -61,103 +70,28 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 	return err
 }
 
-// processSidecarsFromExecution retrieves (if available) sidecars data from the execution client,
+// processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecution(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) {
-	if block.Version() >= version.Fulu {
-		s.processDataColumnSidecarsFromExecution(ctx, block)
-		return
-	}
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
+	if roBlock.Version() >= version.Fulu {
+		key := fmt.Sprintf("%#x", roBlock.Root())
+		if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+			if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
+				return nil, err
+			}
 
-	if block.Version() >= version.Deneb {
-		s.processBlobSidecarsFromExecution(ctx, block)
-		return
-	}
-}
-
-// processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
-// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, roSignedBlock interfaces.ReadOnlySignedBeaconBlock) {
-	block := roSignedBlock.Block()
-
-	log := log.WithFields(logrus.Fields{
-		"slot":          block.Slot(),
-		"proposerIndex": block.ProposerIndex(),
-	})
-
-	kzgCommitments, err := block.Body().BlobKzgCommitments()
-	if err != nil {
-		log.WithError(err).Error("Failed to read commitments from block")
-		return
-	}
-
-	if len(kzgCommitments) == 0 {
-		// No blobs to reconstruct.
-		return
-	}
-
-	blockRoot, err := block.HashTreeRoot()
-	if err != nil {
-		log.WithError(err).Error("Failed to calculate block root")
-		return
-	}
-
-	log = log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot))
-
-	if s.cfg.dataColumnStorage == nil {
-		log.Warning("Data column storage is not enabled, skip saving data column, but continue to reconstruct and broadcast data column")
-	}
-
-	// When this function is called, it's from the time when the block is received, so in almost all situations we need to get the data column from EL instead of the blob storage.
-	sidecars, err := s.cfg.executionReconstructor.ReconstructDataColumnSidecars(ctx, roSignedBlock, blockRoot)
-	if err != nil {
-		log.WithError(err).Debug("Cannot reconstruct data column sidecars after receiving the block")
-		return
-	}
-
-	// Return early if no blobs are retrieved from the EL.
-	if len(sidecars) == 0 {
-		return
-	}
-
-	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
-	if err != nil {
-		log.WithError(err).Error("Failed to get custody group count")
-		return
-	}
-
-	info, _, err := peerdas.Info(nodeID, custodyGroupCount)
-	if err != nil {
-		log.WithError(err).Error("Failed to get peer info")
-		return
-	}
-
-	blockSlot := block.Slot()
-	proposerIndex := block.ProposerIndex()
-
-	// Broadcast and save data column sidecars to custody but not yet received.
-	sidecarCount := uint64(len(sidecars))
-	for columnIndex := range info.CustodyColumns {
-		log := log.WithField("columnIndex", columnIndex)
-		if columnIndex >= sidecarCount {
-			log.Error("Column custody index out of range - should never happen")
-			continue
+			return nil, nil
+		}); err != nil {
+			log.WithError(err).Error("Failed to process data column sidecars from execution")
+			return
 		}
 
-		if s.hasSeenDataColumnIndex(blockSlot, proposerIndex, columnIndex) {
-			continue
-		}
+		return
+	}
 
-		sidecar := sidecars[columnIndex]
-
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(blockRoot, sidecar.Index, sidecar.DataColumnSidecar); err != nil {
-			log.WithError(err).Error("Failed to broadcast data column")
-		}
-
-		if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
-			log.WithError(err).Error("Failed to receive data column")
-		}
+	if roBlock.Version() >= version.Deneb {
+		s.processBlobSidecarsFromExecution(ctx, roBlock)
+		return
 	}
 }
 
@@ -228,6 +162,137 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 		fields["sinceSlotStartTime"] = s.cfg.clock.Now().Sub(startTime)
 		log.WithFields(fields).Debug("Processed blob sidecar from EL")
 	}
+}
+
+// processDataColumnSidecarsFromExecution retrieves (if available) data column sidecars data from the execution client,
+// builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
+func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
+	const delay = 250 * time.Millisecond
+	secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
+
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	commitments, err := source.Commitments()
+	if err != nil {
+		return errors.Wrap(err, "blob kzg commitments")
+	}
+
+	// Exit early if there are no commitments.
+	if len(commitments) == 0 {
+		return nil
+	}
+
+	// Retrieve the indices of sidecars we should sample.
+	indicesToSample, err := s.columnIndicesToSample()
+	if err != nil {
+		return errors.Wrap(err, "column indices to sample")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
+	defer cancel()
+
+	for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
+		// Exit early if all sidecars to sample have been seen.
+		if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), indicesToSample) {
+			return nil
+		}
+
+		// Try to reconstruct data column sidecars from the execution client.
+		sidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+		if err != nil {
+			return errors.Wrap(err, "reconstruct data column sidecars")
+		}
+
+		// No sidecars are retrieved from the EL, retry later
+		sidecarCount := uint64(len(sidecars))
+		if sidecarCount == 0 {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			time.Sleep(delay)
+			continue
+		}
+
+		// Boundary check.
+		if sidecarCount != numberOfColumns {
+			return errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+		}
+
+		// Broadcast and save data column sidecars to custody but not yet received.
+		reconstructedIndices := make(map[uint64]bool, len(indicesToSample))
+		for index := range indicesToSample {
+			if index >= sidecarCount {
+				return errors.Errorf("data column index %d >= sidecar count %d - should never happen", index, sidecarCount)
+			}
+
+			// This sidecar has been received in the meantime, skip it.
+			if s.hasSeenDataColumnIndex(source.Slot(), source.ProposerIndex(), index) {
+				continue
+			}
+
+			sidecar := sidecars[index]
+
+			if err := s.cfg.p2p.BroadcastDataColumnSidecar(sidecar.Index, sidecar); err != nil {
+				return errors.Wrap(err, "broadcast data column sidecar")
+			}
+
+			if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+				return errors.Wrap(err, "receive data column sidecar")
+			}
+
+			reconstructedIndices[index] = true
+		}
+
+		if len(reconstructedIndices) > 0 {
+			log.WithFields(logrus.Fields{
+				"root":          fmt.Sprintf("%#x", source.Root()),
+				"slot":          source.Slot(),
+				"proposerIndex": source.ProposerIndex(),
+				"iteration":     iteration,
+				"type":          source.Type(),
+				"count":         len(reconstructedIndices),
+				"indices":       sortedSliceFromMap(reconstructedIndices),
+			}).Debug("Constructed data column sidecars from the execution client")
+		}
+
+		return nil
+	}
+}
+
+// haveAllSidecarsBeenSeen checks if all sidecars for the given slot, proposer index, and data column indices have been seen.
+func (s *Service) haveAllSidecarsBeenSeen(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, indices map[uint64]bool) bool {
+	for index := range indices {
+		if !s.hasSeenDataColumnIndex(slot, proposerIndex, index) {
+			return false
+		}
+	}
+	return true
+}
+
+// columnIndicesToSample returns the data column indices we should sample for the node.
+func (s *Service) columnIndicesToSample() (map[uint64]bool, error) {
+	// Retrieve our node ID.
+	nodeID := s.cfg.p2p.NodeID()
+
+	// Get the custody group sampling size for the node.
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	if err != nil {
+		return nil, errors.Wrap(err, "custody group count")
+	}
+
+	// Compute the sampling size.
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	samplingSize := max(samplesPerSlot, custodyGroupCount)
+
+	// Get the peer info for the node.
+	peerInfo, _, err := peerdas.Info(nodeID, samplingSize)
+	if err != nil {
+		return nil, errors.Wrap(err, "peer info")
+	}
+
+	return peerInfo.CustodyColumns, nil
 }
 
 // WriteInvalidBlockToDisk as a block ssz. Writes to temp directory.
