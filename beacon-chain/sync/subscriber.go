@@ -812,7 +812,7 @@ func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
 	// In the event there is a fork the next epoch,
 	// we skip the check, as we subscribe subnets an
 	// epoch in advance.
-	if params.DigestChangesAfter(current) {
+	if params.NextNetworkScheduleEntry(current).Epoch == current+1 {
 		return true, nil
 	}
 	return params.ForkDigest(current) == digest, nil

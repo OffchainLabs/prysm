@@ -134,13 +134,15 @@ func (s *Service) peerInspector(peerMap map[peer.ID]*pubsub.PeerScoreSnapshot) {
 
 // pubsubOptions creates a list of options to configure our router with.
 func (s *Service) pubsubOptions() []pubsub.Option {
+	filt := pubsub.NewAllowlistSubscriptionFilter(s.allTopicStrings()...)
+	filt = pubsub.WrapLimitSubscriptionFilter(filt, pubsubSubscriptionRequestLimit)
 	psOpts := []pubsub.Option{
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageIdFn(func(pmsg *pubsubpb.Message) string {
 			return MsgID(s.genesisValidatorsRoot, pmsg)
 		}),
-		pubsub.WithSubscriptionFilter(s),
+		pubsub.WithSubscriptionFilter(filt),
 		pubsub.WithPeerOutboundQueueSize(int(s.cfg.QueueSize)),
 		pubsub.WithMaxMessageSize(int(MaxMessageSize())), // lint:ignore uintcast -- Max Message Size is a config value and is naturally bounded by networking limitations.
 		pubsub.WithValidateQueueSize(int(s.cfg.QueueSize)),

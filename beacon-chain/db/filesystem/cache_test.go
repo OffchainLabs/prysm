@@ -6,14 +6,17 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
 func TestSlotByRoot_Summary(t *testing.T) {
-	noneSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
-	allSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
-	firstSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
-	lastSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
-	oneSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
+	ee := params.BeaconConfig().ElectraForkEpoch
+	es := util.SlotAtEpoch(t, ee)
+	noneSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
+	allSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
+	firstSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
+	lastSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
+	oneSet := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
 	firstSet[0] = true
 	lastSet[len(lastSet)-1] = true
 	oneSet[1] = true
@@ -53,7 +56,7 @@ func TestSlotByRoot_Summary(t *testing.T) {
 	for _, c := range cases {
 		if c.expected != nil {
 			key := bytesutil.ToBytes32([]byte(c.name))
-			sc.cache[key] = BlobStorageSummary{epoch: 0, mask: c.expected}
+			sc.cache[key] = BlobStorageSummary{epoch: ee, mask: c.expected}
 		}
 	}
 	for _, c := range cases {
@@ -73,6 +76,7 @@ func TestSlotByRoot_Summary(t *testing.T) {
 }
 
 func TestAllAvailable(t *testing.T) {
+	es := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
 	idxUpTo := func(u int) []int {
 		r := make([]int, u)
 		for i := range r {
@@ -125,13 +129,13 @@ func TestAllAvailable(t *testing.T) {
 		},
 		{
 			name:  "out of bound is safe",
-			count: params.BeaconConfig().MaxBlobsPerBlock(0) + 1,
+			count: params.BeaconConfig().MaxBlobsPerBlock(es) + 1,
 			aa:    false,
 		},
 		{
 			name:   "max present",
-			count:  params.BeaconConfig().MaxBlobsPerBlock(0),
-			idxSet: idxUpTo(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			count:  params.BeaconConfig().MaxBlobsPerBlock(es),
+			idxSet: idxUpTo(params.BeaconConfig().MaxBlobsPerBlock(es)),
 			aa:     true,
 		},
 		{
@@ -143,7 +147,7 @@ func TestAllAvailable(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			mask := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
+			mask := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
 			for _, idx := range c.idxSet {
 				mask[idx] = true
 			}
