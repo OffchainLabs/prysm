@@ -214,7 +214,17 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 		}
 
 		if sszDimension.isBitfield {
-			return analyzeBitlistType(typ, limit)
+			return &sszInfo{
+				sszType: Bitlist,
+				typ:     typ,
+
+				fixedSize:  offsetBytes,
+				isVariable: true,
+
+				bitlistInfo: &bitlistInfo{
+					limit: limit,
+				},
+			}, nil
 		}
 
 		return analyzeListType(typ, elementInfo, limit)
@@ -228,7 +238,18 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 		}
 
 		if sszDimension.isBitfield {
-			return analyzeBitvectorType(typ, length)
+			return &sszInfo{
+				sszType: Bitvector,
+				typ:     typ,
+
+				// Size in bytes
+				fixedSize:  length,
+				isVariable: false,
+
+				bitvectorInfo: &bitvectorInfo{
+					length: length * 8, // length in bits
+				},
+			}, nil
 		}
 
 		return analyzeVectorType(typ, elementInfo, length)
@@ -281,37 +302,6 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*
 		vectorInfo: &vectorInfo{
 			length:  length,
 			element: elementInfo,
-		},
-	}, nil
-}
-
-// analyzeBitlistType creates SSZ info for Bitlist type with given limit.
-func analyzeBitlistType(typ reflect.Type, limit uint64) (*sszInfo, error) {
-	return &sszInfo{
-		sszType: Bitlist,
-		typ:     typ,
-
-		fixedSize:  offsetBytes,
-		isVariable: true,
-
-		bitlistInfo: &bitlistInfo{
-			limit: limit,
-		},
-	}, nil
-}
-
-// analyzeBitvectorType creates SSZ info for Bitvector type with given length.
-func analyzeBitvectorType(typ reflect.Type, length uint64) (*sszInfo, error) {
-	return &sszInfo{
-		sszType: Bitvector,
-		typ:     typ,
-
-		// Size in bytes
-		fixedSize:  length,
-		isVariable: false,
-
-		bitvectorInfo: &bitvectorInfo{
-			length: length * 8, // length in bits
 		},
 	}, nil
 }
