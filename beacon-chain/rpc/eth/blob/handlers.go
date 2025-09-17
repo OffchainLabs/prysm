@@ -162,7 +162,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, "Bad Request: "+rpcErr.Err.Error(), code)
 			return
 		case http.StatusNotFound:
-			httputil.HandleError(w, "Block not found: "+rpcErr.Err.Error(), code)
+			httputil.HandleError(w, "Not found: "+rpcErr.Err.Error(), code)
 			return
 		case http.StatusInternalServerError:
 			httputil.HandleError(w, "Internal server error: "+rpcErr.Err.Error(), code)
