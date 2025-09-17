@@ -71,6 +71,88 @@ type BeaconDbBlocker struct {
 	DataColumnStorage  *filesystem.DataColumnStorage
 }
 
+// resolveBlockToRootAndBlock resolves a block ID to root and signed block.
+// The minForkEpoch parameter is used to validate slot-based IDs against the minimum fork epoch
+func (p *BeaconDbBlocker) resolveBlockToRootAndBlock(ctx context.Context, id string, minForkEpoch primitives.Epoch) ([fieldparams.RootLength]byte, interfaces.ReadOnlySignedBeaconBlock, *core.RpcError) {
+	var rootSlice []byte
+	switch id {
+	case "genesis":
+		return [32]byte{}, nil, &core.RpcError{Err: errors.New("not supported for Phase 0 fork"), Reason: core.BadRequest}
+	case "head":
+		var err error
+		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
+		if err != nil {
+			return [32]byte{}, nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
+		}
+	case "finalized":
+		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
+		if fcp == nil {
+			return [32]byte{}, nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
+		}
+		rootSlice = fcp.Root
+	case "justified":
+		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
+		if jcp == nil {
+			return [32]byte{}, nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
+		}
+		rootSlice = jcp.Root
+	default:
+		if bytesutil.IsHex([]byte(id)) {
+			var err error
+			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
+			if err != nil {
+				return [32]byte{}, nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+		} else {
+			slot, err := strconv.ParseUint(id, 10, 64)
+			if err != nil {
+				return [32]byte{}, nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
+			}
+			minForkStart, err := slots.EpochStart(minForkEpoch)
+			if err != nil {
+				return [32]byte{}, nil, &core.RpcError{Err: errors.Wrapf(err, "could not calculate fork start slot for epoch %d", minForkEpoch), Reason: core.Internal}
+			}
+			if primitives.Slot(slot) < minForkStart {
+				return [32]byte{}, nil, &core.RpcError{Err: fmt.Errorf("current slot %d is less than %d min fork slot start %d for this feature", slot, minForkStart), Reason: core.BadRequest}
+			}
+			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
+			if !ok {
+				return [32]byte{}, nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
+			}
+			if err != nil {
+				return [32]byte{}, nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
+			}
+			rootSlice = roots[0][:]
+			if len(roots) == 1 {
+				break
+			}
+			for _, blockRoot := range roots {
+				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
+				if err != nil {
+					return [32]byte{}, nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
+				}
+				if canonical {
+					rootSlice = blockRoot[:]
+					break
+				}
+			}
+		}
+	}
+
+	root := bytesutil.ToBytes32(rootSlice)
+
+	roSignedBlock, err := p.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return [32]byte{}, nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
+	}
+
+	if roSignedBlock == nil {
+		return [32]byte{}, nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	}
+
+	return root, roSignedBlock, nil
+}
+
 // Block returns the beacon block for a given identifier. The identifier can be one of:
 //   - "head" (canonical head in node's view)
 //   - "genesis"
@@ -172,88 +254,17 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		opt(cfg)
 	}
 
-	// Resolve block ID to root
-	var rootSlice []byte
-	switch id {
-	case "genesis":
-		return nil, &core.RpcError{Err: errors.New("blobs are not supported for Phase 0 fork"), Reason: core.BadRequest}
-	case "head":
-		var err error
-		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
-		}
-	case "finalized":
-		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
-		if fcp == nil {
-			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
-		}
-		rootSlice = fcp.Root
-	case "justified":
-		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
-		if jcp == nil {
-			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
-		}
-		rootSlice = jcp.Root
-	default:
-		if bytesutil.IsHex([]byte(id)) {
-			var err error
-			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
-			if err != nil {
-				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
-			}
-		} else {
-			slot, err := strconv.ParseUint(id, 10, 64)
-			if err != nil {
-				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
-			}
-			denebStart, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
-			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Deneb start slot"), Reason: core.Internal}
-			}
-			if primitives.Slot(slot) < denebStart {
-				return nil, &core.RpcError{Err: errors.New("blobs are not supported before Deneb fork"), Reason: core.BadRequest}
-			}
-			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
-			if !ok {
-				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
-			}
-			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
-			}
-			rootSlice = roots[0][:]
-			if len(roots) == 1 {
-				break
-			}
-			for _, blockRoot := range roots {
-				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
-				if err != nil {
-					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
-				}
-				if canonical {
-					rootSlice = blockRoot[:]
-					break
-				}
-			}
-		}
-	}
-
-	root := bytesutil.ToBytes32(rootSlice)
-
-	roSignedBlock, err := p.BeaconDB.Block(ctx, root)
-	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
-	}
-
-	if roSignedBlock == nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	// Resolve block ID to root and block
+	root, roSignedBlock, rpcErr := p.resolveBlockToRootAndBlock(ctx, id, params.BeaconConfig().DenebForkEpoch)
+	if rpcErr != nil {
+		return nil, rpcErr
 	}
 
 	roBlock := roSignedBlock.Block()
 
 	commitments, err := roBlock.Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", rootSlice), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", root), Reason: core.Internal}
 	}
 
 	// If there are no commitments return 200 w/ empty list
@@ -475,90 +486,18 @@ func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]
 // cases:
 //   - no block, 404
 //   - block exists, before Fulu fork, 400 (data columns are not supported before Fulu fork)
-//   - block exists, has commitments, inside retention period serve them w/ 200 unless we hit an error reading them.
-//     we are technically not supposed to import a block to forkchoice unless we have the data columns, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
-//   - block exists, has commitments, outside retention period - ie just like block exists, no commitment
 func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
-	var rootSlice []byte
-	switch id {
-	case "genesis":
-		return nil, &core.RpcError{Err: errors.New("data columns are not supported for Phase 0 fork"), Reason: core.BadRequest}
-	case "head":
-		var err error
-		rootSlice, err = p.ChainInfoFetcher.HeadRoot(ctx)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrapf(err, "could not retrieve head root"), Reason: core.Internal}
-		}
-	case "finalized":
-		fcp := p.ChainInfoFetcher.FinalizedCheckpt()
-		if fcp == nil {
-			return nil, &core.RpcError{Err: errors.New("received nil finalized checkpoint"), Reason: core.Internal}
-		}
-		rootSlice = fcp.Root
-	case "justified":
-		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
-		if jcp == nil {
-			return nil, &core.RpcError{Err: errors.New("received nil justified checkpoint"), Reason: core.Internal}
-		}
-		rootSlice = jcp.Root
-	default:
-		if bytesutil.IsHex([]byte(id)) {
-			var err error
-			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
-			if err != nil {
-				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
-			}
-		} else {
-			slot, err := strconv.ParseUint(id, 10, 64)
-			if err != nil {
-				return nil, &core.RpcError{Err: NewBlockIdParseError(err), Reason: core.BadRequest}
-			}
-			fuluStart, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
-			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-			}
-			if primitives.Slot(slot) < fuluStart {
-				return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
-			}
-			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
-			if !ok {
-				return nil, &core.RpcError{Err: fmt.Errorf("no block roots at slot %d", slot), Reason: core.NotFound}
-			}
-			if err != nil {
-				return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to get block roots for slot %d", slot), Reason: core.Internal}
-			}
-			rootSlice = roots[0][:]
-			if len(roots) == 1 {
-				break
-			}
-			for _, blockRoot := range roots {
-				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, blockRoot)
-				if err != nil {
-					return nil, &core.RpcError{Err: errors.Wrapf(err, "could not determine if block %#x is canonical", blockRoot), Reason: core.Internal}
-				}
-				if canonical {
-					rootSlice = blockRoot[:]
-					break
-				}
-			}
-		}
-	}
-
-	root := bytesutil.ToBytes32(rootSlice)
-
-	roSignedBlock, err := p.BeaconDB.Block(ctx, root)
-	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice), Reason: core.Internal}
-	}
-
-	if roSignedBlock == nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
+	// Resolve block ID to root and block
+	root, roSignedBlock, rpcErr := p.resolveBlockToRootAndBlock(ctx, id, params.BeaconConfig().FuluForkEpoch)
+	if rpcErr != nil {
+		return nil, rpcErr
 	}
 
 	// Check if the block is after Fulu fork
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 	fuluForkSlot := primitives.Slot(math.MaxUint64)
 	if fuluForkEpoch != primitives.Epoch(math.MaxUint64) {
+		var err error
 		fuluForkSlot, err = slots.EpochStart(fuluForkEpoch)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
@@ -573,7 +512,7 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 
 	commitments, err := roBlock.Body().BlobKzgCommitments()
 	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", rootSlice), Reason: core.Internal}
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", root), Reason: core.Internal}
 	}
 
 	// If there are no commitments return 200 w/ empty list

@@ -30,13 +30,6 @@ const (
 	errMsgStateFromConsensus = "Could not convert consensus state to response"
 )
 
-// getDataColumnSidecarSSZSize returns the SSZ size of a data column sidecar
-func getDataColumnSidecarSSZSize() int {
-	// Create a zero value DataColumnSidecar to get the size
-	var sidecar ethpb.DataColumnSidecar
-	return sidecar.SizeSSZ()
-}
-
 // GetBeaconStateV2 returns the full beacon state for a given state ID.
 func (s *Server) GetBeaconStateV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "debug.GetBeaconStateV2")
@@ -391,7 +384,7 @@ func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedROD
 	}
 
 	// Pre-allocate buffer for all sidecars using the known SSZ size
-	sizePerSidecar := getDataColumnSidecarSSZSize()
+	sizePerSidecar := (&ethpb.DataColumnSidecar{}).SizeSSZ()
 	ssz := make([]byte, 0, sizePerSidecar*len(verifiedDataColumns))
 
 	// Marshal and append each sidecar

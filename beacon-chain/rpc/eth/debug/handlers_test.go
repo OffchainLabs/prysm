@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -800,7 +801,7 @@ func TestBuildDataColumnSidecarsSSZResponse(t *testing.T) {
 	})
 
 	t.Run("get SSZ size", func(t *testing.T) {
-		size := getDataColumnSidecarSSZSize()
+		size := (&ethpb.DataColumnSidecar{}).SizeSSZ()
 		assert.Equal(t, true, size > 0)
 	})
 }
