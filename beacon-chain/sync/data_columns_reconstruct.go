@@ -72,7 +72,8 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 				return
 			}
 
-			dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
+			duration := time.Since(startTime)
+			dataColumnReconstructionHistogram.Observe(float64(duration.Milliseconds()))
 			dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
 
 			// Retrieve indices of data column sidecars to sample.
@@ -95,6 +96,7 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 					"proposerIndex": proposerIndex,
 					"count":         len(unseenIndices),
 					"indices":       sortedSliceFromMap(unseenIndices),
+					"duration":      duration,
 				}).Debug("Reconstructed data column sidecars")
 			}
 		})
