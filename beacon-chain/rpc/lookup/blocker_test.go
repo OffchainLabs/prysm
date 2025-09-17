@@ -61,11 +61,12 @@ func TestGetBlock(t *testing.T) {
 	fetcher := &BeaconDbBlocker{
 		BeaconDB: beaconDB,
 		ChainInfoFetcher: &mockChain.ChainService{
-			DB:                  beaconDB,
-			Block:               wsb,
-			Root:                headBlock.BlockRoot,
-			FinalizedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
-			CanonicalRoots:      canonicalRoots,
+			DB:                         beaconDB,
+			Block:                      wsb,
+			Root:                       headBlock.BlockRoot,
+			FinalizedCheckPoint:        &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
+			CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[32].BlockRoot},
+			CanonicalRoots:             canonicalRoots,
 		},
 	}
 
@@ -107,6 +108,11 @@ func TestGetBlock(t *testing.T) {
 			name:    "finalized",
 			blockID: []byte("finalized"),
 			want:    blkContainers[64].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
+		},
+		{
+			name:    "justified",
+			blockID: []byte("justified"),
+			want:    blkContainers[32].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "genesis",
@@ -240,7 +246,7 @@ func TestGetBlob(t *testing.T) {
 		blocker := &BeaconDbBlocker{}
 		_, rpcErr := blocker.Blobs(ctx, "genesis")
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
-		require.StringContains(t, "blobs are not supported for Phase 0 fork", rpcErr.Err.Error())
+		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
 	})
 
 	t.Run("head", func(t *testing.T) {
@@ -326,6 +332,7 @@ func TestGetBlob(t *testing.T) {
 		setupDeneb(t)
 
 		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
