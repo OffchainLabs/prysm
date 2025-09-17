@@ -880,7 +880,7 @@ func TestGetBlobs(t *testing.T) {
 	})
 
 	t.Run("versioned_hashes invalid hex", func(t *testing.T) {
-		u := "http://foo.example/finalized?versioned_hashes=invalidhex"
+		u := "http://foo.example/finalized?versioned_hashes=invalidhex,invalid2hex"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -898,7 +898,7 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "versioned_hash is invalid", e.Message)
+		assert.StringContains(t, "versioned_hashes[0] is invalid", e.Message)
 		assert.StringContains(t, "hex string without 0x prefix", e.Message)
 	})
 
@@ -923,7 +923,7 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "Invalid versioned_hash:", e.Message)
+		assert.StringContains(t, "Invalid versioned_hashes[0]:", e.Message)
 		assert.StringContains(t, "is not length 32", e.Message)
 	})
 
