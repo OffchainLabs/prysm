@@ -498,6 +498,31 @@ func TestGetBlob(t *testing.T) {
 			require.DeepSSZEqual(t, initialBlobSidecarPb, retrievedBlobSidecarPb)
 		}
 	})
+
+	t.Run("pre-deneb block should return 400", func(t *testing.T) {
+		// Setup with Deneb fork at epoch 1, so slot 0 is before Deneb
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+
+		// Create a pre-Deneb block (slot 0, which is epoch 0)
+		predenebBlock := util.NewBeaconBlock()
+		predenebBlock.Block.Slot = 0
+		util.SaveBlock(t, ctx, db, predenebBlock)
+		predenebBlockRoot, err := predenebBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
+
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(predenebBlockRoot[:]))
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
+		require.StringContains(t, "not supported before", rpcErr.Err.Error())
+	})
 }
 
 func TestBlobs_CommitmentOrdering(t *testing.T) {
