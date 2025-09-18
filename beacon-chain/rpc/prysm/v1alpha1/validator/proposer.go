@@ -290,7 +290,6 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.Internal, "could not unblind block: %v", err)
 	}
 
-	// post-fulu we don't broadcast builder blocks or sidecars
 	if !prop.shouldBroadcastBlock() {
 		return &ethpb.ProposeResponse{BlockRoot: prop.block.RootSlice()}, nil
 	}
@@ -343,6 +342,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 type proposal struct {
 	block   blocks.ROBlock
+	epoch   primitives.Epoch
 	req     *ethpb.GenericSignedBeaconBlock
 	blobs   []*ethpb.BlobSidecar
 	columns []blocks.RODataColumn
@@ -355,6 +355,7 @@ func parsedProposal(block interfaces.SignedBeaconBlock, req *ethpb.GenericSigned
 	}
 	return &proposal{
 		block: rob,
+		epoch: slots.ToEpoch(rob.Block().Slot()),
 		req:   req,
 	}, nil
 }
@@ -364,7 +365,7 @@ func unblindProposalRequest(ctx context.Context, req *ethpb.GenericSignedBeaconB
 	if err != nil {
 		return nil, errors.Wrap(err, "decode block failed")
 	}
-	if block.Version() < version.Bellatrix || !block.IsBlinded() {
+	if slots.ToEpoch(block.Block().Slot()) < params.BeaconConfig().BellatrixForkEpoch || !block.IsBlinded() {
 		return parsedProposal(block, req)
 	}
 	if bldr == nil || !bldr.Configured() {
@@ -421,7 +422,7 @@ func (u *proposal) buildSidecars() error {
 }
 
 func (u *proposal) buildColumns() ([]blocks.RODataColumn, error) {
-	if u.block.Version() < version.Fulu {
+	if u.epoch < params.BeaconConfig().FuluForkEpoch {
 		return nil, nil // No data columns before fulu.
 	}
 	if len(u.columns) > 0 {
@@ -448,7 +449,7 @@ func (u *proposal) buildColumns() ([]blocks.RODataColumn, error) {
 }
 
 func (u *proposal) buildBlobs() ([]*ethpb.BlobSidecar, error) {
-	if u.block.Version() < version.Deneb || u.block.Version() >= version.Fulu {
+	if u.epoch < params.BeaconConfig().DenebForkEpoch || u.epoch >= params.BeaconConfig().FuluForkEpoch {
 		return nil, nil // No blobs before deneb, data column sidecars after fulu
 	}
 	if len(u.blobs) > 0 {
@@ -464,15 +465,15 @@ func (u *proposal) buildBlobs() ([]*ethpb.BlobSidecar, error) {
 
 func (u *proposal) shouldBroadcastBlock() bool {
 	// we should broadcast if the block is unblinded, or blinded and pre-fulu
-	return !u.block.IsBlinded() || u.block.Version() < version.Fulu
+	return !u.block.IsBlinded() || u.epoch < params.BeaconConfig().FuluForkEpoch
 }
 
 func (u *proposal) shouldBroadcastBlobs() bool {
-	return u.block.Version() >= version.Deneb && u.block.Version() < version.Fulu
+	return u.epoch >= params.BeaconConfig().DenebForkEpoch && u.epoch < params.BeaconConfig().FuluForkEpoch
 }
 
 func (u *proposal) shouldBroadcastColumns() bool {
-	return u.block.Version() >= version.Fulu
+	return u.epoch >= params.BeaconConfig().FuluForkEpoch
 }
 
 // broadcastAndReceiveSidecars broadcasts and receives sidecars.
