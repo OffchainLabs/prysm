@@ -165,14 +165,20 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 			return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head block")
 		}
 		if blk == nil {
-			// For blob features, we can use HeadRoot when block is not available
+			// Head block not in memory, try to get head root and fetch from DB
 			headRoot, err := p.ChainInfoFetcher.HeadRoot(ctx)
 			if err != nil {
 				return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head root")
 			}
-			var root [32]byte
-			copy(root[:], headRoot)
-			return root, nil, nil
+			root := bytesutil.ToBytes32(headRoot)
+			blk, err = p.BeaconDB.Block(ctx, root)
+			if err != nil {
+				return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head block by root")
+			}
+			if blk == nil {
+				return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("head block %#x not found", root))
+			}
+			return root, blk, nil
 		}
 		headRoot, err := blk.Block().HashTreeRoot()
 		if err != nil {
@@ -280,17 +286,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
 			forkName := version.String(slots.ToForkVersion(slot))
 			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
-		}
-	}
-
-	// If block is nil but we have a root (e.g., from head), try to fetch by root
-	if roSignedBlock == nil {
-		roSignedBlock, err = p.BeaconDB.Block(ctx, root)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block by root %#x", root), Reason: core.Internal}
-		}
-		if roSignedBlock == nil {
-			return nil, &core.RpcError{Err: errors.Errorf("block not found for root %#x", root), Reason: core.NotFound}
 		}
 	}
 
