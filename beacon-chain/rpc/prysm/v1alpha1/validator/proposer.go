@@ -437,6 +437,11 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup,
 		return errors.Wrap(err, "broadcast block")
 	}
 
+	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
+	})
+
 	if err := vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil); err != nil {
 		return errors.Wrap(err, "receive block")
 	}
@@ -454,10 +459,6 @@ func (vs *Server) broadcastBlock(ctx context.Context, wg *sync.WaitGroup, block 
 	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
 		return errors.Wrap(err, "broadcast failed")
 	}
-	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
-		Type: blockfeed.ReceivedBlock,
-		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
-	})
 
 	log.WithFields(logrus.Fields{
 		"slot": block.Block().Slot(),
