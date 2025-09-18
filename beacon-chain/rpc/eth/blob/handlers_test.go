@@ -71,7 +71,7 @@ func TestBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "blobs are not supported for Phase 0 fork", e.Message)
+		assert.StringContains(t, "not supported for Phase 0 fork", e.Message)
 	})
 	t.Run("head", func(t *testing.T) {
 		u := "http://foo.example/head"
@@ -336,11 +336,23 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("slot before Deneb fork", func(t *testing.T) {
+		// Create and save a pre-Deneb block at slot 31
+		predenebBlock := util.NewBeaconBlock()
+		predenebBlock.Block.Slot = 31
+		util.SaveBlock(t, t.Context(), db, predenebBlock)
+
 		u := "http://foo.example/31"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		s.Blocker = &lookup.BeaconDbBlocker{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: bs,
+		}
 
 		s.Blobs(writer, request)
 
@@ -348,7 +360,7 @@ func TestBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "blobs are not supported before Deneb fork", e.Message)
+		assert.StringContains(t, "not supported before", e.Message)
 	})
 	t.Run("malformed block ID", func(t *testing.T) {
 		u := "http://foo.example/foo"
@@ -609,7 +621,7 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "blobs are not supported for Phase 0 fork", e.Message)
+		assert.StringContains(t, "not supported for Phase 0 fork", e.Message)
 	})
 	t.Run("head", func(t *testing.T) {
 		u := "http://foo.example/head"
@@ -808,11 +820,22 @@ func TestGetBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("slot before Deneb fork", func(t *testing.T) {
+		// Create and save a pre-Deneb block at slot 31
+		predenebBlock := util.NewBeaconBlock()
+		predenebBlock.Block.Slot = 31
+		util.SaveBlock(t, t.Context(), db, predenebBlock)
+
 		u := "http://foo.example/31"
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		s.Blocker = &lookup.BeaconDbBlocker{}
+		s.Blocker = &lookup.BeaconDbBlocker{
+			BeaconDB:         db,
+			ChainInfoFetcher: &mockChain.ChainService{},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+		}
 
 		s.GetBlobs(writer, request)
 
@@ -820,7 +843,7 @@ func TestGetBlobs(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
-		assert.StringContains(t, "blobs are not supported before Deneb fork", e.Message)
+		assert.StringContains(t, "not supported before", e.Message)
 	})
 	t.Run("malformed block ID", func(t *testing.T) {
 		u := "http://foo.example/foo"

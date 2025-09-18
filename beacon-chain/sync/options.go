@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 )
 
 type Option func(s *Service) error
@@ -226,6 +227,14 @@ func WithLightClientStore(lcs *lightClient.Store) Option {
 func WithBatchVerifierLimit(limit int) Option {
 	return func(s *Service) error {
 		s.cfg.batchVerifierLimit = limit
+		return nil
+	}
+}
+
+// WithReconstructionRandGen sets the random generator for reconstruction delays.
+func WithReconstructionRandGen(rg *rand.Rand) Option {
+	return func(s *Service) error {
+		s.reconstructionRandGen = rg
 		return nil
 	}
 }

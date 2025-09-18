@@ -259,7 +259,6 @@ func (dcs *DataColumnStorage) Summary(root [fieldparams.RootLength]byte) DataCol
 }
 
 // Save saves data column sidecars into the database and asynchronously performs pruning.
-// The returned channel is closed when the pruning is complete.
 func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
 	startTime := time.Now()
 

@@ -308,7 +308,7 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start beacon node: %w", err)
 	}
 
-	if err = helpers.WaitForTextInFile(stdOutFile, "gRPC server listening on port"); err != nil {
+	if err = helpers.WaitForTextInFile(stdOutFile, "Beacon chain gRPC server listening"); err != nil {
 		return fmt.Errorf("could not find multiaddr for node %d, this means the node had issues starting: %w", index, err)
 	}
 
