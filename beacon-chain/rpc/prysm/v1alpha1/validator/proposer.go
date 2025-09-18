@@ -324,8 +324,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		if err := vs.broadcastReceiveBlock(ctx, block, root); err != nil {
+		if err := vs.broadcastReceiveBlock(ctx, &wg, block, root); err != nil {
 			errChan <- errors.Wrap(err, "broadcast/receive block failed")
 			return
 		}
@@ -433,12 +432,14 @@ func (vs *Server) handleUnblindedBlock(
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
 	protoBlock, err := block.Proto()
 	if err != nil {
+		wg.Done()
 		return errors.Wrap(err, "protobuf conversion failed")
 	}
 	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
+		wg.Done()
 		return errors.Wrap(err, "broadcast failed")
 	}
 	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
@@ -451,6 +452,7 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 		"root": fmt.Sprintf("%#x", root),
 	}).Debug("Broadcasted block")
 
+	wg.Done()
 	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
 }
 
