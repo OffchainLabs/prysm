@@ -445,6 +445,12 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 		Type: blockfeed.ReceivedBlock,
 		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
 	})
+
+	log.WithFields(logrus.Fields{
+		"slot": block.Block().Slot(),
+		"root": fmt.Sprintf("%#x", root),
+	}).Debug("Broadcasted block")
+
 	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
 }
 
