@@ -498,10 +498,6 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 		})
 	}
 
-	if err := eg.Wait(); err != nil {
-		return errors.Wrap(err, "wait for data columns to be broadcasted")
-	}
-
 	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedRODataColumns); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
@@ -512,6 +508,11 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn}, // #nosec G601
 		})
 	}
+
+	if err := eg.Wait(); err != nil {
+		return errors.Wrap(err, "wait for data columns to be broadcasted")
+	}
+
 	return nil
 }
 
