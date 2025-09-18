@@ -177,7 +177,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 	ctx := t.Context()
 	db := testDB.SetupDB(t)
 
-	t.Run("non-existent block returns 404", func(t *testing.T) {
+	t.Run("non-existent block by root returns 404", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
 			BeaconDB: db,
 		}
@@ -185,6 +185,64 @@ func TestBlobsErrorHandling(t *testing.T) {
 		_, rpcErr := blocker.Blobs(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "not found", rpcErr.Err.Error())
+	})
+
+	t.Run("non-existent block by slot returns 404", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{},
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "999999")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "no blocks found at slot", rpcErr.Err.Error())
+	})
+
+	t.Run("genesis block not found returns 404", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		// Note: genesis blocks don't support blobs, so this returns BadRequest
+		_, rpcErr := blocker.Blobs(ctx, "genesis")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.StringContains(t, "not supported for Phase 0", rpcErr.Err.Error())
+	})
+
+	t.Run("finalized block not found returns 404", func(t *testing.T) {
+		// Set up a finalized checkpoint pointing to a non-existent block
+		nonExistentRoot := bytesutil.PadTo([]byte("nonexistent"), 32)
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{
+				FinalizedCheckPoint: &ethpb.Checkpoint{Root: nonExistentRoot},
+			},
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "finalized")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "finalized block", rpcErr.Err.Error())
+		require.StringContains(t, "not found", rpcErr.Err.Error())
+	})
+
+	t.Run("justified block not found returns 404", func(t *testing.T) {
+		// Set up a justified checkpoint pointing to a non-existent block
+		nonExistentRoot := bytesutil.PadTo([]byte("nonexistent2"), 32)
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{
+				CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: nonExistentRoot},
+			},
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "justified")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "justified block", rpcErr.Err.Error())
 		require.StringContains(t, "not found", rpcErr.Err.Error())
 	})
 
