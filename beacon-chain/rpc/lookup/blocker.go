@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -26,19 +25,33 @@ import (
 	"github.com/pkg/errors"
 )
 
-type BlockRootsNotFoundError struct {
+// BlockNotFoundError represents an error when a block cannot be found.
+type BlockNotFoundError struct {
 	message string
 }
 
-func NewBlockRootsNotFoundError() *BlockRootsNotFoundError {
-	return &BlockRootsNotFoundError{
+// NewBlockNotFoundError creates a new BlockNotFoundError with a custom message.
+func NewBlockNotFoundError(msg string) *BlockNotFoundError {
+	return &BlockNotFoundError{
+		message: msg,
+	}
+}
+
+// NewBlockRootsNotFoundError creates a BlockNotFoundError for missing block roots.
+// Deprecated: Use NewBlockNotFoundError instead.
+func NewBlockRootsNotFoundError() *BlockNotFoundError {
+	return &BlockNotFoundError{
 		message: "no block roots returned from the database",
 	}
 }
 
-func (e BlockRootsNotFoundError) Error() string {
+func (e *BlockNotFoundError) Error() string {
 	return e.message
 }
+
+// BlockRootsNotFoundError is deprecated. Use BlockNotFoundError instead.
+// Deprecated: Use BlockNotFoundError instead.
+type BlockRootsNotFoundError = BlockNotFoundError
 
 // BlockIdParseError represents an error scenario where a block ID could not be parsed.
 type BlockIdParseError struct {
@@ -176,6 +189,9 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 			}
 			// Find the canonical block
 			for i, b := range blks {
+				if p.ChainInfoFetcher == nil {
+					return [32]byte{}, nil, errors.New("chain info fetcher is not configured")
+				}
 				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, roots[i])
 				if err != nil {
 					return [32]byte{}, nil, errors.Wrapf(err, "could not determine if block root is canonical")
@@ -212,7 +228,7 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 	}
 
 	if blk == nil {
-		return [32]byte{}, nil, fmt.Errorf("block %#x not found in db", rootSlice)
+		return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("block %#x not found in db", rootSlice))
 	}
 
 	return root, blk, nil
@@ -265,9 +281,14 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	// Resolve block ID to root and block
 	root, roSignedBlock, err := p.resolveBlockID(ctx, id)
 	if err != nil {
-		reason := core.BadRequest
-		if strings.Contains(err.Error(), "not found") {
+		var blockNotFound *BlockNotFoundError
+		var blockIdParseErr *BlockIdParseError
+		
+		reason := core.Internal // Default to Internal for unexpected errors
+		if errors.As(err, &blockNotFound) {
 			reason = core.NotFound
+		} else if errors.As(err, &blockIdParseErr) {
+			reason = core.BadRequest
 		}
 		return nil, &core.RpcError{Err: err, Reason: core.ErrorReason(reason)}
 	}

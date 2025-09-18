@@ -168,6 +168,54 @@ func TestGetBlock(t *testing.T) {
 	}
 }
 
+func TestBlobsErrorHandling(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	db := testDB.SetupDB(t)
+
+	t.Run("non-existent block returns 404", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "not found", rpcErr.Err.Error())
+	})
+
+	t.Run("invalid block ID returns 400", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "invalid-hex")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.StringContains(t, "could not parse block ID", rpcErr.Err.Error())
+	})
+
+	t.Run("database error returns 500", func(t *testing.T) {
+		// Create a pre-Deneb block with valid slot
+		predenebBlock := util.NewBeaconBlock()
+		predenebBlock.Block.Slot = 100
+		util.SaveBlock(t, ctx, db, predenebBlock)
+		
+		// Create blocker without ChainInfoFetcher to trigger internal error when checking canonical status
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "100")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.Internal), rpcErr.Reason)
+	})
+}
+
 func TestGetBlob(t *testing.T) {
 	const (
 		slot          = 123
