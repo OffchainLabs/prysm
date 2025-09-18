@@ -26,17 +26,19 @@ import (
 	"github.com/pkg/errors"
 )
 
-type BlockRootsNotFoundError struct {
+// BlockNotFoundError represents an error when a block cannot be found.
+type BlockNotFoundError struct {
 	message string
 }
 
-func NewBlockRootsNotFoundError() *BlockRootsNotFoundError {
-	return &BlockRootsNotFoundError{
-		message: "no block roots returned from the database",
+// NewBlockNotFoundError creates a new BlockNotFoundError with a custom message.
+func NewBlockNotFoundError(msg string) *BlockNotFoundError {
+	return &BlockNotFoundError{
+		message: msg,
 	}
 }
 
-func (e BlockRootsNotFoundError) Error() string {
+func (e *BlockNotFoundError) Error() string {
 	return e.message
 }
 
@@ -73,150 +75,139 @@ type BeaconDbBlocker struct {
 	DataColumnStorage  *filesystem.DataColumnStorage
 }
 
+// resolveBlockIDByRootOrSlot resolves a block ID that is either a root (hex string or raw bytes) or a slot number.
+func (p *BeaconDbBlocker) resolveBlockIDByRootOrSlot(ctx context.Context, id string) ([fieldparams.RootLength]byte, interfaces.ReadOnlySignedBeaconBlock, error) {
+	var rootSlice []byte
+
+	// Check if it's a hex-encoded root
+	if bytesutil.IsHex([]byte(id)) {
+		var err error
+		rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
+		if err != nil {
+			e := NewBlockIdParseError(err)
+			return [32]byte{}, nil, &e
+		}
+	} else if len(id) == 32 {
+		// Handle raw 32-byte root
+		rootSlice = []byte(id)
+	} else {
+		// Try to parse as slot number
+		slot, err := strconv.ParseUint(id, 10, 64)
+		if err != nil {
+			e := NewBlockIdParseError(err)
+			return [32]byte{}, nil, &e
+		}
+
+		// Get block roots for the slot
+		ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
+		if err != nil {
+			return [32]byte{}, nil, errors.Wrapf(err, "could not retrieve block roots for slot %d", slot)
+		}
+		if !ok || len(roots) == 0 {
+			return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("no blocks found at slot %d", slot))
+		}
+
+		// Find the canonical block root
+		if p.ChainInfoFetcher == nil {
+			return [32]byte{}, nil, errors.New("chain info fetcher is not configured")
+		}
+
+		for _, root := range roots {
+			canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, root)
+			if err != nil {
+				return [32]byte{}, nil, errors.Wrapf(err, "could not determine if block root is canonical")
+			}
+			if canonical {
+				rootSlice = root[:]
+				break
+			}
+		}
+
+		// If no canonical block found, rootSlice remains nil
+		if rootSlice == nil {
+			// No canonical block at this slot
+			return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("no canonical block found at slot %d", slot))
+		}
+	}
+
+	// Fetch the block using the root
+	root := bytesutil.ToBytes32(rootSlice)
+	blk, err := p.BeaconDB.Block(ctx, root)
+	if err != nil {
+		return [32]byte{}, nil, errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice)
+	}
+	if blk == nil {
+		return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("block %#x not found in db", rootSlice))
+	}
+
+	return root, blk, nil
+}
+
 // resolveBlockID resolves a block ID to root and signed block.
 // Fork validation is handled outside this function by the calling methods.
 func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([fieldparams.RootLength]byte, interfaces.ReadOnlySignedBeaconBlock, error) {
-	var rootSlice []byte
-	var blk interfaces.ReadOnlySignedBeaconBlock
-	var err error
-
 	switch id {
 	case "genesis":
-		blk, err = p.BeaconDB.GenesisBlock(ctx)
+		blk, err := p.BeaconDB.GenesisBlock(ctx)
 		if err != nil {
 			return [32]byte{}, nil, errors.Wrap(err, "could not retrieve genesis block")
 		}
-		if blk != nil {
-			root, err := blk.Block().HashTreeRoot()
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrap(err, "could not get genesis block root")
-			}
-			return root, blk, nil
+		if blk == nil {
+			return [32]byte{}, nil, NewBlockNotFoundError("genesis block not found")
 		}
-		return [32]byte{}, nil, nil
+		root, err := blk.Block().HashTreeRoot()
+		if err != nil {
+			return [32]byte{}, nil, errors.Wrap(err, "could not get genesis block root")
+		}
+		return root, blk, nil
+
 	case "head":
-		blk, err = p.ChainInfoFetcher.HeadBlock(ctx)
+		blk, err := p.ChainInfoFetcher.HeadBlock(ctx)
 		if err != nil {
 			return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head block")
 		}
 		if blk == nil {
-			// For blob features, we can use HeadRoot when block is not available
-			headRoot, err := p.ChainInfoFetcher.HeadRoot(ctx)
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head root")
-			}
-			var root [32]byte
-			copy(root[:], headRoot)
-			return root, nil, nil
+			return [32]byte{}, nil, NewBlockNotFoundError("head block not found")
 		}
-		headRoot, err := blk.Block().HashTreeRoot()
+		root, err := blk.Block().HashTreeRoot()
 		if err != nil {
 			return [32]byte{}, nil, errors.Wrap(err, "could not get head block root")
 		}
-		return headRoot, blk, nil
+		return root, blk, nil
+
 	case "finalized":
 		finalized := p.ChainInfoFetcher.FinalizedCheckpt()
 		if finalized == nil {
 			return [32]byte{}, nil, errors.New("received nil finalized checkpoint")
 		}
 		finalizedRoot := bytesutil.ToBytes32(finalized.Root)
-		blk, err = p.BeaconDB.Block(ctx, finalizedRoot)
+		blk, err := p.BeaconDB.Block(ctx, finalizedRoot)
 		if err != nil {
 			return [32]byte{}, nil, errors.Wrap(err, "could not retrieve finalized block")
 		}
+		if blk == nil {
+			return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("finalized block %#x not found", finalizedRoot))
+		}
 		return finalizedRoot, blk, nil
+
 	case "justified":
 		jcp := p.ChainInfoFetcher.CurrentJustifiedCheckpt()
 		if jcp == nil {
 			return [32]byte{}, nil, errors.New("received nil justified checkpoint")
 		}
 		justifiedRoot := bytesutil.ToBytes32(jcp.Root)
-		blk, err = p.BeaconDB.Block(ctx, justifiedRoot)
+		blk, err := p.BeaconDB.Block(ctx, justifiedRoot)
 		if err != nil {
 			return [32]byte{}, nil, errors.Wrap(err, "could not retrieve justified block")
 		}
+		if blk == nil {
+			return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("justified block %#x not found", justifiedRoot))
+		}
 		return justifiedRoot, blk, nil
+
 	default:
-		if bytesutil.IsHex([]byte(id)) {
-			var err error
-			rootSlice, err = bytesutil.DecodeHexWithLength(id, fieldparams.RootLength)
-			if err != nil {
-				e := NewBlockIdParseError(err)
-				return [32]byte{}, nil, &e
-			}
-		} else if len(id) == 32 {
-			// Handle raw 32-byte root
-			rootSlice = []byte(id)
-		} else {
-			slot, err := strconv.ParseUint(id, 10, 64)
-			if err != nil {
-				e := NewBlockIdParseError(err)
-				return [32]byte{}, nil, &e
-			}
-
-			// Get blocks by slot
-			blks, err := p.BeaconDB.BlocksBySlot(ctx, primitives.Slot(slot))
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrapf(err, "could not retrieve blocks for slot %d", slot)
-			}
-			ok, roots, err := p.BeaconDB.BlockRootsBySlot(ctx, primitives.Slot(slot))
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrapf(err, "could not retrieve block roots for slot %d", slot)
-			}
-			if !ok || roots == nil || len(roots) == 0 {
-				// No blocks at this slot
-				return [32]byte{}, nil, nil
-			}
-			numBlks := len(blks)
-			if numBlks == 0 {
-				return [32]byte{}, nil, nil
-			}
-			// Ensure we have matching roots and blocks
-			if len(roots) != numBlks {
-				return [32]byte{}, nil, fmt.Errorf("mismatched block and root counts for slot %d: %d blocks, %d roots", slot, numBlks, len(roots))
-			}
-			// Find the canonical block
-			for i, b := range blks {
-				canonical, err := p.ChainInfoFetcher.IsCanonical(ctx, roots[i])
-				if err != nil {
-					return [32]byte{}, nil, errors.Wrapf(err, "could not determine if block root is canonical")
-				}
-				if canonical {
-					blk = b
-					rootSlice = roots[i][:]
-					break
-				}
-			}
-			// If no canonical block found, return nil
-			// Calling methods can decide whether to use non-canonical blocks
-		}
+		return p.resolveBlockIDByRootOrSlot(ctx, id)
 	}
-
-	// If we already have the block, return it
-	if blk != nil {
-		if rootSlice == nil {
-			// Need to compute the root
-			computedRoot, err := blk.Block().HashTreeRoot()
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrap(err, "could not compute block root")
-			}
-			return computedRoot, blk, nil
-		}
-		return bytesutil.ToBytes32(rootSlice), blk, nil
-	}
-
-	// Otherwise, fetch the block using the root
-	root := bytesutil.ToBytes32(rootSlice)
-	blk, err = p.BeaconDB.Block(ctx, root)
-	if err != nil {
-		return [32]byte{}, nil, errors.Wrapf(err, "failed to retrieve block %#x from db", rootSlice)
-	}
-
-	if blk == nil {
-		return [32]byte{}, nil, fmt.Errorf("block %#x not found in db", rootSlice)
-	}
-
-	return root, blk, nil
 }
 
 // Block returns the beacon block for a given identifier. The identifier can be one of:
@@ -228,7 +219,6 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 //   - <hex encoded block root with '0x' prefix>
 //   - <block root>
 func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error) {
-	// Block method: supports all block identifiers
 	_, blk, err := p.resolveBlockID(ctx, string(id))
 	if err != nil {
 		return nil, err
@@ -267,9 +257,14 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	// Resolve block ID to root and block
 	root, roSignedBlock, err := p.resolveBlockID(ctx, id)
 	if err != nil {
-		reason := core.BadRequest
-		if strings.Contains(err.Error(), "not found") {
+		var blockNotFound *BlockNotFoundError
+		var blockIdParseErr *BlockIdParseError
+
+		reason := core.Internal // Default to Internal for unexpected errors
+		if errors.As(err, &blockNotFound) {
 			reason = core.NotFound
+		} else if errors.As(err, &blockIdParseErr) {
+			reason = core.BadRequest
 		}
 		return nil, &core.RpcError{Err: err, Reason: core.ErrorReason(reason)}
 	}
@@ -277,25 +272,9 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	// Validate fork epoch for Deneb (blobs)
 	if roSignedBlock != nil {
 		slot := roSignedBlock.Block().Slot()
-		denebForkEpoch := params.BeaconConfig().DenebForkEpoch
-		denebForkSlot, err := slots.EpochStart(denebForkEpoch)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Deneb start slot"), Reason: core.Internal}
-		}
-		if slot < denebForkSlot {
+		if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
 			forkName := version.String(slots.ToForkVersion(slot))
 			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
-		}
-	}
-
-	// If block is nil but we have a root (e.g., from head), try to fetch by root
-	if roSignedBlock == nil {
-		roSignedBlock, err = p.BeaconDB.Block(ctx, root)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block by root %#x", root), Reason: core.Internal}
-		}
-		if roSignedBlock == nil {
-			return nil, &core.RpcError{Err: errors.Errorf("block not found for root %#x", root), Reason: core.NotFound}
 		}
 	}
 
@@ -317,7 +296,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	if fuluForkEpoch != primitives.Epoch(math.MaxUint64) {
 		fuluForkSlot, err = slots.EpochStart(fuluForkEpoch)
 		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate peerDAS start slot"), Reason: core.Internal}
+			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
 		}
 	}
 
