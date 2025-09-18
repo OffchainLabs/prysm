@@ -172,7 +172,7 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 			}
 			// Ensure we have matching roots and blocks
 			if len(roots) != numBlks {
-				return [32]byte{}, nil, fmt.Errorf("mismatched block and root counts for slot %d: %d blocks, %d roots", slot, numBlks, len(roots))
+				return [32]byte{}, nil, fmt.Errorf("mismatched block and root counts for slot %d (%d blocks, %d roots)", slot, numBlks, len(roots))
 			}
 			// Find the canonical block
 			for i, b := range blks {
