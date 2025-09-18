@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -57,7 +58,7 @@ func (e BlockIdParseError) Error() string {
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
@@ -147,7 +148,9 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 	return blk, nil
 }
 
-// Blobs returns the blobs for a given block id identifier and blob indices. The identifier can be one of:
+// Blobs returns the fetched blobs for a given block ID with configurable options.
+// Options can specify either blob indices or versioned hashes for retrieval.
+// The identifier can be one of:
 //   - "head" (canonical head in node's view)
 //   - "genesis"
 //   - "finalized"
@@ -158,11 +161,17 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //
 // cases:
 //   - no block, 404
-//   - block exists, no commitment, 200 w/ empty list
 //   - block exists, has commitments, inside retention period (greater of protocol- or user-specified) serve then w/ 200 unless we hit an error reading them.
 //     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
 //   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
-func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	// Apply options
+	cfg := &options.BlobsConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	// Resolve block ID to root
 	var rootSlice []byte
 	switch id {
 	case "genesis":
@@ -239,11 +248,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) (
 		return nil, &core.RpcError{Err: fmt.Errorf("block %#x not found in db", rootSlice), Reason: core.NotFound}
 	}
 
-	// If block is not in the retention window, return 200 w/ empty list
-	if !p.BlobStorage.WithinRetentionPeriod(slots.ToEpoch(roSignedBlock.Block().Slot()), slots.ToEpoch(p.GenesisTimeFetcher.CurrentSlot())) {
-		return make([]*blocks.VerifiedROBlob, 0), nil
-	}
-
 	roBlock := roSignedBlock.Block()
 
 	commitments, err := roBlock.Body().BlobKzgCommitments()
@@ -263,6 +267,46 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, indices []int) (
 		fuluForkSlot, err = slots.EpochStart(fuluForkEpoch)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate peerDAS start slot"), Reason: core.Internal}
+		}
+	}
+
+	// Convert versioned hashes to indices if provided
+	indices := cfg.Indices
+	if len(cfg.VersionedHashes) > 0 {
+		// Build a map of requested versioned hashes for fast lookup and tracking
+		requestedHashes := make(map[string]bool)
+		for _, versionedHash := range cfg.VersionedHashes {
+			requestedHashes[string(versionedHash)] = true
+		}
+
+		// Create indices array and track which hashes we found
+		indices = make([]int, 0, len(cfg.VersionedHashes))
+		foundHashes := make(map[string]bool)
+
+		for i, commitment := range commitments {
+			versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+			hashStr := string(versionedHash[:])
+			if requestedHashes[hashStr] {
+				indices = append(indices, i)
+				foundHashes[hashStr] = true
+			}
+		}
+
+		// Check if all requested hashes were found
+		if len(indices) != len(cfg.VersionedHashes) {
+			// Collect missing hashes
+			missingHashes := make([]string, 0, len(cfg.VersionedHashes)-len(indices))
+			for _, requestedHash := range cfg.VersionedHashes {
+				if !foundHashes[string(requestedHash)] {
+					missingHashes = append(missingHashes, hexutil.Encode(requestedHash))
+				}
+			}
+
+			// Create detailed error message
+			errMsg := fmt.Sprintf("versioned hash(es) not found in block (requested %d hashes, found %d, missing: %v)",
+				len(cfg.VersionedHashes), len(indices), missingHashes)
+
+			return nil, &core.RpcError{Err: errors.New(errMsg), Reason: core.NotFound}
 		}
 	}
 

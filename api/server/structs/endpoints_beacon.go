@@ -290,3 +290,9 @@ type GetProposerLookaheadResponse struct {
 	Finalized           bool     `json:"finalized"`
 	Data                []string `json:"data"` // validator indexes
 }
+
+type GetBlobsResponse struct {
+	ExecutionOptimistic bool     `json:"execution_optimistic"`
+	Finalized           bool     `json:"finalized"`
+	Data                []string `json:"data"` //blobs
+}
