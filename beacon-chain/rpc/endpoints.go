@@ -194,6 +194,8 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	const namespace = "blob"
 	return []endpoint{
 		{
+			// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} in favor of /eth/v1/beacon/blobs/{block_id}
+			// the endpoint will continue to work post fulu for some time however
 			template: "/eth/v1/beacon/blob_sidecars/{block_id}",
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
@@ -201,6 +203,16 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.Blobs,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/blobs/{block_id}",
+			name:     namespace + ".GetBlobs",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBlobs,
 			methods: []string{http.MethodGet},
 		},
 	}
