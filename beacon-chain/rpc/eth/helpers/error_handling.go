@@ -39,8 +39,8 @@ func HandleIsOptimisticError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	var blockRootsNotFoundErr *lookup.BlockRootsNotFoundError
-	if errors.As(err, &blockRootsNotFoundErr) {
+	var blockNotFoundErr *lookup.BlockNotFoundError
+	if errors.As(err, &blockNotFoundErr) {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusNotFound)
 		return
 	}

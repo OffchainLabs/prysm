@@ -61,11 +61,12 @@ func TestGetBlock(t *testing.T) {
 	fetcher := &BeaconDbBlocker{
 		BeaconDB: beaconDB,
 		ChainInfoFetcher: &mockChain.ChainService{
-			DB:                  beaconDB,
-			Block:               wsb,
-			Root:                headBlock.BlockRoot,
-			FinalizedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
-			CanonicalRoots:      canonicalRoots,
+			DB:                         beaconDB,
+			Block:                      wsb,
+			Root:                       headBlock.BlockRoot,
+			FinalizedCheckPoint:        &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
+			CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[32].BlockRoot},
+			CanonicalRoots:             canonicalRoots,
 		},
 	}
 
@@ -107,6 +108,11 @@ func TestGetBlock(t *testing.T) {
 			name:    "finalized",
 			blockID: []byte("finalized"),
 			want:    blkContainers[64].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
+		},
+		{
+			name:    "justified",
+			blockID: []byte("justified"),
+			want:    blkContainers[32].Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block,
 		},
 		{
 			name:    "genesis",
@@ -160,6 +166,112 @@ func TestGetBlock(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBlobsErrorHandling(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	db := testDB.SetupDB(t)
+
+	t.Run("non-existent block by root returns 404", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "not found", rpcErr.Err.Error())
+	})
+
+	t.Run("non-existent block by slot returns 404", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{},
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "999999")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "no blocks found at slot", rpcErr.Err.Error())
+	})
+
+	t.Run("genesis block not found returns 404", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		// Note: genesis blocks don't support blobs, so this returns BadRequest
+		_, rpcErr := blocker.Blobs(ctx, "genesis")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.StringContains(t, "not supported for Phase 0", rpcErr.Err.Error())
+	})
+
+	t.Run("finalized block not found returns 404", func(t *testing.T) {
+		// Set up a finalized checkpoint pointing to a non-existent block
+		nonExistentRoot := bytesutil.PadTo([]byte("nonexistent"), 32)
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{
+				FinalizedCheckPoint: &ethpb.Checkpoint{Root: nonExistentRoot},
+			},
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "finalized")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "finalized block", rpcErr.Err.Error())
+		require.StringContains(t, "not found", rpcErr.Err.Error())
+	})
+
+	t.Run("justified block not found returns 404", func(t *testing.T) {
+		// Set up a justified checkpoint pointing to a non-existent block
+		nonExistentRoot := bytesutil.PadTo([]byte("nonexistent2"), 32)
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+			ChainInfoFetcher: &mockChain.ChainService{
+				CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: nonExistentRoot},
+			},
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "justified")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
+		require.StringContains(t, "justified block", rpcErr.Err.Error())
+		require.StringContains(t, "not found", rpcErr.Err.Error())
+	})
+
+	t.Run("invalid block ID returns 400", func(t *testing.T) {
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "invalid-hex")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.StringContains(t, "could not parse block ID", rpcErr.Err.Error())
+	})
+
+	t.Run("database error returns 500", func(t *testing.T) {
+		// Create a pre-Deneb block with valid slot
+		predenebBlock := util.NewBeaconBlock()
+		predenebBlock.Block.Slot = 100
+		util.SaveBlock(t, ctx, db, predenebBlock)
+		
+		// Create blocker without ChainInfoFetcher to trigger internal error when checking canonical status
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, "100")
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.Internal), rpcErr.Reason)
+	})
 }
 
 func TestGetBlob(t *testing.T) {
@@ -240,14 +352,17 @@ func TestGetBlob(t *testing.T) {
 		blocker := &BeaconDbBlocker{}
 		_, rpcErr := blocker.Blobs(ctx, "genesis")
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
-		require.StringContains(t, "blobs are not supported for Phase 0 fork", rpcErr.Err.Error())
+		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
 	})
 
 	t.Run("head", func(t *testing.T) {
 		setupDeneb(t)
 
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{Root: denebBlockRoot[:]},
+			ChainInfoFetcher: &mockChain.ChainService{
+				Root:  denebBlockRoot[:],
+				Block: denebBlock,
+			},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
@@ -326,6 +441,7 @@ func TestGetBlob(t *testing.T) {
 		setupDeneb(t)
 
 		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
@@ -490,6 +606,31 @@ func TestGetBlob(t *testing.T) {
 			initialBlobSidecarPb := fuluBlobSidecars[i].BlobSidecar
 			require.DeepSSZEqual(t, initialBlobSidecarPb, retrievedBlobSidecarPb)
 		}
+	})
+
+	t.Run("pre-deneb block should return 400", func(t *testing.T) {
+		// Setup with Deneb fork at epoch 1, so slot 0 is before Deneb
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
+
+		// Create a pre-Deneb block (slot 0, which is epoch 0)
+		predenebBlock := util.NewBeaconBlock()
+		predenebBlock.Block.Slot = 0
+		util.SaveBlock(t, ctx, db, predenebBlock)
+		predenebBlockRoot, err := predenebBlock.Block.HashTreeRoot()
+		require.NoError(t, err)
+
+		blocker := &BeaconDbBlocker{
+			BeaconDB: db,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(predenebBlockRoot[:]))
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
+		require.StringContains(t, "not supported before", rpcErr.Err.Error())
 	})
 }
 
