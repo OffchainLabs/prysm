@@ -332,10 +332,11 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		errChan <- nil
 	}()
 
+	wg.Wait()
+
 	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
-	wg.Wait()
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
 	}
