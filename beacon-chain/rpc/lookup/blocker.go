@@ -162,7 +162,7 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 			if err != nil {
 				return [32]byte{}, nil, errors.Wrapf(err, "could not retrieve block roots for slot %d", slot)
 			}
-			if !ok || roots == nil || len(roots) == 0 {
+			if !ok || len(roots) == 0 {
 				// No blocks at this slot
 				return [32]byte{}, nil, nil
 			}
