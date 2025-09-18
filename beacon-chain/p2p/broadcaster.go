@@ -381,6 +381,7 @@ func (s *Service) internalBroadcastDataColumnSidecar(
 		"timeSinceSlotStart": time.Since(slotStartTime),
 		"root":               fmt.Sprintf("%#x", dataColumnSidecar.BlockRoot()),
 		"columnSubnet":       columnSubnet,
+		"blobCount":          len(dataColumnSidecar.Column),
 	}).Debug("Broadcasted data column sidecar")
 
 	// Increase the number of successful broadcasts.
