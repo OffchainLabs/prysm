@@ -37,21 +37,9 @@ func NewBlockNotFoundError(msg string) *BlockNotFoundError {
 	}
 }
 
-// NewBlockRootsNotFoundError creates a BlockNotFoundError for missing block roots.
-// Deprecated: Use NewBlockNotFoundError instead.
-func NewBlockRootsNotFoundError() *BlockNotFoundError {
-	return &BlockNotFoundError{
-		message: "no block roots returned from the database",
-	}
-}
-
 func (e *BlockNotFoundError) Error() string {
 	return e.message
 }
-
-// BlockRootsNotFoundError is deprecated. Use BlockNotFoundError instead.
-// Deprecated: Use BlockNotFoundError instead.
-type BlockRootsNotFoundError = BlockNotFoundError
 
 // BlockIdParseError represents an error scenario where a block ID could not be parsed.
 type BlockIdParseError struct {
@@ -283,7 +271,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	if err != nil {
 		var blockNotFound *BlockNotFoundError
 		var blockIdParseErr *BlockIdParseError
-		
+
 		reason := core.Internal // Default to Internal for unexpected errors
 		if errors.As(err, &blockNotFound) {
 			reason = core.NotFound
