@@ -12,7 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -33,7 +32,7 @@ var (
 // SyncCommitteeCache utilizes a FIFO cache to sufficiently cache validator position within sync committee.
 // It is thread safe with concurrent read write.
 type SyncCommitteeCache struct {
-	cache   *cache.FIFO
+	cache   *FIFO
 	lock    sync.RWMutex
 	cleared *atomic.Uint64
 }
@@ -64,7 +63,7 @@ func (s *SyncCommitteeCache) Clear() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.cleared.Add(1)
-	s.cache = cache.NewFIFO(keyFn)
+	s.cache = NewFIFO(keyFn)
 }
 
 // CurrentPeriodPositions returns current period positions of validator indices with respect with

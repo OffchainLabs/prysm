@@ -1,11 +1,7 @@
 package cache
 
-import (
-	"k8s.io/client-go/tools/cache"
-)
-
 // trim the FIFO queue to the maxSize.
-func trim(queue *cache.FIFO, maxSize uint64) {
+func trim(queue *FIFO, maxSize uint64) {
 	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
 		_, err := queue.Pop(popProcessNoopFunc)
 		if err != nil {

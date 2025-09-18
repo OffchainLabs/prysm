@@ -16,6 +16,7 @@ go_library(
         "doc.go",
         "error.go",
         "interfaces.go",
+        "k8s_fifo.go",
         "payload_id.go",
         "proposer_indices.go",
         "proposer_indices_disabled.go",  # keep

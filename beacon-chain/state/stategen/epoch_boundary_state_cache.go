@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
