@@ -165,26 +165,13 @@ func (p *BeaconDbBlocker) resolveBlockID(ctx context.Context, id string) ([field
 			return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head block")
 		}
 		if blk == nil {
-			// Head block not in memory, try to get head root and fetch from DB
-			headRoot, err := p.ChainInfoFetcher.HeadRoot(ctx)
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head root")
-			}
-			root := bytesutil.ToBytes32(headRoot)
-			blk, err = p.BeaconDB.Block(ctx, root)
-			if err != nil {
-				return [32]byte{}, nil, errors.Wrap(err, "could not retrieve head block by root")
-			}
-			if blk == nil {
-				return [32]byte{}, nil, NewBlockNotFoundError(fmt.Sprintf("head block %#x not found", root))
-			}
-			return root, blk, nil
+			return [32]byte{}, nil, NewBlockNotFoundError("head block not found")
 		}
-		headRoot, err := blk.Block().HashTreeRoot()
+		root, err := blk.Block().HashTreeRoot()
 		if err != nil {
 			return [32]byte{}, nil, errors.Wrap(err, "could not get head block root")
 		}
-		return headRoot, blk, nil
+		return root, blk, nil
 
 	case "finalized":
 		finalized := p.ChainInfoFetcher.FinalizedCheckpt()

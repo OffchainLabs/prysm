@@ -359,7 +359,10 @@ func TestGetBlob(t *testing.T) {
 		setupDeneb(t)
 
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{Root: denebBlockRoot[:]},
+			ChainInfoFetcher: &mockChain.ChainService{
+				Root:  denebBlockRoot[:],
+				Block: denebBlock,
+			},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
