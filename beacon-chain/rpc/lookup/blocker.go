@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -269,13 +268,10 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		return nil, &core.RpcError{Err: err, Reason: core.ErrorReason(reason)}
 	}
 
-	// Validate fork epoch for Deneb (blobs)
-	if roSignedBlock != nil {
-		slot := roSignedBlock.Block().Slot()
-		if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
-			forkName := version.String(slots.ToForkVersion(slot))
-			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
-		}
+	slot := roSignedBlock.Block().Slot()
+	if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
+		forkName := version.String(slots.ToForkVersion(slot))
+		return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
 	}
 
 	roBlock := roSignedBlock.Block()
@@ -513,48 +509,26 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 	// Resolve block ID to root and block
 	root, roSignedBlock, err := p.resolveBlockID(ctx, id)
 	if err != nil {
-		reason := core.BadRequest
-		if strings.Contains(err.Error(), "not found") {
+		var blockNotFound *BlockNotFoundError
+		var blockIdParseErr *BlockIdParseError
+
+		reason := core.Internal // Default to Internal for unexpected errors
+		if errors.As(err, &blockNotFound) {
 			reason = core.NotFound
+		} else if errors.As(err, &blockIdParseErr) {
+			reason = core.BadRequest
 		}
 		return nil, &core.RpcError{Err: err, Reason: core.ErrorReason(reason)}
 	}
 
-	// Validate fork epoch for Fulu (data columns)
-	if roSignedBlock != nil {
-		slot := roSignedBlock.Block().Slot()
-		fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-		fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-		}
-		if slot < fuluForkSlot {
-			forkName := version.String(slots.ToForkVersion(slot))
-			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
-		}
+	slot := roSignedBlock.Block().Slot()
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
 	}
-
-	// If block is nil but we have a root (e.g., from head), try to fetch by root
-	if roSignedBlock == nil {
-		roSignedBlock, err = p.BeaconDB.Block(ctx, root)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve block by root %#x", root), Reason: core.Internal}
-		}
-		if roSignedBlock == nil {
-			return nil, &core.RpcError{Err: errors.Errorf("block not found for root %#x", root), Reason: core.NotFound}
-		}
-
-		// Validate fork epoch for the fetched block
-		slot := roSignedBlock.Block().Slot()
-		fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-		fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-		}
-		if slot < fuluForkSlot {
-			forkName := version.String(slots.ToForkVersion(slot))
-			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
-		}
+	if slot < fuluForkSlot {
+		return nil, &core.RpcError{Err: errors.New("not supported before Fulu fork"), Reason: core.BadRequest}
 	}
 
 	roBlock := roSignedBlock.Block()

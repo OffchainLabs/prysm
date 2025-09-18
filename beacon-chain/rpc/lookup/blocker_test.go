@@ -896,7 +896,10 @@ func TestGetDataColumns(t *testing.T) {
 		setupFulu(t)
 
 		blocker := &BeaconDbBlocker{
-			ChainInfoFetcher: &mockChain.ChainService{Root: fuluBlockRoot[:]},
+			ChainInfoFetcher: &mockChain.ChainService{
+				Root:  fuluBlockRoot[:],
+				Block: fuluBlock,
+			},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
 			},
