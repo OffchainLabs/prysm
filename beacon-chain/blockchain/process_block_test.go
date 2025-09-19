@@ -2958,14 +2958,18 @@ func TestIsDataAvailable(t *testing.T) {
 		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
 		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
 
-		err := service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
 
 	t.Run("Fulu - no commitment in blocks", func(t *testing.T) {
 		ctx, _, service, root, signed := testIsAvailableSetup(t, testIsAvailableParams{})
 
-		err := service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
 
@@ -2983,7 +2987,9 @@ func TestIsDataAvailable(t *testing.T) {
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
 
-		err := service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
 
@@ -2995,7 +3001,9 @@ func TestIsDataAvailable(t *testing.T) {
 
 		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
 
-		err := service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
 
@@ -3043,7 +3051,9 @@ func TestIsDataAvailable(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 		defer cancel()
 
-		err = service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
 
@@ -3105,7 +3115,9 @@ func TestIsDataAvailable(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 		defer cancel()
 
-		err = service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
 
@@ -3124,7 +3136,9 @@ func TestIsDataAvailable(t *testing.T) {
 			cancel()
 		}()
 
-		err := service.isDataAvailable(ctx, root, signed)
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
 		require.NotNil(t, err)
 	})
 }

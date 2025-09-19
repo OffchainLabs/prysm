@@ -5,7 +5,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -16,6 +16,7 @@ var (
 	ErrBlobIndexTooHigh         = errors.New("blob index is too high")
 	ErrBlockRootMismatch        = errors.New("block root mismatch")
 	ErrBlobsCellsProofsMismatch = errors.New("blobs and cells proofs mismatch")
+	ErrNilBlobAndProof          = errors.New("nil blob and proof")
 )
 
 // MinimumColumnCountToReconstruct return the minimum number of columns needed to proceed to a reconstruction.
@@ -62,12 +63,6 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	// Sidecars are verified and are committed to the same block.
-	// All signed block headers, KZG commitments, and inclusion proofs are the same.
-	signedBlockHeader := referenceSidecar.SignedBlockHeader
-	kzgCommitments := referenceSidecar.KzgCommitments
-	kzgCommitmentsInclusionProof := referenceSidecar.KzgCommitmentsInclusionProof
-
 	// Recover cells and compute proofs in parallel.
 	var wg errgroup.Group
 	cellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
@@ -100,78 +95,20 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 		return nil, errors.Wrap(err, "wait for RecoverCellsAndKZGProofs")
 	}
 
-	reconstructedSidecars, err := dataColumnsSidecars(signedBlockHeader, kzgCommitments, kzgCommitmentsInclusionProof, cellsAndProofs)
+	outSidecars, err := DataColumnSidecars(cellsAndProofs, PopulateFromSidecar(referenceSidecar))
 	if err != nil {
 		return nil, errors.Wrap(err, "data column sidecars from items")
 	}
 
 	// Input sidecars are verified, and we reconstructed ourselves the missing sidecars.
 	// As a consequence, reconstructed sidecars are also verified.
-	reconstructedVerifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(reconstructedSidecars))
-	for _, sidecar := range reconstructedSidecars {
-		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, blockRoot)
-		if err != nil {
-			return nil, errors.Wrap(err, "new RO data column with root")
-		}
-
-		verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
+	reconstructedVerifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(outSidecars))
+	for _, sidecar := range outSidecars {
+		verifiedRoSidecar := blocks.NewVerifiedRODataColumn(sidecar)
 		reconstructedVerifiedRoSidecars = append(reconstructedVerifiedRoSidecars, verifiedRoSidecar)
 	}
 
 	return reconstructedVerifiedRoSidecars, nil
-}
-
-// ConstructDataColumnSidecars constructs data column sidecars from a block, (un-extended) blobs and
-// cell proofs corresponding the extended blobs. The main purpose of this function is to
-// construct data column sidecars from data obtained from the execution client via:
-// - `engine_getBlobsV2` - https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getblobsv2, or
-// - `engine_getPayloadV5` - https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#engine_getpayloadv5
-// Note: In this function, to stick with the `BlobsBundleV2` format returned by the execution client in `engine_getPayloadV5`,
-// cell proofs are "flattened".
-func ConstructDataColumnSidecars(block interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte, cellProofs [][]byte) ([]*ethpb.DataColumnSidecar, error) {
-	// Check if the cells count is equal to the cell proofs count.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	blobCount := uint64(len(blobs))
-	cellProofsCount := uint64(len(cellProofs))
-
-	cellsCount := blobCount * numberOfColumns
-	if cellsCount != cellProofsCount {
-		return nil, ErrBlobsCellsProofsMismatch
-	}
-
-	cellsAndProofs := make([]kzg.CellsAndProofs, 0, blobCount)
-	for i, blob := range blobs {
-		var kzgBlob kzg.Blob
-		if copy(kzgBlob[:], blob) != len(kzgBlob) {
-			return nil, errors.New("wrong blob size - should never happen")
-		}
-
-		// Compute the extended cells from the (non-extended) blob.
-		cells, err := kzg.ComputeCells(&kzgBlob)
-		if err != nil {
-			return nil, errors.Wrap(err, "compute cells")
-		}
-
-		var proofs []kzg.Proof
-		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
-			var kzgProof kzg.Proof
-			if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
-				return nil, errors.New("wrong KZG proof size - should never happen")
-			}
-
-			proofs = append(proofs, kzgProof)
-		}
-
-		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: proofs}
-		cellsAndProofs = append(cellsAndProofs, cellsProofs)
-	}
-
-	dataColumnSidecars, err := DataColumnSidecars(block, cellsAndProofs)
-	if err != nil {
-		return nil, errors.Wrap(err, "data column sidcars")
-	}
-
-	return dataColumnSidecars, nil
 }
 
 // ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
@@ -254,6 +191,89 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 	}
 
 	return blobSidecars, nil
+}
+
+// ComputeCellsAndProofsFromFlat computes the cells and proofs from blobs and cell flat proofs.
+func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([]kzg.CellsAndProofs, error) {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	blobCount := uint64(len(blobs))
+	cellProofsCount := uint64(len(cellProofs))
+
+	cellsCount := blobCount * numberOfColumns
+	if cellsCount != cellProofsCount {
+		return nil, ErrBlobsCellsProofsMismatch
+	}
+
+	cellsAndProofs := make([]kzg.CellsAndProofs, 0, blobCount)
+	for i, blob := range blobs {
+		var kzgBlob kzg.Blob
+		if copy(kzgBlob[:], blob) != len(kzgBlob) {
+			return nil, errors.New("wrong blob size - should never happen")
+		}
+
+		// Compute the extended cells from the (non-extended) blob.
+		cells, err := kzg.ComputeCells(&kzgBlob)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute cells")
+		}
+
+		var proofs []kzg.Proof
+		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
+			var kzgProof kzg.Proof
+			if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
+				return nil, errors.New("wrong KZG proof size - should never happen")
+			}
+
+			proofs = append(proofs, kzgProof)
+		}
+
+		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: proofs}
+		cellsAndProofs = append(cellsAndProofs, cellsProofs)
+	}
+
+	return cellsAndProofs, nil
+}
+
+// ComputeCellsAndProofs computes the cells and proofs from blobs and cell proofs.
+func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([]kzg.CellsAndProofs, error) {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	cellsAndProofs := make([]kzg.CellsAndProofs, 0, len(blobsAndProofs))
+	for _, blobAndProof := range blobsAndProofs {
+		if blobAndProof == nil {
+			return nil, ErrNilBlobAndProof
+		}
+
+		var kzgBlob kzg.Blob
+		if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
+			return nil, errors.New("wrong blob size - should never happen")
+		}
+
+		// Compute the extended cells from the (non-extended) blob.
+		cells, err := kzg.ComputeCells(&kzgBlob)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute cells")
+		}
+
+		kzgProofs := make([]kzg.Proof, 0, numberOfColumns*kzg.BytesPerProof)
+		for _, kzgProofBytes := range blobAndProof.KzgProofs {
+			if len(kzgProofBytes) != kzg.BytesPerProof {
+				return nil, errors.New("wrong KZG proof size - should never happen")
+			}
+
+			var kzgProof kzg.Proof
+			if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
+				return nil, errors.New("wrong copied KZG proof size - should never happen")
+			}
+
+			kzgProofs = append(kzgProofs, kzgProof)
+		}
+
+		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: kzgProofs}
+		cellsAndProofs = append(cellsAndProofs, cellsProofs)
+	}
+
+	return cellsAndProofs, nil
 }
 
 // blobSidecarsFromDataColumnSidecars converts verified data column sidecars to verified blob sidecars.
