@@ -389,7 +389,7 @@ func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedROD
 
 	// Marshal and append each sidecar
 	for i, sidecar := range verifiedDataColumns {
-		sszrep, err := (&sidecar).MarshalSSZ()
+		sszrep, err := sidecar.MarshalSSZ()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to marshal data column sidecar at index %d", i)
 		}
