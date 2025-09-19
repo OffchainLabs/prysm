@@ -262,7 +262,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 		predenebBlock := util.NewBeaconBlock()
 		predenebBlock.Block.Slot = 100
 		util.SaveBlock(t, ctx, db, predenebBlock)
-		
+
 		// Create blocker without ChainInfoFetcher to trigger internal error when checking canonical status
 		blocker := &BeaconDbBlocker{
 			BeaconDB: db,
@@ -329,9 +329,9 @@ func TestGetBlob(t *testing.T) {
 	for _, blob := range fuluBlobSidecars {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProogs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProogs)
+		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
 	}
 
 	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
@@ -792,5 +792,302 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Check that both missing hashes are reported
 		require.StringContains(t, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", rpcErr.Err.Error())
 		require.StringContains(t, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", rpcErr.Err.Error())
+	})
+}
+
+func TestGetDataColumns(t *testing.T) {
+	const (
+		blobCount     = 4
+		fuluForkEpoch = 2
+	)
+
+	setupFulu := func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 1
+		cfg.FuluForkEpoch = fuluForkEpoch
+		params.OverrideBeaconConfig(cfg)
+	}
+
+	setupPreFulu := func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 1
+		cfg.FuluForkEpoch = 1000 // Set to a high epoch to ensure we're before Fulu
+		params.OverrideBeaconConfig(cfg)
+	}
+
+	ctx := t.Context()
+	db := testDB.SetupDB(t)
+
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Create Fulu block and convert blob sidecars to data column sidecars.
+	fuluForkSlot := fuluForkEpoch * params.BeaconConfig().SlotsPerEpoch
+	fuluBlock, fuluBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, fuluForkSlot, blobCount)
+	fuluBlockRoot := fuluBlock.Root()
+
+	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobSidecars))
+	for _, blob := range fuluBlobSidecars {
+		var kzgBlob kzg.Blob
+		copy(kzgBlob[:], blob.Blob)
+		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		require.NoError(t, err)
+		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+	}
+
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	require.NoError(t, err)
+
+	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+	for _, roDataColumn := range roDataColumnSidecars {
+		verifiedRoDataColumn := blocks.NewVerifiedRODataColumn(roDataColumn)
+		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, verifiedRoDataColumn)
+	}
+
+	err = db.SaveBlock(t.Context(), fuluBlock)
+	require.NoError(t, err)
+
+	_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
+	err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+	require.NoError(t, err)
+
+	t.Run("pre-fulu fork", func(t *testing.T) {
+		setupPreFulu(t)
+
+		// Create a block at slot 123 (before Fulu fork since FuluForkEpoch is set to MaxUint64)
+		preFuluBlock := util.NewBeaconBlock()
+		preFuluBlock.Block.Slot = 123
+		util.SaveBlock(t, ctx, db, preFuluBlock)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			ChainInfoFetcher: &mockChain.ChainService{},
+			BeaconDB:         db,
+		}
+
+		_, rpcErr := blocker.DataColumns(ctx, "123", nil)
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+		require.StringContains(t, "not supported before Fulu fork", rpcErr.Err.Error())
+	})
+
+	t.Run("genesis", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			ChainInfoFetcher: &mockChain.ChainService{},
+		}
+
+		_, rpcErr := blocker.DataColumns(ctx, "genesis", nil)
+		require.NotNil(t, rpcErr)
+		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
+		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
+	})
+
+	t.Run("head", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{
+				Root:  fuluBlockRoot[:],
+				Block: fuluBlock,
+			},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, "head", nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, len(verifiedRoDataColumnSidecars), len(retrievedDataColumns))
+
+		// Create a map of expected indices for easier verification
+		expectedIndices := make(map[uint64]bool)
+		for _, expected := range verifiedRoDataColumnSidecars {
+			expectedIndices[expected.RODataColumn.DataColumnSidecar.Index] = true
+		}
+
+		// Verify we got data columns with the expected indices
+		for _, actual := range retrievedDataColumns {
+			require.Equal(t, true, expectedIndices[actual.RODataColumn.DataColumnSidecar.Index])
+		}
+	})
+
+	t.Run("finalized", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: fuluBlockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, "finalized", nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, len(verifiedRoDataColumnSidecars), len(retrievedDataColumns))
+	})
+
+	t.Run("justified", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			ChainInfoFetcher: &mockChain.ChainService{CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: fuluBlockRoot[:]}},
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, "justified", nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, len(verifiedRoDataColumnSidecars), len(retrievedDataColumns))
+	})
+
+	t.Run("root", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(fuluBlockRoot[:]), nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, len(verifiedRoDataColumnSidecars), len(retrievedDataColumns))
+	})
+
+	t.Run("slot", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			ChainInfoFetcher:  &mockChain.ChainService{},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		slotStr := fmt.Sprintf("%d", fuluForkSlot)
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, slotStr, nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, len(verifiedRoDataColumnSidecars), len(retrievedDataColumns))
+	})
+
+	t.Run("specific indices", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		// Request specific indices (first 3 data columns)
+		indices := []int{0, 1, 2}
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(fuluBlockRoot[:]), indices)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, 3, len(retrievedDataColumns))
+
+		for i, dataColumn := range retrievedDataColumns {
+			require.Equal(t, uint64(indices[i]), dataColumn.RODataColumn.DataColumnSidecar.Index)
+		}
+	})
+
+	t.Run("no data columns returns empty array", func(t *testing.T) {
+		setupFulu(t)
+
+		_, emptyDataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: emptyDataColumnStorage,
+		}
+
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(fuluBlockRoot[:]), nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, 0, len(retrievedDataColumns))
+	})
+
+	t.Run("index too big", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		_, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(fuluBlockRoot[:]), []int{0, math.MaxInt})
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+	})
+
+	t.Run("outside retention period", func(t *testing.T) {
+		setupFulu(t)
+
+		// Create a data column storage with very short retention period
+		shortRetentionStorage, err := filesystem.NewDataColumnStorage(ctx,
+			filesystem.WithDataColumnBasePath(t.TempDir()),
+			filesystem.WithDataColumnRetentionEpochs(1), // Only 1 epoch retention
+		)
+		require.NoError(t, err)
+
+		// Mock genesis time to make current slot much later than the block slot
+		// This simulates being outside retention period
+		genesisTime := time.Now().Add(-time.Duration(fuluForkSlot+1000) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: genesisTime,
+			},
+			BeaconDB:          db,
+			DataColumnStorage: shortRetentionStorage,
+		}
+
+		// Since the block is outside retention period, should return empty array
+		retrievedDataColumns, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(fuluBlockRoot[:]), nil)
+		require.IsNil(t, rpcErr)
+		require.Equal(t, 0, len(retrievedDataColumns))
+	})
+
+	t.Run("block not found", func(t *testing.T) {
+		setupFulu(t)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		nonExistentRoot := bytesutil.PadTo([]byte("nonexistent"), 32)
+		_, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(nonExistentRoot), nil)
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 }

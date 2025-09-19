@@ -67,6 +67,25 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 		}
 
 		return nil
+
+	// In Bitlist case, we have to set the actual length of the bitlist.
+	case Bitlist:
+		bitlistInfo, err := sszInfo.BitlistInfo()
+		if err != nil {
+			return fmt.Errorf("could not get bitlist info: %w", err)
+		}
+
+		if bitlistInfo == nil {
+			return errors.New("bitlistInfo is nil")
+		}
+
+		val := reflect.ValueOf(value)
+		if err := bitlistInfo.SetLengthFromBytes(val.Bytes()); err != nil {
+			return fmt.Errorf("could not set bitlist length from bytes: %w", err)
+		}
+
+		return nil
+
 	// In Container case, we need to recursively populate variable-sized fields.
 	case Container:
 		containerInfo, err := sszInfo.ContainerInfo()
@@ -194,7 +213,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get list limit: %w", err)
 		}
 
-		return analyzeListType(typ, elementInfo, limit)
+		return analyzeListType(typ, elementInfo, limit, sszDimension.isBitfield)
 	}
 
 	// 2. Handle Vector/Bitvector type
@@ -204,7 +223,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get vector length: %w", err)
 		}
 
-		return analyzeVectorType(typ, elementInfo, length)
+		return analyzeVectorType(typ, elementInfo, length, sszDimension.isBitfield)
 	}
 
 	// Parsing ssz tag doesn't provide enough information to determine the collection type,
@@ -212,8 +231,22 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 	return nil, errors.New("could not determine collection type from tags")
 }
 
-// analyzeListType analyzes SSZ List type and returns its SSZ info.
-func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*sszInfo, error) {
+// analyzeListType analyzes SSZ List/Bitlist type and returns its SSZ info.
+func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBitfield bool) (*sszInfo, error) {
+	if isBitfield {
+		return &sszInfo{
+			sszType: Bitlist,
+			typ:     typ,
+
+			fixedSize:  offsetBytes,
+			isVariable: true,
+
+			bitlistInfo: &bitlistInfo{
+				limit: limit,
+			},
+		}, nil
+	}
+
 	if elementInfo == nil {
 		return nil, errors.New("element info is required for List")
 	}
@@ -232,10 +265,25 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 	}, nil
 }
 
-// analyzeVectorType analyzes SSZ Vector type and returns its SSZ info.
-func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*sszInfo, error) {
+// analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
+func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
+	if isBitfield {
+		return &sszInfo{
+			sszType: Bitvector,
+			typ:     typ,
+
+			// Size in bytes
+			fixedSize:  length,
+			isVariable: false,
+
+			bitvectorInfo: &bitvectorInfo{
+				length: length * 8, // length in bits
+			},
+		}, nil
+	}
+
 	if elementInfo == nil {
-		return nil, errors.New("element info is required for Vector")
+		return nil, errors.New("element info is required for Vector/Bitvector")
 	}
 
 	// Validate the given length.

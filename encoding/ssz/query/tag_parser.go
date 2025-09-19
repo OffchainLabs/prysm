@@ -15,6 +15,10 @@ const (
 	// sszSizeTag specifies the length of a fixed-sized collection, like an SSZ Vector.
 	// A wildcard ('?') indicates that the dimension is variable-sized (a List).
 	sszSizeTag = "ssz-size"
+
+	// castTypeTag specifies special custom casting instructions.
+	// e.g., "github.com/prysmaticlabs/go-bitfield.Bitlist".
+	castTypeTag = "cast-type"
 )
 
 // SSZDimension holds parsed SSZ tag information for current dimension.
@@ -22,6 +26,9 @@ const (
 type SSZDimension struct {
 	vectorLength *uint64
 	listLimit    *uint64
+
+	// isBitfield indicates if the dimension represents a bitfield type (Bitlist, Bitvector).
+	isBitfield bool
 }
 
 // ParseSSZTag parses SSZ-specific tags (like `ssz-max` and `ssz-size`)
@@ -34,6 +41,11 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 
 	var newTagParts []string
 	var sizeStr, maxStr string
+	var isBitfield bool
+
+	if castType := tag.Get(castTypeTag); strings.Contains(castType, "go-bitfield") {
+		isBitfield = true
+	}
 
 	// Parse ssz-size tag
 	if sszSize := tag.Get(sszSizeTag); sszSize != "" {
@@ -88,7 +100,7 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 			return nil, nil, errors.New("ssz-max must be greater than 0")
 		}
 
-		return &SSZDimension{listLimit: &limit}, newTag, nil
+		return &SSZDimension{listLimit: &limit, isBitfield: isBitfield}, newTag, nil
 	}
 
 	// 2. If ssz-size is specified, it must be a vector.
@@ -100,7 +112,7 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 		return nil, nil, errors.New("ssz-size must be greater than 0")
 	}
 
-	return &SSZDimension{vectorLength: &length}, newTag, nil
+	return &SSZDimension{vectorLength: &length, isBitfield: isBitfield}, newTag, nil
 }
 
 // IsVector returns true if this dimension represents a vector.
