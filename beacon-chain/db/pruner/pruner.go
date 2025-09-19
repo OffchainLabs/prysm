@@ -184,6 +184,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 	p.prunedUpto = pruneUpto
 
 	// Update the earliest available slot after pruning
+	log.WithField("earliestSlot", pruneUpto+1).Debug("Updating earliest available slot after pruning")
 	p.updateEarliestSlot(pruneUpto + 1)
 
 	return nil
