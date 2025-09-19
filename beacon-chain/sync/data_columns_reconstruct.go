@@ -3,219 +3,131 @@ package sync
 import (
 	"context"
 	"fmt"
-	"slices"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-const (
-	broadcastMissingDataColumnsTimeIntoSlotMin = 1 * time.Second
-	broadcastMissingDataColumnsSlack           = 2 * time.Second
-)
+// processDataColumnSidecarsFromReconstruction, after a random delay, attempts to reconstruct,
+// broadcast and receive missing data column sidecars for the given block root.
+// https:github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#reconstruction-and-cross-seeding
+func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
+	if _, err, _ := s.reconstructionSingleFlight.Do(key, func() (interface{}, error) {
+		var wg sync.WaitGroup
 
-// reconstructSaveBroadcastDataColumnSidecars reconstructs, if possible,
-// all data column sidecars. Then, it saves missing sidecars to the store.
-// After a delay, it broadcasts in the background not seen via gossip
-// (but reconstructed) sidecars.
-func (s *Service) reconstructSaveBroadcastDataColumnSidecars(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	startTime := time.Now()
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+		root := sidecar.BlockRoot()
+		slot := sidecar.Slot()
+		proposerIndex := sidecar.ProposerIndex()
 
-	root := sidecar.BlockRoot()
-	slot := sidecar.Slot()
-	proposerIndex := sidecar.ProposerIndex()
+		// Return early if reconstruction is not needed.
+		if !s.shouldReconstruct(root) {
+			return nil, nil
+		}
 
-	// Lock to prevent concurrent reconstructions.
-	s.reconstructionLock.Lock()
-	defer s.reconstructionLock.Unlock()
+		// Compute the slot start time.
+		slotStartTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), slot)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to calculate slot start time")
+		}
+
+		// Randomly choose value before starting reconstruction.
+		timeIntoSlot := s.computeRandomDelay(slotStartTime)
+		broadcastTime := slotStartTime.Add(timeIntoSlot)
+		waitingTime := time.Until(broadcastTime)
+
+		wg.Add(1)
+		time.AfterFunc(waitingTime, func() {
+			defer wg.Done()
+
+			// Return early if the context was canceled during the waiting time.
+			if err := ctx.Err(); err != nil {
+				return
+			}
+
+			// Return early if reconstruction is not needed anymore.
+			if !s.shouldReconstruct(root) {
+				return
+			}
+
+			// Load all the stored data column sidecars for this root.
+			verifiedSidecars, err := s.cfg.dataColumnStorage.Get(root, nil)
+			if err != nil {
+				log.WithError(err).Error("Failed to get data column sidecars")
+				return
+			}
+
+			// Reconstruct all the data column sidecars.
+			startTime := time.Now()
+			reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(verifiedSidecars)
+			if err != nil {
+				log.WithError(err).Error("Failed to reconstruct data column sidecars")
+				return
+			}
+
+			duration := time.Since(startTime)
+			dataColumnReconstructionHistogram.Observe(float64(duration.Milliseconds()))
+			dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
+
+			// Retrieve indices of data column sidecars to sample.
+			columnIndicesToSample, err := s.columnIndicesToSample()
+			if err != nil {
+				log.WithError(err).Error("Failed to get column indices to sample")
+				return
+			}
+
+			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, slot, proposerIndex, columnIndicesToSample, reconstructedSidecars)
+			if err != nil {
+				log.WithError(err).Error("Failed to broadcast and receive unseen data column sidecars")
+				return
+			}
+
+			if len(unseenIndices) > 0 {
+				log.WithFields(logrus.Fields{
+					"root":          fmt.Sprintf("%#x", root),
+					"slot":          slot,
+					"proposerIndex": proposerIndex,
+					"count":         len(unseenIndices),
+					"indices":       sortedSliceFromMap(unseenIndices),
+					"duration":      duration,
+				}).Debug("Reconstructed data column sidecars")
+			}
+		})
+
+		wg.Wait()
+		return nil, nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// shouldReconstruct returns true if we should attempt to reconstruct the data columns for the given block root.
+func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Get the columns we store.
 	storedDataColumns := s.cfg.dataColumnStorage.Summary(root)
 	storedColumnsCount := storedDataColumns.Count()
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
-	// If reconstruction is not possible or if all columns are already stored, exit early.
-	if storedColumnsCount < peerdas.MinimumColumnCountToReconstruct() || storedColumnsCount == numberOfColumns {
-		return nil
-	}
-
-	// Retrieve our local node info.
-	nodeID := s.cfg.p2p.NodeID()
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
-	if err != nil {
-		return errors.Wrap(err, "custody group count")
-	}
-
-	samplingSize := max(custodyGroupCount, samplesPerSlot)
-	localNodeInfo, _, err := peerdas.Info(nodeID, samplingSize)
-	if err != nil {
-		return errors.Wrap(err, "peer info")
-	}
-
-	// Load all the possible data column sidecars, to minimize reconstruction time.
-	verifiedSidecars, err := s.cfg.dataColumnStorage.Get(root, nil)
-	if err != nil {
-		return errors.Wrap(err, "get data column sidecars")
-	}
-
-	// Reconstruct all the data column sidecars.
-	reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(verifiedSidecars)
-	if err != nil {
-		return errors.Wrap(err, "reconstruct data column sidecars")
-	}
-
-	// Filter reconstructed sidecars to save.
-	custodyColumns := localNodeInfo.CustodyColumns
-	toSaveSidecars := make([]blocks.VerifiedRODataColumn, 0, len(custodyColumns))
-	for _, sidecar := range reconstructedSidecars {
-		if custodyColumns[sidecar.Index] {
-			toSaveSidecars = append(toSaveSidecars, sidecar)
-		}
-	}
-
-	// Save the data column sidecars to the database.
-	// Note: We do not call `receiveDataColumn`, because it will ignore
-	// incoming data columns via gossip while we did not broadcast (yet) the reconstructed data columns.
-	if err := s.cfg.dataColumnStorage.Save(toSaveSidecars); err != nil {
-		return errors.Wrap(err, "save data column sidecars")
-	}
-
-	slotStartTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), slot)
-	if err != nil {
-		return errors.Wrap(err, "failed to calculate slot start time")
-	}
-	log.WithFields(logrus.Fields{
-		"root":                          fmt.Sprintf("%#x", root),
-		"slot":                          slot,
-		"fromColumnsCount":              storedColumnsCount,
-		"sinceSlotStartTime":            time.Since(slotStartTime),
-		"reconstructionAndSaveDuration": time.Since(startTime),
-	}).Debug("Data columns reconstructed and saved")
-
-	// Update reconstruction metrics.
-	dataColumnReconstructionHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
-	dataColumnReconstructionCounter.Add(float64(len(reconstructedSidecars) - len(verifiedSidecars)))
-
-	// Schedule the broadcast.
-	if err := s.scheduleMissingDataColumnSidecarsBroadcast(ctx, root, proposerIndex, slot); err != nil {
-		return errors.Wrap(err, "schedule reconstructed data columns broadcast")
-	}
-
-	return nil
+	// Reconstruct only if we have at least the minimum number of columns to reconstruct, but not all the columns.
+	// (If we have not enough columns, reconstruction is impossible. If we have all the columns, reconstruction is unnecessary.)
+	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != numberOfColumns
 }
 
-// scheduleMissingDataColumnSidecarsBroadcast schedules the broadcast of missing
-// (aka. not seen via gossip but reconstructed) sidecars.
-func (s *Service) scheduleMissingDataColumnSidecarsBroadcast(
-	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	proposerIndex primitives.ValidatorIndex,
-	slot primitives.Slot,
-) error {
-	log := log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%x", root),
-		"slot": slot,
-	})
+// computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.
+func (s *Service) computeRandomDelay(slotStartTime time.Time) time.Duration {
+	const maxReconstructionDelaySec = 2.
 
-	// Get the time corresponding to the start of the slot.
-	genesisTime := s.cfg.clock.GenesisTime()
-	slotStartTime, err := slots.StartTime(genesisTime, slot)
-	if err != nil {
-		return errors.Wrap(err, "failed to calculate slot start time")
-	}
-
-	// Compute the waiting time. This could be negative. In such a case, broadcast immediately.
 	randFloat := s.reconstructionRandGen.Float64()
-	timeIntoSlot := broadcastMissingDataColumnsTimeIntoSlotMin + time.Duration(float64(broadcastMissingDataColumnsSlack)*randFloat)
-	broadcastTime := slotStartTime.Add(timeIntoSlot)
-	waitingTime := time.Until(broadcastTime)
-	time.AfterFunc(waitingTime, func() {
-		// Return early if the context was canceled during the waiting time.
-		if err := ctx.Err(); err != nil {
-			return
-		}
-
-		if err := s.broadcastMissingDataColumnSidecars(slot, proposerIndex, root, timeIntoSlot); err != nil {
-			log.WithError(err).Error("Failed to broadcast missing data column sidecars")
-		}
-	})
-
-	return nil
-}
-
-func (s *Service) broadcastMissingDataColumnSidecars(
-	slot primitives.Slot,
-	proposerIndex primitives.ValidatorIndex,
-	root [fieldparams.RootLength]byte,
-	timeIntoSlot time.Duration,
-) error {
-	// Get the node ID.
-	nodeID := s.cfg.p2p.NodeID()
-
-	// Retrieve the local node info.
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
-	if err != nil {
-		return errors.Wrap(err, "custody group count")
-	}
-
-	localNodeInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
-	if err != nil {
-		return errors.Wrap(err, "peerdas info")
-	}
-
-	// Compute the missing data columns (data columns we should custody but we did not received via gossip.)
-	missingColumns := make([]uint64, 0, len(localNodeInfo.CustodyColumns))
-	for column := range localNodeInfo.CustodyColumns {
-		if !s.hasSeenDataColumnIndex(slot, proposerIndex, column) {
-			missingColumns = append(missingColumns, column)
-		}
-	}
-
-	// Return early if there are no missing data columns.
-	if len(missingColumns) == 0 {
-		return nil
-	}
-
-	// Load from the store the non received but reconstructed data column.
-	verifiedRODataColumnSidecars, err := s.cfg.dataColumnStorage.Get(root, missingColumns)
-	if err != nil {
-		return errors.Wrap(err, "data column storage get")
-	}
-
-	broadcastedColumns := make([]uint64, 0, len(verifiedRODataColumnSidecars))
-	for _, verifiedRODataColumn := range verifiedRODataColumnSidecars {
-		broadcastedColumns = append(broadcastedColumns, verifiedRODataColumn.Index)
-		// Compute the subnet for this column.
-		subnet := peerdas.ComputeSubnetForDataColumnSidecar(verifiedRODataColumn.Index)
-
-		// Broadcast the missing data column.
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, verifiedRODataColumn); err != nil {
-			log.WithError(err).Error("Broadcast data column")
-		}
-
-		// Now, we can set the data column as seen.
-		s.setSeenDataColumnIndex(slot, proposerIndex, verifiedRODataColumn.Index)
-	}
-
-	if logrus.GetLevel() >= logrus.DebugLevel {
-		// Sort for nice logging.
-		slices.Sort(broadcastedColumns)
-		slices.Sort(missingColumns)
-
-		log.WithFields(logrus.Fields{
-			"timeIntoSlot":   timeIntoSlot,
-			"missingColumns": missingColumns,
-			"broadcasted":    broadcastedColumns,
-		}).Debug("Start broadcasting not seen via gossip but reconstructed data columns")
-	}
-
-	return nil
+	timeIntoSlot := time.Duration(maxReconstructionDelaySec * randFloat * float64(time.Second))
+	return timeIntoSlot
 }
