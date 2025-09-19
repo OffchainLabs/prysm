@@ -205,17 +205,24 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([]kzg.C
 	}
 
 	cellsAndProofs := make([]kzg.CellsAndProofs, 0, blobCount)
+	log.Debug("TIME MARKER ZETA")
 	for i, blob := range blobs {
+		log.WithField("index", i).Debug("TIME MARKER EPSILON")
+
 		var kzgBlob kzg.Blob
 		if copy(kzgBlob[:], blob) != len(kzgBlob) {
 			return nil, errors.New("wrong blob size - should never happen")
 		}
+
+		log.WithField("index", i).Debug("TIME MARKER ETA")
 
 		// Compute the extended cells from the (non-extended) blob.
 		cells, err := kzg.ComputeCells(&kzgBlob)
 		if err != nil {
 			return nil, errors.Wrap(err, "compute cells")
 		}
+
+		log.WithField("index", i).Debug("TIME MARKER THETA")
 
 		var proofs []kzg.Proof
 		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
@@ -227,9 +234,16 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([]kzg.C
 			proofs = append(proofs, kzgProof)
 		}
 
+		log.WithField("index", i).Debug("TIME MARKER IOTA")
+
 		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: proofs}
 		cellsAndProofs = append(cellsAndProofs, cellsProofs)
+
+		log.WithField("index", i).Debug("TIME MARKER KAPPA")
+
 	}
+
+	log.Debug("TIME MARKER LAMBDA")
 
 	return cellsAndProofs, nil
 }

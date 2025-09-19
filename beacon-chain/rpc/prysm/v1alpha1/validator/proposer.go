@@ -324,7 +324,9 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 	} else if block.Version() >= version.Deneb {
+		log.Debug("TIME MARKER 05A")
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
+		log.Debug("TIME MARKER 05B")
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -422,23 +424,31 @@ func (vs *Server) handleUnblindedBlock(
 	block blocks.ROBlock,
 	req *ethpb.GenericSignedBeaconBlock,
 ) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, error) {
+	log.Debug("TIME MARKER ALPHA")
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
 		return nil, nil, err
 	}
+	log.Debug("TIME MARKER BETA")
 
 	if block.Version() >= version.Fulu {
+		log.Debug("TIME MARKER GAMMA")
+
 		// Compute cells and proofs from the blobs and cell proofs.
 		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
+		log.Debug("TIME MARKER DELTA")
+
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "data column sidcars")
 		}
+
+		log.Debug("TIME MARKER EPSILON")
 
 		return nil, roDataColumnSidecars, nil
 	}
