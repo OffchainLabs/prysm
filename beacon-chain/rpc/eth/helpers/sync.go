@@ -138,7 +138,7 @@ func isStateRootOptimistic(
 		return true, errors.Wrapf(err, "could not get block roots for slot %d", st.Slot())
 	}
 	if !has {
-		return true, lookup.NewBlockRootsNotFoundError()
+		return true, lookup.NewBlockNotFoundError("no block roots returned from the database")
 	}
 	for _, r := range roots {
 		b, err := database.Block(ctx, r)
