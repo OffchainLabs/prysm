@@ -270,8 +270,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 
 	slot := roSignedBlock.Block().Slot()
 	if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
-		forkName := version.String(slots.ToForkVersion(slot))
-		return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
+		return nil, &core.RpcError{Err: "blobs are not supported before Deneb fork, Reason: core.BadRequest}
 	}
 
 	roBlock := roSignedBlock.Block()
