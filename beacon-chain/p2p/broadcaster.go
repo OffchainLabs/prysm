@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
@@ -52,6 +53,7 @@ func (s *Service) Broadcast(ctx context.Context, msg proto.Message) error {
 		tracing.AnnotateError(span, ErrMessageNotMapped)
 		return ErrMessageNotMapped
 	}
+
 	castMsg, ok := msg.(ssz.Marshaler)
 	if !ok {
 		return errors.Errorf("message of %T does not support marshaller interface", msg)
@@ -410,6 +412,10 @@ func (s *Service) findPeersIfNeeded(
 
 // method to broadcast messages to other peers in our gossip mesh.
 func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
+	if strings.Contains(topic, "beacon_block") {
+		log.Debug("TIME MARKER D")
+	}
+
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
 	defer span.End()
 
@@ -420,6 +426,10 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 		err := errors.Wrap(err, "could not encode message")
 		tracing.AnnotateError(span, err)
 		return err
+	}
+
+	if strings.Contains(topic, "beacon_block") {
+		log.Debug("TIME MARKER E")
 	}
 
 	if span.IsRecording() {
@@ -433,6 +443,10 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err
+	}
+
+	if strings.Contains(topic, "beacon_block") {
+		log.Debug("TIME MARKER L")
 	}
 	return nil
 }

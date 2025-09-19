@@ -81,20 +81,46 @@ func (s *Service) LeaveTopic(topic string) error {
 
 // PublishToTopic joins (if necessary) and publishes a message to a PubSub topic.
 func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte, opts ...pubsub.PubOpt) error {
+	if strings.Contains(topic, "beacon_block") {
+		log.Debug("TIME MARKER F")
+	}
 	topicHandle, err := s.JoinTopic(topic)
 	if err != nil {
 		return err
 	}
 
+	if strings.Contains(topic, "beacon_block") {
+		log.Debug("TIME MARKER G")
+	}
+
 	// Wait for at least 1 peer to be available to receive the published message.
 	for {
-		if len(topicHandle.ListPeers()) > 0 || flags.Get().MinimumSyncPeers == 0 {
+		if strings.Contains(topic, "beacon_block") {
+			log.Debug("TIME MARKER H <--- main suspect after")
+		}
+
+		peers := topicHandle.ListPeers()
+
+		if strings.Contains(topic, "beacon_block") {
+			log.Debug("TIME MARKER I <--- main suspect before")
+		}
+
+		if len(peers) > 0 || flags.Get().MinimumSyncPeers == 0 {
 			return topicHandle.Publish(ctx, data, opts...)
 		}
+
+		if strings.Contains(topic, "beacon_block") {
+			log.Debug("TIME MARKER J")
+		}
+
 		select {
 		case <-ctx.Done():
 			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
 		default:
+			if strings.Contains(topic, "beacon_block") {
+				log.Debug("TIME MARKER K")
+			}
+
 			time.Sleep(100 * time.Millisecond)
 		}
 	}

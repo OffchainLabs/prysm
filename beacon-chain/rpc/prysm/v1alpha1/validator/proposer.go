@@ -284,6 +284,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		dataColumnSidecars []blocks.RODataColumn
 	)
 
+	log.Debug("TIME MARKER 01")
+
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
 
@@ -291,14 +293,21 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return nil, status.Errorf(codes.InvalidArgument, "empty request")
 	}
 
+	log.Debug("TIME MARKER 02")
+
 	block, err := blocks.NewSignedBeaconBlock(req.Block)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", "decode block failed", err)
 	}
+
+	log.Debug("TIME MARKER 03")
+
 	root, err := block.Block().HashTreeRoot()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not hash tree root: %v", err)
 	}
+
+	log.Debug("TIME MARKER 04")
 
 	// For post-Fulu blinded blocks, submit to relay and return early
 	if block.IsBlinded() && slots.ToEpoch(block.Block().Slot()) >= params.BeaconConfig().FuluForkEpoch {
@@ -309,6 +318,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 	}
 
+	log.Debug("TIME MARKER 05")
+
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
@@ -318,6 +329,8 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
 	}
+
+	log.Debug("TIME MARKER 06")
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
@@ -333,12 +346,19 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 	wg.Wait()
 
+	log.Debug("TIME MARKER 07")
+
 	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
+
+	log.Debug("TIME MARKER 08")
+
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
 	}
+
+	log.Debug("TIME MARKER 09")
 
 	return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 }
@@ -433,6 +453,7 @@ func (vs *Server) handleUnblindedBlock(
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
 func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+	log.Debug("TIME MARKER A")
 	if err := vs.broadcastBlock(ctx, wg, block, root); err != nil {
 		return errors.Wrap(err, "broadcast block")
 	}
@@ -452,10 +473,15 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup,
 func (vs *Server) broadcastBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
 	defer wg.Done()
 
+	log.Debug("TIME MARKER B")
+
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
 	}
+
+	log.Debug("TIME MARKER C")
+
 	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
 		return errors.Wrap(err, "broadcast failed")
 	}
