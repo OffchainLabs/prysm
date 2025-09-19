@@ -503,7 +503,7 @@ func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]
 func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
 	// Check for genesis block first (not supported for data columns)
 	if id == "genesis" {
-		return nil, &core.RpcError{Err: errors.New("not supported for Phase 0 fork"), Reason: core.BadRequest}
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported for Phase 0 fork"), Reason: core.BadRequest}
 	}
 
 	// Resolve block ID to root and block
