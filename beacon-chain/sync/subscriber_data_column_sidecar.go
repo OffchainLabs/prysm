@@ -11,10 +11,14 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
+// dataColumnSubscriber is the subscriber function for data column sidecars.
 func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) error {
+	var wg errgroup.Group
+
 	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
 	if !ok {
 		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
@@ -24,43 +28,57 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		return errors.Wrap(err, "receive data column sidecar")
 	}
 
-	if err := s.reconstructSaveBroadcastDataColumnSidecars(ctx, sidecar); err != nil {
-		return errors.Wrap(err, "reconstruct/save/broadcast data column sidecars")
-	}
-
-	source := peerdas.PopulateFromSidecar(sidecar)
-
-	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
-	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
-		if err := s.processDataColumnSidecarsFromExecution(ctx, source); err != nil {
-			return nil, err
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return errors.Wrap(err, "process data column sidecars from reconstruction")
 		}
 
-		return nil, nil
-	}); err != nil {
-		return errors.Wrap(err, "process data column sidecars from execution from sidecar")
+		return nil
+	})
+
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
+			return errors.Wrap(err, "process data column sidecars from execution")
+		}
+
+		return nil
+	})
+
+	if err := wg.Wait(); err != nil {
+		return err
 	}
 
 	return nil
 }
 
+// receiveDataColumnSidecar receives a single data column sidecar: marks it as seen and saves it to the chain.
+// Do not loop over this function to receive multiple sidecars, use receiveDataColumnSidecars instead.
 func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
-	slot := sidecar.SignedBlockHeader.Header.Slot
-	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
-	columnIndex := sidecar.Index
+	return s.receiveDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar})
+}
 
-	s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
+// receiveDataColumnSidecars receives multiple data column sidecars: marks them as seen and saves them to the chain.
+func (s *Service) receiveDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
+	for _, sidecar := range sidecars {
+		slot := sidecar.SignedBlockHeader.Header.Slot
+		proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
+		columnIndex := sidecar.Index
 
-	if err := s.cfg.chain.ReceiveDataColumn(sidecar); err != nil {
+		s.setSeenDataColumnIndex(slot, proposerIndex, columnIndex)
+	}
+
+	if err := s.cfg.chain.ReceiveDataColumns(sidecars); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
 
-	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
-		Type: opfeed.DataColumnSidecarReceived,
-		Data: &opfeed.DataColumnSidecarReceivedData{
-			DataColumn: &sidecar,
-		},
-	})
+	for _, sidecar := range sidecars {
+		s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
+			Type: opfeed.DataColumnSidecarReceived,
+			Data: &opfeed.DataColumnSidecarReceivedData{
+				DataColumn: &sidecar,
+			},
+		})
+	}
 
 	return nil
 }
