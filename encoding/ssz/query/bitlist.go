@@ -54,6 +54,8 @@ func (l *bitlistInfo) SetLengthFromBytes(rawBytes []byte) error {
 // Size returns the size in bytes for this bitlist.
 // Note that while serializing, 1 bit is added for the delimiter bit,
 // which results in ceil((length + 1) / 8) bytes.
+// Note that `(length / 8) + 1` is equivalent to `ceil((length + 1) / 8)`.
+// Example: length=0 -> size=1, length=7 -> size=1, length=8 -> size=2
 // Reference: https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#bitlistn-progressivebitlist
 func (l *bitlistInfo) Size() uint64 {
 	if l == nil {
