@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
@@ -34,8 +35,8 @@ type endpoint struct {
 	handler    http.HandlerFunc
 	methods    []string
 
-	errorMiddlewareIncompatible bool
-	timeoutHandlerIncompatible  bool
+	skipStandardErrorHandling bool
+	ignoreApiTimeout          bool
 }
 
 // responseWriter is the wrapper to http Response writer.
@@ -51,7 +52,7 @@ func (w *responseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
+func (e *endpoint) handlerWithMiddleware(timeout time.Duration) http.HandlerFunc {
 	handler := http.Handler(e.handler)
 	for _, m := range e.middleware {
 		handler = m(handler)
@@ -65,10 +66,16 @@ func (e *endpoint) handlerWithMiddleware() http.HandlerFunc {
 		),
 	)
 
+	// e.ignoreApiTimeout is used by some endpoints (i.e. SSE) to prevent wrapping
+	// with http.TimeoutHandler, since it interferes with streaming response mechanisms.
+	if timeout > 0 && !e.ignoreApiTimeout {
+		handler = http.TimeoutHandler(handler, timeout, "request timed out")
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Some handlers (i.e. SSE) handle errors separately to avoid interference with
 		// the streaming mechanism and ensure accurate error tracking.
-		if e.errorMiddlewareIncompatible {
+		if e.skipStandardErrorHandling {
 			handler.ServeHTTP(w, r)
 			return
 		}
@@ -1169,10 +1176,10 @@ func (s *Service) eventsEndpoints() []endpoint {
 			methods: []string{http.MethodGet},
 
 			// events endpoint handles errors separately
-			errorMiddlewareIncompatible: true,
+			skipStandardErrorHandling: true,
 			// http.TimeoutHandler causes this handler to behave incorrectly, since it uses SetDeadline
 			// on the underlying net/http response
-			timeoutHandlerIncompatible: true,
+			ignoreApiTimeout: true,
 		},
 	}
 }
