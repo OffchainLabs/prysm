@@ -25,7 +25,6 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
-        "//runtime/version:go_default_library",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
