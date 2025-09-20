@@ -54,10 +54,7 @@ func (info *sszInfo) Size() uint64 {
 
 	switch info.sszType {
 	case List:
-		length := info.listInfo.length
-		elementSize := info.listInfo.element.Size()
-
-		return length * elementSize
+		return info.listInfo.Size()
 
 	case Bitlist:
 		return info.bitlistInfo.Size()

@@ -16,6 +16,8 @@ type listInfo struct {
 	element *sszInfo
 	// length is the actual number of elements at runtime (0 if not set).
 	length uint64
+	// elementSize caches the each element's byte size for variable-sized type elements
+	elementSize []uint64
 }
 
 func (l *listInfo) Limit() uint64 {
@@ -50,4 +52,22 @@ func (l *listInfo) SetLength(length uint64) error {
 
 	l.length = length
 	return nil
+}
+
+func (l *listInfo) Size() uint64 {
+	if l == nil {
+		return 0
+	}
+
+	// For fixed-sized type elements, size is multiplying length by element size.
+	if !l.element.isVariable {
+		return l.length * l.element.Size()
+	}
+
+	// For variable-sized type elements, sum up the sizes of each element.
+	totalSize := uint64(0)
+	for _, sz := range l.elementSize {
+		totalSize += sz
+	}
+	return totalSize
 }
