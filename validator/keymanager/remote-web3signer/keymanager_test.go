@@ -53,7 +53,7 @@ func TestNewKeymanager(t *testing.T) {
 	}))
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	tests := []struct {
 		name         string
@@ -362,7 +362,7 @@ func TestKeymanager_Sign(t *testing.T) {
 	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
@@ -371,16 +371,16 @@ func TestKeymanager_Sign(t *testing.T) {
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	km.client = client
 	desiredSigBytes, err := hexutil.Decode(client.Signature)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode signature: %v", err)
 	}
 	desiredSig, err := bls.SignatureFromBytes(desiredSigBytes)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create signature from bytes: %v", err)
 	}
 	type args struct {
 		request *validatorpb.SignRequest
@@ -509,11 +509,11 @@ func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithKeyList(t *testing.T
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	resp, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to fetch validating public keys: %v", err)
 	}
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
@@ -524,14 +524,14 @@ func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithExternalURL(t *testi
 	ctx := t.Context()
 	decodedKey, err := hexutil.Decode("0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	keys := [][48]byte{
 		bytesutil.ToBytes48(decodedKey),
 	}
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -547,7 +547,7 @@ func TestKeymanager_FetchValidatingPublicKeys_HappyPath_WithExternalURL(t *testi
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	resp, err := km.FetchValidatingPublicKeys(ctx)
 	require.NoError(t, err)
@@ -566,7 +566,7 @@ func TestKeymanager_FetchValidatingPublicKeys_WithExternalURL_ThrowsError(t *tes
 
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
@@ -582,7 +582,7 @@ func TestKeymanager_AddPublicKeys(t *testing.T) {
 	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
@@ -590,7 +590,7 @@ func TestKeymanager_AddPublicKeys(t *testing.T) {
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
 	statuses, err := km.AddPublicKeys(publicKeys)
@@ -615,7 +615,7 @@ func TestKeymanager_AddPublicKeys_WithFile(t *testing.T) {
 	keyFilePath := filepath.Join(dir, "keyfile.txt")
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
@@ -624,7 +624,7 @@ func TestKeymanager_AddPublicKeys_WithFile(t *testing.T) {
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
 	statuses, err := km.AddPublicKeys(publicKeys)
@@ -647,7 +647,7 @@ func TestKeymanager_DeletePublicKeys(t *testing.T) {
 	ctx := t.Context()
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
@@ -655,7 +655,7 @@ func TestKeymanager_DeletePublicKeys(t *testing.T) {
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820"}
 	statuses, err := km.AddPublicKeys(publicKeys)
@@ -687,7 +687,7 @@ func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
 	keyFilePath := filepath.Join(dir, "keyfile.txt")
 	root, err := hexutil.Decode("0x270d43e74ce340de4bca2b1936beca0f4f5408d9e78aec4850920baf659d5b69")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to decode hex: %v", err)
 	}
 	config := &SetupConfig{
 		BaseEndpoint:          "http://example.com",
@@ -696,7 +696,7 @@ func TestKeymanager_DeletePublicKeys_WithFile(t *testing.T) {
 	}
 	km, err := NewKeymanager(ctx, config)
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		t.Fatalf("Failed to create keymanager: %v", err)
 	}
 	publicKeys := []string{"0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", "0x8000a9a6d3f5e22d783eefaadbcf0298146adb5d95b04db910a0d4e16976b30229d0b1e7b9cda6c7e0bfa11f72efe055"}
 	statuses, err := km.AddPublicKeys(publicKeys)
