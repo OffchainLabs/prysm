@@ -923,6 +923,14 @@ func getExecutionPayloadDenebSpec() testutil.TestSpec {
 				Expected: payload.BlockHash,
 			},
 			{
+				Path:     ".transactions",
+				Expected: payload.Transactions,
+			},
+			{
+				Path:     ".withdrawals",
+				Expected: payload.Withdrawals,
+			},
+			{
 				Path:     ".blob_gas_used",
 				Expected: payload.BlobGasUsed,
 			},
@@ -930,16 +938,6 @@ func getExecutionPayloadDenebSpec() testutil.TestSpec {
 				Path:     ".excess_blob_gas",
 				Expected: payload.ExcessBlobGas,
 			},
-			// Note: Lists like transactions and withdrawals are commented out
-			// because the test infrastructure doesn't handle SSZ list serialization properly
-			// {
-			// 	Path:     ".transactions",
-			// 	Expected: payload.Transactions,
-			// },
-			// {
-			// 	Path:     ".withdrawals",
-			// 	Expected: payload.Withdrawals,
-			// },
 		},
 	}
 }
