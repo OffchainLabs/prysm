@@ -216,6 +216,9 @@ func TestRoundTripSszInfo(t *testing.T) {
 		getVariableTestContainerSpec(),
 		getExecutionPayloadDenebSpec(),
 		getBeaconStateElectraSpec(),
+		getBeaconBlockBodyElectraSpec(),
+		getBeaconBlockElectraSpec(),
+		getSignedBeaconBlockElectraSpec(),
 	}
 
 	for _, spec := range specs {
@@ -822,8 +825,8 @@ func getBeaconStateElectraSpec() testutil.TestSpec {
 	}
 }
 
-func getExecutionPayloadDenebSpec() testutil.TestSpec {
-	// Create an ExecutionPayloadDeneb with test data
+// createExecutionPayloadDeneb creates a reusable ExecutionPayloadDeneb with test data
+func createExecutionPayloadDeneb() *enginev1.ExecutionPayloadDeneb {
 	payload := &enginev1.ExecutionPayloadDeneb{
 		ParentHash:    generateUniqueBytes(32, 0),
 		FeeRecipient:  generateUniqueBytes(20, 32),
@@ -864,6 +867,12 @@ func getExecutionPayloadDenebSpec() testutil.TestSpec {
 			Amount:         2000000000,
 		},
 	}
+
+	return payload
+}
+
+func getExecutionPayloadDenebSpec() testutil.TestSpec {
+	payload := createExecutionPayloadDeneb()
 
 	return testutil.TestSpec{
 		Name:     "ExecutionPayloadDeneb",
@@ -942,6 +951,302 @@ func getExecutionPayloadDenebSpec() testutil.TestSpec {
 	}
 }
 
+func createBeaconBlockBodyElectra() *ethpb.BeaconBlockBodyElectra {
+	// Create execution payload using the existing helper
+	executionPayload := createExecutionPayloadDeneb()
+
+	// Create execution requests for Electra
+	executionRequests := &enginev1.ExecutionRequests{
+		Deposits: []*enginev1.DepositRequest{
+			{
+				Pubkey:                generateUniqueBytes(48, 1000),
+				WithdrawalCredentials: generateUniqueBytes(32, 1048),
+				Amount:                32000000000,
+				Signature:             generateUniqueBytes(96, 1080),
+				Index:                 0,
+			},
+		},
+		Withdrawals: []*enginev1.WithdrawalRequest{
+			{
+				SourceAddress:   generateUniqueBytes(20, 1176),
+				ValidatorPubkey: generateUniqueBytes(48, 1196),
+				Amount:          1000000000,
+			},
+		},
+		Consolidations: []*enginev1.ConsolidationRequest{
+			{
+				SourceAddress: generateUniqueBytes(20, 1244),
+				SourcePubkey:  generateUniqueBytes(48, 1264),
+				TargetPubkey:  generateUniqueBytes(48, 1312),
+			},
+		},
+	}
+
+	// Create the block body
+	blockBody := &ethpb.BeaconBlockBodyElectra{
+		RandaoReveal: generateUniqueBytes(96, 1360),
+		Eth1Data: &ethpb.Eth1Data{
+			DepositRoot:  generateUniqueBytes(32, 1456),
+			DepositCount: 1000,
+			BlockHash:    generateUniqueBytes(32, 1488),
+		},
+		Graffiti: generateUniqueBytes(32, 1520),
+		ProposerSlashings: []*ethpb.ProposerSlashing{
+			{
+				Header_1: &ethpb.SignedBeaconBlockHeader{
+					Header: &ethpb.BeaconBlockHeader{
+						Slot:          100,
+						ProposerIndex: 10,
+						ParentRoot:    generateUniqueBytes(32, 1552),
+						StateRoot:     generateUniqueBytes(32, 1584),
+						BodyRoot:      generateUniqueBytes(32, 1616),
+					},
+					Signature: generateUniqueBytes(96, 1648),
+				},
+				Header_2: &ethpb.SignedBeaconBlockHeader{
+					Header: &ethpb.BeaconBlockHeader{
+						Slot:          100,
+						ProposerIndex: 10,
+						ParentRoot:    generateUniqueBytes(32, 1744),
+						StateRoot:     generateUniqueBytes(32, 1776),
+						BodyRoot:      generateUniqueBytes(32, 1808),
+					},
+					Signature: generateUniqueBytes(96, 1840),
+				},
+			},
+		},
+		AttesterSlashings: []*ethpb.AttesterSlashingElectra{
+			{
+				Attestation_1: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: []uint64{1, 2, 3},
+					Data: &ethpb.AttestationData{
+						Slot:            99,
+						CommitteeIndex:  0,
+						BeaconBlockRoot: generateUniqueBytes(32, 1936),
+						Source: &ethpb.Checkpoint{
+							Epoch: 3,
+							Root:  generateUniqueBytes(32, 1968),
+						},
+						Target: &ethpb.Checkpoint{
+							Epoch: 4,
+							Root:  generateUniqueBytes(32, 2000),
+						},
+					},
+					Signature: generateUniqueBytes(96, 2032),
+				},
+				Attestation_2: &ethpb.IndexedAttestationElectra{
+					AttestingIndices: []uint64{1, 2, 3},
+					Data: &ethpb.AttestationData{
+						Slot:            99,
+						CommitteeIndex:  0,
+						BeaconBlockRoot: generateUniqueBytes(32, 2128),
+						Source: &ethpb.Checkpoint{
+							Epoch: 3,
+							Root:  generateUniqueBytes(32, 2160),
+						},
+						Target: &ethpb.Checkpoint{
+							Epoch: 4,
+							Root:  generateUniqueBytes(32, 2192),
+						},
+					},
+					Signature: generateUniqueBytes(96, 2224),
+				},
+			},
+		},
+		Attestations: []*ethpb.AttestationElectra{
+			{
+				AggregationBits: bitfield.NewBitlist(512),
+				Data: &ethpb.AttestationData{
+					Slot:            98,
+					CommitteeIndex:  1,
+					BeaconBlockRoot: generateUniqueBytes(32, 2320),
+					Source: &ethpb.Checkpoint{
+						Epoch: 2,
+						Root:  generateUniqueBytes(32, 2352),
+					},
+					Target: &ethpb.Checkpoint{
+						Epoch: 3,
+						Root:  generateUniqueBytes(32, 2384),
+					},
+				},
+				Signature:     generateUniqueBytes(96, 2416),
+				CommitteeBits: bitfield.NewBitvector64(),
+			},
+		},
+		Deposits: []*ethpb.Deposit{
+			{
+				Proof: makeDepositProof(2512),
+				Data: &ethpb.Deposit_Data{
+					PublicKey:             generateUniqueBytes(48, 2576),
+					WithdrawalCredentials: generateUniqueBytes(32, 2624),
+					Amount:                32000000000,
+					Signature:             generateUniqueBytes(96, 2656),
+				},
+			},
+		},
+		VoluntaryExits: []*ethpb.SignedVoluntaryExit{
+			{
+				Exit: &ethpb.VoluntaryExit{
+					Epoch:          10,
+					ValidatorIndex: 100,
+				},
+				Signature: generateUniqueBytes(96, 2752),
+			},
+		},
+		SyncAggregate: &ethpb.SyncAggregate{
+			SyncCommitteeBits:      bitfield.NewBitvector512(),
+			SyncCommitteeSignature: generateUniqueBytes(96, 2848),
+		},
+		ExecutionPayload: executionPayload,
+		BlsToExecutionChanges: []*ethpb.SignedBLSToExecutionChange{
+			{
+				Message: &ethpb.BLSToExecutionChange{
+					ValidatorIndex:     200,
+					FromBlsPubkey:      generateUniqueBytes(48, 2944),
+					ToExecutionAddress: generateUniqueBytes(20, 2992),
+				},
+				Signature: generateUniqueBytes(96, 3012),
+			},
+		},
+		BlobKzgCommitments: [][]byte{
+			generateUniqueBytes(48, 3108),
+			generateUniqueBytes(48, 3156),
+		},
+		ExecutionRequests: executionRequests,
+	}
+
+	return blockBody
+}
+
+func getBeaconBlockBodyElectraSpec() testutil.TestSpec {
+	blockBody := createBeaconBlockBodyElectra()
+
+	return testutil.TestSpec{
+		Name:     "BeaconBlockBodyElectra",
+		Type:     ethpb.BeaconBlockBodyElectra{},
+		Instance: blockBody,
+		PathTests: []testutil.PathTest{
+			{
+				Path:     ".randao_reveal",
+				Expected: blockBody.RandaoReveal,
+			},
+			{
+				Path:     ".eth1_data",
+				Expected: blockBody.Eth1Data,
+			},
+			{
+				Path:     ".graffiti",
+				Expected: blockBody.Graffiti,
+			},
+			{
+				Path:     ".proposer_slashings",
+				Expected: blockBody.ProposerSlashings,
+			},
+			{
+				Path:     ".attester_slashings",
+				Expected: blockBody.AttesterSlashings,
+			},
+			{
+				Path:     ".attestations",
+				Expected: blockBody.Attestations,
+			},
+			{
+				Path:     ".deposits",
+				Expected: blockBody.Deposits,
+			},
+			{
+				Path:     ".voluntary_exits",
+				Expected: blockBody.VoluntaryExits,
+			},
+			{
+				Path:     ".sync_aggregate",
+				Expected: blockBody.SyncAggregate,
+			},
+			{
+				Path:     ".execution_payload",
+				Expected: blockBody.ExecutionPayload,
+			},
+			{
+				Path:     ".bls_to_execution_changes",
+				Expected: blockBody.BlsToExecutionChanges,
+			},
+			{
+				Path:     ".blob_kzg_commitments",
+				Expected: blockBody.BlobKzgCommitments,
+			},
+			{
+				Path:     ".execution_requests",
+				Expected: blockBody.ExecutionRequests,
+			},
+		},
+	}
+}
+
+func createBeaconBlockElectra() *ethpb.BeaconBlockElectra {
+	return &ethpb.BeaconBlockElectra{
+		Slot:          12345,
+		ProposerIndex: 567,
+		ParentRoot:    generateUniqueBytes(32, 3204),
+		StateRoot:     generateUniqueBytes(32, 3236),
+		Body:          createBeaconBlockBodyElectra(),
+	}
+}
+
+func getBeaconBlockElectraSpec() testutil.TestSpec {
+	block := createBeaconBlockElectra()
+
+	return testutil.TestSpec{
+		Name:     "BeaconBlockElectra",
+		Type:     ethpb.BeaconBlockElectra{},
+		Instance: block,
+		PathTests: []testutil.PathTest{
+			{
+				Path:     ".slot",
+				Expected: block.Slot,
+			},
+			{
+				Path:     ".proposer_index",
+				Expected: block.ProposerIndex,
+			},
+			{
+				Path:     ".parent_root",
+				Expected: block.ParentRoot,
+			},
+			{
+				Path:     ".state_root",
+				Expected: block.StateRoot,
+			},
+			{
+				Path:     ".body",
+				Expected: block.Body,
+			},
+		},
+	}
+}
+
+func getSignedBeaconBlockElectraSpec() testutil.TestSpec {
+	signedBlock := &ethpb.SignedBeaconBlockElectra{
+		Block:     createBeaconBlockElectra(),
+		Signature: generateUniqueBytes(96, 3204),
+	}
+
+	return testutil.TestSpec{
+		Name:     "SignedBeaconBlockElectra",
+		Type:     ethpb.SignedBeaconBlockElectra{},
+		Instance: signedBlock,
+		PathTests: []testutil.PathTest{
+			{
+				Path:     ".block",
+				Expected: signedBlock.Block,
+			},
+			{
+				Path:     ".signature",
+				Expected: signedBlock.Signature,
+			},
+		},
+	}
+}
+
 // generateUniqueBytes generates a byte slice of given length with unique sequential values
 // starting from the given offset. It wraps around at 256.
 func generateUniqueBytes(length int, offset int) []byte {
@@ -950,4 +1255,13 @@ func generateUniqueBytes(length int, offset int) []byte {
 		result[i] = byte((offset + i) % 256)
 	}
 	return result
+}
+
+// makeDepositProof creates a deposit proof with 33 elements (depth 33 for the deposit tree)
+func makeDepositProof(offset int) [][]byte {
+	proof := make([][]byte, 33)
+	for i := 0; i < 33; i++ {
+		proof[i] = generateUniqueBytes(32, offset+i*32)
+	}
+	return proof
 }
