@@ -133,56 +133,73 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "field_list_uint64",
 				path:           ".field_list_uint64",
-				expectedOffset: 108, // First part of variable-sized type.
+				expectedOffset: 112, // First part of variable-sized type.
 				expectedLength: 40,  // 5 elements * uint64 (8 bytes each)
 			},
 			{
 				name:           "field_list_container",
 				path:           ".field_list_container",
-				expectedOffset: 148, // Second part of variable-sized type.
+				expectedOffset: 152, // Second part of variable-sized type.
 				expectedLength: 120, // 3 elements * FixedNestedContainer (40 bytes each)
 			},
 			{
 				name:           "field_list_bytes32",
 				path:           ".field_list_bytes32",
-				expectedOffset: 268,
+				expectedOffset: 272,
 				expectedLength: 96, // 3 elements * 32 bytes each
 			},
 			// Nested paths
 			{
 				name:           "nested",
 				path:           ".nested",
-				expectedOffset: 364,
+				expectedOffset: 368,
 				// Calculated with:
 				// - Value1: 8 bytes
 				// - field_list_uint64 offset: 4 bytes
 				// - field_list_uint64 length: 40 bytes
-				expectedLength: 52,
+				// - nested_list_field offset: 4 bytes
+				// - nested_list_field length: 99 bytes
+				// - 3 offset pointers for each element in nested_list_field: 12 bytes
+				// Total: 8 + 4 + 40 + 4 + 99 + 12 = 167 bytes
+				expectedLength: 167,
 			},
 			{
 				name:           "nested.value1",
 				path:           ".nested.value1",
-				expectedOffset: 364,
+				expectedOffset: 368,
 				expectedLength: 8,
 			},
 			{
 				name:           "nested.field_list_uint64",
 				path:           ".nested.field_list_uint64",
-				expectedOffset: 376,
+				expectedOffset: 384,
 				expectedLength: 40,
+			},
+			{
+				name:           "nested.nested_list_field",
+				path:           ".nested.nested_list_field",
+				expectedOffset: 436,
+				expectedLength: 99,
 			},
 			// Bitlist field
 			{
 				name:           "bitlist_field",
 				path:           ".bitlist_field",
-				expectedOffset: 416,
+				expectedOffset: 535,
 				expectedLength: 33, // 32 bytes + 1 byte for length delimiter
+			},
+			// 2D bytes field
+			{
+				name:           "nested_list_field",
+				path:           ".nested_list_field",
+				expectedOffset: 580,
+				expectedLength: 99,
 			},
 			// Fixed trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 52, // After leading_field + 5 offset pointers
+				expectedOffset: 56, // After leading_field + 6 offset pointers
 				expectedLength: 56,
 			},
 		}
@@ -377,6 +394,15 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 	bitlistField.SetBitAt(100, true)
 	bitlistField.SetBitAt(255, true)
 
+	// Total size: 3 lists with lengths 32, 33, and 34 = 99 bytes
+	nestedListField := make([][]byte, 3)
+	for i := range nestedListField {
+		nestedListField[i] = make([]byte, (32 + i)) // Different lengths for each sub-list
+		for j := range nestedListField[i] {
+			nestedListField[i][j] = byte(j + i*16)
+		}
+	}
+
 	return &sszquerypb.VariableTestContainer{
 		// Fixed leading field
 		LeadingField: leadingField,
@@ -394,10 +420,14 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 		Nested: &sszquerypb.VariableNestedContainer{
 			Value1:          42,
 			FieldListUint64: []uint64{1, 2, 3, 4, 5},
+			NestedListField: nestedListField,
 		},
 
 		// Bitlist field
 		BitlistField: bitlistField,
+
+		// 2D bytes field
+		NestedListField: nestedListField,
 
 		// Fixed trailing field
 		TrailingField: trailingField,
@@ -445,10 +475,19 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 				Path:     ".nested.field_list_uint64",
 				Expected: testContainer.Nested.FieldListUint64,
 			},
+			{
+				Path:     ".nested.nested_list_field",
+				Expected: testContainer.Nested.NestedListField,
+			},
 			// Bitlist field
 			{
 				Path:     ".bitlist_field",
 				Expected: testContainer.BitlistField,
+			},
+			// 2D bytes field
+			{
+				Path:     ".nested_list_field",
+				Expected: testContainer.NestedListField,
 			},
 			// Fixed trailing field
 			{
