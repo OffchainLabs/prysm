@@ -129,9 +129,9 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
 			}
 
-			if childSszInfo.sszType == List && childSszInfo.listInfo.element.isVariable {
-				// Each variable-sized element needs an offset entry.
-				currentOffset += offsetBytes * childSszInfo.listInfo.length
+			// Each variable-sized element needs an offset entry.
+			if childSszInfo.sszType == List {
+				currentOffset += childSszInfo.listInfo.OffsetBytes()
 			}
 
 			// Set the actual offset for variable-sized fields.

@@ -66,6 +66,11 @@ func (info *sszInfo) Size() uint64 {
 				continue
 			}
 
+			// Include offset bytes inside nested lists.
+			if fieldInfo.sszInfo.sszType == List {
+				size += fieldInfo.sszInfo.listInfo.OffsetBytes()
+			}
+
 			size += fieldInfo.sszInfo.Size()
 		}
 		return size
