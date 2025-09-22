@@ -17,6 +17,6 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//testing/require:go_default_library",
-        "@in_gopkg_yaml_v3//:go_default_library",
+        "@com_github_ghodss_yaml//:go_default_library",
     ],
 )
