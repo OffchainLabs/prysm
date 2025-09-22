@@ -4,19 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 )
 
-const errMsgStateFromConsensus = "Could not convert consensus state to response"
+const (
+	errMsgStateFromConsensus = "Could not convert consensus state to response"
+)
 
 // GetBeaconStateV2 returns the full beacon state for a given state ID.
 func (s *Server) GetBeaconStateV2(w http.ResponseWriter, r *http.Request) {
@@ -207,4 +219,182 @@ func (s *Server) GetForkChoice(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	httputil.WriteJson(w, resp)
+}
+
+// DataColumnSidecars retrieves data column sidecars for a given block id.
+func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "debug.DataColumnSidecars")
+	defer span.End()
+
+	// Check if we're before Fulu fork - data columns are only available from Fulu onwards
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	if fuluForkEpoch == math.MaxUint64 {
+		httputil.HandleError(w, "Data columns are not supported - Fulu fork not configured", http.StatusBadRequest)
+		return
+	}
+
+	// Check if we're before Fulu fork based on current slot
+	currentSlot := s.GenesisTimeFetcher.CurrentSlot()
+	currentEpoch := primitives.Epoch(currentSlot / params.BeaconConfig().SlotsPerEpoch)
+	if currentEpoch < fuluForkEpoch {
+		httputil.HandleError(w, "Data columns are not supported - before Fulu fork", http.StatusBadRequest)
+		return
+	}
+
+	indices, err := parseDataColumnIndices(r.URL)
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	segments := strings.Split(r.URL.Path, "/")
+	blockId := segments[len(segments)-1]
+
+	verifiedDataColumns, rpcErr := s.Blocker.DataColumns(ctx, blockId, indices)
+	if rpcErr != nil {
+		code := core.ErrorReasonToHTTP(rpcErr.Reason)
+		switch code {
+		case http.StatusBadRequest:
+			httputil.HandleError(w, "Bad request: "+rpcErr.Err.Error(), code)
+			return
+		case http.StatusNotFound:
+			httputil.HandleError(w, "Not found: "+rpcErr.Err.Error(), code)
+			return
+		case http.StatusInternalServerError:
+			httputil.HandleError(w, "Internal server error: "+rpcErr.Err.Error(), code)
+			return
+		default:
+			httputil.HandleError(w, rpcErr.Err.Error(), code)
+			return
+		}
+	}
+
+	blk, err := s.Blocker.Block(ctx, []byte(blockId))
+	if err != nil {
+		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if blk == nil {
+		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+		return
+	}
+
+	if httputil.RespondWithSsz(r) {
+		sszResp, err := buildDataColumnSidecarsSSZResponse(verifiedDataColumns)
+		if err != nil {
+			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+		httputil.WriteSsz(w, sszResp)
+		return
+	}
+
+	blkRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not hash block: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimisticForRoot(ctx, blkRoot)
+	if err != nil {
+		httputil.HandleError(w, "Could not check if block is optimistic: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data := buildDataColumnSidecarsJsonResponse(verifiedDataColumns)
+	resp := &structs.GetDebugDataColumnSidecarsResponse{
+		Version:             version.String(blk.Version()),
+		Data:                data,
+		ExecutionOptimistic: isOptimistic,
+		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
+	}
+	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	httputil.WriteJson(w, resp)
+}
+
+// parseDataColumnIndices filters out invalid and duplicate data column indices
+func parseDataColumnIndices(url *url.URL) ([]int, error) {
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	rawIndices := url.Query()["indices"]
+	indices := make([]int, 0, numberOfColumns)
+	invalidIndices := make([]string, 0)
+loop:
+	for _, raw := range rawIndices {
+		ix, err := strconv.Atoi(raw)
+		if err != nil {
+			invalidIndices = append(invalidIndices, raw)
+			continue
+		}
+		if !(0 <= ix && uint64(ix) < numberOfColumns) {
+			invalidIndices = append(invalidIndices, raw)
+			continue
+		}
+		for i := range indices {
+			if ix == indices[i] {
+				continue loop
+			}
+		}
+		indices = append(indices, ix)
+	}
+
+	if len(invalidIndices) > 0 {
+		return nil, fmt.Errorf("requested data column indices %v are invalid", invalidIndices)
+	}
+	return indices, nil
+}
+
+func buildDataColumnSidecarsJsonResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) []*structs.DataColumnSidecar {
+	sidecars := make([]*structs.DataColumnSidecar, len(verifiedDataColumns))
+	for i, dc := range verifiedDataColumns {
+		column := make([]string, len(dc.Column))
+		for j, cell := range dc.Column {
+			column[j] = hexutil.Encode(cell)
+		}
+
+		kzgCommitments := make([]string, len(dc.KzgCommitments))
+		for j, commitment := range dc.KzgCommitments {
+			kzgCommitments[j] = hexutil.Encode(commitment)
+		}
+
+		kzgProofs := make([]string, len(dc.KzgProofs))
+		for j, proof := range dc.KzgProofs {
+			kzgProofs[j] = hexutil.Encode(proof)
+		}
+
+		kzgCommitmentsInclusionProof := make([]string, len(dc.KzgCommitmentsInclusionProof))
+		for j, proof := range dc.KzgCommitmentsInclusionProof {
+			kzgCommitmentsInclusionProof[j] = hexutil.Encode(proof)
+		}
+
+		sidecars[i] = &structs.DataColumnSidecar{
+			Index:                        strconv.FormatUint(dc.Index, 10),
+			Column:                       column,
+			KzgCommitments:               kzgCommitments,
+			KzgProofs:                    kzgProofs,
+			SignedBeaconBlockHeader:      structs.SignedBeaconBlockHeaderFromConsensus(dc.SignedBlockHeader),
+			KzgCommitmentsInclusionProof: kzgCommitmentsInclusionProof,
+		}
+	}
+	return sidecars
+}
+
+// buildDataColumnSidecarsSSZResponse builds SSZ response for data column sidecars
+func buildDataColumnSidecarsSSZResponse(verifiedDataColumns []blocks.VerifiedRODataColumn) ([]byte, error) {
+	if len(verifiedDataColumns) == 0 {
+		return []byte{}, nil
+	}
+
+	// Pre-allocate buffer for all sidecars using the known SSZ size
+	sizePerSidecar := (&ethpb.DataColumnSidecar{}).SizeSSZ()
+	ssz := make([]byte, 0, sizePerSidecar*len(verifiedDataColumns))
+
+	// Marshal and append each sidecar
+	for i, sidecar := range verifiedDataColumns {
+		sszrep, err := sidecar.MarshalSSZ()
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to marshal data column sidecar at index %d", i)
+		}
+		ssz = append(ssz, sszrep...)
+	}
+
+	return ssz, nil
 }

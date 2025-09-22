@@ -324,18 +324,18 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		if err := vs.broadcastReceiveBlock(ctx, block, root); err != nil {
+		if err := vs.broadcastReceiveBlock(ctx, &wg, block, root); err != nil {
 			errChan <- errors.Wrap(err, "broadcast/receive block failed")
 			return
 		}
 		errChan <- nil
 	}()
 
+	wg.Wait()
+
 	if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 	}
-	wg.Wait()
 	if err := <-errChan; err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not broadcast/receive block: %v", err)
 	}
@@ -432,7 +432,26 @@ func (vs *Server) handleUnblindedBlock(
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
-func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+func (vs *Server) broadcastReceiveBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+	if err := vs.broadcastBlock(ctx, wg, block, root); err != nil {
+		return errors.Wrap(err, "broadcast block")
+	}
+
+	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
+	})
+
+	if err := vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil); err != nil {
+		return errors.Wrap(err, "receive block")
+	}
+
+	return nil
+}
+
+func (vs *Server) broadcastBlock(ctx context.Context, wg *sync.WaitGroup, block interfaces.SignedBeaconBlock, root [fieldparams.RootLength]byte) error {
+	defer wg.Done()
+
 	protoBlock, err := block.Proto()
 	if err != nil {
 		return errors.Wrap(err, "protobuf conversion failed")
@@ -440,11 +459,13 @@ func (vs *Server) broadcastReceiveBlock(ctx context.Context, block interfaces.Si
 	if err := vs.P2P.Broadcast(ctx, protoBlock); err != nil {
 		return errors.Wrap(err, "broadcast failed")
 	}
-	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
-		Type: blockfeed.ReceivedBlock,
-		Data: &blockfeed.ReceivedBlockData{SignedBlock: block},
-	})
-	return vs.BlockReceiver.ReceiveBlock(ctx, block, root, nil)
+
+	log.WithFields(logrus.Fields{
+		"slot": block.Block().Slot(),
+		"root": fmt.Sprintf("%#x", root),
+	}).Debug("Broadcasted block")
+
+	return nil
 }
 
 // broadcastAndReceiveBlobs handles the broadcasting and reception of blob sidecars.
@@ -498,10 +519,6 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 		})
 	}
 
-	if err := eg.Wait(); err != nil {
-		return errors.Wrap(err, "wait for data columns to be broadcasted")
-	}
-
 	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedRODataColumns); err != nil {
 		return errors.Wrap(err, "receive data column")
 	}
@@ -512,6 +529,11 @@ func (vs *Server) broadcastAndReceiveDataColumns(
 			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn}, // #nosec G601
 		})
 	}
+
+	if err := eg.Wait(); err != nil {
+		return errors.Wrap(err, "wait for data columns to be broadcasted")
+	}
+
 	return nil
 }
 

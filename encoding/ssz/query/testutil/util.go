@@ -3,8 +3,10 @@ package testutil
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	ssz "github.com/prysmaticlabs/fastssz"
+	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // marshalAny marshals any value into SSZ format.
@@ -20,7 +22,25 @@ func marshalAny(value any) ([]byte, error) {
 	}
 
 	// Handle custom type aliases by checking if they're based on primitive types
-	if valueType.PkgPath() != "" {
+	if pkgPath := valueType.PkgPath(); pkgPath != "" {
+		// Special handling for bitfield types.
+		if strings.Contains(pkgPath, "go-bitfield") {
+			// Check if it's a Bitlist (variable-length) that needs SSZ encoding
+			if bl, ok := value.(bitfield.Bitlist); ok {
+				// The Bitlist type already contains the SSZ delimiter bit in its internal representation
+				// The raw []byte contains the delimiter as the most significant bit
+				// So we just return the raw bytes directly for SSZ encoding
+				return []byte(bl), nil
+			}
+
+			// For other bitfield types (Bitvector), just return the bytes
+			if bitfield, ok := value.(bitfield.Bitfield); ok {
+				return bitfield.Bytes(), nil
+			}
+
+			return nil, fmt.Errorf("expected bitfield type, got %T", value)
+		}
+
 		switch valueType.Kind() {
 		case reflect.Uint64:
 			return ssz.MarshalUint64(make([]byte, 0), reflect.ValueOf(value).Uint()), nil
