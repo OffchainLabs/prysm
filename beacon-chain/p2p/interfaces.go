@@ -126,6 +126,7 @@ type (
 		EarliestAvailableSlot() (primitives.Slot, error)
 		CustodyGroupCount() (uint64, error)
 		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+		UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}
 )

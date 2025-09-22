@@ -112,6 +112,24 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
+// UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
+// the current custody group count.
+func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	s.custodyInfoLock.Lock()
+	defer s.custodyInfoLock.Unlock()
+
+	// custodyInfo is guaranteed to be non-nil due to initialization in NewService()
+	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
+		return errors.Errorf(
+			"earliest available slot %d is less than the current one %d",
+			earliestAvailableSlot, s.custodyInfo.earliestAvailableSlot,
+		)
+	}
+
+	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
+	return nil
+}
+
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.
 // It first tries to get the custody group count from the peer's metadata,
 // then falls back to the ENR value if the metadata is not available, then

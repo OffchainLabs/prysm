@@ -187,6 +187,45 @@ func TestUpdateCustodyInfo(t *testing.T) {
 	}
 }
 
+func TestUpdateEarliestAvailableSlot(t *testing.T) {
+	t.Run("Valid update", func(t *testing.T) {
+		const initialSlot primitives.Slot = 50
+		const newSlot primitives.Slot = 100
+		const groupCount uint64 = 5
+
+		service := &Service{
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: initialSlot,
+				groupCount:            groupCount,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(newSlot)
+
+		require.NoError(t, err)
+		require.Equal(t, newSlot, service.custodyInfo.earliestAvailableSlot)
+		require.Equal(t, groupCount, service.custodyInfo.groupCount) // Should preserve group count
+	})
+
+	t.Run("Earlier slot - error", func(t *testing.T) {
+		const initialSlot primitives.Slot = 100
+		const earlierSlot primitives.Slot = 50
+
+		service := &Service{
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: initialSlot,
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(earlierSlot)
+
+		require.NotNil(t, err)
+		require.Equal(t, true, strings.Contains(err.Error(), "earliest available slot 50 is less than the current one 100"))
+		require.Equal(t, initialSlot, service.custodyInfo.earliestAvailableSlot) // Should not change
+	})
+}
+
 func TestCustodyGroupCountFromPeer(t *testing.T) {
 	const (
 		expectedENR      uint64 = 7

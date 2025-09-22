@@ -30,6 +30,7 @@ const (
 type custodyUpdater interface {
 	CustodyGroupCount() (uint64, error)
 	UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 }
 
 type ServiceOption func(*Service)
@@ -196,15 +197,8 @@ func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
 		return
 	}
 
-	// Get current custody group count to preserve it during update
-	custodyGroupCount, err := p.custody.CustodyGroupCount()
-	if err != nil {
-		log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after pruning")
-		return
-	}
-
-	// Update the custody info with new earliest available slot
-	_, _, err = p.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+	// Update the earliest available slot 
+	err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
 	if err != nil {
 		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
 			Error("Failed to update earliest available slot after pruning")

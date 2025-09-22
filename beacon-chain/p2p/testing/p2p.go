@@ -499,6 +499,15 @@ func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }
 
+// UpdateEarliestAvailableSlot .
+func (s *TestP2P) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
+
+	s.earliestAvailableSlot = earliestAvailableSlot
+	return nil
+}
+
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.
 // It first tries to get the custody group count from the peer's metadata,
 // then falls back to the ENR value if the metadata is not available, then
