@@ -14,7 +14,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
-func TestHashTreeRootFromBytes_Basic(t *testing.T) {
+func TestHashTreeRoot_Basic(t *testing.T) {
 	// --- uint64 ---
 	u64Info, err := sszquery.AnalyzeObject(new(uint64))
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestHashTreeRootFromBytes_Basic(t *testing.T) {
 	assert.Equal(t, expected, root)
 }
 
-func TestHashTreeRootFromBytes_ContainerBasicTypeFields_VoluntaryExit(t *testing.T) {
+func TestHashTreeRoot_ContainerBasicTypeFields_VoluntaryExit(t *testing.T) {
 	voluntaryExit := &ethpb.VoluntaryExit{
 		Epoch:          12345,
 		ValidatorIndex: 67890,
@@ -87,7 +87,7 @@ func TestHashTreeRootFromBytes_ContainerBasicTypeFields_VoluntaryExit(t *testing
 	assert.Equal(t, expected, root)
 }
 
-func TestHashTreeRootFromBytes_Container(t *testing.T) {
+func TestHashTreeRoot_Container(t *testing.T) {
 	// BeaconBlockHeader fields are fixed-size; the three roots are Bytes32.
 	parentRoot := make([]byte, 32)
 	stateRoot := make([]byte, 32)
@@ -124,7 +124,7 @@ func TestHashTreeRootFromBytes_Container(t *testing.T) {
 	assert.Equal(t, expected, root)
 }
 
-func TestHashTreeRootFromBytes_Container_IndexedAttestationElectra(t *testing.T) {
+func TestHashTreeRoot_Container_IndexedAttestationElectra(t *testing.T) {
 	// Construct IndexedAttestationElectra with dummy data.
 	dummyRoot, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
 	require.NoError(t, err)
@@ -201,7 +201,7 @@ type ValidatorList struct {
 	Validators []*ethpb.Validator `protobuf:"bytes,4001,rep,name=validators,proto3" json:"validators,omitempty" ssz-max:"1099511627776"`
 }
 
-func TestHashTreeRootFromBytes_ListOfContainers(t *testing.T) {
+func TestHashTreeRoot_ListOfContainers(t *testing.T) {
 	// Validators
 	// [
 	// 	{
