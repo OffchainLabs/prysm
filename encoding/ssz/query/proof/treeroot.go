@@ -40,7 +40,7 @@ func HashTreeRoot(si *sszquery.SSZInfo, serializedData []byte) ([32]byte, error)
 // Returns:
 // The method handles all SSZ-supported types including:
 // Example:
-func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher, isInList bool, listLimit uint64) error {
+func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher, isInList bool) error {
 	// hashIndex := hh.Index()
 
 	if si == nil {
@@ -52,22 +52,22 @@ func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.H
 	case sszquery.Boolean, sszquery.UintN, sszquery.Byte:
 		hh.PutBytes(serializedData[:si.FixedSize()])
 	case sszquery.Vector, sszquery.Bitvector:
-		err := buildRootFromVector(si, serializedData, hh, 0)
+		err := buildRootFromVector(si, serializedData, hh)
 		if err != nil {
 			return err
 		}
 	case sszquery.List, sszquery.Bitlist, sszquery.ProgressiveList:
-		err := buildRootFromList(si, serializedData, hh, 0)
+		err := buildRootFromList(si, serializedData, hh)
 		if err != nil {
 			return err
 		}
 	case sszquery.Union:
-		err := buildRootFromCompatibleUnion(si, serializedData, hh, 0)
+		err := buildRootFromCompatibleUnion(si, serializedData, hh)
 		if err != nil {
 			return err
 		}
 	case sszquery.Container:
-		err := buildRootFromContainer(si, serializedData, hh, 0)
+		err := buildRootFromContainer(si, serializedData, hh)
 		if err != nil {
 			return err
 		}
@@ -83,7 +83,7 @@ func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.H
 // Returns:
 // The method handles all SSZ-supported types including:
 // Example:
-func buildRootFromVector(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher, idt int) error {
+func buildRootFromVector(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher) error {
 	hashIndex := hh.Index()
 
 	if si == nil {
@@ -143,7 +143,7 @@ func buildRootFromVector(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Ha
 // Returns:
 // The method handles all SSZ-supported types including:
 // Example:
-func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher, idt int) error {
+func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher) error {
 	hashIndex := hh.Index()
 
 	if si == nil {
@@ -207,7 +207,7 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 // Returns:
 // The method handles all SSZ-supported types including:
 // Example:
-func buildRootFromCompatibleUnion(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher, idt int) error {
+func buildRootFromCompatibleUnion(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher) error {
 
 	return nil
 }
@@ -250,7 +250,7 @@ func buildRootFromContainer(si *sszquery.SSZInfo, serializedData []byte, hh *ssz
 			return fmt.Errorf("field %s has zero size", fieldName)
 		}
 
-		err := buildRootFromSSZInfo(fieldType, serializedData[fieldOffset:fieldOffset+fieldSize], hh, false, 0)
+		err := buildRootFromSSZInfo(fieldType, serializedData[fieldOffset:fieldOffset+fieldSize], hh, false)
 		if err != nil {
 			return fmt.Errorf("failed to hash container field %s: %w", fieldName, err)
 		}
