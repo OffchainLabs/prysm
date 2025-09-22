@@ -52,9 +52,10 @@ func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.H
 	// https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md#typing
 	switch si.Type() {
 	case sszquery.Boolean, sszquery.UintN, sszquery.Byte:
-		hashIndex := hh.Index()
-		hh.PutBytes(serializedData[:si.FixedSize()])
-		hh.Merkleize(hashIndex)
+		err := buildRootFromBasicType(si, serializedData, hh)
+		if err != nil {
+			return err
+		}
 	case sszquery.Vector, sszquery.Bitvector:
 		err := buildRootFromVector(si, serializedData, hh)
 		if err != nil {
@@ -78,6 +79,17 @@ func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.H
 	default:
 		return fmt.Errorf("unsupported SSZ type %s", si.Type())
 	}
+	return nil
+}
+
+func buildRootFromBasicType(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hasher) error {
+
+	if hh == nil {
+		return fmt.Errorf("nil hasher")
+	}
+	hashIndex := hh.Index()
+	hh.PutBytes(serializedData[:si.FixedSize()])
+	hh.Merkleize(hashIndex)
 	return nil
 }
 
