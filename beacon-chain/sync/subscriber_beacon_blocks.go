@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -227,7 +228,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					"iteration":     iteration,
 					"type":          source.Type(),
 					"count":         len(unseenIndices),
-					"indices":       sortedSliceFromMap(unseenIndices),
+					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
 				}).Debug("Constructed data column sidecars from the execution client")
 			}
 
