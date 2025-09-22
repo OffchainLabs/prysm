@@ -14,6 +14,38 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
+func TestHasher(t *testing.T) {
+	pool := &ssz.DefaultHasherPool
+
+	hh := pool.Get()
+	defer pool.Put(hh)
+
+	data := []uint64{1, 2, 3, 4, 5}
+	_ = data // Use the variable to avoid unused variable error
+
+	hh.PutUint64Array(data)
+
+	root, err := hh.HashRoot()
+	require.NoError(t, err)
+	t.Logf("HashRoot: %x", root[:])
+}
+
+func TestHashTreeRootFromBytes_NewHashTreeRoots(t *testing.T) {
+	// --- uint64 ---
+	u64Info, err := sszquery.AnalyzeObject(new(uint64))
+	require.NoError(t, err)
+
+	// uint64(1) in little-endian
+	u64 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(u64, 1)
+
+	root, err := proof.HashTreeRoot(u64Info, u64)
+	require.NoError(t, err)
+
+	t.Logf("HashTreeRoot: %x", root[:])
+
+}
+
 func TestHashTreeRootFromBytes_Basic(t *testing.T) {
 	// --- uint64 ---
 	u64Info, err := sszquery.AnalyzeObject(new(uint64))
@@ -25,6 +57,11 @@ func TestHashTreeRootFromBytes_Basic(t *testing.T) {
 
 	root, err := proof.HashTreeRootFromBytes(u64Info, u64)
 	require.NoError(t, err)
+
+	root, err = proof.HashTreeRoot(u64Info, u64)
+	require.NoError(t, err)
+
+	t.Logf("HashTreeRoot: %x", root[:])
 
 	var expected [32]byte
 	copy(expected[:], u64)
@@ -180,10 +217,6 @@ func TestHashTreeRootFromBytes_Container_IndexedAttestationElectra(t *testing.T)
 	// Start with a pointer to empty object and calculate SSZ info of `IndexedAttestationElectra`.
 	info, err := sszquery.AnalyzeObject(indexedAtt)
 	require.NoError(t, err)
-
-	// Print the SSZ info for debugging.
-	println(info.Print())
-
 	assert.NotNil(t, info, "Expected non-nil SSZ info")
 
 	hashTreeRoot, err := proof.HashTreeRootFromBytes(info, marshalledIndexedAtt)
@@ -193,4 +226,93 @@ func TestHashTreeRootFromBytes_Container_IndexedAttestationElectra(t *testing.T)
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedHashTreeRoot, hashTreeRoot, "Hash tree roots should match")
+}
+
+// Extracted List of Containers (Validators' list) from BeaconState for testing
+type ValidatorList struct {
+	Validators []*ethpb.Validator `protobuf:"bytes,4001,rep,name=validators,proto3" json:"validators,omitempty" ssz-max:"1099511627776"`
+}
+
+func TestHashTreeRootFromBytes_ListOfContainers(t *testing.T) {
+	// Validators
+	// [
+	// 	{
+	// 		pubkey: "0x123400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" ,
+	// 		withdrawal_credentials: "0x5678000000000000000000000000000000000000000000000000000000000000",
+	// 		effective_balance: "9",
+	// 		slashed: false,
+	// 		activation_eligibility_epoch: "11",
+	// 		activation_epoch: "12",
+	// 		exit_epoch: "13",
+	// 		withdrawable_epoch: "14"
+	// 	},
+	// 	{
+	// 		pubkey: "0x151600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+	// 		withdrawal_credentials: "0x1718000000000000000000000000000000000000000000000000000000000000",
+	// 		effective_balance: "19",
+	// 		slashed: true,
+	// 		activation_eligibility_epoch: "21",
+	// 		activation_epoch: "22",
+	// 		exit_epoch: "23",
+	// 		withdrawable_epoch: "24"
+	// 	}
+	// ]
+	// SSZ serialization: 0x12340000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000056780000000000000000000000000000000000000000000000000000000000000900000000000000000b000000000000000c000000000000000d000000000000000e0000000000000015160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017180000000000000000000000000000000000000000000000000000000000001300000000000000011500000000000000160000000000000017000000000000001800000000000000
+	// Hash Tree Root: 0x962288f21c75709e133fdb585e1094fd434155702111adf3bc949e2f18f556d0
+	validators := &ValidatorList{
+		Validators: []*ethpb.Validator{
+			{
+				PublicKey: func() []byte {
+					// 48 bytes (96 hex chars)
+					b, _ := hexutil.Decode("0x123400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+					return b
+				}(),
+				WithdrawalCredentials: func() []byte {
+					// 32 bytes (64 hex chars)
+					b, _ := hexutil.Decode("0x5678000000000000000000000000000000000000000000000000000000000000")
+					return b
+				}(),
+				EffectiveBalance:           9,
+				Slashed:                    false,
+				ActivationEligibilityEpoch: 11,
+				ActivationEpoch:            12,
+				ExitEpoch:                  13,
+				WithdrawableEpoch:          14,
+			},
+			{
+				PublicKey: func() []byte {
+					// 48 bytes (96 hex chars) — la anterior cadena estaba incompleta
+					b, _ := hexutil.Decode("0x151600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+					return b
+				}(),
+				WithdrawalCredentials: func() []byte {
+					// 32 bytes
+					b, _ := hexutil.Decode("0x1718000000000000000000000000000000000000000000000000000000000000")
+					return b
+				}(),
+				EffectiveBalance:           19,
+				Slashed:                    true,
+				ActivationEligibilityEpoch: 21,
+				ActivationEpoch:            22,
+				ExitEpoch:                  23,
+				WithdrawableEpoch:          24,
+			},
+		},
+	}
+
+	info, err := sszquery.AnalyzeObject(validators)
+	require.NoError(t, err)
+	assert.NotNil(t, info, "Expected non-nil SSZ info")
+
+	data := []byte("0x12340000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000056780000000000000000000000000000000000000000000000000000000000000900000000000000000b000000000000000c000000000000000d000000000000000e0000000000000015160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017180000000000000000000000000000000000000000000000000000000000001300000000000000011500000000000000160000000000000017000000000000001800000000000000")
+	t.Logf("SSZ data: %x", data)
+
+	root, err := proof.HashTreeRootFromBytes(info, data)
+	require.NoError(t, err)
+	t.Logf("HashTreeRoot: %x", root[:])
+
+	expected := []byte("0x962288f21c75709e133fdb585e1094fd434155702111adf3bc949e2f18f556d0")
+	t.Logf("Expected:     %x", expected)
+
+	assert.Equal(t, expected, root)
 }
