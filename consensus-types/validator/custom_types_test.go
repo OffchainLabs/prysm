@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"k8s.io/apimachinery/pkg/util/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 func Test_customUint_UnmarshalJSON(t *testing.T) {

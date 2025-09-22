@@ -11,9 +11,10 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"gopkg.in/yaml.v3"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 func UnmarshalFromURL(ctx context.Context, from string, to interface{}) error {
