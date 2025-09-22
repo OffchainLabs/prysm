@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -62,6 +61,7 @@ func (e BlockIdParseError) Error() string {
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
 }
 
 // BeaconDbBlocker is an implementation of Blocker. It retrieves blocks from the beacon chain database.
@@ -267,13 +267,9 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		return nil, &core.RpcError{Err: err, Reason: core.ErrorReason(reason)}
 	}
 
-	// Validate fork epoch for Deneb (blobs)
-	if roSignedBlock != nil {
-		slot := roSignedBlock.Block().Slot()
-		if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
-			forkName := version.String(slots.ToForkVersion(slot))
-			return nil, &core.RpcError{Err: fmt.Errorf("not supported before %s fork", forkName), Reason: core.BadRequest}
-		}
+	slot := roSignedBlock.Block().Slot()
+	if slots.ToEpoch(slot) < params.BeaconConfig().DenebForkEpoch {
+		return nil, &core.RpcError{Err: errors.New("blobs are not supported before Deneb fork"), Reason: core.BadRequest}
 	}
 
 	roBlock := roSignedBlock.Block()
@@ -488,4 +484,94 @@ func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]
 	}
 
 	return verifiedRoSidecars, nil
+}
+
+// DataColumns returns the data column sidecars for a given block id identifier and column indices. The identifier can be one of:
+//   - "head" (canonical head in node's view)
+//   - "genesis"
+//   - "finalized"
+//   - "justified"
+//   - <slot>
+//   - <hex encoded block root with '0x' prefix>
+//   - <block root>
+//
+// cases:
+//   - no block, 404
+//   - block exists, before Fulu fork, 400 (data columns are not supported before Fulu fork)
+func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+	// Check for genesis block first (not supported for data columns)
+	if id == "genesis" {
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported for Phase 0 fork"), Reason: core.BadRequest}
+	}
+
+	// Resolve block ID to root and block
+	root, roSignedBlock, err := p.resolveBlockID(ctx, id)
+	if err != nil {
+		var blockNotFound *BlockNotFoundError
+		var blockIdParseErr *BlockIdParseError
+
+		reason := core.Internal // Default to Internal for unexpected errors
+		if errors.As(err, &blockNotFound) {
+			reason = core.NotFound
+		} else if errors.As(err, &blockIdParseErr) {
+			reason = core.BadRequest
+		}
+		return nil, &core.RpcError{Err: err, Reason: core.ErrorReason(reason)}
+	}
+
+	slot := roSignedBlock.Block().Slot()
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
+	}
+	if slot < fuluForkSlot {
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
+	}
+
+	roBlock := roSignedBlock.Block()
+
+	commitments, err := roBlock.Body().BlobKzgCommitments()
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", root), Reason: core.Internal}
+	}
+
+	// If there are no commitments return 200 w/ empty list
+	if len(commitments) == 0 {
+		return make([]blocks.VerifiedRODataColumn, 0), nil
+	}
+
+	// Get column indices to retrieve
+	columnIndices := make([]uint64, 0)
+	if len(indices) == 0 {
+		// If no indices specified, return all columns this node is custodying
+		summary := p.DataColumnStorage.Summary(root)
+		stored := summary.Stored()
+		for index := range stored {
+			columnIndices = append(columnIndices, index)
+		}
+	} else {
+		// Validate and convert indices
+		numberOfColumns := params.BeaconConfig().NumberOfColumns
+		for _, index := range indices {
+			if index < 0 || uint64(index) >= numberOfColumns {
+				return nil, &core.RpcError{
+					Err:    fmt.Errorf("requested index %d is outside valid range [0, %d)", index, numberOfColumns),
+					Reason: core.BadRequest,
+				}
+			}
+			columnIndices = append(columnIndices, uint64(index))
+		}
+	}
+
+	// Retrieve data column sidecars from storage
+	verifiedRoDataColumns, err := p.DataColumnStorage.Get(root, columnIndices)
+	if err != nil {
+		return nil, &core.RpcError{
+			Err:    errors.Wrapf(err, "could not retrieve data columns for block root %#x", root),
+			Reason: core.Internal,
+		}
+	}
+
+	return verifiedRoDataColumns, nil
 }

@@ -20,4 +20,6 @@ type Server struct {
 	ForkchoiceFetcher     blockchain.ForkchoiceFetcher
 	FinalizationFetcher   blockchain.FinalizationFetcher
 	ChainInfoFetcher      blockchain.ChainInfoFetcher
+	GenesisTimeFetcher    blockchain.TimeFetcher
+	Blocker               lookup.Blocker
 }
