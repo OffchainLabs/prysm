@@ -1,2 +1,2 @@
 ### Fixed
-fix race in PriorityQueue.Pop by checking emptiness under write lock. (#15726)
+- fix race in PriorityQueue.Pop by checking emptiness under write lock. (#15726)
