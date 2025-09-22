@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
-	"gopkg.in/yaml.v3"
+	"github.com/ghodss/yaml"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
