@@ -2,7 +2,7 @@ package cache
 
 // trim the FIFO queue to the maxSize.
 func trim(queue *FIFO, maxSize uint64) {
-	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
+	for s := uint64(queue.Len()); s > maxSize; s-- {
 		_, err := queue.Pop(popProcessNoopFunc)
 		if err != nil {
 			// popProcessNoopFunc never returns an error, but we handle this anyway to make linter
@@ -13,6 +13,6 @@ func trim(queue *FIFO, maxSize uint64) {
 }
 
 // popProcessNoopFunc is a no-op function that never returns an error.
-func popProcessNoopFunc(_ interface{}, _ bool) error {
+func popProcessNoopFunc(_ interface{}) error {
 	return nil
 }

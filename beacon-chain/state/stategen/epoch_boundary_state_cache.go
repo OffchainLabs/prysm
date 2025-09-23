@@ -176,7 +176,7 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 
 // trim the FIFO queue to the maxSize.
 func trim(queue *cache.FIFO, maxSize uint64) {
-	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
+	for s := uint64(queue.Len()); s > maxSize; s-- {
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
 			panic(err) // lint:nopanic -- Never returns an error.
 		}
@@ -184,7 +184,7 @@ func trim(queue *cache.FIFO, maxSize uint64) {
 }
 
 // popProcessNoopFunc is a no-op function that never returns an error.
-func popProcessNoopFunc(_ interface{}, _ bool) error {
+func popProcessNoopFunc(_ interface{}) error {
 	return nil
 }
 

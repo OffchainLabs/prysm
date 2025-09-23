@@ -739,12 +739,6 @@ def prysm_deps():
         version = "v0.11.0",
     )
     go_repository(
-        name = "com_github_emicklei_go_restful_v3",
-        importpath = "github.com/emicklei/go-restful/v3",
-        sum = "h1:DhwDP0vY3k8ZzE0RunuJy8GhNpPL6zqLkDf9B/a0/xU=",
-        version = "v3.12.2",
-    )
-    go_repository(
         name = "com_github_envoyproxy_go_control_plane",
         importpath = "github.com/envoyproxy/go-control-plane",
         sum = "h1:zEqyPVyku6IvWCFwux4x9RxkLOMUL+1vC9xUFv5l2/M=",
@@ -1206,8 +1200,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_google_btree",
         importpath = "github.com/google/btree",
-        sum = "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg=",
-        version = "v1.1.3",
+        sum = "h1:0udJVsspx3VBr5FwtLhQQtuAsVc79tTq0ocGIPAU6qo=",
+        version = "v1.0.0",
     )
     go_repository(
         name = "com_github_google_gnostic_models",
@@ -1356,8 +1350,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_gregjones_httpcache",
         importpath = "github.com/gregjones/httpcache",
-        sum = "h1:+ngKgrYPPJrOjhax5N+uePQ0Fh1Z7PheYoUI/0nzkPA=",
-        version = "v0.0.0-20190611155906-901d90724c79",
+        sum = "h1:pdN6V1QBWetyv/0+wjACpqVH+eVULgEjkurDLq3goeM=",
+        version = "v0.0.0-20180305231024-9cad4c3443a7",
     )
     go_repository(
         name = "com_github_grpc_ecosystem_go_grpc_middleware",
@@ -2598,12 +2592,6 @@ def prysm_deps():
         importpath = "github.com/performancecopilot/speed",
         sum = "h1:2WnRzIquHa5QxaJKShDkLM+sc0JPuwhXzK8OYOyt3Vg=",
         version = "v3.0.0+incompatible",
-    )
-    go_repository(
-        name = "com_github_peterbourgon_diskv",
-        importpath = "github.com/peterbourgon/diskv",
-        sum = "h1:UBdAOUP5p4RWqPBg048CAvpKN+vxiaj6gdUUzhl4XmI=",
-        version = "v2.0.1+incompatible",
     )
     go_repository(
         name = "com_github_peterh_liner",
@@ -4561,25 +4549,10 @@ def prysm_deps():
         version = "v0.0.0-20191023171146-3cf2f69b5738",
     )
     go_repository(
-        name = "io_k8s_api",
-        build_file_proto_mode = "disable_global",
-        importpath = "k8s.io/api",
-        sum = "h1:jC+153630BMdlFukegoEL8E/yT7aLyQkIVuwhmwDgJM=",
-        version = "v0.34.1",
-    )
-    go_repository(
         name = "io_k8s_apimachinery",
         build_file_proto_mode = "disable_global",
         importpath = "k8s.io/apimachinery",
         sum = "h1:dTlxFls/eikpJxmAC7MVE8oOeP1zryV7iRyIjB0gky4=",
-        version = "v0.34.1",
-    )
-    go_repository(
-        name = "io_k8s_client_go",
-        build_extra_args = ["-exclude=vendor"],
-        build_naming_convention = "go_default_library",
-        importpath = "k8s.io/client-go",
-        sum = "h1:ZUPJKgXsnKwVwmKKdPfw4tB58+7/Ik3CrjOEhsiZ7mY=",
         version = "v0.34.1",
     )
     go_repository(
@@ -4844,8 +4817,8 @@ def prysm_deps():
     go_repository(
         name = "org_golang_x_oauth2",
         importpath = "golang.org/x/oauth2",
-        sum = "h1:da9Vo7/tDv5RH/7nZDz1eMGS/q1Vv1N/7FCrBhI9I3M=",
-        version = "v0.27.0",
+        sum = "h1:CY4y7XT9v0cRI9oupztF8AgiIu99L/ksR/Xp/6jrZ70=",
+        version = "v0.25.0",
     )
     go_repository(
         name = "org_golang_x_perf",
