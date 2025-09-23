@@ -79,7 +79,7 @@ func (quicProtocol) ENRKey() string { return quickProtocolEnrKey }
 func newListener(listenerCreator func() (*discover.UDPv5, error)) (*listenerWrapper, error) {
 	rawListener, err := listenerCreator()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create new listener")
+		return nil, errors.Wrap(err, "create new listener")
 	}
 	return &listenerWrapper{
 		listener:        rawListener,
@@ -536,7 +536,7 @@ func (s *Service) createListener(
 		int(s.cfg.QUICPort),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create local node")
+		return nil, errors.Wrap(err, "create local node")
 	}
 
 	bootNodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddrs))
@@ -606,7 +606,7 @@ func (s *Service) createLocalNode(
 	if params.FuluEnabled() {
 		custodyGroupCount, err := s.CustodyGroupCount()
 		if err != nil {
-			return nil, errors.Wrap(err, "could not retrieve custody group count")
+			return nil, errors.Wrap(err, "retrieve custody group count")
 		}
 
 		custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
@@ -652,7 +652,7 @@ func (s *Service) startDiscoveryV5(
 	}
 	wrappedListener, err := newListener(createListener)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create listener")
+		return nil, errors.Wrap(err, "create listener")
 	}
 	record := wrappedListener.Self()
 
