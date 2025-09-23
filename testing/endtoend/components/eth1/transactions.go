@@ -138,16 +138,48 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		gasPrice = expectedPrice
 	}
 
-	// Check if we're post-Fulu fork to disable blob transactions
+	// Check if we're near or post-Fulu fork
 	currentSlot := slots.CurrentSlot(e2e.TestParams.CLGenesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
-	isPostFulu := currentEpoch >= params.BeaconConfig().FuluForkEpoch
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+
+	// Stop sending blob transactions 1 epoch before Fulu fork to avoid execution client bug at fork boundary
+	nearFuluFork := fuluForkEpoch > 0 && currentEpoch == (fuluForkEpoch - 1)
+	isPostFulu := currentEpoch >= fuluForkEpoch
 
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
 
-	// Only send blob transactions if we're NOT post-Fulu
-	if !isPostFulu {
+	// Send blob transactions - skip near fork boundary, use different versions pre/post Fulu
+	if nearFuluFork && !isPostFulu {
+		logrus.Infof("Near Fulu fork boundary (epoch %d, fork at %d): Skipping blob transactions to avoid execution client bug", currentEpoch, fuluForkEpoch)
+	} else if isPostFulu {
+		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
+		for i := uint64(0); i < 10; i++ {
+			index := i
+			g.Go(func() error {
+				tx, err := RandomBlobCellTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
+				if err != nil {
+					logrus.WithError(err).Error("Could not create blob cell tx")
+					// In the event the transaction constructed is not valid, we continue with the routine
+					// rather than complete stop it.
+					//nolint:nilerr
+					return nil
+				}
+				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
+				if err != nil {
+					logrus.WithError(err).Error("Could not sign blob cell tx")
+					// We continue on in the event there is a reason we can't sign this
+					// transaction(unlikely).
+					//nolint:nilerr
+					return nil
+				}
+				txs[index] = signedTx
+				return nil
+			})
+		}
+	} else {
+		logrus.Info("Pre-Fulu: Sending standard blob transactions with Version 0 sidecars")
 		for i := uint64(0); i < 10; i++ {
 			index := i
 			g.Go(func() error {
@@ -171,22 +203,20 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 				return nil
 			})
 		}
+	}
 
-		if err := g.Wait(); err != nil {
-			return err
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	for _, tx := range txs {
+		if tx == nil {
+			continue
 		}
-		for _, tx := range txs {
-			if tx == nil {
-				continue
-			}
-			err = backend.SendTransaction(context.Background(), tx)
-			if err != nil {
-				// Do nothing
-				continue
-			}
+		err = backend.SendTransaction(context.Background(), tx)
+		if err != nil {
+			// Do nothing
+			continue
 		}
-	} else {
-		logrus.Info("Skipping blob transactions after Fulu fork")
 	}
 
 	nonce, err = backend.PendingNonceAt(context.Background(), sender)
@@ -248,6 +278,85 @@ func (t *TransactionGenerator) Resume() error {
 func (t *TransactionGenerator) Stop() error {
 	t.cancel()
 	return nil
+}
+
+func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
+	// Set fields if non-nil
+	if rpc != nil {
+		client := ethclient.NewClient(rpc)
+		var err error
+		if gasPrice == nil {
+			gasPrice, err = client.SuggestGasPrice(context.Background())
+			if err != nil {
+				gasPrice = big.NewInt(1)
+			}
+		}
+		if chainID == nil {
+			chainID, err = client.ChainID(context.Background())
+			if err != nil {
+				chainID = big.NewInt(1)
+			}
+		}
+	}
+	gas := uint64(100000)
+	to := randomAddress()
+	code := txfuzz.RandomCode(f)
+	value := big.NewInt(0)
+	if len(code) > 128 {
+		code = code[:128]
+	}
+	mod := 2
+	if al {
+		mod = 1
+	}
+	switch f.Byte() % byte(mod) {
+	case 0:
+		// Blob transaction with cell proofs (Version 1 sidecar)
+		tip, feecap, err := getCaps(rpc, gasPrice)
+		if err != nil {
+			return nil, errors.Wrap(err, "getCaps")
+		}
+		data, err := randomBlobData()
+		if err != nil {
+			return nil, errors.Wrap(err, "randomBlobData")
+		}
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
+	case 1:
+		// Blob transaction with cell proofs and access list
+		tx := types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &to,
+			Value:    value,
+			Gas:      gas,
+			GasPrice: gasPrice,
+			Data:     code,
+		})
+
+		msg := ethereum.CallMsg{
+			From:       sender,
+			To:         tx.To(),
+			Gas:        tx.Gas(),
+			GasPrice:   tx.GasPrice(),
+			Value:      tx.Value(),
+			Data:       tx.Data(),
+			AccessList: nil,
+		}
+		geth := gethclient.New(rpc)
+		al, _, _, err := geth.CreateAccessList(context.Background(), msg)
+		if err != nil {
+			return nil, errors.Wrap(err, "CreateAccessList")
+		}
+		tip, feecap, err := getCaps(rpc, gasPrice)
+		if err != nil {
+			return nil, errors.Wrap(err, "getCaps")
+		}
+		data, err := randomBlobData()
+		if err != nil {
+			return nil, errors.Wrap(err, "randomBlobData")
+		}
+		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al)
+	}
+	return nil, errors.New("asdf")
 }
 
 func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
@@ -329,6 +438,42 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al), nil
 	}
 	return nil, errors.New("asdf")
+}
+
+func New4844CellTx(nonce uint64, to *common.Address, gasLimit uint64, chainID, tip, feeCap, value *big.Int, code []byte, blobFeeCap *big.Int, blobData []byte, al types.AccessList) (*types.Transaction, error) {
+	blobs, comms, _, versionedHashes, err := EncodeBlobs(blobData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to encode blobs")
+	}
+
+	// Create a Version 0 sidecar first
+	sidecar := &types.BlobTxSidecar{
+		Version:     types.BlobSidecarVersion0,
+		Blobs:       blobs,
+		Commitments: comms,
+		Proofs:      make([]kzg4844.Proof, len(blobs)), // Placeholder, will be replaced by ToV1
+	}
+
+	// Convert to Version 1 which will compute and attach cell proofs
+	if err := sidecar.ToV1(); err != nil {
+		return nil, errors.Wrap(err, "failed to convert sidecar to V1")
+	}
+
+	tx := types.NewTx(&types.BlobTx{
+		ChainID:    uint256.MustFromBig(chainID),
+		Nonce:      nonce,
+		GasTipCap:  uint256.MustFromBig(tip),
+		GasFeeCap:  uint256.MustFromBig(feeCap),
+		Gas:        gasLimit,
+		To:         *to,
+		Value:      uint256.MustFromBig(value),
+		Data:       code,
+		AccessList: al,
+		BlobFeeCap: uint256.MustFromBig(blobFeeCap),
+		BlobHashes: versionedHashes,
+		Sidecar:    sidecar,
+	})
+	return tx, nil
 }
 
 func New4844Tx(nonce uint64, to *common.Address, gasLimit uint64, chainID, tip, feeCap, value *big.Int, code []byte, blobFeeCap *big.Int, blobData []byte, al types.AccessList) *types.Transaction {
