@@ -27,6 +27,12 @@ type sszInfo struct {
 
 	// For Vector types.
 	vectorInfo *vectorInfo
+
+	// For Bitlist types.
+	bitlistInfo *bitlistInfo
+
+	// For Bitvector types.
+	bitvectorInfo *bitvectorInfo
 }
 
 func (info *sszInfo) FixedSize() uint64 {
@@ -53,6 +59,9 @@ func (info *sszInfo) Size() uint64 {
 
 		return length * elementSize
 
+	case Bitlist:
+		return info.bitlistInfo.Size()
+
 	case Container:
 		size := info.fixedSize
 		for _, fieldInfo := range info.containerInfo.fields {
@@ -65,7 +74,6 @@ func (info *sszInfo) Size() uint64 {
 		return size
 
 	default:
-		// NOTE: Handle other variable-sized types.
 		return 0
 	}
 }
@@ -110,6 +118,30 @@ func (info *sszInfo) VectorInfo() (*vectorInfo, error) {
 	return info.vectorInfo, nil
 }
 
+func (info *sszInfo) BitlistInfo() (*bitlistInfo, error) {
+	if info == nil {
+		return nil, errors.New("sszInfo is nil")
+	}
+
+	if info.sszType != Bitlist {
+		return nil, fmt.Errorf("sszInfo is not a Bitlist type, got %s", info.sszType)
+	}
+
+	return info.bitlistInfo, nil
+}
+
+func (info *sszInfo) BitvectorInfo() (*bitvectorInfo, error) {
+	if info == nil {
+		return nil, errors.New("sszInfo is nil")
+	}
+
+	if info.sszType != Bitvector {
+		return nil, fmt.Errorf("sszInfo is not a Bitvector type, got %s", info.sszType)
+	}
+
+	return info.bitvectorInfo, nil
+}
+
 // String implements the Stringer interface for sszInfo.
 // This follows the notation used in the consensus specs.
 func (info *sszInfo) String() string {
@@ -128,6 +160,10 @@ func (info *sszInfo) String() string {
 			return fmt.Sprintf("Bytes%d", info.vectorInfo.length)
 		}
 		return fmt.Sprintf("Vector[%s, %d]", info.vectorInfo.element, info.vectorInfo.length)
+	case Bitlist:
+		return fmt.Sprintf("Bitlist[%d]", info.bitlistInfo.limit)
+	case Bitvector:
+		return fmt.Sprintf("Bitvector[%d]", info.bitvectorInfo.length)
 	default:
 		return info.typ.Name()
 	}
@@ -174,6 +210,9 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 
 	case List:
 		builder.WriteString(fmt.Sprintf("%s (%s / length: %d, size: %d)\n", info, sizeDesc, info.listInfo.length, info.Size()))
+
+	case Bitlist:
+		builder.WriteString(fmt.Sprintf("%s (%s / length (bit): %d, size: %d)\n", info, sizeDesc, info.bitlistInfo.length, info.Size()))
 
 	default:
 		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info, sizeDesc, info.Size()))

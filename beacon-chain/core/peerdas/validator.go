@@ -109,15 +109,14 @@ func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
+	info, err := src.extract()
+	if err != nil {
+		return nil, errors.Wrap(err, "extract block info")
+	}
 
 	maxIdx := params.BeaconConfig().NumberOfColumns
 	roSidecars := make([]blocks.RODataColumn, 0, maxIdx)
 	for idx := range maxIdx {
-		info, err := src.extract()
-		if err != nil {
-			return nil, errors.Wrap(err, "extract block info")
-		}
-
 		sidecar := &ethpb.DataColumnSidecar{
 			Index:                        idx,
 			Column:                       cells[idx],

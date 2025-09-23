@@ -79,7 +79,7 @@ func (quicProtocol) ENRKey() string { return quickProtocolEnrKey }
 func newListener(listenerCreator func() (*discover.UDPv5, error)) (*listenerWrapper, error) {
 	rawListener, err := listenerCreator()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create new listener")
+		return nil, errors.Wrap(err, "create new listener")
 	}
 	return &listenerWrapper{
 		listener:        rawListener,
@@ -536,7 +536,7 @@ func (s *Service) createListener(
 		int(s.cfg.QUICPort),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create local node")
+		return nil, errors.Wrap(err, "create local node")
 	}
 
 	bootNodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddrs))
@@ -604,13 +604,26 @@ func (s *Service) createLocalNode(
 	localNode = initializeSyncCommSubnets(localNode)
 
 	if params.FuluEnabled() {
-		custodyGroupCount, err := s.CustodyGroupCount()
-		if err != nil {
-			return nil, errors.Wrap(err, "could not retrieve custody group count")
-		}
+		// TODO: Replace this quick fix with a proper synchronization scheme (chan?)
+		const delay = 1 * time.Second
 
-		custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
-		localNode.Set(custodyGroupCountEntry)
+		var custodyGroupCount uint64
+
+		err := errNoCustodyInfo
+		for errors.Is(err, errNoCustodyInfo) {
+			custodyGroupCount, err = s.CustodyGroupCount()
+			if errors.Is(err, errNoCustodyInfo) {
+				log.WithField("delay", delay).Debug("No custody info available yet, retrying later")
+				continue
+			}
+
+			if err != nil {
+				return nil, errors.Wrap(err, "retrieve custody group count")
+			}
+
+			custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
+			localNode.Set(custodyGroupCountEntry)
+		}
 	}
 
 	if s.cfg != nil && s.cfg.HostAddress != "" {
@@ -652,7 +665,7 @@ func (s *Service) startDiscoveryV5(
 	}
 	wrappedListener, err := newListener(createListener)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create listener")
+		return nil, errors.Wrap(err, "create listener")
 	}
 	record := wrappedListener.Self()
 

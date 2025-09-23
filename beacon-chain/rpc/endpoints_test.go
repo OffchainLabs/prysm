@@ -80,9 +80,10 @@ func Test_endpoints(t *testing.T) {
 	}
 
 	debugRoutes := map[string][]string{
-		"/eth/v2/debug/beacon/states/{state_id}": {http.MethodGet},
-		"/eth/v2/debug/beacon/heads":             {http.MethodGet},
-		"/eth/v1/debug/fork_choice":              {http.MethodGet},
+		"/eth/v2/debug/beacon/states/{state_id}":               {http.MethodGet},
+		"/eth/v2/debug/beacon/heads":                           {http.MethodGet},
+		"/eth/v1/debug/fork_choice":                            {http.MethodGet},
+		"/eth/v1/debug/beacon/data_column_sidecars/{block_id}": {http.MethodGet},
 	}
 
 	eventsRoutes := map[string][]string{

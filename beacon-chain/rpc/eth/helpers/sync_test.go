@@ -286,8 +286,8 @@ func TestIsOptimistic(t *testing.T) {
 			require.NoError(t, err)
 			mf := &testutil.MockStater{BeaconState: st}
 			_, err = IsOptimistic(ctx, []byte(hexutil.Encode(bytesutil.PadTo([]byte("root"), 32))), cs, mf, cs, db)
-			var blockRootsNotFoundErr *lookup.BlockRootsNotFoundError
-			require.Equal(t, true, errors.As(err, &blockRootsNotFoundErr))
+			var blockNotFoundErr *lookup.BlockNotFoundError
+			require.Equal(t, true, errors.As(err, &blockNotFoundErr))
 		})
 	})
 
@@ -395,11 +395,11 @@ func TestHandleIsOptimisticError(t *testing.T) {
 	})
 	t.Run("no block roots error handled as 404", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		blockRootsErr := lookup.NewBlockRootsNotFoundError()
-		HandleIsOptimisticError(rr, blockRootsErr)
+		blockNotFoundErr := lookup.NewBlockNotFoundError("no block roots returned from the database")
+		HandleIsOptimisticError(rr, blockNotFoundErr)
 
 		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.StringContains(t, blockRootsErr.Error(), rr.Body.String())
+		require.StringContains(t, blockNotFoundErr.Error(), rr.Body.String())
 	})
 
 	t.Run("generic error handled as 500", func(t *testing.T) {

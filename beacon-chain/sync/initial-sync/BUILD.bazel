@@ -20,6 +20,7 @@ go_library(
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/core/feed/block:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/das:go_default_library",

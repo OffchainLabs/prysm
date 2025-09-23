@@ -1349,14 +1349,6 @@ func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
 	assert.Equal(t, 2, len(receivedPeers))
 }
 
-func TestSortedSliceFromMap(t *testing.T) {
-	m := map[uint64]bool{1: true, 3: true, 2: true, 4: true}
-	expected := []uint64{1, 2, 3, 4}
-
-	actual := sortedSliceFromMap(m)
-	require.DeepSSZEqual(t, expected, actual)
-}
-
 func TestFetchSidecars(t *testing.T) {
 	ctx := t.Context()
 	t.Run("No blocks", func(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -598,7 +599,7 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 	return func(sidecar blocks.RODataColumn) error {
 		columnIndex := sidecar.Index
 		if !requestedIndices[columnIndex] {
-			requested := sortedSliceFromMap(requestedIndices)
+			requested := helpers.SortedPrettySliceFromMap(requestedIndices)
 			return errors.Errorf("data column sidecar index %d returned by the peer but not found in requested indices %v", columnIndex, requested)
 		}
 
