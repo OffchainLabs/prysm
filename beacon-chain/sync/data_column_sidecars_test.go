@@ -1007,13 +1007,6 @@ func TestCompareIndices(t *testing.T) {
 	require.Equal(t, true, compareIndices(left, right))
 }
 
-func TestSlortedSliceFromMap(t *testing.T) {
-	input := map[uint64]bool{54: true, 23: true, 35: true}
-	expected := []uint64{23, 35, 54}
-	actual := sortedSliceFromMap(input)
-	require.DeepEqual(t, expected, actual)
-}
-
 func TestComputeTotalCount(t *testing.T) {
 	input := map[[fieldparams.RootLength]byte]map[uint64]bool{
 		[fieldparams.RootLength]byte{1}: {1: true, 3: true},
