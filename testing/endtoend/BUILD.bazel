@@ -108,7 +108,7 @@ go_test(
         "@com_github_ethereum_go_ethereum//cmd/geth",
         "@web3signer",
     ],
-    eth_network = "minimal",
+    eth_network = "e2e",
     flaky = True,
     shard_count = 2,
     tags = [
@@ -141,7 +141,7 @@ go_test(
         "@com_github_ethereum_go_ethereum//cmd/geth",
         "@web3signer",
     ],
-    eth_network = "minimal",
+    eth_network = "e2e",
     flaky = True,
     shard_count = 2,
     tags = [
@@ -239,7 +239,7 @@ go_test(
         "@com_github_ethereum_go_ethereum//cmd/geth",
         "@web3signer",
     ],
-    eth_network = "minimal",
+    eth_network = "e2e",
     flaky = True,
     shard_count = 2,
     tags = [

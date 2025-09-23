@@ -14,6 +14,13 @@ config_setting(
     },
 )
 
+config_setting(
+    name = "e2e",
+    flag_values = {
+        "//proto:network": "e2e",
+    },
+)
+
 go_library(
     name = "go_default_library",
     srcs = ["util.go"],

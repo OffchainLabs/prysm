@@ -1,4 +1,4 @@
-//go:build !minimal
+//go:build !minimal && !e2e
 
 package eth
 

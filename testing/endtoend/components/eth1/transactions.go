@@ -144,7 +144,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
 
 	// Stop sending blob transactions 1 epoch before Fulu fork to avoid execution client bug at fork boundary
-	nearFuluFork := fuluForkEpoch > 0 && currentEpoch == (fuluForkEpoch - 1)
+	nearFuluFork := fuluForkEpoch > 0 && currentEpoch == (fuluForkEpoch-1)
 	isPostFulu := currentEpoch >= fuluForkEpoch
 
 	g, _ := errgroup.WithContext(context.Background())

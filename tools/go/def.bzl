@@ -3,12 +3,15 @@ load("@io_bazel_rules_go//go/private/rules:test.bzl", "go_test_kwargs")
 load("@bazel_gazelle//:deps.bzl", _go_repository = "go_repository")
 
 def _go_test_transition_impl(settings, attr):
-    """Edge transition to add minimal or mainnet build tags"""
+    """Edge transition to add minimal, mainnet, or e2e build tags"""
     settings = dict(settings)
 
     if attr.eth_network == "minimal":
         settings["//proto:network"] = "minimal"
-        settings["@io_bazel_rules_go//go/config:tags"] = ["minimal"] + settings["@io_bazel_rules_go//go/config:tags"] 
+        settings["@io_bazel_rules_go//go/config:tags"] = ["minimal"] + settings["@io_bazel_rules_go//go/config:tags"]
+    elif attr.eth_network == "e2e":
+        settings["//proto:network"] = "e2e"
+        settings["@io_bazel_rules_go//go/config:tags"] = ["e2e"] + settings["@io_bazel_rules_go//go/config:tags"]
     elif attr.eth_network == "mainnet":  # Default / optional
         settings["//proto:network"] = "mainnet"
         settings["@io_bazel_rules_go//go/config:tags"] = ["mainnet"] + settings["@io_bazel_rules_go//go/config:tags"] 
@@ -41,7 +44,7 @@ def _go_test_transition_rule(**kwargs):
     kwargs = dict(kwargs)
     attrs = dict(kwargs["attrs"])
     attrs.update({
-        "eth_network": attr.string(values = ["mainnet", "minimal"]),
+        "eth_network": attr.string(values = ["mainnet", "minimal", "e2e"]),
     })
     kwargs["attrs"] = attrs
     kwargs["cfg"] = go_test_transition

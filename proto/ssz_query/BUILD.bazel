@@ -66,5 +66,6 @@ ssz_proto_files(
         "//conditions:default": "mainnet",
         "//proto:ssz_mainnet": "mainnet",
         "//proto:ssz_minimal": "minimal",
+        "//proto:ssz_e2e": "e2e",
     }),
 )
