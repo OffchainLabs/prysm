@@ -3,7 +3,6 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -746,14 +745,14 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	missing, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "missing data columns")
 	}
 
 	// If there are no missing indices, all data column sidecars are available.
 	// This is the happy path.
-	if len(missingMap) == 0 {
+	if len(missing) == 0 {
 		return nil
 	}
 
@@ -770,33 +769,17 @@ func (s *Service) areDataColumnsAvailable(
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		timer := time.AfterFunc(time.Until(nextSlot), func() {
-			missingMapCount := uint64(len(missingMap))
+			missingCount := uint64(len(missing))
 
-			if missingMapCount == 0 {
+			if missingCount == 0 {
 				return
-			}
-
-			var (
-				expected interface{} = "all"
-				missing  interface{} = "all"
-			)
-
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			colMapCount := uint64(len(peerInfo.CustodyColumns))
-
-			if colMapCount < numberOfColumns {
-				expected = uint64MapToSortedSlice(peerInfo.CustodyColumns)
-			}
-
-			if missingMapCount < numberOfColumns {
-				missing = uint64MapToSortedSlice(missingMap)
 			}
 
 			log.WithFields(logrus.Fields{
 				"slot":            block.Slot(),
 				"root":            fmt.Sprintf("%#x", root),
-				"columnsExpected": expected,
-				"columnsWaiting":  missing,
+				"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+				"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
 			}).Warning("Data columns still missing at slot end")
 		})
 		defer timer.Stop()
@@ -812,7 +795,7 @@ func (s *Service) areDataColumnsAvailable(
 
 			for _, index := range idents.Indices {
 				// This is a data column we are expecting.
-				if _, ok := missingMap[index]; ok {
+				if _, ok := missing[index]; ok {
 					storedDataColumnsCount++
 				}
 
@@ -823,10 +806,10 @@ func (s *Service) areDataColumnsAvailable(
 				}
 
 				// Remove the index from the missing map.
-				delete(missingMap, index)
+				delete(missing, index)
 
 				// Return if there is no more missing data columns.
-				if len(missingMap) == 0 {
+				if len(missing) == 0 {
 					return nil
 				}
 			}
@@ -834,10 +817,10 @@ func (s *Service) areDataColumnsAvailable(
 		case <-ctx.Done():
 			var missingIndices interface{} = "all"
 			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			missingIndicesCount := uint64(len(missingMap))
+			missingIndicesCount := uint64(len(missing))
 
 			if missingIndicesCount < numberOfColumns {
-				missingIndices = uint64MapToSortedSlice(missingMap)
+				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
 			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
@@ -919,16 +902,6 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x", block.Slot(), root)
 		}
 	}
-}
-
-// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
-func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
-	output := make([]uint64, 0, len(input))
-	for idx := range input {
-		output = append(output, idx)
-	}
-	slices.Sort[[]uint64](output)
-	return output
 }
 
 // lateBlockTasks  is called 4 seconds into the slot and performs tasks

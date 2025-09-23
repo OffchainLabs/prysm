@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -95,7 +96,7 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 					"slot":          slot,
 					"proposerIndex": proposerIndex,
 					"count":         len(unseenIndices),
-					"indices":       sortedSliceFromMap(unseenIndices),
+					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
 					"duration":      duration,
 				}).Debug("Reconstructed data column sidecars")
 			}

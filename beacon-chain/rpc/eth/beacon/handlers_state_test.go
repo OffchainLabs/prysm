@@ -192,8 +192,14 @@ func TestGetRandao(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(mixOld[:]), resp.Data.Randao)
 	})
 	t.Run("head state below `EpochsPerHistoricalVector`", func(t *testing.T) {
-		s.Stater = &testutil.MockStater{
-			BeaconState: headSt,
+		s := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: headSt,
+			},
+			HeadFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			BeaconDB:              db,
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao", nil)
@@ -302,6 +308,74 @@ func TestGetRandao(t *testing.T) {
 		resp := &structs.GetRandaoResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.Finalized)
+	})
+	t.Run("early epoch scenario - epoch 0 from state at epoch (EpochsPerHistoricalVector - 1)", func(t *testing.T) {
+		// Create a state at early epoch
+		earlyEpochState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		earlyEpoch := params.BeaconConfig().EpochsPerHistoricalVector - 1
+		require.NoError(t, earlyEpochState.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(earlyEpoch)))
+
+		// Set up RANDAO mix for epoch 0
+		// In real networks, this would be the ETH1 block hash used for genesis
+		epoch0Randao := bytesutil.ToBytes32([]byte("epoch0"))
+		require.NoError(t, earlyEpochState.UpdateRandaoMixesAtIndex(0, epoch0Randao))
+
+		earlyServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: earlyEpochState,
+			},
+			HeadFetcher:           &chainMock.ChainService{},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+			FinalizationFetcher:   &chainMock.ChainService{},
+		}
+
+		// Query epoch 0 from state at epoch (EpochsPerHistoricalVector - 1) - should succeed
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=0", nil)
+		request.SetPathValue("state_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		earlyServer.GetRandao(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code, "Early epoch queries should succeed when within bounds")
+
+		resp := &structs.GetRandaoResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, hexutil.Encode(epoch0Randao[:]), resp.Data.Randao)
+	})
+	t.Run("early epoch scenario - epoch 0 from state at epoch EpochsPerHistoricalVector", func(t *testing.T) {
+		// Create a state at early epoch
+		earlyEpochState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		earlyEpoch := params.BeaconConfig().EpochsPerHistoricalVector
+		require.NoError(t, earlyEpochState.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(earlyEpoch)))
+
+		// Set up RANDAO mix for epoch 0
+		// In real networks, this would be the ETH1 block hash used for genesis
+		epoch0Randao := bytesutil.ToBytes32([]byte("epoch0"))
+		require.NoError(t, earlyEpochState.UpdateRandaoMixesAtIndex(0, epoch0Randao))
+
+		earlyServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: earlyEpochState,
+			},
+			HeadFetcher:           &chainMock.ChainService{},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+			FinalizationFetcher:   &chainMock.ChainService{},
+		}
+
+		// Query epoch 0 from state at epoch EpochsPerHistoricalVector - should fail
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=0", nil)
+		request.SetPathValue("state_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		earlyServer.GetRandao(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		require.StringContains(t, "Epoch is out of range for the randao mixes of the state", e.Message)
 	})
 }
 
