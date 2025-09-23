@@ -375,9 +375,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-vvbKzHQSurReSRxaBIhxsYavajvN19goigA1xATzIEo=",
-    strip_prefix = "hoodi-21a110a60e6558a2ba7c819fa4b80029d49ab205",
-    url = "https://github.com/eth-clients/hoodi/archive/21a110a60e6558a2ba7c819fa4b80029d49ab205.tar.gz",
+    integrity = "sha256-G+4c9c/vci1OyPrQJnQCI+ZCv/E0cWN4hrHDY3i7ns0=",
+    strip_prefix = "hoodi-b6ee51b2045a5e7fe3efac52534f75b080b049c6",
+    url = "https://github.com/eth-clients/hoodi/archive/b6ee51b2045a5e7fe3efac52534f75b080b049c6.tar.gz",
 )
 
 http_archive(
