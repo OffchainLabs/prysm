@@ -2,14 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "hash_tree_root.go",
-        "treeroot.go",
-    ],
+    srcs = ["hash_tree_root.go"],
     importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz/query/proof",
     visibility = ["//visibility:public"],
     deps = [
-        "//encoding/ssz:go_default_library",
         "//encoding/ssz/query:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
     ],
@@ -22,6 +18,7 @@ go_test(
         ":go_default_library",
         "//encoding/ssz/query:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//proto/ssz_query:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",

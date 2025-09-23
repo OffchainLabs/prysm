@@ -66,6 +66,7 @@ func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.H
 		if err != nil {
 			return err
 		}
+
 	case sszquery.Union:
 		err := buildRootFromCompatibleUnion(si, serializedData, hh)
 		if err != nil {
@@ -165,6 +166,10 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 	if si.Type() != sszquery.List && si.Type() != sszquery.Bitlist && si.Type() != sszquery.ProgressiveList {
 		return fmt.Errorf("expected list type, got %s", si.Type())
 	}
+	if si.Type() == sszquery.Bitlist {
+		hh.PutBitlist(serializedData, 2048)
+		return nil
+	}
 
 	li, err := si.ListInfo()
 	if err != nil {
@@ -203,11 +208,6 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 		// PutBytes handles chunking automatically for data > 32 bytes
 		hh.PutBytes(serializedData[:listLength*elemType.Size()])
 		hh.MerkleizeWithMixin(hashIndex, listLength, listLimit)
-	} else if si.Type() == sszquery.Bitlist {
-		// mix_in_length(merkleize(pack_bits(value), limit=chunk_count(type)), len(value)) if value is a bitlist.
-		// pack_bits(bits): Given the bits of bitlist or bitvector, get bitfield_bytes by packing them in bytes and aligning to the start. The length-delimiting bit for bitlists is excluded. Then return pack(bitfield_bytes).
-		// PutBitlist handles length-delimiting bit removal and proper length mixing
-		hh.PutBitlist(serializedData, listLimit)
 	} else {
 		// mix_in_length(merkleize([hash_tree_root(element) for element in value], limit=chunk_count(type)), len(value)) if value is a list of composite objects.
 		// For composite types, hash each element individually, then merkleize with length mixing

@@ -365,5 +365,4 @@ func TestHashTreeRoot_CustomTypes_BitlistContainer(t *testing.T) {
 	expectedHashTreeRoot, err := bitlistContainer.HashTreeRoot()
 	require.NoError(t, err)
 	assert.Equal(t, expectedHashTreeRoot, hashTreeRoot)
-
 }
