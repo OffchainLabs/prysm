@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -479,7 +480,7 @@ func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay ti
 		// Some sidecars are still missing.
 		log := log.WithFields(logrus.Fields{
 			"attempt":        attempt,
-			"missingIndices": sortedSliceFromMap(missingIndicesByRoot[root]),
+			"missingIndices": helpers.SortedPrettySliceFromMap(missingIndicesByRoot[root]),
 			"delay":          delay,
 		})
 

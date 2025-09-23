@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -187,7 +188,7 @@ func requestSidecarsFromStorage(
 	requestedIndicesMap map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	requestedIndices := sortedSliceFromMap(requestedIndicesMap)
+	requestedIndices := helpers.SortedSliceFromMap(requestedIndicesMap)
 
 	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
 
@@ -599,7 +600,7 @@ func assembleAvailableSidecarsForRoot(
 	root [fieldparams.RootLength]byte,
 	indices map[uint64]bool,
 ) ([]blocks.VerifiedRODataColumn, error) {
-	stored, err := storage.Get(root, sortedSliceFromMap(indices))
+	stored, err := storage.Get(root, helpers.SortedSliceFromMap(indices))
 	if err != nil {
 		return nil, errors.Wrapf(err, "storage get for root %#x", root)
 	}
@@ -802,24 +803,26 @@ func sendDataColumnSidecarsRequest(
 			roDataColumns = append(roDataColumns, localRoDataColumns...)
 		}
 
-		prettyByRangeRequests := make([]map[string]any, 0, len(byRangeRequests))
-		for _, request := range byRangeRequests {
-			prettyRequest := map[string]any{
-				"startSlot": request.StartSlot,
-				"count":     request.Count,
-				"columns":   request.Columns,
+		if logrus.GetLevel() >= logrus.DebugLevel {
+			prettyByRangeRequests := make([]map[string]any, 0, len(byRangeRequests))
+			for _, request := range byRangeRequests {
+				prettyRequest := map[string]any{
+					"startSlot": request.StartSlot,
+					"count":     request.Count,
+					"columns":   helpers.PrettySlice(request.Columns),
+				}
+
+				prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
 			}
 
-			prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
+			log.WithFields(logrus.Fields{
+				"respondedSidecars": len(roDataColumns),
+				"requestCount":      len(byRangeRequests),
+				"type":              "byRange",
+				"duration":          time.Since(start),
+				"requests":          prettyByRangeRequests,
+			}).Debug("Received data column sidecars")
 		}
-
-		log.WithFields(logrus.Fields{
-			"respondedSidecars": len(roDataColumns),
-			"requestCount":      len(byRangeRequests),
-			"type":              "byRange",
-			"duration":          time.Since(start),
-			"requests":          prettyByRangeRequests,
-		}).Debug("Received data column sidecars")
 
 		return roDataColumns, nil
 	}
@@ -895,7 +898,7 @@ func buildByRangeRequests(
 		}
 	}
 
-	columns := sortedSliceFromMap(reference)
+	columns := helpers.SortedSliceFromMap(reference)
 	startSlot, endSlot := slots[0], slots[len(slots)-1]
 	totalCount := uint64(endSlot - startSlot + 1)
 
@@ -920,7 +923,7 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 	for root, indices := range indicesByRoot {
 		identifier := &eth.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
-			Columns:   sortedSliceFromMap(indices),
+			Columns:   helpers.SortedSliceFromMap(indices),
 		}
 		identifiers = append(identifiers, identifier)
 	}
@@ -1171,17 +1174,6 @@ func compareIndices(left, right map[uint64]bool) bool {
 	}
 
 	return true
-}
-
-// sortedSliceFromMap converts a map[uint64]bool to a sorted slice of keys.
-func sortedSliceFromMap(m map[uint64]bool) []uint64 {
-	result := make([]uint64, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-
-	slices.Sort(result)
-	return result
 }
 
 // computeTotalCount calculates the total count of indices across all roots.

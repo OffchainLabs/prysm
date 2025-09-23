@@ -1,7 +1,5 @@
 package params
 
-import "math"
-
 // UseHoleskyNetworkConfig uses the Holesky beacon chain specific network config.
 func UseHoleskyNetworkConfig() {
 	cfg := BeaconNetworkConfig().Copy()
@@ -41,12 +39,21 @@ func HoleskyConfig() *BeaconChainConfig {
 	cfg.DenebForkVersion = []byte{0x05, 0x1, 0x70, 0x0}
 	cfg.ElectraForkEpoch = 115968 // Mon, Feb 24 at 21:55:12 UTC
 	cfg.ElectraForkVersion = []byte{0x06, 0x1, 0x70, 0x0}
-	cfg.FuluForkEpoch = math.MaxUint64
-	cfg.FuluForkVersion = []byte{0x07, 0x1, 0x70, 0x0} // TODO: Define holesky fork version for fulu. This is a placeholder value.
+	cfg.FuluForkEpoch = 165120 // 2025-10-01 08:48:00 UTC
+	cfg.FuluForkVersion = []byte{0x07, 0x1, 0x70, 0x0}
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x4242424242424242424242424242424242424242"
 	cfg.EjectionBalance = 28000000000
-	cfg.BlobSchedule = []BlobScheduleEntry{}
+	cfg.BlobSchedule = []BlobScheduleEntry{
+		{
+			MaxBlobsPerBlock: 15,
+			Epoch:            166400, // 2025-10-07 01:20:00 UTC
+		},
+		{
+			MaxBlobsPerBlock: 21,
+			Epoch:            167936, // 2025-10-13 21:10:24 UTC
+		},
+	}
 	cfg.InitializeForkSchedule()
 	return cfg
 }
