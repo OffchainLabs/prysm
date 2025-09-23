@@ -34,6 +34,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // A minimal client for peering with beacon nodes over libp2p and sending p2p RPC requests for data.
@@ -42,6 +43,7 @@ type client struct {
 	meta         metadata.Metadata
 	beaconClient pb.BeaconChainClient
 	nodeClient   pb.NodeClient
+	conn         *grpc.ClientConn
 }
 
 func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error) {
@@ -74,7 +76,7 @@ func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error
 	if len(beaconEndpoints) == 0 {
 		return nil, errors.New("no specified beacon API endpoints")
 	}
-	conn, err := grpc.Dial(beaconEndpoints[0], grpc.WithInsecure())
+	conn, err := grpc.Dial(beaconEndpoints[0], grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
@@ -85,10 +87,14 @@ func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error
 		meta:         meta,
 		beaconClient: beaconClient,
 		nodeClient:   nodeClient,
+		conn:         conn,
 	}, nil
 }
 
 func (c *client) Close() {
+	if c.conn != nil {
+		_ = c.conn.Close()
+	}
 	if err := c.host.Close(); err != nil {
 		panic(err) // lint:nopanic -- The client is closing anyway...
 	}
