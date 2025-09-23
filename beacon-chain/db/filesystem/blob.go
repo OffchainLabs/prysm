@@ -122,18 +122,18 @@ type BlobStorage struct {
 func (bs *BlobStorage) WarmCache() {
 	start := time.Now()
 	if bs.layoutName == LayoutNameFlat {
-		log.Info("Blob filesystem cache warm-up started. This may take a few minutes.")
+		log.Info("Blob filesystem cache warm-up started. This may take a few minutes")
 	} else {
-		log.Info("Blob filesystem cache warm-up started.")
+		log.Info("Blob filesystem cache warm-up started")
 	}
 
 	if err := warmCache(bs.layout, bs.cache); err != nil {
-		log.WithError(err).Error("Error encountered while warming up blob filesystem cache.")
+		log.WithError(err).Error("Error encountered while warming up blob filesystem cache")
 	}
 	if err := bs.migrateLayouts(); err != nil {
-		log.WithError(err).Error("Error encountered while migrating blob storage.")
+		log.WithError(err).Error("Error encountered while migrating blob storage")
 	}
-	log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete.")
+	log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete")
 }
 
 // If any blob storage directories are found for layouts besides the configured layout, migrate them.
