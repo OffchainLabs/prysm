@@ -213,6 +213,11 @@ func (s *FakeP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
+// UpdateEarliestAvailableSlot -- fake.
+func (*FakeP2P) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	return nil
+}
+
 // CustodyGroupCountFromPeer -- fake.
 func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
 	return 0
