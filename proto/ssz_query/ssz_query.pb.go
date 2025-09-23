@@ -195,6 +195,7 @@ type VariableNestedContainer struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Value1          uint64                 `protobuf:"varint,1,opt,name=value1,proto3" json:"value1,omitempty"`
 	FieldListUint64 []uint64               `protobuf:"varint,2,rep,packed,name=field_list_uint64,json=fieldListUint64,proto3" json:"field_list_uint64,omitempty" ssz-max:"100"`
+	NestedListField [][]byte               `protobuf:"bytes,3,rep,name=nested_list_field,json=nestedListField,proto3" json:"nested_list_field,omitempty" ssz-max:"100,50" ssz-size:"?,?"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -258,7 +259,8 @@ type VariableTestContainer struct {
 	FieldListBytes32   [][]byte                                     `protobuf:"bytes,4,rep,name=field_list_bytes32,json=fieldListBytes32,proto3" json:"field_list_bytes32,omitempty" ssz-max:"100" ssz-size:"?,32"`
 	Nested             *VariableNestedContainer                     `protobuf:"bytes,5,opt,name=nested,proto3" json:"nested,omitempty"`
 	BitlistField       github_com_prysmaticlabs_go_bitfield.Bitlist `protobuf:"bytes,6,opt,name=bitlist_field,json=bitlistField,proto3" json:"bitlist_field,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitlist" ssz-max:"2048"`
-	TrailingField      []byte                                       `protobuf:"bytes,7,opt,name=trailing_field,json=trailingField,proto3" json:"trailing_field,omitempty" ssz-size:"56"`
+	NestedListField    [][]byte                                     `protobuf:"bytes,7,rep,name=nested_list_field,json=nestedListField,proto3" json:"nested_list_field,omitempty" ssz-max:"100,50" ssz-size:"?,?"`
+	TrailingField      []byte                                       `protobuf:"bytes,8,opt,name=trailing_field,json=trailingField,proto3" json:"trailing_field,omitempty" ssz-size:"56"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
