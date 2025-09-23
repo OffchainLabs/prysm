@@ -197,7 +197,7 @@ func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
 		return
 	}
 
-	// Update the earliest available slot 
+	// Update the earliest available slot
 	err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
 	if err != nil {
 		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
