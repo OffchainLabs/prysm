@@ -154,6 +154,12 @@ func (m *mockCustodyUpdater) UpdateCustodyInfo(earliestAvailableSlot primitives.
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
+func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	m.updateCallCount++
+	m.earliestAvailableSlot = earliestAvailableSlot
+	return nil
+}
+
 func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	hook := logTest.NewGlobal()
@@ -241,7 +247,12 @@ func (m *mockCustodyUpdaterWithError) UpdateCustodyInfo(earliestAvailableSlot pr
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
-func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
+func (m *mockCustodyUpdaterWithError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	m.updateCallCount++
+	return nil
+}
+
+func TestPruner_UpdatesEarliestSlotIndependentOfCustodyGroupCount(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	hook := logTest.NewGlobal()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -288,10 +299,10 @@ func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
 	// Wait for pruning to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Should not have called UpdateCustodyInfo due to error
-	assert.Equal(t, 0, mockCustody.updateCallCount, "UpdateCustodyInfo should not be called when CustodyGroupCount fails")
+	// Should have called UpdateEarliestAvailableSlot
+	assert.Equal(t, 1, mockCustody.updateCallCount, "UpdateEarliestAvailableSlot should be called")
 
-	// Check error log
+	// Check that no error was logged for custody group count
 	found := false
 	for _, entry := range hook.AllEntries() {
 		if entry.Message == "Failed to get custody group count, cannot update earliest available slot after pruning" {
@@ -299,7 +310,7 @@ func TestPruner_SkipsUpdateOnCustodyGroupCountError(t *testing.T) {
 			break
 		}
 	}
-	assert.Equal(t, true, found, "Should log error when custody group count fails")
+	assert.Equal(t, false, found, "Should not log custody group count error")
 
 	require.NoError(t, p.Stop())
 }
