@@ -604,6 +604,7 @@ func (s *Service) createLocalNode(
 	localNode = initializeSyncCommSubnets(localNode)
 
 	if params.FuluEnabled() {
+		// TODO: Replace this quick fix with a proper synchronization scheme (chan?)
 		const delay = 1 * time.Second
 
 		var custodyGroupCount uint64
