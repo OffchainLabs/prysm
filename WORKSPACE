@@ -359,9 +359,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-jF05y+5f3Wcp2b6sKh6ip0b//rrV65X4iFDyjZ2cIbE=",
-    strip_prefix = "sepolia-56f0bff41cecab6c661251d72b73ceecc52c5701",
-    url = "https://github.com/eth-clients/sepolia/archive/56f0bff41cecab6c661251d72b73ceecc52c5701.tar.gz",
+    integrity = "sha256-+UZgfvBcea0K0sbvAJZOz5ZNmxdWZYbohP38heUuc6w=",
+    strip_prefix = "sepolia-f9158732adb1a2a6440613ad2232eb50e7384c4f",
+    url = "https://github.com/eth-clients/sepolia/archive/f9158732adb1a2a6440613ad2232eb50e7384c4f.tar.gz",
 )
 
 http_archive(
