@@ -680,3 +680,91 @@ func (v *VariableTestContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the BitlistContainer object
+func (b *BitlistContainer) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BitlistContainer object to a target array
+func (b *BitlistContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'BitlistField'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BitlistField)
+
+	// Field (0) 'BitlistField'
+	if size := len(b.BitlistField); size > 2048 {
+		err = ssz.ErrBytesLengthFn("--.BitlistField", size, 2048)
+		return
+	}
+	dst = append(dst, b.BitlistField...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BitlistContainer object
+func (b *BitlistContainer) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'BitlistField'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'BitlistField'
+	{
+		buf = tail[o0:]
+		if err = ssz.ValidateBitlist(buf, 2048); err != nil {
+			return err
+		}
+		if cap(b.BitlistField) == 0 {
+			b.BitlistField = make([]byte, 0, len(buf))
+		}
+		b.BitlistField = append(b.BitlistField, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BitlistContainer object
+func (b *BitlistContainer) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'BitlistField'
+	size += len(b.BitlistField)
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BitlistContainer object
+func (b *BitlistContainer) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BitlistContainer object with a hasher
+func (b *BitlistContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BitlistField'
+	if len(b.BitlistField) == 0 {
+		err = ssz.ErrEmptyBitlist
+		return
+	}
+	hh.PutBitlist(b.BitlistField, 2048)
+
+	hh.Merkleize(indx)
+	return
+}

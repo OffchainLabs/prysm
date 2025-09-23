@@ -80,3 +80,16 @@ message VariableTestContainer {
   // Verifies correct offset calculation after variable-size fields
   bytes trailing_field = 6 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 = 48
 }
+
+// BitlistContainer - container with only a bitlist for testing bitlist hash tree root computation
+// Tests: Bitlist SSZ serialization, hash tree root for bitlists, container with single bitlist field
+message BitlistContainer {
+  // Bitlist field - test variable-size bitlist in container
+  // SSZ bitlists include a length-delimiting bit and use mix_in_length for hash tree root
+    bytes bitlist_field = 1 [
+    (ethereum.eth.ext.ssz_max) = "2048",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+  ];
+}
+
