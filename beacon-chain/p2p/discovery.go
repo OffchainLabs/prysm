@@ -614,6 +614,7 @@ func (s *Service) createLocalNode(
 			custodyGroupCount, err = s.CustodyGroupCount()
 			if errors.Is(err, errNoCustodyInfo) {
 				log.WithField("delay", delay).Debug("No custody info available yet, retrying later")
+				time.Sleep(delay)
 				continue
 			}
 
