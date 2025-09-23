@@ -388,6 +388,7 @@ func presetsFilePath(t *testing.T, config string) []string {
 		path.Join(fPath, "presets", config, "capella.yaml"),
 		path.Join(fPath, "presets", config, "deneb.yaml"),
 		path.Join(fPath, "presets", config, "electra.yaml"),
+		path.Join(fPath, "presets", config, "fulu.yaml"),
 	}
 }
 
