@@ -61,5 +61,8 @@ func (l *bitlistInfo) Size() uint64 {
 	if l == nil {
 		return 0
 	}
+	if l.length == 0 {
+		return 0
+	}
 	return (l.length / 8) + 1
 }
