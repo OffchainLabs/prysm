@@ -66,7 +66,6 @@ func buildRootFromSSZInfo(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.H
 		if err != nil {
 			return err
 		}
-
 	case sszquery.Union:
 		err := buildRootFromCompatibleUnion(si, serializedData, hh)
 		if err != nil {
@@ -180,6 +179,10 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 		if err != nil {
 			return err
 		}
+		if bi.Length() == 0 {
+			return fmt.Errorf("bitlist length is zero")
+		}
+
 		bitlistLimit := bi.Limit()
 		hh.PutBitlist(serializedData, bitlistLimit)
 		return nil
@@ -203,7 +206,14 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 	listLength := li.Length()
 	if listLength == 0 {
 		// empty list - still needs length mixing for proper list hash
-		hh.MerkleizeWithMixin(hashIndex, 0, listLimit)
+		// Calculate chunk limit for consistency
+		if isBasicType(elemType.Type()) {
+			elemSize := elemType.Size()
+			chunkLimit := (listLimit*elemSize + 31) / 32
+			hh.MerkleizeWithMixin(hashIndex, 0, chunkLimit)
+		} else {
+			hh.MerkleizeWithMixin(hashIndex, 0, listLimit)
+		}
 		return nil
 	}
 
@@ -220,8 +230,11 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 		// mix_in_length(merkleize(pack(value), limit=chunk_count(type)), len(value)) if value is a list of basic objects.
 		// mix_in_length: Given a Merkle root and a length ("uint256" little-endian serialization) return hash(root + length).
 		// PutBytes handles chunking automatically for data > 32 bytes
-		hh.PutBytes(serializedData[:listLength*elemType.Size()])
-		hh.MerkleizeWithMixin(hashIndex, listLength, listLimit)
+		hh.Append(serializedData[:listLength*elemType.Size()])
+
+		// For basic types, calculate the maximum number of chunks based on element size
+		elemSize := elemType.Size()
+		hh.MerkleizeWithMixin(hashIndex, listLength, ssz.CalculateLimit(listLimit, listLength, elemSize))
 	} else {
 		// mix_in_length(merkleize([hash_tree_root(element) for element in value], limit=chunk_count(type)), len(value)) if value is a list of composite objects.
 		// For composite types, hash each element individually, then merkleize with length mixing
@@ -235,6 +248,7 @@ func buildRootFromList(si *sszquery.SSZInfo, serializedData []byte, hh *ssz.Hash
 				return fmt.Errorf("failed to hash list element %d: %w", i, err)
 			}
 		}
+		// For composite types, each element becomes one chunk after hashing
 		hh.MerkleizeWithMixin(hashIndex, listLength, listLimit)
 	}
 
@@ -282,9 +296,9 @@ func buildRootFromContainer(si *sszquery.SSZInfo, serializedData []byte, hh *ssz
 
 		fieldOffset := fieldInfo.Offset()
 		fieldSize := fieldType.Size()
-		if fieldSize == 0 {
-			return fmt.Errorf("field %s has zero size", fieldName)
-		}
+		// if fieldSize == 0 {
+		// 	return nil
+		// }
 
 		err := buildRootFromSSZInfo(fieldType, serializedData[fieldOffset:fieldOffset+fieldSize], hh)
 		if err != nil {

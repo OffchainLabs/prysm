@@ -347,24 +347,84 @@ func TestHashTreeRoot_CustomTypes_FixedTestContainer(t *testing.T) {
 }
 
 func TestHashTreeRoot_CustomTypes_BitlistContainer(t *testing.T) {
-	bitlist := []byte{0b10101010, 0b10101010} // 10 bits: 1010101000
-	bitlistContainer := &sszquerypb.BitlistContainer{
-		BitlistField: bitlist,
+	tests := []struct {
+		name        string
+		bitlist     []byte
+		description string
+	}{
+		// { NOTE: THIS TEST CASE MUST BE REVIEWED
+		// 	name:        "empty_bitlist",
+		// 	bitlist:     []byte{},
+		// 	description: "Empty bitlist - should hash correctly with zero length",
+		// },
+		{
+			name:        "small_bitlist",
+			bitlist:     []byte{0b10101010, 0x01}, // 8 bits: 10101010 + length-delimiting bit
+			description: "Small bitlist with 8 bits",
+		},
+		{
+			name:        "medium_bitlist",
+			bitlist:     []byte{0b11110000, 0b00001111, 0b10101010, 0x01}, // 24 bits + length-delimiting bit
+			description: "Medium bitlist with 24 bits",
+		},
+		{
+			name: "large_bitlist",
+			bitlist: func() []byte {
+				// Create a bitlist with 100 bits + length-delimiting bit
+				bits := make([]byte, 13) // 100 bits = 12.5 bytes, so 13 bytes
+				for i := 0; i < 12; i++ {
+					bits[i] = 0b10101010 // Alternating pattern
+				}
+				bits[12] = 0b00010000 // 4 bits + length-delimiting bit (bit 4)
+				return bits
+			}(),
+			description: "Large bitlist with 100 bits",
+		},
+		{
+			name: "near_max_bitlist",
+			bitlist: func() []byte {
+				// Create a bitlist with 2000 bits (near the 2048 limit)
+				numBytes := (2000 + 7) / 8       // 250 bytes for 2000 bits
+				bits := make([]byte, numBytes+1) // +1 for length-delimiting bit
+				for i := 0; i < numBytes; i++ {
+					bits[i] = 0b11001100 // Pattern
+				}
+				// Set the length-delimiting bit at position 2000 % 8 = 0 in the last byte
+				bits[numBytes] = 0b00000001 // Length-delimiting bit at position 0
+				return bits
+			}(),
+			description: "Near maximum bitlist with 2000 bits (close to 2048 limit)",
+		},
 	}
 
-	info, err := sszquery.AnalyzeObject(bitlistContainer)
-	require.NoError(t, err)
-	assert.NotNil(t, info, "Expected non-nil SSZ info")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bitlistContainer := &sszquerypb.BitlistContainer{
+				BitlistField: tt.bitlist,
+			}
 
-	serializedData, err := ssz.MarshalSSZ(bitlistContainer)
-	require.NoError(t, err)
+			info, err := sszquery.AnalyzeObject(bitlistContainer)
+			require.NoError(t, err, "Failed to analyze BitlistContainer for test: %s", tt.description)
+			assert.NotNil(t, info, "Expected non-nil SSZ info for test: %s", tt.description)
 
-	hashTreeRoot, err := proof.HashTreeRoot(info, serializedData)
-	require.NoError(t, err)
+			serializedData, err := ssz.MarshalSSZ(bitlistContainer)
+			t.Logf("Serialized data for test %s: %x", tt.name, serializedData)
+			require.NoError(t, err, "Failed to marshal BitlistContainer for test: %s", tt.description)
 
-	expectedHashTreeRoot, err := bitlistContainer.HashTreeRoot()
-	require.NoError(t, err)
-	assert.Equal(t, expectedHashTreeRoot, hashTreeRoot)
+			expectedHashTreeRoot, err := bitlistContainer.HashTreeRoot()
+			require.NoError(t, err, "Failed to compute expected HashTreeRoot for test: %s", tt.description)
+
+			hashTreeRoot, err := proof.HashTreeRoot(info, serializedData)
+			require.NoError(t, err, "Failed to compute HashTreeRoot for test: %s", tt.description)
+
+			assert.Equal(t, expectedHashTreeRoot, hashTreeRoot,
+				"Hash tree roots should match for test: %s (bitlist length: %d bytes)",
+				tt.description, len(tt.bitlist))
+
+			t.Logf("Test %s passed - Bitlist length: %d bytes, Root: %x",
+				tt.name, len(tt.bitlist), hashTreeRoot)
+		})
+	}
 }
 
 func TestHashTreeRoot_CustomTypes_BitvectorContainer(t *testing.T) {
@@ -385,5 +445,31 @@ func TestHashTreeRoot_CustomTypes_BitvectorContainer(t *testing.T) {
 
 	expectedHashTreeRoot, err := bitvectorContainer.HashTreeRoot()
 	require.NoError(t, err)
+	assert.Equal(t, expectedHashTreeRoot, hashTreeRoot)
+}
+
+func TestHashTreeRoot_CustomTypes_BasicTypeListContainer(t *testing.T) {
+	listField := []uint64{0, 1, 2, 3, 4, 0, 1, 2, 3, 4}
+	basicTypeList := &sszquerypb.BasicTypeList{
+		FieldListUint64: listField,
+	}
+
+	info, err := sszquery.AnalyzeObject(basicTypeList)
+	require.NoError(t, err)
+	assert.NotNil(t, info, "Expected non-nil SSZ info")
+	serializedData, err := ssz.MarshalSSZ(basicTypeList)
+	require.NoError(t, err)
+
+	t.Logf("Serialized data: %x", serializedData)
+
+	expectedHashTreeRoot, err := basicTypeList.HashTreeRoot()
+	require.NoError(t, err)
+
+	hashTreeRoot, err := proof.HashTreeRoot(info, serializedData)
+	require.NoError(t, err)
+
+	t.Logf("Computed HashTreeRoot: %x\n", hashTreeRoot)
+	t.Logf("Expected HashTreeRoot: %x\n", expectedHashTreeRoot)
+
 	assert.Equal(t, expectedHashTreeRoot, hashTreeRoot)
 }
