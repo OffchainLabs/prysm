@@ -800,6 +800,11 @@ func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
 }
 
 func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	params.OverrideBeaconConfig(config)
+
 	ctx := t.Context()
 
 	// Test case 1: Should not prune if highestStoredEpoch <= retentionEpochs

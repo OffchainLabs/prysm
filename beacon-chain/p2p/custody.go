@@ -125,7 +125,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	if currentEpoch < params.BeaconConfig().FuluForkEpoch {
 		log.WithFields(logrus.Fields{
 			"currentEpoch": currentEpoch,
-			"fuluEpoch":   params.BeaconConfig().FuluForkEpoch,
+			"fuluEpoch":    params.BeaconConfig().FuluForkEpoch,
 		}).Debug("Skipping custody update - before Fulu fork epoch")
 		return nil
 	}
