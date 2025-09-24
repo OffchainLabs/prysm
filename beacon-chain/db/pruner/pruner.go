@@ -42,7 +42,8 @@ func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
 		if retentionEpochs < defaultRetentionEpochs {
 			log.WithField("userEpochs", retentionEpochs).
 				WithField("minRequired", defaultRetentionEpochs).
-				Warn("Retention period too low, using minimum required value")
+				Warn("Retention period too low, ignoring and using minimum required value")
+			retentionEpochs = defaultRetentionEpochs
 		}
 
 		s.ps = pruneStartSlotFunc(retentionEpochs)

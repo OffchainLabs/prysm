@@ -245,6 +245,81 @@ func (m *mockCustodyUpdaterWithError) UpdateEarliestAvailableSlot(earliestAvaila
 	return nil
 }
 
+func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
+	// Use minimal config for testing
+	params.SetupTestConfigCleanup(t)
+	config := params.MinimalSpecConfig()
+	params.OverrideBeaconConfig(config)
+
+	ctx := t.Context()
+	beaconDB := dbtest.SetupDB(t)
+
+	// Get the minimum required epochs (272 + 1 = 273 for minimal)
+	minRequiredEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests + 1)
+
+	tests := []struct {
+		name                  string
+		userRetentionEpochs   primitives.Epoch
+		expectedRetentionSlots primitives.Slot
+		description           string
+	}{
+		{
+			name:                  "User value below minimum - should use minimum",
+			userRetentionEpochs:   2,  // Way below minimum
+			expectedRetentionSlots: primitives.Slot(minRequiredEpochs) * params.BeaconConfig().SlotsPerEpoch,
+			description:           "Should use minimum when user value is too low",
+		},
+		{
+			name:                  "User value at minimum",
+			userRetentionEpochs:   minRequiredEpochs,
+			expectedRetentionSlots: primitives.Slot(minRequiredEpochs) * params.BeaconConfig().SlotsPerEpoch,
+			description:           "Should use user value when at minimum",
+		},
+		{
+			name:                  "User value above minimum",
+			userRetentionEpochs:   minRequiredEpochs + 10,
+			expectedRetentionSlots: primitives.Slot(minRequiredEpochs + 10) * params.BeaconConfig().SlotsPerEpoch,
+			description:           "Should use user value when above minimum",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hook := logTest.NewGlobal()
+			logrus.SetLevel(logrus.WarnLevel)
+
+			// Create pruner with retention period
+			p, err := New(
+				ctx,
+				beaconDB,
+				time.Now(),
+				nil,
+				nil,
+				WithRetentionPeriod(tt.userRetentionEpochs),
+			)
+			require.NoError(t, err)
+
+			// Test the pruning calculation
+			currentSlot := primitives.Slot(20000) // Reasonable slot number for minimal config
+			pruneUptoSlot := p.ps(currentSlot)
+
+			// Calculate expected prune slot
+			expectedPruneSlot := primitives.Slot(0)
+			if currentSlot > tt.expectedRetentionSlots {
+				expectedPruneSlot = currentSlot - tt.expectedRetentionSlots
+			}
+
+			// Verify the pruning slot
+			assert.Equal(t, expectedPruneSlot, pruneUptoSlot, tt.description)
+
+			// Check if warning was logged when value was too low
+			if tt.userRetentionEpochs < minRequiredEpochs {
+				assert.LogsContain(t, hook, "Retention period too low, ignoring and using minimum required value")
+			}
+		})
+	}
+}
+
 func TestPruner_UpdatesEarliestSlotIndependentOfCustodyGroupCount(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
