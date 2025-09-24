@@ -71,7 +71,7 @@ type stateDiff struct {
 	// genesis_time does not change.
 	// genesis_validators_root does not change.
 	targetVersion               int
-	eth1VotesAppend             bool                                                        // is eth1DataVotes an append only diff?. Positioned here because of alignement.
+	eth1VotesAppend             bool                                                        // Positioned here because of alignement.
 	justificationBits           byte                                                        // override.
 	slot                        primitives.Slot                                             // override.
 	fork                        *ethpb.Fork                                                 // override.
@@ -98,23 +98,23 @@ type stateDiff struct {
 	// Bellatrix
 	executionPayloadHeader interfaces.ExecutionData // override.
 	// Capella
-	nextWithdrawalIndex          uint64
-	nextWithdrawalValidatorIndex primitives.ValidatorIndex
+	nextWithdrawalIndex          uint64                     // override.
+	nextWithdrawalValidatorIndex primitives.ValidatorIndex  // override.
 	historicalSummaries          []*ethpb.HistoricalSummary // append only.
 	// Electra
-	depositRequestsStartIndex     uint64
-	depositBalanceToConsume       primitives.Gwei
-	exitBalanceToConsume          primitives.Gwei
-	earliestExitEpoch             primitives.Epoch
-	consolidationBalanceToConsume primitives.Gwei
-	earliestConsolidationEpoch    primitives.Epoch
+	depositRequestsStartIndex     uint64           // override.
+	depositBalanceToConsume       primitives.Gwei  // override.
+	exitBalanceToConsume          primitives.Gwei  // override.
+	earliestExitEpoch             primitives.Epoch // override.
+	consolidationBalanceToConsume primitives.Gwei  // override.
+	earliestConsolidationEpoch    primitives.Epoch // override.
 
-	pendingDepositIndex            uint64
-	pendingPartialWithdrawalsIndex uint64
-	pendingConsolidationsIndex     uint64
-	pendingDepositDiff             []*ethpb.PendingDeposit
-	pendingPartialWithdrawalsDiff  []*ethpb.PendingPartialWithdrawal
-	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation
+	pendingDepositIndex            uint64                            // override.
+	pendingPartialWithdrawalsIndex uint64                            // override.
+	pendingConsolidationsIndex     uint64                            // override.
+	pendingDepositDiff             []*ethpb.PendingDeposit           // override.
+	pendingPartialWithdrawalsDiff  []*ethpb.PendingPartialWithdrawal // override.
+	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation     // override.
 	// Fulu
 	proposerLookahead []uint64 // override
 }
@@ -127,8 +127,8 @@ type hdiff struct {
 
 // validatorDiff is a type that represents a difference between two validators.
 type validatorDiff struct {
-	Slashed                    bool // new Value (here because of alignement)
-	index                      uint32
+	Slashed                    bool             // new value (here because of alignement)
+	index                      uint32           // override.
 	PublicKey                  []byte           // override.
 	WithdrawalCredentials      []byte           // override.
 	EffectiveBalance           uint64           // override.
@@ -144,6 +144,7 @@ var (
 
 const (
 	nilMarker                      = byte(0)
+	notNilMarker                   = byte(1)
 	forkLength                     = 2*fieldparams.VersionLength + 8
 	blockHeaderLength              = 8 + 8 + 3*fieldparams.RootLength
 	blockRootsLength               = fieldparams.BlockRootsLength * fieldparams.RootLength
@@ -158,7 +159,7 @@ const (
 	proposerLookaheadLength        = 8 * 2 * fieldparams.SlotsPerEpoch
 )
 
-// newHdiff desrializes a new Hdiff object from the given seialized data.
+// newHdiff desrializes a new Hdiff object from the given serialized data.
 func newHdiff(data HdiffBytes) (*hdiff, error) {
 	stateDiff, err := newStateDiff(data.StateDiff)
 	if err != nil {
@@ -292,7 +293,8 @@ func (ret *stateDiff) readEth1Data(data *[]byte) error {
 		*data = (*data)[1:]
 		return nil
 	}
-	if len(*data) < eth1DataLength+1 {
+	*data = (*data)[1:]
+	if len(*data) < eth1DataLength {
 		return errors.Wrap(errDataSmall, "eth1Data")
 	}
 	ret.eth1Data = &ethpb.Eth1Data{
@@ -309,11 +311,7 @@ func (ret *stateDiff) readEth1DataVotes(data *[]byte) error {
 	if len(*data) < 9 {
 		return errors.Wrap(errDataSmall, "eth1DataVotes")
 	}
-	if (*data)[0] == nilMarker {
-		ret.eth1VotesAppend = true
-	} else {
-		ret.eth1VotesAppend = false
-	}
+	ret.eth1VotesAppend = ((*data)[0] == nilMarker)
 	eth1DataVotesLength := int(binary.LittleEndian.Uint64((*data)[1 : 1+8])) // lint:ignore uintcast
 	if len(*data) < 1+8+eth1DataVotesLength*eth1DataLength {
 		return errors.Wrap(errDataSmall, "eth1DataVotes")
@@ -435,6 +433,7 @@ func (ret *stateDiff) readPreviousEpochParticipation(data *[]byte) error {
 	*data = (*data)[8+previousEpochParticipationLength:]
 	return nil
 }
+
 func (ret *stateDiff) readCurrentEpochParticipation(data *[]byte) error {
 	if len(*data) < 8 {
 		return errors.Wrap(errDataSmall, "currentEpochParticipation")
@@ -628,7 +627,6 @@ func (ret *stateDiff) readHistoricalSummaries(data *[]byte) error {
 }
 
 func (ret *stateDiff) readElectraPendingIndices(data *[]byte) error {
-	// Read depositRequestsStartIndex.
 	if len(*data) < 8*6 {
 		return errors.Wrap(errDataSmall, "electraPendingIndices")
 	}
@@ -726,7 +724,7 @@ func (ret *stateDiff) readProposerLookahead(data *[]byte) error {
 	return nil
 }
 
-// newStateDiff deserializes a new StateDiff object from the given data.
+// newStateDiff deserializes a new stateDiff object from the given data.
 func newStateDiff(input []byte) (*stateDiff, error) {
 	data, err := snappy.Decode(nil, input)
 	if err != nil {
@@ -827,6 +825,7 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 		return nil, err
 	}
 	if ret.targetVersion >= version.Fulu {
+		// Proposer lookahead has fixed size and it is not added for forks previous to Fulu.
 		if err := ret.readProposerLookahead(&data); err != nil {
 			return nil, err
 		}
@@ -936,13 +935,13 @@ func newBalancesDiff(input []byte) ([]int64, error) {
 }
 
 func (s *stateDiff) serialize() []byte {
-	ret := make([]byte, 0) // TODO: compute a sensible default capacity.
+	ret := make([]byte, 0)
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.targetVersion))
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(s.slot))
 	if s.fork == nil {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 		ret = append(ret, s.fork.PreviousVersion...)
 		ret = append(ret, s.fork.CurrentVersion...)
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.fork.Epoch))
@@ -951,7 +950,7 @@ func (s *stateDiff) serialize() []byte {
 	if s.latestBlockHeader == nil {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.latestBlockHeader.Slot))
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.latestBlockHeader.ProposerIndex))
 		ret = append(ret, s.latestBlockHeader.ParentRoot...)
@@ -975,7 +974,7 @@ func (s *stateDiff) serialize() []byte {
 	if s.eth1Data == nil {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 		ret = append(ret, s.eth1Data.DepositRoot...)
 		ret = binary.LittleEndian.AppendUint64(ret, s.eth1Data.DepositCount)
 		ret = append(ret, s.eth1Data.BlockHash...)
@@ -984,7 +983,7 @@ func (s *stateDiff) serialize() []byte {
 	if s.eth1VotesAppend {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 	}
 	ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.eth1DataVotes)))
 	for _, v := range s.eth1DataVotes {
@@ -1054,7 +1053,7 @@ func (s *stateDiff) serialize() []byte {
 	if s.currentSyncCommittee == nil {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 		for _, pubkey := range s.currentSyncCommittee.Pubkeys {
 			ret = append(ret, pubkey...)
 		}
@@ -1064,7 +1063,7 @@ func (s *stateDiff) serialize() []byte {
 	if s.nextSyncCommittee == nil {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 		for _, pubkey := range s.nextSyncCommittee.Pubkeys {
 			ret = append(ret, pubkey...)
 		}
@@ -1074,7 +1073,7 @@ func (s *stateDiff) serialize() []byte {
 	if s.executionPayloadHeader == nil {
 		ret = append(ret, nilMarker)
 	} else {
-		ret = append(ret, 0x1)
+		ret = append(ret, notNilMarker)
 		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadHeader.SizeSSZ()))
 		var err error
 		ret, err = s.executionPayloadHeader.MarshalSSZTo(ret)
@@ -1133,25 +1132,25 @@ func (s *stateDiff) serialize() []byte {
 }
 
 func (h *hdiff) serialize() HdiffBytes {
-	vals := make([]byte, 0) // TODO: compute a sensible default capacity.
+	vals := make([]byte, 0)
 	vals = binary.LittleEndian.AppendUint64(vals, uint64(len(h.validatorDiffs)))
 	for _, v := range h.validatorDiffs {
 		vals = binary.LittleEndian.AppendUint32(vals, v.index)
 		if v.PublicKey == nil {
 			vals = append(vals, nilMarker)
 		} else {
-			vals = append(vals, 0x1)
+			vals = append(vals, notNilMarker)
 			vals = append(vals, v.PublicKey...)
 		}
 		if v.WithdrawalCredentials == nil {
 			vals = append(vals, nilMarker)
 		} else {
-			vals = append(vals, 0x1)
+			vals = append(vals, notNilMarker)
 			vals = append(vals, v.WithdrawalCredentials...)
 		}
 		vals = binary.LittleEndian.AppendUint64(vals, v.EffectiveBalance)
 		if v.Slashed {
-			vals = append(vals, 0x1)
+			vals = append(vals, notNilMarker)
 		} else {
 			vals = append(vals, nilMarker)
 		}
@@ -1180,7 +1179,7 @@ func diffToVals(source, target state.ReadOnlyBeaconState) ([]validatorDiff, erro
 	if len(tVals) < len(sVals) {
 		return nil, errors.Errorf("target validators length %d is less than source %d", len(tVals), len(sVals))
 	}
-	diffs := make([]validatorDiff, 0) // TODO: compute a sensible default capacity.
+	diffs := make([]validatorDiff, 0)
 	for i, s := range sVals {
 		ti := tVals[i]
 		if validatorsEqual(s, ti) {
@@ -1414,7 +1413,7 @@ func diffBlockRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 		return
 	}
 	if len(sRoots) != fieldparams.BlockRootsLength {
-		logrus.Errorf("Block roots length mismatch: source %d", len(sRoots))
+		logrus.Errorf("Block roots length mismatch: expected: %d, source %d", fieldparams.BlockRootsLength, len(sRoots))
 		return
 	}
 	for i := range fieldparams.BlockRootsLength {
@@ -1434,7 +1433,7 @@ func diffStateRoots(diff *stateDiff, source, target state.ReadOnlyBeaconState) {
 		return
 	}
 	if len(sRoots) != fieldparams.StateRootsLength {
-		logrus.Errorf("State roots length mismatch: source %d", len(sRoots))
+		logrus.Errorf("State roots length mismatch: expected %d, source %d", fieldparams.StateRootsLength, len(sRoots))
 		return
 	}
 	for i := range fieldparams.StateRootsLength {
@@ -1492,7 +1491,7 @@ func diffRandaoMixes(diff *stateDiff, source, target state.ReadOnlyBeaconState) 
 		return
 	}
 	if len(sMixes) != fieldparams.RandaoMixesLength {
-		logrus.Errorf("Randao mixes length mismatch: source %d", len(sMixes))
+		logrus.Errorf("Randao mixes length mismatch: expected %d, source %d", fieldparams.RandaoMixesLength, len(sMixes))
 		return
 	}
 	for i := range fieldparams.RandaoMixesLength {
@@ -1531,7 +1530,6 @@ func diffHistoricalSummaries(diff *stateDiff, source, target state.ReadOnlyBeaco
 	if len(tSummaries) < start {
 		return errors.New("target historical summaries length is less than source")
 	}
-	// this copy can be avoided if we use []*ethpb.HistoricalSummary instead of []ethpb.HistoricalSummary.
 	diff.historicalSummaries = make([]*ethpb.HistoricalSummary, len(tSummaries)-start)
 	for i, summary := range tSummaries[start:] {
 		diff.historicalSummaries[i] = &ethpb.HistoricalSummary{
@@ -1567,7 +1565,7 @@ func diffElectraFields(diff *stateDiff, source, target state.ReadOnlyBeaconState
 	if err != nil {
 		return
 	}
-	if err := diffPEndingDeposits(diff, source, target); err != nil {
+	if err := diffPendingDeposits(diff, source, target); err != nil {
 		return err
 	}
 	if err := diffPendingPartialWithdrawals(diff, source, target); err != nil {
@@ -1576,6 +1574,7 @@ func diffElectraFields(diff *stateDiff, source, target state.ReadOnlyBeaconState
 	return diffPendingConsolidations(diff, source, target)
 }
 
+// kmpIndex returns the index of the first occurrence of the pattern in the slice using the Knuth-Morris-Pratt algorithm.
 func kmpIndex[T any](lens int, t []*T, equals func(a, b *T) bool) int {
 	if lens == 0 || len(t) == 1 {
 		return lens
@@ -1585,6 +1584,7 @@ func kmpIndex[T any](lens int, t []*T, equals func(a, b *T) bool) int {
 	return lens - lps[len(lps)-1]
 }
 
+// computeLPS computes the longest prefix-suffix (LPS) array for the given pattern.
 func computeLPS[T any](combined []*T, equals func(a, b *T) bool) []int {
 	lps := make([]int, len(combined))
 	length := 0
@@ -1607,7 +1607,7 @@ func computeLPS[T any](combined []*T, equals func(a, b *T) bool) []int {
 	return lps
 }
 
-func diffPEndingDeposits(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
+func diffPendingDeposits(diff *stateDiff, source, target state.ReadOnlyBeaconState) error {
 	tPendingDeposits, err := target.PendingDeposits()
 	if err != nil {
 		return err
@@ -1806,7 +1806,7 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 			return nil, errors.Wrap(err, "failed to set current epoch participation")
 		}
 	}
-	if err := source.SetJustificationBits(bitfield.Bitvector4([]byte{diff.justificationBits})); err != nil {
+	if err := source.SetJustificationBits([]byte{diff.justificationBits}); err != nil {
 		return nil, errors.Wrap(err, "failed to set justification bits")
 	}
 	if diff.previousJustifiedCheckpoint != nil {
@@ -1973,7 +1973,7 @@ func applySlashingsDiff(source state.BeaconState, diff *stateDiff) error {
 		return errors.Errorf("slashings length mismatch: source %d, target %d", len(sSlashings), len(tSlashings))
 	}
 	if len(sSlashings) != fieldparams.SlashingsLength {
-		return errors.Errorf("slashings length mismatch: source %d", len(sSlashings))
+		return errors.Errorf("slashings length mismatch: expected %d, source %d", fieldparams.SlashingsLength, len(sSlashings))
 	}
 	for i, t := range tSlashings {
 		if t > 0 {
@@ -1993,7 +1993,7 @@ func applyRandaoMixesDiff(source state.BeaconState, diff *stateDiff) error {
 		return errors.Errorf("randao mixes length mismatch: source %d, target %d", len(sMixes), len(tMixes))
 	}
 	if len(sMixes) != fieldparams.RandaoMixesLength {
-		return errors.Errorf("randao mixes length mismatch: source %d", len(sMixes))
+		return errors.Errorf("randao mixes length mismatch: expected %d, source %d", fieldparams.RandaoMixesLength, len(sMixes))
 	}
 	for i := range fieldparams.RandaoMixesLength {
 		if tMixes[i] != [fieldparams.RootLength]byte{} {
@@ -2032,7 +2032,7 @@ func applyStateRootsDiff(source state.BeaconState, diff *stateDiff) error {
 		return errors.Errorf("state roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
 	}
 	if len(sRoots) != fieldparams.StateRootsLength {
-		return errors.Errorf("state roots length mismatch: source %d", len(sRoots))
+		return errors.Errorf("state roots length mismatch: expected %d, source %d", fieldparams.StateRootsLength, len(sRoots))
 	}
 	for i := range fieldparams.StateRootsLength {
 		if tRoots[i] != [fieldparams.RootLength]byte{} {
@@ -2050,7 +2050,7 @@ func applyBlockRootsDiff(source state.BeaconState, diff *stateDiff) error {
 		return errors.Errorf("block roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
 	}
 	if len(sRoots) != fieldparams.BlockRootsLength {
-		return errors.Errorf("block roots length mismatch: source %d", len(sRoots))
+		return errors.Errorf("block roots length mismatch: expected %d, source %d", fieldparams.BlockRootsLength, len(sRoots))
 	}
 	for i := range fieldparams.BlockRootsLength {
 		if tRoots[i] != [fieldparams.RootLength]byte{} {
