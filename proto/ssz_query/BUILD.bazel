@@ -43,6 +43,7 @@ ssz_gen_marshal(
         "VariableTestContainer",
         "BitlistContainer",
         "BitvectorContainer",
+        "BasicTypeList",
     ],
 )
 

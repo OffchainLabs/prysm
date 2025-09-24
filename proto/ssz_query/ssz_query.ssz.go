@@ -908,3 +908,103 @@ func (b *BitvectorContainer) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the BasicTypeList object
+func (b *BasicTypeList) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BasicTypeList object to a target array
+func (b *BasicTypeList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'FieldListUint64'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.FieldListUint64) * 8
+
+	// Field (0) 'FieldListUint64'
+	if size := len(b.FieldListUint64); size > 2048 {
+		err = ssz.ErrListTooBigFn("--.FieldListUint64", size, 2048)
+		return
+	}
+	for ii := 0; ii < len(b.FieldListUint64); ii++ {
+		dst = ssz.MarshalUint64(dst, b.FieldListUint64[ii])
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BasicTypeList object
+func (b *BasicTypeList) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'FieldListUint64'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 4 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (0) 'FieldListUint64'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 8, 2048)
+		if err != nil {
+			return err
+		}
+		b.FieldListUint64 = ssz.ExtendUint64(b.FieldListUint64, num)
+		for ii := 0; ii < num; ii++ {
+			b.FieldListUint64[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BasicTypeList object
+func (b *BasicTypeList) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'FieldListUint64'
+	size += len(b.FieldListUint64) * 8
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BasicTypeList object
+func (b *BasicTypeList) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BasicTypeList object with a hasher
+func (b *BasicTypeList) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'FieldListUint64'
+	{
+		if size := len(b.FieldListUint64); size > 2048 {
+			err = ssz.ErrListTooBigFn("--.FieldListUint64", size, 2048)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range b.FieldListUint64 {
+			hh.AppendUint64(i)
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(b.FieldListUint64))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(2048, numItems, 8))
+	}
+
+	hh.Merkleize(indx)
+	return
+}

@@ -125,3 +125,6 @@ message BitvectorContainer {
   ];
 }
 
+message BasicTypeList {
+  repeated uint64 field_list_uint64 = 1 [ (ethereum.eth.ext.ssz_max) = "2048" ];
+}
