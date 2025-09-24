@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -13,8 +14,13 @@ import (
 // PruneAttestationsAtEpoch deletes all attestations from the slasher DB with target epoch
 // less than or equal to the specified epoch.
 func (s *Store) PruneAttestationsAtEpoch(
-	_ context.Context, maxEpoch primitives.Epoch,
+	ctx context.Context, maxEpoch primitives.Epoch,
 ) (numPruned uint, err error) {
+	// In some cases, pruning may take a very long time and consume significant memory in the open
+	// open Update transaction. Therefore, we impose a 1 minute timeout on this operation.
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
 	// We can prune everything less than the current epoch - history length.
 	encodedEndPruneEpoch := make([]byte, 8)
 	binary.BigEndian.PutUint64(encodedEndPruneEpoch, uint64(maxEpoch))
@@ -55,6 +61,11 @@ func (s *Store) PruneAttestationsAtEpoch(
 
 		// We begin a pruning iteration starting from the first item in the bucket.
 		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if ctx.Err() != nil {
+				// Exit the routine if the context has expired.
+				log.WithError(ctx.Err()).Warn("Aborting pruning routine")
+				return nil
+			}
 			// We check the epoch from the current key in the database.
 			// If we have hit an epoch that is greater than the end epoch of the pruning process,
 			// we then completely exit the process as we are done.
