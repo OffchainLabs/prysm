@@ -50,7 +50,7 @@ func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
 }
 
 func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
-	return &TransactionGenerator{keystore: keystore, seed: seed}
+    return &TransactionGenerator{keystore: keystore, seed: seed}
 }
 
 func (t *TransactionGenerator) Start(ctx context.Context) error {
@@ -83,10 +83,32 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return err
 	}
 	newKey := keystore.NewKeyForDirectICAP(newGen)
-	if err := fundAccount(client, mineKey, newKey); err != nil {
-		return err
-	}
-	fundedAccount = newKey
+    if err := fundAccount(client, mineKey, newKey); err != nil {
+        return err
+    }
+    fundedAccount = newKey
+    // Ensure funding tx is mined before generating txs that rely on balance.
+    // Mine 1 block using the miner key to include the funding transfer.
+    backend := ethclient.NewClient(client)
+    defer backend.Close()
+    if err := WaitForBlocks(ctx, backend, mineKey, 1); err != nil {
+        return errors.Wrap(err, "failed to mine block for funding tx")
+    }
+    // Confirm balance is credited
+    for i := 0; i < 20; i++ {
+        bal, err := backend.BalanceAt(ctx, fundedAccount.Address, nil)
+        if err == nil && bal.Sign() > 0 {
+            break
+        }
+        time.Sleep(250 * time.Millisecond)
+    }
+
+    // Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
+    minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
+    minWei.Mul(minWei, big.NewInt(1e9)) // 1000 ETH in wei
+    if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
+        return err
+    }
 	rnd := make([]byte, 10000)
 	_, err = mathRand.Read(rnd) // #nosec G404
 	if err != nil {
@@ -155,7 +177,8 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		logrus.Infof("Near Fulu fork boundary (epoch %d, fork at %d): Skipping blob transactions to avoid execution client bug", currentEpoch, fuluForkEpoch)
 	} else if isPostFulu {
 		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
-		for i := uint64(0); i < 10; i++ {
+		// Reduced from 10 to 5 to conserve funds during extended test runs
+		for i := uint64(0); i < 5; i++ {
 			index := i
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
@@ -180,7 +203,8 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		}
 	} else {
 		logrus.Info("Pre-Fulu: Sending standard blob transactions with Version 0 sidecars")
-		for i := uint64(0); i < 10; i++ {
+		// Reduced from 10 to 5 to conserve funds during extended test runs
+		for i := uint64(0); i < 5; i++ {
 			index := i
 			g.Go(func() error {
 				tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
@@ -235,6 +259,9 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 				//nolint:nilerr
 				return nil
 			}
+			// Clamp gas to avoid exceeding common EL per-tx gas caps (e.g. 16,777,216) due to EIP-7825: Transaction Gas Limit Cap
+			tx = clampTxGas(tx, 16_000_000)
+
 			signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainid), key)
 			if err != nil {
 				// We continue on in the event there is a reason we can't sign this
@@ -321,35 +348,36 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 			return nil, errors.Wrap(err, "randomBlobData")
 		}
 		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
-	case 1:
-		// Blob transaction with cell proofs and access list
-		tx := types.NewTx(&types.LegacyTx{
-			Nonce:    nonce,
-			To:       &to,
-			Value:    value,
-			Gas:      gas,
-			GasPrice: gasPrice,
-			Data:     code,
-		})
+    case 1:
+        // Blob transaction with cell proofs and access list
+        tx := types.NewTx(&types.LegacyTx{
+            Nonce:    nonce,
+            To:       &to,
+            Value:    value,
+            Gas:      gas,
+            GasPrice: gasPrice,
+            Data:     code,
+        })
 
-		msg := ethereum.CallMsg{
-			From:       sender,
-			To:         tx.To(),
-			Gas:        tx.Gas(),
-			GasPrice:   tx.GasPrice(),
-			Value:      tx.Value(),
-			Data:       tx.Data(),
-			AccessList: nil,
-		}
-		geth := gethclient.New(rpc)
-		al, _, _, err := geth.CreateAccessList(context.Background(), msg)
-		if err != nil {
-			return nil, errors.Wrap(err, "CreateAccessList")
-		}
-		tip, feecap, err := getCaps(rpc, gasPrice)
-		if err != nil {
-			return nil, errors.Wrap(err, "getCaps")
-		}
+        // Use legacy GasPrice for access list simulation to satisfy post-London requirement.
+        msg := ethereum.CallMsg{
+            From:       sender,
+            To:         tx.To(),
+            Gas:        tx.Gas(),
+            GasPrice:   gasPrice,
+            Value:      tx.Value(),
+            Data:       tx.Data(),
+            AccessList: nil,
+        }
+        geth := gethclient.New(rpc)
+        al, _, _, err := geth.CreateAccessList(context.Background(), msg)
+        if err != nil {
+            return nil, errors.Wrap(err, "CreateAccessList")
+        }
+        tip, feecap, err := getCaps(rpc, gasPrice)
+        if err != nil {
+            return nil, errors.Wrap(err, "getCaps")
+        }
 		data, err := randomBlobData()
 		if err != nil {
 			return nil, errors.Wrap(err, "randomBlobData")
@@ -400,37 +428,36 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 			return nil, errors.Wrap(err, "randomBlobData")
 		}
 		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0)), nil
-	case 1:
-		// 4844 transaction with AL nonce, to, value, gas, gasPrice, code
-		tx := types.NewTx(&types.LegacyTx{
-			Nonce:    nonce,
-			To:       &to,
-			Value:    value,
-			Gas:      gas,
-			GasPrice: gasPrice,
-			Data:     code,
-		})
+    case 1:
+        // 4844 transaction with AL nonce, to, value, gas, gasPrice, code
+        tx := types.NewTx(&types.LegacyTx{
+            Nonce:    nonce,
+            To:       &to,
+            Value:    value,
+            Gas:      gas,
+            GasPrice: gasPrice,
+            Data:     code,
+        })
 
-		// TODO: replace call with al, err := txfuzz.CreateAccessList(rpc, tx, sender) when txfuzz is fixed in new release
-		// an error occurs mentioning error="CreateAccessList: both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"
-		msg := ethereum.CallMsg{
-			From:       sender,
-			To:         tx.To(),
-			Gas:        tx.Gas(),
-			GasPrice:   tx.GasPrice(),
-			Value:      tx.Value(),
-			Data:       tx.Data(),
-			AccessList: nil,
-		}
-		geth := gethclient.New(rpc)
-		al, _, _, err := geth.CreateAccessList(context.Background(), msg)
-		if err != nil {
-			return nil, errors.Wrap(err, "CreateAccessList")
-		}
-		tip, feecap, err := getCaps(rpc, gasPrice)
-		if err != nil {
-			return nil, errors.Wrap(err, "getCaps")
-		}
+        // Use legacy GasPrice for access list simulation to satisfy post-London requirement.
+        msg := ethereum.CallMsg{
+            From:       sender,
+            To:         tx.To(),
+            Gas:        tx.Gas(),
+            GasPrice:   gasPrice,
+            Value:      tx.Value(),
+            Data:       tx.Data(),
+            AccessList: nil,
+        }
+        geth := gethclient.New(rpc)
+        al, _, _, err := geth.CreateAccessList(context.Background(), msg)
+        if err != nil {
+            return nil, errors.Wrap(err, "CreateAccessList")
+        }
+        tip, feecap, err := getCaps(rpc, gasPrice)
+        if err != nil {
+            return nil, errors.Wrap(err, "getCaps")
+        }
 		data, err := randomBlobData()
 		if err != nil {
 			return nil, errors.Wrap(err, "randomBlobData")
@@ -500,6 +527,73 @@ func New4844Tx(nonce uint64, to *common.Address, gasLimit uint64, chainID, tip, 
 		},
 	})
 	return tx
+}
+
+// clampTxGas returns a copy of tx with Gas reduced to cap if it exceeds cap.
+// This avoids EL errors like "transaction gas limit too high" on networks with
+// per-transaction gas caps (commonly ~16,777,216).
+func clampTxGas(tx *types.Transaction, gasCap uint64) *types.Transaction {
+	if tx == nil || tx.Gas() <= gasCap {
+		return tx
+	}
+	to := tx.To()
+	switch tx.Type() {
+	case types.LegacyTxType:
+		return types.NewTx(&types.LegacyTx{
+			Nonce:    tx.Nonce(),
+			To:       to,
+			Value:    tx.Value(),
+			Gas:      gasCap,
+			GasPrice: tx.GasPrice(),
+			Data:     tx.Data(),
+		})
+	case types.AccessListTxType:
+		return types.NewTx(&types.AccessListTx{
+			ChainID:    tx.ChainId(),
+			Nonce:      tx.Nonce(),
+			To:         to,
+			Value:      tx.Value(),
+			Gas:        gasCap,
+			GasPrice:   tx.GasPrice(),
+			Data:       tx.Data(),
+			AccessList: tx.AccessList(),
+		})
+	case types.DynamicFeeTxType:
+		return types.NewTx(&types.DynamicFeeTx{
+			ChainID:    tx.ChainId(),
+			Nonce:      tx.Nonce(),
+			To:         to,
+			Value:      tx.Value(),
+			Gas:        gasCap,
+			Data:       tx.Data(),
+			AccessList: tx.AccessList(),
+			GasTipCap:  tx.GasTipCap(),
+			GasFeeCap:  tx.GasFeeCap(),
+		})
+	case types.BlobTxType:
+		// Leave blob txs unchanged here; blob tx construction paths set gas explicitly.
+		return tx
+	default:
+		return tx
+	}
+}
+
+// ensureMinBalance tops up dest account from miner if its balance is below minWei.
+func ensureMinBalance(ctx context.Context, rpcCli *rpc.Client, backend *ethclient.Client, minerKey, destKey *keystore.Key, minWei *big.Int) error {
+    bal, err := backend.BalanceAt(ctx, destKey.Address, nil)
+    if err != nil {
+        return err
+    }
+    if bal.Cmp(minWei) >= 0 {
+        return nil
+    }
+    if err := fundAccount(rpcCli, minerKey, destKey); err != nil {
+        return err
+    }
+    if err := WaitForBlocks(ctx, backend, minerKey, 1); err != nil {
+        return errors.Wrap(err, "failed to mine block for top-up tx")
+    }
+    return nil
 }
 
 func encodeBlobs(data []byte) []kzg4844.Blob {
@@ -629,7 +723,8 @@ func fundAccount(client *rpc.Client, sourceKey, destKey *keystore.Key) error {
 	if err != nil {
 		return err
 	}
-	val, ok := big.NewInt(0).SetString("10000000000000000000000000", 10)
+	// Increased funding to 100 million ETH to handle extended test runs with blob transactions
+	val, ok := big.NewInt(0).SetString("100000000000000000000000000", 10)
 	if !ok {
 		return errors.New("could not set big int for value")
 	}
