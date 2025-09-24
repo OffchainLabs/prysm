@@ -1,6 +1,8 @@
 package flags
 
 import (
+	"sync"
+
 	"github.com/OffchainLabs/prysm/v6/cmd"
 	"github.com/urfave/cli/v2"
 )
@@ -21,10 +23,15 @@ type GlobalFlags struct {
 	DataColumnBatchLimitBurstFactor int
 }
 
-var globalConfig *GlobalFlags
+var (
+	globalConfig     *GlobalFlags
+	globalConfigLock sync.RWMutex
+)
 
 // Get retrieves the global config.
 func Get() *GlobalFlags {
+	globalConfigLock.RLock()
+	defer globalConfigLock.RUnlock()
 	if globalConfig == nil {
 		return &GlobalFlags{}
 	}
@@ -33,6 +40,8 @@ func Get() *GlobalFlags {
 
 // Init sets the global config equal to the config that is passed in.
 func Init(c *GlobalFlags) {
+	globalConfigLock.Lock()
+	defer globalConfigLock.Unlock()
 	globalConfig = c
 }
 

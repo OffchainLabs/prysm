@@ -14,7 +14,7 @@ var cfgrw sync.RWMutex
 func BeaconConfig() *BeaconChainConfig {
 	cfgrw.RLock()
 	defer cfgrw.RUnlock()
-	return configs.getActive()
+	return configs.active
 }
 
 // OverrideBeaconConfig by replacing the config. The preferred pattern is to
@@ -30,8 +30,6 @@ func OverrideBeaconConfig(c *BeaconChainConfig) {
 
 // Copy returns a copy of the config object.
 func (b *BeaconChainConfig) Copy() *BeaconChainConfig {
-	cfgrw.RLock()
-	defer cfgrw.RUnlock()
 	config, ok := deepcopy.Copy(*b).(BeaconChainConfig)
 	if !ok {
 		panic("somehow deepcopy produced a BeaconChainConfig that is not of the same type as the original") // lint:nopanic -- Impossible scenario.
