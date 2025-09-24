@@ -301,22 +301,6 @@ filegroup(
 )
 
 http_archive(
-    name = "eth2_networks",
-    build_file_content = """
-filegroup(
-    name = "configs",
-    srcs = glob([
-        "shared/**/config.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    sha256 = "77e7e3ed65e33b7bb19d30131f4c2bb39e4dfeb188ab9ae84651c3cc7600131d",
-    strip_prefix = "eth2-networks-934c948e69205dcf2deb87e4ae6cc140c335f94d",
-    url = "https://github.com/eth-clients/eth2-networks/archive/934c948e69205dcf2deb87e4ae6cc140c335f94d.tar.gz",
-)
-
-http_archive(
     name = "holesky_testnet",
     build_file_content = """
 filegroup(
@@ -327,9 +311,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-dB5vtXbG4XkyL6Tr2+VjJk3/17yqgcWI/WXf2s7FznE=",
-    strip_prefix = "holesky-bd469753624a53b8855fcf2c2f5edfcd2936e425",
-    url = "https://github.com/eth-clients/holesky/archive/bd469753624a53b8855fcf2c2f5edfcd2936e425.tar.gz",
+    integrity = "sha256-htyxg8Ln2o8eCiifFN7/hcHGZg8Ir9CPzCEx+FUnnCs=",
+    strip_prefix = "holesky-8aec65f11f0c986d6b76b2eb902420635eb9b815",
+    url = "https://github.com/eth-clients/holesky/archive/8aec65f11f0c986d6b76b2eb902420635eb9b815.tar.gz",
 )
 
 http_archive(
@@ -359,9 +343,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-jF05y+5f3Wcp2b6sKh6ip0b//rrV65X4iFDyjZ2cIbE=",
-    strip_prefix = "sepolia-56f0bff41cecab6c661251d72b73ceecc52c5701",
-    url = "https://github.com/eth-clients/sepolia/archive/56f0bff41cecab6c661251d72b73ceecc52c5701.tar.gz",
+    integrity = "sha256-+UZgfvBcea0K0sbvAJZOz5ZNmxdWZYbohP38heUuc6w=",
+    strip_prefix = "sepolia-f9158732adb1a2a6440613ad2232eb50e7384c4f",
+    url = "https://github.com/eth-clients/sepolia/archive/f9158732adb1a2a6440613ad2232eb50e7384c4f.tar.gz",
 )
 
 http_archive(
@@ -375,9 +359,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-vvbKzHQSurReSRxaBIhxsYavajvN19goigA1xATzIEo=",
-    strip_prefix = "hoodi-21a110a60e6558a2ba7c819fa4b80029d49ab205",
-    url = "https://github.com/eth-clients/hoodi/archive/21a110a60e6558a2ba7c819fa4b80029d49ab205.tar.gz",
+    integrity = "sha256-G+4c9c/vci1OyPrQJnQCI+ZCv/E0cWN4hrHDY3i7ns0=",
+    strip_prefix = "hoodi-b6ee51b2045a5e7fe3efac52534f75b080b049c6",
+    url = "https://github.com/eth-clients/hoodi/archive/b6ee51b2045a5e7fe3efac52534f75b080b049c6.tar.gz",
 )
 
 http_archive(
