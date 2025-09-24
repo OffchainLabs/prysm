@@ -29,6 +29,11 @@ func WriteStateFetchError(w http.ResponseWriter, err error) {
 // WriteBlockFetchError writes an appropriate error based on the supplied argument.
 // The argument error should be a result of fetching block.
 func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock, err error) bool {
+	var blockNotFoundErr *lookup.BlockNotFoundError
+	if errors.As(err, &blockNotFoundErr) {
+		httputil.HandleError(w, "Block not found: "+blockNotFoundErr.Error(), http.StatusNotFound)
+		return false
+	}
 	var invalidBlockIdErr *lookup.BlockIdParseError
 	if errors.As(err, &invalidBlockIdErr) {
 		httputil.HandleError(w, "Invalid block ID: "+invalidBlockIdErr.Error(), http.StatusBadRequest)
