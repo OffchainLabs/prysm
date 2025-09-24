@@ -113,6 +113,8 @@ func (b *BeaconState) SetPendingPartialWithdrawals(pendingPartialWithdrawals []*
 	if pendingPartialWithdrawals == nil {
 		return errors.New("cannot set nil pending partial withdrawals")
 	}
+	b.sharedFieldReferences[types.PendingPartialWithdrawals].MinusRef()
+	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 
 	b.pendingPartialWithdrawals = pendingPartialWithdrawals
 	b.markFieldAsDirty(types.PendingPartialWithdrawals)
