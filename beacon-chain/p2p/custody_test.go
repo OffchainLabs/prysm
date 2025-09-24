@@ -188,6 +188,11 @@ func TestUpdateCustodyInfo(t *testing.T) {
 }
 
 func TestUpdateEarliestAvailableSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	params.OverrideBeaconConfig(config)
+
 	t.Run("Valid update", func(t *testing.T) {
 		const initialSlot primitives.Slot = 50
 		const newSlot primitives.Slot = 100

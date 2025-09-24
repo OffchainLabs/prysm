@@ -352,7 +352,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 			if err := filesystem.WithDataColumnCustodyUpdater(p2pService)(beacon.DataColumnStorage); err != nil {
 				log.WithError(err).Warn("Failed to set custody updater on DataColumnStorage")
 			}
-			log.Debug("Successfully updated data column custory updater")
+			log.Debug("Successfully updated data column custody updater")
 		} else {
 			log.Debug("P2P service not available during WithDataColumnCustodyUpdater")
 		}
@@ -1131,7 +1131,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 	p2pService := b.fetchP2P()
 	if p2pService != nil {
 		opts = append(opts, pruner.WithCustodyUpdater(p2pService))
-		log.Debug("Successfully updated data column custory updater")
+		log.Debug("Successfully updated pruner custody updater")
 	} else {
 		log.Debug("P2P service not available during pruner registration, pruner will not update custody info")
 	}

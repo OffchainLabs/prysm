@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 )
 
@@ -56,7 +57,7 @@ var (
 // custodyUpdater is used to update custody info especially earliestAvailableSlot; implemented by the P2P service.
 type custodyUpdater interface {
 	CustodyGroupCount() (uint64, error)
-	UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 }
 
 type (
@@ -621,18 +622,28 @@ func (dcs *DataColumnStorage) prune() {
 // updateEarliestSlot updates the earliest available slot via the injected custody updater.
 func (dcs *DataColumnStorage) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
 	if dcs.custody == nil {
+		log.Debug("Skipping updateEarliestSlot for data column as dcs.custody == nil")
 		return
 	}
 
-	// Get current custody group count to preserve it during update
-	custodyGroupCount, err := dcs.custody.CustodyGroupCount()
-	if err != nil {
-		log.WithError(err).Error("Failed to get custody group count, cannot update earliest available slot after data column pruning")
+	// Only update custody info if Fulu is enabled and we're at or past the Fulu fork epoch
+	if !params.FuluEnabled() {
+		log.Debug("Skipping updateEarliestSlot for data column - Fulu not enabled")
 		return
 	}
 
-	// Update the custody info with new earliest available slot
-	_, _, err = dcs.custody.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+	currentEpoch := slots.ToEpoch(earliestAvailableSlot)
+	if currentEpoch < params.BeaconConfig().FuluForkEpoch {
+		log.WithFields(logrus.Fields{
+			"currentEpoch": currentEpoch,
+			"fuluEpoch":    params.BeaconConfig().FuluForkEpoch,
+		}).Debug("Skipping updateEarliestSlot - before Fulu fork epoch")
+		return
+	}
+
+	// Update the earliest available slot
+	log.Debug("About to update earliest slot for data column")
+	err := dcs.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
 	if err != nil {
 		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
 			Error("Failed to update earliest available slot after data column pruning")

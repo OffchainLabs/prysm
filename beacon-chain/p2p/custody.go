@@ -115,10 +115,24 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 // UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
 // the current custody group count.
 func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	// Only update custody info if Fulu is enabled and we're at or past the Fulu fork epoch
+	if !params.FuluEnabled() {
+		log.Debug("Skipping custody update - Fulu not enabled")
+		return nil
+	}
+
+	currentEpoch := slots.ToEpoch(earliestAvailableSlot)
+	if currentEpoch < params.BeaconConfig().FuluForkEpoch {
+		log.WithFields(logrus.Fields{
+			"currentEpoch": currentEpoch,
+			"fuluEpoch":   params.BeaconConfig().FuluForkEpoch,
+		}).Debug("Skipping custody update - before Fulu fork epoch")
+		return nil
+	}
+
 	s.custodyInfoLock.Lock()
 	defer s.custodyInfoLock.Unlock()
 
-	// custodyInfo is guaranteed to be non-nil due to initialization in NewService()
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
 		return errors.Errorf(
 			"earliest available slot %d is less than the current one %d",

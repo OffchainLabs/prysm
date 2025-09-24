@@ -147,13 +147,6 @@ func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
 	return m.custodyGroupCount, nil
 }
 
-func (m *mockCustodyUpdater) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
-	m.updateCallCount++
-	m.earliestAvailableSlot = earliestAvailableSlot
-	m.custodyGroupCount = custodyGroupCount
-	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
 func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	m.updateCallCount++
 	m.earliestAvailableSlot = earliestAvailableSlot
@@ -161,6 +154,11 @@ func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot p
 }
 
 func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	params.OverrideBeaconConfig(config)
+
 	logrus.SetLevel(logrus.DebugLevel)
 	hook := logTest.NewGlobal()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -210,8 +208,8 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	// Wait for pruning to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Check that UpdateCustodyInfo was called
-	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateCustodyInfo should have been called")
+	// Check that UpdateEarliestAvailableSlot was called
+	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateEarliestAvailableSlot should have been called")
 
 	// The earliest available slot should be pruneUpto + 1
 	// pruneUpto = currentSlot - retentionEpochs*slotsPerEpoch = 80 - 2*32 = 16
@@ -242,17 +240,17 @@ func (m *mockCustodyUpdaterWithError) CustodyGroupCount() (uint64, error) {
 	return 0, errors.New("custody group count error")
 }
 
-func (m *mockCustodyUpdaterWithError) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
-	m.updateCallCount++
-	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
 func (m *mockCustodyUpdaterWithError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	m.updateCallCount++
 	return nil
 }
 
 func TestPruner_UpdatesEarliestSlotIndependentOfCustodyGroupCount(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	params.OverrideBeaconConfig(config)
+
 	logrus.SetLevel(logrus.DebugLevel)
 	hook := logTest.NewGlobal()
 	ctx, cancel := context.WithCancel(t.Context())

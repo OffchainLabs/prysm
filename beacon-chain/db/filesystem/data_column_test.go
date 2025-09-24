@@ -738,13 +738,18 @@ func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
 	return m.custodyGroupCount, nil
 }
 
-func (m *mockCustodyUpdater) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	m.updateCallCount++
 	m.earliestAvailableSlot = earliestAvailableSlot
-	return earliestAvailableSlot, custodyGroupCount, nil
+	return nil
 }
 
 func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	params.OverrideBeaconConfig(config)
+
 	ctx := t.Context()
 
 	// Create mock custody updater
@@ -785,8 +790,8 @@ func TestDataColumnStorage_UpdatesEarliestAvailableSlot(t *testing.T) {
 	// This should prune epochs 0 and 1 (keeping only epochs 2 and 3)
 	storage.prune()
 
-	// Check that UpdateCustodyInfo was called
-	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateCustodyInfo should have been called")
+	// Check that UpdateEarliestAvailableSlot was called
+	assert.Equal(t, true, mockCustody.updateCallCount > 0, "UpdateEarliestAvailableSlot should have been called")
 
 	// The highest epoch to prune is 3 - 2 = 1
 	// So earliest available slot should be the first slot of epoch 2 = epoch 2 * 32 = 64
@@ -830,7 +835,7 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 		// Trigger pruning
 		storage.prune()
 
-		// Should not have called UpdateCustodyInfo since no pruning should happen
+		// Should not have called UpdateEarliestAvailableSlot since no pruning should happen
 		assert.Equal(t, 0, mockCustody.updateCallCount, "Should not prune when highestStoredEpoch <= retentionEpochs")
 	})
 
@@ -869,7 +874,7 @@ func TestDataColumnStorage_PruneLogicCorrectness(t *testing.T) {
 		// Trigger pruning
 		storage.prune()
 
-		// Should have called UpdateCustodyInfo since pruning should happen
+		// Should have called UpdateEarliestAvailableSlot since pruning should happen
 		// highestStoredEpoch = 5, retentionEpochs = 2
 		// highestEpochToPrune = 5 - 2 = 3
 		// earliestAvailableSlot = first slot of epoch 4 = 4 * 32 = 128
