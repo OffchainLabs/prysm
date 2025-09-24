@@ -247,13 +247,22 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.LatestExecutionPayloadHeaderCapella.RealPosition()] = executionPayloadRoot[:]
 	}
 
-	if state.version >= version.Deneb {
+	if state.version >= version.Deneb && state.version < version.Gloas {
 		// Execution payload root.
 		executionPayloadRoot, err := state.latestExecutionPayloadHeaderDeneb.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}
 		fieldRoots[types.LatestExecutionPayloadHeaderDeneb.RealPosition()] = executionPayloadRoot[:]
+	}
+
+	if state.version >= version.Gloas {
+		// Execution payload root.
+		executionPayloadRoot, err := state.latestExecutionPayloadHeaderGloas.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		fieldRoots[types.LatestExecutionPayloadHeaderGloas.RealPosition()] = executionPayloadRoot[:]
 	}
 
 	if state.version >= version.Capella {

@@ -693,13 +693,13 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			return nil, err
 		}
 
-		fullBlock = &eth.SignedBeaconBlockFulu{
-			Block: &eth.BeaconBlockElectra{
+		fullBlock = &eth.SignedBeaconBlockGloas{
+			Block: &eth.BeaconBlockGloas{
 				Slot:          b.Slot(),
 				ProposerIndex: b.ProposerIndex(),
 				ParentRoot:    parentRoot[:],
 				StateRoot:     stateRoot[:],
-				Body: &eth.BeaconBlockBodyElectra{
+				Body: &eth.BeaconBlockBodyGloas{
 					RandaoReveal:      randaoReveal[:],
 					Eth1Data:          b.Body().Eth1Data(),
 					Graffiti:          graffiti[:],
@@ -709,24 +709,25 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 					Deposits:          b.Body().Deposits(),
 					VoluntaryExits:    b.Body().VoluntaryExits(),
 					SyncAggregate:     syncAgg,
-					ExecutionPayload: &enginev1.ExecutionPayloadDeneb{
-						ParentHash:    p.ParentHash,
-						FeeRecipient:  p.FeeRecipient,
-						StateRoot:     p.StateRoot,
-						ReceiptsRoot:  p.ReceiptsRoot,
-						LogsBloom:     p.LogsBloom,
-						PrevRandao:    p.PrevRandao,
-						BlockNumber:   p.BlockNumber,
-						GasLimit:      p.GasLimit,
-						GasUsed:       p.GasUsed,
-						Timestamp:     p.Timestamp,
-						ExtraData:     p.ExtraData,
-						BaseFeePerGas: p.BaseFeePerGas,
-						BlockHash:     p.BlockHash,
-						Transactions:  p.Transactions,
-						Withdrawals:   p.Withdrawals,
-						BlobGasUsed:   p.BlobGasUsed,
-						ExcessBlobGas: p.ExcessBlobGas,
+					ExecutionPayload: &enginev1.ExecutionPayloadGloas{
+						ParentHash:      p.ParentHash,
+						FeeRecipient:    p.FeeRecipient,
+						StateRoot:       p.StateRoot,
+						ReceiptsRoot:    p.ReceiptsRoot,
+						LogsBloom:       p.LogsBloom,
+						PrevRandao:      p.PrevRandao,
+						BlockNumber:     p.BlockNumber,
+						GasLimit:        p.GasLimit,
+						GasUsed:         p.GasUsed,
+						Timestamp:       p.Timestamp,
+						ExtraData:       p.ExtraData,
+						BaseFeePerGas:   p.BaseFeePerGas,
+						BlockHash:       p.BlockHash,
+						Transactions:    p.Transactions,
+						Withdrawals:     p.Withdrawals,
+						BlobGasUsed:     p.BlobGasUsed,
+						ExcessBlobGas:   p.ExcessBlobGas,
+						BlockAccessList: p.BlockAccessList,
 					},
 					BlsToExecutionChanges: blsToExecutionChanges,
 					BlobKzgCommitments:    commitments,
