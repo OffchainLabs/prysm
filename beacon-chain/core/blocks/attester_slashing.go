@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
@@ -40,11 +39,11 @@ func ProcessAttesterSlashings(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	slashFunc slashValidatorFunc,
 ) (state.BeaconState, error) {
 	var err error
 	for _, slashing := range slashings {
-		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, slashFunc)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +56,7 @@ func ProcessAttesterSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	slashFunc slashValidatorFunc,
 ) (state.BeaconState, error) {
 	if err := VerifyAttesterSlashing(ctx, beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify attester slashing")
@@ -76,9 +75,10 @@ func ProcessAttesterSlashing(
 			return nil, err
 		}
 		if helpers.IsSlashableValidator(val.ActivationEpoch(), val.WithdrawableEpoch(), val.Slashed(), currentEpoch) {
-			beaconState, err = validators.SlashValidator(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitInfo)
+			beaconState, err = slashFunc(ctx, beaconState, primitives.ValidatorIndex(validatorIndex))
 			if err != nil {
-				return nil, errors.Wrapf(err, "could not slash validator index %d", validatorIndex)
+				return nil, errors.Wrapf(err, "could not slash validator index %d",
+					validatorIndex)
 			}
 			slashedAny = true
 		}

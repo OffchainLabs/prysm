@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -47,21 +46,18 @@ var (
 //      # [New in Electra:EIP7251]
 //      for_ops(body.execution_payload.consolidation_requests, process_consolidation_request)
 
-func ProcessOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	var err error
-
+func ProcessOperations(
+	ctx context.Context,
+	st state.BeaconState,
+	block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
 	// 6110 validations are in VerifyOperationLengths
 	bb := block.Body()
 	// Electra extends the altair operations.
-	exitInfo := v.ExitInformation(st)
-	if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
-		return nil, errors.Wrap(err, "could not update total active balance cache")
-	}
-	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
+	st, err := ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), v.SlashValidator)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo)
+	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), v.SlashValidator)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -72,7 +68,7 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	if _, err := ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
+	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}

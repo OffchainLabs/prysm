@@ -49,11 +49,9 @@ func TestInitiateValidatorExit_AlreadyExited(t *testing.T) {
 	}}
 	state, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	exitInfo := &validators.ExitInfo{HighestExitEpoch: 199, Churn: 1}
-	newState, err := validators.InitiateValidatorExit(t.Context(), state, 0, exitInfo)
+	newState, epoch, err := validators.InitiateValidatorExit(t.Context(), state, 0, 199, 1)
 	require.ErrorIs(t, err, validators.ErrValidatorAlreadyExited)
-	assert.Equal(t, primitives.Epoch(199), exitInfo.HighestExitEpoch)
-	assert.Equal(t, uint64(1), exitInfo.Churn)
+	require.Equal(t, exitEpoch, epoch)
 	v, err := newState.ValidatorAtIndex(0)
 	require.NoError(t, err)
 	assert.Equal(t, exitEpoch, v.ExitEpoch, "Already exited")
@@ -70,11 +68,9 @@ func TestInitiateValidatorExit_ProperExit(t *testing.T) {
 	}}
 	state, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	exitInfo := &validators.ExitInfo{HighestExitEpoch: exitedEpoch + 2, Churn: 1}
-	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, exitInfo)
+	newState, epoch, err := validators.InitiateValidatorExit(t.Context(), state, idx, exitedEpoch+2, 1)
 	require.NoError(t, err)
-	assert.Equal(t, exitedEpoch+2, exitInfo.HighestExitEpoch)
-	assert.Equal(t, uint64(2), exitInfo.Churn)
+	require.Equal(t, exitedEpoch+2, epoch)
 	v, err := newState.ValidatorAtIndex(idx)
 	require.NoError(t, err)
 	assert.Equal(t, exitedEpoch+2, v.ExitEpoch, "Exit epoch was not the highest")
@@ -92,11 +88,9 @@ func TestInitiateValidatorExit_ChurnOverflow(t *testing.T) {
 	}}
 	state, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	exitInfo := &validators.ExitInfo{HighestExitEpoch: exitedEpoch + 2, Churn: 4}
-	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, exitInfo)
+	newState, epoch, err := validators.InitiateValidatorExit(t.Context(), state, idx, exitedEpoch+2, 4)
 	require.NoError(t, err)
-	assert.Equal(t, exitedEpoch+3, exitInfo.HighestExitEpoch)
-	assert.Equal(t, uint64(1), exitInfo.Churn)
+	require.Equal(t, exitedEpoch+3, epoch)
 
 	// Because of exit queue overflow,
 	// validator who init exited has to wait one more epoch.
@@ -116,8 +110,7 @@ func TestInitiateValidatorExit_WithdrawalOverflows(t *testing.T) {
 	}}
 	state, err := state_native.InitializeFromProtoPhase0(base)
 	require.NoError(t, err)
-	exitInfo := &validators.ExitInfo{HighestExitEpoch: params.BeaconConfig().FarFutureEpoch - 1, Churn: 1}
-	_, err = validators.InitiateValidatorExit(t.Context(), state, 1, exitInfo)
+	_, _, err = validators.InitiateValidatorExit(t.Context(), state, 1, params.BeaconConfig().FarFutureEpoch-1, 1)
 	require.ErrorContains(t, "addition overflows", err)
 }
 
@@ -153,11 +146,12 @@ func TestInitiateValidatorExit_ProperExit_Electra(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Gwei(0), ebtc)
 
-	newState, err := validators.InitiateValidatorExit(t.Context(), state, idx, &validators.ExitInfo{}) // exit info is not used in electra
+	newState, epoch, err := validators.InitiateValidatorExit(t.Context(), state, idx, 0, 0) // exitQueueEpoch and churn are not used in electra
 	require.NoError(t, err)
 
 	// Expect that the exit epoch is the next available epoch with max seed lookahead.
 	want := helpers.ActivationExitEpoch(exitedEpoch + 1)
+	require.Equal(t, want, epoch)
 	v, err := newState.ValidatorAtIndex(idx)
 	require.NoError(t, err)
 	assert.Equal(t, want, v.ExitEpoch, "Exit epoch was not the highest")
@@ -196,7 +190,7 @@ func TestSlashValidator_OK(t *testing.T) {
 	require.NoError(t, err, "Could not get proposer")
 	proposerBal, err := state.BalanceAtIndex(proposer)
 	require.NoError(t, err)
-	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state))
+	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx)
 	require.NoError(t, err, "Could not slash validator")
 	require.Equal(t, true, slashedState.Version() == version.Phase0)
 
@@ -250,7 +244,7 @@ func TestSlashValidator_Electra(t *testing.T) {
 	require.NoError(t, err, "Could not get proposer")
 	proposerBal, err := state.BalanceAtIndex(proposer)
 	require.NoError(t, err)
-	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx, validators.ExitInformation(state))
+	slashedState, err := validators.SlashValidator(t.Context(), state, slashedIdx)
 	require.NoError(t, err, "Could not slash validator")
 	require.Equal(t, true, slashedState.Version() == version.Electra)
 
@@ -511,8 +505,8 @@ func TestValidatorMaxExitEpochAndChurn(t *testing.T) {
 	for _, tt := range tests {
 		s, err := state_native.InitializeFromProtoPhase0(tt.state)
 		require.NoError(t, err)
-		exitInfo := validators.ExitInformation(s)
-		require.Equal(t, tt.wantedEpoch, exitInfo.HighestExitEpoch)
-		require.Equal(t, tt.wantedChurn, exitInfo.Churn)
+		epoch, churn := validators.MaxExitEpochAndChurn(s)
+		require.Equal(t, tt.wantedEpoch, epoch)
+		require.Equal(t, tt.wantedChurn, churn)
 	}
 }
