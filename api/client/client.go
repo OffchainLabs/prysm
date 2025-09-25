@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -33,7 +34,7 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 		return nil, err
 	}
 	c := &Client{
-		hc:          &http.Client{},
+		hc:          &http.Client{Timeout: 30 * time.Second}, // Default client timeout to prevent indefinite hangs
 		baseURL:     u,
 		maxBodySize: MaxBodySize,
 	}
