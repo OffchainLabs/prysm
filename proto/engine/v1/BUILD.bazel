@@ -83,6 +83,7 @@ go_library(
         "execution_engine.go",
         "fulu.go",
         "json_marshal_unmarshal.go",
+        "gloas.go",
         ":ssz_generated_files",  # keep
     ],
     embed = [

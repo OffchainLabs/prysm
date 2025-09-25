@@ -1544,43 +1544,6 @@ func initBlindedBlockFromProtoFulu(pb *eth.BlindedBeaconBlockFulu) (*BeaconBlock
 	return b, nil
 }
 
-func initSignedBlockFromProtoGloas(pb *eth.SignedBeaconBlockGloas) (*SignedBeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	block, err := initBlockFromProtoGloas(pb.Block)
-	if err != nil {
-		return nil, err
-	}
-	b := &SignedBeaconBlock{
-		version:   version.Gloas,
-		block:     block,
-		signature: bytesutil.ToBytes96(pb.Signature),
-	}
-	return b, nil
-}
-
-func initBlockFromProtoGloas(pb *eth.BeaconBlockGloas) (*BeaconBlock, error) {
-	if pb == nil {
-		return nil, errNilBlock
-	}
-
-	body, err := initBlockBodyFromProtoGloas(pb.Body)
-	if err != nil {
-		return nil, err
-	}
-	b := &BeaconBlock{
-		version:       version.Gloas,
-		slot:          pb.Slot,
-		proposerIndex: pb.ProposerIndex,
-		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
-		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
-		body:          body,
-	}
-	return b, nil
-}
-
 func initBlockBodyFromProtoFulu(pb *eth.BeaconBlockBodyElectra) (*BeaconBlockBody, error) {
 	if pb == nil {
 		return nil, errNilBlockBody
@@ -1643,6 +1606,47 @@ func initBlindedBlockBodyFromProtoFulu(pb *eth.BlindedBeaconBlockBodyElectra) (*
 		blsToExecutionChanges:    pb.BlsToExecutionChanges,
 		blobKzgCommitments:       pb.BlobKzgCommitments,
 		executionRequests:        er,
+	}
+	return b, nil
+}
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+func initSignedBlockFromProtoGloas(pb *eth.SignedBeaconBlockGloas) (*SignedBeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	block, err := initBlockFromProtoGloas(pb.Block)
+	if err != nil {
+		return nil, err
+	}
+	b := &SignedBeaconBlock{
+		version:   version.Gloas,
+		block:     block,
+		signature: bytesutil.ToBytes96(pb.Signature),
+	}
+	return b, nil
+}
+
+func initBlockFromProtoGloas(pb *eth.BeaconBlockGloas) (*BeaconBlock, error) {
+	if pb == nil {
+		return nil, errNilBlock
+	}
+
+	body, err := initBlockBodyFromProtoGloas(pb.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := &BeaconBlock{
+		version:       version.Gloas,
+		slot:          pb.Slot,
+		proposerIndex: pb.ProposerIndex,
+		parentRoot:    bytesutil.ToBytes32(pb.ParentRoot),
+		stateRoot:     bytesutil.ToBytes32(pb.StateRoot),
+		body:          body,
 	}
 	return b, nil
 }
