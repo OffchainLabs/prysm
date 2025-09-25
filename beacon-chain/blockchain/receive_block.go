@@ -248,7 +248,7 @@ func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityStore, block
 		err = s.isDataAvailable(ctx, block)
 	}
 	elapsed := time.Since(start)
-	if err != nil {
+	if err == nil {
 		dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
 	}
 	return elapsed, err

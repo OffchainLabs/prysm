@@ -1465,8 +1465,7 @@ func (s *Server) GetBlockHeader(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockID))
-	ok := shared.WriteBlockFetchError(w, blk, err)
-	if !ok {
+	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
 	blockHeader, err := blk.Header()
