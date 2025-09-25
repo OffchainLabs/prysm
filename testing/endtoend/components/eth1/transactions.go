@@ -181,6 +181,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		// Reduced from 10 to 5 to conserve funds during extended test runs
 		for i := uint64(0); i < 5; i++ {
 			index := i
+
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
 				if err != nil {
@@ -207,6 +208,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		// Reduced from 10 to 5 to conserve funds during extended test runs
 		for i := uint64(0); i < 5; i++ {
 			index := i
+
 			g.Go(func() error {
 				tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
 				if err != nil {
@@ -312,7 +314,9 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
+
 		var err error
+
 		if gasPrice == nil {
 			gasPrice, err = client.SuggestGasPrice(context.Background())
 			if err != nil {
@@ -330,6 +334,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 	to := randomAddress()
 	code := txfuzz.RandomCode(f)
 	value := big.NewInt(0)
+
 	if len(code) > 128 {
 		code = code[:128]
 	}
@@ -348,6 +353,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 		if err != nil {
 			return nil, errors.Wrap(err, "randomBlobData")
 		}
+
 		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
 	case 1:
 		// Blob transaction with cell proofs and access list
@@ -451,6 +457,7 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 			AccessList: nil,
 		}
 		geth := gethclient.New(rpc)
+
 		al, _, _, err := geth.CreateAccessList(context.Background(), msg)
 		if err != nil {
 			return nil, errors.Wrap(err, "CreateAccessList")
@@ -594,6 +601,7 @@ func ensureMinBalance(ctx context.Context, rpcCli *rpc.Client, backend *ethclien
 	if err := WaitForBlocks(ctx, backend, minerKey, 1); err != nil {
 		return errors.Wrap(err, "failed to mine block for top-up tx")
 	}
+
 	return nil
 }
 
