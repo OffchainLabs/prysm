@@ -58,12 +58,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
-	if err != nil {
-		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if blk == nil {
-		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
 
@@ -174,12 +169,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
-	if err != nil {
-		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if blk == nil {
-		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
 
