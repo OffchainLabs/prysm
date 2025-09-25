@@ -154,13 +154,16 @@ func (m *SparseMerkleTrie) Insert(item []byte, index int) error {
 			root = parentHash
 		}
 		parentIdx := currentIndex / 2
-		if len(m.branches[i+1]) == 0 || parentIdx >= len(m.branches[i+1]) {
-			newItem := root
-			m.branches[i+1] = append(m.branches[i+1], newItem[:])
-		} else {
-			newItem := root
-			m.branches[i+1][parentIdx] = newItem[:]
+		// Ensure the parent layer has capacity up to parentIdx by padding with
+		// appropriate zero hashes for this level before assigning at index.
+		if parentIdx >= len(m.branches[i+1]) {
+			neededLen := parentIdx + 1
+			for len(m.branches[i+1]) < neededLen {
+				m.branches[i+1] = append(m.branches[i+1], ZeroHashes[i+1][:])
+			}
 		}
+		newItem := root
+		m.branches[i+1][parentIdx] = newItem[:]
 		currentIndex = parentIdx
 	}
 	return nil
@@ -187,7 +190,11 @@ func (m *SparseMerkleTrie) MerkleProof(index int) ([][]byte, error) {
 		}
 	}
 	var enc [32]byte
-	binary.LittleEndian.PutUint64(enc[:], uint64(len(m.originalItems)))
+	depositCount := uint64(len(m.originalItems))
+	if len(m.originalItems) == 1 && bytes.Equal(m.originalItems[0], ZeroHashes[0][:]) {
+		depositCount = 0
+	}
+	binary.LittleEndian.PutUint64(enc[:], depositCount)
 	proof[len(proof)-1] = enc[:]
 	return proof, nil
 }
