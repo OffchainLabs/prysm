@@ -1,22 +1,9 @@
+version: "2"
 run:
-  timeout: 10m
-  go: '1.23.5'
-
-issues:
-  exclude-files:
-    - validator/web/site_data.go
-    - .*_test.go
-  exclude-dirs:
-    - proto
-    - tools/analyzers
-
+  go: 1.23.5
 linters:
-  enable-all: true
+  default: all
   disable:
-    # Deprecated linters:
-    - govet
-
-    # Disabled for now:
     - asasalint
     - bodyclose
     - containedctx
@@ -26,14 +13,13 @@ linters:
     - dogsled
     - dupl
     - durationcheck
-    - errname
     - err113
+    - errname
     - exhaustive
     - exhaustruct
     - forbidigo
     - forcetypeassert
     - funlen
-    - gci
     - gochecknoglobals
     - gochecknoinits
     - goconst
@@ -41,9 +27,9 @@ linters:
     - gocyclo
     - godot
     - godox
-    - gofumpt
     - gomoddirectives
     - gosec
+    - govet
     - inamedparam
     - interfacebloat
     - intrange
@@ -58,6 +44,7 @@ linters:
     - nilnil
     - nlreturn
     - noctx
+    - noinlineerr
     - nolintlint
     - nonamedreturns
     - nosprintfhostport
@@ -70,7 +57,6 @@ linters:
     - revive
     - spancheck
     - staticcheck
-    - stylecheck
     - tagalign
     - tagliatelle
     - thelper
@@ -79,12 +65,35 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
-
-linters-settings:
-  gocognit:
-    # TODO: We should target for < 50
-    min-complexity: 65
-
-output:
-  print-issued-lines: true
-  sort-results: true
+  settings:
+    gocognit:
+      min-complexity: 65
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - validator/web/site_data.go
+      - .*_test.go
+      - proto
+      - tools/analyzers
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - validator/web/site_data.go
+      - .*_test.go
+      - proto
+      - tools/analyzers
+      - third_party$
+      - builtin$
+      - examples$
