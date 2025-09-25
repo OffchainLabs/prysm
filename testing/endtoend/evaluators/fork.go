@@ -330,13 +330,17 @@ func fuluForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error
 	if err != nil {
 		return err
 	}
+
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return errors.New("context canceled prematurely")
 	}
+
 	res, err := stream.Recv()
+
 	if err != nil {
 		return err
 	}
+
 	if res == nil || res.Block == nil {
 		return errors.New("nil block returned by beacon node")
 	}

@@ -147,10 +147,13 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 	if cfg.ElectraForkEpoch == 0 {
 		pragueTime = &genesisTime
 	}
+
 	osakaTime := GethOsakaTime(genesis, cfg)
+
 	if cfg.FuluForkEpoch == 0 {
 		osakaTime = &genesisTime
 	}
+
 	cc := &params.ChainConfig{
 		ChainID:                 big.NewInt(defaultTestChainId),
 		HomesteadBlock:          bigz,

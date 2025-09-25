@@ -226,6 +226,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 					//nolint:nilerr
 					return nil
 				}
+
 				txs[index] = signedTx
 				return nil
 			})
@@ -342,6 +343,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 	if al {
 		mod = 1
 	}
+
 	switch f.Byte() % byte(mod) {
 	case 0:
 		// Blob transaction with cell proofs (Version 1 sidecar)
@@ -377,6 +379,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 			AccessList: nil,
 		}
 		geth := gethclient.New(rpc)
+
 		al, _, _, err := geth.CreateAccessList(context.Background(), msg)
 		if err != nil {
 			return nil, errors.Wrap(err, "CreateAccessList")
@@ -389,9 +392,11 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 		if err != nil {
 			return nil, errors.Wrap(err, "randomBlobData")
 		}
+
 		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al)
 	}
-	return nil, errors.New("asdf")
+
+	return nil, nil
 }
 
 func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
@@ -508,6 +513,7 @@ func New4844CellTx(nonce uint64, to *common.Address, gasLimit uint64, chainID, t
 		BlobHashes: versionedHashes,
 		Sidecar:    sidecar,
 	})
+
 	return tx, nil
 }
 
