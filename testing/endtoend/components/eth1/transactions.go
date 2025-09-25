@@ -91,6 +91,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	// Mine 1 block using the miner key to include the funding transfer.
 	backend := ethclient.NewClient(client)
 	defer backend.Close()
+
 	if err := WaitForBlocks(ctx, backend, mineKey, 1); err != nil {
 		return errors.Wrap(err, "failed to mine block for funding tx")
 	}
@@ -191,6 +192,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 					//nolint:nilerr
 					return nil
 				}
+
 				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
 				if err != nil {
 					logrus.WithError(err).Error("Could not sign blob cell tx")
@@ -219,6 +221,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 					//nolint:nilerr
 					return nil
 				}
+
 				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
 				if err != nil {
 					logrus.WithError(err).Error("Could not sign blob tx")
@@ -241,6 +244,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		if tx == nil {
 			continue
 		}
+
 		err = backend.SendTransaction(context.Background(), tx)
 		if err != nil {
 			// Do nothing
@@ -414,6 +418,7 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 				gasPrice = big.NewInt(1)
 			}
 		}
+
 		if chainID == nil {
 			chainID, err = client.ChainID(context.Background())
 			if err != nil {
@@ -613,6 +618,7 @@ func ensureMinBalance(ctx context.Context, rpcCli *rpc.Client, backend *ethclien
 	if err := fundAccount(rpcCli, minerKey, destKey); err != nil {
 		return err
 	}
+
 	if err := WaitForBlocks(ctx, backend, minerKey, 1); err != nil {
 		return errors.Wrap(err, "failed to mine block for top-up tx")
 	}
