@@ -33,6 +33,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -74,7 +75,7 @@ func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error
 	if len(beaconEndpoints) == 0 {
 		return nil, errors.New("no specified beacon API endpoints")
 	}
-	conn, err := grpc.Dial(beaconEndpoints[0], grpc.WithInsecure())
+	conn, err := grpc.Dial(beaconEndpoints[0], grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
