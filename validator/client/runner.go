@@ -90,6 +90,7 @@ func (r *runner) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
+			//nolint:govet
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
@@ -98,7 +99,7 @@ func (r *runner) run(ctx context.Context) {
 			}
 
 			deadline := v.SlotDeadline(slot)
-			slotCtx, cancel := context.WithDeadline(ctx, deadline)
+			slotCtx, cancel := context.WithDeadline(ctx, deadline) //nolint:govet
 
 			var span trace.Span
 			slotCtx, span = prysmTrace.StartSpan(slotCtx, "validator.processSlot")
@@ -131,7 +132,7 @@ func (r *runner) run(ctx context.Context) {
 
 			// Start fetching domain data for the next epoch.
 			if slots.IsEpochEnd(slot) {
-				domainCtx, _ := context.WithDeadline(ctx, deadline)
+				domainCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
 				go v.UpdateDomainDataCaches(domainCtx, slot+1)
 			}
 
@@ -145,7 +146,7 @@ func (r *runner) run(ctx context.Context) {
 				continue
 			}
 			// performRoles calls span.End()
-			rolesCtx, _ := context.WithDeadline(ctx, deadline)
+			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
