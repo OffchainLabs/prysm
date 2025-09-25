@@ -100,6 +100,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		if err == nil && bal.Sign() > 0 {
 			break
 		}
+
 		time.Sleep(250 * time.Millisecond)
 	}
 

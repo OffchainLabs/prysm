@@ -117,6 +117,7 @@ func GethPragueTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uin
 // by adding the relative time of the fulu the fork epoch to the given genesis timestamp.
 func GethOsakaTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
 	var osakaTime *uint64
+
 	if cfg.FuluForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.FuluForkEpoch)
 		if err == nil {
@@ -125,6 +126,7 @@ func GethOsakaTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint
 			osakaTime = &newTime
 		}
 	}
+
 	return osakaTime
 }
 
@@ -176,21 +178,21 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
 			Osaka:  params.DefaultOsakaBlobConfig,
-			//BPO1: &params.BlobConfig{
-			//	Target:         9,
-			//	Max:            14,
-			//	UpdateFraction: 8832827,
-			//},
-			//BPO2: &params.BlobConfig{
-			//	Target:         14,
-			//	Max:            21,
-			//	UpdateFraction: 13739630,
-			//},
-			//BPO3: &params.BlobConfig{
-			//	Target:         21,
-			//	Max:            32,
-			//	UpdateFraction: 20609697,
-			//},
+			BPO1: &params.BlobConfig{
+				Target:         9,
+				Max:            14,
+				UpdateFraction: 8832827,
+			},
+			BPO2: &params.BlobConfig{
+				Target:         14,
+				Max:            21,
+				UpdateFraction: 13739630,
+			},
+			BPO3: &params.BlobConfig{
+				Target:         21,
+				Max:            32,
+				UpdateFraction: 20609697,
+			},
 		},
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)
