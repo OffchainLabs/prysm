@@ -8,15 +8,18 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
+
+var errTimeOut = errors.New("operation timed out")
 
 // PruneAttestationsAtEpoch deletes all attestations from the slasher DB with target epoch
 // less than or equal to the specified epoch.
 func (s *Store) PruneAttestationsAtEpoch(
 	ctx context.Context, maxEpoch primitives.Epoch,
 ) (numPruned uint, err error) {
-	// In some cases, pruning may take a very long time and consume significant memory in the open
+	// In some cases, pruning may take a very long time and consume significant memory in the
 	// open Update transaction. Therefore, we impose a 1 minute timeout on this operation.
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
@@ -54,7 +57,7 @@ func (s *Store) PruneAttestationsAtEpoch(
 		return
 	}
 
-	if err = s.db.Update(func(tx *bolt.Tx) error {
+	err = s.db.Update(func(tx *bolt.Tx) error {
 		signingRootsBkt := tx.Bucket(attestationDataRootsBucket)
 		attRecordsBkt := tx.Bucket(attestationRecordsBucket)
 		c := signingRootsBkt.Cursor()
@@ -63,9 +66,9 @@ func (s *Store) PruneAttestationsAtEpoch(
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			if ctx.Err() != nil {
 				// Exit the routine if the context has expired.
-				log.WithError(ctx.Err()).Warn("Aborting pruning routine")
-				return nil
+				return errTimeOut
 			}
+
 			// We check the epoch from the current key in the database.
 			// If we have hit an epoch that is greater than the end epoch of the pruning process,
 			// we then completely exit the process as we are done.
@@ -78,18 +81,27 @@ func (s *Store) PruneAttestationsAtEpoch(
 			// so it is possible we have a few adjacent objects that have the same slot, such as
 			//  (target_epoch = 3 ++ _) => encode(attestation)
 			if err := signingRootsBkt.Delete(k); err != nil {
-				return err
+				return errors.Wrap(err, "delete attestation signing root")
 			}
 			if err := attRecordsBkt.Delete(v); err != nil {
-				return err
+				return errors.Wrap(err, "delete attestation record")
 			}
 			slasherAttestationsPrunedTotal.Inc()
 			numPruned++
 		}
 		return nil
-	}); err != nil {
+	})
+
+	if errors.Is(err, errTimeOut) {
+		log.Warning("Aborting pruning routine")
 		return
 	}
+
+	if err != nil {
+		log.WithError(err).Error("Failed to prune attestations")
+		return
+	}
+
 	return
 }
 
