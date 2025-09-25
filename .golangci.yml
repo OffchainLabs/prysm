@@ -25,3 +25,18 @@ linters:
       - third_party$
       - builtin$
       - examples$
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - validator/web/site_data.go
+      - .*_test.go
+      - proto
+      - tools/analyzers
+      - third_party$
+      - builtin$
+      - examples$
