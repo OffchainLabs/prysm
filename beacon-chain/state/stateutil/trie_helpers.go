@@ -223,13 +223,16 @@ func recomputeRootFromLayerVariable(idx int, item [32]byte, layers [][]*[32]byte
 		root = parentHash
 
 		parentIdx := currentIndex / 2
-		if len(layers[i+1]) == 0 || parentIdx >= len(layers[i+1]) {
-			newItem := root
-			layers[i+1] = append(layers[i+1], &newItem)
-		} else {
-			newItem := root
-			layers[i+1][parentIdx] = &newItem
+		// Ensure parent layer has capacity up to parentIdx; pad with zerohashes for this level.
+		if parentIdx >= len(layers[i+1]) {
+			neededLen := parentIdx + 1
+			for len(layers[i+1]) < neededLen {
+				zerohash := trie.ZeroHashes[i+1]
+				layers[i+1] = append(layers[i+1], &zerohash)
+			}
 		}
+		newItem := root
+		layers[i+1][parentIdx] = &newItem
 		currentIndex = parentIdx
 	}
 	return root, layers, nil
