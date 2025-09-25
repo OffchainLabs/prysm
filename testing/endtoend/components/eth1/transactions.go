@@ -354,6 +354,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
+
 		data, err := randomBlobData()
 		if err != nil {
 			return nil, errors.Wrap(err, "randomBlobData")
@@ -434,10 +435,12 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 	switch f.Byte() % byte(mod) {
 	case 0:
 		// 4844 transaction without AL
+
 		tip, feecap, err := getCaps(rpc, gasPrice)
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
+
 		data, err := randomBlobData()
 		if err != nil {
 			return nil, errors.Wrap(err, "randomBlobData")
@@ -553,6 +556,7 @@ func clampTxGas(tx *types.Transaction, gasCap uint64) *types.Transaction {
 	if tx == nil || tx.Gas() <= gasCap {
 		return tx
 	}
+
 	to := tx.To()
 	switch tx.Type() {
 	case types.LegacyTxType:
@@ -601,9 +605,11 @@ func ensureMinBalance(ctx context.Context, rpcCli *rpc.Client, backend *ethclien
 	if err != nil {
 		return err
 	}
+
 	if bal.Cmp(minWei) >= 0 {
 		return nil
 	}
+
 	if err := fundAccount(rpcCli, minerKey, destKey); err != nil {
 		return err
 	}

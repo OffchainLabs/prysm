@@ -276,6 +276,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if gen.Config.PragueTime != nil {
 			fields["prague"] = fmt.Sprintf("%d", *gen.Config.PragueTime)
 		}
+
 		if gen.Config.OsakaTime != nil {
 			fields["osaka"] = fmt.Sprintf("%d", *gen.Config.OsakaTime)
 		}
