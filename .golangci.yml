@@ -3,13 +3,12 @@ run:
   go: 1.23.5
 linters:
   enable:
-    - errcheck    # Passes - checks for unchecked errors
-    - ineffassign # Passes - detects unused assignments
+    - errcheck
+    - ineffassign
+    - govet
+    - unused
   disable:
-    # Disable the default linters that currently fail
-    - govet       # 9 issues - vet examinations like unreachable code, context leaks
-    - staticcheck # 50 issues - various static analysis checks
-    - unused      # 26 issues - unused constants, variables, functions
+    - staticcheck
   exclusions:
     generated: lax
     presets:
