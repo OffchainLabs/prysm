@@ -128,6 +128,7 @@ var (
 	SaveFullExecutionPayloads = &cli.BoolFlag{
 		Name:  "save-full-execution-payloads",
 		Usage: "Saves beacon blocks with full execution payloads instead of execution payload headers in the database.",
+		Value: true,
 	}
 	EnableBeaconRESTApi = &cli.BoolFlag{
 		Name:  "enable-beacon-rest-api",
