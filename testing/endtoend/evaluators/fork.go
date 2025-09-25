@@ -336,7 +336,6 @@ func fuluForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error
 	}
 
 	res, err := stream.Recv()
-
 	if err != nil {
 		return err
 	}
@@ -361,6 +360,7 @@ func fuluForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
 		return err
 	}
+
 	if blk.Block().Slot() < fSlot {
 		return errors.Errorf("wanted a block at slot >= %d but received %d", fSlot, blk.Block().Slot())
 	}

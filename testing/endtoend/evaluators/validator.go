@@ -353,9 +353,11 @@ func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfac
 	if container.GetBlindedElectraBlock() != nil {
 		return blocks.NewSignedBeaconBlock(container.GetBlindedElectraBlock())
 	}
+
 	if container.GetFuluBlock() != nil {
 		return blocks.NewSignedBeaconBlock(container.GetFuluBlock())
 	}
+
 	if container.GetBlindedFuluBlock() != nil {
 		return blocks.NewSignedBeaconBlock(container.GetBlindedFuluBlock())
 	}

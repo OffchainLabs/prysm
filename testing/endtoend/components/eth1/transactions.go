@@ -199,6 +199,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 					//nolint:nilerr
 					return nil
 				}
+
 				txs[index] = signedTx
 				return nil
 			})
@@ -331,6 +332,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 			}
 		}
 	}
+
 	gas := uint64(100000)
 	to := randomAddress()
 	code := txfuzz.RandomCode(f)
@@ -339,6 +341,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 	if len(code) > 128 {
 		code = code[:128]
 	}
+
 	mod := 2
 	if al {
 		mod = 1
