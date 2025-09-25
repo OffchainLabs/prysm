@@ -6,9 +6,9 @@ linters:
     - errcheck
     - ineffassign
     - govet
-    - unused
   disable:
     - staticcheck
+    - unused
   exclusions:
     generated: lax
     presets:
