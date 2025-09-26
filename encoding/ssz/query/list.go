@@ -16,7 +16,7 @@ type listInfo struct {
 	element *sszInfo
 	// length is the actual number of elements at runtime (0 if not set).
 	length uint64
-	// elementSize caches the each element's byte size for variable-sized type elements
+	// elementSize caches each element's byte size for variable-sized type elements
 	elementSize []uint64
 }
 
