@@ -174,7 +174,10 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 
 	// Send blob transactions - skip near fork boundary, use different versions pre/post Fulu
 	if nearFuluFork && !isPostFulu {
-		logrus.Infof("Near Fulu fork boundary (epoch %d, fork at %d): Skipping blob transactions to avoid execution client bug", currentEpoch, fuluForkEpoch)
+		logrus.WithFields(logrus.Fields{
+			"currentEpoch":  currentEpoch,
+			"fuluForkEpoch": fuluForkEpoch,
+		}).Infof("Near Fulu fork boundary: Skipping blob transactions to avoid execution client bug")
 	} else if isPostFulu {
 		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
