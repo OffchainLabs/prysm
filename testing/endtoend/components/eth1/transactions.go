@@ -68,7 +68,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	newGen := rand.NewDeterministicGenerator()
 	if seed == 0 {
 		seed = newGen.Int63()
-		logrus.Infof("Seed for transaction generator is: %d", seed)
+		logrus.WithField("Seed", seed).Info("transaction generator")
 	}
 	// Set seed so that all transactions can be
 	// deterministically generated.
@@ -101,8 +101,6 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		if err == nil && bal.Sign() > 0 {
 			break
 		}
-
-		time.Sleep(250 * time.Millisecond)
 	}
 
 	// Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
@@ -144,7 +142,7 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 	return s.started
 }
 
-func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler, gasPrice *big.Int, addr string, N uint64, backend *ethclient.Client, al bool) error {
+func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool) error {
 	sender := common.HexToAddress(addr)
 	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
 	if err != nil {
@@ -180,8 +178,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	} else if isPostFulu {
 		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
-		for i := range uint64(5) {
-			index := i
+		for index := range uint64(5) {
 
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
@@ -209,8 +206,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	} else {
 		logrus.Info("Pre-Fulu: Sending standard blob transactions with Version 0 sidecars")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
-		for i := uint64(0); i < 5; i++ {
-			index := i
+		for index := range uint64(5) {
 
 			g.Go(func() error {
 				tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
@@ -257,9 +253,9 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		return err
 	}
 
-	txs = make([]*types.Transaction, N)
-	for i := uint64(0); i < N; i++ {
-		index := i
+	txs = make([]*types.Transaction, txCount)
+	for index := range txCount {
+
 		g.Go(func() error {
 			tx, err := txfuzz.RandomValidTx(client, f, sender, nonce+index, gasPrice, chainid, al)
 			if err != nil {
