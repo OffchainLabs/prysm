@@ -420,7 +420,7 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var exitInfo *v.ExitInfo
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
-		exitInfo := v.ExitInformation(st)
+		exitInfo = v.ExitInformation(st)
 		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}
