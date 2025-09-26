@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -274,6 +275,20 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 		return errors.New("attempted to broadcast nil light client optimistic update")
 	}
 
+	// add delay to ensure block has time to propagate
+	slotStart, err := slots.StartTime(s.genesisTime, update.SignatureSlot())
+	if err != nil {
+		err := errors.Wrap(err, "could not compute slot start time")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	timeSinceSlotStart := time.Since(slotStart)
+	expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS), update.SignatureSlot())
+	if timeSinceSlotStart < expectedDelay {
+		waitDuration := expectedDelay - timeSinceSlotStart
+		<-time.After(waitDuration)
+	}
+
 	digest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
 	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(digest)); err != nil {
 		log.WithError(err).Debug("Failed to broadcast light client optimistic update")
@@ -292,6 +307,20 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 
 	if update == nil || update.IsNil() {
 		return errors.New("attempted to broadcast nil light client finality update")
+	}
+
+	// add delay to ensure block has time to propagate
+	slotStart, err := slots.StartTime(s.genesisTime, update.SignatureSlot())
+	if err != nil {
+		err := errors.Wrap(err, "could not compute slot start time")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	timeSinceSlotStart := time.Since(slotStart)
+	expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS), update.SignatureSlot())
+	if timeSinceSlotStart < expectedDelay {
+		waitDuration := expectedDelay - timeSinceSlotStart
+		<-time.After(waitDuration)
 	}
 
 	forkDigest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))

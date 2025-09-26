@@ -223,6 +223,7 @@ type BeaconChainConfig struct {
 	// Light client
 	MinSyncCommitteeParticipants uint64 `yaml:"MIN_SYNC_COMMITTEE_PARTICIPANTS" spec:"true"`  // MinSyncCommitteeParticipants defines the minimum amount of sync committee participants for which the light client acknowledges the signature.
 	MaxRequestLightClientUpdates uint64 `yaml:"MAX_REQUEST_LIGHT_CLIENT_UPDATES" spec:"true"` // MaxRequestLightClientUpdates defines the maximum amount of light client updates that can be requested in a single request.
+	SyncMessageDueBPS            uint64 `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`             // SyncMessageDueBPS defines the due time for a sync message.
 
 	// Bellatrix
 	TerminalBlockHash                common.Hash      `yaml:"TERMINAL_BLOCK_HASH" spec:"true"`                  // TerminalBlockHash of beacon chain.
