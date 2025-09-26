@@ -3,9 +3,11 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "errors.go",
         "hashers.go",
         "helpers.go",
         "htrutils.go",
+        "list.go",
         "merkleize.go",
         "slice_root.go",
     ],
