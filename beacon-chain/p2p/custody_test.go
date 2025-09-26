@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
@@ -199,6 +200,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		const groupCount uint64 = 5
 
 		service := &Service{
+			genesisTime: time.Now(),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: initialSlot,
 				groupCount:            groupCount,
@@ -212,11 +214,12 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.Equal(t, groupCount, service.custodyInfo.groupCount) // Should preserve group count
 	})
 
-	t.Run("Earlier slot - error", func(t *testing.T) {
+	t.Run("Earlier slot - allowed for backfill", func(t *testing.T) {
 		const initialSlot primitives.Slot = 100
 		const earlierSlot primitives.Slot = 50
 
 		service := &Service{
+			genesisTime: time.Now(),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: initialSlot,
 				groupCount:            5,
@@ -225,9 +228,35 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 
 		err := service.UpdateEarliestAvailableSlot(earlierSlot)
 
+		require.NoError(t, err)
+		require.Equal(t, earlierSlot, service.custodyInfo.earliestAvailableSlot) // Should decrease for backfill
+	})
+
+	t.Run("Prevent increase within MIN_EPOCHS_FOR_BLOCK_REQUESTS", func(t *testing.T) {
+		// Set current time far enough in the future to have a meaningful MIN_EPOCHS_FOR_BLOCK_REQUESTS period
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks + 100 // Well beyond the minimum
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		// Calculate the minimum allowed epoch
+		minRequiredEpoch := currentEpoch - minEpochsForBlocks
+		minRequiredSlot := primitives.Slot(minRequiredEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		// Try to set earliest slot to a value within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period (should fail)
+		attemptedSlot := minRequiredSlot + 1000 // Within the mandatory retention period
+
+		service := &Service{
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: minRequiredSlot - 100, // Current value is before the min required
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+
 		require.NotNil(t, err)
-		require.Equal(t, true, strings.Contains(err.Error(), "earliest available slot 50 is less than the current one 100"))
-		require.Equal(t, initialSlot, service.custodyInfo.earliestAvailableSlot) // Should not change
+		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
 	})
 }
 

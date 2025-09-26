@@ -135,11 +135,39 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	s.custodyInfoLock.Lock()
 	defer s.custodyInfoLock.Unlock()
 
+	if s.custodyInfo == nil {
+		s.custodyInfo = &custodyInfo{
+			earliestAvailableSlot: earliestAvailableSlot,
+		}
+		return nil
+	}
+
+	currentSlot := slots.CurrentSlot(s.genesisTime)
+	currentSlotEpoch := slots.ToEpoch(currentSlot)
+	earliestAvailableEpoch := slots.ToEpoch(earliestAvailableSlot)
+	storedEarliestEpoch := slots.ToEpoch(s.custodyInfo.earliestAvailableSlot)
+
+	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
-		return errors.Errorf(
-			"earliest available slot %d is less than the current one %d",
-			earliestAvailableSlot, s.custodyInfo.earliestAvailableSlot,
-		)
+		s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
+		log.WithFields(logrus.Fields{
+			"newEarliestSlot": earliestAvailableSlot,
+			"oldEarliestSlot": s.custodyInfo.earliestAvailableSlot,
+		}).Debug("Decreased earliest available slot (backfill)")
+		return nil
+	}
+
+	// Prevent increase within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period
+	// This ensures we don't voluntarily refuse to serve mandatory block data
+	minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+	if currentSlotEpoch > minEpochsForBlocks {
+		minRequiredEpoch := currentSlotEpoch - minEpochsForBlocks
+		if earliestAvailableEpoch > storedEarliestEpoch && earliestAvailableEpoch > minRequiredEpoch {
+			return errors.Errorf(
+				"cannot increase earliest available slot to %d (epoch %d) as it would be within MIN_EPOCHS_FOR_BLOCK_REQUESTS period (current epoch %d, min required epoch %d)",
+				earliestAvailableSlot, earliestAvailableEpoch, currentSlotEpoch, minRequiredEpoch,
+			)
+		}
 	}
 
 	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
