@@ -350,6 +350,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
 
 		wg.Go(func() {
+			// Add tracing to the function.
+			ctx, span := trace.StartSpan(s.ctx, "p2p.broadcastDataColumnSidecars")
+			defer span.End()
+
 			// Compute the subnet for this data column sidecar.
 			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
 
@@ -361,12 +365,14 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			// Find peers if needed.
 			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot find peers if needed")
 				return
 			}
 
 			// Broadcast the data column sidecar to the network.
 			if err := s.broadcastObject(ctx, sidecar, topic); err != nil {
+				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot broadcast data column sidecar")
 				return
 			}
