@@ -180,7 +180,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	} else if isPostFulu {
 		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
-		for i := uint64(0); i < 5; i++ {
+		for i := range uint64(5) {
 			index := i
 
 			g.Go(func() error {
