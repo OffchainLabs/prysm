@@ -223,27 +223,49 @@ func deepValueBaseTypeEqual(v1, v2 reflect.Value) bool {
 	case reflect.Uint64:
 		switch v1.Type().Name() {
 		case "Epoch":
-			return v1.Interface().(primitives.Epoch) == v2.Interface().(primitives.Epoch)
+			val1, ok1 := reflect.TypeAssert[primitives.Epoch](v1)
+			val2, ok2 := reflect.TypeAssert[primitives.Epoch](v2)
+			return ok1 && ok2 && val1 == val2
 		case "Slot":
-			return v1.Interface().(primitives.Slot) == v2.Interface().(primitives.Slot)
+			val1, ok1 := reflect.TypeAssert[primitives.Slot](v1)
+			val2, ok2 := reflect.TypeAssert[primitives.Slot](v2)
+			return ok1 && ok2 && val1 == val2
 		case "ValidatorIndex":
-			return v1.Interface().(primitives.ValidatorIndex) == v2.Interface().(primitives.ValidatorIndex)
+			val1, ok1 := reflect.TypeAssert[primitives.ValidatorIndex](v1)
+			val2, ok2 := reflect.TypeAssert[primitives.ValidatorIndex](v2)
+			return ok1 && ok2 && val1 == val2
 		case "CommitteeIndex":
-			return v1.Interface().(primitives.CommitteeIndex) == v2.Interface().(primitives.CommitteeIndex)
+			val1, ok1 := reflect.TypeAssert[primitives.CommitteeIndex](v1)
+			val2, ok2 := reflect.TypeAssert[primitives.CommitteeIndex](v2)
+			return ok1 && ok2 && val1 == val2
 		case "Gwei":
-			return v1.Interface().(primitives.Gwei) == v2.Interface().(primitives.Gwei)
+			val1, ok1 := reflect.TypeAssert[primitives.Gwei](v1)
+			val2, ok2 := reflect.TypeAssert[primitives.Gwei](v2)
+			return ok1 && ok2 && val1 == val2	
 		}
-		return v1.Interface().(uint64) == v2.Interface().(uint64)
+		val1, ok1 := reflect.TypeAssert[uint64](v1)
+		val2, ok2 := reflect.TypeAssert[uint64](v2)
+		return ok1 && ok2 && val1 == val2	
 	case reflect.Uint32:
-		return v1.Interface().(uint32) == v2.Interface().(uint32)
+		val1, ok1 := reflect.TypeAssert[uint32](v1)
+		val2, ok2 := reflect.TypeAssert[uint32](v2)
+		return ok1 && ok2 && val1 == val2	
 	case reflect.Int32:
-		return v1.Interface().(int32) == v2.Interface().(int32)
+		val1, ok1 := reflect.TypeAssert[int32](v1)
+		val2, ok2 := reflect.TypeAssert[int32](v2)
+		return ok1 && ok2 && val1 == val2	
 	case reflect.Uint16:
-		return v1.Interface().(uint16) == v2.Interface().(uint16)
+		val1, ok1 := reflect.TypeAssert[uint16](v1)
+		val2, ok2 := reflect.TypeAssert[uint16](v2)
+		return ok1 && ok2 && val1 == val2	
 	case reflect.Uint8:
-		return v1.Interface().(uint8) == v2.Interface().(uint8)
+		val1, ok1 := reflect.TypeAssert[uint8](v1)
+		val2, ok2 := reflect.TypeAssert[uint8](v2)
+		return ok1 && ok2 && val1 == val2	
 	case reflect.Bool:
-		return v1.Interface().(bool) == v2.Interface().(bool)
+		val1, ok1 := reflect.TypeAssert[bool](v1)
+		val2, ok2 := reflect.TypeAssert[bool](v2)
+		return ok1 && ok2 && val1 == val2	
 	default:
 		return false
 	}

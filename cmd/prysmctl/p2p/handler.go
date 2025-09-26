@@ -63,7 +63,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 		// a way to check for its reflect.Kind and based on the result, we can decode
 		// accordingly.
 		if t.Kind() == reflect.Ptr {
-			msg, ok := reflect.New(t.Elem()).Interface().(ssz.Unmarshaler)
+			msg, ok := reflect.TypeAssert[ssz.Unmarshaler](reflect.New(t.Elem()))
 			if !ok {
 				log.Errorf("message of %T does not support marshaller interface", msg)
 				return
@@ -80,7 +80,7 @@ func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {
 			}
 		} else {
 			nTyp := reflect.New(t)
-			msg, ok := nTyp.Interface().(ssz.Unmarshaler)
+			msg, ok := reflect.TypeAssert[ssz.Unmarshaler](nTyp)
 			if !ok {
 				log.Errorf("message of %T does not support marshaller interface", msg)
 				return
