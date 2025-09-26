@@ -60,9 +60,21 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 		if val.Kind() != reflect.Slice {
 			return fmt.Errorf("expected slice for List type, got %v", val.Kind())
 		}
+		length := val.Len()
 
-		length := uint64(val.Len())
-		if err := listInfo.SetLength(length); err != nil {
+		if listInfo.element.isVariable {
+			listInfo.elementSizes = make([]uint64, 0, length)
+
+			// Populate nested variable-sized type element lengths recursively.
+			for i := range length {
+				if err := PopulateVariableLengthInfo(listInfo.element, val.Index(i).Interface()); err != nil {
+					return fmt.Errorf("could not populate nested list element at index %d: %w", i, err)
+				}
+				listInfo.elementSizes = append(listInfo.elementSizes, listInfo.element.Size())
+			}
+		}
+
+		if err := listInfo.SetLength(uint64(length)); err != nil {
 			return fmt.Errorf("could not set list length: %w", err)
 		}
 
@@ -111,14 +123,19 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 				continue
 			}
 
-			// Set the actual offset for variable-sized fields.
-			fieldInfo.offset = currentOffset
-
 			// Recursively populate variable-sized fields.
 			fieldValue := derefValue.FieldByName(fieldInfo.goFieldName)
 			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue.Interface()); err != nil {
 				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
 			}
+
+			// Each variable-sized element needs an offset entry.
+			if childSszInfo.sszType == List {
+				currentOffset += childSszInfo.listInfo.OffsetBytes()
+			}
+
+			// Set the actual offset for variable-sized fields.
+			fieldInfo.offset = currentOffset
 
 			currentOffset += childSszInfo.Size()
 		}
