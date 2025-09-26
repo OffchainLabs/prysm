@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -379,8 +380,9 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
-	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
-	var exitInfo *v.ExitInfo
+	// exitInfo is only needed for voluntary exits pre Electra.
+	hasExits := st.Version() < version.Electra && len(beaconBlock.Body().VoluntaryExits()) > 0
+	exitInfo := &validators.ExitInfo{}
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
 		exitInfo = v.ExitInformation(st)
