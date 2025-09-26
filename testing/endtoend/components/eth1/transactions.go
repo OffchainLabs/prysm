@@ -96,7 +96,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return errors.Wrap(err, "failed to mine block for funding tx")
 	}
 	// Confirm balance is credited
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		bal, err := backend.BalanceAt(ctx, fundedAccount.Address, nil)
 		if err == nil && bal.Sign() > 0 {
 			break
