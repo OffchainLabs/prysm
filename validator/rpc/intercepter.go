@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -51,8 +52,8 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 				return
 			}
 
-			token := tokenParts[1]
-			if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
+			token := strings.TrimSpace(tokenParts[1])
+			if s.authToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
@@ -75,8 +76,8 @@ func (s *Server) authorize(ctx context.Context) error {
 	if len(authHeader) < 1 || !strings.Contains(authHeader[0], "Bearer ") {
 		return status.Error(codes.Unauthenticated, "Invalid auth header, needs Bearer {token}")
 	}
-	token := strings.Split(authHeader[0], "Bearer ")[1]
-	if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
+	token := strings.TrimSpace(strings.Split(authHeader[0], "Bearer ")[1])
+	if s.authToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 		return status.Errorf(codes.Unauthenticated, "Forbidden: token value is invalid")
 	}
 	return nil
