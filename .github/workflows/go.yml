@@ -56,7 +56,6 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.4
-          only-new-issues: true
 
   build:
     name: Build
