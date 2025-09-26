@@ -95,13 +95,6 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	if err := WaitForBlocks(ctx, backend, mineKey, 1); err != nil {
 		return errors.Wrap(err, "failed to mine block for funding tx")
 	}
-	// Confirm balance is credited
-	for i := range 20 {
-		bal, err := backend.BalanceAt(ctx, fundedAccount.Address, nil)
-		if err == nil && bal.Sign() > 0 {
-			break
-		}
-	}
 
 	// Ensure the funded account has a comfortable minimum balance for blob and fuzzed txs.
 	minWei := new(big.Int).Mul(big.NewInt(1000), big.NewInt(0).SetUint64(params.BeaconConfig().GweiPerEth))
@@ -186,20 +179,12 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
 				if err != nil {
-					logrus.WithError(err).Error("Could not create blob cell tx")
-					// In the event the transaction constructed is not valid, we continue with the routine
-					// rather than complete stop it.
-					//nolint:nilerr
-					return nil
+					return errors.Wrap(err, "Could not create blob cell tx")
 				}
 
 				signedTx, err := types.SignTx(tx, types.NewCancunSigner(chainid), fundedAccount.PrivateKey)
 				if err != nil {
-					logrus.WithError(err).Error("Could not sign blob cell tx")
-					// We continue on in the event there is a reason we can't sign this
-					// transaction(unlikely).
-					//nolint:nilerr
-					return nil
+					return errors.Wrap(err, "Could not sign blob cell tx")
 				}
 
 				txs[index] = signedTx
