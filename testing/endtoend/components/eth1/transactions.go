@@ -68,7 +68,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	newGen := rand.NewDeterministicGenerator()
 	if seed == 0 {
 		seed = newGen.Int63()
-		logrus.WithField("Seed", seed).Info("transaction generator")
+		logrus.WithField("Seed", seed).Info("Transaction generator")
 	}
 	// Set seed so that all transactions can be
 	// deterministically generated.
