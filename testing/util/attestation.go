@@ -207,7 +207,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		)
 	}
 
-	attsPerCommittee := math.Max(float64(numToGen/committeesPerSlot), 1)
+	attsPerCommittee := max(float64(numToGen/committeesPerSlot), 1)
 	if math.Trunc(attsPerCommittee) != attsPerCommittee {
 		return nil, fmt.Errorf(
 			"requested attestations %d must be easily divisible by committees in slot %d, calculated %f",
