@@ -132,7 +132,7 @@
 
 - name: apply_light_client_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientUpdateFromBeaconState(
   spec: |
     <spec fn="apply_light_client_update" fork="altair" hash="211a52c9">
@@ -181,7 +181,7 @@
 
 - name: block_to_light_client_header#altair
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func BlockToLightClientHeader(
   spec: |
     <spec fn="block_to_light_client_header" fork="altair" hash="94342f64">
@@ -199,7 +199,7 @@
 
 - name: block_to_light_client_header#capella
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func BlockToLightClientHeader(
   spec: |
     <spec fn="block_to_light_client_header" fork="capella" hash="597ddeac">
@@ -251,7 +251,7 @@
 
 - name: block_to_light_client_header#deneb
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func BlockToLightClientHeader(
   spec: |
     <spec fn="block_to_light_client_header" fork="deneb" hash="b5ed5bf8">
@@ -510,37 +510,42 @@
     - file: beacon-chain/core/signing/signing_root.go
       search: func ComputeForkDigest(
   spec: |
-    <spec fn="compute_fork_digest" fork="phase0" hash="8b33f64d">
-    def compute_fork_digest(current_version: Version, genesis_validators_root: Root) -> ForkDigest:
-        """
-        Return the 4-byte fork digest for the ``current_version`` and ``genesis_validators_root``.
-        This is a digest primarily used for domain separation on the p2p layer.
-        4-bytes suffices for practical separation of forks/chains.
-        """
-        return ForkDigest(compute_fork_data_root(current_version, genesis_validators_root)[:4])
-    </spec>
-
-- name: compute_fork_digest#fulu
-  sources: []
-  spec: |
-    <spec fn="compute_fork_digest" fork="fulu" hash="24737097">
+    <spec fn="compute_fork_digest" fork="phase0" hash="e206968f">
     def compute_fork_digest(
         genesis_validators_root: Root,
-        # [New in Fulu:EIP7892]
         epoch: Epoch,
     ) -> ForkDigest:
         """
-        Return the 4-byte fork digest for the ``version`` and ``genesis_validators_root``
-        XOR'd with the hash of the blob parameters for ``epoch``.
+        Return the 4-byte fork digest for the ``genesis_validators_root`` at a given ``epoch``.
 
         This is a digest primarily used for domain separation on the p2p layer.
         4-bytes suffices for practical separation of forks/chains.
         """
         fork_version = compute_fork_version(epoch)
         base_digest = compute_fork_data_root(fork_version, genesis_validators_root)
-        blob_parameters = get_blob_parameters(epoch)
+        return ForkDigest(base_digest[:4])
+    </spec>
 
+- name: compute_fork_digest#fulu
+  sources: []
+  spec: |
+    <spec fn="compute_fork_digest" fork="fulu" hash="e916a595">
+    def compute_fork_digest(
+        genesis_validators_root: Root,
+        epoch: Epoch,
+    ) -> ForkDigest:
+        """
+        Return the 4-byte fork digest for the ``genesis_validators_root`` at a given ``epoch``.
+
+        This is a digest primarily used for domain separation on the p2p layer.
+        4-bytes suffices for practical separation of forks/chains.
+        """
+        fork_version = compute_fork_version(epoch)
+        base_digest = compute_fork_data_root(fork_version, genesis_validators_root)
+
+        # [Modified in Fulu:EIP7892]
         # Bitmask digest with hash of blob parameters
+        blob_parameters = get_blob_parameters(epoch)
         return ForkDigest(
             bytes(
                 xor(
@@ -1132,7 +1137,7 @@
 
 - name: create_light_client_bootstrap
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientBootstrapFromBeaconState(
   spec: |
     <spec fn="create_light_client_bootstrap" fork="altair" hash="54e41304">
@@ -1157,7 +1162,7 @@
 
 - name: create_light_client_finality_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientFinalityUpdateFromBeaconState(
   spec: |
     <spec fn="create_light_client_finality_update" fork="altair" hash="21956507">
@@ -1173,7 +1178,7 @@
 
 - name: create_light_client_optimistic_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientOptimisticUpdateFromBeaconState(
   spec: |
     <spec fn="create_light_client_optimistic_update" fork="altair" hash="5a993ad2">
@@ -1187,7 +1192,7 @@
 
 - name: create_light_client_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientUpdateFromBeaconState(
   spec: |
     <spec fn="create_light_client_update" fork="altair" hash="cde7d86c">
@@ -2071,7 +2076,7 @@
 
 - name: get_data_column_sidecars
   sources:
-    - file: beacon-chain/core/peerdas/das_core.go
+    - file: beacon-chain/core/peerdas/validator.go
       search: func DataColumnSidecars(
   spec: |
     <spec fn="get_data_column_sidecars" fork="fulu" hash="317fc596">
@@ -2106,60 +2111,6 @@
                 )
             )
         return sidecars
-    </spec>
-
-- name: get_data_column_sidecars_from_block
-  sources:
-    - file: beacon-chain/core/peerdas/das_core.go
-      search: func dataColumnsSidecars(
-  spec: |
-    <spec fn="get_data_column_sidecars_from_block" fork="fulu" hash="02ffae23">
-    def get_data_column_sidecars_from_block(
-        signed_block: SignedBeaconBlock,
-        cells_and_kzg_proofs: Sequence[
-            Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
-        ],
-    ) -> Sequence[DataColumnSidecar]:
-        """
-        Given a signed block and the cells/proofs associated with each blob in the
-        block, assemble the sidecars which can be distributed to peers.
-        """
-        blob_kzg_commitments = signed_block.message.body.blob_kzg_commitments
-        signed_block_header = compute_signed_block_header(signed_block)
-        kzg_commitments_inclusion_proof = compute_merkle_proof(
-            signed_block.message.body,
-            get_generalized_index(BeaconBlockBody, "blob_kzg_commitments"),
-        )
-        return get_data_column_sidecars(
-            signed_block_header,
-            blob_kzg_commitments,
-            kzg_commitments_inclusion_proof,
-            cells_and_kzg_proofs,
-        )
-    </spec>
-
-- name: get_data_column_sidecars_from_column_sidecar
-  sources: []
-  spec: |
-    <spec fn="get_data_column_sidecars_from_column_sidecar" fork="fulu" hash="4304cdec">
-    def get_data_column_sidecars_from_column_sidecar(
-        sidecar: DataColumnSidecar,
-        cells_and_kzg_proofs: Sequence[
-            Tuple[Vector[Cell, CELLS_PER_EXT_BLOB], Vector[KZGProof, CELLS_PER_EXT_BLOB]]
-        ],
-    ) -> Sequence[DataColumnSidecar]:
-        """
-        Given a DataColumnSidecar and the cells/proofs associated with each blob corresponding
-        to the commitments it contains, assemble all sidecars for distribution to peers.
-        """
-        assert len(cells_and_kzg_proofs) == len(sidecar.kzg_commitments)
-
-        return get_data_column_sidecars(
-            sidecar.signed_block_header,
-            sidecar.kzg_commitments,
-            sidecar.kzg_commitments_inclusion_proof,
-            cells_and_kzg_proofs,
-        )
     </spec>
 
 - name: get_domain
@@ -3680,7 +3631,7 @@
 
 - name: initialize_light_client_store
   sources:
-    - file: beacon-chain/core/light-client/store.go
+    - file: beacon-chain/light-client/store.go
       search: func NewLightClientStore(
   spec: |
     <spec fn="initialize_light_client_store" fork="altair" hash="f3de55b9">
@@ -3732,8 +3683,6 @@
   sources:
     - file: beacon-chain/core/validators/validator.go
       search: func InitiateValidatorExit(
-    - file: beacon-chain/core/validators/validator.go
-      search: if s.Version() < version.Electra {
   spec: |
     <spec fn="initiate_validator_exit" fork="phase0" hash="0483a058">
     def initiate_validator_exit(state: BeaconState, index: ValidatorIndex) -> None:
@@ -3849,7 +3798,7 @@
 
 - name: is_better_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func IsBetterUpdate(
   spec: |
     <spec fn="is_better_update" fork="altair" hash="b99582ff">
@@ -4251,11 +4200,12 @@
 - name: is_proposing_on_time
   sources: []
   spec: |
-    <spec fn="is_proposing_on_time" fork="phase0" hash="cadfde05">
+    <spec fn="is_proposing_on_time" fork="phase0" hash="dc5256b4">
     def is_proposing_on_time(store: Store) -> bool:
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        proposer_reorg_cutoff_ms = get_slot_component_duration_ms(PROPOSER_REORG_CUTOFF_BPS)
+        epoch = get_current_store_epoch(store)
+        proposer_reorg_cutoff_ms = get_proposer_reorg_cutoff_ms(epoch)
         return time_into_slot_ms <= proposer_reorg_cutoff_ms
     </spec>
 
@@ -4321,7 +4271,7 @@
 
 - name: is_sync_committee_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func HasRelevantSyncCommittee(
   spec: |
     <spec fn="is_sync_committee_update" fork="altair" hash="af6f8cb0">
@@ -4706,7 +4656,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="phase0" hash="0bd081f0">
+    <spec fn="on_block" fork="phase0" hash="aff24b59">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         block = signed_block.message
         # Parent block must be known
@@ -4739,7 +4689,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4761,7 +4712,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="bellatrix" hash="cceac63a">
+    <spec fn="on_block" fork="bellatrix" hash="a3193d92">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4805,7 +4756,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4827,7 +4779,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="capella" hash="b051b7c6">
+    <spec fn="on_block" fork="capella" hash="560056ad">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4863,7 +4815,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4885,7 +4838,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="deneb" hash="1f48df4d">
+    <spec fn="on_block" fork="deneb" hash="9565acee">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4926,7 +4879,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4948,7 +4902,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="fulu" hash="a27a9edb">
+    <spec fn="on_block" fork="fulu" hash="4f955de9">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4989,7 +4943,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -6088,7 +6043,7 @@
     - file: beacon-chain/core/blocks/payload.go
       search: func ProcessPayload(
   spec: |
-    <spec fn="process_execution_payload" fork="fulu" hash="cc18d6ef">
+    <spec fn="process_execution_payload" fork="fulu" hash="9a872dd6">
     def process_execution_payload(
         state: BeaconState, body: BeaconBlockBody, execution_engine: ExecutionEngine
     ) -> None:
@@ -6100,7 +6055,8 @@
         assert payload.prev_randao == get_randao_mix(state, get_current_epoch(state))
         # Verify timestamp
         assert payload.timestamp == compute_time_at_slot(state, state.slot)
-        # [Modified in Fulu:EIP7892] Verify commitments are under limit
+        # [Modified in Fulu:EIP7892]
+        # Verify commitments are under limit
         assert (
             len(body.blob_kzg_commitments)
             <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
@@ -6246,7 +6202,7 @@
 
 - name: process_light_client_finality_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientFinalityUpdateFromBeaconState(
   spec: |
     <spec fn="process_light_client_finality_update" fork="altair" hash="befaba5b">
@@ -6270,7 +6226,7 @@
 
 - name: process_light_client_optimistic_update
   sources:
-    - file: beacon-chain/core/light-client/lightclient.go
+    - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientOptimisticUpdateFromBeaconState(
   spec: |
     <spec fn="process_light_client_optimistic_update" fork="altair" hash="06c0365a">
@@ -6582,7 +6538,7 @@
 - name: process_proposer_lookahead
   sources:
     - file: beacon-chain/core/fulu/transition.go
-      search: func processProposerLookahead(
+      search: func ProcessProposerLookahead(
   spec: |
     <spec fn="process_proposer_lookahead" fork="fulu" hash="3ff130cc">
     def process_proposer_lookahead(state: BeaconState) -> None:
@@ -7084,7 +7040,7 @@
     - file: beacon-chain/core/blocks/exit.go
       search: func ProcessVoluntaryExits(
   spec: |
-    <spec fn="process_voluntary_exit" fork="electra" hash="6dcb5530">
+    <spec fn="process_voluntary_exit" fork="electra" hash="51b07d36">
     def process_voluntary_exit(state: BeaconState, signed_voluntary_exit: SignedVoluntaryExit) -> None:
         voluntary_exit = signed_voluntary_exit.message
         validator = state.validators[voluntary_exit.validator_index]
@@ -7098,7 +7054,6 @@
         assert get_current_epoch(state) >= validator.activation_epoch + SHARD_COMMITTEE_PERIOD
         # [New in Electra:EIP7251]
         # Only exit validator if it has no pending withdrawals in the queue
-
         assert get_pending_balance_to_withdraw(state, voluntary_exit.validator_index) == 0
         # Verify signature
         domain = compute_domain(

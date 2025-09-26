@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"

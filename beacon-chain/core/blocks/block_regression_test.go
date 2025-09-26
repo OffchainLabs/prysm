@@ -94,7 +94,7 @@ func TestProcessAttesterSlashings_RegressionSlashableIndices(t *testing.T) {
 	for i, s := range b.Block.Body.AttesterSlashings {
 		ss[i] = s
 	}
-	newState, err := blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.SlashValidator)
+	newState, err := blocks.ProcessAttesterSlashings(t.Context(), beaconState, ss, v.ExitInformation(beaconState))
 	require.NoError(t, err)
 	newRegistry := newState.Validators()
 	if !newRegistry[expectedSlashedVal].Slashed {

@@ -856,7 +856,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 			svc, clock = tt.setupSvc(svc, tt.args.msg)
 			require.NoError(t, cw.SetClock(clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen)
-
+			markInitSyncComplete(t, svc)
 			go svc.Start()
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)

@@ -12,9 +12,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
@@ -58,6 +58,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 		subHandler:   newSubTopicHandler(),
 		chainStarted: abool.New(),
 	}
+	markInitSyncComplete(t, &r)
 	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -83,6 +84,11 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	}
 }
 
+func markInitSyncComplete(_ *testing.T, s *Service) {
+	s.initialSyncComplete = make(chan struct{})
+	close(s.initialSyncComplete)
+}
+
 func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	p2pService := p2ptest.NewTestP2P(t)
 	gt := time.Now()
@@ -101,6 +107,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	var err error
 	p2pService.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -152,6 +159,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 		chainStarted:              abool.New(),
 		subHandler:                newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := "/eth2/%x/attester_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -205,6 +213,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 		chainStarted:              abool.New(),
 		subHandler:                newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := "/eth2/%x/proposer_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -253,6 +262,8 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 		subHandler:   newSubTopicHandler(),
 		chainStarted: abool.New(),
 	}
+	markInitSyncComplete(t, &r)
+
 	var err error
 	p.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -292,25 +303,33 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	}
 	digest, err := r.currentForkDigest()
 	require.NoError(t, err)
-	subscriptions := make(map[uint64]*pubsub.Subscription, params.BeaconConfig().MaxCommitteesPerSlot)
 
-	defaultTopic := "/eth2/testing/%#x/committee%d"
+	params := subscribeParameters{
+		topicFormat: "/eth2/testing/%#x/committee%d",
+		digest:      digest,
+	}
+	tracker := newSubnetTracker(params)
+
 	// committee index 1
-	fullTopic := fmt.Sprintf(defaultTopic, digest, 1) + r.cfg.p2p.Encoding().ProtocolSuffix()
+	c1 := uint64(1)
+	fullTopic := params.fullTopic(c1, r.cfg.p2p.Encoding().ProtocolSuffix())
 	_, topVal := r.wrapAndReportValidation(fullTopic, r.noopValidator)
 	require.NoError(t, r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal))
-	subscriptions[1], err = r.cfg.p2p.SubscribeToTopic(fullTopic)
+	sub1, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
+	tracker.track(c1, sub1)
 
 	// committee index 2
-	fullTopic = fmt.Sprintf(defaultTopic, digest, 2) + r.cfg.p2p.Encoding().ProtocolSuffix()
+	c2 := uint64(2)
+	fullTopic = params.fullTopic(c2, r.cfg.p2p.Encoding().ProtocolSuffix())
 	_, topVal = r.wrapAndReportValidation(fullTopic, r.noopValidator)
 	err = r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal)
 	require.NoError(t, err)
-	subscriptions[2], err = r.cfg.p2p.SubscribeToTopic(fullTopic)
+	sub2, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
+	tracker.track(c2, sub2)
 
-	r.pruneSubscriptions(subscriptions, map[uint64]bool{2: true}, defaultTopic, digest)
+	r.pruneSubscriptions(tracker, map[uint64]bool{c2: true})
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
@@ -539,7 +558,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{0, 1}, 10*time.Second)
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	r.subscribeWithParameters(subscribeParameters{
+	go r.subscribeWithParameters(subscribeParameters{
 		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
 		digest:           digest,
 		getSubnetsToJoin: r.activeSyncSubnetIndices,
@@ -580,6 +599,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	// Empty cache at the end of the test.
 	defer cache.SyncSubnetIDs.EmptyAllCaches()
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), 0, []uint64{0, 1}, 10*time.Second)
@@ -589,12 +609,11 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), version)
 	require.Equal(t, params.BeaconConfig().DenebForkEpoch, e)
 
-	sp := subscribeToSubnetsParameters{
-		subscriptionBySubnet: make(map[uint64]*pubsub.Subscription),
-		topicFormat:          p2p.SyncCommitteeSubnetTopicFormat,
-		digest:               digest,
-		getSubnetsToJoin:     r.activeSyncSubnetIndices,
-	}
+	sp := newSubnetTracker(subscribeParameters{
+		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
+		digest:           digest,
+		getSubnetsToJoin: r.activeSyncSubnetIndices,
+	})
 	require.NoError(t, r.subscribeToSubnets(sp))
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
@@ -683,6 +702,8 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -694,9 +715,10 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := p2p.LightClientOptimisticUpdateTopicFormat
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -712,7 +734,7 @@ func TestSubscribe_ReceivesLCOptimisticUpdate(t *testing.T) {
 
 	r.markForChainStart()
 
-	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority(0))
 	update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 	require.NoError(t, err, "Error generating light client optimistic update")
 
@@ -750,6 +772,8 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix()-int64(genesisDrift), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -761,9 +785,10 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      lightClient.NewLightClientStore(d, &p2ptest.FakeP2P{}, new(event.Feed)),
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 	}
+	markInitSyncComplete(t, &r)
 	topic := p2p.LightClientFinalityUpdateTopicFormat
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -779,7 +804,7 @@ func TestSubscribe_ReceivesLCFinalityUpdate(t *testing.T) {
 
 	r.markForChainStart()
 
-	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority())
+	l := util.NewTestLightClient(t, version.Altair, util.WithSupermajority(0))
 	update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(l.Ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 	require.NoError(t, err, "Error generating light client finality update")
 

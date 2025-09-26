@@ -1,8 +1,6 @@
 package params
 
 import (
-	"math"
-
 	eth1Params "github.com/ethereum/go-ethereum/params"
 )
 
@@ -46,12 +44,21 @@ func SepoliaConfig() *BeaconChainConfig {
 	cfg.DenebForkVersion = []byte{0x90, 0x00, 0x00, 0x73}
 	cfg.ElectraForkEpoch = 222464 // Wed, Mar 5 at 07:29:36 UTC
 	cfg.ElectraForkVersion = []byte{0x90, 0x00, 0x00, 0x74}
-	cfg.FuluForkEpoch = math.MaxUint64
-	cfg.FuluForkVersion = []byte{0x90, 0x00, 0x00, 0x75} // TODO: Define sepolia fork version for fulu. This is a placeholder value.
+	cfg.FuluForkEpoch = 272640 // 2025-10-14 07:36:00 UTC
+	cfg.FuluForkVersion = []byte{0x90, 0x00, 0x00, 0x75}
 	cfg.TerminalTotalDifficulty = "17000000000000000"
 	cfg.DepositContractAddress = "0x7f02C3E3c98b133055B8B348B2Ac625669Ed295D"
 	cfg.DefaultBuilderGasLimit = uint64(60000000)
-	cfg.BlobSchedule = []BlobScheduleEntry{}
+	cfg.BlobSchedule = []BlobScheduleEntry{
+		{
+			MaxBlobsPerBlock: 15,
+			Epoch:            274176, // 2025-10-21 03:26:24 UTC
+		},
+		{
+			MaxBlobsPerBlock: 21,
+			Epoch:            275712, // 2025-10-27 23:16:48 UTC
+		},
+	}
 	cfg.InitializeForkSchedule()
 	return cfg
 }

@@ -14,6 +14,9 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 		require.NoError(t, err)
 
 		testInstance := spec.Instance
+		err = query.PopulateVariableLengthInfo(info, testInstance)
+		require.NoError(t, err)
+
 		marshaller, ok := testInstance.(ssz.Marshaler)
 		require.Equal(t, true, ok, "Test instance must implement ssz.Marshaler, got %T", testInstance)
 
@@ -28,10 +31,10 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 				require.NoError(t, err)
 
-				expectedRawBytes := marshalledData[offset : offset+length]
-				rawBytes, err := marshalAny(pathTest.Expected)
+				actualRawBytes := marshalledData[offset : offset+length]
+				expectedRawBytes, err := marshalAny(pathTest.Expected)
 				require.NoError(t, err, "Marshalling expected value should not return an error")
-				require.DeepEqual(t, expectedRawBytes, rawBytes, "Extracted value should match expected")
+				require.DeepEqual(t, actualRawBytes, expectedRawBytes, "Extracted value should match expected")
 			})
 		}
 	})

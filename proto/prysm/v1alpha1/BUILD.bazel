@@ -392,6 +392,7 @@ ssz_proto_files(
     srcs = [
         "attestation.proto",
         "beacon_block.proto",
+        "beacon_core_types.proto",
         "beacon_state.proto",
         "blobs.proto",
         "data_columns.proto",

@@ -102,11 +102,11 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
 
 	if features.Get().EnableLightClient {
-		endpoints = append(endpoints, s.lightClientEndpoints(blocker, stater)...)
+		endpoints = append(endpoints, s.lightClientEndpoints()...)
 	}
 
 	if enableDebug {
-		endpoints = append(endpoints, s.debugEndpoints(stater)...)
+		endpoints = append(endpoints, s.debugEndpoints(stater, blocker)...)
 	}
 
 	return endpoints
@@ -194,6 +194,8 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 	const namespace = "blob"
 	return []endpoint{
 		{
+			// Deprecated: /eth/v1/beacon/blob_sidecars/{block_id} in favor of /eth/v1/beacon/blobs/{block_id}
+			// the endpoint will continue to work post fulu for some time however
 			template: "/eth/v1/beacon/blob_sidecars/{block_id}",
 			name:     namespace + ".Blobs",
 			middleware: []middleware.Middleware{
@@ -201,6 +203,16 @@ func (s *Service) blobEndpoints(blocker lookup.Blocker) []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.Blobs,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/blobs/{block_id}",
+			name:     namespace + ".GetBlobs",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetBlobs,
 			methods: []string{http.MethodGet},
 		},
 	}
@@ -1034,9 +1046,10 @@ func (*Service) configEndpoints() []endpoint {
 	}
 }
 
-func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Stater) []endpoint {
+func (s *Service) lightClientEndpoints() []endpoint {
 	server := &lightclient.Server{
-		LCStore: s.cfg.LCStore,
+		LCStore:     s.cfg.LCStore,
+		HeadFetcher: s.cfg.HeadFetcher,
 	}
 
 	const namespace = "lightclient"
@@ -1084,7 +1097,7 @@ func (s *Service) lightClientEndpoints(blocker lookup.Blocker, stater lookup.Sta
 	}
 }
 
-func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
+func (s *Service) debugEndpoints(stater lookup.Stater, blocker lookup.Blocker) []endpoint {
 	server := &debug.Server{
 		BeaconDB:              s.cfg.BeaconDB,
 		HeadFetcher:           s.cfg.HeadFetcher,
@@ -1094,6 +1107,8 @@ func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
 		ForkchoiceFetcher:     s.cfg.ForkchoiceFetcher,
 		FinalizationFetcher:   s.cfg.FinalizationFetcher,
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
+		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
+		Blocker:               blocker,
 	}
 
 	const namespace = "debug"
@@ -1126,6 +1141,16 @@ func (s *Service) debugEndpoints(stater lookup.Stater) []endpoint {
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetForkChoice,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/debug/beacon/data_column_sidecars/{block_id}",
+			name:     namespace + ".GetDataColumnSidecars",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.DataColumnSidecars,
 			methods: []string{http.MethodGet},
 		},
 	}
@@ -1230,6 +1255,7 @@ func (s *Service) prysmBeaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
+			// Warning: no longer supported post Fulu fork
 			template: "/prysm/v1/beacon/blobs",
 			name:     namespace + ".PublishBlobs",
 			middleware: []middleware.Middleware{

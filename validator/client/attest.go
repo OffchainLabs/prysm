@@ -71,9 +71,15 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
+	committeeIndex := duty.CommitteeIndex
+	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+	if postElectra {
+		committeeIndex = 0
+	}
+
 	req := &ethpb.AttestationDataRequest{
 		Slot:           slot,
-		CommitteeIndex: duty.CommitteeIndex,
+		CommitteeIndex: committeeIndex,
 	}
 	data, err := v.validatorClient.AttestationData(ctx, req)
 	if err != nil {
@@ -94,8 +100,6 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		tracing.AnnotateError(span, err)
 		return
 	}
-
-	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
 
 	var indexedAtt ethpb.IndexedAtt
 	if postElectra {

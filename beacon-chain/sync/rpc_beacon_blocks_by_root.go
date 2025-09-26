@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -115,9 +116,17 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		NewVerifier: s.newColumnsVerifier,
 	}
 
-	sidecarsByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)
+	sidecarsByRoot, missingIndicesByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "fetch data column sidecars")
+	}
+
+	if len(missingIndicesByRoot) > 0 {
+		prettyMissingIndicesByRoot := make(map[string]string, len(missingIndicesByRoot))
+		for root, indices := range missingIndicesByRoot {
+			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
+		}
+		return errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}
 
 	// Save the sidecars to the storage.

@@ -630,14 +630,15 @@ func TestStore_InsertChain(t *testing.T) {
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		})
 	}
-	args := make([]*forkchoicetypes.BlockAndCheckpoints, 10)
-	for i := 0; i < len(blks); i++ {
-		args[i] = blks[10-i-1]
-	}
-	require.NoError(t, f.InsertChain(t.Context(), args))
+	// InsertChain now expects blocks in increasing slot order
+	require.NoError(t, f.InsertChain(t.Context(), blks))
 
+	// Test partial insertion: first insert the foundation blocks, then a subset
 	f = setup(1, 1)
-	require.NoError(t, f.InsertChain(t.Context(), args[2:]))
+	// Insert first 2 blocks to establish a chain from genesis
+	require.NoError(t, f.InsertChain(t.Context(), blks[:2]))
+	// Then insert the remaining blocks
+	require.NoError(t, f.InsertChain(t.Context(), blks[2:]))
 }
 
 func TestForkChoice_UpdateCheckpoints(t *testing.T) {

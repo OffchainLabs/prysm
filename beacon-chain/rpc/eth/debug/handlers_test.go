@@ -2,9 +2,13 @@ package debug
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api"
@@ -13,9 +17,13 @@ import (
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -514,4 +522,286 @@ func TestGetForkChoice(t *testing.T) {
 	resp := &structs.GetForkChoiceDumpResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 	require.Equal(t, "2", resp.FinalizedCheckpoint.Epoch)
+}
+
+func TestDataColumnSidecars(t *testing.T) {
+	t.Run("Fulu fork not configured", func(t *testing.T) {
+		// Save the original config
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		// Set Fulu fork epoch to MaxUint64 (unconfigured)
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = math.MaxUint64
+		params.OverrideBeaconConfig(config)
+
+		chainService := &blockchainmock.ChainService{}
+
+		// Create a mock blocker to avoid nil pointer
+		mockBlocker := &testutil.MockBlocker{}
+
+		s := &Server{
+			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "Data columns are not supported - Fulu fork not configured", writer.Body.String())
+	})
+
+	t.Run("Before Fulu fork", func(t *testing.T) {
+		// Save the original config
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		// Set Fulu fork epoch to 100
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 100
+		params.OverrideBeaconConfig(config)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(0) // Current slot 0 (epoch 0, before epoch 100)
+		chainService.Slot = &currentSlot
+
+		// Create a mock blocker to avoid nil pointer
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return nil, &core.RpcError{Err: errors.New("before Fulu fork"), Reason: core.BadRequest}
+			},
+		}
+
+		s := &Server{
+			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "Data columns are not supported - before Fulu fork", writer.Body.String())
+	})
+
+	t.Run("Invalid indices", func(t *testing.T) {
+		// Save the original config
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		// Set Fulu fork epoch to 0 (already activated)
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(0) // Current slot 0 (epoch 0, at fork)
+		chainService.Slot = &currentSlot
+
+		// Create a mock blocker to avoid nil pointer
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return nil, &core.RpcError{Err: errors.New("invalid index"), Reason: core.BadRequest}
+			},
+		}
+
+		s := &Server{
+			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
+		}
+
+		// Test with invalid index (out of range)
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head?indices=9999", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		assert.StringContains(t, "requested data column indices [9999] are invalid", writer.Body.String())
+	})
+
+	t.Run("Block not found", func(t *testing.T) {
+		// Save the original config
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		// Set Fulu fork epoch to 0 (already activated)
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(0) // Current slot 0
+		chainService.Slot = &currentSlot
+
+		// Create a mock blocker that returns block not found
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return nil, &core.RpcError{Err: errors.New("block not found"), Reason: core.NotFound}
+			},
+			BlockToReturn: nil, // Block not found
+		}
+
+		s := &Server{
+			GenesisTimeFetcher: chainService,
+			Blocker:            mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusNotFound, writer.Code)
+	})
+
+	t.Run("Empty data columns", func(t *testing.T) {
+		// Save the original config
+		originalConfig := params.BeaconConfig()
+		defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+		// Set Fulu fork epoch to 0
+		config := params.BeaconConfig().Copy()
+		config.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		// Create a simple test block
+		signedTestBlock := util.NewBeaconBlock()
+		roBlock, err := blocks.NewSignedBeaconBlock(signedTestBlock)
+		require.NoError(t, err)
+
+		chainService := &blockchainmock.ChainService{}
+		currentSlot := primitives.Slot(0) // Current slot 0
+		chainService.Slot = &currentSlot
+		chainService.OptimisticRoots = make(map[[32]byte]bool)
+		chainService.FinalizedRoots = make(map[[32]byte]bool)
+
+		mockBlocker := &testutil.MockBlocker{
+			DataColumnsFunc: func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+				return []blocks.VerifiedRODataColumn{}, nil // Empty data columns
+			},
+			BlockToReturn: roBlock,
+		}
+
+		s := &Server{
+			GenesisTimeFetcher:    chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			Blocker:               mockBlocker,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/debug/beacon/data_column_sidecars/head", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.DataColumnSidecars(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetDebugDataColumnSidecarsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, 0, len(resp.Data))
+	})
+}
+
+func TestParseDataColumnIndices(t *testing.T) {
+	// Save the original config
+	originalConfig := params.BeaconConfig()
+	defer func() { params.OverrideBeaconConfig(originalConfig) }()
+
+	// Set NumberOfColumns to 128 for testing
+	config := params.BeaconConfig().Copy()
+	config.NumberOfColumns = 128
+	params.OverrideBeaconConfig(config)
+
+	tests := []struct {
+		name        string
+		queryParams map[string][]string
+		expected    []int
+		expectError bool
+	}{
+		{
+			name:        "no indices",
+			queryParams: map[string][]string{},
+			expected:    []int{},
+			expectError: false,
+		},
+		{
+			name:        "valid indices",
+			queryParams: map[string][]string{"indices": {"0", "1", "127"}},
+			expected:    []int{0, 1, 127},
+			expectError: false,
+		},
+		{
+			name:        "duplicate indices",
+			queryParams: map[string][]string{"indices": {"0", "1", "0"}},
+			expected:    []int{0, 1},
+			expectError: false,
+		},
+		{
+			name:        "invalid string index",
+			queryParams: map[string][]string{"indices": {"abc"}},
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "negative index",
+			queryParams: map[string][]string{"indices": {"-1"}},
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "index too large",
+			queryParams: map[string][]string{"indices": {"128"}}, // 128 >= NumberOfColumns (128)
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "mixed valid and invalid",
+			queryParams: map[string][]string{"indices": {"0", "abc", "1"}},
+			expected:    nil,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse("http://example.com/test")
+			require.NoError(t, err)
+
+			q := u.Query()
+			for key, values := range tt.queryParams {
+				for _, value := range values {
+					q.Add(key, value)
+				}
+			}
+			u.RawQuery = q.Encode()
+
+			result, err := parseDataColumnIndices(u)
+
+			if tt.expectError {
+				assert.NotNil(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.DeepEqual(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestBuildDataColumnSidecarsSSZResponse(t *testing.T) {
+	t.Run("empty data columns", func(t *testing.T) {
+		result, err := buildDataColumnSidecarsSSZResponse([]blocks.VerifiedRODataColumn{})
+		require.NoError(t, err)
+		require.DeepEqual(t, []byte{}, result)
+	})
+
+	t.Run("get SSZ size", func(t *testing.T) {
+		size := (&ethpb.DataColumnSidecar{}).SizeSSZ()
+		assert.Equal(t, true, size > 0)
+	})
 }

@@ -1851,6 +1851,88 @@ func (b *BuilderBidCapella) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the HistoricalSummary object
+func (h *HistoricalSummary) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(h)
+}
+
+// MarshalSSZTo ssz marshals the HistoricalSummary object to a target array
+func (h *HistoricalSummary) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'BlockSummaryRoot'
+	if size := len(h.BlockSummaryRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockSummaryRoot", size, 32)
+		return
+	}
+	dst = append(dst, h.BlockSummaryRoot...)
+
+	// Field (1) 'StateSummaryRoot'
+	if size := len(h.StateSummaryRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateSummaryRoot", size, 32)
+		return
+	}
+	dst = append(dst, h.StateSummaryRoot...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the HistoricalSummary object
+func (h *HistoricalSummary) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 64 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'BlockSummaryRoot'
+	if cap(h.BlockSummaryRoot) == 0 {
+		h.BlockSummaryRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	h.BlockSummaryRoot = append(h.BlockSummaryRoot, buf[0:32]...)
+
+	// Field (1) 'StateSummaryRoot'
+	if cap(h.StateSummaryRoot) == 0 {
+		h.StateSummaryRoot = make([]byte, 0, len(buf[32:64]))
+	}
+	h.StateSummaryRoot = append(h.StateSummaryRoot, buf[32:64]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the HistoricalSummary object
+func (h *HistoricalSummary) SizeSSZ() (size int) {
+	size = 64
+	return
+}
+
+// HashTreeRoot ssz hashes the HistoricalSummary object
+func (h *HistoricalSummary) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(h)
+}
+
+// HashTreeRootWith ssz hashes the HistoricalSummary object with a hasher
+func (h *HistoricalSummary) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BlockSummaryRoot'
+	if size := len(h.BlockSummaryRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockSummaryRoot", size, 32)
+		return
+	}
+	hh.PutBytes(h.BlockSummaryRoot)
+
+	// Field (1) 'StateSummaryRoot'
+	if size := len(h.StateSummaryRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.StateSummaryRoot", size, 32)
+		return
+	}
+	hh.PutBytes(h.StateSummaryRoot)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BeaconStateCapella object
 func (b *BeaconStateCapella) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
@@ -2750,88 +2832,6 @@ func (b *BeaconStateCapella) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 		}
 		hh.MerkleizeWithMixin(subIndx, num, 16777216)
 	}
-
-	hh.Merkleize(indx)
-	return
-}
-
-// MarshalSSZ ssz marshals the HistoricalSummary object
-func (h *HistoricalSummary) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(h)
-}
-
-// MarshalSSZTo ssz marshals the HistoricalSummary object to a target array
-func (h *HistoricalSummary) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	dst = buf
-
-	// Field (0) 'BlockSummaryRoot'
-	if size := len(h.BlockSummaryRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.BlockSummaryRoot", size, 32)
-		return
-	}
-	dst = append(dst, h.BlockSummaryRoot...)
-
-	// Field (1) 'StateSummaryRoot'
-	if size := len(h.StateSummaryRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.StateSummaryRoot", size, 32)
-		return
-	}
-	dst = append(dst, h.StateSummaryRoot...)
-
-	return
-}
-
-// UnmarshalSSZ ssz unmarshals the HistoricalSummary object
-func (h *HistoricalSummary) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size != 64 {
-		return ssz.ErrSize
-	}
-
-	// Field (0) 'BlockSummaryRoot'
-	if cap(h.BlockSummaryRoot) == 0 {
-		h.BlockSummaryRoot = make([]byte, 0, len(buf[0:32]))
-	}
-	h.BlockSummaryRoot = append(h.BlockSummaryRoot, buf[0:32]...)
-
-	// Field (1) 'StateSummaryRoot'
-	if cap(h.StateSummaryRoot) == 0 {
-		h.StateSummaryRoot = make([]byte, 0, len(buf[32:64]))
-	}
-	h.StateSummaryRoot = append(h.StateSummaryRoot, buf[32:64]...)
-
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the HistoricalSummary object
-func (h *HistoricalSummary) SizeSSZ() (size int) {
-	size = 64
-	return
-}
-
-// HashTreeRoot ssz hashes the HistoricalSummary object
-func (h *HistoricalSummary) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(h)
-}
-
-// HashTreeRootWith ssz hashes the HistoricalSummary object with a hasher
-func (h *HistoricalSummary) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'BlockSummaryRoot'
-	if size := len(h.BlockSummaryRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.BlockSummaryRoot", size, 32)
-		return
-	}
-	hh.PutBytes(h.BlockSummaryRoot)
-
-	// Field (1) 'StateSummaryRoot'
-	if size := len(h.StateSummaryRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.StateSummaryRoot", size, 32)
-		return
-	}
-	hh.PutBytes(h.StateSummaryRoot)
 
 	hh.Merkleize(indx)
 	return

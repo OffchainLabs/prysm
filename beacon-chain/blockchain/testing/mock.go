@@ -723,7 +723,8 @@ func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
 }
 
 // ReceiveDataColumns implements the same method in chain service
-func (*ChainService) ReceiveDataColumns(_ []blocks.VerifiedRODataColumn) error {
+func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) error {
+	c.DataColumns = append(c.DataColumns, dcs...)
 	return nil
 }
 

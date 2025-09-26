@@ -1,22 +1,13 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
-const (
-	offsetBytes = 4
-
-	// sszMaxTag specifies the maximum capacity of a variable-sized collection, like an SSZ List.
-	sszMaxTag = "ssz-max"
-
-	// sszSizeTag specifies the length of a fixed-sized collection, like an SSZ Vector.
-	// A wildcard ('?') indicates that the dimension is variable-sized (a List).
-	sszSizeTag = "ssz-size"
-)
+const offsetBytes = 4
 
 // AnalyzeObject analyzes given object and returns its SSZ information.
 func AnalyzeObject(obj any) (*sszInfo, error) {
@@ -27,7 +18,132 @@ func AnalyzeObject(obj any) (*sszInfo, error) {
 		return nil, fmt.Errorf("could not analyze type %s: %w", value.Type().Name(), err)
 	}
 
+	// Populate variable-length information using the actual value.
+	err = PopulateVariableLengthInfo(info, value.Interface())
+	if err != nil {
+		return nil, fmt.Errorf("could not populate variable length info: %w", err)
+	}
+
 	return info, nil
+}
+
+// PopulateVariableLengthInfo populates runtime information for SSZ fields of variable-sized types.
+// This function updates the sszInfo structure with actual lengths and offsets that can only
+// be determined at runtime for variable-sized items like Lists and variable-sized Container fields.
+func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
+	if sszInfo == nil {
+		return errors.New("sszInfo is nil")
+	}
+
+	if value == nil {
+		return errors.New("value is nil")
+	}
+
+	// Short circuit: If the type is fixed-sized, we don't need to fill in the info.
+	if !sszInfo.isVariable {
+		return nil
+	}
+
+	switch sszInfo.sszType {
+	// In List case, we have to set the actual length of the list.
+	case List:
+		listInfo, err := sszInfo.ListInfo()
+		if err != nil {
+			return fmt.Errorf("could not get list info: %w", err)
+		}
+
+		if listInfo == nil {
+			return errors.New("listInfo is nil")
+		}
+
+		val := reflect.ValueOf(value)
+		if val.Kind() != reflect.Slice {
+			return fmt.Errorf("expected slice for List type, got %v", val.Kind())
+		}
+		length := val.Len()
+
+		if listInfo.element.isVariable {
+			listInfo.elementSizes = make([]uint64, 0, length)
+
+			// Populate nested variable-sized type element lengths recursively.
+			for i := range length {
+				if err := PopulateVariableLengthInfo(listInfo.element, val.Index(i).Interface()); err != nil {
+					return fmt.Errorf("could not populate nested list element at index %d: %w", i, err)
+				}
+				listInfo.elementSizes = append(listInfo.elementSizes, listInfo.element.Size())
+			}
+		}
+
+		if err := listInfo.SetLength(uint64(length)); err != nil {
+			return fmt.Errorf("could not set list length: %w", err)
+		}
+
+		return nil
+
+	// In Bitlist case, we have to set the actual length of the bitlist.
+	case Bitlist:
+		bitlistInfo, err := sszInfo.BitlistInfo()
+		if err != nil {
+			return fmt.Errorf("could not get bitlist info: %w", err)
+		}
+
+		if bitlistInfo == nil {
+			return errors.New("bitlistInfo is nil")
+		}
+
+		val := reflect.ValueOf(value)
+		if err := bitlistInfo.SetLengthFromBytes(val.Bytes()); err != nil {
+			return fmt.Errorf("could not set bitlist length from bytes: %w", err)
+		}
+
+		return nil
+
+	// In Container case, we need to recursively populate variable-sized fields.
+	case Container:
+		containerInfo, err := sszInfo.ContainerInfo()
+		if err != nil {
+			return fmt.Errorf("could not get container info: %w", err)
+		}
+
+		// Dereference first in case value is a pointer.
+		derefValue := dereferencePointer(value)
+
+		// Start with the fixed size of this Container.
+		currentOffset := sszInfo.FixedSize()
+
+		for _, fieldName := range containerInfo.order {
+			fieldInfo := containerInfo.fields[fieldName]
+			childSszInfo := fieldInfo.sszInfo
+			if childSszInfo == nil {
+				return fmt.Errorf("sszInfo is nil for field %s", fieldName)
+			}
+
+			// Skip fixed-size fields.
+			if !childSszInfo.isVariable {
+				continue
+			}
+
+			// Recursively populate variable-sized fields.
+			fieldValue := derefValue.FieldByName(fieldInfo.goFieldName)
+			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue.Interface()); err != nil {
+				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
+			}
+
+			// Each variable-sized element needs an offset entry.
+			if childSszInfo.sszType == List {
+				currentOffset += childSszInfo.listInfo.OffsetBytes()
+			}
+
+			// Set the actual offset for variable-sized fields.
+			fieldInfo.offset = currentOffset
+
+			currentOffset += childSszInfo.Size()
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("unsupported SSZ type (%s) for variable size info", sszInfo.sszType)
+	}
 }
 
 // analyzeType is an entry point that inspects a reflect.Type and computes its SSZ layout information.
@@ -92,50 +208,64 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 		return nil, fmt.Errorf("can only analyze slice types, got %v", typ.Kind())
 	}
 
-	if tag == nil {
-		return nil, fmt.Errorf("tag is required for slice types")
+	// Parse the first dimension from the tag and get remaining tag for element
+	sszDimension, remainingTag, err := ParseSSZTag(tag)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse SSZ tag: %w", err)
+	}
+	if sszDimension == nil {
+		return nil, errors.New("ssz tag is required for slice types")
 	}
 
-	elementInfo, err := analyzeType(typ.Elem(), nil)
+	// Analyze element type with remaining dimensions
+	elementInfo, err := analyzeType(typ.Elem(), remainingTag)
 	if err != nil {
 		return nil, fmt.Errorf("could not analyze element type for homogeneous collection: %w", err)
 	}
 
-	// 1. Check if the type is List/Bitlist by checking `ssz-max` tag.
-	sszMax := tag.Get(sszMaxTag)
-	if sszMax != "" {
-		dims := strings.Split(sszMax, ",")
-		if len(dims) > 1 {
-			return nil, fmt.Errorf("multi-dimensional lists are not supported, got %d dimensions", len(dims))
-		}
-
-		limit, err := strconv.ParseUint(dims[0], 10, 64)
+	// 1. Handle List/Bitlist type
+	if sszDimension.IsList() {
+		limit, err := sszDimension.GetListLimit()
 		if err != nil {
-			return nil, fmt.Errorf("invalid ssz-max tag (%s): %w", sszMax, err)
+			return nil, fmt.Errorf("could not get list limit: %w", err)
 		}
 
-		return analyzeListType(typ, elementInfo, limit)
+		return analyzeListType(typ, elementInfo, limit, sszDimension.isBitfield)
 	}
 
-	// 2. Handle Vector/Bitvector type.
-	sszSize := tag.Get(sszSizeTag)
-	dims := strings.Split(sszSize, ",")
-	if len(dims) > 1 {
-		return nil, fmt.Errorf("multi-dimensional vectors are not supported, got %d dimensions", len(dims))
+	// 2. Handle Vector/Bitvector type
+	if sszDimension.IsVector() {
+		length, err := sszDimension.GetVectorLength()
+		if err != nil {
+			return nil, fmt.Errorf("could not get vector length: %w", err)
+		}
+
+		return analyzeVectorType(typ, elementInfo, length, sszDimension.isBitfield)
 	}
 
-	length, err := strconv.ParseUint(dims[0], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid ssz-size tag (%s): %w", sszSize, err)
-	}
-
-	return analyzeVectorType(typ, elementInfo, length)
+	// Parsing ssz tag doesn't provide enough information to determine the collection type,
+	// return an error.
+	return nil, errors.New("could not determine collection type from tags")
 }
 
-// analyzeListType analyzes SSZ List type and returns its SSZ info.
-func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*sszInfo, error) {
+// analyzeListType analyzes SSZ List/Bitlist type and returns its SSZ info.
+func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBitfield bool) (*sszInfo, error) {
+	if isBitfield {
+		return &sszInfo{
+			sszType: Bitlist,
+			typ:     typ,
+
+			fixedSize:  offsetBytes,
+			isVariable: true,
+
+			bitlistInfo: &bitlistInfo{
+				limit: limit,
+			},
+		}, nil
+	}
+
 	if elementInfo == nil {
-		return nil, fmt.Errorf("element info is required for List")
+		return nil, errors.New("element info is required for List")
 	}
 
 	return &sszInfo{
@@ -144,13 +274,39 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64) (*ssz
 
 		fixedSize:  offsetBytes,
 		isVariable: true,
+
+		listInfo: &listInfo{
+			limit:   limit,
+			element: elementInfo,
+		},
 	}, nil
 }
 
-// analyzeVectorType analyzes SSZ Vector type and returns its SSZ info.
-func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*sszInfo, error) {
+// analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
+func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
+	if isBitfield {
+		return &sszInfo{
+			sszType: Bitvector,
+			typ:     typ,
+
+			// Size in bytes
+			fixedSize:  length,
+			isVariable: false,
+
+			bitvectorInfo: &bitvectorInfo{
+				length: length * 8, // length in bits
+			},
+		}, nil
+	}
+
 	if elementInfo == nil {
-		return nil, fmt.Errorf("element info is required for Vector")
+		return nil, errors.New("element info is required for Vector/Bitvector")
+	}
+
+	// Validate the given length.
+	// https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#illegal-types
+	if length == 0 {
+		return nil, fmt.Errorf("vector length must be greater than 0, got %d", length)
 	}
 
 	return &sszInfo{
@@ -159,6 +315,11 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64) (*
 
 		fixedSize:  length * elementInfo.Size(),
 		isVariable: false,
+
+		vectorInfo: &vectorInfo{
+			length:  length,
+			element: elementInfo,
+		},
 	}, nil
 }
 
@@ -168,11 +329,12 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		return nil, fmt.Errorf("can only analyze struct types, got %v", typ.Kind())
 	}
 
+	fields := make(map[string]*fieldInfo)
+	order := make([]string, 0, typ.NumField())
+
 	sszInfo := &sszInfo{
 		sszType: Container,
 		typ:     typ,
-
-		containerInfo: make(map[string]*fieldInfo),
 	}
 	var currentOffset uint64
 
@@ -204,23 +366,31 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 			return nil, fmt.Errorf("could not analyze type for field %s: %w", fieldName, err)
 		}
 
-		// If one of the fields is variable-sized,
-		// the entire struct is considered variable-sized.
-		if info.isVariable {
-			sszInfo.isVariable = true
-		}
-
 		// Store nested struct info.
-		sszInfo.containerInfo[fieldName] = &fieldInfo{
-			sszInfo: info,
-			offset:  currentOffset,
+		fields[fieldName] = &fieldInfo{
+			sszInfo:     info,
+			offset:      currentOffset,
+			goFieldName: field.Name,
 		}
+		// Persist order
+		order = append(order, fieldName)
 
-		// Update the current offset based on the field's fixed size.
-		currentOffset += info.fixedSize
+		// Update the current offset depending on whether the field is variable-sized.
+		if info.isVariable {
+			// If one of the fields is variable-sized,
+			// the entire struct is considered variable-sized.
+			sszInfo.isVariable = true
+			currentOffset += offsetBytes
+		} else {
+			currentOffset += info.fixedSize
+		}
 	}
 
 	sszInfo.fixedSize = currentOffset
+	sszInfo.containerInfo = &containerInfo{
+		fields: fields,
+		order:  order,
+	}
 
 	return sszInfo, nil
 }

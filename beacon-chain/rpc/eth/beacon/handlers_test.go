@@ -910,6 +910,100 @@ func TestGetBlockAttestations(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("empty-attestations", func(t *testing.T) {
+		t.Run("v1", func(t *testing.T) {
+			b := util.NewBeaconBlock()
+			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
+			sb, err := blocks.NewSignedBeaconBlock(b)
+			require.NoError(t, err)
+
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+
+			s := &Server{
+				OptimisticModeFetcher: mockChainService,
+				FinalizationFetcher:   mockChainService,
+				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetBlockAttestations(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetBlockAttestationsResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+			// Ensure data is empty array, not null
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, 0, len(resp.Data))
+		})
+
+		t.Run("v2-pre-electra", func(t *testing.T) {
+			b := util.NewBeaconBlock()
+			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
+			sb, err := blocks.NewSignedBeaconBlock(b)
+			require.NoError(t, err)
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+
+			s := &Server{
+				OptimisticModeFetcher: mockChainService,
+				FinalizationFetcher:   mockChainService,
+				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetBlockAttestationsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetBlockAttestationsV2Response{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			// Ensure data is "[]", not null
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, string(json.RawMessage("[]")), string(resp.Data))
+		})
+
+		t.Run("v2-electra", func(t *testing.T) {
+			eb := util.NewBeaconBlockFulu()
+			eb.Block.Body.Attestations = []*eth.AttestationElectra{} // Explicitly set empty attestations
+			esb, err := blocks.NewSignedBeaconBlock(eb)
+			require.NoError(t, err)
+
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+
+			s := &Server{
+				OptimisticModeFetcher: mockChainService,
+				FinalizationFetcher:   mockChainService,
+				Blocker:               &testutil.MockBlocker{BlockToReturn: esb},
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.GetBlockAttestationsV2(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.GetBlockAttestationsV2Response{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+			// Ensure data is "[]", not null
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, string(json.RawMessage("[]")), string(resp.Data))
+			assert.Equal(t, "fulu", resp.Version)
+		})
+	})
 }
 
 func TestGetBlindedBlock(t *testing.T) {

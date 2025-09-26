@@ -4,14 +4,20 @@ go_library(
     name = "go_default_library",
     srcs = [
         "analyzer.go",
+        "bitlist.go",
+        "bitvector.go",
         "container.go",
+        "list.go",
         "path.go",
         "query.go",
         "ssz_info.go",
         "ssz_type.go",
+        "tag_parser.go",
+        "vector.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz/query",
     visibility = ["//visibility:public"],
+    deps = ["@com_github_prysmaticlabs_go_bitfield//:go_default_library"],
 )
 
 go_test(
@@ -20,11 +26,13 @@ go_test(
         "analyzer_test.go",
         "path_test.go",
         "query_test.go",
+        "tag_parser_test.go",
     ],
     deps = [
         ":go_default_library",
         "//encoding/ssz/query/testutil:go_default_library",
         "//proto/ssz_query:go_default_library",
         "//testing/require:go_default_library",
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )

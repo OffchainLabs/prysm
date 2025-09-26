@@ -24,12 +24,13 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"AGGREGRATE_DUE_BPS",
-	"AGGREGRATE_DUE_BPS_GLOAS",
+	"AGGREGATE_DUE_BPS",
+	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
 	"ATTESTATION_DUE_BPS",
 	"ATTESTATION_DUE_BPS_GLOAS",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
+	"CELLS_PER_EXT_BLOB",
 	"CONTRIBUTION_DUE_BPS",
 	"CONTRIBUTION_DUE_BPS_GLOAS",
 	"EIP6110_FORK_EPOCH",
@@ -42,11 +43,16 @@ var placeholderFields = []string{
 	"EIP7732_FORK_VERSION",
 	"EIP7805_FORK_EPOCH",
 	"EIP7805_FORK_VERSION",
+	"EIP7928_FORK_EPOCH",
+	"EIP7928_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
+	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
+	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
 	"GLOAS_FORK_EPOCH",
 	"GLOAS_FORK_VERSION",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
+	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
@@ -386,6 +392,7 @@ func presetsFilePath(t *testing.T, config string) []string {
 		path.Join(fPath, "presets", config, "capella.yaml"),
 		path.Join(fPath, "presets", config, "deneb.yaml"),
 		path.Join(fPath, "presets", config, "electra.yaml"),
+		path.Join(fPath, "presets", config, "fulu.yaml"),
 	}
 }
 
