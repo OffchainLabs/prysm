@@ -16,8 +16,8 @@ type listInfo struct {
 	element *sszInfo
 	// length is the actual number of elements at runtime (0 if not set).
 	length uint64
-	// elementSize caches each element's byte size for variable-sized type elements
-	elementSize []uint64
+	// elementSizes caches each element's byte size for variable-sized type elements
+	elementSizes []uint64
 }
 
 func (l *listInfo) Limit() uint64 {
@@ -66,7 +66,7 @@ func (l *listInfo) Size() uint64 {
 
 	// For variable-sized type elements, sum up the sizes of each element.
 	totalSize := uint64(0)
-	for _, sz := range l.elementSize {
+	for _, sz := range l.elementSizes {
 		totalSize += sz
 	}
 	return totalSize

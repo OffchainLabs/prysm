@@ -63,14 +63,14 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 		length := val.Len()
 
 		if listInfo.element.isVariable {
-			listInfo.elementSize = make([]uint64, 0, length)
+			listInfo.elementSizes = make([]uint64, 0, length)
 
 			// Populate nested variable-sized type element lengths recursively.
 			for i := range length {
 				if err := PopulateVariableLengthInfo(listInfo.element, val.Index(i).Interface()); err != nil {
 					return fmt.Errorf("could not populate nested list element at index %d: %w", i, err)
 				}
-				listInfo.elementSize = append(listInfo.elementSize, listInfo.element.Size())
+				listInfo.elementSizes = append(listInfo.elementSizes, listInfo.element.Size())
 			}
 		}
 
