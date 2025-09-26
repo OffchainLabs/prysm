@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.0.5](https://github.com/prysmaticlabs/prysm/compare/v6.0.4...v6.0.5) - 2025-09-26
+
+We are releasing a patch update on top of v6.0.4 to address a stability issue with quic-go. 
+All operators should update as soon as possible to v6.0.5 or later.
+
+### Security
+
+- Updated quic-go to latest version. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15749)
+
 ## [v6.0.4](https://github.com/prysmaticlabs/prysm/compare/v6.0.3...v6.0.4) - 2025-06-05
 
 This release has more work on PeerDAS, and light client support. Additionally, we have a few bug fixes:
