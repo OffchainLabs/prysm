@@ -142,10 +142,9 @@ var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
-	}()
+	}(time.Now())
 
 	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
 	ctx, cancel := context.WithDeadline(ctx, d)
@@ -183,7 +182,10 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		return nil, errors.New("unknown execution data type")
 	}
 	if result.ValidationError != "" {
-		log.WithError(errors.New(result.ValidationError)).Error("Got a validation error in newPayload")
+		log.WithField("status", result.Status.String()).
+			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
+			WithError(errors.New(result.ValidationError)).
+			Error("Got a validation error in newPayload")
 	}
 	switch result.Status {
 	case pb.PayloadStatus_INVALID_BLOCK_HASH:
@@ -195,7 +197,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	case pb.PayloadStatus_VALID:
 		return result.LatestValidHash, nil
 	default:
-		return nil, ErrUnknownPayloadStatus
+		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
 	}
 }
 
