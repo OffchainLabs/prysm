@@ -345,18 +345,6 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		return errors.Wrap(err, "could not register P2P service")
 	}
 
-	// Connect P2P service to DataColumnStorage for updating earliest available slot after pruning
-	if beacon.DataColumnStorage != nil {
-		p2pService := beacon.fetchP2P()
-		if p2pService != nil {
-			if err := filesystem.WithDataColumnCustodyUpdater(p2pService)(beacon.DataColumnStorage); err != nil {
-				log.WithError(err).Warn("Failed to set custody updater on DataColumnStorage")
-			}
-			log.Debug("Successfully updated data column custody updater")
-		} else {
-			log.Debug("P2P service not available during WithDataColumnCustodyUpdater")
-		}
-	}
 	if features.Get().EnableLightClient {
 		log.Debugln("Registering Light Client Store")
 		beacon.registerLightClientStore()

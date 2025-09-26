@@ -24,7 +24,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 )
 
@@ -54,11 +53,6 @@ var (
 	errNoDataColumnBasePath                 = errors.New("DataColumnStorage base path not specified in init")
 )
 
-// custodyUpdater is used to update custody info especially earliestAvailableSlot; implemented by the P2P service.
-type custodyUpdater interface {
-	CustodyGroupCount() (uint64, error)
-	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
-}
 
 type (
 	// DataColumnStorage is the concrete implementation of the filesystem backend for saving and retrieving DataColumnSidecars.
@@ -69,7 +63,6 @@ type (
 		cache           *dataColumnStorageSummaryCache
 		dataColumnFeed  *event.Feed
 		pruneMu         sync.RWMutex
-		custody         custodyUpdater
 
 		mu      sync.Mutex // protects muChans
 		muChans map[[fieldparams.RootLength]byte]*muChan
@@ -141,13 +134,6 @@ func WithDataColumnFs(fs afero.Fs) DataColumnStorageOption {
 	}
 }
 
-// WithDataColumnCustodyUpdater injects a custody updater without importing p2p.
-func WithDataColumnCustodyUpdater(u custodyUpdater) DataColumnStorageOption {
-	return func(b *DataColumnStorage) error {
-		b.custody = u
-		return nil
-	}
-}
 
 // NewDataColumnStorage creates a new instance of the DataColumnStorage object. Note that the implementation of DataColumnStorage may
 // attempt to hold a file lock to guarantee exclusive control of the data column storage directory, so this should only be
@@ -610,47 +596,6 @@ func (dcs *DataColumnStorage) prune() {
 	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
 
-	// Update the earliest available slot after pruning
-	earliestAvailableSlot, err := slots.EpochStart(highestEpochToPrune + 1)
-	if err != nil {
-		log.WithError(err).Error("Failed to calculate earliest available slot after data column pruning")
-		return
-	}
-	dcs.updateEarliestSlot(earliestAvailableSlot)
-}
-
-// updateEarliestSlot updates the earliest available slot via the injected custody updater.
-func (dcs *DataColumnStorage) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
-	if dcs.custody == nil {
-		log.Debug("Skipping updateEarliestSlot for data column as dcs.custody == nil")
-		return
-	}
-
-	// Only update custody info if Fulu is enabled and we're at or past the Fulu fork epoch
-	if !params.FuluEnabled() {
-		log.Debug("Skipping updateEarliestSlot for data column - Fulu not enabled")
-		return
-	}
-
-	currentEpoch := slots.ToEpoch(earliestAvailableSlot)
-	if currentEpoch < params.BeaconConfig().FuluForkEpoch {
-		log.WithFields(logrus.Fields{
-			"currentEpoch": currentEpoch,
-			"fuluEpoch":    params.BeaconConfig().FuluForkEpoch,
-		}).Debug("Skipping updateEarliestSlot - before Fulu fork epoch")
-		return
-	}
-
-	// Update the earliest available slot
-	log.Debug("About to update earliest slot for data column")
-	err := dcs.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
-	if err != nil {
-		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
-			Error("Failed to update earliest available slot after data column pruning")
-	} else {
-		log.WithField("earliestAvailableSlot", earliestAvailableSlot).
-			Debug("Updated earliest available slot after data column pruning")
-	}
 }
 
 // saveDataColumnSidecarsExistingFile saves data column sidecars into an existing file.
