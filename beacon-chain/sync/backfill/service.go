@@ -3,7 +3,6 @@ package backfill
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -14,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/proto/dbval"
 	"github.com/OffchainLabs/prysm/v6/runtime"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -348,7 +348,7 @@ func (*Service) Status() error {
 // minimumBackfillSlot determines the lowest slot that backfill needs to download based on looking back
 // MIN_EPOCHS_FOR_BLOCK_REQUESTS from the current slot.
 func minimumBackfillSlot(current primitives.Slot) primitives.Slot {
-	oe := helpers.MinEpochsForBlockRequests()
+	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 	if oe > slots.MaxSafeEpoch() {
 		oe = slots.MaxSafeEpoch()
 	}

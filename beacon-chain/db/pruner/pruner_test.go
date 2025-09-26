@@ -300,7 +300,8 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			require.NoError(t, err)
 
 			// Test the pruning calculation
-			currentSlot := primitives.Slot(20000) // Reasonable slot number for minimal config
+			// Use a slot that's guaranteed to be after the minimum retention period
+			currentSlot := primitives.Slot((minRequiredEpochs + 100) * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
 			pruneUptoSlot := p.ps(currentSlot)
 
 			// Calculate expected prune slot
