@@ -203,7 +203,7 @@ load("@prysm//tools:image_deps.bzl", "prysm_image_deps")
 
 prysm_image_deps()
 
-load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies", "go_download_sdk")
+load("@io_bazel_rules_go//go:deps.bzl", "go_download_sdk", "go_register_toolchains", "go_rules_dependencies")
 
 go_rules_dependencies()
 
@@ -218,9 +218,9 @@ go_register_toolchains(
 # Go SDK for windows on go 1.25+ with an outdated gcc/zig sdk. See issue #15760.
 # This must be configured at build time --@io_bazel_rules_go//go/toolchain:sdk_name=go_sdk_nodwarf5
 go_download_sdk(
-  name = "go_sdk_nodwarf5",
-  version = GO_VERSION,
-  experiments =["nodwarf5"],
+    name = "go_sdk_nodwarf5",
+    experiments = ["nodwarf5"],
+    version = GO_VERSION,
 )
 
 load("//:distroless_deps.bzl", "distroless_deps")
