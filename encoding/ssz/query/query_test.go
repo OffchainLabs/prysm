@@ -234,6 +234,19 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				expectedOffset: 436,
 				expectedLength: 99,
 			},
+			// Accessing an element in the nested list of bytes
+			{
+				name:           "nested.nested_list_field (1st element)",
+				path:           ".nested.nested_list_field[1]",
+				expectedOffset: 468,
+				expectedLength: 33,
+			},
+			{
+				name:           "nested.nested_list_field (2nd element)",
+				path:           ".nested.nested_list_field[2]",
+				expectedOffset: 501,
+				expectedLength: 34,
+			},
 			// Bitlist field
 			{
 				name:           "bitlist_field",
@@ -247,6 +260,25 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				path:           ".nested_list_field",
 				expectedOffset: 580,
 				expectedLength: 99,
+			},
+			// Accessing an element in the list of nested bytes
+			{
+				name:           "nested_list_field (0th element)",
+				path:           ".nested_list_field[0]",
+				expectedOffset: 580,
+				expectedLength: 32,
+			},
+			{
+				name:           "nested_list_field (1st element)",
+				path:           ".nested_list_field[1]",
+				expectedOffset: 612,
+				expectedLength: 33,
+			},
+			{
+				name:           "nested_list_field (2nd element)",
+				path:           ".nested_list_field[2]",
+				expectedOffset: 645,
+				expectedLength: 34,
 			},
 			// Fixed trailing field
 			{
@@ -565,6 +597,18 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 				Path:     ".nested.nested_list_field",
 				Expected: testContainer.Nested.NestedListField,
 			},
+			{
+				Path:     ".nested.nested_list_field[0]",
+				Expected: testContainer.Nested.NestedListField[0],
+			},
+			{
+				Path:     ".nested.nested_list_field[1]",
+				Expected: testContainer.Nested.NestedListField[1],
+			},
+			{
+				Path:     ".nested.nested_list_field[2]",
+				Expected: testContainer.Nested.NestedListField[2],
+			},
 			// Bitlist field
 			{
 				Path:     ".bitlist_field",
@@ -574,6 +618,18 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".nested_list_field",
 				Expected: testContainer.NestedListField,
+			},
+			{
+				Path:     ".nested_list_field[0]",
+				Expected: testContainer.NestedListField[0],
+			},
+			{
+				Path:     ".nested_list_field[1]",
+				Expected: testContainer.NestedListField[1],
+			},
+			{
+				Path:     ".nested_list_field[2]",
+				Expected: testContainer.NestedListField[2],
 			},
 			// Fixed trailing field
 			{

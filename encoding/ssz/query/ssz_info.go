@@ -80,6 +80,25 @@ func (info *sszInfo) Size() uint64 {
 	}
 }
 
+// SetLengthBySize sets the length of List/Bitlist sszInfo based on the provided size in bytes.
+func (info *sszInfo) SetLengthBySize(size uint64) error {
+	if info == nil {
+		return errors.New("sszInfo is nil")
+	}
+
+	switch info.sszType {
+	case List:
+		listInfo := info.listInfo
+		elementSize := listInfo.element.Size()
+		if elementSize == 0 {
+			return errors.New("element size is zero, cannot set length by size")
+		}
+		return listInfo.SetLength(size / elementSize)
+	default:
+		return fmt.Errorf("SetLengthBySize is only applicable to List type, got %s", info.sszType)
+	}
+}
+
 func (info *sszInfo) ContainerInfo() (*containerInfo, error) {
 	if info == nil {
 		return nil, errors.New("sszInfo is nil")
