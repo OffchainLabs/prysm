@@ -50,11 +50,12 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 						offset += listInfo.elementSizes[i]
 					}
 
-					// IMPORTANT: For variable-sized lists, we must use the stored element size at this index
-					// rather than the element template's size. When populating variable-length info, the shared
-					// element template is recursively updated for each list item, causing it to retain the
-					// size information of the last processed element. The correct individual element sizes
-					// are preserved in the elementSizes array.
+					// NOTE: When populating recursively, the shared element template is updated for each
+					// list item, causing it to retain the size information of the last processed element.
+					// This wouldn't be an issue if this is in the middle of the path, as the walk would be updated
+					// to the next field's sszInfo, which would have the correct size information.
+					// However, if this is the last element in the path, we need to ensure we return the correct size
+					// for the indexed element. Hence, we return the size from elementSizes.
 					if pathIndex == len(path)-1 {
 						return walk, offset, listInfo.elementSizes[index], nil
 					}
@@ -73,7 +74,7 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 				walk = vectorInfo.element
 
 			default:
-				return nil, 0, 0, fmt.Errorf("field %s is not a List/Vector, cannot index", elem.Name)
+				return nil, 0, 0, fmt.Errorf("field %s type %s cannot apply index", elem.Name, walk.sszType)
 			}
 		}
 	}

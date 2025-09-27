@@ -9,8 +9,9 @@ import (
 
 // PathElement represents a single element in a path.
 type PathElement struct {
-	Name  string
-	Index *uint64 // Optional index for List/Vector elements
+	Name string
+	// [Optional] Index for List/Vector elements
+	Index *uint64
 }
 
 func ParsePath(rawPath string) ([]PathElement, error) {
@@ -34,22 +35,22 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 		fieldName := elem
 		var index *uint64
 
-		// Check for List/Vector index notation, e.g., "field[0]"
+		// Check for index notation, e.g., "field[0]"
 		if strings.Contains(elem, "[") {
 			parts := strings.SplitN(elem, "[", 2)
 			if len(parts) != 2 {
-				return nil, fmt.Errorf("invalid List/Vector notation in path element %s", elem)
+				return nil, fmt.Errorf("invalid index notation in path element %s", elem)
 			}
 
 			fieldName = parts[0]
 			indexPart := strings.TrimSuffix(parts[1], "]")
 			if indexPart == "" {
-				return nil, errors.New("List/Vector index cannot be empty")
+				return nil, errors.New("index cannot be empty")
 			}
 
 			indexValue, err := strconv.ParseUint(indexPart, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid List/Vector index in path element %s: %w", elem, err)
+				return nil, fmt.Errorf("invalid index in path element %s: %w", elem, err)
 			}
 			index = &indexValue
 		}
