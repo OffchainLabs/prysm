@@ -37,6 +37,15 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 		if elem.Index != nil {
 			switch walk.sszType {
 			case List:
+				index := *elem.Index
+				listInfo := walk.listInfo
+				if index >= listInfo.length {
+					return nil, 0, 0, fmt.Errorf("index %d out of bounds for field %s", index, elem.Name)
+				}
+
+				offset += index * listInfo.element.Size()
+				walk = listInfo.element
+
 			case Vector:
 				index := *elem.Index
 				vectorInfo := walk.vectorInfo
