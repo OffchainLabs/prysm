@@ -74,6 +74,19 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				expectedOffset: 85,
 				expectedLength: 192, // 24 * 8 bytes
 			},
+			// Accessing an element in the vector
+			{
+				name:           "vector field (0th element)",
+				path:           ".vector_field[0]",
+				expectedOffset: 85,
+				expectedLength: 8,
+			},
+			{
+				name:           "vector field (10th element)",
+				path:           ".vector_field[10]",
+				expectedOffset: 165,
+				expectedLength: 8,
+			},
 			// 2D bytes field
 			{
 				name:           "two_dimension_bytes_field",
@@ -340,6 +353,14 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".vector_field",
 				Expected: testContainer.VectorField,
+			},
+			{
+				Path:     ".vector_field[0]",
+				Expected: testContainer.VectorField[0],
+			},
+			{
+				Path:     ".vector_field[10]",
+				Expected: testContainer.VectorField[10],
 			},
 			// 2D bytes field
 			{
