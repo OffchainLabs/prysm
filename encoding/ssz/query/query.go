@@ -70,10 +70,8 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 				offset += index * vectorInfo.element.Size()
 				walk = vectorInfo.element
 
-			case Bitlist:
-			case Bitvector:
 			default:
-				return nil, 0, 0, fmt.Errorf("field %s is not a List/Bitvector, cannot index", elem.Name)
+				return nil, 0, 0, fmt.Errorf("field %s is not a List/Vector, cannot index", elem.Name)
 			}
 		}
 	}
