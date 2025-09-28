@@ -344,15 +344,17 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 	topic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	log := log.WithField("topic", topic)
 
-	// Do not resubscribe already seen subscriptions.
-	ok := s.subHandler.topicExists(topic)
-	if ok {
+	// Atomically check and reserve the topic to prevent race conditions.
+	// If multiple goroutines try to subscribe simultaneously only one will successfully reserve the topic.
+	if !s.subHandler.tryReserveTopic(topic) {
 		log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
 		return nil
 	}
 
 	if err := s.cfg.p2p.PubSub().RegisterTopicValidator(s.wrapAndReportValidation(topic, validator)); err != nil {
 		log.WithError(err).Error("Could not register validator for topic")
+		// Clean up the reservation since we're not proceeding
+		s.subHandler.removeTopic(topic)
 		return nil
 	}
 
@@ -362,9 +364,12 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 		// libp2p PubSub library or a subscription request to a topic that fails to match the topic
 		// subscription filter.
 		log.WithError(err).Error("Could not subscribe topic")
+		// Clean up the reservation since we're not proceeding
+		s.subHandler.removeTopic(topic)
 		return nil
 	}
 
+	// Update the reservation with the actual subscription
 	s.subHandler.addTopic(sub.Topic(), sub)
 
 	// Pipeline decodes the incoming subscription data, runs the validation, and handles the
@@ -414,6 +419,8 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 				// Cancel subscription in the event of an error, as we are
 				// now exiting topic event loop.
 				sub.Cancel()
+				// Remove topic from our tracking to allow resubscription.
+				s.subHandler.removeTopic(topic)
 				return
 			}
 
