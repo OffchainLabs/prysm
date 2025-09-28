@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -183,18 +184,7 @@ func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestations")
 	defer span.End()
 
-	var req structs.SubmitAttestationsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	attFailures, failedBroadcasts, err := s.handleAttestations(ctx, req.Data)
+	attFailures, failedBroadcasts, err := s.handleAttestations(ctx, r)
 	if err != nil {
 		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -236,24 +226,13 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req structs.SubmitAttestationsRequest
-	err = json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	var attFailures []*server.IndexedVerificationFailure
 	var failedBroadcasts []string
 
 	if v >= version.Electra {
-		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, req.Data)
+		attFailures, failedBroadcasts, err = s.handleAttestationsElectra(ctx, r)
 	} else {
-		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, req.Data)
+		attFailures, failedBroadcasts, err = s.handleAttestations(ctx, r)
 	}
 	if err != nil {
 		httputil.HandleError(w, fmt.Sprintf("Failed to handle attestations: %v", err), http.StatusBadRequest)
@@ -281,40 +260,76 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAttestationsElectra(
 	ctx context.Context,
-	data json.RawMessage,
+	r *http.Request,
 ) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
-	var sourceAttestations []*structs.SingleAttestation
+	var validAttestations []*eth.SingleAttestation
 	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
 	if currentEpoch < params.BeaconConfig().ElectraForkEpoch {
 		return nil, nil, errors.Errorf("electra attestations have not been enabled, current epoch %d enabled epoch %d", currentEpoch, params.BeaconConfig().ElectraForkEpoch)
 	}
 
-	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
-	}
-
-	if len(sourceAttestations) == 0 {
-		return nil, nil, errors.New("no data submitted")
-	}
-
-	var validAttestations []*eth.SingleAttestation
-	for i, sourceAtt := range sourceAttestations {
-		att, err := sourceAtt.ToConsensus()
+	if httputil.IsRequestSsz(r) {
+		sszLen := (&eth.SingleAttestation{}).SizeSSZ()
+		body, err := readRequestBody(r)
 		if err != nil {
-			attFailures = append(attFailures, &server.IndexedVerificationFailure{
-				Index:   i,
-				Message: "Could not convert request attestation to consensus attestation: " + err.Error(),
-			})
-			continue
+			return nil, nil, errors.Wrap(err, "could not read request body")
 		}
-		if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
-			attFailures = append(attFailures, &server.IndexedVerificationFailure{
-				Index:   i,
-				Message: "Incorrect attestation signature: " + err.Error(),
-			})
-			continue
+		if len(body) < sszLen {
+			return nil, nil, errors.New("no data submitted")
 		}
-		validAttestations = append(validAttestations, att)
+
+		atts := make(types.SingleAttestations, 0)
+		if err := atts.UnmarshalSSZ(body); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal ssz single attestations")
+		}
+
+		for i, att := range atts {
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Incorrect attestation signature: " + err.Error(),
+				})
+			} else {
+				validAttestations = append(validAttestations, att)
+			}
+		}
+	} else {
+		var sourceAttestations []*structs.SingleAttestation
+		var req structs.SubmitAttestationsRequest
+		err = json.NewDecoder(r.Body).Decode(&req.Data)
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil, nil, errors.New("no data submitted")
+		case err != nil:
+			return nil, nil, errors.Wrap(err, "could not decode request body")
+		}
+
+		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
+			return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
+		}
+
+		if len(sourceAttestations) == 0 {
+			return nil, nil, errors.New("no data submitted")
+		}
+
+		for i, sourceAtt := range sourceAttestations {
+			att, err := sourceAtt.ToConsensus()
+			if err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Could not convert request attestation to consensus attestation: " + err.Error(),
+				})
+				continue
+			}
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Incorrect attestation signature: " + err.Error(),
+				})
+				continue
+			}
+			validAttestations = append(validAttestations, att)
+		}
 	}
 
 	for i, singleAtt := range validAttestations {
@@ -362,39 +377,73 @@ func (s *Server) handleAttestationsElectra(
 	return attFailures, failedBroadcasts, nil
 }
 
-func (s *Server) handleAttestations(ctx context.Context, data json.RawMessage) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
-	var sourceAttestations []*structs.Attestation
+func (s *Server) handleAttestations(ctx context.Context, r *http.Request) (attFailures []*server.IndexedVerificationFailure, failedBroadcasts []string, err error) {
+	var validAttestations []*eth.Attestation
 
 	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().ElectraForkEpoch {
 		return nil, nil, errors.New("old attestation format, only electra attestations should be sent")
 	}
 
-	if err = json.Unmarshal(data, &sourceAttestations); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
-	}
-
-	if len(sourceAttestations) == 0 {
-		return nil, nil, errors.New("no data submitted")
-	}
-
-	var validAttestations []*eth.Attestation
-	for i, sourceAtt := range sourceAttestations {
-		att, err := sourceAtt.ToConsensus()
+	if httputil.IsRequestSsz(r) {
+		body, err := readRequestBody(r)
 		if err != nil {
-			attFailures = append(attFailures, &server.IndexedVerificationFailure{
-				Index:   i,
-				Message: "Could not convert request attestation to consensus attestation: " + err.Error(),
-			})
-			continue
+			return nil, nil, errors.Wrap(err, "could not read request body")
 		}
-		if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
-			attFailures = append(attFailures, &server.IndexedVerificationFailure{
-				Index:   i,
-				Message: "Incorrect attestation signature: " + err.Error(),
-			})
-			continue
+		if len(body) == 0 {
+			return nil, nil, errors.New("no data submitted")
 		}
-		validAttestations = append(validAttestations, att)
+
+		atts := make(types.Attestations, 0)
+		if err := atts.UnmarshalSSZ(body); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal ssz attestations")
+		}
+		for i, att := range atts {
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Incorrect attestation signature: " + err.Error(),
+				})
+			} else {
+				validAttestations = append(validAttestations, att)
+			}
+		}
+	} else {
+		var sourceAttestations []*structs.Attestation
+		var req structs.SubmitAttestationsRequest
+		err = json.NewDecoder(r.Body).Decode(&req.Data)
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil, nil, errors.New("no data submitted")
+		case err != nil:
+			return nil, nil, errors.Wrap(err, "could not decode request body")
+		}
+
+		if err = json.Unmarshal(req.Data, &sourceAttestations); err != nil {
+			return nil, nil, errors.Wrap(err, "failed to unmarshal attestation")
+		}
+
+		if len(sourceAttestations) == 0 {
+			return nil, nil, errors.New("no data submitted")
+		}
+
+		for i, sourceAtt := range sourceAttestations {
+			att, err := sourceAtt.ToConsensus()
+			if err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Could not convert request attestation to consensus attestation: " + err.Error(),
+				})
+				continue
+			}
+			if _, err = bls.SignatureFromBytes(att.Signature); err != nil {
+				attFailures = append(attFailures, &server.IndexedVerificationFailure{
+					Index:   i,
+					Message: "Incorrect attestation signature: " + err.Error(),
+				})
+				continue
+			}
+			validAttestations = append(validAttestations, att)
+		}
 	}
 
 	for i, att := range validAttestations {

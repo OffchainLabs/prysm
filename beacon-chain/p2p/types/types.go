@@ -337,3 +337,245 @@ func init() {
 	dataColumnSizer := &eth.DataColumnSidecarsByRangeRequest{}
 	dataColumnIdSize = dataColumnSizer.SizeSSZ()
 }
+
+// ====================================
+// Attestations section
+// ====================================
+var _ ssz.Marshaler = (*Attestations)(nil)
+var _ ssz.Unmarshaler = (*Attestations)(nil)
+
+// Attestations is a list of pre electra Attestation objects.
+type Attestations []*eth.Attestation
+
+// UnmarshalSSZ implements ssz.Unmarshaler.
+func (a *Attestations) UnmarshalSSZ(buf []byte) error {
+	// Exit early if the buffer is too small.
+	if len(buf) < bytesPerLengthOffset {
+		return nil
+	}
+
+	// Get the size of the offsets.
+	offsetEnd := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
+	if offsetEnd%bytesPerLengthOffset != 0 {
+		return errors.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetEnd)
+	}
+
+	count := offsetEnd / bytesPerLengthOffset
+	if count < 1 {
+		return nil
+	}
+
+	// TODO is this needed?
+	maxSize := params.BeaconConfig().MaxAttestations
+	if uint64(count) > maxSize {
+		return errors.Errorf("attestations list exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if offsetEnd > uint32(len(buf)) {
+		return errors.Errorf("offsets value %d larger than buffer %d", offsetEnd, len(buf))
+	}
+	valueStart := offsetEnd
+
+	// Decode the attestations.
+	*a = make([]*eth.Attestation, count)
+	var start uint32
+	end := uint32(len(buf))
+	for i := count; i > 0; i-- {
+		offsetEnd -= bytesPerLengthOffset
+		start = binary.LittleEndian.Uint32(buf[offsetEnd : offsetEnd+bytesPerLengthOffset])
+		if start > end {
+			return errors.Errorf("expected offset[%d] %d to be less than %d", i-1, start, end)
+		}
+		if start < valueStart {
+			return errors.Errorf("offset[%d] %d indexes before value section %d", i-1, start, valueStart)
+		}
+		// Decode the identifier.
+		ident := &eth.Attestation{}
+		if err := ident.UnmarshalSSZ(buf[start:end]); err != nil {
+			return err
+		}
+		(*a)[i-1] = ident
+		end = start
+	}
+
+	return nil
+}
+
+func (a *Attestations) MarshalSSZ() ([]byte, error) {
+	var err error
+	count := len(*a)
+
+	// TODO is this needed?
+	maxSize := params.BeaconConfig().MaxAttestations
+	if uint64(count) > maxSize {
+		return nil, errors.Errorf("attestations list exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if count == 0 {
+		return []byte{}, nil
+	}
+
+	sizes := make([]uint32, count)
+	valTotal := uint32(0)
+	for i, elem := range *a {
+		if elem == nil {
+			return nil, errors.New("nil item in Attestations list")
+		}
+		sizes[i] = uint32(elem.SizeSSZ())
+		valTotal += sizes[i]
+	}
+
+	offSize := uint32(4 * count)
+	out := make([]byte, offSize, offSize+valTotal)
+	for i := range sizes {
+		binary.LittleEndian.PutUint32(out[i*4:i*4+4], offSize)
+		offSize += sizes[i]
+	}
+	for _, elem := range *a {
+		out, err = elem.MarshalSSZTo(out)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return out, nil
+}
+
+// MarshalSSZTo implements ssz.Marshaler.
+func (a *Attestations) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := a.MarshalSSZ()
+	if err != nil {
+		return nil, err
+	}
+	return append(dst, obj...), nil
+}
+
+func (a *Attestations) SizeSSZ() int {
+	size := 0
+	for i := 0; i < len(*a); i++ {
+		size += 4
+		size += (*a)[i].SizeSSZ()
+	}
+	return size
+}
+
+// ====================================
+// SingleAttestations section
+// ====================================
+var _ ssz.Marshaler = (*SingleAttestations)(nil)
+var _ ssz.Unmarshaler = (*SingleAttestations)(nil)
+
+// SingleAttestations is a list of post electra SingleAttestation objects.
+type SingleAttestations []*eth.SingleAttestation
+
+// UnmarshalSSZ implements ssz.Unmarshaler.
+func (a *SingleAttestations) UnmarshalSSZ(buf []byte) error {
+	// Exit early if the buffer is too small.
+	if len(buf) < bytesPerLengthOffset {
+		return nil
+	}
+
+	// Get the size of the offsets.
+	offsetEnd := binary.LittleEndian.Uint32(buf[:bytesPerLengthOffset])
+	if offsetEnd%bytesPerLengthOffset != 0 {
+		return errors.Errorf("expected offsets size to be a multiple of %d but got %d", bytesPerLengthOffset, offsetEnd)
+	}
+
+	count := offsetEnd / bytesPerLengthOffset
+	if count < 1 {
+		return nil
+	}
+
+	// TODO is this needed?
+	maxSize := params.BeaconConfig().MaxAttestations
+	if uint64(count) > maxSize {
+		return errors.Errorf("single attestations list exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if offsetEnd > uint32(len(buf)) {
+		return errors.Errorf("offsets value %d larger than buffer %d", offsetEnd, len(buf))
+	}
+	valueStart := offsetEnd
+
+	// Decode the attestations.
+	*a = make([]*eth.SingleAttestation, count)
+	var start uint32
+	end := uint32(len(buf))
+	for i := count; i > 0; i-- {
+		offsetEnd -= bytesPerLengthOffset
+		start = binary.LittleEndian.Uint32(buf[offsetEnd : offsetEnd+bytesPerLengthOffset])
+		if start > end {
+			return errors.Errorf("expected offset[%d] %d to be less than %d", i-1, start, end)
+		}
+		if start < valueStart {
+			return errors.Errorf("offset[%d] %d indexes before value section %d", i-1, start, valueStart)
+		}
+		// Decode the identifier.
+		ident := &eth.SingleAttestation{}
+		if err := ident.UnmarshalSSZ(buf[start:end]); err != nil {
+			return err
+		}
+		(*a)[i-1] = ident
+		end = start
+	}
+
+	return nil
+}
+
+func (a *SingleAttestations) MarshalSSZ() ([]byte, error) {
+	var err error
+	count := len(*a)
+
+	// TODO is this needed?
+	maxSize := params.BeaconConfig().MaxAttestationsElectra
+	if uint64(count) > maxSize {
+		return nil, errors.Errorf("single attestations list exceeds max size: %d > %d", count, maxSize)
+	}
+
+	if count == 0 {
+		return []byte{}, nil
+	}
+
+	sizes := make([]uint32, count)
+	valTotal := uint32(0)
+	for i, elem := range *a {
+		if elem == nil {
+			return nil, errors.New("nil item in SingleAttestations list")
+		}
+		sizes[i] = uint32(elem.SizeSSZ())
+		valTotal += sizes[i]
+	}
+
+	offSize := uint32(4 * count)
+	out := make([]byte, offSize, offSize+valTotal)
+	for i := range sizes {
+		binary.LittleEndian.PutUint32(out[i*4:i*4+4], offSize)
+		offSize += sizes[i]
+	}
+	for _, elem := range *a {
+		out, err = elem.MarshalSSZTo(out)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return out, nil
+}
+
+// MarshalSSZTo implements ssz.Marshaler.
+func (a *SingleAttestations) MarshalSSZTo(dst []byte) ([]byte, error) {
+	obj, err := a.MarshalSSZ()
+	if err != nil {
+		return nil, err
+	}
+	return append(dst, obj...), nil
+}
+
+func (a *SingleAttestations) SizeSSZ() int {
+	size := 0
+	for i := 0; i < len(*a); i++ {
+		size += 4
+		size += (*a)[i].SizeSSZ()
+	}
+	return size
+}

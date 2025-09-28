@@ -751,7 +751,7 @@ func (s *Service) beaconEndpoints(
 			template: "/eth/v2/beacon/pool/attestations",
 			name:     namespace + ".SubmitAttestationsV2",
 			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
