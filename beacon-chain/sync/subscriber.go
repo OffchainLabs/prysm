@@ -344,9 +344,15 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 	topic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	log := log.WithField("topic", topic)
 
-	// Atomically check and reserve the topic to prevent race conditions.
-	// If multiple goroutines try to subscribe simultaneously only one will successfully reserve the topic.
+	// 1) Fast-path bail if it already exists.
+	if s.subHandler.topicExists(topic) {
+		log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
+		return nil
+	}
+
+	// 2) Otherwise, atomically reserve to block concurrent goroutines.
 	if !s.subHandler.tryReserveTopic(topic) {
+		// Someone else reserved first.
 		log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
 		return nil
 	}
