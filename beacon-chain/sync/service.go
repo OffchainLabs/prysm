@@ -416,6 +416,11 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	// Register respective pubsub handlers at state synced event.
 	s.registerSubscribers(currentEpoch, forkDigest)
 
+	// Initialize registeredNetworkEntry to the current network schedule entry to avoid
+	// duplicate subscriber registration on the first forkWatcher tick when the next
+	// epoch has the same digest.
+	s.registeredNetworkEntry = params.GetNetworkScheduleEntry(currentEpoch)
+
 	// Start the fork watcher.
 	go s.forkWatcher()
 }

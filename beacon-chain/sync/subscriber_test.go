@@ -317,7 +317,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	require.NoError(t, r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal))
 	sub1, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
-	tracker.track(c1, sub1)
+	tracker.track(c1, sub1, fullTopic)
 
 	// committee index 2
 	c2 := uint64(2)
@@ -327,7 +327,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	require.NoError(t, err)
 	sub2, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
 	require.NoError(t, err)
-	tracker.track(c2, sub2)
+	tracker.track(c2, sub2, fullTopic)
 
 	r.pruneSubscriptions(tracker, map[uint64]bool{c2: true})
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
