@@ -130,4 +130,3 @@ func (s *subTopicHandler) cancelReservation(topic string) {
 		delete(s.subTopics, topic)
 	}
 }
-

@@ -121,9 +121,9 @@ func (t *subnetTracker) missing(wanted map[uint64]bool) []uint64 {
 	}
 	if len(missing) > 0 {
 		log.WithFields(logrus.Fields{
-			"wanted":    len(wanted),
-			"tracked":   len(t.subscriptions),
-			"missing":   missing,
+			"wanted":  len(wanted),
+			"tracked": len(t.subscriptions),
+			"missing": missing,
 			"trackedSubnets": func() []uint64 {
 				var tracked []uint64
 				for k := range t.subscriptions {
@@ -255,27 +255,27 @@ func (s *Service) spawn(f func()) {
 
 // Register PubSub subscribers
 func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
-    // Idempotent fixed-topic subscriptions: skip if already active.
-    fixed := []struct{
-        fmt    string
-        val    wrappedVal
-        handle subHandler
-    }{
-        {p2p.BlockSubnetTopicFormat, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber},
-        {p2p.AggregateAndProofSubnetTopicFormat, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber},
-        {p2p.ExitSubnetTopicFormat, s.validateVoluntaryExit, s.voluntaryExitSubscriber},
-        {p2p.ProposerSlashingSubnetTopicFormat, s.validateProposerSlashing, s.proposerSlashingSubscriber},
-        {p2p.AttesterSlashingSubnetTopicFormat, s.validateAttesterSlashing, s.attesterSlashingSubscriber},
-    }
-    for _, f := range fixed {
-        full := s.addDigestToTopic(f.fmt, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
-        if s.subHandler.topicExists(full) {
-            continue
-        }
-        s.spawn(func(fmt string, val wrappedVal, handle subHandler) func() {
-            return func() { s.subscribe(fmt, val, handle, digest) }
-        }(f.fmt, f.val, f.handle))
-    }
+	// Idempotent fixed-topic subscriptions: skip if already active.
+	fixed := []struct {
+		fmt    string
+		val    wrappedVal
+		handle subHandler
+	}{
+		{p2p.BlockSubnetTopicFormat, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber},
+		{p2p.AggregateAndProofSubnetTopicFormat, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber},
+		{p2p.ExitSubnetTopicFormat, s.validateVoluntaryExit, s.voluntaryExitSubscriber},
+		{p2p.ProposerSlashingSubnetTopicFormat, s.validateProposerSlashing, s.proposerSlashingSubscriber},
+		{p2p.AttesterSlashingSubnetTopicFormat, s.validateAttesterSlashing, s.attesterSlashingSubscriber},
+	}
+	for _, f := range fixed {
+		full := s.addDigestToTopic(f.fmt, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
+		if s.subHandler.topicExists(full) {
+			continue
+		}
+		s.spawn(func(fmt string, val wrappedVal, handle subHandler) func() {
+			return func() { s.subscribe(fmt, val, handle, digest) }
+		}(f.fmt, f.val, f.handle))
+	}
 	s.spawn(func() {
 		s.subscribeWithParameters(subscribeParameters{
 			topicFormat:              p2p.AttestationSubnetTopicFormat,
@@ -289,20 +289,20 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 
 	// New gossip topic in Altair
 	if params.BeaconConfig().AltairForkEpoch <= epoch {
-        // SyncContributionAndProof fixed topic
-        {
-            full := s.addDigestToTopic(p2p.SyncContributionAndProofSubnetTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
-            if !s.subHandler.topicExists(full) {
-                s.spawn(func() {
-                    s.subscribe(
-                        p2p.SyncContributionAndProofSubnetTopicFormat,
-                        s.validateSyncContributionAndProof,
-                        s.syncContributionAndProofSubscriber,
-                        digest,
-                    )
-                })
-            }
-        }
+		// SyncContributionAndProof fixed topic
+		{
+			full := s.addDigestToTopic(p2p.SyncContributionAndProofSubnetTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
+			if !s.subHandler.topicExists(full) {
+				s.spawn(func() {
+					s.subscribe(
+						p2p.SyncContributionAndProofSubnetTopicFormat,
+						s.validateSyncContributionAndProof,
+						s.syncContributionAndProofSubscriber,
+						digest,
+					)
+				})
+			}
+		}
 		s.spawn(func() {
 			s.subscribeWithParameters(subscribeParameters{
 				topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
@@ -314,50 +314,50 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		})
 
 		if features.Get().EnableLightClient {
-            // Light client fixed topics
-            {
-                full := s.addDigestToTopic(p2p.LightClientOptimisticUpdateTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
-                if !s.subHandler.topicExists(full) {
-                    s.spawn(func() {
-                        s.subscribe(
-                            p2p.LightClientOptimisticUpdateTopicFormat,
-                            s.validateLightClientOptimisticUpdate,
-                            s.lightClientOptimisticUpdateSubscriber,
-                            digest,
-                        )
-                    })
-                }
-            }
-            {
-                full := s.addDigestToTopic(p2p.LightClientFinalityUpdateTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
-                if !s.subHandler.topicExists(full) {
-                    s.spawn(func() {
-                        s.subscribe(
-                            p2p.LightClientFinalityUpdateTopicFormat,
-                            s.validateLightClientFinalityUpdate,
-                            s.lightClientFinalityUpdateSubscriber,
-                            digest,
-                        )
-                    })
-                }
-            }
-        }
-    }
+			// Light client fixed topics
+			{
+				full := s.addDigestToTopic(p2p.LightClientOptimisticUpdateTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
+				if !s.subHandler.topicExists(full) {
+					s.spawn(func() {
+						s.subscribe(
+							p2p.LightClientOptimisticUpdateTopicFormat,
+							s.validateLightClientOptimisticUpdate,
+							s.lightClientOptimisticUpdateSubscriber,
+							digest,
+						)
+					})
+				}
+			}
+			{
+				full := s.addDigestToTopic(p2p.LightClientFinalityUpdateTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
+				if !s.subHandler.topicExists(full) {
+					s.spawn(func() {
+						s.subscribe(
+							p2p.LightClientFinalityUpdateTopicFormat,
+							s.validateLightClientFinalityUpdate,
+							s.lightClientFinalityUpdateSubscriber,
+							digest,
+						)
+					})
+				}
+			}
+		}
+	}
 
 	// New gossip topic in Capella
-    if params.BeaconConfig().CapellaForkEpoch <= epoch {
-        full := s.addDigestToTopic(p2p.BlsToExecutionChangeSubnetTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
-        if !s.subHandler.topicExists(full) {
-            s.spawn(func() {
-                s.subscribe(
-                    p2p.BlsToExecutionChangeSubnetTopicFormat,
-                    s.validateBlsToExecutionChange,
-                    s.blsToExecutionChangeSubscriber,
-                    digest,
-                )
-            })
-        }
-    }
+	if params.BeaconConfig().CapellaForkEpoch <= epoch {
+		full := s.addDigestToTopic(p2p.BlsToExecutionChangeSubnetTopicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
+		if !s.subHandler.topicExists(full) {
+			s.spawn(func() {
+				s.subscribe(
+					p2p.BlsToExecutionChangeSubnetTopicFormat,
+					s.validateBlsToExecutionChange,
+					s.blsToExecutionChangeSubscriber,
+					digest,
+				)
+			})
+		}
+	}
 
 	// New gossip topic in Deneb, removed in Electra
 	if params.BeaconConfig().DenebForkEpoch <= epoch && epoch < params.BeaconConfig().ElectraForkEpoch {
@@ -424,20 +424,20 @@ func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandle
 
 // subscribeWithBase subscribes to a topic that already includes the protocol suffix.
 func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle subHandler) *pubsub.Subscription {
-    log := log.WithField("topic", topic)
+	log := log.WithField("topic", topic)
 
-    // Fast-path: avoid attempting if already actively subscribed
-    if s.subHandler.topicExists(topic) {
-        log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
-        return nil
-    }
+	// Fast-path: avoid attempting if already actively subscribed
+	if s.subHandler.topicExists(topic) {
+		log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
+		return nil
+	}
 
-    // Atomically check if topic exists and reserve it for subscription if it doesn't
-    if !s.subHandler.tryReserveTopic(topic) {
-        // Another goroutine may have just subscribed or reserved it; report and skip
-        log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
-        return nil
-    }
+	// Atomically check if topic exists and reserve it for subscription if it doesn't
+	if !s.subHandler.tryReserveTopic(topic) {
+		// Another goroutine may have just subscribed or reserved it; report and skip
+		log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
+		return nil
+	}
 
 	// Register validator after successfully reserving the topic
 	if err := s.cfg.p2p.PubSub().RegisterTopicValidator(s.wrapAndReportValidation(topic, validator)); err != nil {
@@ -621,46 +621,46 @@ func (s *Service) subscribeToSubnets(t *subnetTracker) error {
 		return errInvalidDigest
 	}
 
-    subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
-    s.pruneSubscriptions(t, subnetsToJoin)
+	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
+	s.pruneSubscriptions(t, subnetsToJoin)
 
-    // Filter out subnets already globally subscribed and mark them tracked to prevent re-reserve.
-    // Work on a copy to avoid mutating the original map while iterating later code paths.
-    wanted := make(map[uint64]bool, len(subnetsToJoin))
-    for subnet := range subnetsToJoin {
-        full := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
-        if s.subHandler.topicExists(full) {
-            t.track(subnet, nil, full)
-            continue
-        }
-        wanted[subnet] = true
-    }
+	// Filter out subnets already globally subscribed and mark them tracked to prevent re-reserve.
+	// Work on a copy to avoid mutating the original map while iterating later code paths.
+	wanted := make(map[uint64]bool, len(subnetsToJoin))
+	for subnet := range subnetsToJoin {
+		full := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
+		if s.subHandler.topicExists(full) {
+			t.track(subnet, nil, full)
+			continue
+		}
+		wanted[subnet] = true
+	}
 
-    // Atomically reserve subnets that still need subscription
-    reservedSubnets := t.tryReserveSubnets(wanted)
-    if len(reservedSubnets) > 0 {
-        log.WithFields(logrus.Fields{
-            "reservedSubnets": reservedSubnets,
-            "totalWanted":     len(subnetsToJoin),
-        }).Debug("Reserved missing subnets for subscription")
-    }
-    for _, subnet := range reservedSubnets {
-        fullTopic := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
-        // Skip if already subscribed globally (e.g., another goroutine won the race).
-        // Mark as tracked so we don't repeatedly reserve and skip on subsequent ticks.
-        if s.subHandler.topicExists(fullTopic) {
-            t.track(subnet, nil, fullTopic)
-            continue
-        }
-        log.WithFields(logrus.Fields{
-            "subnet": subnet,
-            "topic":  fullTopic,
-        }).Debug("Attempting to subscribe to reserved subnet")
-        sub := s.subscribeWithBase(fullTopic, t.validate, t.handle)
-        if sub != nil {
-            t.track(subnet, sub, fullTopic)
-        } else {
-            // Subscription failed, cancel the reservation
+	// Atomically reserve subnets that still need subscription
+	reservedSubnets := t.tryReserveSubnets(wanted)
+	if len(reservedSubnets) > 0 {
+		log.WithFields(logrus.Fields{
+			"reservedSubnets": reservedSubnets,
+			"totalWanted":     len(subnetsToJoin),
+		}).Debug("Reserved missing subnets for subscription")
+	}
+	for _, subnet := range reservedSubnets {
+		fullTopic := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
+		// Skip if already subscribed globally (e.g., another goroutine won the race).
+		// Mark as tracked so we don't repeatedly reserve and skip on subsequent ticks.
+		if s.subHandler.topicExists(fullTopic) {
+			t.track(subnet, nil, fullTopic)
+			continue
+		}
+		log.WithFields(logrus.Fields{
+			"subnet": subnet,
+			"topic":  fullTopic,
+		}).Debug("Attempting to subscribe to reserved subnet")
+		sub := s.subscribeWithBase(fullTopic, t.validate, t.handle)
+		if sub != nil {
+			t.track(subnet, sub, fullTopic)
+		} else {
+			// Subscription failed, cancel the reservation
 			t.cancelReservation(subnet)
 			log.WithFields(logrus.Fields{
 				"subnet": subnet,
