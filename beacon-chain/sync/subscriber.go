@@ -546,7 +546,15 @@ func (s *Service) subscribeToSubnets(t *subnetTracker) error {
 	for _, subnet := range t.missing(subnetsToJoin) {
 		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
 		topic := t.fullTopic(subnet, "")
-		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
+		sub := s.subscribeWithBase(topic, t.validate, t.handle)
+		// Even if sub is nil (topic already exists), we need to track the subnet
+		// to avoid repeated subscription attempts every slot.
+		if sub == nil {
+			// Topic already exists, get the existing subscription for tracking
+			fullTopic := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
+			sub = s.subHandler.subForTopic(fullTopic)
+		}
+		t.track(subnet, sub)
 	}
 
 	return nil
