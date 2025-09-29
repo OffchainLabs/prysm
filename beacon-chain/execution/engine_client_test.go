@@ -928,7 +928,7 @@ func TestClient_HTTP(t *testing.T) {
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
 		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
-		require.ErrorIs(t, ErrUnknownPayloadStatus, err)
+		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
 	t.Run(BlockByNumberMethod, func(t *testing.T) {
