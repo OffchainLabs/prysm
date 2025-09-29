@@ -43,6 +43,9 @@ func (s *subTopicHandler) addTopic(topic string, sub *pubsub.Subscription) {
 }
 
 func (s *subTopicHandler) topicExists(topic string) bool {
+	if s == nil {
+		return false
+	}
 	s.RLock()
 	defer s.RUnlock()
 	sub, ok := s.subTopics[topic]
@@ -101,6 +104,9 @@ func (s *subTopicHandler) subForTopic(topic string) *pubsub.Subscription {
 // Returns true if the topic was successfully reserved, false if it already has an active subscription or reservation.
 // If true is returned, the caller is responsible for calling addTopic with the actual subscription.
 func (s *subTopicHandler) tryReserveTopic(topic string) bool {
+	if s == nil {
+		return false
+	}
 	s.Lock()
 	defer s.Unlock()
 	_, exists := s.subTopics[topic]
@@ -115,6 +121,9 @@ func (s *subTopicHandler) tryReserveTopic(topic string) bool {
 
 // cancelReservation removes a topic reservation if the subscription failed.
 func (s *subTopicHandler) cancelReservation(topic string) {
+	if s == nil {
+		return
+	}
 	s.Lock()
 	defer s.Unlock()
 	if sub, exists := s.subTopics[topic]; exists && sub == nil {
