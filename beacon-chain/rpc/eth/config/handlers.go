@@ -132,6 +132,10 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 		}
 		return m
 
+	// ===== String =====
+	case reflect.String:
+		return v.String()
+
 	// ===== Default =====
 	default:
 		log.WithFields(log.Fields{
