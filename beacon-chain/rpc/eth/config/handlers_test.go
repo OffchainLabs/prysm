@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -17,6 +18,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	log "github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestGetDepositContract(t *testing.T) {
@@ -714,4 +717,36 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 
 	_, exists := data["BLOB_SCHEDULE"]
 	require.Equal(t, false, exists)
+}
+
+func TestConvertValueForJSON_NoErrorLogsForStrings(t *testing.T) {
+	logHook := logTest.NewLocal(log.StandardLogger())
+	defer logHook.Reset()
+
+	stringTestCases := []struct {
+		tag   string
+		value string
+	}{
+		{"CONFIG_NAME", "mainnet"},
+		{"PRESET_BASE", "mainnet"},
+		{"DEPOSIT_CONTRACT_ADDRESS", "0x00000000219ab540356cBB839Cbe05303d7705Fa"},
+		{"TERMINAL_TOTAL_DIFFICULTY", "58750000000000000000000"},
+	}
+
+	for _, tc := range stringTestCases {
+		t.Run(tc.tag, func(t *testing.T) {
+			logHook.Reset()
+
+			// Convert the string value
+			v := reflect.ValueOf(tc.value)
+			result := convertValueForJSON(v, tc.tag)
+
+			// Verify the result is correct
+			require.Equal(t, tc.value, result)
+
+			// Verify NO error was logged about unsupported field kind
+			require.LogsDoNotContain(t, logHook, "Unsupported config field kind")
+			require.LogsDoNotContain(t, logHook, "kind=string")
+		})
+	}
 }
