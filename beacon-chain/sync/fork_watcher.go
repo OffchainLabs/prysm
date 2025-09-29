@@ -13,7 +13,13 @@ import (
 // it will be in charge of subscribing/unsubscribing the relevant topics at the fork boundaries.
 func (s *Service) forkWatcher() {
 	<-s.initialSyncComplete
-	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	genesisTime := s.cfg.clock.GenesisTime()
+	currentEpoch := slots.ToEpoch(slots.CurrentSlot(genesisTime))
+	// Initialize registeredNetworkEntry to the current network schedule entry to avoid
+	// duplicate subscriber registration on the first forkWatcher tick when the next
+	// epoch has the same digest.
+	s.registeredNetworkEntry = params.GetNetworkScheduleEntry(currentEpoch)
+	slotTicker := slots.NewSlotTicker(genesisTime, params.BeaconConfig().SecondsPerSlot)
 	for {
 		select {
 		// In the event of a node restart, we will still end up subscribing to the correct
