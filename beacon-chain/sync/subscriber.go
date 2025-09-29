@@ -257,9 +257,9 @@ func (s *Service) spawn(f func()) {
 func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 	// Idempotent fixed-topic subscriptions: skip if already active.
 	fixed := []struct {
-		fmt    string
-		val    wrappedVal
-		handle subHandler
+		topicFormat string
+		val         wrappedVal
+		handle      subHandler
 	}{
 		{p2p.BlockSubnetTopicFormat, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber},
 		{p2p.AggregateAndProofSubnetTopicFormat, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber},
@@ -268,13 +268,13 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 		{p2p.AttesterSlashingSubnetTopicFormat, s.validateAttesterSlashing, s.attesterSlashingSubscriber},
 	}
 	for _, f := range fixed {
-		full := s.addDigestToTopic(f.fmt, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
+		full := s.addDigestToTopic(f.topicFormat, digest) + s.cfg.p2p.Encoding().ProtocolSuffix()
 		if s.subHandler.topicExists(full) {
 			continue
 		}
 		s.spawn(func(fmt string, val wrappedVal, handle subHandler) func() {
 			return func() { s.subscribe(fmt, val, handle, digest) }
-		}(f.fmt, f.val, f.handle))
+		}(f.topicFormat, f.val, f.handle))
 	}
 	s.spawn(func() {
 		s.subscribeWithParameters(subscribeParameters{
