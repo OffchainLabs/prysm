@@ -692,6 +692,27 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// Check second entry - values should be strings for consistent API output
 	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
 	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+
+	// Verify that fields with json:"-" are NOT present in the blob schedule entries
+	for i, entry := range blobSchedule {
+		t.Run(fmt.Sprintf("entry_%d_omits_json_dash_fields", i), func(t *testing.T) {
+			// These fields have `json:"-"` in NetworkScheduleEntry and should be omitted
+			_, hasForkVersion := entry["ForkVersion"]
+			assert.Equal(t, false, hasForkVersion, "ForkVersion should be omitted due to json:\"-\"")
+
+			_, hasForkDigest := entry["ForkDigest"]
+			assert.Equal(t, false, hasForkDigest, "ForkDigest should be omitted due to json:\"-\"")
+
+			_, hasBPOEpoch := entry["BPOEpoch"]
+			assert.Equal(t, false, hasBPOEpoch, "BPOEpoch should be omitted due to json:\"-\"")
+
+			_, hasVersionEnum := entry["VersionEnum"]
+			assert.Equal(t, false, hasVersionEnum, "VersionEnum should be omitted due to json:\"-\"")
+
+			_, hasIsFork := entry["isFork"]
+			assert.Equal(t, false, hasIsFork, "isFork should be omitted due to json:\"-\"")
+		})
+	}
 }
 
 func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
@@ -717,6 +738,112 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 
 	_, exists := data["BLOB_SCHEDULE"]
 	require.Equal(t, false, exists)
+}
+
+func TestConvertValueForJSON_JSONTagHandling(t *testing.T) {
+	// Test struct for verifying JSON tag handling
+	type TestStruct struct {
+		IncludedField        string `json:"included_field"`
+		OmittedField         string `json:"-"`
+		EmptyFieldOmitEmpty  string `json:"empty_field,omitempty"`
+		ValueFieldOmitEmpty  string `json:"value_field,omitempty"`
+		ZeroIntOmitEmpty     int    `json:"zero_int,omitempty"`
+		NonZeroIntOmitEmpty  int    `json:"nonzero_int,omitempty"`
+		EmptySliceOmitEmpty  []int  `json:"empty_slice,omitempty"`
+		ValueSliceOmitEmpty  []int  `json:"value_slice,omitempty"`
+		NoTagField           string
+	}
+
+	testData := TestStruct{
+		IncludedField:        "always_included",
+		OmittedField:         "should_be_omitted",
+		EmptyFieldOmitEmpty:  "", // empty, should be omitted
+		ValueFieldOmitEmpty:  "has_value", // has value, should be included
+		ZeroIntOmitEmpty:     0, // zero, should be omitted
+		NonZeroIntOmitEmpty:  42, // non-zero, should be included
+		EmptySliceOmitEmpty:  []int{}, // empty slice, should be omitted
+		ValueSliceOmitEmpty:  []int{1, 2, 3}, // has values, should be included
+		NoTagField:           "uses_field_name",
+	}
+
+	v := reflect.ValueOf(testData)
+	result := convertValueForJSON(v, "TEST_STRUCT")
+
+	resultMap, ok := result.(map[string]interface{})
+	require.Equal(t, true, ok)
+
+	// Test json:"-" behavior
+	_, hasOmittedField := resultMap["OmittedField"]
+	assert.Equal(t, false, hasOmittedField, "Field with json:\"-\" should be completely omitted")
+
+	// Test regular json tag
+	includedValue, hasIncludedField := resultMap["included_field"]
+	assert.Equal(t, true, hasIncludedField, "Field with json tag should be present")
+	assert.Equal(t, "always_included", includedValue)
+
+	// Test omitempty with empty values (should be omitted)
+	_, hasEmptyField := resultMap["empty_field"]
+	assert.Equal(t, false, hasEmptyField, "Empty field with omitempty should be omitted")
+
+	_, hasZeroInt := resultMap["zero_int"]
+	assert.Equal(t, false, hasZeroInt, "Zero int with omitempty should be omitted")
+
+	_, hasEmptySlice := resultMap["empty_slice"]
+	assert.Equal(t, false, hasEmptySlice, "Empty slice with omitempty should be omitted")
+
+	// Test omitempty with non-empty values (should be included)
+	valueField, hasValueField := resultMap["value_field"]
+	assert.Equal(t, true, hasValueField, "Non-empty field with omitempty should be included")
+	assert.Equal(t, "has_value", valueField)
+
+	nonZeroInt, hasNonZeroInt := resultMap["nonzero_int"]
+	assert.Equal(t, true, hasNonZeroInt, "Non-zero int with omitempty should be included")
+	assert.Equal(t, "42", nonZeroInt) // should be converted to string
+
+	valueSlice, hasValueSlice := resultMap["value_slice"]
+	assert.Equal(t, true, hasValueSlice, "Non-empty slice with omitempty should be included")
+	actualSlice, ok := valueSlice.([]interface{})
+	require.Equal(t, true, ok, "Value slice should be []interface{}")
+	require.Equal(t, 3, len(actualSlice), "Value slice should have 3 elements")
+	assert.Equal(t, "1", actualSlice[0])
+	assert.Equal(t, "2", actualSlice[1])
+	assert.Equal(t, "3", actualSlice[2])
+
+	// Test field without json tag (uses field name)
+	noTagValue, hasNoTagField := resultMap["NoTagField"]
+	assert.Equal(t, true, hasNoTagField, "Field without json tag should use field name")
+	assert.Equal(t, "uses_field_name", noTagValue)
+}
+
+func TestIsEmptyValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    interface{}
+		expected bool
+	}{
+		{"nil", nil, true},
+		{"empty string", "", true},
+		{"non-empty string", "hello", false},
+		{"empty slice", []interface{}{}, true},
+		{"non-empty slice", []interface{}{1}, false},
+		{"empty map", map[string]interface{}{}, true},
+		{"non-empty map", map[string]interface{}{"key": "value"}, false},
+		{"zero int", 0, true},
+		{"non-zero int", 42, false},
+		{"zero uint", uint(0), true},
+		{"non-zero uint", uint(42), false},
+		{"zero float", 0.0, true},
+		{"non-zero float", 3.14, false},
+		{"false bool", false, true},
+		{"true bool", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isEmptyValue(tt.value)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestConvertValueForJSON_NoErrorLogsForStrings(t *testing.T) {

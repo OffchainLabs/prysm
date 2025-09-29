@@ -124,11 +124,27 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			if !v.Field(i).CanInterface() {
 				continue // unexported
 			}
-			key := f.Tag.Get("json")
-			if key == "" || key == "-" {
+			jsonTag := f.Tag.Get("json")
+			if jsonTag == "-" {
+				continue // skip fields with json:"-"
+			}
+
+			// Parse JSON tag options (e.g., "fieldname,omitempty")
+			parts := strings.Split(jsonTag, ",")
+			key := parts[0]
+			hasOmitEmpty := len(parts) > 1 && strings.Contains(strings.Join(parts[1:], ","), "omitempty")
+
+			if key == "" {
 				key = f.Name
 			}
-			m[key] = convertValueForJSON(v.Field(i), tag)
+
+			// Check if field should be omitted before conversion
+			if hasOmitEmpty && isEmptyValueReflect(v.Field(i)) {
+				continue
+			}
+
+			fieldValue := convertValueForJSON(v.Field(i), tag)
+			m[key] = fieldValue
 		}
 		return m
 
@@ -146,6 +162,71 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 		}).Error("Unsupported config field kind; value forwarded verbatim")
 		return v.Interface()
 	}
+}
+
+// isEmptyValueReflect checks if a reflect.Value should be considered empty for omitempty
+func isEmptyValueReflect(v reflect.Value) bool {
+	// Unwrap pointers / interfaces
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return true
+		}
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.String:
+		return v.String() == ""
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Slice, reflect.Array:
+		return v.Len() == 0
+	case reflect.Map:
+		return v.Len() == 0
+	}
+	return false
+}
+
+// isEmptyValue checks if a value should be considered empty for omitempty
+func isEmptyValue(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+
+	switch val := v.(type) {
+	case string:
+		return val == ""
+	case []interface{}:
+		return len(val) == 0
+	case map[string]interface{}:
+		return len(val) == 0
+	default:
+		// For numbers, check if they're zero
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return rv.Int() == 0
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return rv.Uint() == 0
+		case reflect.Float32, reflect.Float64:
+			return rv.Float() == 0
+		case reflect.Bool:
+			return !rv.Bool()
+		case reflect.Slice, reflect.Array:
+			return rv.Len() == 0
+		case reflect.Map:
+			return rv.Len() == 0
+		case reflect.Ptr, reflect.Interface:
+			return rv.IsNil()
+		}
+	}
+	return false
 }
 
 func prepareConfigSpec() (map[string]interface{}, error) {
