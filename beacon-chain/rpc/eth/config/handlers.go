@@ -139,7 +139,7 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			}
 
 			// Check if field should be omitted before conversion
-			if hasOmitEmpty && isEmptyValueReflect(v.Field(i)) {
+			if hasOmitEmpty && isEmptyForOmitEmpty(v.Field(i)) {
 				continue
 			}
 
@@ -164,8 +164,8 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 	}
 }
 
-// isEmptyValueReflect checks if a reflect.Value should be considered empty for omitempty
-func isEmptyValueReflect(v reflect.Value) bool {
+// isEmptyForOmitEmpty checks if a reflect.Value should be considered empty for omitempty
+func isEmptyForOmitEmpty(v reflect.Value) bool {
 	// Unwrap pointers / interfaces
 	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
 		if v.IsNil() {
@@ -174,23 +174,14 @@ func isEmptyValueReflect(v reflect.Value) bool {
 		v = v.Elem()
 	}
 
+	// Types where omitempty uses length semantics too
 	switch v.Kind() {
-	case reflect.String:
-		return v.String() == ""
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return v.Uint() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Slice, reflect.Array:
+	case reflect.String, reflect.Array, reflect.Slice, reflect.Map:
 		return v.Len() == 0
-	case reflect.Map:
-		return v.Len() == 0
+	default:
+		// Everything else: zero value check
+		return v.IsZero()
 	}
-	return false
 }
 
 // isEmptyValue checks if a value should be considered empty for omitempty
@@ -198,35 +189,7 @@ func isEmptyValue(v interface{}) bool {
 	if v == nil {
 		return true
 	}
-
-	switch val := v.(type) {
-	case string:
-		return val == ""
-	case []interface{}:
-		return len(val) == 0
-	case map[string]interface{}:
-		return len(val) == 0
-	default:
-		// For numbers, check if they're zero
-		rv := reflect.ValueOf(v)
-		switch rv.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return rv.Int() == 0
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return rv.Uint() == 0
-		case reflect.Float32, reflect.Float64:
-			return rv.Float() == 0
-		case reflect.Bool:
-			return !rv.Bool()
-		case reflect.Slice, reflect.Array:
-			return rv.Len() == 0
-		case reflect.Map:
-			return rv.Len() == 0
-		case reflect.Ptr, reflect.Interface:
-			return rv.IsNil()
-		}
-	}
-	return false
+	return isEmptyForOmitEmpty(reflect.ValueOf(v))
 }
 
 func prepareConfigSpec() (map[string]interface{}, error) {
