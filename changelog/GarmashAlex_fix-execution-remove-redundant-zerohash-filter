@@ -1,0 +1,3 @@
+### Fixed
+
+- remove redundant ZeroHash filter in requestBodiesByHash (#15781)
