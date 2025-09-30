@@ -185,26 +185,25 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	// Update the earliest available slot after pruning
 	log.WithField("earliestSlot", pruneUpto+1).Debug("Updating earliest available slot after pruning")
-	p.updateEarliestSlot(pruneUpto + 1)
+	if err := p.updateEarliestSlot(pruneUpto + 1); err != nil {
+		return errors.Wrap(err, "failed to update earliest available slot")
+	}
 
 	return nil
 }
 
 // updateEarliestSlot updates the earliest available slot via the injected custody updater.
-func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) {
+func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) error {
 	if p.custody == nil {
-		return
+		return nil
 	}
 
 	// Update the earliest available slot
-	err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
-	if err != nil {
-		log.WithError(err).WithField("earliestAvailableSlot", earliestAvailableSlot).
-			Error("Failed to update earliest available slot after pruning")
-	} else {
-		log.WithField("earliestAvailableSlot", earliestAvailableSlot).
-			Debug("Updated earliest available slot after pruning")
+	if err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+		return errors.Wrapf(err, "failed to update earliest available slot after pruning to %d", earliestAvailableSlot)
 	}
+
+	return nil
 }
 
 func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
