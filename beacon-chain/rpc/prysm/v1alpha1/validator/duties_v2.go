@@ -169,7 +169,6 @@ type metadata struct {
 	committeesAtSlot     uint64
 	proposalSlots        map[primitives.ValidatorIndex][]primitives.Slot
 	startSlot            primitives.Slot
-	committeesBySlot     [][][]primitives.ValidatorIndex
 	validatorAssignments map[primitives.ValidatorIndex]*helpers.LiteAssignment
 	committeeAssignments map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
 }
@@ -215,11 +214,11 @@ func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.
 	// Use different strategies based on request size
 	if len(requestIndices) >= validatorLookupThreshold {
 		// For large requests: precompute all committees and build a map for O(1) lookup
-		meta.committeesBySlot, err = helpers.PrecomputeCommittees(ctx, s, meta.startSlot)
+		committeesBySlot, err := helpers.PrecomputeCommittees(ctx, s, meta.startSlot)
 		if err != nil {
 			return nil, err
 		}
-		meta.validatorAssignments = buildValidatorAssignmentMap(meta.committeesBySlot, meta.startSlot)
+		meta.validatorAssignments = buildValidatorAssignmentMap(committeesBySlot, meta.startSlot)
 	} else {
 		// For small requests: use CommitteeAssignments which only computes for requested validators
 		meta.committeeAssignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
