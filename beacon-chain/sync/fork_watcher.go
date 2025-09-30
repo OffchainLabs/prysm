@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -46,6 +48,7 @@ func (s *Service) registerForUpcomingFork(currentEpoch primitives.Epoch) error {
 	}
 
 	if s.subHandler.digestExists(nextEntry.ForkDigest) {
+		log.WithField("digest", fmt.Sprintf("%#x", nextEntry.ForkDigest)).Debug("Already subscribed to fork")
 		return nil
 	}
 

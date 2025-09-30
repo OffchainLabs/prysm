@@ -413,6 +413,8 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 		return
 	}
 
+	s.registeredNetworkEntry = params.GetNetworkScheduleEntry(currentEpoch)
+
 	// Register respective pubsub handlers at state synced event.
 	s.registerSubscribers(currentEpoch, forkDigest)
 
