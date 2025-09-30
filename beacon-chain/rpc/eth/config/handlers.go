@@ -132,7 +132,7 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			// Parse JSON tag options (e.g., "fieldname,omitempty")
 			parts := strings.Split(jsonTag, ",")
 			key := parts[0]
-			hasOmitEmpty := len(parts) > 1 && strings.Contains(strings.Join(parts[1:], ","), "omitempty")
+			hasOmitEmpty := len(parts) > 1 && strings.Contains(jsonTag, "omitempty")
 
 			if key == "" {
 				key = f.Name
