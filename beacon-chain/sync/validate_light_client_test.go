@@ -26,9 +26,13 @@ func TestValidateLightClientOptimisticUpdate_NilMessageOrTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}, lcStore: lcStore}
+	mockUpdate, err := util.MockOptimisticUpdate()
+	require.NoError(t, err)
+	s.lcStore.SetLastOptimisticUpdate(mockUpdate, false)
 
-	_, err := s.validateLightClientOptimisticUpdate(ctx, "", nil)
+	_, err = s.validateLightClientOptimisticUpdate(ctx, "", nil)
 	require.ErrorIs(t, err, errNilPubsubMessage)
 
 	_, err = s.validateLightClientOptimisticUpdate(ctx, "", &pubsub.Message{Message: &pb.Message{}})
@@ -72,27 +76,27 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 			name:             "no previous update",
 			oldUpdateOptions: nil,
 			newUpdateOptions: []util.LightClientOption{},
-			expectedResult:   pubsub.ValidationAccept,
+			expectedResult:   pubsub.ValidationIgnore,
 		},
 		{
 			name:             "not enough time passed",
 			genesisDrift:     -secondsPerSlot / slotIntervals,
-			oldUpdateOptions: nil,
-			newUpdateOptions: []util.LightClientOption{},
-			expectedResult:   pubsub.ValidationIgnore,
-		},
-		{
-			name:             "new update has no age advantage",
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
 		},
 		{
-			name:             "new update is better - younger",
+			name:             "new update is the same",
+			oldUpdateOptions: []util.LightClientOption{},
+			newUpdateOptions: []util.LightClientOption{},
+			expectedResult:   pubsub.ValidationAccept,
+		},
+		{
+			name:             "new update is different",
 			genesisDrift:     secondsPerSlot,
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
-			expectedResult:   pubsub.ValidationAccept,
+			expectedResult:   pubsub.ValidationIgnore,
 		},
 	}
 
@@ -149,9 +153,13 @@ func TestValidateLightClientFinalityUpdate_NilMessageOrTopic(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	ctx := t.Context()
 	p := p2ptest.NewTestP2P(t)
-	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), testDB.SetupDB(t))
+	s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}, lcStore: lcStore}
+	mockUpdate, err := util.MockFinalityUpdate()
+	require.NoError(t, err)
+	s.lcStore.SetLastFinalityUpdate(mockUpdate, false)
 
-	_, err := s.validateLightClientFinalityUpdate(ctx, "", nil)
+	_, err = s.validateLightClientFinalityUpdate(ctx, "", nil)
 	require.ErrorIs(t, err, errNilPubsubMessage)
 
 	_, err = s.validateLightClientFinalityUpdate(ctx, "", &pubsub.Message{Message: &pb.Message{}})
@@ -195,44 +203,26 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 			name:             "no previous update",
 			oldUpdateOptions: nil,
 			newUpdateOptions: []util.LightClientOption{},
-			expectedResult:   pubsub.ValidationAccept,
+			expectedResult:   pubsub.ValidationIgnore,
 		},
 		{
 			name:             "not enough time passed",
 			genesisDrift:     -secondsPerSlot / slotIntervals,
-			oldUpdateOptions: nil,
-			newUpdateOptions: []util.LightClientOption{},
-			expectedResult:   pubsub.ValidationIgnore,
-		},
-		{
-			name:             "new update has no advantage",
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
 		},
 		{
-			name:             "new update is better - age",
+			name:             "new update is the same",
+			oldUpdateOptions: []util.LightClientOption{},
+			newUpdateOptions: []util.LightClientOption{},
+			expectedResult:   pubsub.ValidationAccept,
+		},
+		{
+			name:             "new update is different",
 			genesisDrift:     secondsPerSlot,
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{util.WithIncreasedFinalizedSlot(1)},
-			expectedResult:   pubsub.ValidationAccept,
-		},
-		{
-			name:             "new update is better - supermajority",
-			oldUpdateOptions: []util.LightClientOption{},
-			newUpdateOptions: []util.LightClientOption{util.WithSupermajority(0)},
-			expectedResult:   pubsub.ValidationAccept,
-		},
-		{
-			name:             "old update is better - supermajority",
-			oldUpdateOptions: []util.LightClientOption{util.WithSupermajority(0)},
-			newUpdateOptions: []util.LightClientOption{},
-			expectedResult:   pubsub.ValidationIgnore,
-		},
-		{
-			name:             "old update is better - age",
-			oldUpdateOptions: []util.LightClientOption{util.WithIncreasedAttestedSlot(1)},
-			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
 		},
 	}
