@@ -16,8 +16,8 @@ import (
 
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -218,31 +218,28 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 	require.Equal(t, expectedEarliestSlot, mockCustody.earliestAvailableSlot, "Earliest available slot should be updated correctly")
 	require.Equal(t, uint64(4), mockCustody.custodyGroupCount, "Custody group count should be preserved")
 
-	// Check log entries
-	found := false
+	// Verify that no error was logged
 	for _, entry := range hook.AllEntries() {
-		if entry.Message == "Updated earliest available slot after pruning" {
-			found = true
-			require.Equal(t, expectedEarliestSlot, entry.Data["earliestAvailableSlot"])
+		if entry.Level == logrus.ErrorLevel {
+			t.Errorf("Unexpected error log: %s", entry.Message)
 		}
 	}
-	assert.Equal(t, true, found, "Should log successful earliest available slot update")
 
 	require.NoError(t, p.Stop())
 }
 
-// Mock custody updater that returns an error for CustodyGroupCount
-type mockCustodyUpdaterWithError struct {
+// Mock custody updater that returns an error for UpdateEarliestAvailableSlot
+type mockCustodyUpdaterWithUpdateError struct {
 	updateCallCount int
 }
 
-func (m *mockCustodyUpdaterWithError) CustodyGroupCount() (uint64, error) {
-	return 0, errors.New("custody group count error")
+func (m *mockCustodyUpdaterWithUpdateError) CustodyGroupCount() (uint64, error) {
+	return 4, nil
 }
 
-func (m *mockCustodyUpdaterWithError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	m.updateCallCount++
-	return nil
+	return errors.New("failed to update earliest available slot")
 }
 
 func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
@@ -258,28 +255,28 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 	minRequiredEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests + 1)
 
 	tests := []struct {
-		name                  string
-		userRetentionEpochs   primitives.Epoch
+		name                   string
+		userRetentionEpochs    primitives.Epoch
 		expectedRetentionSlots primitives.Slot
-		description           string
+		description            string
 	}{
 		{
-			name:                  "User value below minimum - should use minimum",
-			userRetentionEpochs:   2,  // Way below minimum
+			name:                   "User value below minimum - should use minimum",
+			userRetentionEpochs:    2, // Way below minimum
 			expectedRetentionSlots: primitives.Slot(minRequiredEpochs) * params.BeaconConfig().SlotsPerEpoch,
-			description:           "Should use minimum when user value is too low",
+			description:            "Should use minimum when user value is too low",
 		},
 		{
-			name:                  "User value at minimum",
-			userRetentionEpochs:   minRequiredEpochs,
+			name:                   "User value at minimum",
+			userRetentionEpochs:    minRequiredEpochs,
 			expectedRetentionSlots: primitives.Slot(minRequiredEpochs) * params.BeaconConfig().SlotsPerEpoch,
-			description:           "Should use user value when at minimum",
+			description:            "Should use user value when at minimum",
 		},
 		{
-			name:                  "User value above minimum",
-			userRetentionEpochs:   minRequiredEpochs + 10,
-			expectedRetentionSlots: primitives.Slot(minRequiredEpochs + 10) * params.BeaconConfig().SlotsPerEpoch,
-			description:           "Should use user value when above minimum",
+			name:                   "User value above minimum",
+			userRetentionEpochs:    minRequiredEpochs + 10,
+			expectedRetentionSlots: primitives.Slot(minRequiredEpochs+10) * params.BeaconConfig().SlotsPerEpoch,
+			description:            "Should use user value when above minimum",
 		},
 	}
 
@@ -321,7 +318,7 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 	}
 }
 
-func TestPruner_UpdatesEarliestSlotIndependentOfCustodyGroupCount(t *testing.T) {
+func TestPruner_UpdateEarliestSlotError(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
 	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
@@ -337,8 +334,8 @@ func TestPruner_UpdatesEarliestSlotIndependentOfCustodyGroupCount(t *testing.T) 
 
 	slotTicker := &slottest.MockTicker{Channel: make(chan primitives.Slot)}
 
-	// Create mock custody updater that returns an error for CustodyGroupCount
-	mockCustody := &mockCustodyUpdaterWithError{}
+	// Create mock custody updater that returns an error for UpdateEarliestAvailableSlot
+	mockCustody := &mockCustodyUpdaterWithUpdateError{}
 
 	// Create pruner with mock custody updater
 	p, err := New(
@@ -376,15 +373,15 @@ func TestPruner_UpdatesEarliestSlotIndependentOfCustodyGroupCount(t *testing.T) 
 	// Should have called UpdateEarliestAvailableSlot
 	assert.Equal(t, 1, mockCustody.updateCallCount, "UpdateEarliestAvailableSlot should be called")
 
-	// Check that no error was logged for custody group count
+	// Check that error was logged by the prune function
 	found := false
 	for _, entry := range hook.AllEntries() {
-		if entry.Message == "Failed to get custody group count, cannot update earliest available slot after pruning" {
+		if entry.Level == logrus.ErrorLevel && entry.Message == "Failed to prune database" {
 			found = true
 			break
 		}
 	}
-	assert.Equal(t, false, found, "Should not log custody group count error")
+	assert.Equal(t, true, found, "Should log error when UpdateEarliestAvailableSlot fails")
 
 	require.NoError(t, p.Stop())
 }
