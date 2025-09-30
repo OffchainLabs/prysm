@@ -277,47 +277,48 @@ func FuzzReadPendingAttestation(f *testing.F) {
 // FuzzKmpIndex tests the KMP algorithm implementation
 func FuzzKmpIndex(f *testing.F) {
 	// Test with integer pointers to match the actual usage
-	f.Add(0, "1,2,3", "1,2,3,4,5")
-	f.Add(3, "1,2,3", "1,2,3,1,2,3")
-	f.Add(0, "", "1,2,3")
-	
-	f.Fuzz(func(t *testing.T, lens int, patternStr string, textStr string) {
+	f.Add("1,2,3", "4,5,6")
+	f.Add("1,2,3", "1,2,3")
+	f.Add("", "1,2,3")
+	f.Add("1,1,1", "2,2,2")
+
+	f.Fuzz(func(t *testing.T, sourceStr string, targetStr string) {
 		defer func() {
 			if r := recover(); r != nil {
 				t.Errorf("kmpIndex panicked: %v", r)
 			}
 		}()
-		
+
 		// Parse comma-separated strings into int slices
-		var pattern, text []int
-		if patternStr != "" {
-			for _, s := range strings.Split(patternStr, ",") {
+		var source, target []int
+		if sourceStr != "" {
+			for _, s := range strings.Split(sourceStr, ",") {
 				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-					pattern = append(pattern, val)
+					source = append(source, val)
 				}
 			}
 		}
-		if textStr != "" {
-			for _, s := range strings.Split(textStr, ",") {
+		if targetStr != "" {
+			for _, s := range strings.Split(targetStr, ",") {
 				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-					text = append(text, val)
+					target = append(target, val)
 				}
 			}
 		}
-		
+
+		// Maintain the precondition: concatenate target with source
+		// This matches how kmpIndex is actually called in production
+		combined := make([]int, len(target)+len(source))
+		copy(combined, target)
+		copy(combined[len(target):], source)
+
 		// Convert to pointer slices as used in actual code
-		patternPtrs := make([]*int, len(pattern))
-		for i := range pattern {
-			val := pattern[i]
-			patternPtrs[i] = &val
+		combinedPtrs := make([]*int, len(combined))
+		for i := range combined {
+			val := combined[i]
+			combinedPtrs[i] = &val
 		}
-		
-		textPtrs := make([]*int, len(text))
-		for i := range text {
-			val := text[i]
-			textPtrs[i] = &val
-		}
-		
+
 		integerEquals := func(a, b *int) bool {
 			if a == nil && b == nil {
 				return true
@@ -327,20 +328,12 @@ func FuzzKmpIndex(f *testing.F) {
 			}
 			return *a == *b
 		}
-		
-		// Clamp lens to reasonable range to avoid infinite loops
-		if lens < 0 {
-			lens = 0
-		}
-		if lens > len(textPtrs) {
-			lens = len(textPtrs)
-		}
-		
-		result := kmpIndex(lens, textPtrs, integerEquals)
-		
-		// Basic sanity check
-		if result < 0 || result > lens {
-			t.Errorf("kmpIndex returned invalid result: %d for lens=%d", result, lens)
+
+		result := kmpIndex(len(source), combinedPtrs, integerEquals)
+
+		// Basic sanity check: result should be in [0, len(source)]
+		if result < 0 || result > len(source) {
+			t.Errorf("kmpIndex returned invalid result: %d for source length=%d", result, len(source))
 		}
 	})
 }

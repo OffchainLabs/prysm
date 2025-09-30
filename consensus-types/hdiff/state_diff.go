@@ -370,7 +370,12 @@ func readPendingAttestation(data *[]byte) (*ethpb.PendingAttestation, error) {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
 	}
 	bitsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if len(*data) < 144+8+bitsLength {
+	if bitsLength < 0 {
+		return nil, errors.Wrap(errDataSmall, "pendingAttestation: negative bitsLength")
+	}
+	// Check for integer overflow: 8 + bitsLength + 144
+	const fixedSize = 152 // 8 (length field) + 144 (fixed fields)
+	if bitsLength > len(*data)-fixedSize {
 		return nil, errors.Wrap(errDataSmall, "pendingAttestation")
 	}
 	pending := &ethpb.PendingAttestation{}
@@ -391,6 +396,9 @@ func (ret *stateDiff) readPreviousEpochAttestations(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "previousEpochAttestations")
 	}
 	previousEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	if previousEpochAttestationsLength < 0 {
+		return errors.Wrap(errDataSmall, "previousEpochAttestations: negative length")
+	}
 	ret.previousEpochAttestations = make([]*ethpb.PendingAttestation, previousEpochAttestationsLength)
 	(*data) = (*data)[8:]
 	var err error
@@ -408,6 +416,9 @@ func (ret *stateDiff) readCurrentEpochAttestations(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "currentEpochAttestations")
 	}
 	currentEpochAttestationsLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	if currentEpochAttestationsLength < 0 {
+		return errors.Wrap(errDataSmall, "currentEpochAttestations: negative length")
+	}
 	ret.currentEpochAttestations = make([]*ethpb.PendingAttestation, currentEpochAttestationsLength)
 	(*data) = (*data)[8:]
 	var err error
@@ -425,7 +436,10 @@ func (ret *stateDiff) readPreviousEpochParticipation(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "previousEpochParticipation")
 	}
 	previousEpochParticipationLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if len(*data) < 8+previousEpochParticipationLength {
+	if previousEpochParticipationLength < 0 {
+		return errors.Wrap(errDataSmall, "previousEpochParticipation: negative length")
+	}
+	if len(*data)-8 < previousEpochParticipationLength {
 		return errors.Wrap(errDataSmall, "previousEpochParticipation")
 	}
 	ret.previousEpochParticipation = make([]byte, previousEpochParticipationLength)
@@ -439,7 +453,10 @@ func (ret *stateDiff) readCurrentEpochParticipation(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "currentEpochParticipation")
 	}
 	currentEpochParticipationLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if len(*data) < 8+currentEpochParticipationLength {
+	if currentEpochParticipationLength < 0 {
+		return errors.Wrap(errDataSmall, "currentEpochParticipation: negative length")
+	}
+	if len(*data)-8 < currentEpochParticipationLength {
 		return errors.Wrap(errDataSmall, "currentEpochParticipation")
 	}
 	ret.currentEpochParticipation = make([]byte, currentEpochParticipationLength)
@@ -498,7 +515,10 @@ func (ret *stateDiff) readInactivityScores(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "inactivityScores")
 	}
 	inactivityScoresLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
-	if len(*data) < 8+inactivityScoresLength*8 {
+	if inactivityScoresLength < 0 {
+		return errors.Wrap(errDataSmall, "inactivityScores: negative length")
+	}
+	if len(*data)-8 < inactivityScoresLength*8 {
 		return errors.Wrap(errDataSmall, "inactivityScores")
 	}
 	ret.inactivityScores = make([]uint64, inactivityScoresLength)
@@ -563,6 +583,9 @@ func (ret *stateDiff) readExecutionPayloadHeader(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "executionPayloadHeader")
 	}
 	headerLength := int(binary.LittleEndian.Uint64((*data)[1:9])) // lint:ignore uintcast
+	if headerLength < 0 {
+		return errors.Wrap(errDataSmall, "executionPayloadHeader: negative length")
+	}
 	*data = (*data)[9:]
 	type sszSizeUnmarshaler interface {
 		ssz.Unmarshaler
@@ -610,6 +633,9 @@ func (ret *stateDiff) readHistoricalSummaries(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "historicalSummaries")
 	}
 	historicalSummariesLength := int(binary.LittleEndian.Uint64((*data)[:8])) // lint:ignore uintcast
+	if historicalSummariesLength < 0 {
+		return errors.Wrap(errDataSmall, "historicalSummaries: negative length")
+	}
 	if len(*data) < 8+historicalSummariesLength*fieldparams.RootLength*2 {
 		return errors.Wrap(errDataSmall, "historicalSummaries")
 	}
@@ -646,6 +672,9 @@ func (ret *stateDiff) readPendingDeposits(data *[]byte) error {
 	}
 	ret.pendingDepositIndex = binary.LittleEndian.Uint64((*data)[:8])
 	pendingDepositDiffLength := int(binary.LittleEndian.Uint64((*data)[8:16])) // lint:ignore uintcast
+	if pendingDepositDiffLength < 0 {
+		return errors.Wrap(errDataSmall, "pendingDeposits: negative length")
+	}
 	if len(*data) < 16+pendingDepositDiffLength*pendingDepositLength {
 		return errors.Wrap(errDataSmall, "pendingDepositDiff")
 	}
@@ -671,6 +700,9 @@ func (ret *stateDiff) readPendingPartialWithdrawals(data *[]byte) error {
 	}
 	ret.pendingPartialWithdrawalsIndex = binary.LittleEndian.Uint64((*data)[:8])
 	pendingPartialWithdrawalsDiffLength := int(binary.LittleEndian.Uint64((*data)[8:16])) // lint:ignore uintcast
+	if pendingPartialWithdrawalsDiffLength < 0 {
+		return errors.Wrap(errDataSmall, "pendingPartialWithdrawals: negative length")
+	}
 	if len(*data) < 16+pendingPartialWithdrawalsDiffLength*pendingPartialWithdrawalLength {
 		return errors.Wrap(errDataSmall, "pendingPartialWithdrawalsDiff")
 	}
@@ -694,6 +726,9 @@ func (ret *stateDiff) readPendingConsolidations(data *[]byte) error {
 	}
 	ret.pendingConsolidationsIndex = binary.LittleEndian.Uint64((*data)[:8])
 	pendingConsolidationsDiffsLength := int(binary.LittleEndian.Uint64((*data)[8:16])) // lint:ignore uintcast
+	if pendingConsolidationsDiffsLength < 0 {
+		return errors.Wrap(errDataSmall, "pendingConsolidations: negative length")
+	}
 	if len(*data) < 16+pendingConsolidationsDiffsLength*pendingConsolidationLength {
 		return errors.Wrap(errDataSmall, "pendingConsolidationsDiffs")
 	}
@@ -924,6 +959,9 @@ func newBalancesDiff(input []byte) ([]int64, error) {
 		return nil, errors.Wrap(errDataSmall, "balancesDiff")
 	}
 	balancesLength := int(binary.LittleEndian.Uint64(data[:8])) // lint:ignore uintcast
+	if balancesLength < 0 {
+		return nil, errors.Wrap(errDataSmall, "balancesDiff: negative length")
+	}
 	if len(data) != 8+balancesLength*8 {
 		return nil, errors.Errorf("incorrect length of balancesDiff, expected %d, got %d", 8+balancesLength*8, len(data))
 	}
@@ -1576,12 +1614,18 @@ func diffElectraFields(diff *stateDiff, source, target state.ReadOnlyBeaconState
 
 // kmpIndex returns the index of the first occurrence of the pattern in the slice using the Knuth-Morris-Pratt algorithm.
 func kmpIndex[T any](lens int, t []*T, equals func(a, b *T) bool) int {
-	if lens == 0 || len(t) == 1 {
+	if lens == 0 || len(t) <= 1 {
 		return lens
 	}
 
 	lps := computeLPS(t, equals)
-	return lens - lps[len(lps)-1]
+	result := lens - lps[len(lps)-1]
+	// Clamp result to valid range [0, lens] to handle cases where
+	// the LPS value exceeds lens due to repetitive patterns
+	if result < 0 {
+		return 0
+	}
+	return result
 }
 
 // computeLPS computes the longest prefix-suffix (LPS) array for the given pattern.
