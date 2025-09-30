@@ -126,7 +126,7 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			}
 			jsonTag := f.Tag.Get("json")
 			if jsonTag == "-" {
-				continue // skip fields with json:"-"
+				continue
 			}
 
 			// Parse JSON tag options (e.g., "fieldname,omitempty")
