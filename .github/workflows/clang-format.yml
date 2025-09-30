@@ -10,7 +10,7 @@ on:
 
 jobs:
   clang-format-checking:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-4
     steps:
       - uses: actions/checkout@v2
       # Is this step failing for you? 
