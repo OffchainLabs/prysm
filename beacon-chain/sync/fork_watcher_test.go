@@ -50,12 +50,36 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 	return r
 }
 
+func TestRegisterSubscriptions_Idempotent(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+	fulu := params.BeaconConfig().ElectraForkEpoch + 4096*2
+	params.BeaconConfig().FuluForkEpoch = fulu
+	params.BeaconConfig().InitializeForkSchedule()
+
+	current := fulu - 1
+	s := testForkWatcherService(t, current)
+	next := params.GetNetworkScheduleEntry(fulu)
+	wg := attachSpawner(s)
+	require.Equal(t, true, s.registerSubscribers(next))
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for subscriptions to be registered")
+	case <-done:
+	}
+	// the goal of this callback is just to assert that spawn is never called.
+	s.subscriptionSpawner = func(func()) { t.Error("registration routines spawned twice for the same digest") }
+	require.NoError(t, s.registerForUpcomingFork(fulu))
+}
+
 func TestService_CheckForNextEpochFork(t *testing.T) {
 	closedChan := make(chan struct{})
 	close(closedChan)
 	params.SetupTestConfigCleanup(t)
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
-	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 1096*2
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
 	params.BeaconConfig().InitializeForkSchedule()
 
 	tests := []struct {

@@ -180,7 +180,8 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
-	registeredNetworkEntry           params.NetworkScheduleEntry
+	registeredDigests                sync.Map
+	registrationHistory              registrationHistory
 	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
 
@@ -377,11 +378,12 @@ func (s *Service) waitForChainStart() {
 	}
 	s.ctxMap = ctxMap
 
-	// Register respective rpc handlers at state initialized event.
-	err = s.registerRPCHandlers()
-	if err != nil {
-		log.WithError(err).Error("Could not register rpc handlers")
-		return
+	// We need to register RPC handlers ASAP so that we can handle incoming status message
+	// requests from peers.
+	nse := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	if err := s.registerRPCHandlers(nse); err != nil {
+		// If we fail here, we won't be able to peer with anyone because we can't handle their status messages.
+		panic(errors.Wrap(err, "Failed to register RPC handlers")) // lint:nopanic
 	}
 
 	// Wait for chainstart in separate routine.
@@ -400,20 +402,6 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 		log.Debug("Context closed, exiting StartDiscoveryAndSubscription")
 		return
 	}
-
-	// Compute the current epoch.
-	currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
-	currentEpoch := slots.ToEpoch(currentSlot)
-
-	// Compute the current fork forkDigest.
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		log.WithError(err).Error("Could not retrieve current fork digest")
-		return
-	}
-
-	// Register respective pubsub handlers at state synced event.
-	s.registerSubscribers(currentEpoch, forkDigest)
 
 	// Start the fork watcher.
 	go s.forkWatcher()
