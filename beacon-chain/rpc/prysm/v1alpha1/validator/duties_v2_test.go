@@ -626,9 +626,9 @@ func TestGetValidatorAssignment_WithAssignmentMap(t *testing.T) {
 
 	// Test with pre-built assignment map (large request scenario)
 	meta := &metadata{
-		startSlot:              start,
-		committeesBySlot:       bySlot,
-		validatorAssignmentMap: buildValidatorAssignmentMap(bySlot, start),
+		startSlot:            start,
+		committeesBySlot:     bySlot,
+		validatorAssignments: buildValidatorAssignmentMap(bySlot, start),
 	}
 
 	vs := &Server{}
@@ -649,16 +649,20 @@ func TestGetValidatorAssignment_WithAssignmentMap(t *testing.T) {
 
 func TestGetValidatorAssignment_WithoutAssignmentMap(t *testing.T) {
 	start := primitives.Slot(100)
-	bySlot := [][][]primitives.ValidatorIndex{
-		{{1, 2, 3}},
-		{{4, 5, 6}},
+
+	// Test without assignment map (small request scenario using CommitteeAssignments)
+	committeeAssignments := map[primitives.ValidatorIndex]*helpers.CommitteeAssignment{
+		5: {
+			Committee:      []primitives.ValidatorIndex{4, 5, 6},
+			AttesterSlot:   start + 1,
+			CommitteeIndex: primitives.CommitteeIndex(0),
+		},
 	}
 
-	// Test without assignment map (small request scenario)
 	meta := &metadata{
-		startSlot:              start,
-		committeesBySlot:       bySlot,
-		validatorAssignmentMap: nil, // No map - should use linear search
+		startSlot:            start,
+		committeeAssignments: committeeAssignments,
+		validatorAssignments: nil, // No map - should use CommitteeAssignments
 	}
 
 	vs := &Server{}
@@ -682,47 +686,54 @@ func TestLoadMetadata_ThresholdBehavior(t *testing.T) {
 	epoch := primitives.Epoch(0)
 
 	tests := []struct {
-		name                string
-		numValidators       int
-		expectAssignmentMap bool
+		name                       string
+		numValidators              int
+		expectAssignmentMap        bool
+		expectCommitteeAssignments bool
 	}{
 		{
-			name:                "Small request - below threshold",
-			numValidators:       100,
-			expectAssignmentMap: false,
+			name:                       "Small request - below threshold",
+			numValidators:              100,
+			expectAssignmentMap:        false,
+			expectCommitteeAssignments: true,
 		},
 		{
-			name:                "Large request - at threshold",
-			numValidators:       validatorLookupThreshold,
-			expectAssignmentMap: true,
+			name:                       "Large request - at threshold",
+			numValidators:              validatorLookupThreshold,
+			expectAssignmentMap:        true,
+			expectCommitteeAssignments: false,
 		},
 		{
-			name:                "Large request - above threshold",
-			numValidators:       validatorLookupThreshold + 1000,
-			expectAssignmentMap: true,
+			name:                       "Large request - above threshold",
+			numValidators:              validatorLookupThreshold + 1000,
+			expectAssignmentMap:        true,
+			expectCommitteeAssignments: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			meta, err := loadMetadata(t.Context(), state, epoch, tt.numValidators)
+			// Create a slice of validator indices based on numValidators
+			requestIndices := make([]primitives.ValidatorIndex, tt.numValidators)
+			for i := 0; i < tt.numValidators && i < int(state.NumValidators()); i++ {
+				requestIndices[i] = primitives.ValidatorIndex(i)
+			}
+
+			meta, err := loadMetadata(t.Context(), state, epoch, requestIndices)
 			require.NoError(t, err)
 			require.NotNil(t, meta)
 
 			if tt.expectAssignmentMap {
-				require.NotNil(t, meta.validatorAssignmentMap, "Expected assignment map to be built for large requests")
-				assert.Equal(t, true, len(meta.validatorAssignmentMap) > 0, "Assignment map should not be empty")
-			} else {
-				// For small requests, the map should be nil (not initialized)
-				if meta.validatorAssignmentMap != nil {
-					t.Errorf("Expected no assignment map for small requests, got: %v", meta.validatorAssignmentMap)
-				}
+				require.NotNil(t, meta.validatorAssignments, "Expected assignment map to be built for large requests")
+				assert.Equal(t, true, len(meta.validatorAssignments) > 0, "Assignment map should not be empty")
+				require.IsNil(t, meta.committeeAssignments, "Expected no committee assignments for large requests")
+			} else if tt.expectCommitteeAssignments {
+				require.NotNil(t, meta.committeeAssignments, "Expected committee assignments for small requests")
+				require.IsNil(t, meta.validatorAssignments, "Expected no assignment map for small requests")
 			}
 
 			// Common fields should always be set
 			assert.Equal(t, true, meta.committeesAtSlot > 0)
-			require.NotNil(t, meta.committeesBySlot)
-			assert.Equal(t, true, len(meta.committeesBySlot) > 0)
 		})
 	}
 }
