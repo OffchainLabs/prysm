@@ -202,4 +202,3 @@ func ParseWeakSubjectivityInputString(wsCheckpointString string) (*v1alpha1.Chec
 		Root:  bRoot,
 	}, nil
 }
-
