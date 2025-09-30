@@ -53,7 +53,6 @@ var (
 	errNoDataColumnBasePath                 = errors.New("DataColumnStorage base path not specified in init")
 )
 
-
 type (
 	// DataColumnStorage is the concrete implementation of the filesystem backend for saving and retrieving DataColumnSidecars.
 	DataColumnStorage struct {
@@ -133,7 +132,6 @@ func WithDataColumnFs(fs afero.Fs) DataColumnStorageOption {
 		return nil
 	}
 }
-
 
 // NewDataColumnStorage creates a new instance of the DataColumnStorage object. Note that the implementation of DataColumnStorage may
 // attempt to hold a file lock to guarantee exclusive control of the data column storage directory, so this should only be

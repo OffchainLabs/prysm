@@ -119,16 +119,11 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	// Only update custody info if Fulu is enabled and we're at or past the Fulu fork epoch
 	if !params.FuluEnabled() {
-		log.Debug("Skipping custody update - Fulu not enabled")
 		return nil
 	}
 
 	currentEpoch := slots.ToEpoch(earliestAvailableSlot)
 	if currentEpoch < params.BeaconConfig().FuluForkEpoch {
-		log.WithFields(logrus.Fields{
-			"currentEpoch": currentEpoch,
-			"fuluEpoch":    params.BeaconConfig().FuluForkEpoch,
-		}).Debug("Skipping custody update - before Fulu fork epoch")
 		return nil
 	}
 
