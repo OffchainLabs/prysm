@@ -627,7 +627,6 @@ func TestGetValidatorAssignment_WithAssignmentMap(t *testing.T) {
 	// Test with pre-built assignment map (large request scenario)
 	meta := &metadata{
 		startSlot:            start,
-		committeesBySlot:     bySlot,
 		validatorAssignments: buildValidatorAssignmentMap(bySlot, start),
 	}
 
