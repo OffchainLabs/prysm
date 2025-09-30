@@ -345,11 +345,9 @@ func (vs *Server) buildValidatorDuty(
 			}
 			nextDuty.IsSyncCommittee = nextInSync
 			if nextInSync {
-				go func() {
-					if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-						log.WithError(err).Warn("Could not register sync subnet next period")
-					}
-				}()
+				if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
+					log.WithError(err).Warn("Could not register sync subnet next period")
+				}
 			}
 		}
 	}
