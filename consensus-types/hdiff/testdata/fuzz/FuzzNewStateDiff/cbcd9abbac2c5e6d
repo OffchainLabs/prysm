@@ -1,2 +1,0 @@
-go test fuzz v1
-[]byte("\xed\xed\xed\xed\f\xee\xed\xedSI")

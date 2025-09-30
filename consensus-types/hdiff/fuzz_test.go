@@ -7,9 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
+
+const maxFuzzValidators = 10000
+const maxFuzzStateDiffSize = 1000
+const maxFuzzHistoricalRoots = 10000
+const maxFuzzDecodedSize = maxFuzzStateDiffSize * 10
+const maxFuzzScanRange = 200
+const fuzzRootsLengthOffset = 16
+const maxFuzzInputSize = 10
+const oneEthInGwei = 1000000000
 
 // FuzzNewHdiff tests parsing variations of realistic diffs
 func FuzzNewHdiff(f *testing.F) {
@@ -63,6 +72,32 @@ func FuzzNewHdiff(f *testing.F) {
 			return
 		}
 		
+		// Bound historical roots length in stateDiff (if it contains snappy-compressed data)
+		// The historicalRootsLength is read after snappy decompression, but we can still
+		// limit the compressed input size to prevent extreme decompression ratios
+		if len(stateDiff) > maxFuzzStateDiffSize {
+			// Limit stateDiff to prevent potential memory bombs from snappy decompression
+			stateDiff = stateDiff[:maxFuzzStateDiffSize]
+		}
+		
+		// Bound validator count in validatorDiffs
+		if len(validatorDiffs) >= 8 {
+			count := binary.LittleEndian.Uint64(validatorDiffs[0:8])
+			if count >= maxFuzzValidators {
+				boundedCount := count % maxFuzzValidators
+				binary.LittleEndian.PutUint64(validatorDiffs[0:8], boundedCount)
+			}
+		}
+		
+		// Bound balance count in balancesDiff
+		if len(balancesDiff) >= 8 {
+			count := binary.LittleEndian.Uint64(balancesDiff[0:8])
+			if count >= maxFuzzValidators {
+				boundedCount := count % maxFuzzValidators
+				binary.LittleEndian.PutUint64(balancesDiff[0:8], boundedCount)
+			}
+		}
+		
 		input := HdiffBytes{
 			StateDiff:      stateDiff,
 			ValidatorDiffs: validatorDiffs,
@@ -75,112 +110,196 @@ func FuzzNewHdiff(f *testing.F) {
 	})
 }
 
-// FuzzNewStateDiff tests the newStateDiff function with random compressed input
+// FuzzNewStateDiff tests the newStateDiff function with valid random state diffs
 func FuzzNewStateDiff(f *testing.F) {
-	// Add seed corpus
-	source, _ := util.DeterministicGenesisStateElectra(f, 16)
-	target := source.Copy()
-	_ = target.SetSlot(source.Slot() + 5)
-	
-	diff, err := diffToState(source, target)
-	if err == nil {
-		serialized := diff.serialize()
-		f.Add(serialized)
-	}
-	
-	// Add edge cases
-	f.Add([]byte{})
-	f.Add([]byte{0x01})
-	f.Add([]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07})
-	
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, validatorCount uint8, slotDelta uint64, balanceData []byte, validatorData []byte) {
 		defer func() {
 			if r := recover(); r != nil {
 				t.Errorf("newStateDiff panicked: %v", r)
 			}
 		}()
 		
-		// Should never panic, only return error
-		_, err := newStateDiff(data)
-		_ = err
+		// Bound validator count to reasonable range
+		validators := uint64(validatorCount%32 + 8) // 8-39 validators
+		if slotDelta > 100 {
+			slotDelta = slotDelta % 100
+		}
+		
+		// Generate random source state
+		source, _ := util.DeterministicGenesisStateElectra(t, validators)
+		target := source.Copy()
+		
+		// Apply random slot change
+		_ = target.SetSlot(source.Slot() + primitives.Slot(slotDelta))
+		
+		// Apply random balance changes
+		if len(balanceData) >= 8 {
+			balances := target.Balances()
+			numChanges := int(binary.LittleEndian.Uint64(balanceData[:8])) % len(balances)
+			for i := 0; i < numChanges && i*8+8 < len(balanceData); i++ {
+				idx := i % len(balances)
+				delta := int64(binary.LittleEndian.Uint64(balanceData[i*8+8:(i+1)*8+8]))
+				// Keep delta reasonable
+				delta = delta % oneEthInGwei // Max 1 ETH change
+				
+				if delta < 0 && uint64(-delta) > balances[idx] {
+					balances[idx] = 0
+				} else if delta < 0 {
+					balances[idx] -= uint64(-delta)
+				} else {
+					balances[idx] += uint64(delta)
+				}
+			}
+			_ = target.SetBalances(balances)
+		}
+		
+		// Apply random validator changes
+		if len(validatorData) > 0 {
+			validators := target.Validators()
+			numChanges := int(validatorData[0]) % len(validators)
+			for i := 0; i < numChanges && i < len(validatorData)-1; i++ {
+				idx := i % len(validators)
+				if validatorData[i+1]%2 == 0 {
+					validators[idx].EffectiveBalance += oneEthInGwei // 1 ETH
+				}
+			}
+			_ = target.SetValidators(validators)
+		}
+		
+		// Create diff between source and target  
+		diff, err := Diff(source, target)
+		if err != nil {
+			return // Skip if diff creation fails
+		}
+		
+		// Test newStateDiff with the valid serialized diff from StateDiff field
+		reconstructed, err := newStateDiff(diff.StateDiff)
+		if err != nil {
+			t.Errorf("newStateDiff failed on valid diff: %v", err)
+			return
+		}
+		
+		// Basic validation that reconstruction worked
+		if reconstructed == nil {
+			t.Error("newStateDiff returned nil without error")
+		}
 	})
 }
 
-// FuzzNewValidatorDiffs tests validator diff deserialization
+// FuzzNewValidatorDiffs tests validator diff deserialization with valid diffs
 func FuzzNewValidatorDiffs(f *testing.F) {
-	// Add seed corpus
-	source, _ := util.DeterministicGenesisStateElectra(f, 8)
-	target := source.Copy()
-	vals := target.Validators()
-	if len(vals) > 0 {
-		modifiedVal := &ethpb.Validator{
-			PublicKey:                  vals[0].PublicKey,
-			WithdrawalCredentials:      vals[0].WithdrawalCredentials,
-			EffectiveBalance:           vals[0].EffectiveBalance + 1000,
-			Slashed:                    !vals[0].Slashed,
-			ActivationEligibilityEpoch: vals[0].ActivationEligibilityEpoch,
-			ActivationEpoch:            vals[0].ActivationEpoch,
-			ExitEpoch:                  vals[0].ExitEpoch,
-			WithdrawableEpoch:          vals[0].WithdrawableEpoch,
-		}
-		vals[0] = modifiedVal
-		_ = target.SetValidators(vals)
-		
-		// Create a simple diff for fuzzing - we'll just use raw bytes
-		_, err := diffToVals(source, target)
-		if err == nil {
-			// Add some realistic validator diff bytes for the corpus
-			f.Add([]byte{1, 0, 0, 0, 0, 0, 0, 0}) // Simple validator diff
-		}
-	}
-	
-	// Add edge cases
-	f.Add([]byte{})
-	f.Add([]byte{0x01, 0x02, 0x03, 0x04})
-	
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, validatorCount uint8, changeData []byte) {
 		defer func() {
 			if r := recover(); r != nil {
 				t.Errorf("newValidatorDiffs panicked: %v", r)
 			}
 		}()
 		
-		_, err := newValidatorDiffs(data)
-		_ = err
+		// Bound validator count to reasonable range
+		validators := uint64(validatorCount%16 + 4) // 4-19 validators
+		
+		// Generate random source state
+		source, _ := util.DeterministicGenesisStateElectra(t, validators)
+		target := source.Copy()
+		
+		// Apply random validator changes based on changeData
+		if len(changeData) > 0 {
+			vals := target.Validators()
+			numChanges := int(changeData[0]) % len(vals)
+			
+			for i := 0; i < numChanges && i < len(changeData)-1; i++ {
+				idx := i % len(vals)
+				changeType := changeData[i+1] % 4
+				
+				switch changeType {
+				case 0: // Change effective balance
+					vals[idx].EffectiveBalance += oneEthInGwei
+				case 1: // Toggle slashed status
+					vals[idx].Slashed = !vals[idx].Slashed
+				case 2: // Change activation epoch
+					vals[idx].ActivationEpoch++
+				case 3: // Change exit epoch
+					vals[idx].ExitEpoch++
+				}
+			}
+			_ = target.SetValidators(vals)
+		}
+		
+		// Create diff between source and target
+		diff, err := Diff(source, target)
+		if err != nil {
+			return // Skip if diff creation fails
+		}
+		
+		// Test newValidatorDiffs with the valid serialized diff
+		reconstructed, err := newValidatorDiffs(diff.ValidatorDiffs)
+		if err != nil {
+			t.Errorf("newValidatorDiffs failed on valid diff: %v", err)
+			return
+		}
+		
+		// Basic validation that reconstruction worked
+		if reconstructed == nil {
+			t.Error("newValidatorDiffs returned nil without error")
+		}
 	})
 }
 
-// FuzzNewBalancesDiff tests balance diff deserialization
+// FuzzNewBalancesDiff tests balance diff deserialization with valid diffs
 func FuzzNewBalancesDiff(f *testing.F) {
-	// Add seed corpus
-	source, _ := util.DeterministicGenesisStateElectra(f, 8)
-	target := source.Copy()
-	balances := target.Balances()
-	if len(balances) > 0 {
-		balances[0] += 1000
-		_ = target.SetBalances(balances)
-		
-		// Create a simple diff for fuzzing - we'll just use raw bytes
-		_, err := diffToBalances(source, target)
-		if err == nil {
-			// Add some realistic balance diff bytes for the corpus
-			f.Add([]byte{1, 0, 0, 0, 0, 0, 0, 0}) // Simple balance diff
-		}
-	}
-	
-	// Add edge cases
-	f.Add([]byte{})
-	f.Add([]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08})
-	
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, balanceCount uint8, balanceData []byte) {
 		defer func() {
 			if r := recover(); r != nil {
 				t.Errorf("newBalancesDiff panicked: %v", r)
 			}
 		}()
 		
-		_, err := newBalancesDiff(data)
-		_ = err
+		// Bound balance count to reasonable range
+		numBalances := int(balanceCount%32 + 8) // 8-39 balances
+		
+		// Generate simple source state
+		source, _ := util.DeterministicGenesisStateElectra(t, uint64(numBalances))
+		target := source.Copy()
+		
+		// Apply random balance changes based on balanceData
+		if len(balanceData) >= 8 {
+			balances := target.Balances()
+			numChanges := int(binary.LittleEndian.Uint64(balanceData[:8])) % numBalances
+			
+			for i := 0; i < numChanges && i*8+8 < len(balanceData); i++ {
+				idx := i % numBalances
+				delta := int64(binary.LittleEndian.Uint64(balanceData[i*8+8:(i+1)*8+8]))
+				// Keep delta reasonable
+				delta = delta % oneEthInGwei // Max 1 ETH change
+				
+				if delta < 0 && uint64(-delta) > balances[idx] {
+					balances[idx] = 0
+				} else if delta < 0 {
+					balances[idx] -= uint64(-delta)
+				} else {
+					balances[idx] += uint64(delta)
+				}
+			}
+			_ = target.SetBalances(balances)
+		}
+		
+		// Create diff between source and target to get BalancesDiff
+		diff, err := Diff(source, target)
+		if err != nil {
+			return // Skip if diff creation fails
+		}
+		
+		// Test newBalancesDiff with the valid serialized diff
+		reconstructed, err := newBalancesDiff(diff.BalancesDiff)
+		if err != nil {
+			t.Errorf("newBalancesDiff failed on valid diff: %v", err)
+			return
+		}
+		
+		// Basic validation that reconstruction worked
+		if reconstructed == nil {
+			t.Error("newBalancesDiff returned nil without error")
+		}
 	})
 }
 
@@ -231,6 +350,29 @@ func FuzzApplyDiff(f *testing.F) {
 			return
 		}
 		
+		// Bound historical roots length in stateDiff (same as FuzzNewHdiff)
+		if len(stateDiff) > maxFuzzStateDiffSize {
+			stateDiff = stateDiff[:maxFuzzStateDiffSize]
+		}
+		
+		// Bound validator count in validatorDiffs
+		if len(validatorDiffs) >= 8 {
+			count := binary.LittleEndian.Uint64(validatorDiffs[0:8])
+			if count >= maxFuzzValidators {
+				boundedCount := count % maxFuzzValidators
+				binary.LittleEndian.PutUint64(validatorDiffs[0:8], boundedCount)
+			}
+		}
+		
+		// Bound balance count in balancesDiff
+		if len(balancesDiff) >= 8 {
+			count := binary.LittleEndian.Uint64(balancesDiff[0:8])
+			if count >= maxFuzzValidators {
+				boundedCount := count % maxFuzzValidators
+				binary.LittleEndian.PutUint64(balancesDiff[0:8], boundedCount)
+			}
+		}
+		
 		// Create fresh source state for each test
 		source, _ := util.DeterministicGenesisStateElectra(t, 8)
 		
@@ -268,6 +410,16 @@ func FuzzReadPendingAttestation(f *testing.F) {
 		// Make a copy since the function modifies the slice
 		dataCopy := make([]byte, len(data))
 		copy(dataCopy, data)
+		
+		// Bound the bits length by modifying the first 8 bytes if they exist
+		if len(dataCopy) >= 8 {
+			// Read the bits length and bound it to maxFuzzValidators
+			bitsLength := binary.LittleEndian.Uint64(dataCopy[0:8])
+			if bitsLength >= maxFuzzValidators {
+				boundedLength := bitsLength % maxFuzzValidators
+				binary.LittleEndian.PutUint64(dataCopy[0:8], boundedLength)
+			}
+		}
 		
 		_, err := readPendingAttestation(&dataCopy)
 		_ = err

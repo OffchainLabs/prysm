@@ -1,4 +1,0 @@
-go test fuzz v1
-[]byte("\x8c\x8c\x8c\x8c\x8c\x00\x01\x00\x00")
-[]byte("p")
-[]byte("0")

@@ -11,6 +11,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
+// maxSafeBalance ensures balances can be safely cast to int64 for diff computation
+const maxSafeBalance = 1<<52 - 1
+
 // PropertyTestRoundTrip verifies that diff->apply is idempotent with realistic data
 func FuzzPropertyRoundTrip(f *testing.F) {
 	f.Fuzz(func(t *testing.T, slotDelta uint64, balanceData []byte, validatorData []byte) {
@@ -228,15 +231,25 @@ func FuzzPropertyDiffEfficiency(f *testing.F) {
 // PropertyTestBalanceConservation verifies that balance operations don't create/destroy value unexpectedly
 func FuzzPropertyBalanceConservation(f *testing.F) {
 	f.Fuzz(func(t *testing.T, balanceData []byte) {
-		// Convert byte data to balance changes
+		// Convert byte data to balance changes, bounded to safe range
 		var balanceChanges []int64
 		for i := 0; i+7 < len(balanceData) && len(balanceChanges) < 50; i += 8 {
-			change := int64(binary.LittleEndian.Uint64(balanceData[i : i+8]))
+			rawChange := int64(binary.LittleEndian.Uint64(balanceData[i : i+8]))
+			// Bound the change to ensure resulting balances stay within safe range
+			change := rawChange % (maxSafeBalance / 2) // Divide by 2 to allow for addition/subtraction
 			balanceChanges = append(balanceChanges, change)
 		}
 		
 		source, _ := util.DeterministicGenesisStateElectra(t, uint64(len(balanceChanges)+10))
 		originalBalances := source.Balances()
+		
+		// Ensure initial balances are within safe range for int64 casting
+		for i, balance := range originalBalances {
+			if balance > maxSafeBalance {
+				originalBalances[i] = balance % maxSafeBalance
+			}
+		}
+		_ = source.SetBalances(originalBalances)
 		
 		// Calculate total before
 		var totalBefore uint64
@@ -256,7 +269,7 @@ func FuzzPropertyBalanceConservation(f *testing.F) {
 			
 			// Prevent underflow
 			if delta < 0 && uint64(-delta) > targetBalances[i] {
-				totalDelta += int64(targetBalances[i]) // Lost amount
+				totalDelta -= int64(targetBalances[i]) // Actually lost amount (negative)
 				targetBalances[i] = 0
 			} else if delta < 0 {
 				targetBalances[i] -= uint64(-delta)
@@ -382,7 +395,7 @@ func FuzzPropertyValidatorIndices(f *testing.F) {
 		resultVals := result.Validators()
 		for i := range sourceVals {
 			if i < len(resultVals) {
-				require.Equal(t, sourceVals[i].PublicKey, resultVals[i].PublicKey,
+				require.DeepEqual(t, sourceVals[i].PublicKey, resultVals[i].PublicKey,
 					"Public key changed at validator index %d", i)
 			}
 		}

@@ -38,6 +38,7 @@ go_test(
         "security_test.go",
         "state_diff_test.go",
     ],
+    data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
         "//beacon-chain/core/transition:go_default_library",
