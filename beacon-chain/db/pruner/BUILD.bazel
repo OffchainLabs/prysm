@@ -8,7 +8,6 @@ go_library(
         "//beacon-chain:__subpackages__",
     ],
     deps = [
-        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//config/params:go_default_library",
