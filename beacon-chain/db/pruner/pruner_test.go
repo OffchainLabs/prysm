@@ -254,29 +254,32 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 	// Get the minimum required epochs (272 + 1 = 273 for minimal)
 	minRequiredEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests + 1)
 
+	// Use a slot that's guaranteed to be after the minimum retention period
+	currentSlot := primitives.Slot(minRequiredEpochs+100) * (params.BeaconConfig().SlotsPerEpoch)
+
 	tests := []struct {
-		name                   string
-		userRetentionEpochs    primitives.Epoch
-		expectedRetentionSlots primitives.Slot
-		description            string
+		name                string
+		userRetentionEpochs primitives.Epoch
+		expectedPruneSlot   primitives.Slot
+		description         string
 	}{
 		{
-			name:                   "User value below minimum - should use minimum",
-			userRetentionEpochs:    2, // Way below minimum
-			expectedRetentionSlots: primitives.Slot(minRequiredEpochs) * params.BeaconConfig().SlotsPerEpoch,
-			description:            "Should use minimum when user value is too low",
+			name:                "User value below minimum - should use minimum",
+			userRetentionEpochs: 2, // Way below minimum
+			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs)*params.BeaconConfig().SlotsPerEpoch,
+			description:         "Should use minimum when user value is too low",
 		},
 		{
-			name:                   "User value at minimum",
-			userRetentionEpochs:    minRequiredEpochs,
-			expectedRetentionSlots: primitives.Slot(minRequiredEpochs) * params.BeaconConfig().SlotsPerEpoch,
-			description:            "Should use user value when at minimum",
+			name:                "User value at minimum",
+			userRetentionEpochs: minRequiredEpochs,
+			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs)*params.BeaconConfig().SlotsPerEpoch,
+			description:         "Should use user value when at minimum",
 		},
 		{
-			name:                   "User value above minimum",
-			userRetentionEpochs:    minRequiredEpochs + 10,
-			expectedRetentionSlots: primitives.Slot(minRequiredEpochs+10) * params.BeaconConfig().SlotsPerEpoch,
-			description:            "Should use user value when above minimum",
+			name:                "User value above minimum",
+			userRetentionEpochs: minRequiredEpochs + 10,
+			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs+10)*params.BeaconConfig().SlotsPerEpoch,
+			description:         "Should use user value when above minimum",
 		},
 	}
 
@@ -297,18 +300,10 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			require.NoError(t, err)
 
 			// Test the pruning calculation
-			// Use a slot that's guaranteed to be after the minimum retention period
-			currentSlot := primitives.Slot((minRequiredEpochs + 100) * primitives.Epoch(params.BeaconConfig().SlotsPerEpoch))
 			pruneUptoSlot := p.ps(currentSlot)
 
-			// Calculate expected prune slot
-			expectedPruneSlot := primitives.Slot(0)
-			if currentSlot > tt.expectedRetentionSlots {
-				expectedPruneSlot = currentSlot - tt.expectedRetentionSlots
-			}
-
 			// Verify the pruning slot
-			assert.Equal(t, expectedPruneSlot, pruneUptoSlot, tt.description)
+			assert.Equal(t, tt.expectedPruneSlot, pruneUptoSlot, tt.description)
 
 			// Check if warning was logged when value was too low
 			if tt.userRetentionEpochs < minRequiredEpochs {
