@@ -132,15 +132,9 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			// Parse JSON tag options (e.g., "fieldname,omitempty")
 			parts := strings.Split(jsonTag, ",")
 			key := parts[0]
-			hasOmitEmpty := len(parts) > 1 && strings.Contains(jsonTag, "omitempty")
 
 			if key == "" {
 				key = f.Name
-			}
-
-			// Check if field should be omitted before conversion
-			if hasOmitEmpty && isEmptyForOmitEmpty(v.Field(i)) {
-				continue
 			}
 
 			fieldValue := convertValueForJSON(v.Field(i), tag)
@@ -162,34 +156,6 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 		}).Error("Unsupported config field kind; value forwarded verbatim")
 		return v.Interface()
 	}
-}
-
-// isEmptyForOmitEmpty checks if a reflect.Value should be considered empty for omitempty
-func isEmptyForOmitEmpty(v reflect.Value) bool {
-	// Unwrap pointers / interfaces
-	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return true
-		}
-		v = v.Elem()
-	}
-
-	// Types where omitempty uses length semantics too
-	switch v.Kind() {
-	case reflect.String, reflect.Array, reflect.Slice, reflect.Map:
-		return v.Len() == 0
-	default:
-		// Everything else: zero value check
-		return v.IsZero()
-	}
-}
-
-// isEmptyValue checks if a value should be considered empty for omitempty
-func isEmptyValue(v interface{}) bool {
-	if v == nil {
-		return true
-	}
-	return isEmptyForOmitEmpty(reflect.ValueOf(v))
 }
 
 func prepareConfigSpec() (map[string]interface{}, error) {
