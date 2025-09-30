@@ -426,16 +426,15 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 					continue
 				}
 				if _, ok := assignments[vIndex]; !ok {
-					assignments[vIndex] = &CommitteeAssignment{
-						Committee:      committee,
-						AttesterSlot:   slot,
-						CommitteeIndex: primitives.CommitteeIndex(j),
-					}
-					delete(vals, vIndex)
-					remaining--
-					if remaining == 0 {
-						return assignments, nil // early exit
-					}
+					assignments[vIndex] = &CommitteeAssignment{}
+				}
+				assignments[vIndex].Committee = committee
+				assignments[vIndex].AttesterSlot = slot
+				assignments[vIndex].CommitteeIndex = primitives.CommitteeIndex(j)
+				delete(vals, vIndex)
+				remaining--
+				if remaining == 0 {
+					return assignments, nil // early exit
 				}
 			}
 		}
