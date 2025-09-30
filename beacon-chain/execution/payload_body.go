@@ -179,9 +179,6 @@ func (r *blindedBlockReconstructor) requestBodiesByHash(ctx context.Context, cli
 	}
 	hashes := make([]common.Hash, 0, len(batch))
 	for h := range batch {
-		if h == params.BeaconConfig().ZeroHash {
-			continue
-		}
 		hashes = append(hashes, h)
 	}
 	result := make([]*pb.ExecutionPayloadBody, 0)
