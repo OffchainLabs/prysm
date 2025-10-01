@@ -2915,8 +2915,8 @@ def prysm_deps():
             "gazelle:exclude tools.go",
         ],
         importpath = "github.com/quic-go/quic-go",
-        sum = "h1:w5iJHXwHxs1QxyBv1EHKuC50GX5to8mJAxvtnttJp94=",
-        version = "v0.49.0",
+        sum = "h1:x09Agz4ATTMEP3qb5P0MRxNZfd6O9wAyK3qwwqQZVQc=",
+        version = "v0.49.1-0.20250925085836-275c172fec2b",
     )
     go_repository(
         name = "com_github_quic_go_webtransport_go",
@@ -3311,6 +3311,15 @@ def prysm_deps():
         importpath = "github.com/stretchr/testify",
         sum = "h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=",
         version = "v1.10.0",
+    )
+    go_repository(
+        name = "com_github_supranational_blst",
+        build_file_generation = "off",
+        importpath = "github.com/supranational/blst",
+        patch_args = ["-p1"],
+        patches = ["//third_party:com_github_supranational_blst.patch"],
+        sum = "h1:xNMoHRJOTwMn63ip6qoWJ2Ymgvj7E2b9jY2FAwY+qRo=",
+        version = "v0.3.14",
     )
     go_repository(
         name = "com_github_syndtr_goleveldb",
@@ -4938,14 +4947,4 @@ def prysm_deps():
         importpath = "go.uber.org/zap",
         sum = "h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=",
         version = "v1.27.0",
-    )
-
-    http_archive(
-        name = "com_github_supranational_blst",
-        urls = [
-            "https://github.com/supranational/blst/archive/8c7db7fe8d2ce6e76dc398ebd4d475c0ec564355.tar.gz",
-        ],
-        strip_prefix = "blst-8c7db7fe8d2ce6e76dc398ebd4d475c0ec564355",
-        build_file = "//third_party:blst/blst.BUILD",
-        sha256 = "e9041d03594271c9739d22d9f013ea8b5c28403285a2e8938f6e41a2437c6ff8",
     )

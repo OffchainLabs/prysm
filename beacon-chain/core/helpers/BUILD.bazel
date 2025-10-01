@@ -10,6 +10,7 @@ go_library(
         "legacy.go",
         "metrics.go",
         "randao.go",
+        "ranges.go",
         "rewards_penalties.go",
         "shuffle.go",
         "sync_committee.go",
@@ -56,6 +57,7 @@ go_test(
         "private_access_fuzz_noop_test.go",  # keep
         "private_access_test.go",
         "randao_test.go",
+        "ranges_test.go",
         "rewards_penalties_test.go",
         "shuffle_test.go",
         "sync_committee_test.go",

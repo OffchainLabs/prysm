@@ -3,12 +3,12 @@ package initialsync
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -430,9 +430,9 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	}
 
 	if len(missingIndicesByRoot) > 0 {
-		prettyMissingIndicesByRoot := make(map[string][]uint64, len(missingIndicesByRoot))
+		prettyMissingIndicesByRoot := make(map[string]string, len(missingIndicesByRoot))
 		for root, indices := range missingIndicesByRoot {
-			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = sortedSliceFromMap(indices)
+			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
 		}
 		return "", errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}
@@ -725,17 +725,6 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 		return p, err
 	}
 	return "", errNoPeersAvailable
-}
-
-// sortedSliceFromMap returns a sorted slice of keys from a map.
-func sortedSliceFromMap(m map[uint64]bool) []uint64 {
-	result := make([]uint64, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-
-	slices.Sort(result)
-	return result
 }
 
 // requestBlocks is a wrapper for handling BeaconBlocksByRangeRequest requests/streams.

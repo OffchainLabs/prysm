@@ -67,7 +67,6 @@ go_test(
         "testdata/e2e_config.yaml",
         "@consensus_spec//:spec_data",
         "@consensus_spec_tests//:test_data",
-        "@eth2_networks//:configs",
         "@holesky_testnet//:configs",
         "@hoodi_testnet//:configs",
         "@mainnet//:configs",
