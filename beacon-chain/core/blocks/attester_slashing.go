@@ -62,6 +62,9 @@ func ProcessAttesterSlashing(
 	slashing ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process attester slashing")
+	}
 	if err := VerifyAttesterSlashing(ctx, beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify attester slashing")
 	}
@@ -70,9 +73,6 @@ func ProcessAttesterSlashing(
 		return slashableIndices[i] < slashableIndices[j]
 	})
 	currentEpoch := slots.ToEpoch(beaconState.Slot())
-	if exitInfo == nil {
-		return nil, errors.New("exit info is required to process attester slashing")
-	}
 	var err error
 	var slashedAny bool
 	var val state.ReadOnlyValidator
