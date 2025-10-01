@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -17,6 +18,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	log "github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestGetDepositContract(t *testing.T) {
@@ -689,6 +692,27 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// Check second entry - values should be strings for consistent API output
 	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
 	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+
+	// Verify that fields with json:"-" are NOT present in the blob schedule entries
+	for i, entry := range blobSchedule {
+		t.Run(fmt.Sprintf("entry_%d_omits_json_dash_fields", i), func(t *testing.T) {
+			// These fields have `json:"-"` in NetworkScheduleEntry and should be omitted
+			_, hasForkVersion := entry["ForkVersion"]
+			assert.Equal(t, false, hasForkVersion, "ForkVersion should be omitted due to json:\"-\"")
+
+			_, hasForkDigest := entry["ForkDigest"]
+			assert.Equal(t, false, hasForkDigest, "ForkDigest should be omitted due to json:\"-\"")
+
+			_, hasBPOEpoch := entry["BPOEpoch"]
+			assert.Equal(t, false, hasBPOEpoch, "BPOEpoch should be omitted due to json:\"-\"")
+
+			_, hasVersionEnum := entry["VersionEnum"]
+			assert.Equal(t, false, hasVersionEnum, "VersionEnum should be omitted due to json:\"-\"")
+
+			_, hasIsFork := entry["isFork"]
+			assert.Equal(t, false, hasIsFork, "isFork should be omitted due to json:\"-\"")
+		})
+	}
 }
 
 func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
@@ -714,4 +738,36 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 
 	_, exists := data["BLOB_SCHEDULE"]
 	require.Equal(t, false, exists)
+}
+
+func TestConvertValueForJSON_NoErrorLogsForStrings(t *testing.T) {
+	logHook := logTest.NewLocal(log.StandardLogger())
+	defer logHook.Reset()
+
+	stringTestCases := []struct {
+		tag   string
+		value string
+	}{
+		{"CONFIG_NAME", "mainnet"},
+		{"PRESET_BASE", "mainnet"},
+		{"DEPOSIT_CONTRACT_ADDRESS", "0x00000000219ab540356cBB839Cbe05303d7705Fa"},
+		{"TERMINAL_TOTAL_DIFFICULTY", "58750000000000000000000"},
+	}
+
+	for _, tc := range stringTestCases {
+		t.Run(tc.tag, func(t *testing.T) {
+			logHook.Reset()
+
+			// Convert the string value
+			v := reflect.ValueOf(tc.value)
+			result := convertValueForJSON(v, tc.tag)
+
+			// Verify the result is correct
+			require.Equal(t, tc.value, result)
+
+			// Verify NO error was logged about unsupported field kind
+			require.LogsDoNotContain(t, logHook, "Unsupported config field kind")
+			require.LogsDoNotContain(t, logHook, "kind=string")
+		})
+	}
 }
