@@ -527,7 +527,11 @@
     </spec>
 
 - name: compute_fork_digest#fulu
-  sources: []
+  sources:
+    - file: config/params/fork.go
+      search: func ForkDigest(
+    - file: config/params/config.go
+      search: func entryWithForkDigest(
   spec: |
     <spec fn="compute_fork_digest" fork="fulu" hash="e916a595">
     def compute_fork_digest(
@@ -3140,6 +3144,17 @@
         return hash(domain_type + uint_to_bytes(epoch) + mix)
     </spec>
 
+- name: get_slot_component_duration_ms
+  sources: []
+  spec: |
+    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
+    def get_slot_component_duration_ms(basis_points: uint64) -> uint64:
+        """
+        Calculate the duration of a slot component in milliseconds.
+        """
+        return basis_points * SLOT_DURATION_MS // BASIS_POINTS
+    </spec>
+
 - name: get_slot_signature
   sources: []
   spec: |
@@ -3158,17 +3173,6 @@
     <spec fn="get_slots_since_genesis" fork="phase0" hash="3c697269">
     def get_slots_since_genesis(store: Store) -> int:
         return (store.time - store.genesis_time) // SECONDS_PER_SLOT
-    </spec>
-
-- name: get_slot_component_duration_ms
-  sources: []
-  spec: |
-    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
-    def get_slot_component_duration_ms(basis_points: uint64) -> uint64:
-        """
-        Calculate the duration of a slot component in milliseconds.
-        """
-        return basis_points * SLOT_DURATION_MS // BASIS_POINTS
     </spec>
 
 - name: get_source_deltas
@@ -7279,6 +7283,20 @@
         return a - b if a > b else 0
     </spec>
 
+- name: seconds_to_milliseconds
+  sources: []
+  spec: |
+    <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
+    def seconds_to_milliseconds(seconds: uint64) -> uint64:
+        """
+        Convert seconds to milliseconds with overflow protection.
+        Returns ``UINT64_MAX`` if the result would overflow.
+        """
+        if seconds > UINT64_MAX // 1000:
+            return UINT64_MAX
+        return seconds * 1000
+    </spec>
+
 - name: set_or_append_list
   sources: []
   spec: |
@@ -7514,20 +7532,6 @@
         # Verify state root
         if validate_result:
             assert block.state_root == hash_tree_root(state)
-    </spec>
-
-- name: seconds_to_milliseconds
-  sources: []
-  spec: |
-    <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
-    def seconds_to_milliseconds(seconds: uint64) -> uint64:
-        """
-        Convert seconds to milliseconds with overflow protection.
-        Returns ``UINT64_MAX`` if the result would overflow.
-        """
-        if seconds > UINT64_MAX // 1000:
-            return UINT64_MAX
-        return seconds * 1000
     </spec>
 
 - name: store_target_checkpoint_state
