@@ -17,13 +17,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	// validatorLookupThreshold determines when to use PrecomputeCommittees vs CommitteeAssignments.
-	// For requests with fewer validators, we use CommitteeAssignments which only computes committees
-	// for the requested validators. For large amounts of validators, we precompute all committees
-	// and build a map for O(1) lookups.
-	validatorLookupThreshold = 3000
-)
 
 // GetDutiesV2 returns the duties assigned to a list of validators specified
 // in the request object.
@@ -168,8 +161,6 @@ type dutiesMetadata struct {
 type metadata struct {
 	committeesAtSlot     uint64
 	proposalSlots        map[primitives.ValidatorIndex][]primitives.Slot
-	startSlot            primitives.Slot
-	validatorAssignments map[primitives.ValidatorIndex]*helpers.LiteAssignment
 	committeeAssignments map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
 }
 
@@ -206,50 +197,13 @@ func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.
 	}
 	meta.committeesAtSlot = helpers.SlotCommitteeCount(activeValidatorCount)
 
-	meta.startSlot, err = slots.EpochStart(reqEpoch)
+	// Use CommitteeAssignments which only computes committees for requested validators
+	meta.committeeAssignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
 	if err != nil {
-		return nil, err
-	}
-
-	// Use different strategies based on request size
-	if len(requestIndices) >= validatorLookupThreshold {
-		// For large requests: precompute all committees and build a map for O(1) lookup
-		committeesBySlot, err := helpers.PrecomputeCommittees(ctx, s, meta.startSlot)
-		if err != nil {
-			return nil, err
-		}
-		meta.validatorAssignments = buildValidatorAssignmentMap(committeesBySlot, meta.startSlot)
-	} else {
-		// For small requests: use CommitteeAssignments which only computes for requested validators
-		meta.committeeAssignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
-		}
+		return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
 	}
 
 	return meta, nil
-}
-
-// buildValidatorAssignmentMap creates a map from validator index to assignment for O(1) lookup.
-func buildValidatorAssignmentMap(
-	bySlot [][][]primitives.ValidatorIndex,
-	startSlot primitives.Slot,
-) map[primitives.ValidatorIndex]*helpers.LiteAssignment {
-	validatorToAssignment := make(map[primitives.ValidatorIndex]*helpers.LiteAssignment)
-
-	for relativeSlot, committees := range bySlot {
-		for cIdx, committee := range committees {
-			for pos, vIdx := range committee {
-				validatorToAssignment[vIdx] = &helpers.LiteAssignment{
-					AttesterSlot:            startSlot + primitives.Slot(relativeSlot),
-					CommitteeIndex:          primitives.CommitteeIndex(cIdx),
-					CommitteeLength:         uint64(len(committee)),
-					ValidatorCommitteeIndex: uint64(pos),
-				}
-			}
-		}
-	}
-	return validatorToAssignment
 }
 
 // findValidatorIndexInCommittee finds the position of a validator in a committee.
@@ -262,31 +216,16 @@ func findValidatorIndexInCommittee(committee []primitives.ValidatorIndex, valida
 	return 0
 }
 
-// getValidatorAssignment retrieves the assignment for a validator using either
-// the pre-built assignment map (for large requests) or CommitteeAssignments (for small requests).
+// getValidatorAssignment retrieves the assignment for a validator from CommitteeAssignments.
 func (vs *Server) getValidatorAssignment(meta *metadata, validatorIndex primitives.ValidatorIndex) *helpers.LiteAssignment {
-	// For large requests: use the pre-built assignment map
-	if meta.validatorAssignments != nil {
-		if assignment, exists := meta.validatorAssignments[validatorIndex]; exists {
-			return assignment
+	if assignment, exists := meta.committeeAssignments[validatorIndex]; exists {
+		return &helpers.LiteAssignment{
+			AttesterSlot:            assignment.AttesterSlot,
+			CommitteeIndex:          assignment.CommitteeIndex,
+			CommitteeLength:         uint64(len(assignment.Committee)),
+			ValidatorCommitteeIndex: findValidatorIndexInCommittee(assignment.Committee, validatorIndex),
 		}
-		return &helpers.LiteAssignment{}
 	}
-
-	// For small requests: use CommitteeAssignments result
-	if meta.committeeAssignments != nil {
-		if assignment, exists := meta.committeeAssignments[validatorIndex]; exists {
-			return &helpers.LiteAssignment{
-				AttesterSlot:            assignment.AttesterSlot,
-				CommitteeIndex:          assignment.CommitteeIndex,
-				CommitteeLength:         uint64(len(assignment.Committee)),
-				ValidatorCommitteeIndex: findValidatorIndexInCommittee(assignment.Committee, validatorIndex),
-			}
-		}
-		return &helpers.LiteAssignment{}
-	}
-
-	// Fallback (shouldn't happen, but for safety)
 	return &helpers.LiteAssignment{}
 }
 
