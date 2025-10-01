@@ -776,8 +776,8 @@ def prysm_deps():
         importpath = "github.com/ethereum/c-kzg-4844/v2",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_ethereum_c_kzg_4844.patch"],
-        sum = "h1:DQ21UU0VSsuGy8+pcMJHDS0CV1bKmJmxsJYK8l3MiLU=",
-        version = "v2.1.3",
+        sum = "h1:aVtoLK5xwJ6c5RiqO8g8ptJ5KU+2Hdquf6G3aXiHh5s=",
+        version = "v2.1.5",
     )
     go_repository(
         name = "com_github_ethereum_go_ethereum",
