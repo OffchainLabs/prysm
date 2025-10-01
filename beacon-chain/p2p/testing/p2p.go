@@ -233,7 +233,7 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumnSidecar(uint64, blocks.VerifiedRODataColumn) error {
+func (p *TestP2P) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }

@@ -267,16 +267,9 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 		unseenIndices[sidecar.Index] = true
 	}
 
-	// Broadcast all the data column sidecars we reconstructed but did not see via gossip.
-	for _, sidecar := range unseenSidecars {
-		// Compute the subnet for this data column sidecar.
-		subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-
-		// Broadcast the data column sidecar.
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, sidecar); err != nil {
-			// Don't return on error on broadcast failure, just log it.
-			log.WithError(err).Error("Broadcast data column")
-		}
+	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).
+	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars); err != nil {
+		return nil, errors.Wrap(err, "broadcast data column sidecars")
 	}
 
 	// Receive data column sidecars.

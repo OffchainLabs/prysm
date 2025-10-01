@@ -18,7 +18,6 @@ exceptions:
     - UPDATE_TIMEOUT#altair
 
     # Not implemented: gloas (future fork)
-    - KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH_GLOAS#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
 
@@ -215,7 +214,6 @@ exceptions:
 
     # Not implemented: altair
     - compute_sync_committee_period_at_slot#altair
-    - compute_timestamp_at_slot#bellatrix
     - get_contribution_and_proof#altair
     - get_contribution_due_ms#altair
     - get_index_for_new_validator#altair
@@ -285,12 +283,10 @@ exceptions:
     - upgrade_lc_update_to_electra#electra
 
     # Not implemented: fulu
-    - compute_fork_digest#fulu
     - compute_matrix#fulu
     - get_blob_parameters#fulu
     - get_data_column_sidecars_from_block#fulu
     - get_data_column_sidecars_from_column_sidecar#fulu
-    - get_extended_sample_count#fulu
     - recover_matrix#fulu
 
     # Not implemented: gloas (future fork)
