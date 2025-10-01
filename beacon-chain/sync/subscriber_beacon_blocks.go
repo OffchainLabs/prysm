@@ -68,7 +68,10 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
-	return err
+	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
+		return errors.Wrap(err, "process pending atts for block")
+	}
+	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,

@@ -62,7 +62,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 
 	a := &ethpb.Attestation{Data: &ethpb.AttestationData{Target: &ethpb.Checkpoint{Root: make([]byte, 32)}}}
 	r.blkRootToPendingAtts[[32]byte{'A'}] = []any{a}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), [32]byte{'A'}))
 	require.LogsContain(t, hook, "Requesting block by root")
 }
 
@@ -141,7 +141,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []any{att}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -235,7 +235,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAttElectra(t *testing.T) {
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []any{att}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -360,7 +360,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 	r.blkRootToPendingAtts[root] = []any{
 		att,
 	}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	// Verify that the event feed receives the expected attestation.
 	var wg sync.WaitGroup
@@ -471,7 +471,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	}
 
 	s.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: a, Signature: make([]byte, fieldparams.BLSSignatureLength)}}
-	require.NoError(t, s.processPendingAtts(t.Context()))
+	require.NoError(t, s.processPendingAttsForBlock(t.Context(), r32))
 
 	assert.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcasted bad aggregate")
 
@@ -510,7 +510,7 @@ func TestProcessPendingAtts_NoBroadcastWithBadSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	s.blkRootToPendingAtts[r32] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
-	require.NoError(t, s.processPendingAtts(t.Context()))
+	require.NoError(t, s.processPendingAttsForBlock(t.Context(), r32))
 
 	assert.Equal(t, true, p2p.BroadcastCalled.Load(), "The good aggregate was not broadcasted")
 
@@ -601,7 +601,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAtt(t *testing.T) {
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof, Signature: aggreSig}}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
 	assert.DeepEqual(t, att, r.cfg.attPool.AggregatedAttestations()[0], "Incorrect saved att")
@@ -696,7 +696,7 @@ func TestProcessPendingAtts_HasBlockSaveAggregatedAttElectra(t *testing.T) {
 	require.NoError(t, r.cfg.beaconDB.SaveState(t.Context(), s, root))
 
 	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProofElectra{Message: aggregateAndProof, Signature: aggreSig}}
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	assert.Equal(t, 1, len(r.cfg.attPool.AggregatedAttestations()), "Did not save aggregated att")
 	assert.DeepEqual(t, att, r.cfg.attPool.AggregatedAttestations()[0], "Incorrect saved att")
@@ -781,7 +781,7 @@ func TestProcessPendingAtts_BlockNotInForkChoice(t *testing.T) {
 	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
 
 	// Process pending attestations - should not process because block is not in fork choice
-	require.NoError(t, r.processPendingAtts(t.Context()))
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	// Verify attestations were not processed (should still be pending)
 	assert.Equal(t, 1, len(r.blkRootToPendingAtts[root]), "Attestations should still be pending")
