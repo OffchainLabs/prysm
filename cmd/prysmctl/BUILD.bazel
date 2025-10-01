@@ -10,6 +10,7 @@ go_library(
     deps = [
         "//cmd/prysmctl/checkpointsync:go_default_library",
         "//cmd/prysmctl/db:go_default_library",
+        "//cmd/prysmctl/logging:go_default_library",
         "//cmd/prysmctl/p2p:go_default_library",
         "//cmd/prysmctl/testnet:go_default_library",
         "//cmd/prysmctl/validator:go_default_library",

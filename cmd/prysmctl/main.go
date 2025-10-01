@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/checkpointsync"
 	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/db"
+	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/logging"
 	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/p2p"
 	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/testnet"
 	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/validator"
@@ -32,4 +33,5 @@ func init() {
 	prysmctlCommands = append(prysmctlCommands, testnet.Commands...)
 	prysmctlCommands = append(prysmctlCommands, weaksubjectivity.Commands...)
 	prysmctlCommands = append(prysmctlCommands, validator.Commands...)
+	prysmctlCommands = append(prysmctlCommands, logging.Commands...)
 }
