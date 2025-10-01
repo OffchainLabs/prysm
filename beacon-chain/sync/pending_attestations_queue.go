@@ -46,12 +46,13 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	attestations := s.blkRootToPendingAtts[bRoot]
 	s.pendingAttsLock.RUnlock()
 
-	s.processAttestations(ctx, attestations)
-	log.WithFields(logrus.Fields{
-		"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
-		"pendingAttsCount": len(attestations),
-	}).Debug("Verified and saved pending attestations to pool")
-
+	if len(attestations) > 0 {
+		s.processAttestations(ctx, attestations)
+		log.WithFields(logrus.Fields{
+			"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
+			"pendingAttsCount": len(attestations),
+		}).Debug("Verified and saved pending attestations to pool")
+	}
 	randGen := rand.NewGenerator()
 	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
 	s.pendingAttsLock.Lock()
