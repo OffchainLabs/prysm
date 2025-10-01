@@ -85,8 +85,11 @@ func fluentdFormat(t *testing.T) formatter {
 
 func textFormat() formatter {
 	formatter := new(prefixed.TextFormatter)
-	formatter.DisableTimestamp = true // Don't include timestamp since we don't have it
+	formatter.FullTimestamp = true
+	formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 	formatter.DisableColors = false
+	formatter.ForceColors = true // Force colors to match the implementation
+	formatter.ForceFormatting = true // Force formatted output
 
 	return formatter
 }

@@ -20,8 +20,31 @@ func TranslateFluentdtoUnstructuredLog(s string) (string, error) {
 
 	// Create a logrus entry
 	entry := &logrus.Entry{
-		Time: time.Time{}, // Zero time since we don't have timestamp info
 		Data: make(logrus.Fields),
+	}
+
+	// Extract timestamp if present, otherwise use zero time
+	// This matches the test expectations and is fine since we'll only
+	// use this for translating existing logs that don't have timestamps
+	if ts, ok := data["timestamp"].(string); ok {
+		// Try to parse the timestamp
+		if parsedTime, err := time.Parse(time.RFC3339, ts); err == nil {
+			entry.Time = parsedTime
+		} else {
+			entry.Time = time.Time{} // Zero time if parse fails
+		}
+		delete(data, "timestamp")
+	} else if ts, ok := data["time"].(string); ok {
+		// Alternative field name
+		if parsedTime, err := time.Parse(time.RFC3339, ts); err == nil {
+			entry.Time = parsedTime
+		} else {
+			entry.Time = time.Time{} // Zero time if parse fails
+		}
+		delete(data, "time")
+	} else {
+		// No timestamp in JSON, use zero time (will show as 0001-01-01)
+		entry.Time = time.Time{}
 	}
 
 	// Extract message and severity
@@ -67,13 +90,15 @@ func TranslateFluentdtoUnstructuredLog(s string) (string, error) {
 		}
 	}
 
-	// Use the prefixed formatter to format the entry
+	// Use the prefixed formatter to format the entry.
 	formatter := &prefixed.TextFormatter{
-		DisableTimestamp: true,
-		DisableColors:    false,
+		FullTimestamp:   true,
+		TimestampFormat: "2006-01-02 15:04:05.00", // Match beacon-chain format
+		DisableColors:   false,
+		ForceColors:     true, // Force colors even when not a TTY
+		ForceFormatting: true, // Force formatted output even when not a TTY
 	}
 
-	// Format the entry
 	formatted, err := formatter.Format(entry)
 	if err != nil {
 		return "", err
