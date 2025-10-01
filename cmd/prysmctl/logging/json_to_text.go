@@ -2,45 +2,82 @@ package logging
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
+	"time"
+
+	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
+	"github.com/sirupsen/logrus"
 )
 
 // TranslateFluentdtoUnstructuredLog accepts a JSON object as a string and converts it to Prysm's
 // default unstructured text logger.
 func TranslateFluentdtoUnstructuredLog(s string) (string, error) {
-	var logEntry map[string]any
-	if err := json.Unmarshal([]byte(s), &logEntry); err != nil {
+	// Parse the JSON input
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &data); err != nil {
 		return "", err
 	}
 
-	// Extract standard fields
-	message, _ := logEntry["message"].(string)
-	severity, _ := logEntry["severity"].(string)
-
-	// Convert severity to lowercase for the level field
-	level := strings.ToLower(severity)
-
-	// Build the base log line with time and level
-	// Using the default timestamp format from the test
-	result := fmt.Sprintf(`time="0001-01-01 00:00:00.00" level=%s msg="%s"`, level, message)
-
-	// Add additional fields in sorted order (based on test output)
-	// The order appears to be: error, prefix, slot
-	if errVal, ok := logEntry["error"]; ok {
-		result += fmt.Sprintf(` error="%v"`, errVal)
+	// Create a logrus entry
+	entry := &logrus.Entry{
+		Time: time.Time{}, // Zero time since we don't have timestamp info
+		Data: make(logrus.Fields),
 	}
 
-	if prefix, ok := logEntry["prefix"]; ok {
-		result += fmt.Sprintf(` prefix=%v`, prefix)
+	// Extract message and severity
+	if msg, ok := data["message"].(string); ok {
+		entry.Message = msg
+		delete(data, "message")
 	}
 
-	if slot, ok := logEntry["slot"]; ok {
-		// Slot is a number, so no quotes
-		result += fmt.Sprintf(` slot=%v`, slot)
+	if severity, ok := data["severity"].(string); ok {
+		// Convert severity to logrus level
+		level, err := logrus.ParseLevel(strings.ToLower(severity))
+		if err != nil {
+			// Default to info if we can't parse the level
+			entry.Level = logrus.InfoLevel
+		} else {
+			entry.Level = level
+		}
+		delete(data, "severity")
+	} else {
+		entry.Level = logrus.InfoLevel
 	}
 
-	result += "\n"
+	// All remaining fields go into Data
+	// Convert float64 to int64 if they're whole numbers to avoid scientific notation
+	for k, v := range data {
+		switch val := v.(type) {
+		case float64:
+			// Check if it's a whole number
+			if val == float64(int64(val)) {
+				entry.Data[k] = int64(val)
+			} else {
+				entry.Data[k] = val
+			}
+		case float32:
+			// Check if it's a whole number
+			if val == float32(int64(val)) {
+				entry.Data[k] = int64(val)
+			} else {
+				entry.Data[k] = val
+			}
+		default:
+			entry.Data[k] = v
+		}
+	}
 
-	return result, nil
+	// Use the prefixed formatter to format the entry
+	formatter := &prefixed.TextFormatter{
+		DisableTimestamp: true,
+		DisableColors:    false,
+	}
+
+	// Format the entry
+	formatted, err := formatter.Format(entry)
+	if err != nil {
+		return "", err
+	}
+
+	return string(formatted), nil
 }

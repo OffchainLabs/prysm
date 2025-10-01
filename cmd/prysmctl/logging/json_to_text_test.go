@@ -37,6 +37,15 @@ func TestTranslateFluentdtoUnstructuredLog(t *testing.T) {
 			Level:   logrus.ErrorLevel,
 			Message: "Failed to process something very important",
 		}),
+		createTestCaseFluentdToText(t, &logrus.Entry{
+			Data: logrus.Fields{
+				"prefix": "core",
+				"slot":   100_000_000,
+				"hash":   "0xabcdef",
+			},
+			Level:   logrus.InfoLevel,
+			Message: "Processed something successfully",
+		}),
 	}
 
 	for i, tt := range tests {
@@ -76,8 +85,7 @@ func fluentdFormat(t *testing.T) formatter {
 
 func textFormat() formatter {
 	formatter := new(prefixed.TextFormatter)
-	formatter.TimestampFormat = "2006-01-02 15:04:05.00"
-	formatter.FullTimestamp = true
+	formatter.DisableTimestamp = true // Don't include timestamp since we don't have it
 	formatter.DisableColors = false
 
 	return formatter
