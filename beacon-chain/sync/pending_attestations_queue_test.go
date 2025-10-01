@@ -53,16 +53,47 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
 	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{})
 
-	chain := &mock.ChainService{Genesis: prysmTime.Now(), FinalizedCheckPoint: &ethpb.Checkpoint{}}
+	// Create and save block 'A' to DB
+	blockA := util.NewBeaconBlock()
+	util.SaveBlock(t, t.Context(), db, blockA)
+	rootA, err := blockA.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Save state for block 'A'
+	stateA, err := util.NewBeaconState()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveState(t.Context(), stateA, rootA))
+
+	// Setup chain service with block 'A' in forkchoice
+	chain := &mock.ChainService{
+		Genesis:             prysmTime.Now(),
+		FinalizedCheckPoint: &ethpb.Checkpoint{},
+		// NotFinalized: false means InForkchoice returns true
+	}
+
 	r := &Service{
 		cfg:                  &config{p2p: p1, beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
 		blkRootToPendingAtts: make(map[[32]byte][]any),
+		seenPendingBlocks:    make(map[[32]byte]bool),
 		chainStarted:         abool.New(),
 	}
 
-	a := &ethpb.Attestation{Data: &ethpb.AttestationData{Target: &ethpb.Checkpoint{Root: make([]byte, 32)}}}
-	r.blkRootToPendingAtts[[32]byte{'A'}] = []any{a}
-	require.NoError(t, r.processPendingAttsForBlock(t.Context(), [32]byte{'A'}))
+	// Add pending attestations for OTHER block roots (not block A)
+	// These are blocks we don't have yet, so they should be requested
+	attB := &ethpb.Attestation{Data: &ethpb.AttestationData{
+		BeaconBlockRoot: bytesutil.PadTo([]byte{'B'}, 32),
+		Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+	}}
+	attC := &ethpb.Attestation{Data: &ethpb.AttestationData{
+		BeaconBlockRoot: bytesutil.PadTo([]byte{'C'}, 32),
+		Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+	}}
+	r.blkRootToPendingAtts[[32]byte{'B'}] = []any{attB}
+	r.blkRootToPendingAtts[[32]byte{'C'}] = []any{attC}
+
+	// Process block A (which exists and has no pending attestations)
+	// This should skip processing attestations for A and request blocks B and C
+	require.NoError(t, r.processPendingAttsForBlock(t.Context(), rootA))
 	require.LogsContain(t, hook, "Requesting block by root")
 }
 
@@ -780,8 +811,8 @@ func TestProcessPendingAtts_BlockNotInForkChoice(t *testing.T) {
 	// Add pending attestation
 	r.blkRootToPendingAtts[root] = []any{&ethpb.SignedAggregateAttestationAndProof{Message: aggregateAndProof}}
 
-	// Process pending attestations - should not process because block is not in fork choice
-	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
+	// Process pending attestations - should return error because block is not in fork choice
+	require.ErrorContains(t, "could not process unknown block root", r.processPendingAttsForBlock(t.Context(), root))
 
 	// Verify attestations were not processed (should still be pending)
 	assert.Equal(t, 1, len(r.blkRootToPendingAtts[root]), "Attestations should still be pending")
