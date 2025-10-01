@@ -17,7 +17,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-
 // GetDutiesV2 returns the duties assigned to a list of validators specified
 // in the request object.
 //
