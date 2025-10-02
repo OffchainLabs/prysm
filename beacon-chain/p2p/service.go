@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -92,7 +91,6 @@ type Service struct {
 	peerDisconnectionTime *cache.Cache
 	custodyInfo           *custodyInfo
 	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
-	clock                 *startup.Clock
 	allForkDigests        map[[4]byte]struct{}
 }
 

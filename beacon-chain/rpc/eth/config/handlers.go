@@ -124,11 +124,21 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 			if !v.Field(i).CanInterface() {
 				continue // unexported
 			}
-			key := f.Tag.Get("json")
-			if key == "" || key == "-" {
+			jsonTag := f.Tag.Get("json")
+			if jsonTag == "-" {
+				continue
+			}
+
+			// Parse JSON tag options (e.g., "fieldname,omitempty")
+			parts := strings.Split(jsonTag, ",")
+			key := parts[0]
+
+			if key == "" {
 				key = f.Name
 			}
-			m[key] = convertValueForJSON(v.Field(i), tag)
+
+			fieldValue := convertValueForJSON(v.Field(i), tag)
+			m[key] = fieldValue
 		}
 		return m
 

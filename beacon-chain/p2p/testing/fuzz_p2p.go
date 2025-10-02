@@ -169,7 +169,7 @@ func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfac
 }
 
 // BroadcastDataColumnSidecar -- fake.
-func (*FakeP2P) BroadcastDataColumnSidecar(_ uint64, _ blocks.VerifiedRODataColumn) error {
+func (*FakeP2P) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn) error {
 	return nil
 }
 

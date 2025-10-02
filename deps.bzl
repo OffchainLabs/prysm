@@ -776,8 +776,8 @@ def prysm_deps():
         importpath = "github.com/ethereum/c-kzg-4844/v2",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_ethereum_c_kzg_4844.patch"],
-        sum = "h1:KhzBVjmURsfr1+S3k/VE35T02+AW2qU9t9gr4R6YpSo=",
-        version = "v2.1.1",
+        sum = "h1:aVtoLK5xwJ6c5RiqO8g8ptJ5KU+2Hdquf6G3aXiHh5s=",
+        version = "v2.1.5",
     )
     go_repository(
         name = "com_github_ethereum_go_ethereum",
@@ -3318,8 +3318,8 @@ def prysm_deps():
         importpath = "github.com/supranational/blst",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_supranational_blst.patch"],
-        sum = "h1:xNMoHRJOTwMn63ip6qoWJ2Ymgvj7E2b9jY2FAwY+qRo=",
-        version = "v0.3.14",
+        sum = "h1:nbdqkIGOGfUAD54q1s2YBcBz/WcsxCO9HUQ4aGV5hUw=",
+        version = "v0.3.16-0.20250831170142-f48500c1fdbe",
     )
     go_repository(
         name = "com_github_syndtr_goleveldb",

@@ -15,10 +15,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
@@ -61,7 +61,6 @@ func TestService_Broadcast(t *testing.T) {
 	topic := "/eth2/%x/testing"
 	// Set a test gossip mapping for testpb.TestSimpleMessage.
 	GossipTypeMapping[reflect.TypeOf(msg)] = topic
-	p.clock = startup.NewClock(p.genesisTime, bytesutil.ToBytes32(p.genesisValidatorsRoot))
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest)
@@ -679,6 +678,8 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		topicFormat = DataColumnSubnetTopicFormat
 	)
 
+	ctx := t.Context()
+
 	// Load the KZG trust setup.
 	err := kzg.Start()
 	require.NoError(t, err)
@@ -701,7 +702,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	_, pkey, ipAddr := createHost(t, port)
 
 	service := &Service{
-		ctx:                   t.Context(),
+		ctx:                   ctx,
 		host:                  p1.BHost,
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
@@ -710,7 +711,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
-		peers:                 peers.NewStatus(t.Context(), &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
 		custodyInfo:           &custodyInfo{},
 	}
 
@@ -737,7 +738,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Broadcast to peers and wait.
-	err = service.BroadcastDataColumnSidecar(subnet, verifiedRoSidecar)
+	err = service.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{verifiedRoSidecar})
 	require.NoError(t, err)
 
 	// Receive the message.
