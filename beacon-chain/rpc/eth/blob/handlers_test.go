@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -266,7 +267,9 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		overLimit := maxBlobsPerBlockByVersion(version.Deneb)
+		forkslot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
+		require.NoError(t, err)
+		overLimit := params.BeaconConfig().MaxBlobsPerBlock(forkslot)
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -432,7 +435,10 @@ func TestBlobs_Electra(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	db := testDB.SetupDB(t)
-	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, maxBlobsPerBlockByVersion(version.Electra))
+	forkslot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+	require.NoError(t, err)
+	overLimit := params.BeaconConfig().MaxBlobsPerBlock(forkslot)
+	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, overLimit)
 	require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
@@ -468,7 +474,7 @@ func TestBlobs_Electra(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, maxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
+		require.Equal(t, overLimit, len(resp.Data))
 		sidecar := resp.Data[0]
 		require.NotNil(t, sidecar)
 		assert.Equal(t, "0", sidecar.Index)
@@ -481,7 +487,7 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("requested blob index at max", func(t *testing.T) {
-		limit := maxBlobsPerBlockByVersion(version.Electra) - 1
+		limit := overLimit - 1
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", limit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -513,7 +519,6 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		overLimit := maxBlobsPerBlockByVersion(version.Electra)
 		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
@@ -1009,7 +1014,10 @@ func TestGetBlobs(t *testing.T) {
 
 	// Test for Electra fork
 	t.Run("electra max blobs", func(t *testing.T) {
-		electraBlock, electraBlobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 323, maxBlobsPerBlockByVersion(version.Electra))
+		forkslot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
+		require.NoError(t, err)
+		overLimit := params.BeaconConfig().MaxBlobsPerBlock(forkslot)
+		electraBlock, electraBlobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 323, overLimit)
 		require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
 		electraBs := filesystem.NewEphemeralBlobStorage(t)
 		electraSidecars := verification.FakeVerifySliceForTest(t, electraBlobs)
@@ -1036,7 +1044,8 @@ func TestGetBlobs(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetBlobsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.Equal(t, maxBlobsPerBlockByVersion(version.Electra), len(resp.Data))
+
+		require.Equal(t, overLimit, len(resp.Data))
 		blob := resp.Data[0]
 		require.NotNil(t, blob)
 		assert.Equal(t, hexutil.Encode(electraBlobs[0].Blob), blob)
@@ -1144,15 +1153,4 @@ func unmarshalBlobs(t *testing.T, response []byte) [][]byte {
 		blobs[i] = response[i*fieldparams.BlobSize : (i+1)*fieldparams.BlobSize]
 	}
 	return blobs
-}
-
-func maxBlobsPerBlockByVersion(v int) int {
-	if v >= version.Fulu {
-		return params.BeaconConfig().DeprecatedMaxBlobsPerBlockFulu
-	}
-	if v >= version.Electra {
-		return params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra
-	}
-
-	return params.BeaconConfig().DeprecatedMaxBlobsPerBlock
 }
