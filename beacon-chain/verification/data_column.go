@@ -554,7 +554,7 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
 
-	copy(unhashedKey[128:], root[:])
+	copy(unhashedKey[commsIncProofByteCount:], root[:])
 
 	// Include the commitments in the key.
 	for i := range c.KzgCommitments {
