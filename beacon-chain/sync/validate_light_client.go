@@ -75,7 +75,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-		}).Debug("Invalid light client optimistic update received. Ignoring.")
+		}).Debug("Received light client optimistic update is different from the local one. Ignoring.")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -148,7 +148,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-		}).Debug("Invalid light client finality update received. ignoring.")
+		}).Debug("Received light client finality update is different from the local one. ignoring.")
 		return pubsub.ValidationIgnore, nil
 	}
 
