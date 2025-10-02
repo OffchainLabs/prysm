@@ -632,11 +632,6 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
 	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
-	for k, v := range fvs {
-		if v == b.FarFutureEpoch {
-			delete(fvs, k)
-		}
-	}
 	return fvs
 }
 
