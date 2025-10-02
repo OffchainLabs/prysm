@@ -274,7 +274,6 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
-	s.runPendingAttsQueue()
 	s.maintainPeerStatuses()
 
 	if params.FuluEnabled() {
