@@ -539,13 +539,11 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	}
 
 	commsByteCount := len(c.KzgCommitments) * fieldparams.KzgCommitmentSize
-	unhashedKey := make([]byte, commsIncProofByteCount+fieldparams.RootLength+commsByteCount)
+	unhashedKey := make([]byte, 0, commsIncProofByteCount+fieldparams.RootLength+commsByteCount)
 
 	// Include the commitments inclusion proof in the key.
-	for i := range c.KzgCommitmentsInclusionProof {
-		if copy(unhashedKey[32*i:32*(i+1)], c.KzgCommitmentsInclusionProof[i]) != 32 {
-			return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
-		}
+	for _, proof := range c.KzgCommitmentsInclusionProof {
+		unhashedKey = append(unhashedKey, proof...)
 	}
 
 	// Include the block root in the key.
@@ -554,13 +552,11 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
 
-	copy(unhashedKey[commsIncProofByteCount:], root[:])
+	unhashedKey = append(unhashedKey, root[:]...)
 
 	// Include the commitments in the key.
-	for i := range c.KzgCommitments {
-		if copy(unhashedKey[160+i*fieldparams.KzgCommitmentSize:160+(i+1)*fieldparams.KzgCommitmentSize], c.KzgCommitments[i]) != fieldparams.KzgCommitmentSize {
-			return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
-		}
+	for _, commitment := range c.KzgCommitments {
+		unhashedKey = append(unhashedKey, commitment...)
 	}
 
 	return sha256.Sum256(unhashedKey), nil
