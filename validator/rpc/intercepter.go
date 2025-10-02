@@ -54,14 +54,13 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
-			tokenParts := strings.Split(reqToken, "Bearer ")
-			if len(tokenParts) != 2 {
-				httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
-				return
-			}
+		 	if !strings.HasPrefix(reqToken, "Bearer ") {
+                httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
+                return
+            }
 
-			token := strings.TrimSpace(tokenParts[1])
-			if s.authToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
+            token := strings.TrimSpace(reqToken[len("Bearer "):])
+			if s.authToken == "" || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
@@ -77,15 +76,13 @@ func (s *Server) authorize(ctx context.Context) error {
 		return status.Errorf(codes.InvalidArgument, "Retrieving metadata failed")
 	}
 
-	authHeader, ok := md["authorization"]
-	if !ok {
-		return status.Errorf(codes.Unauthenticated, "Authorization token could not be found")
-	}
-	if len(authHeader) < 1 || !strings.Contains(authHeader[0], "Bearer ") {
+	authHeader := md["authorization"][0]
+	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return status.Error(codes.Unauthenticated, "Invalid auth header, needs Bearer {token}")
 	}
-	token := strings.TrimSpace(strings.Split(authHeader[0], "Bearer ")[1])
-	if s.authToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
+	token := strings.TrimSpace(authHeader[len("Bearer "):])
+
+	if len(s.authToken) == 0 || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 		return status.Errorf(codes.Unauthenticated, "Forbidden: token value is invalid")
 	}
 	return nil
