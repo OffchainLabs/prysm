@@ -72,7 +72,13 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 	}
-	defer s.sendStateFeedOnBlock(cfg)
+	// Track whether block processing succeeded to only send event on success
+	var blockProcessed bool
+	defer func() {
+		if blockProcessed {
+			s.sendStateFeedOnBlock(cfg)
+		}
+	}()
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
 
@@ -101,16 +107,22 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
+		// Mark as processed even for non-canonical blocks that succeed
+		blockProcessed = true
 		return nil
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
+		// Mark as processed - block was successfully inserted even if FCU args failed
+		blockProcessed = true
 		return nil
 	}
 	if err := s.sendFCU(cfg, fcuArgs); err != nil {
 		return errors.Wrap(err, "could not send FCU to engine")
 	}
 
+	// Block successfully processed
+	blockProcessed = true
 	return nil
 }
 

@@ -3462,3 +3462,258 @@ func TestProcessLightClientFinalityUpdate(t *testing.T) {
 		}
 	}
 }
+
+// mockForkChoice is a mock implementation of forkchoice.ForkChoicer for testing
+type mockForkChoice struct {
+	insertNodeErr error
+	headRoot      [32]byte
+	headErr       error
+	doublylinkedtree.ForkChoice // embed to get default implementations
+}
+
+func (m *mockForkChoice) InsertNode(ctx context.Context, st state.BeaconState, blk consensusblocks.ROBlock) error {
+	if m.insertNodeErr != nil {
+		return m.insertNodeErr
+	}
+	return nil
+}
+
+func (m *mockForkChoice) Head(ctx context.Context) ([32]byte, error) {
+	if m.headErr != nil {
+		return [32]byte{}, m.headErr
+	}
+	return m.headRoot, nil
+}
+
+func (m *mockForkChoice) Lock() {}
+
+func (m *mockForkChoice) Unlock() {}
+
+func (m *mockForkChoice) RLock() {}
+
+func (m *mockForkChoice) RUnlock() {}
+
+func (m *mockForkChoice) IsOptimistic(root [32]byte) (bool, error) {
+	return false, nil
+}
+
+func (m *mockForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
+	return [32]byte{}, nil
+}
+
+// Test_postBlockProcess_EventSending tests that block processed events are only sent
+// when block processing succeeds according to the decision tree:
+//
+// Block Processing Flow:
+// ├─ InsertNode FAILS (fork choice timeout)
+// │  └─ blockProcessed = false ❌ NO EVENT
+// │
+// ├─ InsertNode succeeds
+// │  ├─ handleBlockAttestations FAILS
+// │  │  └─ blockProcessed = false ❌ NO EVENT
+// │  │
+// │  ├─ Block is NON-CANONICAL (not head)
+// │  │  └─ blockProcessed = true ✅ SEND EVENT (Line 111)
+// │  │
+// │  ├─ Block IS CANONICAL (new head)
+// │  │  ├─ getFCUArgs FAILS
+// │  │  │  └─ blockProcessed = true ✅ SEND EVENT (Line 117)
+// │  │  │
+// │  │  ├─ sendFCU FAILS
+// │  │  │  └─ blockProcessed = false ❌ NO EVENT
+// │  │  │
+// │  │  └─ Full success
+// │  │     └─ blockProcessed = true ✅ SEND EVENT (Line 125)
+func Test_postBlockProcess_EventSending(t *testing.T) {
+	ctx := context.Background()
+
+	// Helper to create a minimal valid block and state
+	createTestBlockAndState := func(t *testing.T, slot primitives.Slot, root [32]byte) (consensusblocks.ROBlock, state.BeaconState) {
+		st, _ := util.DeterministicGenesisState(t, 64)
+		require.NoError(t, st.SetSlot(slot))
+
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = slot
+		blk.Block.ProposerIndex = 0
+		blk.Block.Body.Graffiti = root // Use root in graffiti to identify the block
+
+		signed := util.HydrateSignedBeaconBlock(blk)
+		roBlock, err := consensusblocks.NewROBlock(signed)
+		require.NoError(t, err)
+
+		return roBlock, st
+	}
+
+	tests := []struct {
+		name              string
+		setupMock         func(*mockForkChoice, [32]byte)
+		setupService      func(*Service)
+		blockRoot         [32]byte
+		expectEvent       bool
+		expectError       bool
+		errorContains     string
+	}{
+		{
+			name:      "InsertNode fails - no event",
+			blockRoot: [32]byte{0x01},
+			setupMock: func(fc *mockForkChoice, root [32]byte) {
+				fc.insertNodeErr = errors.New("fork choice timeout")
+			},
+			expectEvent:   false,
+			expectError:   true,
+			errorContains: "could not insert block",
+		},
+		{
+			name:      "handleBlockAttestations fails - no event",
+			blockRoot: [32]byte{0x02},
+			setupMock: func(fc *mockForkChoice, root [32]byte) {
+				fc.insertNodeErr = nil
+				fc.headRoot = root
+			},
+			setupService: func(s *Service) {
+				// Force handleBlockAttestations to fail by setting nil AttPool
+				s.cfg.AttPool = nil
+			},
+			expectEvent:   false,
+			expectError:   true,
+			errorContains: "could not handle block's attestations",
+		},
+		{
+			name:      "Non-canonical block (not head) - sends event",
+			blockRoot: [32]byte{0x03},
+			setupMock: func(fc *mockForkChoice, root [32]byte) {
+				fc.insertNodeErr = nil
+				// Return different root as head - makes block non-canonical
+				fc.headRoot = [32]byte{0xFF}
+			},
+			expectEvent: true,
+			expectError: false,
+		},
+		{
+			name:      "Canonical block, getFCUArgs fails - sends event",
+			blockRoot: [32]byte{0x04},
+			setupMock: func(fc *mockForkChoice, root [32]byte) {
+				fc.insertNodeErr = nil
+				// Return same root as head - makes block canonical
+				fc.headRoot = root
+			},
+			setupService: func(s *Service) {
+				// Force getFCUArgs to fail by not setting up execution engine
+				s.cfg.ExecutionEngineCaller = nil
+			},
+			expectEvent: true,
+			expectError: false,
+		},
+		{
+			name:      "Canonical block, sendFCU fails - no event",
+			blockRoot: [32]byte{0x05},
+			setupMock: func(fc *mockForkChoice, root [32]byte) {
+				fc.insertNodeErr = nil
+				fc.headRoot = root
+			},
+			setupService: func(s *Service) {
+				// Setup execution engine that will fail on FCU
+				engine := &mockExecution.EngineClient{
+					ErrForkchoiceUpdated: errors.New("FCU failed"),
+				}
+				s.cfg.ExecutionEngineCaller = engine
+			},
+			expectEvent:   false,
+			expectError:   true,
+			errorContains: "could not send FCU",
+		},
+		{
+			name:      "Full success - sends event",
+			blockRoot: [32]byte{0x06},
+			setupMock: func(fc *mockForkChoice, root [32]byte) {
+				fc.insertNodeErr = nil
+				fc.headRoot = root
+			},
+			setupService: func(s *Service) {
+				// Setup successful execution engine
+				engine := &mockExecution.EngineClient{
+					PayloadIDBytes: &execution.PayloadIDBytes{1, 0, 0, 0, 0, 0, 0, 0},
+				}
+				s.cfg.ExecutionEngineCaller = engine
+			},
+			expectEvent: true,
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create test block and state
+			roBlock, st := createTestBlockAndState(t, 100, tt.blockRoot)
+
+			// Create mock fork choice
+			fc := &mockForkChoice{}
+			tt.setupMock(fc, tt.blockRoot)
+
+			// Create service with mocks
+			opts := []Option{
+				WithForkChoiceStore(fc),
+				WithStateNotifier(&mock.MockStateNotifier{RecordEvents: true}),
+				WithAttestationPool(kv.NewAttCaches()),
+			}
+			service, err := NewService(ctx, opts...)
+			require.NoError(t, err)
+
+			// Apply additional service setup if provided
+			if tt.setupService != nil {
+				tt.setupService(service)
+			}
+
+			// Create post block process config
+			cfg := &postBlockProcessConfig{
+				ctx:            ctx,
+				roblock:        roBlock,
+				postState:      st,
+				isValidPayload: true,
+			}
+
+			// Execute postBlockProcess
+			err = service.postBlockProcess(cfg)
+
+			// Check error expectation
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.errorContains != "" {
+					require.ErrorContains(t, err, tt.errorContains)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			// Give a moment for deferred functions to execute
+			time.Sleep(10 * time.Millisecond)
+
+			// Check event expectation
+			notifier := service.cfg.StateNotifier.(*mock.MockStateNotifier)
+			events := notifier.ReceivedEvents()
+
+			if tt.expectEvent {
+				require.NotEqual(t, 0, len(events), "Expected event to be sent but none were received")
+
+				// Verify it's a BlockProcessed event
+				foundBlockProcessed := false
+				for _, evt := range events {
+					if evt.Type == statefeed.BlockProcessed {
+						foundBlockProcessed = true
+						data, ok := evt.Data.(*statefeed.BlockProcessedData)
+						require.True(t, ok, "Event data should be BlockProcessedData")
+						require.Equal(t, roBlock.Root(), data.BlockRoot, "Event should contain correct block root")
+						break
+					}
+				}
+				require.True(t, foundBlockProcessed, "Expected BlockProcessed event type")
+			} else {
+				// For no-event cases, verify no BlockProcessed events were sent
+				for _, evt := range events {
+					require.NotEqual(t, statefeed.BlockProcessed, evt.Type,
+						"Expected no BlockProcessed event but one was sent")
+				}
+			}
+		})
+	}
+}
