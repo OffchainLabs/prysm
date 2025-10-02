@@ -274,3 +274,16 @@ func TestFilterFarFuture(t *testing.T) {
 	last := params.LastNetworkScheduleEntry()
 	require.Equal(t, [4]byte(params.BeaconConfig().ElectraForkVersion), last.ForkVersion)
 }
+
+func TestFarFuturePrepareFilter(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	oldElectra := cfg.ElectraForkEpoch
+	// This should cause electra to be filtered from the schedule, so looking up the entry for electra's epoch
+	// should return the previous entry (deneb).
+	cfg.ElectraForkEpoch = params.BeaconConfig().FarFutureEpoch
+	cfg.FuluForkEpoch = params.BeaconConfig().FarFutureEpoch
+	params.OverrideBeaconConfig(cfg)
+	entry := params.GetNetworkScheduleEntry(oldElectra)
+	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), entry.ForkVersion)
+}
