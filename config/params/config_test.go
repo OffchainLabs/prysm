@@ -266,3 +266,11 @@ func testConfigForSchedule(gvr [32]byte) *params.BeaconChainConfig {
 	}
 	return cfg
 }
+
+func TestFilterFarFuture(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().FarFutureEpoch
+	params.BeaconConfig().InitializeForkSchedule()
+	last := params.LastNetworkScheduleEntry()
+	require.Equal(t, [4]byte(params.BeaconConfig().ElectraForkVersion), last.ForkVersion)
+}

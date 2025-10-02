@@ -526,6 +526,13 @@ func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
 }
 
 func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
+	// Only keep entries up to FarFutureEpoch.
+	for i := range ns.entries {
+		if ns.entries[i].Epoch == b.FarFutureEpoch {
+			ns.entries = ns.entries[:i]
+			break
+		}
+	}
 	if len(ns.entries) == 0 {
 		return errors.New("cannot compute digests for an empty network schedule")
 	}
@@ -625,6 +632,11 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.DenebForkVersion)] = b.DenebForkEpoch
 	fvs[bytesutil.ToBytes4(b.ElectraForkVersion)] = b.ElectraForkEpoch
 	fvs[bytesutil.ToBytes4(b.FuluForkVersion)] = b.FuluForkEpoch
+	for k, v := range fvs {
+		if v == b.FarFutureEpoch {
+			delete(fvs, k)
+		}
+	}
 	return fvs
 }
 
