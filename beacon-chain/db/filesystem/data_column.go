@@ -593,7 +593,6 @@ func (dcs *DataColumnStorage) prune() {
 	dcs.mu.Lock()
 	defer dcs.mu.Unlock()
 	clear(dcs.muChans)
-
 }
 
 // saveDataColumnSidecarsExistingFile saves data column sidecars into an existing file.

@@ -725,4 +725,3 @@ func TestPrune(t *testing.T) {
 		require.Equal(t, true, compareSlices([]string{"0x0de28a18cae63cbc6f0b20dc1afb0b1df38da40824a5f09f92d485ade04de97f.sszs"}, dirs))
 	})
 }
-
