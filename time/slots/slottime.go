@@ -309,7 +309,7 @@ func SecondsUntilNextEpochStart(genesis time.Time) (uint64, error) {
 }
 
 // ComponentDuration calculates the duration of a slot component in milliseconds.
-func ComponentDuration(component primitives.BP, currentSlot primitives.Slot) time.Duration {
-	ms := (component * params.SlotBP(currentSlot)) / params.BASIS_POINTS
+func ComponentDuration(component primitives.BP) time.Duration {
+	ms := (component * params.SlotBP()) / params.BasisPoints
 	return time.Duration(ms) * time.Millisecond
 }
