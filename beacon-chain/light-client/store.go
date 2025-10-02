@@ -254,6 +254,7 @@ func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaco
 	return updatesByPeriod, nil
 }
 
+// SetLastFinalityUpdate should be used only for testing.
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -283,6 +284,7 @@ func (s *Store) LastFinalityUpdate() interfaces.LightClientFinalityUpdate {
 	return s.lastFinalityUpdate
 }
 
+// SetLastOptimisticUpdate should be used only for testing.
 func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
