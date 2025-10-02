@@ -435,8 +435,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "16777216", v)
 			case "PROPOSER_SCORE_BOOST":
 				assert.Equal(t, "40", v)
-			case "INTERVALS_PER_SLOT":
-				assert.Equal(t, "3", v)
 			case "MAX_WITHDRAWALS_PER_PAYLOAD":
 				assert.Equal(t, "74", v)
 			case "MAX_BLS_TO_EXECUTION_CHANGES":
