@@ -97,7 +97,7 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
 	if err != nil {
-		return errors.Wrap(err, "fetch custody group count from peer")
+		return errors.Wrap(err, "custody group count")
 	}
 
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
