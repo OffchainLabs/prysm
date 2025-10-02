@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -524,18 +525,23 @@ func columnErrBuilder(baseErr error) error {
 	return errors.Wrap(baseErr, errColumnsInvalid.Error())
 }
 
-func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {
-	var key [160]byte
+// incluseionProofKey computes a unique key based on the KZG commitments,
+// the KZG commitments inclusion proof, and the signed block header root.
+func inclusionProofKey(c blocks.RODataColumn) ([192]byte, error) {
+	var key [192]byte
+
 	if len(c.KzgCommitmentsInclusionProof) != 4 {
 		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
 		return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 
+	// Include the block root in the key.
 	root, err := c.SignedBlockHeader.HashTreeRoot()
 	if err != nil {
-		return [160]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
+		return key, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
 
+	// Include the commitments inclusion proof in the key.
 	for i := range c.KzgCommitmentsInclusionProof {
 		if copy(key[32*i:32*i+32], c.KzgCommitmentsInclusionProof[i]) != 32 {
 			return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
@@ -543,5 +549,15 @@ func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {
 	}
 
 	copy(key[128:], root[:])
+
+	// Include the commitments in the key.
+	commitmentsFlat := make([]byte, 0, len(c.KzgCommitments)*fieldparams.KzgCommitmentSize)
+	for _, commitment := range c.KzgCommitments {
+		commitmentsFlat = append(commitmentsFlat, commitment...)
+	}
+
+	commitmentsHash := sha256.Sum256(commitmentsFlat)
+	copy(key[160:], commitmentsHash[:])
+
 	return key, nil
 }
