@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"sync"
+	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
@@ -24,30 +23,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// This defines how often a node cleans up and processes pending attestations in the queue.
-var processPendingAttsPeriod = slots.DivideSlotBy(2 /* twice per slot */)
-var pendingAttsLimit = 10000
+var pendingAttsLimit = 32768
 
-// This processes pending attestation queues on every processPendingAttsPeriod.
-func (s *Service) runPendingAttsQueue() {
-	// Prevents multiple queue processing goroutines (invoked by RunEvery) from contending for data.
-	mutex := new(sync.Mutex)
-	async.RunEvery(s.ctx, processPendingAttsPeriod, func() {
-		mutex.Lock()
-		if err := s.processPendingAtts(s.ctx); err != nil {
-			log.WithError(err).Debug("Could not process pending attestation")
-		}
-		mutex.Unlock()
-	})
-}
-
-// This defines how pending attestations are processed. It contains features:
-// 1. Clean up invalid pending attestations from the queue.
-// 2. Check if pending attestations can be processed when the block has arrived.
-// 3. Request block from a random peer if unable to proceed step 2.
-func (s *Service) processPendingAtts(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "processPendingAtts")
+// This method processes pending attestations as a "known" block as arrived. With validations,
+// the valid attestations get saved into the operation mem pool, and the invalid attestations gets deleted
+// from the sync pending pool.
+func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte) error {
+	ctx, span := trace.StartSpan(ctx, "processPendingAttsForBlock")
 	defer span.End()
+
+	// Confirm that the pending attestation's missing block arrived and the node processed the block.
+	if !s.cfg.beaconDB.HasBlock(ctx, bRoot) || !(s.cfg.beaconDB.HasState(ctx, bRoot) || s.cfg.beaconDB.HasStateSummary(ctx, bRoot)) || !s.cfg.chain.InForkchoice(bRoot) {
+		return fmt.Errorf("could not process unknown block root %#x", bRoot)
+	}
 
 	// Before a node processes pending attestations queue, it verifies
 	// the attestations in the queue are still valid. Attestations will
@@ -55,39 +43,31 @@ func (s *Service) processPendingAtts(ctx context.Context) error {
 	s.validatePendingAtts(ctx, s.cfg.clock.CurrentSlot())
 
 	s.pendingAttsLock.RLock()
-	roots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
-	for br := range s.blkRootToPendingAtts {
-		roots = append(roots, br)
-	}
+	attestations := s.blkRootToPendingAtts[bRoot]
 	s.pendingAttsLock.RUnlock()
 
-	var pendingRoots [][32]byte
+	if len(attestations) > 0 {
+		s.processAttestations(ctx, attestations)
+		log.WithFields(logrus.Fields{
+			"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
+			"pendingAttsCount": len(attestations),
+		}).Debug("Verified and saved pending attestations to pool")
+	}
 	randGen := rand.NewGenerator()
-	for _, bRoot := range roots {
-		s.pendingAttsLock.RLock()
-		attestations := s.blkRootToPendingAtts[bRoot]
-		s.pendingAttsLock.RUnlock()
-		// has the pending attestation's missing block arrived and the node processed block yet?
-		if s.cfg.beaconDB.HasBlock(ctx, bRoot) && (s.cfg.beaconDB.HasState(ctx, bRoot) || s.cfg.beaconDB.HasStateSummary(ctx, bRoot)) && s.cfg.chain.InForkchoice(bRoot) {
-			s.processAttestations(ctx, attestations)
-			log.WithFields(logrus.Fields{
-				"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
-				"pendingAttsCount": len(attestations),
-			}).Debug("Verified and saved pending attestations to pool")
-
-			// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
-			s.pendingAttsLock.Lock()
-			delete(s.blkRootToPendingAtts, bRoot)
-			s.pendingAttsLock.Unlock()
-		} else {
-			s.pendingQueueLock.RLock()
-			seen := s.seenPendingBlocks[bRoot]
-			s.pendingQueueLock.RUnlock()
-			if !seen {
-				pendingRoots = append(pendingRoots, bRoot)
-			}
+	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
+	s.pendingAttsLock.Lock()
+	delete(s.blkRootToPendingAtts, bRoot)
+	pendingRoots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
+	s.pendingQueueLock.RLock()
+	for r := range s.blkRootToPendingAtts {
+		if !s.seenPendingBlocks[r] {
+			pendingRoots = append(pendingRoots, r)
 		}
 	}
+	s.pendingQueueLock.RUnlock()
+	s.pendingAttsLock.Unlock()
+
+	//  Request the blocks for the pending attestations that could not be processed.
 	return s.sendBatchRootRequest(ctx, pendingRoots, randGen)
 }
 

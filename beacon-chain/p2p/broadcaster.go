@@ -5,14 +5,18 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
@@ -306,86 +310,150 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 	return nil
 }
 
-// BroadcastDataColumnSidecar broadcasts a data column to the p2p network, the message is assumed to be
-// broadcasted to the current fork and to the input column subnet.
-func (s *Service) BroadcastDataColumnSidecar(
-	dataColumnSubnet uint64,
-	dataColumnSidecar blocks.VerifiedRODataColumn,
-) error {
-	// Add tracing to the function.
-	ctx, span := trace.StartSpan(s.ctx, "p2p.BroadcastDataColumnSidecar")
-	defer span.End()
+// BroadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network, after ensuring
+// there is at least one peer in each needed subnet. If not, it will attempt to find one before broadcasting.
+// This function is non-blocking. It stops trying to broadcast a given sidecar when more than one slot has passed, or the context is
+// cancelled (whichever comes first).
+func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
+	// Increase the number of broadcast attempts.
+	dataColumnSidecarBroadcastAttempts.Add(float64(len(sidecars)))
 
 	// Retrieve the current fork digest.
 	forkDigest, err := s.currentForkDigest()
 	if err != nil {
-		err := errors.Wrap(err, "current fork digest")
-		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrap(err, "current fork digest")
 	}
 
-	// Non-blocking broadcast, with attempts to discover a column subnet peer if none available.
-	go s.internalBroadcastDataColumnSidecar(ctx, dataColumnSubnet, dataColumnSidecar, forkDigest)
+	go s.broadcastDataColumnSidecars(ctx, forkDigest, sidecars)
 
 	return nil
 }
 
-func (s *Service) internalBroadcastDataColumnSidecar(
-	ctx context.Context,
-	columnSubnet uint64,
-	dataColumnSidecar blocks.VerifiedRODataColumn,
-	forkDigest [fieldparams.VersionLength]byte,
-) {
-	// Add tracing to the function.
-	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastDataColumnSidecar")
-	defer span.End()
-
-	// Increase the number of broadcast attempts.
-	dataColumnSidecarBroadcastAttempts.Inc()
-
-	// Define a one-slot length context timeout.
-	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
-	oneSlot := time.Duration(secondsPerSlot) * time.Second
-	ctx, cancel := context.WithTimeout(ctx, oneSlot)
-	defer cancel()
-
-	// Build the topic corresponding to this column subnet and this fork digest.
-	topic := dataColumnSubnetToTopic(columnSubnet, forkDigest)
-
-	// Compute the wrapped subnet index.
-	wrappedSubIdx := columnSubnet + dataColumnSubnetVal
-
-	// Find peers if needed.
-	if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, columnSubnet); err != nil {
-		log.WithError(err).Error("Failed to find peers for data column subnet")
-		tracing.AnnotateError(span, err)
+// broadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network, after ensuring
+// there is at least one peer in each needed subnet. If not, it will attempt to find one before broadcasting.
+// It returns when all broadcasts are complete, or the context is cancelled (whichever comes first).
+func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [fieldparams.VersionLength]byte, sidecars []blocks.VerifiedRODataColumn) {
+	type rootAndIndex struct {
+		root  [fieldparams.RootLength]byte
+		index uint64
 	}
 
-	// Broadcast the data column sidecar to the network.
-	if err := s.broadcastObject(ctx, dataColumnSidecar, topic); err != nil {
-		log.WithError(err).Error("Failed to broadcast data column sidecar")
-		tracing.AnnotateError(span, err)
+	var (
+		wg      sync.WaitGroup
+		timings sync.Map
+	)
+
+	logLevel := logrus.GetLevel()
+
+	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
+	for _, sidecar := range sidecars {
+		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
+
+		wg.Go(func() {
+			// Add tracing to the function.
+			ctx, span := trace.StartSpan(s.ctx, "p2p.broadcastDataColumnSidecars")
+			defer span.End()
+
+			// Compute the subnet for this data column sidecar.
+			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+
+			// Build the topic corresponding to subnet column subnet and this fork digest.
+			topic := dataColumnSubnetToTopic(subnet, forkDigest)
+
+			// Compute the wrapped subnet index.
+			wrappedSubIdx := subnet + dataColumnSubnetVal
+
+			// Find peers if needed.
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot find peers if needed")
+				return
+			}
+
+			// Broadcast the data column sidecar to the network.
+			if err := s.broadcastObject(ctx, sidecar, topic); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot broadcast data column sidecar")
+				return
+			}
+
+			// Increase the number of successful broadcasts.
+			dataColumnSidecarBroadcasts.Inc()
+
+			// Record the timing for log purposes.
+			if logLevel >= logrus.DebugLevel {
+				root := sidecar.BlockRoot()
+				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
+			}
+		})
+	}
+
+	// Wait for all broadcasts to finish.
+	wg.Wait()
+
+	// The rest of this function is only for debug logging purposes.
+	if logLevel < logrus.DebugLevel {
 		return
 	}
 
-	header := dataColumnSidecar.SignedBlockHeader.GetHeader()
-	slot := header.GetSlot()
-
-	slotStartTime, err := slots.StartTime(s.genesisTime, slot)
-	if err != nil {
-		log.WithError(err).Error("Failed to convert slot to time")
+	type logInfo struct {
+		durationMin time.Duration
+		durationMax time.Duration
+		indices     []uint64
 	}
 
-	log.WithFields(logrus.Fields{
-		"slot":               slot,
-		"timeSinceSlotStart": time.Since(slotStartTime),
-		"root":               fmt.Sprintf("%#x", dataColumnSidecar.BlockRoot()),
-		"columnSubnet":       columnSubnet,
-		"blobCount":          len(dataColumnSidecar.Column),
-	}).Debug("Broadcasted data column sidecar")
+	logInfoPerRoot := make(map[[fieldparams.RootLength]byte]*logInfo, 1)
 
-	// Increase the number of successful broadcasts.
-	dataColumnSidecarBroadcasts.Inc()
+	timings.Range(func(key any, value any) bool {
+		rootAndIndex, ok := key.(rootAndIndex)
+		if !ok {
+			log.Error("Could not cast key to rootAndIndex")
+			return true
+		}
+
+		broadcastTime, ok := value.(time.Time)
+		if !ok {
+			log.Error("Could not cast value to time.Time")
+			return true
+		}
+
+		slot, ok := slotPerRoot[rootAndIndex.root]
+		if !ok {
+			log.WithField("root", fmt.Sprintf("%#x", rootAndIndex.root)).Error("Could not find slot for root")
+			return true
+		}
+
+		duration, err := slots.SinceSlotStart(slot, s.genesisTime, broadcastTime)
+		if err != nil {
+			log.WithError(err).Error("Could not compute duration since slot start")
+			return true
+		}
+
+		info, ok := logInfoPerRoot[rootAndIndex.root]
+		if !ok {
+			logInfoPerRoot[rootAndIndex.root] = &logInfo{durationMin: duration, durationMax: duration, indices: []uint64{rootAndIndex.index}}
+			return true
+		}
+
+		info.durationMin = min(info.durationMin, duration)
+		info.durationMax = max(info.durationMax, duration)
+		info.indices = append(info.indices, rootAndIndex.index)
+
+		return true
+	})
+
+	for root, info := range logInfoPerRoot {
+		slices.Sort(info.indices)
+
+		log.WithFields(logrus.Fields{
+			"root":                  fmt.Sprintf("%#x", root),
+			"slot":                  slotPerRoot[root],
+			"count":                 len(info.indices),
+			"indices":               helpers.PrettySlice(info.indices),
+			"timeSinceSlotStartMin": info.durationMin,
+			"timeSinceSlotStartMax": info.durationMax,
+		}).Debug("Broadcasted data column sidecars")
+	}
 }
 
 func (s *Service) findPeersIfNeeded(

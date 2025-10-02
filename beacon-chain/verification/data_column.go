@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -524,24 +525,39 @@ func columnErrBuilder(baseErr error) error {
 	return errors.Wrap(baseErr, errColumnsInvalid.Error())
 }
 
-func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {
-	var key [160]byte
-	if len(c.KzgCommitmentsInclusionProof) != 4 {
+// incluseionProofKey computes a unique key based on the KZG commitments,
+// the KZG commitments inclusion proof, and the signed block header root.
+func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
+	const (
+		commsIncProofLen       = 4
+		commsIncProofByteCount = commsIncProofLen * 32
+	)
+
+	if len(c.KzgCommitmentsInclusionProof) != commsIncProofLen {
 		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
-		return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
+		return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 
+	commsByteCount := len(c.KzgCommitments) * fieldparams.KzgCommitmentSize
+	unhashedKey := make([]byte, 0, commsIncProofByteCount+fieldparams.RootLength+commsByteCount)
+
+	// Include the commitments inclusion proof in the key.
+	for _, proof := range c.KzgCommitmentsInclusionProof {
+		unhashedKey = append(unhashedKey, proof...)
+	}
+
+	// Include the block root in the key.
 	root, err := c.SignedBlockHeader.HashTreeRoot()
 	if err != nil {
-		return [160]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
+		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
 
-	for i := range c.KzgCommitmentsInclusionProof {
-		if copy(key[32*i:32*i+32], c.KzgCommitmentsInclusionProof[i]) != 32 {
-			return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
-		}
+	unhashedKey = append(unhashedKey, root[:]...)
+
+	// Include the commitments in the key.
+	for _, commitment := range c.KzgCommitments {
+		unhashedKey = append(unhashedKey, commitment...)
 	}
 
-	copy(key[128:], root[:])
-	return key, nil
+	return sha256.Sum256(unhashedKey), nil
 }

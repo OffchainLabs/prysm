@@ -53,9 +53,15 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 	// 6110 validations are in VerifyOperationLengths
 	bb := block.Body()
 	// Electra extends the altair operations.
-	exitInfo := v.ExitInformation(st)
-	if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
-		return nil, errors.Wrap(err, "could not update total active balance cache")
+	var exitInfo *v.ExitInfo
+	hasSlashings := len(bb.ProposerSlashings()) > 0 || len(bb.AttesterSlashings()) > 0
+	hasExits := len(bb.VoluntaryExits()) > 0
+	if hasSlashings || hasExits {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = v.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
+			return nil, errors.Wrap(err, "could not update total active balance cache")
+		}
 	}
 	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
 	if err != nil {

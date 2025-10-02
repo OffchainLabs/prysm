@@ -692,6 +692,27 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	// Check second entry - values should be strings for consistent API output
 	assert.Equal(t, "200", blobSchedule[1]["EPOCH"])
 	assert.Equal(t, "9", blobSchedule[1]["MAX_BLOBS_PER_BLOCK"])
+
+	// Verify that fields with json:"-" are NOT present in the blob schedule entries
+	for i, entry := range blobSchedule {
+		t.Run(fmt.Sprintf("entry_%d_omits_json_dash_fields", i), func(t *testing.T) {
+			// These fields have `json:"-"` in NetworkScheduleEntry and should be omitted
+			_, hasForkVersion := entry["ForkVersion"]
+			assert.Equal(t, false, hasForkVersion, "ForkVersion should be omitted due to json:\"-\"")
+
+			_, hasForkDigest := entry["ForkDigest"]
+			assert.Equal(t, false, hasForkDigest, "ForkDigest should be omitted due to json:\"-\"")
+
+			_, hasBPOEpoch := entry["BPOEpoch"]
+			assert.Equal(t, false, hasBPOEpoch, "BPOEpoch should be omitted due to json:\"-\"")
+
+			_, hasVersionEnum := entry["VersionEnum"]
+			assert.Equal(t, false, hasVersionEnum, "VersionEnum should be omitted due to json:\"-\"")
+
+			_, hasIsFork := entry["isFork"]
+			assert.Equal(t, false, hasIsFork, "isFork should be omitted due to json:\"-\"")
+		})
+	}
 }
 
 func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
