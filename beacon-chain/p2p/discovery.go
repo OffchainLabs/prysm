@@ -604,26 +604,13 @@ func (s *Service) createLocalNode(
 	localNode = initializeSyncCommSubnets(localNode)
 
 	if params.FuluEnabled() {
-		// TODO: Replace this quick fix with a proper synchronization scheme (chan?)
-		const delay = 1 * time.Second
-
-		var custodyGroupCount uint64
-
-		err := errNoCustodyInfo
-		for errors.Is(err, errNoCustodyInfo) {
-			custodyGroupCount, err = s.CustodyGroupCount()
-			if errors.Is(err, errNoCustodyInfo) {
-				log.WithField("delay", delay).Debug("No custody info available yet, retrying later")
-				continue
-			}
-
-			if err != nil {
-				return nil, errors.Wrap(err, "retrieve custody group count")
-			}
-
-			custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
-			localNode.Set(custodyGroupCountEntry)
+		custodyGroupCount, err := s.CustodyGroupCount()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not retrieve custody group count")
 		}
+
+		custodyGroupCountEntry := peerdas.Cgc(custodyGroupCount)
+		localNode.Set(custodyGroupCountEntry)
 	}
 
 	if s.cfg != nil && s.cfg.HostAddress != "" {

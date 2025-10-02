@@ -10,8 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var errNoCustodyInfo = errors.New("no custody info available")
-
 var _ CustodyManager = (*Service)(nil)
 
 // EarliestAvailableSlot returns the earliest available slot.
@@ -32,7 +30,7 @@ func (s *Service) CustodyGroupCount() (uint64, error) {
 	defer s.custodyInfoLock.Unlock()
 
 	if s.custodyInfo == nil {
-		return 0, errNoCustodyInfo
+		return 0, errors.New("no custody info available")
 	}
 
 	return s.custodyInfo.groupCount, nil
