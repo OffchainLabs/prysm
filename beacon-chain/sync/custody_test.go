@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
@@ -55,9 +54,9 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 
 	if withChain {
 		const headSlot = primitives.Slot(100)
-		block, err := blocks.NewSignedBeaconBlock(&eth.SignedBeaconBlock{
-			Block: &eth.BeaconBlock{
-				Body: &eth.BeaconBlockBody{},
+		block, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+			Block: &ethpb.BeaconBlock{
+				Body: &ethpb.BeaconBlockBody{},
 				Slot: headSlot,
 			},
 		})
