@@ -467,7 +467,7 @@ func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
 // LastFork is the last full fork (this is used by e2e testing)
 func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
 	for i := len(ns.entries) - 1; i >= 0; i-- {
-		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+		if ns.entries[i].isFork {
 			return ns.entries[i]
 		}
 	}

@@ -102,7 +102,8 @@ func LastForkEpoch() primitives.Epoch {
 }
 
 func LastNetworkScheduleEntry() NetworkScheduleEntry {
-	return BeaconConfig().networkSchedule.LastFork()
+	lastIdx := len(BeaconConfig().networkSchedule.entries) - 1
+	return BeaconConfig().networkSchedule.entries[lastIdx]
 }
 
 func GetNetworkScheduleEntry(epoch primitives.Epoch) NetworkScheduleEntry {
