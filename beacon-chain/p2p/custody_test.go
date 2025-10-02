@@ -20,12 +20,14 @@ import (
 )
 
 func TestEarliestAvailableSlot(t *testing.T) {
+	ctx := t.Context()
+
 	t.Run("No custody info available", func(t *testing.T) {
 		service := &Service{
 			custodyInfo: nil,
 		}
 
-		_, err := service.EarliestAvailableSlot()
+		_, err := service.EarliestAvailableSlot(ctx)
 
 		require.NotNil(t, err)
 	})
@@ -39,7 +41,7 @@ func TestEarliestAvailableSlot(t *testing.T) {
 			},
 		}
 
-		slot, err := service.EarliestAvailableSlot()
+		slot, err := service.EarliestAvailableSlot(ctx)
 
 		require.NoError(t, err)
 		require.Equal(t, expected, slot)
@@ -47,12 +49,14 @@ func TestEarliestAvailableSlot(t *testing.T) {
 }
 
 func TestCustodyGroupCount(t *testing.T) {
+	ctx := t.Context()
+
 	t.Run("No custody info available", func(t *testing.T) {
 		service := &Service{
 			custodyInfo: nil,
 		}
 
-		_, err := service.CustodyGroupCount()
+		_, err := service.CustodyGroupCount(ctx)
 
 		require.NotNil(t, err)
 		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
@@ -67,7 +71,7 @@ func TestCustodyGroupCount(t *testing.T) {
 			},
 		}
 
-		count, err := service.CustodyGroupCount()
+		count, err := service.CustodyGroupCount(ctx)
 
 		require.NoError(t, err)
 		require.Equal(t, expected, count)

@@ -253,7 +253,7 @@ func (s *Service) RefreshPersistentSubnets() {
 			return
 		}
 
-		custodyGroupCount, err = s.CustodyGroupCount()
+		custodyGroupCount, err = s.CustodyGroupCount(s.ctx)
 		if err != nil {
 			log.WithError(err).Error("Could not retrieve custody group count")
 			return
@@ -604,7 +604,7 @@ func (s *Service) createLocalNode(
 	localNode = initializeSyncCommSubnets(localNode)
 
 	if params.FuluEnabled() {
-		custodyGroupCount, err := s.CustodyGroupCount()
+		custodyGroupCount, err := s.CustodyGroupCount(s.ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not retrieve custody group count")
 		}

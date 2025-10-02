@@ -90,11 +90,13 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 }
 
 func (ts *testSetup) assertCustodyInfo(t *testing.T, expectedSlot primitives.Slot, expectedCount uint64) {
-	p2pEarliestSlot, err := ts.p2pService.EarliestAvailableSlot()
+	ctx := t.Context()
+
+	p2pEarliestSlot, err := ts.p2pService.EarliestAvailableSlot(ctx)
 	require.NoError(t, err)
 	require.Equal(t, expectedSlot, p2pEarliestSlot)
 
-	p2pCustodyCount, err := ts.p2pService.CustodyGroupCount()
+	p2pCustodyCount, err := ts.p2pService.CustodyGroupCount(ctx)
 	require.NoError(t, err)
 	require.Equal(t, expectedCount, p2pCustodyCount)
 
@@ -170,13 +172,15 @@ func TestCustodyGroupCount(t *testing.T) {
 	config.CustodyRequirement = 3
 	params.OverrideBeaconConfig(config)
 
+	ctx := t.Context()
+
 	t.Run("SubscribeAllDataSubnets enabled returns NumberOfCustodyGroups", func(t *testing.T) {
 		withSubscribeAllDataSubnets(t, func() {
 			service := &Service{
 				ctx: context.Background(),
 			}
 
-			result, err := service.custodyGroupCount()
+			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
 			require.Equal(t, config.NumberOfCustodyGroups, result)
 		})
@@ -188,7 +192,7 @@ func TestCustodyGroupCount(t *testing.T) {
 			trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 		}
 
-		result, err := service.custodyGroupCount()
+		result, err := service.custodyGroupCount(ctx)
 		require.NoError(t, err)
 		require.Equal(t, config.CustodyRequirement, result)
 	})

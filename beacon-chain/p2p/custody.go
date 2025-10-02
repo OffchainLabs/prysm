@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"context"
+
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -13,7 +15,7 @@ import (
 var _ CustodyManager = (*Service)(nil)
 
 // EarliestAvailableSlot returns the earliest available slot.
-func (s *Service) EarliestAvailableSlot() (primitives.Slot, error) {
+func (s *Service) EarliestAvailableSlot(ctx context.Context) (primitives.Slot, error) {
 	s.custodyInfoLock.RLock()
 	defer s.custodyInfoLock.RUnlock()
 
@@ -25,7 +27,7 @@ func (s *Service) EarliestAvailableSlot() (primitives.Slot, error) {
 }
 
 // CustodyGroupCount returns the custody group count.
-func (s *Service) CustodyGroupCount() (uint64, error) {
+func (s *Service) CustodyGroupCount(context.Context) (uint64, error) {
 	s.custodyInfoLock.Lock()
 	defer s.custodyInfoLock.Unlock()
 
