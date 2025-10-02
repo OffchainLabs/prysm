@@ -201,7 +201,7 @@ func TestGetSpec(t *testing.T) {
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
 
-	assert.Equal(t, 169, len(data))
+	assert.Equal(t, 170, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
