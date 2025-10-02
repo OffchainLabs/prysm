@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -14,6 +13,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -30,6 +30,12 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 
 	_, span := trace.StartSpan(ctx, "sync.validateLightClientOptimisticUpdate")
 	defer span.End()
+
+	currentUpdate := s.lcStore.LastOptimisticUpdate()
+	if currentUpdate == nil {
+		log.Debug("No existing optimistic update to compare against. Ignoring.")
+		return pubsub.ValidationIgnore, nil
+	}
 
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
@@ -64,12 +70,12 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		return pubsub.ValidationIgnore, nil
 	}
 
-	if !lightclient.IsBetterOptimisticUpdate(newUpdate, s.lcStore.LastOptimisticUpdate()) {
+	if !proto.Equal(newUpdate.Proto(), currentUpdate.Proto()) {
 		log.WithFields(logrus.Fields{
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-		}).Debug("Newly received light client optimistic update ignored. current update is better.")
+		}).Debug("Received light client optimistic update is different from the local one. Ignoring.")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -97,6 +103,12 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 
 	_, span := trace.StartSpan(ctx, "sync.validateLightClientFinalityUpdate")
 	defer span.End()
+
+	currentUpdate := s.lcStore.LastFinalityUpdate()
+	if currentUpdate == nil {
+		log.Debug("No existing finality update to compare against. Ignoring.")
+		return pubsub.ValidationIgnore, nil
+	}
 
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
@@ -131,12 +143,12 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, nil
 	}
 
-	if !lightclient.IsFinalityUpdateValidForBroadcast(newUpdate, s.lcStore.LastFinalityUpdate()) {
+	if !proto.Equal(newUpdate.Proto(), currentUpdate.Proto()) {
 		log.WithFields(logrus.Fields{
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-		}).Debug("Newly received light client finality update ignored. current update is better.")
+		}).Debug("Received light client finality update is different from the local one. ignoring.")
 		return pubsub.ValidationIgnore, nil
 	}
 

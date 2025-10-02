@@ -44,6 +44,11 @@ type wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.Validati
 // subHandler represents handler for a given subscription.
 type subHandler func(context.Context, proto.Message) error
 
+// noopHandler is used for subscriptions that do not require anything to be done.
+var noopHandler subHandler = func(ctx context.Context, msg proto.Message) error {
+	return nil
+}
+
 // subscribeParameters holds the parameters that are needed to construct a set of subscriptions topics for a given
 // set of gossipsub subnets.
 type subscribeParameters struct {
@@ -251,7 +256,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 				s.subscribe(
 					p2p.LightClientOptimisticUpdateTopicFormat,
 					s.validateLightClientOptimisticUpdate,
-					s.lightClientOptimisticUpdateSubscriber,
+					noopHandler,
 					digest,
 				)
 			})
@@ -259,7 +264,7 @@ func (s *Service) registerSubscribers(epoch primitives.Epoch, digest [4]byte) {
 				s.subscribe(
 					p2p.LightClientFinalityUpdateTopicFormat,
 					s.validateLightClientFinalityUpdate,
-					s.lightClientFinalityUpdateSubscriber,
+					noopHandler,
 					digest,
 				)
 			})
