@@ -207,10 +207,8 @@ func (s *Service) spawn(f func()) {
 func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 	// If we have already registered for this fork digest, exit early.
 	if s.registrationActionComplete(nse.ForkDigest, registrationActionGossipEnter) {
-		log.WithField("digest", fmt.Sprintf("#%x", nse.ForkDigest)).Debug("Early return from registerSubscribers - already registered for digest")
 		return false
 	}
-	log.WithField("digest", fmt.Sprintf("#%x", nse.ForkDigest)).Debug("Proceed with registerSubscribers")
 	s.spawn(func() {
 		s.subscribe(p2p.BlockSubnetTopicFormat, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber, nse)
 	})
@@ -350,7 +348,7 @@ func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandle
 		log.WithFields(logrus.Fields{
 			"topic":        topic,
 			"digest":       nse.ForkDigest,
-			"epoch":        nse.Epoch,
+			"forkEpoch":    nse.Epoch,
 			"currentEpoch": s.cfg.clock.CurrentEpoch(),
 		}).Debug("Not subscribing to topic as we are already past the next fork epoch")
 		return
@@ -545,6 +543,7 @@ func (s *Service) subscribeToSubnets(t *subnetTracker) error {
 	}
 
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
+	s.pruneSubscriptions(t, subnetsToJoin)
 	for _, subnet := range t.missing(subnetsToJoin) {
 		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
 		topic := t.fullTopic(subnet, "")
