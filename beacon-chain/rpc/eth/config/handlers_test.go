@@ -145,7 +145,6 @@ func TestGetSpec(t *testing.T) {
 	config.PendingDepositsLimit = 82
 	config.MaxPendingPartialsPerWithdrawalsSweep = 83
 	config.PendingConsolidationsLimit = 84
-	config.MaxPartialWithdrawalsPerPayload = 85
 	config.FullExitRequestAmount = 86
 	config.MaxConsolidationsRequestsPerPayload = 87
 	config.MaxAttesterSlashingsElectra = 88
@@ -202,8 +201,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
-
-	assert.Equal(t, 177, len(data))
+	assert.Equal(t, 171, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -241,8 +239,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "14", v)
 			case "RANDOM_SUBNETS_PER_VALIDATOR":
 				assert.Equal(t, "15", v)
-			case "EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION":
-				assert.Equal(t, "16", v)
 			case "SECONDS_PER_ETH1_BLOCK":
 				assert.Equal(t, "17", v)
 			case "DEPOSIT_CHAIN_ID":
@@ -439,8 +435,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "16777216", v)
 			case "PROPOSER_SCORE_BOOST":
 				assert.Equal(t, "40", v)
-			case "INTERVALS_PER_SLOT":
-				assert.Equal(t, "3", v)
 			case "MAX_WITHDRAWALS_PER_PAYLOAD":
 				assert.Equal(t, "74", v)
 			case "MAX_BLS_TO_EXECUTION_CHANGES":
@@ -457,9 +451,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":
 				assert.Equal(t, "128", v)
-			case "SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY":
-			case "NODE_ID_BITS":
-				assert.Equal(t, "256", v)
 			case "ATTESTATION_SUBNET_EXTRA_BITS":
 				assert.Equal(t, "0", v)
 			case "ATTESTATION_SUBNET_PREFIX_BITS":
@@ -522,8 +513,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "83", v)
 			case "PENDING_CONSOLIDATIONS_LIMIT":
 				assert.Equal(t, "84", v)
-			case "MAX_PARTIAL_WITHDRAWALS_PER_PAYLOAD":
-				assert.Equal(t, "85", v)
 			case "FULL_EXIT_REQUEST_AMOUNT":
 				assert.Equal(t, "86", v)
 			case "MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD":
@@ -542,8 +531,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "93", v)
 			case "MAX_PENDING_DEPOSITS_PER_EPOCH":
 				assert.Equal(t, "94", v)
-			case "TARGET_BLOBS_PER_BLOCK_ELECTRA":
-				assert.Equal(t, "6", v)
 			case "MAX_BLOBS_PER_BLOCK_ELECTRA":
 				assert.Equal(t, "9", v)
 			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
@@ -574,8 +561,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "100", v)
 			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
 				assert.Equal(t, "101", v)
-			case "MAX_BLOBS_PER_BLOCK_FULU":
-				assert.Equal(t, "12", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT":
 				assert.Equal(t, "102", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
