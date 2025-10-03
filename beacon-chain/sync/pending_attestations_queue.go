@@ -345,6 +345,7 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 	valRes, err := s.validateAggregatedAtt(ctx, aggregate)
 	if err != nil {
 		log.WithError(err).Debug("Pending aggregated attestation failed validation")
+		return
 	}
 	aggValid := pubsub.ValidationAccept == valRes
 	if aggValid && s.validateBlockInAttestation(ctx, aggregate) {
