@@ -606,6 +606,11 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 }
 
 func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig().Copy()
+	config.SyncMessageDueBPS = 833 // ~1 second
+	params.OverrideBeaconConfig(config)
+
 	p1 := p2ptest.NewTestP2P(t)
 	p2 := p2ptest.NewTestP2P(t)
 	p1.Connect(p2)
@@ -643,7 +648,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	wg.Add(1)
 	go func(tt *testing.T) {
 		defer wg.Done()
-		ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		incomingMessage, err := sub.Next(ctx)
