@@ -22,6 +22,8 @@ import (
 )
 
 var requestBlobsFlags = struct {
+	Network        string
+	Fork           string
 	Peers          string
 	ClientPortTCP  uint
 	ClientPortQUIC uint
@@ -41,6 +43,18 @@ var requestBlobsCmd = &cli.Command{
 	},
 	Flags: []cli.Flag{
 		cmd.ChainConfigFileFlag,
+		&cli.StringFlag{
+			Name:        "network",
+			Usage:       "network to run on (mainnet, sepolia, holesky, hoodi)",
+			Destination: &requestBlobsFlags.Network,
+			Value:       "mainnet",
+		},
+		&cli.StringFlag{
+			Name:        "fork",
+			Usage:       "fork version to use (phase0, altair, bellatrix, capella, deneb). If not specified, will auto-detect from chain state",
+			Destination: &requestBlobsFlags.Fork,
+			Value:       "",
+		},
 		&cli.StringFlag{
 			Name:        "peer-multiaddrs",
 			Usage:       "comma-separated, peer multiaddr(s) to connect to for p2p requests",
@@ -82,12 +96,45 @@ var requestBlobsCmd = &cli.Command{
 }
 
 func cliActionRequestBlobs(cliCtx *cli.Context) error {
+	// Set network configuration first
+	switch requestBlobsFlags.Network {
+	case params.SepoliaName:
+		if err := params.SetActive(params.SepoliaConfig()); err != nil {
+			log.Fatal(err)
+		}
+	case params.HoleskyName:
+		if err := params.SetActive(params.HoleskyConfig()); err != nil {
+			log.Fatal(err)
+		}
+	case params.HoodiName:
+		if err := params.SetActive(params.HoodiConfig()); err != nil {
+			log.Fatal(err)
+		}
+	case params.MainnetName:
+		// Do nothing - mainnet is default
+	default:
+		log.Fatalf("Unknown network provided: %s", requestBlobsFlags.Network)
+	}
+
+	// Load custom chain config if provided
 	if cliCtx.IsSet(cmd.ChainConfigFileFlag.Name) {
 		chainConfigFileName := cliCtx.String(cmd.ChainConfigFileFlag.Name)
 		if err := params.LoadChainConfigFile(chainConfigFileName, nil); err != nil {
 			return err
 		}
 	}
+
+	// Parse and validate fork flag if provided
+	var forkOverride *pb.Fork
+	if requestBlobsFlags.Fork != "" {
+		var err error
+		forkOverride, err = parseForkFlag(requestBlobsFlags.Fork)
+		if err != nil {
+			return errors.Wrap(err, "invalid fork flag")
+		}
+		log.WithField("fork", requestBlobsFlags.Fork).Info("Using fork override from --fork flag")
+	}
+
 	p2ptypes.InitializeDataMaps()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -118,7 +165,9 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 		return errors.New("no peers found")
 	}
 	log.WithField("peers", allPeers).Info("List of peers")
-	chain, err := c.initializeMockChainService(ctx)
+
+	// Initialize chain service with optional fork override
+	chain, err := c.initializeMockChainServiceWithFork(ctx, forkOverride)
 	if err != nil {
 		return err
 	}
@@ -161,6 +210,7 @@ func cliActionRequestBlobs(cliCtx *cli.Context) error {
 			"startSlot": startSlot,
 			"count":     requestBlobsFlags.Count,
 			"peer":      pr.String(),
+			"fork":      chain.currentFork,
 		}
 		if headSlot != nil {
 			fields["headSlot"] = *headSlot

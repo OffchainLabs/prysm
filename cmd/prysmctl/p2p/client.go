@@ -189,6 +189,34 @@ func (c *client) initializeMockChainService(ctx context.Context) (*mockChain, er
 	}, nil
 }
 
+// initializeMockChainServiceWithFork creates a mock chain service with a specific fork override
+func (c *client) initializeMockChainServiceWithFork(ctx context.Context, forkOverride *pb.Fork) (*mockChain, error) {
+	genesisResp, err := c.nodeClient.GetGenesis(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+
+	var currentFork *pb.Fork
+	if forkOverride != nil {
+		currentFork = forkOverride
+		log.WithField("fork", currentFork).Info("Using fork override from --fork flag")
+	} else {
+		// Fallback to dynamic fork detection
+		currEpoch := slots.ToEpoch(slots.SinceGenesis(genesisResp.GenesisTime.AsTime()))
+		currentFork, err = forks.Fork(currEpoch)
+		if err != nil {
+			return nil, err
+		}
+		log.WithField("fork", currentFork).Info("Using dynamically detected fork")
+	}
+
+	return &mockChain{
+		genesisTime:     genesisResp.GenesisTime.AsTime(),
+		currentFork:     currentFork,
+		genesisValsRoot: bytesutil.ToBytes32(genesisResp.GenesisValidatorsRoot),
+	}, nil
+}
+
 // Retrieves an external ipv4 address and converts into a libp2p formatted value.
 func ipAddr() net.IP {
 	ip, err := network.ExternalIP()

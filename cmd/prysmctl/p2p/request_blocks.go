@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,10 +13,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
-	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -24,6 +25,7 @@ import (
 
 var requestBlocksFlags = struct {
 	Network        string
+	Fork           string
 	Peers          string
 	ClientPortTCP  uint
 	ClientPortQUIC uint
@@ -46,9 +48,15 @@ var requestBlocksCmd = &cli.Command{
 		cmd.ChainConfigFileFlag,
 		&cli.StringFlag{
 			Name:        "network",
-			Usage:       "network to run on (mainnet, sepolia, holesky)",
+			Usage:       "network to run on (mainnet, sepolia, holesky, hoodi)",
 			Destination: &requestBlocksFlags.Network,
 			Value:       "mainnet",
+		},
+		&cli.StringFlag{
+			Name:        "fork",
+			Usage:       "fork version to use (phase0, altair, bellatrix, capella, deneb). If not specified, will auto-detect from chain state",
+			Destination: &requestBlocksFlags.Fork,
+			Value:       "",
 		},
 		&cli.StringFlag{
 			Name:        "peer-multiaddrs",
@@ -97,6 +105,7 @@ var requestBlocksCmd = &cli.Command{
 }
 
 func cliActionRequestBlocks(cliCtx *cli.Context) error {
+	// Set network configuration first
 	switch requestBlocksFlags.Network {
 	case params.SepoliaName:
 		if err := params.SetActive(params.SepoliaConfig()); err != nil {
@@ -111,17 +120,30 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 			log.Fatal(err)
 		}
 	case params.MainnetName:
-		// Do nothing
+		// Do nothing - mainnet is default
 	default:
 		log.Fatalf("Unknown network provided: %s", requestBlocksFlags.Network)
 	}
 
+	// Load custom chain config if provided
 	if cliCtx.IsSet(cmd.ChainConfigFileFlag.Name) {
 		chainConfigFileName := cliCtx.String(cmd.ChainConfigFileFlag.Name)
 		if err := params.LoadChainConfigFile(chainConfigFileName, nil); err != nil {
 			return err
 		}
 	}
+
+	// Parse and validate fork flag if provided
+	var forkOverride *pb.Fork
+	if requestBlocksFlags.Fork != "" {
+		var err error
+		forkOverride, err = parseForkFlag(requestBlocksFlags.Fork)
+		if err != nil {
+			return errors.Wrap(err, "invalid fork flag")
+		}
+		log.WithField("fork", requestBlocksFlags.Fork).Info("Using fork override from --fork flag")
+	}
+
 	p2ptypes.InitializeDataMaps()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -152,7 +174,9 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 		return errors.New("no peers found")
 	}
 	log.WithField("peers", allPeers).Info("List of peers")
-	chain, err := c.initializeMockChainService(ctx)
+
+	// Initialize chain service with optional fork override
+	chain, err := c.initializeMockChainServiceWithFork(ctx, forkOverride)
 	if err != nil {
 		return err
 	}
@@ -202,6 +226,7 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 			"count":     requestBlocksFlags.Count,
 			"step":      requestBlocksFlags.Step,
 			"peer":      pr.String(),
+			"fork":      chain.currentFork,
 		}
 		if headSlot != nil {
 			fields["headSlot"] = *headSlot
@@ -252,8 +277,40 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 	return nil
 }
 
-func closeStream(stream corenet.Stream) {
-	if err := stream.Close(); err != nil {
-		log.Println(err)
+// parseForkFlag parses the fork flag and returns the corresponding Fork struct
+func parseForkFlag(forkName string) (*pb.Fork, error) {
+	switch strings.ToLower(forkName) {
+	case "phase0", "phase_0":
+		return &pb.Fork{
+			PreviousVersion: bytesutil.PadTo([]byte{0, 0, 0, 0}, 4),
+			CurrentVersion:  bytesutil.PadTo([]byte{0, 0, 0, 0}, 4),
+			Epoch:           0,
+		}, nil
+	case "altair":
+		return &pb.Fork{
+			PreviousVersion: bytesutil.PadTo([]byte{0, 0, 0, 0}, 4),
+			CurrentVersion:  bytesutil.PadTo([]byte{1, 0, 0, 0}, 4),
+			Epoch:           74240, // Mainnet Altair epoch
+		}, nil
+	case "bellatrix", "merge":
+		return &pb.Fork{
+			PreviousVersion: bytesutil.PadTo([]byte{1, 0, 0, 0}, 4),
+			CurrentVersion:  bytesutil.PadTo([]byte{2, 0, 0, 0}, 4),
+			Epoch:           144896, // Mainnet Bellatrix epoch
+		}, nil
+	case "capella":
+		return &pb.Fork{
+			PreviousVersion: bytesutil.PadTo([]byte{2, 0, 0, 0}, 4),
+			CurrentVersion:  bytesutil.PadTo([]byte{3, 0, 0, 0}, 4),
+			Epoch:           194048, // Mainnet Capella epoch
+		}, nil
+	case "deneb":
+		return &pb.Fork{
+			PreviousVersion: bytesutil.PadTo([]byte{3, 0, 0, 0}, 4),
+			CurrentVersion:  bytesutil.PadTo([]byte{4, 0, 0, 0}, 4),
+			Epoch:           269568, // Mainnet Deneb epoch
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown fork: %s. Supported forks: phase0, altair, bellatrix, capella, deneb", forkName)
 	}
 }
