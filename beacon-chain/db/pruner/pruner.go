@@ -166,20 +166,22 @@ func (p *Service) prune(slot primitives.Slot) error {
 		return errors.Wrap(err, "failed to prune batches")
 	}
 
+	earliestAvailableSlot := pruneUpto + 1
+
 	log.WithFields(logrus.Fields{
-		"prunedUpto":  pruneUpto,
-		"duration":    time.Since(tt),
-		"currentSlot": slot,
-		"batchSize":   defaultPrunableBatchSize,
-		"numBatches":  numBatches,
+		"prunedUpto":            pruneUpto,
+		"earliestAvailableSlot": earliestAvailableSlot,
+		"duration":              time.Since(tt),
+		"currentSlot":           slot,
+		"batchSize":             defaultPrunableBatchSize,
+		"numBatches":            numBatches,
 	}).Debug("Successfully pruned chain data")
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
 
 	// Update the earliest available slot after pruning
-	log.WithField("earliestSlot", pruneUpto+1).Debug("Updating earliest available slot after pruning")
-	if err := p.updateEarliestSlot(pruneUpto + 1); err != nil {
+	if err := p.updateEarliestSlot(earliestAvailableSlot); err != nil {
 		return errors.Wrap(err, "failed to update earliest available slot")
 	}
 
