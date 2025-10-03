@@ -201,7 +201,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
-	assert.Equal(t, 170, len(data))
+	assert.Equal(t, 171, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
