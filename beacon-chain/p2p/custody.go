@@ -135,10 +135,6 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
 		s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
-		log.WithFields(logrus.Fields{
-			"newEarliestSlot": earliestAvailableSlot,
-			"oldEarliestSlot": s.custodyInfo.earliestAvailableSlot,
-		}).Debug("Decreased earliest available slot (backfill)")
 		return nil
 	}
 

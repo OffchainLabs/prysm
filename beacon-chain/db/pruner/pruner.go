@@ -186,11 +186,23 @@ func (p *Service) prune(slot primitives.Slot) error {
 	return nil
 }
 
-// updateEarliestSlot updates the earliest available slot via the injected custody updater.
+// updateEarliestSlot updates the earliest available slot via the injected custody updater
+// and also persists it to the database.
 func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) error {
-	// Update the earliest available slot
+	// Update the p2p in-memory state
 	if err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
 		return errors.Wrapf(err, "failed to update earliest available slot after pruning to %d", earliestAvailableSlot)
+	}
+
+	// Persist to database to ensure it survives restarts
+	custodyGroupCount, err := p.custody.CustodyGroupCount()
+	if err != nil {
+		return errors.Wrapf(err, "failed to get custody group count for earliest slot %d", earliestAvailableSlot)
+	}
+
+	_, _, err = p.db.UpdateCustodyInfo(p.ctx, earliestAvailableSlot, custodyGroupCount)
+	if err != nil {
+		return errors.Wrapf(err, "failed to update custody info in database for earliest slot %d", earliestAvailableSlot)
 	}
 
 	return nil
