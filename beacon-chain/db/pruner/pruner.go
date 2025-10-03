@@ -55,13 +55,6 @@ func WithSlotTicker(slotTicker slots.Ticker) ServiceOption {
 	}
 }
 
-// WithCustodyUpdater injects the updater without importing p2p here.
-func WithCustodyUpdater(u custodyUpdater) ServiceOption {
-	return func(s *Service) {
-		s.custody = u
-	}
-}
-
 // Service defines a service that prunes beacon chain DB based on MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 type Service struct {
 	ctx            context.Context
@@ -75,7 +68,7 @@ type Service struct {
 	custody        custodyUpdater
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, custody custodyUpdater, opts ...ServiceOption) (*Service, error) {
 	p := &Service{
 		ctx:            ctx,
 		db:             db,
@@ -84,6 +77,7 @@ func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSync
 		slotTicker:     slots.NewSlotTicker(slots.UnsafeStartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
 		initSyncWaiter: initSyncWaiter,
 		backfillWaiter: backfillWaiter,
+		custody:        custody,
 	}
 
 	for _, o := range opts {
@@ -194,10 +188,6 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 // updateEarliestSlot updates the earliest available slot via the injected custody updater.
 func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) error {
-	if p.custody == nil {
-		return nil
-	}
-
 	// Update the earliest available slot
 	if err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
 		return errors.Wrapf(err, "failed to update earliest available slot after pruning to %d", earliestAvailableSlot)

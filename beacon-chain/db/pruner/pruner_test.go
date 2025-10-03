@@ -64,7 +64,9 @@ func TestPruner_PruningConditions(t *testing.T) {
 			if !tt.backfillCompleted {
 				backfillWaiter = waiter
 			}
-			p, err := New(ctx, beaconDB, time.Now(), initSyncWaiter, backfillWaiter, WithSlotTicker(slotTicker))
+
+			mockCustody := &mockCustodyUpdater{}
+			p, err := New(ctx, beaconDB, time.Now(), initSyncWaiter, backfillWaiter, mockCustody, WithSlotTicker(slotTicker))
 			require.NoError(t, err)
 
 			go p.Start()
@@ -99,12 +101,14 @@ func TestPruner_PruneSuccess(t *testing.T) {
 	retentionEpochs := primitives.Epoch(2)
 	slotTicker := &slottest.MockTicker{Channel: make(chan primitives.Slot)}
 
+	mockCustody := &mockCustodyUpdater{}
 	p, err := New(
 		ctx,
 		beaconDB,
 		time.Now(),
 		nil,
 		nil,
+		mockCustody,
 		WithSlotTicker(slotTicker),
 	)
 	require.NoError(t, err)
@@ -182,8 +186,8 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 		time.Now(),
 		nil,
 		nil,
+		mockCustody,
 		WithSlotTicker(slotTicker),
-		WithCustodyUpdater(mockCustody),
 	)
 	require.NoError(t, err)
 
@@ -288,6 +292,7 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			hook := logTest.NewGlobal()
 			logrus.SetLevel(logrus.WarnLevel)
 
+			mockCustody := &mockCustodyUpdater{}
 			// Create pruner with retention period
 			p, err := New(
 				ctx,
@@ -295,6 +300,7 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 				time.Now(),
 				nil,
 				nil,
+				mockCustody,
 				WithRetentionPeriod(tt.userRetentionEpochs),
 			)
 			require.NoError(t, err)
@@ -339,8 +345,8 @@ func TestPruner_UpdateEarliestSlotError(t *testing.T) {
 		time.Now(),
 		nil,
 		nil,
+		mockCustody,
 		WithSlotTicker(slotTicker),
-		WithCustodyUpdater(mockCustody),
 	)
 	require.NoError(t, err)
 
