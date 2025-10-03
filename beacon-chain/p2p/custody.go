@@ -20,7 +20,7 @@ func (s *Service) EarliestAvailableSlot() (primitives.Slot, error) {
 	defer s.custodyInfoLock.RUnlock()
 
 	if s.custodyInfo == nil {
-		return 0, errors.New("no custody info available")
+		return 0, errNoCustodyInfo
 	}
 
 	return s.custodyInfo.earliestAvailableSlot, nil
