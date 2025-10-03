@@ -117,13 +117,8 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 // UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
 // the current custody group count.
 func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
-	// Only update custody info if Fulu is enabled and we're at or past the Fulu fork epoch
+	// Only update custody info if Fulu is enabled
 	if !params.FuluEnabled() {
-		return nil
-	}
-
-	currentEpoch := slots.ToEpoch(earliestAvailableSlot)
-	if currentEpoch < params.BeaconConfig().FuluForkEpoch {
 		return nil
 	}
 
@@ -131,10 +126,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	defer s.custodyInfoLock.Unlock()
 
 	if s.custodyInfo == nil {
-		s.custodyInfo = &custodyInfo{
-			earliestAvailableSlot: earliestAvailableSlot,
-		}
-		return nil
+		return errNoCustodyInfo
 	}
 
 	currentSlot := slots.CurrentSlot(s.genesisTime)
@@ -154,15 +146,23 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 
 	// Prevent increase within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period
 	// This ensures we don't voluntarily refuse to serve mandatory block data
+	// This check applies regardless of whether we're early or late in the chain
 	minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+	// Calculate the minimum required epoch (or 0 if we're early in the chain)
+	var minRequiredEpoch primitives.Epoch
 	if currentSlotEpoch > minEpochsForBlocks {
-		minRequiredEpoch := currentSlotEpoch - minEpochsForBlocks
-		if earliestAvailableEpoch > storedEarliestEpoch && earliestAvailableEpoch > minRequiredEpoch {
-			return errors.Errorf(
-				"cannot increase earliest available slot to %d (epoch %d) as it would be within MIN_EPOCHS_FOR_BLOCK_REQUESTS period (current epoch %d, min required epoch %d)",
-				earliestAvailableSlot, earliestAvailableEpoch, currentSlotEpoch, minRequiredEpoch,
-			)
-		}
+		minRequiredEpoch = currentSlotEpoch - minEpochsForBlocks
+	} else {
+		minRequiredEpoch = 0
+	}
+
+	// Prevent any increase that would put earliest slot beyond the minimum required epoch
+	if earliestAvailableEpoch > storedEarliestEpoch && earliestAvailableEpoch > minRequiredEpoch {
+		return errors.Errorf(
+			"cannot increase earliest available slot to %d (epoch %d) as it would be within MIN_EPOCHS_FOR_BLOCK_REQUESTS period (current epoch %d, min required epoch %d)",
+			earliestAvailableSlot, earliestAvailableEpoch, currentSlotEpoch, minRequiredEpoch,
+		)
 	}
 
 	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot

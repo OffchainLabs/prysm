@@ -199,8 +199,14 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		const newSlot primitives.Slot = 100
 		const groupCount uint64 = 5
 
+		// Set up a scenario where we're far enough in the chain that increasing to newSlot is valid
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks + 100 // Well beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
 		service := &Service{
-			genesisTime: time.Now(),
+			// Set genesis time in the past so currentSlot is the "current" slot
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
 			custodyInfo: &custodyInfo{
 				earliestAvailableSlot: initialSlot,
 				groupCount:            groupCount,
@@ -232,7 +238,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.Equal(t, earlierSlot, service.custodyInfo.earliestAvailableSlot) // Should decrease for backfill
 	})
 
-	t.Run("Prevent increase within MIN_EPOCHS_FOR_BLOCK_REQUESTS", func(t *testing.T) {
+	t.Run("Prevent increase within MIN_EPOCHS_FOR_BLOCK_REQUESTS - late in chain", func(t *testing.T) {
 		// Set current time far enough in the future to have a meaningful MIN_EPOCHS_FOR_BLOCK_REQUESTS period
 		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 		currentEpoch := minEpochsForBlocks + 100 // Well beyond the minimum
@@ -256,6 +262,54 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
 
 		require.NotNil(t, err)
+		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
+	})
+
+	t.Run("Prevent increase within MIN_EPOCHS_FOR_BLOCK_REQUESTS - early in chain", func(t *testing.T) {
+		// Concrete example with numbers to demonstrate the bug:
+		// - MIN_EPOCHS_FOR_BLOCK_REQUESTS = 33024 (from config)
+		// - SlotsPerEpoch = 32
+		// - Current epoch = 33014 (which is < 33024, so we're "early in chain")
+		// - Current slot = 33014 * 32 = 1,056,448
+		// - Current stored earliest slot = 100
+		// - Attempted new earliest slot = 1000
+		//
+		// The node MUST serve blocks from slot 0 to current slot (1,056,448).
+		// Trying to increase earliest slot from 100 to 1000 should FAIL because:
+		// - We're claiming we can't serve slots 100-999 anymore
+		// - But those slots are within the mandatory retention window (current - MIN_EPOCHS_FOR_BLOCK_REQUESTS)
+		//
+		// BUG: The current code on line 158 checks "if currentSlotEpoch > minEpochsForBlocks"
+		// Since currentSlotEpoch (33014) < minEpochsForBlocks (33024), this check is FALSE
+		// Therefore lines 159-166 are SKIPPED, and the increase is wrongly ALLOWED
+		//
+		// This tests the bug: when currentSlotEpoch <= minEpochsForBlocks, the current code
+		// does NOT prevent increases within the window, but it should.
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks - 10 // Early in chain, BEFORE we have MIN_EPOCHS_FOR_BLOCK_REQUESTS of history
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		// Current earliest slot is at slot 100
+		currentEarliestSlot := primitives.Slot(100)
+
+		// Try to increase earliest slot to slot 1000 (which would be within the mandatory window from currentSlot)
+		// This should FAIL because we must serve blocks from genesis (slot 0) up to currentSlot
+		// Increasing earliest slot would make us refuse to serve mandatory data
+		attemptedSlot := primitives.Slot(1000)
+
+		service := &Service{
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: currentEarliestSlot,
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+
+		// This should fail because attemptedSlot (1000) is greater than current slot (currentEpoch * SlotsPerEpoch)
+		// We should never allow increasing earliest slot beyond the current position minus MIN_EPOCHS_FOR_BLOCK_REQUESTS
+		require.NotNil(t, err, "Should prevent increasing earliest slot within the mandatory retention window, even early in chain")
 		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
 	})
 }
