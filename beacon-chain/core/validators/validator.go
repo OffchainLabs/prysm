@@ -98,7 +98,9 @@ func InitiateValidatorExit(
 	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 		return s, ErrValidatorAlreadyExited
 	}
-
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process validator exit")
+	}
 	// Compute exit queue epoch.
 	if s.Version() < version.Electra {
 		if err = initiateValidatorExitPreElectra(ctx, s, exitInfo); err != nil {
@@ -177,6 +179,9 @@ func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, e
 	//	if exit_queue_churn >= get_validator_churn_limit(state):
 	//	    exit_queue_epoch += Epoch(1)
 	exitableEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(s))
+	if exitInfo == nil {
+		return errors.New("exit info is required to process validator exit")
+	}
 	if exitableEpoch > exitInfo.HighestExitEpoch {
 		exitInfo.HighestExitEpoch = exitableEpoch
 		exitInfo.Churn = 0
@@ -235,7 +240,9 @@ func SlashValidator(
 	exitInfo *ExitInfo,
 ) (state.BeaconState, error) {
 	var err error
-
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to slash validator")
+	}
 	s, err = InitiateValidatorExitForTotalBal(ctx, s, slashedIdx, exitInfo, primitives.Gwei(exitInfo.TotalActiveBalance))
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)

@@ -429,12 +429,12 @@ func TestService_ValidateBlsToExecutionChange(t *testing.T) {
 			svc := NewService(ctx, append(opts, tt.svcopts...)...)
 			markInitSyncComplete(t, svc)
 			svc, tt.args.topic = tt.setupSvc(svc, tt.args.msg, tt.args.topic)
-			go svc.Start()
 			if tt.clock == nil {
 				tt.clock = startup.NewClock(time.Now(), [32]byte{})
 			}
 			require.NoError(t, cw.SetClock(tt.clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen)
+			go svc.Start()
 
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)

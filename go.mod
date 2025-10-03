@@ -1,6 +1,6 @@
 module github.com/OffchainLabs/prysm/v6
 
-go 1.24.5
+go 1.25.1
 
 require (
 	github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20240516070431-7828990cad7d
@@ -14,7 +14,7 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.2.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/emicklei/dot v0.11.0
-	github.com/ethereum/c-kzg-4844/v2 v2.1.1
+	github.com/ethereum/c-kzg-4844/v2 v2.1.5
 	github.com/ethereum/go-ethereum v1.15.9
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/ghodss/yaml v1.0.0
@@ -70,7 +70,7 @@ require (
 	github.com/spf13/afero v1.10.0
 	github.com/status-im/keycard-go v0.2.0
 	github.com/stretchr/testify v1.10.0
-	github.com/supranational/blst v0.3.14
+	github.com/supranational/blst v0.3.16-0.20250831170142-f48500c1fdbe
 	github.com/thomaso-mirodin/intmath v0.0.0-20160323211736-5dc6d854e46e
 	github.com/trailofbits/go-mutexasserts v0.0.0-20250212181730-4c2b8e9e784b
 	github.com/tyler-smith/go-bip39 v1.1.0
@@ -238,7 +238,7 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/quic-go/quic-go v0.49.0 // indirect
+	github.com/quic-go/quic-go v0.49.1-0.20250925085836-275c172fec2b // indirect
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

@@ -54,10 +54,7 @@ func (info *sszInfo) Size() uint64 {
 
 	switch info.sszType {
 	case List:
-		length := info.listInfo.length
-		elementSize := info.listInfo.element.Size()
-
-		return length * elementSize
+		return info.listInfo.Size()
 
 	case Bitlist:
 		return info.bitlistInfo.Size()
@@ -67,6 +64,11 @@ func (info *sszInfo) Size() uint64 {
 		for _, fieldInfo := range info.containerInfo.fields {
 			if !fieldInfo.sszInfo.isVariable {
 				continue
+			}
+
+			// Include offset bytes inside nested lists.
+			if fieldInfo.sszInfo.sszType == List {
+				size += fieldInfo.sszInfo.listInfo.OffsetBytes()
 			}
 
 			size += fieldInfo.sszInfo.Size()

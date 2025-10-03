@@ -55,6 +55,9 @@ func ProcessVoluntaryExits(
 	if len(exits) == 0 {
 		return beaconState, nil
 	}
+	if exitInfo == nil {
+		return nil, errors.New("exit info required to process voluntary exits")
+	}
 	for idx, exit := range exits {
 		if exit == nil || exit.Exit == nil {
 			return nil, errors.New("nil voluntary exit in block body")

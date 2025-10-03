@@ -63,7 +63,7 @@ func (m *MockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context, 
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (m *MockBroadcaster) BroadcastDataColumnSidecar(uint64, blocks.VerifiedRODataColumn) error {
+func (m *MockBroadcaster) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn) error {
 	m.BroadcastCalled.Store(true)
 	return nil
 }

@@ -65,6 +65,10 @@ message FixedTestContainer {
 message VariableNestedContainer {
   uint64 value1 = 1;  
   repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "100" ];
+  repeated bytes nested_list_field = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "100,50"
+  ];
 }
 
 // VariableTestContainer - comprehensive variable-size container for SSZ query testing
@@ -96,7 +100,14 @@ message VariableTestContainer {
         "github.com/prysmaticlabs/go-bitfield.Bitlist"
   ];
 
+  // 2D bytes list - test list of bytelists.
+  // e.g., ExecutionPayload.transactions
+  repeated bytes nested_list_field = 7 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "100,50"
+  ];
+
   // Fixed-size trailing field - test fixed field after variable fields
   // Verifies correct offset calculation after variable-size fields
-  bytes trailing_field = 7 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 + 4 = 52
+  bytes trailing_field = 8 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 + 4 + 4 = 56
 }
