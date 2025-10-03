@@ -15,27 +15,25 @@ import (
 var _ CustodyManager = (*Service)(nil)
 
 // EarliestAvailableSlot returns the earliest available slot.
+// It blocks until the custody info is set or the context is done.
 func (s *Service) EarliestAvailableSlot(ctx context.Context) (primitives.Slot, error) {
-	s.custodyInfoLock.RLock()
-	defer s.custodyInfoLock.RUnlock()
-
-	if s.custodyInfo == nil {
-		return 0, errors.New("no custody info available")
+	custodyInfo, err := s.waitForCustodyInfo(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "wait for custody info")
 	}
 
-	return s.custodyInfo.earliestAvailableSlot, nil
+	return custodyInfo.earliestAvailableSlot, nil
 }
 
 // CustodyGroupCount returns the custody group count.
-func (s *Service) CustodyGroupCount(context.Context) (uint64, error) {
-	s.custodyInfoLock.Lock()
-	defer s.custodyInfoLock.Unlock()
-
-	if s.custodyInfo == nil {
-		return 0, errors.New("no custody info available")
+// It blocks until the custody info is set or the context is done.
+func (s *Service) CustodyGroupCount(ctx context.Context) (uint64, error) {
+	custodyInfo, err := s.waitForCustodyInfo(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "wait for custody info")
 	}
 
-	return s.custodyInfo.groupCount, nil
+	return custodyInfo.groupCount, nil
 }
 
 // UpdateCustodyInfo updates the stored custody group count to the incoming one
@@ -79,6 +77,9 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 			earliestAvailableSlot: earliestAvailableSlot,
 			groupCount:            custodyGroupCount,
 		}
+
+		close(s.custodyInfoSet)
+
 		return earliestAvailableSlot, custodyGroupCount, nil
 	}
 
@@ -145,6 +146,33 @@ func (s *Service) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 	}
 
 	return custodyCount
+}
+
+func (s *Service) waitForCustodyInfo(ctx context.Context) (custodyInfo, error) {
+	select {
+	case <-s.custodyInfoSet:
+		info, ok := s.copyCustodyInfo()
+		if !ok {
+			return custodyInfo{}, errors.New("custody info was set but is nil")
+		}
+
+		return info, nil
+	case <-ctx.Done():
+		return custodyInfo{}, ctx.Err()
+	}
+}
+
+// copyCustodyInfo returns a copy of the current custody info in a thread-safe manner.
+// If no custody info is set, it returns false as the second return value.
+func (s *Service) copyCustodyInfo() (custodyInfo, bool) {
+	s.custodyInfoLock.RLock()
+	defer s.custodyInfoLock.RUnlock()
+
+	if s.custodyInfo == nil {
+		return custodyInfo{}, false
+	}
+
+	return *s.custodyInfo, true
 }
 
 // custodyGroupCountFromPeerENR retrieves the custody count from the peer's ENR.

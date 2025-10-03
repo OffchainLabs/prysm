@@ -20,62 +20,37 @@ import (
 )
 
 func TestEarliestAvailableSlot(t *testing.T) {
-	ctx := t.Context()
+	const expected primitives.Slot = 100
 
-	t.Run("No custody info available", func(t *testing.T) {
-		service := &Service{
-			custodyInfo: nil,
-		}
+	service := &Service{
+		custodyInfoSet: make(chan struct{}),
+		custodyInfo: &custodyInfo{
+			earliestAvailableSlot: expected,
+		},
+	}
 
-		_, err := service.EarliestAvailableSlot(ctx)
+	close(service.custodyInfoSet)
+	slot, err := service.EarliestAvailableSlot(t.Context())
 
-		require.NotNil(t, err)
-	})
-
-	t.Run("Valid custody info", func(t *testing.T) {
-		const expected primitives.Slot = 100
-
-		service := &Service{
-			custodyInfo: &custodyInfo{
-				earliestAvailableSlot: expected,
-			},
-		}
-
-		slot, err := service.EarliestAvailableSlot(ctx)
-
-		require.NoError(t, err)
-		require.Equal(t, expected, slot)
-	})
+	require.NoError(t, err)
+	require.Equal(t, expected, slot)
 }
 
 func TestCustodyGroupCount(t *testing.T) {
-	ctx := t.Context()
+	const expected uint64 = 5
 
-	t.Run("No custody info available", func(t *testing.T) {
-		service := &Service{
-			custodyInfo: nil,
-		}
+	service := &Service{
+		custodyInfoSet: make(chan struct{}),
+		custodyInfo: &custodyInfo{
+			groupCount: expected,
+		},
+	}
 
-		_, err := service.CustodyGroupCount(ctx)
+	close(service.custodyInfoSet)
+	count, err := service.CustodyGroupCount(t.Context())
 
-		require.NotNil(t, err)
-		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
-	})
-
-	t.Run("Valid custody info", func(t *testing.T) {
-		const expected uint64 = 5
-
-		service := &Service{
-			custodyInfo: &custodyInfo{
-				groupCount: expected,
-			},
-		}
-
-		count, err := service.CustodyGroupCount(ctx)
-
-		require.NoError(t, err)
-		require.Equal(t, expected, count)
-	})
+	require.NoError(t, err)
+	require.Equal(t, expected, count)
 }
 
 func TestUpdateCustodyInfo(t *testing.T) {
@@ -167,7 +142,8 @@ func TestUpdateCustodyInfo(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			service := &Service{
-				custodyInfo: tc.initialCustodyInfo,
+				custodyInfoSet: make(chan struct{}),
+				custodyInfo:    tc.initialCustodyInfo,
 			}
 
 			slot, groupCount, err := service.UpdateCustodyInfo(tc.inputSlot, tc.inputGroupCount)
