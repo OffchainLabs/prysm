@@ -122,6 +122,29 @@ func TestCompareForkENR(t *testing.T) {
 	}
 }
 
+func TestIgnoreFarFutureMismatch(t *testing.T) {
+	db, err := enode.OpenDB("")
+	assert.NoError(t, err)
+	_, k := createAddrAndPrivKey(t)
+	current := params.GetNetworkScheduleEntry(params.BeaconConfig().ElectraForkEpoch)
+	next := params.NetworkScheduleEntry{
+		Epoch:       params.BeaconConfig().FarFutureEpoch,
+		ForkDigest:  [4]byte{0xFF, 0xFF, 0xFF, 0xFF}, // Ensure a unique digest for testing.
+		ForkVersion: [4]byte{0xFF, 0xFF, 0xFF, 0xFF},
+	}
+	self := enode.NewLocalNode(db, k)
+	require.NoError(t, updateENR(self, current, next))
+
+	peerNext := params.NetworkScheduleEntry{
+		Epoch:       params.BeaconConfig().FarFutureEpoch,
+		ForkDigest:  [4]byte{0xAA, 0xAA, 0xAA, 0xAA}, // Different unique digest for testing.
+		ForkVersion: [4]byte{0xAA, 0xAA, 0xAA, 0xAA},
+	}
+	peer := enode.NewLocalNode(db, k)
+	require.NoError(t, updateENR(peer, current, peerNext))
+	require.NoError(t, compareForkENR(self.Node().Record(), peer.Node().Record()))
+}
+
 func TestNfdSetAndLoad(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096
