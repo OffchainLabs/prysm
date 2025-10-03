@@ -347,7 +347,7 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 		log.WithError(err).Debug("Pending aggregated attestation failed validation")
 	}
 	aggValid := pubsub.ValidationAccept == valRes
-	if s.validateBlockInAttestation(ctx, aggregate) && aggValid {
+	if aggValid && s.validateBlockInAttestation(ctx, aggregate) {
 		if features.Get().EnableExperimentalAttestationPool {
 			if err = s.cfg.attestationCache.Add(att); err != nil {
 				log.WithError(err).Debug("Could not save aggregated attestation")
