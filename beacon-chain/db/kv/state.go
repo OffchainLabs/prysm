@@ -954,16 +954,11 @@ func (s *Store) CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint pr
 	deletedRoots := make([][32]byte, 0)
 
 	oRoot, err := s.OriginCheckpointBlockRoot(ctx)
-	hasOriginRoot := true
-	if err != nil {
-		if !errors.Is(err, ErrNotFoundOriginBlockRoot) {
-			return err
-		}
-		// Origin block root is not set (e.g., starting from genesis or certain forks)
-		hasOriginRoot = false
+	if err != nil && !errors.Is(err, ErrNotFoundOriginBlockRoot) {
+		// If origin block root is not found (e.g., starting from genesis or certain forks),
+		// use zero hash which will never match any actual state root
+		return err
 	}
-	// If origin block root is not found (e.g., starting from genesis or certain forks),
-	// use zero hash which will never match any actual state root
 
 	err = s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateSlotIndicesBucket)
@@ -992,7 +987,7 @@ func (s *Store) CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint pr
 				return nil
 			}
 
-			if hasOriginRoot && oRoot == root {
+			if oRoot == root {
 				return nil
 			}
 
