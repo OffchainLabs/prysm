@@ -130,9 +130,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	}
 
 	currentSlot := slots.CurrentSlot(s.genesisTime)
-	currentSlotEpoch := slots.ToEpoch(currentSlot)
-	earliestAvailableEpoch := slots.ToEpoch(earliestAvailableSlot)
-	storedEarliestEpoch := slots.ToEpoch(s.custodyInfo.earliestAvailableSlot)
+	currentEpoch := slots.ToEpoch(currentSlot)
 
 	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
@@ -151,17 +149,24 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 
 	// Calculate the minimum required epoch (or 0 if we're early in the chain)
 	var minRequiredEpoch primitives.Epoch
-	if currentSlotEpoch > minEpochsForBlocks {
-		minRequiredEpoch = currentSlotEpoch - minEpochsForBlocks
+	if currentEpoch > minEpochsForBlocks {
+		minRequiredEpoch = currentEpoch - minEpochsForBlocks
 	} else {
 		minRequiredEpoch = 0
 	}
 
-	// Prevent any increase that would put earliest slot beyond the minimum required epoch
-	if earliestAvailableEpoch > storedEarliestEpoch && earliestAvailableEpoch > minRequiredEpoch {
+	// Convert to slot to ensure we compare at slot-level granularity, not epoch-level
+	// This prevents allowing increases to slots within minRequiredEpoch that are after its first slot
+	minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+	if err != nil {
+		return errors.Wrap(err, "epoch start")
+	}
+
+	// Prevent any increase that would put earliest slot beyond the minimum required slot
+	if earliestAvailableSlot > s.custodyInfo.earliestAvailableSlot && earliestAvailableSlot > minRequiredSlot {
 		return errors.Errorf(
-			"cannot increase earliest available slot to %d (epoch %d) as it would be within MIN_EPOCHS_FOR_BLOCK_REQUESTS period (current epoch %d, min required epoch %d)",
-			earliestAvailableSlot, earliestAvailableEpoch, currentSlotEpoch, minRequiredEpoch,
+			"cannot increase earliest available slot to %d (epoch %d) as it exceeds minimum required slot %d (epoch %d)",
+			earliestAvailableSlot, slots.ToEpoch(earliestAvailableSlot), minRequiredSlot, minRequiredEpoch,
 		)
 	}
 
