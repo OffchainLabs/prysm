@@ -79,6 +79,9 @@ func compareForkENR(self, peer *enr.Record) error {
 		// we allow the connection to continue until the fork boundary.
 		return nil
 	}
+	if selfEntry.NextForkEpoch == params.BeaconConfig().FarFutureEpoch {
+		return nil
+	}
 
 	// Since we agree on the next fork epoch, we require next fork version to also be in agreement.
 	if !bytes.Equal(peerEntry.NextForkVersion, selfEntry.NextForkVersion) {

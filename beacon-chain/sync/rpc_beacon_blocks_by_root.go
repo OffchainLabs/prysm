@@ -93,6 +93,10 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
 // If so, requests them and saves them to the storage.
 func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock) error {
+	if len(blks) == 0 {
+		return nil
+	}
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
