@@ -223,6 +223,7 @@ type BeaconChainConfig struct {
 	// Light client
 	MinSyncCommitteeParticipants uint64 `yaml:"MIN_SYNC_COMMITTEE_PARTICIPANTS" spec:"true"`  // MinSyncCommitteeParticipants defines the minimum amount of sync committee participants for which the light client acknowledges the signature.
 	MaxRequestLightClientUpdates uint64 `yaml:"MAX_REQUEST_LIGHT_CLIENT_UPDATES" spec:"true"` // MaxRequestLightClientUpdates defines the maximum amount of light client updates that can be requested in a single request.
+	SyncMessageDueBPS            uint64 `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`             // SyncMessageDueBPS defines the due time for a sync message.
 
 	// Bellatrix
 	TerminalBlockHash                common.Hash      `yaml:"TERMINAL_BLOCK_HASH" spec:"true"`                  // TerminalBlockHash of beacon chain.
@@ -467,7 +468,7 @@ func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
 // LastFork is the last full fork (this is used by e2e testing)
 func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
 	for i := len(ns.entries) - 1; i >= 0; i-- {
-		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
+		if ns.entries[i].isFork {
 			return ns.entries[i]
 		}
 	}
@@ -526,6 +527,13 @@ func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
 }
 
 func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
+	// Only keep entries up to FarFutureEpoch.
+	for i := range ns.entries {
+		if ns.entries[i].Epoch == b.FarFutureEpoch {
+			ns.entries = ns.entries[:i]
+			break
+		}
+	}
 	if len(ns.entries) == 0 {
 		return errors.New("cannot compute digests for an empty network schedule")
 	}
