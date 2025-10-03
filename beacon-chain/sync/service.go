@@ -180,7 +180,6 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
-	registeredDigests                sync.Map
 	registrationHistory              registrationHistory
 	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
