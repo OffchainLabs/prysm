@@ -180,7 +180,7 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
-	registrationHistory              registrationHistory
+	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
 

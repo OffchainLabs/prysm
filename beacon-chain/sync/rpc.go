@@ -148,7 +148,7 @@ func removedRPCTopics(previous, next map[string]rpcHandler) map[string]bool {
 
 // registerRPCHandlers for p2p RPC.
 func (s *Service) registerRPCHandlers(nse params.NetworkScheduleEntry) error {
-	if s.registrationActionComplete(nse.ForkDigest, registrationActionRPCEnter) {
+	if s.digestActionDone(nse.ForkDigest, registerRpcOnce) {
 		return nil
 	}
 	// Get the RPC handlers for the current epoch.

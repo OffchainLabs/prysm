@@ -206,7 +206,7 @@ func (s *Service) spawn(f func()) {
 // Register PubSub subscribers
 func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 	// If we have already registered for this fork digest, exit early.
-	if s.registrationActionComplete(nse.ForkDigest, registrationActionGossipEnter) {
+	if s.digestActionDone(nse.ForkDigest, registerGossipOnce) {
 		return false
 	}
 	s.spawn(func() {
@@ -866,38 +866,5 @@ func errorIsIgnored(err error) bool {
 	if errors.Is(err, altair.ErrTooLate) {
 		return true
 	}
-	return false
-}
-
-type registrationHistory struct {
-	sync.Mutex
-	history map[[4]byte]registrationAction
-}
-
-type registrationAction uint8
-
-const (
-	registrationActionNone        registrationAction = 0
-	registrationActionGossipEnter registrationAction = 1 << 1
-	registrationActionGossipExit  registrationAction = 1 << 2
-	registrationActionRPCEnter    registrationAction = 1 << 3
-	registrationActionRPCExit     registrationAction = 1 << 4
-)
-
-func (s *Service) registrationActionComplete(digest [4]byte, action registrationAction) bool {
-	s.registrationHistory.Lock()
-	defer s.registrationHistory.Unlock()
-	// lazy initialize registrationHistory; the lock is not a reference type so it is ready to go
-	if s.registrationHistory.history == nil {
-		s.registrationHistory.history = make(map[[4]byte]registrationAction)
-	}
-
-	prev := s.registrationHistory.history[digest]
-	// Return true if the bit was already set
-	if prev&action != 0 {
-		return true
-	}
-
-	s.registrationHistory.history[digest] = prev | action
 	return false
 }

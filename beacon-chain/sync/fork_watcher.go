@@ -49,7 +49,7 @@ func (s *Service) registerForUpcomingFork(epoch primitives.Epoch) error {
 	if err != nil {
 		return errors.Wrap(err, "RPC handler by topic from before fork epoch")
 	}
-	if !s.registrationActionComplete(current.ForkDigest, registrationActionRPCEnter) {
+	if !s.digestActionDone(current.ForkDigest, registerRpcOnce) {
 		for topic, handler := range currentHandler {
 			s.registerRPC(topic, handler)
 		}
@@ -61,7 +61,7 @@ func (s *Service) registerForUpcomingFork(epoch primitives.Epoch) error {
 	}
 	s.registerSubscribers(next)
 
-	if s.registrationActionComplete(next.ForkDigest, registrationActionRPCEnter) {
+	if s.digestActionDone(next.ForkDigest, registerRpcOnce) {
 		return nil
 	}
 
@@ -95,7 +95,7 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	previous := params.GetNetworkScheduleEntry(current.Epoch - 1)
 	// Remove stream handlers for all topics that are in the set of
 	// currentTopics-previousTopics
-	if !s.registrationActionComplete(previous.ForkDigest, registrationActionRPCExit) {
+	if !s.digestActionDone(previous.ForkDigest, unregisterRpcOnce) {
 		previousTopics, err := s.rpcHandlerByTopicFromFork(previous.VersionEnum)
 		if err != nil {
 			return errors.Wrap(err, "RPC handler by topic from before fork epoch")
@@ -113,7 +113,7 @@ func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
 	}
 
 	// Unsubscribe from all gossip topics with the previous fork digest.
-	if s.registrationActionComplete(previous.ForkDigest, registrationActionGossipExit) {
+	if s.digestActionDone(previous.ForkDigest, unregisterGossipOnce) {
 		return nil
 	}
 	for _, t := range s.subHandler.allTopics() {
