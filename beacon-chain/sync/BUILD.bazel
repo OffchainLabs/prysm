@@ -17,6 +17,7 @@ go_library(
         "fuzz_exports.go",  # keep
         "log.go",
         "metrics.go",
+        "once.go",
         "options.go",
         "pending_attestations_queue.go",
         "pending_blocks_queue.go",
@@ -172,6 +173,7 @@ go_test(
         "error_test.go",
         "fork_watcher_test.go",
         "kzg_batch_verifier_test.go",
+        "once_test.go",
         "pending_attestations_queue_test.go",
         "pending_blocks_queue_test.go",
         "rate_limiter_test.go",
