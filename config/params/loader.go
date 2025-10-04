@@ -241,8 +241,6 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MIN_EPOCHS_FOR_BLOCK_REQUESTS: %d", int(cfg.MinEpochsForBlockRequests)),
 		fmt.Sprintf("MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: %d", cfg.MinPerEpochChurnLimitElectra),
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK: %d", cfg.DeprecatedMaxBlobsPerBlock),
-		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_ELECTRA: %d", cfg.DeprecatedMaxBlobsPerBlockElectra),
-		fmt.Sprintf("MAX_BLOBS_PER_BLOCK_FULU: %d", cfg.DeprecatedMaxBlobsPerBlockFulu),
 	}
 
 	if len(cfg.BlobSchedule) > 0 {
