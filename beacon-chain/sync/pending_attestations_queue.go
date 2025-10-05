@@ -147,7 +147,7 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 
 	// Shared validations for the entire bucket.
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		log.WithError(blockchain.ErrNotDescendantOfFinalized).Debug("Failed forkchoice check for bucket")
+		log.WithError(blockchain.ErrNotDescendantOfFinalized).WithField("root", fmt.Sprintf("%#x", data.BeaconBlockRoot)).Debug("Failed forkchoice check for bucket")
 		return
 	}
 
