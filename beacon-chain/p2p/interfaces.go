@@ -123,8 +123,8 @@ type (
 
 	// CustodyManager abstracts some data columns related methods.
 	CustodyManager interface {
-		EarliestAvailableSlot() (primitives.Slot, error)
-		CustodyGroupCount() (uint64, error)
+		EarliestAvailableSlot(ctx context.Context) (primitives.Slot, error)
+		CustodyGroupCount(ctx context.Context) (uint64, error)
 		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}

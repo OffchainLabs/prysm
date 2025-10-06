@@ -299,7 +299,7 @@ func (s *Service) columnIndicesToSample() (map[uint64]bool, error) {
 	nodeID := s.cfg.p2p.NodeID()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody group count")
 	}

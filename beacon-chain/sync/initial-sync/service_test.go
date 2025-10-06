@@ -629,7 +629,7 @@ func TestFetchOriginSidecars(t *testing.T) {
 
 		// Compute the columns to request.
 		p2p := p2ptest.NewTestP2P(t)
-		custodyGroupCount, err := p2p.CustodyGroupCount()
+		custodyGroupCount, err := p2p.CustodyGroupCount(t.Context())
 		require.NoError(t, err)
 
 		samplingSize := max(custodyGroupCount, samplesPerSlot)
