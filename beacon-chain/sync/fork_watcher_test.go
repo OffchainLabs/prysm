@@ -219,6 +219,9 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
 			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 			wg.Wait()
+
+			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch))
+			assert.Equal(t, true, s.subHandler.digestExists(digest))
 			// deregister as if it is the epoch after the next fork epoch
 			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
 			assert.Equal(t, false, s.subHandler.digestExists(digest))
