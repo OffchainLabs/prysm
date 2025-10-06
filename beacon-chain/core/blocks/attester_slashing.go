@@ -42,6 +42,9 @@ func ProcessAttesterSlashings(
 	slashings []ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if exitInfo == nil && len(slashings) > 0 {
+		return nil, errors.New("exit info required to process attester slashings")
+	}
 	var err error
 	for _, slashing := range slashings {
 		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, exitInfo)
@@ -59,6 +62,9 @@ func ProcessAttesterSlashing(
 	slashing ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process attester slashing")
+	}
 	if err := VerifyAttesterSlashing(ctx, beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify attester slashing")
 	}

@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "basis_points.go",
         "config.go",
         "config_utils_develop.go",  # keep
         "config_utils_prod.go",
