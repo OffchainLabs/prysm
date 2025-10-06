@@ -124,20 +124,23 @@ func TestHashTreeRoot_batch(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, info, "Expected non-nil SSZ info")
 
+			originalFunctions, ok := tt.obj.(query.SSZIface)
+			require.Equal(t, ok, true, "Original object does not implement HashTreeRoot")
+
 			hashTreeRoot, err := info.HashTreeRoot()
 			require.NoError(t, err, "HashTreeRoot should not return an error")
 			t.Logf("HashTreeRoot for %s: %x", tt.name, hashTreeRoot)
 
-			// Use reflection to call HashTreeRoot on the original object
-			type hasher interface {
-				HashTreeRoot() ([32]byte, error)
-			}
-			originalHasher, ok := tt.obj.(hasher)
-			require.Equal(t, ok, true, "Original object does not implement HashTreeRoot")
+			expectedMarshaledData, err := originalFunctions.MarshalSSZ()
+			require.NoError(t, err, "MarshalSSZ on original object should not return an error")
+			marshalledData, err := info.MarshalSSZ()
+			require.NoError(t, err, "MarshalSSZ on sszInfo should not return an error")
+			require.DeepSSZEqual(t, expectedMarshaledData, marshalledData, "Marshalled data from sszInfo should match original object's marshalled data")
 
-			expectedHashTreeRoot, err := originalHasher.HashTreeRoot()
+			expectedHashTreeRoot, err := originalFunctions.HashTreeRoot()
 			require.NoError(t, err, "HashTreeRoot on original object should not return an error")
 			require.Equal(t, expectedHashTreeRoot, hashTreeRoot, "HashTreeRoot from sszInfo should match original object's HashTreeRoot")
+
 		})
 	}
 }
