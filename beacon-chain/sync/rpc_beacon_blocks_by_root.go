@@ -99,7 +99,7 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
 	}

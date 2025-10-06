@@ -199,12 +199,12 @@ func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 }
 
 // EarliestAvailableSlot -- fake.
-func (*FakeP2P) EarliestAvailableSlot() (primitives.Slot, error) {
+func (*FakeP2P) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
 	return 0, nil
 }
 
 // CustodyGroupCount -- fake.
-func (*FakeP2P) CustodyGroupCount() (uint64, error) {
+func (*FakeP2P) CustodyGroupCount(context.Context) (uint64, error) {
 	return 0, nil
 }
 

@@ -264,9 +264,11 @@ func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdat
 
 func (s *Store) setLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	if broadcast && IsFinalityUpdateValidForBroadcast(update, s.lastFinalityUpdate) {
-		if err := s.p2p.BroadcastLightClientFinalityUpdate(context.Background(), update); err != nil {
-			log.WithError(err).Error("Could not broadcast light client finality update")
-		}
+		go func() {
+			if err := s.p2p.BroadcastLightClientFinalityUpdate(context.Background(), update); err != nil {
+				log.WithError(err).Error("Could not broadcast light client finality update")
+			}
+		}()
 	}
 
 	s.lastFinalityUpdate = update
@@ -294,9 +296,11 @@ func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticU
 
 func (s *Store) setLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate, broadcast bool) {
 	if broadcast {
-		if err := s.p2p.BroadcastLightClientOptimisticUpdate(context.Background(), update); err != nil {
-			log.WithError(err).Error("Could not broadcast light client optimistic update")
-		}
+		go func() {
+			if err := s.p2p.BroadcastLightClientOptimisticUpdate(context.Background(), update); err != nil {
+				log.WithError(err).Error("Could not broadcast light client optimistic update")
+			}
+		}()
 	}
 
 	s.lastOptimisticUpdate = update

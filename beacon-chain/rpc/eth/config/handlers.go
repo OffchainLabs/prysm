@@ -167,8 +167,8 @@ func prepareConfigSpec() (map[string]interface{}, error) {
 
 	for i := 0; i < t.NumField(); i++ {
 		tField := t.Field(i)
-		_, isSpec := tField.Tag.Lookup("spec")
-		if !isSpec {
+		specTag, isSpec := tField.Tag.Lookup("spec")
+		if !isSpec || specTag != "true" {
 			continue
 		}
 		if shouldSkip(tField) {

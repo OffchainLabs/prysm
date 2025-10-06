@@ -384,7 +384,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	}
 
 	// Compute the columns to request.
-	custodyGroupCount, err := f.p2p.CustodyGroupCount()
+	custodyGroupCount, err := f.p2p.CustodyGroupCount(ctx)
 	if err != nil {
 		return blobsPid, errors.Wrap(err, "custody group count")
 	}
