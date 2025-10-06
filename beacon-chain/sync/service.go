@@ -382,7 +382,9 @@ func (s *Service) waitForChainStart() {
 	nse := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
 	if err := s.registerRPCHandlers(nse); err != nil {
 		// If we fail here, we won't be able to peer with anyone because we can't handle their status messages.
-		panic(errors.Wrap(err, "Failed to register RPC handlers")) // lint:nopanic
+		log.WithError(err).Error("Failed to register RPC handlers")
+		// TODO: need ability to bubble the error up to the top of the node init tree and exit safely.
+		return
 	}
 
 	// Wait for chainstart in separate routine.
