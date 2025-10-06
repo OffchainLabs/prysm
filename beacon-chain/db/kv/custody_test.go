@@ -108,7 +108,7 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		require.Equal(t, groupCount, storedCount)
 	})
 
-	t.Run("update with lower group count should not update", func(t *testing.T) {
+	t.Run("update with lower group count should not update group count", func(t *testing.T) {
 		const (
 			initialSlot  = primitives.Slot(200)
 			initialCount = uint64(10)
@@ -123,11 +123,81 @@ func TestUpdateCustodyInfo(t *testing.T) {
 
 		slot, count, err := db.UpdateCustodyInfo(ctx, earliestSlot, groupCount)
 		require.NoError(t, err)
-		require.Equal(t, initialSlot, slot)
+		require.Equal(t, earliestSlot, slot) // Slot should be updated
+		require.Equal(t, initialCount, count) // Count should stay the same
+
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, earliestSlot, storedSlot) // Slot should be updated
+		require.Equal(t, initialCount, storedCount) // Count should stay the same
+	})
+
+	t.Run("update earliest slot with same group count (pruning scenario)", func(t *testing.T) {
+		const (
+			initialSlot  = primitives.Slot(100)
+			groupCount   = uint64(128) // Same custody group count
+			earliestSlot1 = primitives.Slot(200)
+			earliestSlot2 = primitives.Slot(300)
+			earliestSlot3 = primitives.Slot(400)
+		)
+
+		db := setupDB(t)
+
+		// Initial update
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, groupCount)
+		require.NoError(t, err)
+
+		// First pruning event - custody group stays the same but earliest slot advances
+		slot, count, err := db.UpdateCustodyInfo(ctx, earliestSlot1, groupCount)
+		require.NoError(t, err)
+		require.Equal(t, earliestSlot1, slot)
+		require.Equal(t, groupCount, count)
+
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, earliestSlot1, storedSlot)
+		require.Equal(t, groupCount, storedCount)
+
+		// Second pruning event
+		slot, count, err = db.UpdateCustodyInfo(ctx, earliestSlot2, groupCount)
+		require.NoError(t, err)
+		require.Equal(t, earliestSlot2, slot)
+		require.Equal(t, groupCount, count)
+
+		storedSlot, storedCount = getCustodyInfoFromDB(t, db)
+		require.Equal(t, earliestSlot2, storedSlot)
+		require.Equal(t, groupCount, storedCount)
+
+		// Third pruning event
+		slot, count, err = db.UpdateCustodyInfo(ctx, earliestSlot3, groupCount)
+		require.NoError(t, err)
+		require.Equal(t, earliestSlot3, slot)
+		require.Equal(t, groupCount, count)
+
+		storedSlot, storedCount = getCustodyInfoFromDB(t, db)
+		require.Equal(t, earliestSlot3, storedSlot)
+		require.Equal(t, groupCount, storedCount)
+	})
+
+	t.Run("should not update with lower earliest slot", func(t *testing.T) {
+		const (
+			initialSlot  = primitives.Slot(300)
+			initialCount = uint64(10)
+			earliestSlot = primitives.Slot(200) // Lower than initial
+			groupCount   = uint64(10)
+		)
+
+		db := setupDB(t)
+
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Try to update with a lower slot (should not update)
+		slot, count, err := db.UpdateCustodyInfo(ctx, earliestSlot, groupCount)
+		require.NoError(t, err)
+		require.Equal(t, initialSlot, slot) // Should keep the higher slot
 		require.Equal(t, initialCount, count)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
-		require.Equal(t, initialSlot, storedSlot)
+		require.Equal(t, initialSlot, storedSlot) // Should keep the higher slot
 		require.Equal(t, initialCount, storedCount)
 	})
 }

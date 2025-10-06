@@ -11,8 +11,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// UpdateCustodyInfo atomically updates the custody group count only it is greater than the stored one.
-// In this case, it also updates the earliest available slot with the provided value.
+// UpdateCustodyInfo updates the custody group count if it is greater than the stored one,
+// and updates the earliest available slot if it is greater than the stored one.
 // It returns the (potentially updated) custody group count and earliest available slot.
 func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateCustodyInfo")
@@ -38,23 +38,24 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 			storedEarliestAvailableSlot = primitives.Slot(bytesutil.BytesToUint64BigEndian(storedEarliestAvailableSlotBytes))
 		}
 
-		// Exit early if the new custody group count is lower than or equal to the stored one.
-		if custodyGroupCount <= storedGroupCount {
-			return nil
+		// Update custody group count only if it increased.
+		if custodyGroupCount > storedGroupCount {
+			storedGroupCount = custodyGroupCount
+			bytes := bytesutil.Uint64ToBytesBigEndian(custodyGroupCount)
+			if err := bucket.Put(groupCountKey, bytes); err != nil {
+				return errors.Wrap(err, "put custody group count")
+			}
 		}
 
-		storedGroupCount, storedEarliestAvailableSlot = custodyGroupCount, earliestAvailableSlot
-
-		// Store the earliest available slot.
-		bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
-		if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
-			return errors.Wrap(err, "put earliest available slot")
-		}
-
-		// Store the custody group count.
-		bytes = bytesutil.Uint64ToBytesBigEndian(custodyGroupCount)
-		if err := bucket.Put(groupCountKey, bytes); err != nil {
-			return errors.Wrap(err, "put custody group count")
+		// Update earliest available slot if it advanced.
+		// This is for pruning to work correctly as blocks are pruned,
+		// the earliest available slot moves forward independently of custody group changes.
+		if earliestAvailableSlot > storedEarliestAvailableSlot {
+			storedEarliestAvailableSlot = earliestAvailableSlot
+			bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
+			if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
+				return errors.Wrap(err, "put earliest available slot")
+			}
 		}
 
 		return nil
