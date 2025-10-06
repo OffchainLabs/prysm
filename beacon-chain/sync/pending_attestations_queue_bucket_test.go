@@ -220,15 +220,13 @@ func TestProcessAttestationBucket(t *testing.T) {
 }
 
 func TestBucketAttestationsByData(t *testing.T) {
-	s := &Service{}
-
 	t.Run("EmptyInput", func(t *testing.T) {
 		hook := logTest.NewGlobal()
-		buckets := s.bucketAttestationsByData(nil)
+		buckets := bucketAttestationsByData(nil)
 		require.Equal(t, 0, len(buckets))
 		require.Equal(t, 0, len(hook.Entries))
 
-		buckets = s.bucketAttestationsByData([]ethpb.Att{})
+		buckets = bucketAttestationsByData([]ethpb.Att{})
 		require.Equal(t, 0, len(buckets))
 		require.Equal(t, 0, len(hook.Entries))
 	})
@@ -239,7 +237,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 		att.Data.Slot = 1
 		att.Data.CommitteeIndex = 0
 
-		buckets := s.bucketAttestationsByData([]ethpb.Att{att})
+		buckets := bucketAttestationsByData([]ethpb.Att{att})
 
 		require.Equal(t, 1, len(buckets))
 		var bucket *attestationBucket
@@ -265,7 +263,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 		att2.Data = att1.Data             // Same data
 		att2.Signature = make([]byte, 96) // Different signature
 
-		buckets := s.bucketAttestationsByData([]ethpb.Att{att1, att2})
+		buckets := bucketAttestationsByData([]ethpb.Att{att1, att2})
 
 		require.Equal(t, 1, len(buckets), "Should have one bucket for same data")
 		var bucket *attestationBucket
@@ -290,7 +288,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 		att2.Data.Slot = 2 // Different slot
 		att2.Data.CommitteeIndex = 1
 
-		buckets := s.bucketAttestationsByData([]ethpb.Att{att1, att2})
+		buckets := bucketAttestationsByData([]ethpb.Att{att1, att2})
 
 		require.Equal(t, 2, len(buckets), "Should have two buckets for different data")
 		bucketCount := 0
@@ -317,7 +315,7 @@ func TestBucketAttestationsByData(t *testing.T) {
 			Signature:     make([]byte, 96),
 		}
 
-		buckets := s.bucketAttestationsByData([]ethpb.Att{phase0Att, electraAtt})
+		buckets := bucketAttestationsByData([]ethpb.Att{phase0Att, electraAtt})
 
 		require.Equal(t, 1, len(buckets), "Should have one bucket for same data")
 		var bucket *attestationBucket
