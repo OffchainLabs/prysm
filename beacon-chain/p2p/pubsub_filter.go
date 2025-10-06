@@ -130,7 +130,7 @@ func (s *Service) logCheckSubscribableError(pid peer.ID) func(string) bool {
 				log.WithError(err).WithFields(logrus.Fields{
 					"peerID": pid,
 					"topic":  topic,
-				}).Debug("Peer subscription rejected")
+				}).Trace("Peer subscription rejected")
 			}
 			return false
 		}

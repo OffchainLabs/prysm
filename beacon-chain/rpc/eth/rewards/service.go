@@ -68,7 +68,11 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	exitInfo := validators.ExitInformation(st)
+	var exitInfo *validators.ExitInfo
+	if len(blk.Body().ProposerSlashings()) > 0 || len(blk.Body().AttesterSlashings()) > 0 {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = validators.ExitInformation(st)
+	}
 	st, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{

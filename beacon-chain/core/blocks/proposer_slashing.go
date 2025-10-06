@@ -51,6 +51,9 @@ func ProcessProposerSlashings(
 	slashings []*ethpb.ProposerSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if exitInfo == nil && len(slashings) > 0 {
+		return nil, errors.New("exit info required to process proposer slashings")
+	}
 	var err error
 	for _, slashing := range slashings {
 		beaconState, err = ProcessProposerSlashing(ctx, beaconState, slashing, exitInfo)
@@ -74,6 +77,9 @@ func ProcessProposerSlashing(
 	}
 	if err = VerifyProposerSlashing(beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify proposer slashing")
+	}
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process proposer slashing")
 	}
 	beaconState, err = validators.SlashValidator(ctx, beaconState, slashing.Header_1.Header.ProposerIndex, exitInfo)
 	if err != nil {
