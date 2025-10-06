@@ -20,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -921,7 +920,7 @@ func buildByRangeRequests(
 func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool) p2ptypes.DataColumnsByRootIdentifiers {
 	identifiers := make(p2ptypes.DataColumnsByRootIdentifiers, 0, len(indicesByRoot))
 	for root, indices := range indicesByRoot {
-		identifier := &eth.DataColumnsByRootIdentifier{
+		identifier := &ethpb.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
 			Columns:   helpers.SortedSliceFromMap(indices),
 		}
@@ -929,7 +928,7 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 	}
 
 	// Sort identifiers to have a deterministic output.
-	slices.SortFunc(identifiers, func(left, right *eth.DataColumnsByRootIdentifier) int {
+	slices.SortFunc(identifiers, func(left, right *ethpb.DataColumnsByRootIdentifier) int {
 		if cmp := bytes.Compare(left.BlockRoot, right.BlockRoot); cmp != 0 {
 			return cmp
 		}

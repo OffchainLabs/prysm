@@ -91,6 +91,7 @@ type Service struct {
 	peerDisconnectionTime *cache.Cache
 	custodyInfo           *custodyInfo
 	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
+	custodyInfoSet        chan struct{}
 	allForkDigests        map[[4]byte]struct{}
 }
 
@@ -137,6 +138,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		joinedTopics:          make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
+		custodyInfoSet:        make(chan struct{}),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
