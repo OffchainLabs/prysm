@@ -955,8 +955,8 @@ func (s *Store) CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint pr
 
 	oRoot, err := s.OriginCheckpointBlockRoot(ctx)
 	if err != nil && !errors.Is(err, ErrNotFoundOriginBlockRoot) {
-		// If origin block root is not found (e.g., starting from genesis or certain forks),
-		// use zero hash which will never match any actual state root
+		// If the node did not use checkpoint sync, there will be no origin block root.
+		// Use zero hash which will never match any actual state root
 		return err
 	}
 
