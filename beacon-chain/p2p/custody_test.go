@@ -20,58 +20,37 @@ import (
 )
 
 func TestEarliestAvailableSlot(t *testing.T) {
-	t.Run("No custody info available", func(t *testing.T) {
-		service := &Service{
-			custodyInfo: nil,
-		}
+	const expected primitives.Slot = 100
 
-		_, err := service.EarliestAvailableSlot()
+	service := &Service{
+		custodyInfoSet: make(chan struct{}),
+		custodyInfo: &custodyInfo{
+			earliestAvailableSlot: expected,
+		},
+	}
 
-		require.NotNil(t, err)
-	})
+	close(service.custodyInfoSet)
+	slot, err := service.EarliestAvailableSlot(t.Context())
 
-	t.Run("Valid custody info", func(t *testing.T) {
-		const expected primitives.Slot = 100
-
-		service := &Service{
-			custodyInfo: &custodyInfo{
-				earliestAvailableSlot: expected,
-			},
-		}
-
-		slot, err := service.EarliestAvailableSlot()
-
-		require.NoError(t, err)
-		require.Equal(t, expected, slot)
-	})
+	require.NoError(t, err)
+	require.Equal(t, expected, slot)
 }
 
 func TestCustodyGroupCount(t *testing.T) {
-	t.Run("No custody info available", func(t *testing.T) {
-		service := &Service{
-			custodyInfo: nil,
-		}
+	const expected uint64 = 5
 
-		_, err := service.CustodyGroupCount()
+	service := &Service{
+		custodyInfoSet: make(chan struct{}),
+		custodyInfo: &custodyInfo{
+			groupCount: expected,
+		},
+	}
 
-		require.NotNil(t, err)
-		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
-	})
+	close(service.custodyInfoSet)
+	count, err := service.CustodyGroupCount(t.Context())
 
-	t.Run("Valid custody info", func(t *testing.T) {
-		const expected uint64 = 5
-
-		service := &Service{
-			custodyInfo: &custodyInfo{
-				groupCount: expected,
-			},
-		}
-
-		count, err := service.CustodyGroupCount()
-
-		require.NoError(t, err)
-		require.Equal(t, expected, count)
-	})
+	require.NoError(t, err)
+	require.Equal(t, expected, count)
 }
 
 func TestUpdateCustodyInfo(t *testing.T) {
@@ -163,7 +142,8 @@ func TestUpdateCustodyInfo(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			service := &Service{
-				custodyInfo: tc.initialCustodyInfo,
+				custodyInfoSet: make(chan struct{}),
+				custodyInfo:    tc.initialCustodyInfo,
 			}
 
 			slot, groupCount, err := service.UpdateCustodyInfo(tc.inputSlot, tc.inputGroupCount)

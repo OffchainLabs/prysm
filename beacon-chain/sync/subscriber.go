@@ -680,7 +680,7 @@ func (s *Service) samplingSize() (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "custody group count")
 	}

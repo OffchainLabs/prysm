@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -29,13 +30,13 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 	const minimumPeerCount = 1
 
 	// Get our actual custody group count.
-	actualCustodyGrounpCount, err := s.cfg.p2p.CustodyGroupCount()
+	actualCustodyGrounpCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return errors.Wrap(err, "p2p custody group count")
 	}
 
 	// Get our target custody group count.
-	targetCustodyGroupCount, err := s.custodyGroupCount()
+	targetCustodyGroupCount, err := s.custodyGroupCount(s.ctx)
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
 	}
@@ -88,7 +89,7 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 
 // custodyGroupCount computes the custody group count based on the custody requirement,
 // the validators custody requirement, and whether the node is subscribed to all data subnets.
-func (s *Service) custodyGroupCount() (uint64, error) {
+func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 	beaconConfig := params.BeaconConfig()
 
 	if flags.Get().SubscribeAllDataSubnets {

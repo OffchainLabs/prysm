@@ -3,10 +3,10 @@ package sync
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -53,17 +53,14 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [IGNORE] The optimistic_update is received after the block at signature_slot was given enough time
-	// to propagate through the network -- i.e. validate that one-third of optimistic_update.signature_slot
-	// has transpired (SECONDS_PER_SLOT / INTERVALS_PER_SLOT seconds after the start of the slot,
-	// with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
+	// validate that enough time has passed since the start of the slot so the block has had enough time to propagate
 	slotStart, err := slots.StartTime(s.cfg.clock.GenesisTime(), newUpdate.SignatureSlot())
 	if err != nil {
 		log.WithError(err).Debug("Peer sent a slot that would overflow slot start time")
 		return pubsub.ValidationReject, nil
 	}
 	earliestValidTime := slotStart.
-		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
+		Add(slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
 		log.Debug("Newly received light client optimistic update ignored. not enough time passed for block to propagate")
@@ -126,17 +123,14 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		return pubsub.ValidationIgnore, err
 	}
 
-	// [IGNORE] The optimistic_update is received after the block at signature_slot was given enough time
-	// to propagate through the network -- i.e. validate that one-third of optimistic_update.signature_slot
-	// has transpired (SECONDS_PER_SLOT / INTERVALS_PER_SLOT seconds after the start of the slot,
-	// with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance)
+	// validate that enough time has passed since the start of the slot so the block has had enough time to propagate
 	slotStart, err := slots.StartTime(s.cfg.clock.GenesisTime(), newUpdate.SignatureSlot())
 	if err != nil {
 		log.WithError(err).Debug("Peer sent a slot that would overflow slot start time")
 		return pubsub.ValidationReject, nil
 	}
 	earliestValidTime := slotStart.
-		Add(time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot/params.BeaconConfig().IntervalsPerSlot)).
+		Add(slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))).
 		Add(-params.BeaconConfig().MaximumGossipClockDisparityDuration())
 	if s.cfg.clock.Now().Before(earliestValidTime) {
 		log.Debug("Newly received light client finality update ignored. not enough time passed for block to propagate")
