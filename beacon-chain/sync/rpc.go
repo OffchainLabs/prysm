@@ -122,7 +122,7 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 
 // addedRPCHandlerByTopic returns the RPC handlers that are added in the new map that are not present in the old map.
 func addedRPCHandlerByTopic(previous, next map[string]rpcHandler) map[string]rpcHandler {
-	added := make(map[string]rpcHandler)
+	added := make(map[string]rpcHandler, len(next))
 
 	for topic, handler := range next {
 		if _, ok := previous[topic]; !ok {

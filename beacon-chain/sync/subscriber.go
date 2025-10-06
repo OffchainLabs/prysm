@@ -368,7 +368,7 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 	// Do not resubscribe already seen subscriptions.
 	ok := s.subHandler.topicExists(topic)
 	if ok {
-		log.WithField("topic", topic).Debug("Provided topic already has an active subscription running")
+		log.WithField("topic", topic).Error("Provided topic already has an active subscription running")
 		return nil
 	}
 
@@ -520,46 +520,27 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 	}
 }
 
-// pruneSubscriptions unsubscribes from topics we are currently subscribed to but that are
+// pruneNotWanted unsubscribes from topics we are currently subscribed to but that are
 // not in the list of wanted subnets.
-// This function mutates the `subscriptionBySubnet` map, which is used to keep track of the current subscriptions.
-func (s *Service) pruneSubscriptions(t *subnetTracker, wantedSubnets map[uint64]bool) {
+func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool) {
 	for _, subnet := range t.unwanted(wantedSubnets) {
 		t.cancelSubscription(subnet)
 		s.unSubscribeFromTopic(t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix()))
 	}
 }
 
-// subscribeToSubnets subscribes to needed subnets and unsubscribe from unneeded ones.
-// This functions mutates the `subscriptionBySubnet` map, which is used to keep track of the current subscriptions.
-func (s *Service) subscribeToSubnets(t *subnetTracker) error {
-	select {
-	default:
-		// If initialSyncComplete is not closed, bail out; subscribeWithParameters will keep calling this
-		return nil
-	case <-s.ctx.Done():
-		return s.ctx.Err()
-	case <-s.initialSyncComplete:
-	}
-
-	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
-	s.pruneSubscriptions(t, subnetsToJoin)
-	for _, subnet := range t.missing(subnetsToJoin) {
-		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
-		topic := t.fullTopic(subnet, "")
-		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
-	}
-
-	return nil
-}
-
 // subscribeWithParameters subscribes to a list of subnets.
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
-	go s.logMinimumPeersPerSubnet(p)
+	ctx, cancel := context.WithCancel(s.ctx)
+	defer cancel()
+	go s.logMinimumPeersPerSubnet(ctx, p)
 
 	tracker := newSubnetTracker(p)
 	// Try once immediately so we don't have to wait until the next slot.
-	s.trySubscribeSubnets(tracker)
+	go func() {
+		<-s.initialSyncComplete
+		s.trySubscribeSubnets(tracker)
+	}()
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
@@ -584,15 +565,24 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	}
 }
 
-func (s *Service) trySubscribeSubnets(tracker *subnetTracker) {
-	logFields := tracker.logFields()
-	if err := s.subscribeToSubnets(tracker); err != nil {
-		if errors.Is(err, errInvalidDigest) {
-			log.WithFields(logFields).Debug("Digest is invalid, stopping subscription")
-			return
-		}
-		log.WithFields(logFields).WithError(err).Error("Could not subscribe to subnets")
+// trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
+// Only if initial sync is complete.
+func (s *Service) trySubscribeSubnets(t *subnetTracker) {
+	select {
+	default:
+		// If initialSyncComplete is not closed, bail out; subscribeWithParameters will keep calling this
 		return
+	case <-s.ctx.Done():
+		return
+	case <-s.initialSyncComplete:
+	}
+
+	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
+	s.pruneNotWanted(t, subnetsToJoin)
+	for _, subnet := range t.missing(subnetsToJoin) {
+		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
+		topic := t.fullTopic(subnet, "")
+		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
 	}
 }
 
@@ -609,7 +599,7 @@ func (s *Service) ensurePeers(tracker *subnetTracker) {
 	}
 }
 
-func (s *Service) logMinimumPeersPerSubnet(p subscribeParameters) {
+func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParameters) {
 	logFields := p.logFields()
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Warn the user if we are not subscribed to enough peers in the subnets.
@@ -640,7 +630,7 @@ func (s *Service) logMinimumPeersPerSubnet(p subscribeParameters) {
 			if !isSubnetWithMissingPeers {
 				log.WithFields(logFields).Debug("All subnets have enough connected peers")
 			}
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}

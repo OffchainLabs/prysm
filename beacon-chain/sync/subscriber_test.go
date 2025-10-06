@@ -322,7 +322,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 	require.NoError(t, err)
 	tracker.track(c2, sub2)
 
-	r.pruneSubscriptions(tracker, map[uint64]bool{c2: true})
+	r.pruneNotWanted(tracker, map[uint64]bool{c2: true})
 	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
@@ -606,7 +606,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 		nse:              nse,
 		getSubnetsToJoin: r.activeSyncSubnetIndices,
 	})
-	require.NoError(t, r.subscribeToSubnets(sp))
+	r.trySubscribeSubnets(sp)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
 	for _, t := range r.cfg.p2p.PubSub().GetTopics() {
@@ -629,7 +629,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	// clear the cache and re-subscribe to subnets.
 	// this should result in the subscriptions being removed
 	cache.SyncSubnetIDs.EmptyAllCaches()
-	require.NoError(t, r.subscribeToSubnets(sp))
+	r.trySubscribeSubnets(sp)
 	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 }
 

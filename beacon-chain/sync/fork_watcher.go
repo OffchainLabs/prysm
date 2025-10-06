@@ -9,9 +9,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Is a background routine that observes for new incoming forks. Depending on the epoch
-// it will be in charge of subscribing/unsubscribing the relevant topics at the fork boundaries.
-func (s *Service) forkWatcher() {
+// p2pHandlerControlLoop runs in a continuous loop to ensure that:
+// - We are subscribed to the correct gossipsub topics (for the current and upcoming epoch).
+// - We have registered the correct RPC stream handlers (for the current and upcoming epoch).
+// - We have cleaned up gossipsub topics and RPC stream handlers that are no longer needed.
+func (s *Service) p2pHandlerControlLoop() {
 	// At startup, launch registration and peer discovery loops, and register rpc stream handlers.
 	startEntry := params.GetNetworkScheduleEntry(s.cfg.clock.CurrentEpoch())
 	s.registerSubscribers(startEntry)
@@ -24,11 +26,11 @@ func (s *Service) forkWatcher() {
 		// subscriptions for nodes running before a fork epoch.
 		case <-slotTicker.C():
 			current := s.cfg.clock.CurrentEpoch()
-			if err := s.registerForUpcomingFork(current); err != nil {
+			if err := s.ensureRegistrationsForEpoch(current); err != nil {
 				log.WithError(err).Error("Unable to check for fork in the next epoch")
 				continue
 			}
-			if err := s.deregisterFromPastFork(current); err != nil {
+			if err := s.ensureDeregistrationForEpoch(current); err != nil {
 				log.WithError(err).Error("Unable to check for fork in the previous epoch")
 				continue
 			}
@@ -40,8 +42,9 @@ func (s *Service) forkWatcher() {
 	}
 }
 
-// registerForUpcomingFork registers appropriate gossip and RPC topic if there is a fork in the next epoch.
-func (s *Service) registerForUpcomingFork(epoch primitives.Epoch) error {
+// ensureRegistrationsForEpoch ensures that gossip topic and RPC stream handler
+// registrations are in place for the current and subsequent epoch.
+func (s *Service) ensureRegistrationsForEpoch(epoch primitives.Epoch) error {
 	current := params.GetNetworkScheduleEntry(epoch)
 	s.registerSubscribers(current)
 
@@ -80,8 +83,8 @@ func (s *Service) registerForUpcomingFork(epoch primitives.Epoch) error {
 	return nil
 }
 
-// deregisterFromPastFork deregisters appropriate gossip and RPC topic if there is a fork in the current epoch.
-func (s *Service) deregisterFromPastFork(currentEpoch primitives.Epoch) error {
+// ensureDeregistrationForEpoch deregisters appropriate gossip and RPC topic if there is a fork in the current epoch.
+func (s *Service) ensureDeregistrationForEpoch(currentEpoch primitives.Epoch) error {
 	current := params.GetNetworkScheduleEntry(currentEpoch)
 
 	// If we are still in our genesis fork version then exit early.
