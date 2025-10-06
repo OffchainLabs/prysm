@@ -108,7 +108,7 @@ type attestationBucket struct {
 }
 
 // bucketAttestationsByData groups attestations by their AttestationData hash.
-func (s *Service) bucketAttestationsByData(attestations []ethpb.Att) []*attestationBucket {
+func (s *Service) bucketAttestationsByData(attestations []ethpb.Att) map[[32]byte]*attestationBucket {
 	bucketMap := make(map[[32]byte]*attestationBucket)
 
 	for _, att := range attestations {
@@ -130,11 +130,7 @@ func (s *Service) bucketAttestationsByData(attestations []ethpb.Att) []*attestat
 		}
 	}
 
-	buckets := make([]*attestationBucket, 0, len(bucketMap))
-	for _, b := range bucketMap {
-		buckets = append(buckets, b)
-	}
-	return buckets
+	return bucketMap
 }
 
 // processAttestationBucket processes a bucket of attestations with shared AttestationData.

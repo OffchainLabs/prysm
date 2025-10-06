@@ -242,9 +242,15 @@ func TestBucketAttestationsByData(t *testing.T) {
 		buckets := s.bucketAttestationsByData([]ethpb.Att{att})
 
 		require.Equal(t, 1, len(buckets))
-		require.Equal(t, 1, len(buckets[0].attestations))
-		require.Equal(t, att, buckets[0].attestations[0])
-		require.Equal(t, att.GetData(), buckets[0].data)
+		var bucket *attestationBucket
+		for _, b := range buckets {
+			bucket = b
+			break
+		}
+		require.NotNil(t, bucket)
+		require.Equal(t, 1, len(bucket.attestations))
+		require.Equal(t, att, bucket.attestations[0])
+		require.Equal(t, att.GetData(), bucket.data)
 		require.Equal(t, 0, len(hook.Entries))
 	})
 
@@ -262,8 +268,14 @@ func TestBucketAttestationsByData(t *testing.T) {
 		buckets := s.bucketAttestationsByData([]ethpb.Att{att1, att2})
 
 		require.Equal(t, 1, len(buckets), "Should have one bucket for same data")
-		require.Equal(t, 2, len(buckets[0].attestations), "Should have both attestations in one bucket")
-		require.Equal(t, att1.GetData(), buckets[0].data)
+		var bucket *attestationBucket
+		for _, b := range buckets {
+			bucket = b
+			break
+		}
+		require.NotNil(t, bucket)
+		require.Equal(t, 2, len(bucket.attestations), "Should have both attestations in one bucket")
+		require.Equal(t, att1.GetData(), bucket.data)
 		require.Equal(t, 0, len(hook.Entries))
 	})
 
@@ -281,8 +293,12 @@ func TestBucketAttestationsByData(t *testing.T) {
 		buckets := s.bucketAttestationsByData([]ethpb.Att{att1, att2})
 
 		require.Equal(t, 2, len(buckets), "Should have two buckets for different data")
-		require.Equal(t, 1, len(buckets[0].attestations), "First bucket should have one attestation")
-		require.Equal(t, 1, len(buckets[1].attestations), "Second bucket should have one attestation")
+		bucketCount := 0
+		for _, bucket := range buckets {
+			require.Equal(t, 1, len(bucket.attestations), "Each bucket should have one attestation")
+			bucketCount++
+		}
+		require.Equal(t, 2, bucketCount, "Should have exactly two buckets")
 		require.Equal(t, 0, len(hook.Entries))
 	})
 
@@ -304,8 +320,14 @@ func TestBucketAttestationsByData(t *testing.T) {
 		buckets := s.bucketAttestationsByData([]ethpb.Att{phase0Att, electraAtt})
 
 		require.Equal(t, 1, len(buckets), "Should have one bucket for same data")
-		require.Equal(t, 2, len(buckets[0].attestations), "Should have both attestations in one bucket")
-		require.Equal(t, phase0Att.GetData(), buckets[0].data)
+		var bucket *attestationBucket
+		for _, b := range buckets {
+			bucket = b
+			break
+		}
+		require.NotNil(t, bucket)
+		require.Equal(t, 2, len(bucket.attestations), "Should have both attestations in one bucket")
+		require.Equal(t, phase0Att.GetData(), bucket.data)
 		require.Equal(t, 0, len(hook.Entries))
 	})
 }
