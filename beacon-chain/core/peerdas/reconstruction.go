@@ -113,7 +113,7 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 	return reconstructedVerifiedRoSidecars, nil
 }
 
-// ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
+// ReconstructBlobs constructs verified read only blobs sidecars from verified read only data columns.
 // The following constraints must be satisfied:
 //   - All `dataColumnSidecars` has to be committed to the same block, and
 //   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
