@@ -554,11 +554,12 @@ func TestGetBlob(t *testing.T) {
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 
-	t.Run("reconstruction needed", func(t *testing.T) {
+	t.Run("reconstruction needed - all columns required", func(t *testing.T) {
 		setupFulu(t)
 
 		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
-		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars[1 : peerdas.MinimumColumnCountToReconstruct()+1])
+		// Save all columns to enable reconstruction
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
 
 		blocker := &BeaconDbBlocker{
@@ -579,6 +580,28 @@ func TestGetBlob(t *testing.T) {
 			initialBlobSidecarPb := fuluBlobSidecars[i].BlobSidecar
 			require.DeepSSZEqual(t, initialBlobSidecarPb, retrievedBlobSidecarPb)
 		}
+	})
+
+	t.Run("insufficient columns for reconstruction", func(t *testing.T) {
+		setupFulu(t)
+
+		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
+		// Save only MinimumColumnCountToReconstruct columns (not enough anymore - need all numberOfColumns)
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars[1 : peerdas.MinimumColumnCountToReconstruct()+1])
+		require.NoError(t, err)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:          db,
+			BlobStorage:       blobStorage,
+			DataColumnStorage: dataColumnStorage,
+		}
+
+		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		require.NotNil(t, rpcErr)
+		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 
 	t.Run("no reconstruction needed", func(t *testing.T) {
