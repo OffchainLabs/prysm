@@ -443,6 +443,15 @@ func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
 }
 
+func (s *Service) waitForInitialSync(ctx context.Context) error {
+	select {
+	case <-s.initialSyncComplete:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Checker defines a struct which can verify whether a node is currently
 // synchronizing a chain with the rest of peers in the network.
 type Checker interface {

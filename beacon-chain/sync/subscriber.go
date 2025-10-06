@@ -338,19 +338,26 @@ func (s *Service) subscriptionRequestExpired(nse params.NetworkScheduleEntry) bo
 	return next.Epoch != nse.Epoch && s.cfg.clock.CurrentEpoch() > next.Epoch
 }
 
+func (s *Service) subscribeLogFields(topic string, nse params.NetworkScheduleEntry) logrus.Fields {
+	return logrus.Fields{
+		"topic":        topic,
+		"digest":       nse.ForkDigest,
+		"forkEpoch":    nse.Epoch,
+		"currentEpoch": s.cfg.clock.CurrentEpoch(),
+	}
+}
+
 // subscribe to a given topic with a given validator and subscription handler.
 // The base protobuf message is used to initialize new messages for decoding.
 func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler, nse params.NetworkScheduleEntry) {
-	<-s.initialSyncComplete
+	if err := s.waitForInitialSync(s.ctx); err != nil {
+		log.WithFields(s.subscribeLogFields(topic, nse)).WithError(err).Debug("Context cancelled while waiting for initial sync, not subscribing to topic")
+		return
+	}
 	// Check if this subscribe request is still valid - we may have crossed another fork epoch while waiting for initial sync.
 	if s.subscriptionRequestExpired(nse) {
 		// If we are already past the next fork epoch, do not subscribe to this topic.
-		log.WithFields(logrus.Fields{
-			"topic":        topic,
-			"digest":       nse.ForkDigest,
-			"forkEpoch":    nse.Epoch,
-			"currentEpoch": s.cfg.clock.CurrentEpoch(),
-		}).Debug("Not subscribing to topic as we are already past the next fork epoch")
+		log.WithFields(s.subscribeLogFields(topic, nse)).Debug("Not subscribing to topic as we are already past the next fork epoch")
 		return
 	}
 	base := p2p.GossipTopicMappings(topic, nse.Epoch)
@@ -538,7 +545,10 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	go s.ensurePeers(ctx, tracker)
 	go s.logMinimumPeersPerSubnet(ctx, p)
 
-	<-s.initialSyncComplete
+	if err := s.waitForInitialSync(ctx); err != nil {
+		log.WithFields(p.logFields()).WithError(err).Debug("Could not subscribe to subnets as initial sync failed")
+		return
+	}
 	s.trySubscribeSubnets(tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
@@ -576,23 +586,23 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 }
 
 func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
-	timeout := (time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) - 100*time.Millisecond
 	// Try once immediately so we don't have to wait until the next slot.
-	s.tryEnsurePeers(ctx, tracker, timeout)
+	s.tryEnsurePeers(ctx, tracker)
 
 	oncePerSlot := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer oncePerSlot.Done()
 	for {
 		select {
 		case <-oncePerSlot.C():
-			s.tryEnsurePeers(ctx, tracker, timeout)
+			s.tryEnsurePeers(ctx, tracker)
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker, timeout time.Duration) {
+func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker) {
+	timeout := (time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) - 100*time.Millisecond
 	minPeers := flags.Get().MinimumPeersPerSubnet
 	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
