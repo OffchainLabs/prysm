@@ -533,14 +533,13 @@ func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool
 func (s *Service) subscribeWithParameters(p subscribeParameters) {
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
-	go s.logMinimumPeersPerSubnet(ctx, p)
 
 	tracker := newSubnetTracker(p)
-	// Try once immediately so we don't have to wait until the next slot.
-	go func() {
-		<-s.initialSyncComplete
-		s.trySubscribeSubnets(tracker)
-	}()
+	go s.ensurePeers(ctx, tracker)
+	go s.logMinimumPeersPerSubnet(ctx, p)
+
+	<-s.initialSyncComplete
+	s.trySubscribeSubnets(tracker)
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
@@ -557,7 +556,6 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 				}).Debug("Exiting topic subnet subscription loop")
 				return
 			}
-			go s.ensurePeers(tracker)
 			s.trySubscribeSubnets(tracker)
 		case <-s.ctx.Done():
 			return
@@ -568,15 +566,6 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 // trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
 // Only if initial sync is complete.
 func (s *Service) trySubscribeSubnets(t *subnetTracker) {
-	select {
-	default:
-		// If initialSyncComplete is not closed, bail out; subscribeWithParameters will keep calling this
-		return
-	case <-s.ctx.Done():
-		return
-	case <-s.initialSyncComplete:
-	}
-
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
 	for _, subnet := range t.missing(subnetsToJoin) {
@@ -586,16 +575,31 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 	}
 }
 
-func (s *Service) ensurePeers(tracker *subnetTracker) {
-	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
-	minPeers := flags.Get().MinimumPeersPerSubnet
-	logFields := tracker.logFields()
-	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
+func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
+	timeout := (time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) - 100*time.Millisecond
+	// Try once immediately so we don't have to wait until the next slot.
+	s.tryEnsurePeers(ctx, tracker, timeout)
 
-	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	oncePerSlot := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
+	defer oncePerSlot.Done()
+	for {
+		select {
+		case <-oncePerSlot.C():
+			s.tryEnsurePeers(ctx, tracker, timeout)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker, timeout time.Duration) {
+	minPeers := flags.Get().MinimumPeersPerSubnet
+	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	if err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, tracker.topicFormat, tracker.nse.ForkDigest, minPeers, neededSubnets); err != nil && !errors.Is(err, context.DeadlineExceeded) {
-		log.WithFields(logFields).WithError(err).Debug("Could not find peers with subnets")
+	err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, tracker.topicFormat, tracker.nse.ForkDigest, minPeers, neededSubnets)
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		log.WithFields(tracker.logFields()).WithError(err).Debug("Could not find peers with subnets")
 	}
 }
 
