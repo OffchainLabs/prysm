@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -444,23 +443,12 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indic
 		}
 	}
 
-	// Determine which columns to retrieve based on what we have
-	columnsToRetrieve := p.neededDataColumnSidecars(stored)
-
 	// Retrieve from the database needed data columns.
-	verifiedRoDataColumnSidecars, err := p.DataColumnStorage.Get(root, columnsToRetrieve)
+	verifiedRoDataColumnSidecars, err := p.neededDataColumnSidecars(root, stored)
 	if err != nil {
 		return nil, &core.RpcError{
-			Err:    errors.Wrap(err, "data columns storage get"),
+			Err:    errors.Wrap(err, "needed data column sidecars"),
 			Reason: core.Internal,
-		}
-	}
-
-	// Verify we retrieved enough columns
-	if len(verifiedRoDataColumnSidecars) < len(columnsToRetrieve) {
-		return nil, &core.RpcError{
-			Err:    errors.Errorf("expected to retrieve %d columns but got %d", len(columnsToRetrieve), len(verifiedRoDataColumnSidecars)),
-			Reason: core.NotFound,
 		}
 	}
 
@@ -476,22 +464,38 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indic
 	return verifiedRoBlobSidecars, nil
 }
 
-// neededDataColumnSidecars determines which column indices to retrieve based on stored columns.
-// Always retrieves all available columns and lets ReconstructBlobs optimize based on what's present.
-// Returns the indices in sorted order as required by ReconstructBlobs.
-func (p *BeaconDbBlocker) neededDataColumnSidecars(stored map[uint64]bool) []uint64 {
-	// Retrieve all available columns
-	columnsToRetrieve := make([]uint64, 0, len(stored))
-	for idx := range stored {
-		columnsToRetrieve = append(columnsToRetrieve, idx)
+// neededDataColumnSidecars retrieves all data column sidecars corresponding to (non extended) blobs if available,
+// else retrieves all data column sidecars from the store.
+func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]byte, stored map[uint64]bool) ([]blocks.VerifiedRODataColumn, error) {
+	// Check if we have all the non-extended data columns.
+	cellsPerBlob := fieldparams.CellsPerBlob
+	blobIndices := make([]uint64, 0, cellsPerBlob)
+	hasAllBlobColumns := true
+	for i := range uint64(cellsPerBlob) {
+		if !stored[i] {
+			hasAllBlobColumns = false
+			break
+		}
+		blobIndices = append(blobIndices, i)
 	}
 
-	// Sort to ensure indices are in ascending order as required by ReconstructBlobs
-	sort.Slice(columnsToRetrieve, func(i, j int) bool {
-		return columnsToRetrieve[i] < columnsToRetrieve[j]
-	})
+	if hasAllBlobColumns {
+		// Retrieve only the non-extended data columns.
+		verifiedRoSidecars, err := p.DataColumnStorage.Get(root, blobIndices)
+		if err != nil {
+			return nil, errors.Wrap(err, "data columns storage get")
+		}
 
-	return columnsToRetrieve
+		return verifiedRoSidecars, nil
+	}
+
+	// Retrieve all the data columns.
+	verifiedRoSidecars, err := p.DataColumnStorage.Get(root, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "data columns storage get")
+	}
+
+	return verifiedRoSidecars, nil
 }
 
 // DataColumns returns the data column sidecars for a given block id identifier and column indices. The identifier can be one of:
