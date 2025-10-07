@@ -147,7 +147,7 @@ type mockCustodyUpdater struct {
 	updateCallCount       int
 }
 
-func (m *mockCustodyUpdater) CustodyGroupCount() (uint64, error) {
+func (m *mockCustodyUpdater) CustodyGroupCount(context.Context) (uint64, error) {
 	return m.custodyGroupCount, nil
 }
 
@@ -237,7 +237,7 @@ type mockCustodyUpdaterWithUpdateError struct {
 	updateCallCount int
 }
 
-func (m *mockCustodyUpdaterWithUpdateError) CustodyGroupCount() (uint64, error) {
+func (m *mockCustodyUpdaterWithUpdateError) CustodyGroupCount(context.Context) (uint64, error) {
 	return 4, nil
 }
 

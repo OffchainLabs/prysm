@@ -27,7 +27,7 @@ const (
 // custodyUpdater is a tiny interface that p2p service implements; kept here to avoid
 // importing the p2p package and creating a cycle.
 type custodyUpdater interface {
-	CustodyGroupCount() (uint64, error)
+	CustodyGroupCount(context.Context) (uint64, error)
 	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 }
 
@@ -197,7 +197,7 @@ func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) erro
 	}
 
 	// Persist to database to ensure it survives restarts
-	custodyGroupCount, err := p.custody.CustodyGroupCount()
+	custodyGroupCount, err := p.custody.CustodyGroupCount(p.ctx)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get custody group count for earliest slot %d", earliestAvailableSlot)
 	}
