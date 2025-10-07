@@ -72,17 +72,21 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		root, idx := bytesutil.ToBytes32(blobIdents[i].BlockRoot), blobIdents[i].Index
 		sc, err := s.cfg.blobStorage.Get(root, idx)
 		if err != nil {
+			log := log.WithFields(logrus.Fields{
+				"root":  fmt.Sprintf("%#x", root),
+				"index": idx,
+				"peer":  remotePeer.String(),
+			})
+
 			if db.IsNotFound(err) {
-				log.WithError(err).WithFields(logrus.Fields{
-					"root":  fmt.Sprintf("%#x", root),
-					"index": idx,
-					"peer":  remotePeer.String(),
-				}).Debugf("Peer requested blob sidecar by root not found in db")
+				log.Trace("Peer requested blob sidecar by root not found in db")
 				continue
 			}
-			log.WithError(err).Errorf("unexpected db error retrieving BlobSidecar, root=%x, index=%d", root, idx)
+
+			log.Error("Unexpected DB error retrieving blob sidecar from storage")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-			return err
+
+			return errors.Wrap(err, "get blob sidecar by root")
 		}
 
 		// If any root in the request content references a block earlier than minimum_request_epoch,
