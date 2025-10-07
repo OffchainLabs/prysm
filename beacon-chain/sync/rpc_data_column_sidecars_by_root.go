@@ -84,13 +84,16 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	if log.Logger.Level >= logrus.TraceLevel {
-		prettyRequestedColumnsByRoot := make(map[string]string, len(requestedColumnsByRoot))
+		// We optimistially assume the peer requests the same set of columns for all roots,
+		// pre-sizing the map accordingly.
+		requestedRootsByColumnSet := make(map[string][]string, 1)
 		for root, columns := range requestedColumnsByRoot {
 			slices.Sort(columns)
-			prettyRequestedColumnsByRoot[fmt.Sprintf("%#x", root)] = helpers.PrettySlice(columns)
+			prettyColumns := helpers.PrettySlice(columns)
+			requestedRootsByColumnSet[prettyColumns] = append(requestedRootsByColumnSet[prettyColumns], fmt.Sprintf("%#x", root))
 		}
 
-		log.WithField("requested", prettyRequestedColumnsByRoot).Trace("Serving data column sidecars by root")
+		log.WithField("requested", requestedRootsByColumnSet).Trace("Serving data column sidecars by root")
 	}
 
 	count := 0
