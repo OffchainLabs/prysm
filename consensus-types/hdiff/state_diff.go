@@ -2014,10 +2014,10 @@ func applySlashingsDiff(source state.BeaconState, diff *stateDiff) error {
 	sSlashings := source.Slashings()
 	tSlashings := diff.slashings
 	if len(sSlashings) != len(tSlashings) {
-		return errors.Errorf("slashings length mismatch: source %d, target %d", len(sSlashings), len(tSlashings))
+		return errors.Errorf("slashings length mismatch source %d, target %d", len(sSlashings), len(tSlashings))
 	}
 	if len(sSlashings) != fieldparams.SlashingsLength {
-		return errors.Errorf("slashings length mismatch: expected %d, source %d", fieldparams.SlashingsLength, len(sSlashings))
+		return errors.Errorf("slashings length mismatch expected %d, source %d", fieldparams.SlashingsLength, len(sSlashings))
 	}
 	for i, t := range tSlashings {
 		if t > 0 {
@@ -2034,10 +2034,10 @@ func applyRandaoMixesDiff(source state.BeaconState, diff *stateDiff) error {
 	sMixes := source.RandaoMixes()
 	tMixes := diff.randaoMixes
 	if len(sMixes) != len(tMixes) {
-		return errors.Errorf("randao mixes length mismatch: source %d, target %d", len(sMixes), len(tMixes))
+		return errors.Errorf("randao mixes length mismatch, source %d, target %d", len(sMixes), len(tMixes))
 	}
 	if len(sMixes) != fieldparams.RandaoMixesLength {
-		return errors.Errorf("randao mixes length mismatch: expected %d, source %d", fieldparams.RandaoMixesLength, len(sMixes))
+		return errors.Errorf("randao mixes length mismatch, expected %d, source %d", fieldparams.RandaoMixesLength, len(sMixes))
 	}
 	for i := range fieldparams.RandaoMixesLength {
 		if tMixes[i] != [fieldparams.RootLength]byte{} {
@@ -2073,10 +2073,10 @@ func applyStateRootsDiff(source state.BeaconState, diff *stateDiff) error {
 	sRoots := source.StateRoots()
 	tRoots := diff.stateRoots
 	if len(sRoots) != len(tRoots) {
-		return errors.Errorf("state roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
+		return errors.Errorf("state roots length mismatch, source %d, target %d", len(sRoots), len(tRoots))
 	}
 	if len(sRoots) != fieldparams.StateRootsLength {
-		return errors.Errorf("state roots length mismatch: expected %d, source %d", fieldparams.StateRootsLength, len(sRoots))
+		return errors.Errorf("state roots length mismatch, expected %d, source %d", fieldparams.StateRootsLength, len(sRoots))
 	}
 	for i := range fieldparams.StateRootsLength {
 		if tRoots[i] != [fieldparams.RootLength]byte{} {
@@ -2091,10 +2091,10 @@ func applyBlockRootsDiff(source state.BeaconState, diff *stateDiff) error {
 	sRoots := source.BlockRoots()
 	tRoots := diff.blockRoots
 	if len(sRoots) != len(tRoots) {
-		return errors.Errorf("block roots length mismatch: source %d, target %d", len(sRoots), len(tRoots))
+		return errors.Errorf("block roots length mismatch, source %d, target %d", len(sRoots), len(tRoots))
 	}
 	if len(sRoots) != fieldparams.BlockRootsLength {
-		return errors.Errorf("block roots length mismatch: expected %d, source %d", fieldparams.BlockRootsLength, len(sRoots))
+		return errors.Errorf("block roots length mismatch, expected %d, source %d", fieldparams.BlockRootsLength, len(sRoots))
 	}
 	for i := range fieldparams.BlockRootsLength {
 		if tRoots[i] != [fieldparams.RootLength]byte{} {
