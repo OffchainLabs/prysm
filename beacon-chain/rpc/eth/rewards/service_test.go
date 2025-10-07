@@ -34,7 +34,7 @@ func TestGetStateForRewards_NextSlotCacheHit(t *testing.T) {
 	sbb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
 	sbb.SetSlot(parent.Block().Slot() + 1)
-	result, err := s.StateForRewards(ctx, sbb.Block())
+	result, err := s.GetStateForRewards(ctx, sbb.Block())
 	require.NoError(t, err)
 	_, lcs := transition.LastCachedState()
 	expected, err := lcs.HashTreeRoot(ctx)
