@@ -312,7 +312,7 @@ func (s *Service) respondWithStatus(ctx context.Context, stream network.Stream) 
 	}
 
 	cp := s.cfg.chain.FinalizedCheckpt()
-	status, err := s.buildStatusFromStream(stream, forkDigest, cp.Root, cp.Epoch, headRoot)
+	status, err := s.buildStatusFromStream(ctx, stream, forkDigest, cp.Root, cp.Epoch, headRoot)
 	if err != nil {
 		return errors.Wrap(err, "build status")
 	}
@@ -329,6 +329,7 @@ func (s *Service) respondWithStatus(ctx context.Context, stream network.Stream) 
 }
 
 func (s *Service) buildStatusFromStream(
+	ctx context.Context,
 	stream libp2pcore.Stream,
 	forkDigest [4]byte,
 	finalizedRoot []byte,
@@ -354,7 +355,7 @@ func (s *Service) buildStatusFromStream(
 	}
 
 	if streamVersion == p2p.SchemaVersionV2 {
-		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot(s.ctx)
+		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "earliest available slot")
 		}
