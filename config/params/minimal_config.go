@@ -33,7 +33,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.ETH1AddressWithdrawalPrefixByte = byte(1)
 
 	// Time parameters
-	minimalConfig.SecondsPerSlot = 2
+	minimalConfig.SecondsPerSlot = 6
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2
@@ -101,7 +101,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.SyncCommitteeSize = 32
 	minimalConfig.InactivityScoreBias = 4
 	minimalConfig.EpochsPerSyncCommitteePeriod = 8
-	minimalConfig.MinEpochsForBlockRequests = 2
+	minimalConfig.MinEpochsForBlockRequests = 272
 
 	// New Deneb params
 	minimalConfig.MaxBlobCommitmentsPerBlock = 4096
