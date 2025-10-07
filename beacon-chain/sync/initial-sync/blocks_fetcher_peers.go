@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -133,6 +132,6 @@ func trimPeers(peers []peer.ID, peersPercentage float64) []peer.ID {
 	// Limit cannot be less that minimum peers required by sync mechanism.
 	limit = max(limit, uint64(required))
 	// Limit cannot be higher than number of peers available (safe-guard).
-	limit = mathutil.Min(limit, uint64(len(peers)))
+	limit = min(limit, uint64(len(peers)))
 	return peers[:limit]
 }
