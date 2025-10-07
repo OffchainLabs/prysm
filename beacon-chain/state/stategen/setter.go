@@ -3,7 +3,6 @@ package stategen
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -54,7 +53,7 @@ func (s *State) saveStateByRoot(ctx context.Context, blockRoot [32]byte, st stat
 	defer span.End()
 
 	// Duration can't be 0 to prevent panic for division.
-	duration := uint64(math.Max(float64(s.saveHotStateDB.duration), 1))
+	duration := uint64(max(float64(s.saveHotStateDB.duration), 1))
 
 	s.saveHotStateDB.lock.Lock()
 	if s.saveHotStateDB.enabled && st.Slot().Mod(duration) == 0 {

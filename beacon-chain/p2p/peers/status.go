@@ -24,7 +24,6 @@ package peers
 
 import (
 	"context"
-	"math"
 	"net"
 	"sort"
 	"strings"
@@ -411,7 +410,7 @@ func (p *Status) RandomizeBackOff(pid peer.ID) {
 		return
 	}
 
-	duration := time.Duration(math.Max(MinBackOffDuration, float64(p.rand.Intn(MaxBackOffDuration)))) * time.Millisecond
+	duration := time.Duration(max(MinBackOffDuration, float64(p.rand.Intn(MaxBackOffDuration)))) * time.Millisecond
 	peerData.NextValidTime = time.Now().Add(duration)
 }
 
