@@ -64,7 +64,7 @@ func ProcessProposerSlashings(
 	return beaconState, nil
 }
 
-// ProcessProposerSlashingsNoVerify processes attester slashings without verifying them.
+// ProcessProposerSlashingsNoVerify processes proposer slashings without verifying them.
 // This is useful in scenarios such as block reward calculation, where we can assume the data
 // in the block is valid.
 func ProcessProposerSlashingsNoVerify(
@@ -102,7 +102,7 @@ func ProcessProposerSlashing(
 	return processProposerSlashing(ctx, beaconState, slashing, exitInfo)
 }
 
-// ProcessProposerSlashingNoVerify processes individual attester slashing without verifying it.
+// ProcessProposerSlashingNoVerify processes individual proposer slashing without verifying it.
 // This is useful in scenarios such as block reward calculation, where we can assume the data
 // in the block is valid.
 func ProcessProposerSlashingNoVerify(
