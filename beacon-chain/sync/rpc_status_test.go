@@ -440,6 +440,11 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 }
 
 func TestStatusRPCRequest_RequestSent(t *testing.T) {
+	const (
+		earliestAvailableSlot = primitives.Slot(50)
+		custodyGroupCount     = uint64(4)
+	)
+
 	beaconConfig := params.BeaconConfig()
 	ctx := t.Context()
 
@@ -493,7 +498,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 					HeadRoot:              headRoot,
 					FinalizedEpoch:        5,
 					FinalizedRoot:         finalizedRoot,
-					EarliestAvailableSlot: 0,
+					EarliestAvailableSlot: earliestAvailableSlot,
 				}
 
 				if !proto.Equal(out, expected) {
@@ -516,6 +521,11 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 
 			p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
 			p1.Connect(p2)
+
+			updatedEas, updatedCgc, err := p1.UpdateCustodyInfo(earliestAvailableSlot, custodyGroupCount)
+			require.NoError(t, err)
+			require.Equal(t, earliestAvailableSlot, updatedEas)
+			require.Equal(t, custodyGroupCount, updatedCgc)
 
 			// Set up a head state with data we expect.
 			head := util.NewBeaconBlock()
