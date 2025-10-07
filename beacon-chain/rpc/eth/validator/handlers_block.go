@@ -225,7 +225,7 @@ func getConsensusBlockValue(ctx context.Context, blockRewardsFetcher rewards.Blo
 	}
 	// Get consensus payload value which is the same as the total from the block rewards api.
 	// The value is in Gwei, but Wei should be returned from the endpoint.
-	blockRewards, httpError := blockRewardsFetcher.GetBlockRewardsData(ctx, bb)
+	blockRewards, httpError := blockRewardsFetcher.BlockRewardsData(ctx, bb)
 	if httpError != nil {
 		return "", httpError
 	}

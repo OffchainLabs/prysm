@@ -15,14 +15,14 @@ type MockBlockRewardFetcher struct {
 	State   state.BeaconState
 }
 
-func (m *MockBlockRewardFetcher) GetBlockRewardsData(_ context.Context, _ interfaces.ReadOnlyBeaconBlock) (*structs.BlockRewards, *httputil.DefaultJsonError) {
+func (m *MockBlockRewardFetcher) BlockRewardsData(_ context.Context, _ interfaces.ReadOnlyBeaconBlock) (*structs.BlockRewards, *httputil.DefaultJsonError) {
 	if m.Error != nil {
 		return nil, m.Error
 	}
 	return m.Rewards, nil
 }
 
-func (m *MockBlockRewardFetcher) GetStateForRewards(_ context.Context, _ interfaces.ReadOnlyBeaconBlock) (state.BeaconState, *httputil.DefaultJsonError) {
+func (m *MockBlockRewardFetcher) StateForRewards(_ context.Context, _ interfaces.ReadOnlyBeaconBlock) (state.BeaconState, *httputil.DefaultJsonError) {
 	if m.Error != nil {
 		return nil, m.Error
 	}
