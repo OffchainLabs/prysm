@@ -92,6 +92,21 @@ func TestApplyDiff(t *testing.T) {
 	target, err := transition.ExecuteStateTransition(ctx, source, wsb)
 	require.NoError(t, err)
 
+	// Add non-trivial eth1Data, regression check
+	depositRoot := make([]byte, fieldparams.RootLength)
+	for i := range depositRoot {
+		depositRoot[i] = byte(i + 42)
+	}
+	blockHash := make([]byte, fieldparams.RootLength)
+	for i := range blockHash {
+		blockHash[i] = byte(i + 100)
+	}
+	require.NoError(t, target.SetEth1Data(&ethpb.Eth1Data{
+		DepositRoot:  depositRoot,
+		DepositCount: 99999,
+		BlockHash:    blockHash,
+	}))
+
 	hdiff, err := Diff(source, target)
 	require.NoError(t, err)
 	source, err = ApplyDiff(ctx, source, hdiff)
@@ -879,6 +894,58 @@ func Test_readPendingAttestation(t *testing.T) {
 	data := []byte{0x01, 0x02}
 	_, err := readPendingAttestation(&data)
 	require.ErrorContains(t, "data is too small", err)
+}
+
+// Test readEth1Data - regression test for bug where indices were off by 1
+func Test_readEth1Data(t *testing.T) {
+	diff := &stateDiff{}
+
+	// Test nil marker
+	data := []byte{nilMarker}
+	err := diff.readEth1Data(&data)
+	require.NoError(t, err)
+	require.IsNil(t, diff.eth1Data)
+	require.Equal(t, 0, len(data))
+
+	// Test successful read with actual data
+	// Create test data: marker + depositRoot + depositCount + blockHash
+	depositRoot := make([]byte, fieldparams.RootLength)
+	for i := range depositRoot {
+		depositRoot[i] = byte(i % 256)
+	}
+	blockHash := make([]byte, fieldparams.RootLength)
+	for i := range blockHash {
+		blockHash[i] = byte((i + 100) % 256)
+	}
+	depositCount := uint64(12345)
+
+	data = []byte{notNilMarker}
+	data = append(data, depositRoot...)
+	countBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(countBytes, depositCount)
+	data = append(data, countBytes...)
+	data = append(data, blockHash...)
+
+	diff = &stateDiff{}
+	err = diff.readEth1Data(&data)
+	require.NoError(t, err)
+	require.NotNil(t, diff.eth1Data)
+	require.DeepEqual(t, depositRoot, diff.eth1Data.DepositRoot)
+	require.Equal(t, depositCount, diff.eth1Data.DepositCount)
+	require.DeepEqual(t, blockHash, diff.eth1Data.BlockHash)
+	require.Equal(t, 0, len(data))
+
+	// Test insufficient data for marker
+	data = []byte{}
+	diff = &stateDiff{}
+	err = diff.readEth1Data(&data)
+	require.ErrorContains(t, "eth1Data", err)
+
+	// Test insufficient data after marker
+	data = []byte{notNilMarker}
+	diff = &stateDiff{}
+	err = diff.readEth1Data(&data)
+	require.ErrorContains(t, "eth1Data", err)
 }
 
 func BenchmarkGetDiff(b *testing.B) {

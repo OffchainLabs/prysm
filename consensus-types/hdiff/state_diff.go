@@ -159,7 +159,7 @@ const (
 	proposerLookaheadLength        = 8 * 2 * fieldparams.SlotsPerEpoch
 )
 
-// newHdiff desrializes a new Hdiff object from the given serialized data.
+// newHdiff deserializes a new Hdiff object from the given serialized data.
 func newHdiff(data HdiffBytes) (*hdiff, error) {
 	stateDiff, err := newStateDiff(data.StateDiff)
 	if err != nil {
@@ -298,11 +298,11 @@ func (ret *stateDiff) readEth1Data(data *[]byte) error {
 		return errors.Wrap(errDataSmall, "eth1Data")
 	}
 	ret.eth1Data = &ethpb.Eth1Data{
-		DepositRoot:  slices.Clone((*data)[1 : 1+fieldparams.RootLength]),
-		DepositCount: binary.LittleEndian.Uint64((*data)[1+fieldparams.RootLength : 1+fieldparams.RootLength+8]),
-		BlockHash:    slices.Clone((*data)[1+fieldparams.RootLength+8 : 1+2*fieldparams.RootLength+8]),
+		DepositRoot:  slices.Clone((*data)[:fieldparams.RootLength]),
+		DepositCount: binary.LittleEndian.Uint64((*data)[fieldparams.RootLength : fieldparams.RootLength+8]),
+		BlockHash:    slices.Clone((*data)[fieldparams.RootLength+8 : 2*fieldparams.RootLength+8]),
 	}
-	*data = (*data)[1+eth1DataLength:]
+	*data = (*data)[eth1DataLength:]
 	return nil
 }
 
