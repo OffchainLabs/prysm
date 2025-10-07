@@ -66,12 +66,12 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		tracing.AnnotateError(span, err)
 		return errors.Wrap(err, "validate data columns by range")
 	}
+
+	log.Trace("Serving data column sidecars by range")
+
 	if rangeParameters == nil {
-		log.Debug("No data columns by range to serve")
 		return nil
 	}
-
-	log.Debug("Serving data columns by range request")
 
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(time.Second)
@@ -101,13 +101,13 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 
 		// Once the quota is reached, we're done serving the request.
 		if maxRequestDataColumnSidecars == 0 {
-			log.WithField("initialQuota", beaconConfig.MaxRequestDataColumnSidecars).Debug("Reached quota for data column sidecars by range request")
+			log.WithField("initialQuota", beaconConfig.MaxRequestDataColumnSidecars).Trace("Reached quota for data column sidecars by range request")
 			break
 		}
 	}
 
 	if err := batch.error(); err != nil {
-		log.WithError(err).Debug("Error in DataColumnSidecarsByRange batch")
+		log.WithError(err).Error("Cannot get next batch of blocks")
 
 		// If we hit a rate limit, the error response has already been written, and the stream is already closed.
 		if !errors.Is(err, p2ptypes.ErrRateLimited) {

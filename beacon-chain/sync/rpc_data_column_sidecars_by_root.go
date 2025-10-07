@@ -83,13 +83,13 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		ticker = time.NewTicker(tickerDelay)
 	}
 
-	if log.Logger.Level >= logrus.DebugLevel {
+	if log.Logger.Level >= logrus.TraceLevel {
 		for root, columns := range requestedColumnsByRoot {
 			slices.Sort(columns)
 			log.WithFields(logrus.Fields{
 				"root":    fmt.Sprintf("%#x", root),
 				"columns": helpers.PrettySlice(columns),
-			}).Debug("Serving data column sidecars by root request")
+			}).Trace("Serving data column sidecars by root")
 		}
 	}
 
