@@ -563,8 +563,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_crate_crypto_go_eth_kzg",
         importpath = "github.com/crate-crypto/go-eth-kzg",
-        sum = "h1:05GrhASN9kDAidaFJOda6A4BEvgvuXbazXg/0E3OOdI=",
-        version = "v1.3.0",
+        sum = "h1:WzDGjHk4gFg6YzV0rJOAsTK4z3Qkz5jd4RE3DAvPFkg=",
+        version = "v1.4.0",
     )
     go_repository(
         name = "com_github_crate_crypto_go_ipa",
@@ -794,6 +794,12 @@ def prysm_deps():
         version = "v2.1.5",
     )
     go_repository(
+        name = "com_github_ethereum_go_bigmodexpfix",
+        importpath = "github.com/ethereum/go-bigmodexpfix",
+        sum = "h1:rvv6MJhy07IMfEKuARQ9TKojGqLVNxQajaXEp/BoqSk=",
+        version = "v0.0.0-20250911101455-f9e208c548ab",
+    )
+    go_repository(
         name = "com_github_ethereum_go_ethereum",
         build_directives = [
             "gazelle:resolve go github.com/karalabe/usb @prysm//third_party/usb:go_default_library",
@@ -804,8 +810,8 @@ def prysm_deps():
         patches = [
             "//third_party:com_github_ethereum_go_ethereum_secp256k1.patch",
         ],
-        sum = "h1:nDoBSrmsrPbrDIVLTkDQCy1U9KdHN+F2PzvMbDoS42Q=",
-        version = "v1.16.3",
+        sum = "h1:H6dU0r2p/amA7cYg6zyG9Nt2JrKKH6oX2utfcqrSpkQ=",
+        version = "v1.16.4",
     )
     go_repository(
         name = "com_github_ethereum_go_verkle",
@@ -1550,8 +1556,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_holiman_billy",
         importpath = "github.com/holiman/billy",
-        sum = "h1:X4egAf/gcS1zATw6wn4Ej8vjuVGxeHdan+bRb2ebyv4=",
-        version = "v0.0.0-20240216141850-2abb0c79d3c4",
+        sum = "h1:IZUYC/xb3giYwBLMnr8d0TGTzPKFGNTCGgGLoyeX330=",
+        version = "v0.0.0-20250707135307-f2f9b9aae7db",
     )
     go_repository(
         name = "com_github_holiman_bloomfilter_v2",
@@ -4846,8 +4852,8 @@ def prysm_deps():
     go_repository(
         name = "org_golang_x_sys",
         importpath = "golang.org/x/sys",
-        sum = "h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=",
-        version = "v0.31.0",
+        sum = "h1:KVRy2GtZBrk1cBYA7MKu5bEZFxQk4NIDV6RLVcC8o0k=",
+        version = "v0.36.0",
     )
     go_repository(
         name = "org_golang_x_telemetry",
