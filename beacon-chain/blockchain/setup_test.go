@@ -106,14 +106,14 @@ type mockCustodyManager struct {
 	custodyGroupCount     uint64
 }
 
-func (dch *mockCustodyManager) EarliestAvailableSlot() (primitives.Slot, error) {
+func (dch *mockCustodyManager) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
 	dch.mut.RLock()
 	defer dch.mut.RUnlock()
 
 	return dch.earliestAvailableSlot, nil
 }
 
-func (dch *mockCustodyManager) CustodyGroupCount() (uint64, error) {
+func (dch *mockCustodyManager) CustodyGroupCount(context.Context) (uint64, error) {
 	dch.mut.RLock()
 	defer dch.mut.RUnlock()
 

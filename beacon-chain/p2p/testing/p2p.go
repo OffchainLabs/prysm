@@ -473,7 +473,7 @@ func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 }
 
 // EarliestAvailableSlot .
-func (s *TestP2P) EarliestAvailableSlot() (primitives.Slot, error) {
+func (s *TestP2P) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
 	s.custodyInfoMut.RLock()
 	defer s.custodyInfoMut.RUnlock()
 
@@ -481,7 +481,7 @@ func (s *TestP2P) EarliestAvailableSlot() (primitives.Slot, error) {
 }
 
 // CustodyGroupCount .
-func (s *TestP2P) CustodyGroupCount() (uint64, error) {
+func (s *TestP2P) CustodyGroupCount(context.Context) (uint64, error) {
 	s.custodyInfoMut.RLock()
 	defer s.custodyInfoMut.RUnlock()
 
