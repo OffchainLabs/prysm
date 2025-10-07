@@ -134,11 +134,8 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 
 	// Collect valid attestations for both single and electra formats.
 	// Broadcast takes single format but attestation pool and batch signature verification take electra format.
-	type attPair struct {
-		forBroadcast ethpb.Att // Original SingleAttestation for broadcasting
-		forPool      ethpb.Att // Converted AttestationElectra for pool/verification
-	}
-	attPairs := make([]attPair, 0, len(bucket.attestations))
+	forBroadcast := make([]ethpb.Att, 0, len(bucket.attestations))
+	forPool := make([]ethpb.Att, 0, len(bucket.attestations))
 
 	for _, att := range bucket.attestations {
 		committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
@@ -169,27 +166,23 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 			conv = att
 		}
 
-		attPairs = append(attPairs, attPair{forBroadcast: att, forPool: conv})
+		forBroadcast = append(forBroadcast, att)
+		forPool = append(forPool, conv)
 	}
 
-	if len(attPairs) == 0 {
+	if len(forPool) == 0 {
 		return
 	}
 
-	sigAtts := make([]ethpb.Att, len(attPairs))
-	for i, p := range attPairs {
-		sigAtts[i] = p.forPool
-	}
-
-	verified := s.batchVerifyAttestationSignatures(ctx, sigAtts, preState)
+	verified := s.batchVerifyAttestationSignatures(ctx, forPool, preState)
 	verifiedSet := make(map[ethpb.Att]struct{}, len(verified))
 	for _, att := range verified {
 		verifiedSet[att] = struct{}{}
 	}
 
-	for _, p := range attPairs {
-		if _, ok := verifiedSet[p.forPool]; ok {
-			s.processVerifiedAttestation(ctx, p.forBroadcast, p.forPool, preState)
+	for i, poolAtt := range forPool {
+		if _, ok := verifiedSet[poolAtt]; ok {
+			s.processVerifiedAttestation(ctx, forBroadcast[i], poolAtt, preState)
 		}
 	}
 }
@@ -209,13 +202,12 @@ func (s *Service) batchVerifyAttestationSignatures(
 	}
 
 	ok, err := set.Verify()
-	if err != nil {
-		log.WithError(err).Debug(fallbackMsg)
-		return s.fallbackToIndividualVerification(ctx, attestations, preState)
-	}
-
-	if !ok {
-		log.Debug(fallbackMsg)
+	if err != nil || !ok {
+		if err != nil {
+			log.WithError(err).Debug(fallbackMsg)
+		} else {
+			log.Debug(fallbackMsg)
+		}
 		return s.fallbackToIndividualVerification(ctx, attestations, preState)
 	}
 
