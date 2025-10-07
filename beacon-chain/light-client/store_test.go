@@ -3,6 +3,7 @@ package light_client
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
@@ -74,6 +75,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	p2p := p2pTesting.NewTestP2P(t)
 	lcStore := NewLightClientStore(p2p, new(event.Feed), testDB.SetupDB(t))
 
+	timeForGoroutinesToFinish := 20 * time.Microsecond
 	// update 0 with basic data and no supermajority following an empty lastFinalityUpdate - should save and broadcast
 	l0 := util.NewTestLightClient(t, version.Altair)
 	update0, err := NewLightClientFinalityUpdateFromBeaconState(l0.Ctx, l0.State, l0.Block, l0.AttestedState, l0.AttestedBlock, l0.FinalizedBlock)
@@ -85,6 +87,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update0, true)
 	require.Equal(t, update0, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, true, p2p.BroadcastCalled.Load(), "Broadcast should have been called after setting a new last finality update when previous is nil")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
@@ -99,6 +102,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update1, true)
 	require.Equal(t, update1, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called after setting a new last finality update without supermajority")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
@@ -113,6 +117,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update2, true)
 	require.Equal(t, update2, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, true, p2p.BroadcastCalled.Load(), "Broadcast should have been called after setting a new last finality update with supermajority")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
@@ -127,6 +132,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update3, true)
 	require.Equal(t, update3, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been when previous was already broadcast")
 
 	// update 4 with increased finality slot, increased attested slot, and supermajority - should save and broadcast
@@ -140,6 +146,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update4, true)
 	require.Equal(t, update4, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, true, p2p.BroadcastCalled.Load(), "Broadcast should have been called after a new finality update with increased finality slot")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
@@ -154,6 +161,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update5, true)
 	require.Equal(t, update5, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called when previous was already broadcast with supermajority")
 
 	// update 6 with the same new finality slot, increased attested slot, and no supermajority - should save but not broadcast
@@ -167,6 +175,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update6, true)
 	require.Equal(t, update6, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
+	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called when previous was already broadcast with supermajority")
 }
 

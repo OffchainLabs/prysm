@@ -142,8 +142,8 @@ func TestNextForkData(t *testing.T) {
 		{
 			name:              "after last bpo - should be far future epoch and 0x00000000",
 			currEpoch:         params.LastForkEpoch() + 1,
-			wantedForkVersion: [4]byte(cfg.FuluForkVersion),
-			wantedEpoch:       cfg.FarFutureEpoch,
+			wantedForkVersion: [4]byte(cfg.ElectraForkVersion),
+			wantedEpoch:       cfg.ElectraForkEpoch,
 		},
 	}
 	for _, tt := range tests {

@@ -8,7 +8,7 @@ on:
 jobs:
   Horusec_Scan:
     name: horusec-Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-4
     if: github.ref == 'refs/heads/develop'
     steps:
     - name: Check out code
