@@ -354,7 +354,7 @@ func (s *Service) buildStatusFromStream(
 		return nil, err
 	}
 
-	if streamVersion == p2p.SchemaVersionV2 {
+	if params.FuluEnabled() && streamVersion == p2p.SchemaVersionV2 {
 		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "earliest available slot")
