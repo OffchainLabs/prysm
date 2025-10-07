@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -33,7 +34,6 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	defer span.End()
 
 	batchSize := flags.Get().DataColumnBatchLimit
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Check if the message type is the one expected.
 	ref, ok := msg.(types.DataColumnsByRootIdentifiers)
@@ -68,26 +68,13 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		slices.Sort(columns)
 	}
 
-	// Format nice logs.
-	requestedColumnsByRootLog := make(map[string]interface{})
-	for root, columns := range requestedColumnsByRoot {
-		rootStr := fmt.Sprintf("%#x", root)
-		requestedColumnsByRootLog[rootStr] = "all"
-		if uint64(len(columns)) != numberOfColumns {
-			requestedColumnsByRootLog[rootStr] = columns
-		}
-	}
-
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
 	minReqSlot, err := dataColumnsRPCMinValidSlot(s.cfg.clock.CurrentSlot())
 	if err != nil {
 		return errors.Wrapf(err, "data columns RPC min valid slot")
 	}
 
-	log := log.WithFields(logrus.Fields{
-		"peer":    remotePeer,
-		"columns": requestedColumnsByRootLog,
-	})
+	log := log.WithField("peer", remotePeer)
 
 	defer closeStream(stream, log)
 
@@ -96,7 +83,15 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		ticker = time.NewTicker(tickerDelay)
 	}
 
-	log.Debug("Serving data column sidecar by root request")
+	if log.Logger.Level >= logrus.DebugLevel {
+		for root, columns := range requestedColumnsByRoot {
+			slices.Sort(columns)
+			log.WithFields(logrus.Fields{
+				"root":    fmt.Sprintf("%#x", root),
+				"columns": helpers.PrettySlice(columns),
+			}).Debug("Serving data column sidecars by root request")
+		}
+	}
 
 	count := 0
 	for _, ident := range requestedColumnIdents {

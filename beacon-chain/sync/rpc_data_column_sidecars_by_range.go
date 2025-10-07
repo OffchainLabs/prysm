@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -41,20 +42,16 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	maxRequestDataColumnSidecars := beaconConfig.MaxRequestDataColumnSidecars
 	remotePeer := stream.Conn().RemotePeer()
 
-	requestedColumns := request.Columns
-
-	// Format log fields.
-	var requestedColumnsLog interface{} = "all"
-	if uint64(len(requestedColumns)) != beaconConfig.NumberOfColumns {
-		requestedColumnsLog = requestedColumns
-	}
-
 	log := log.WithFields(logrus.Fields{
-		"remotePeer":       remotePeer,
-		"requestedColumns": requestedColumnsLog,
-		"startSlot":        request.StartSlot,
-		"count":            request.Count,
+		"remotePeer": remotePeer,
+		"startSlot":  request.StartSlot,
+		"count":      request.Count,
 	})
+
+	if log.Logger.Level >= logrus.DebugLevel {
+		slices.Sort(request.Columns)
+		log = log.WithField("requestedColumns", helpers.PrettySlice(request.Columns))
+	}
 
 	// Validate the request regarding rate limiting.
 	if err := s.rateLimiter.validateRequest(stream, rateLimitingAmount); err != nil {
