@@ -145,17 +145,17 @@ var (
 const (
 	nilMarker                      = byte(0)
 	notNilMarker                   = byte(1)
-	forkLength                     = 2*fieldparams.VersionLength + 8
-	blockHeaderLength              = 8 + 8 + 3*fieldparams.RootLength
+	forkLength                     = 2*fieldparams.VersionLength + 8  // previous_version + current_version + epoch
+	blockHeaderLength              = 8 + 8 + 3*fieldparams.RootLength // slot + proposer_index + parent_root + state_root + body_root
 	blockRootsLength               = fieldparams.BlockRootsLength * fieldparams.RootLength
 	stateRootsLength               = fieldparams.StateRootsLength * fieldparams.RootLength
-	eth1DataLength                 = 8 + 2*fieldparams.RootLength
+	eth1DataLength                 = 8 + 2*fieldparams.RootLength // deposit_count + deposit_root + block_hash
 	randaoMixesLength              = fieldparams.RandaoMixesLength * fieldparams.RootLength
-	checkpointLength               = 8 + fieldparams.RootLength
+	checkpointLength               = 8 + fieldparams.RootLength // epoch + root
 	syncCommitteeLength            = (fieldparams.SyncCommitteeLength + 1) * fieldparams.BLSPubkeyLength
-	pendingDepositLength           = fieldparams.BLSPubkeyLength + fieldparams.RootLength + 8 + fieldparams.BLSSignatureLength + 8
-	pendingPartialWithdrawalLength = 8 + 8 + 8
-	pendingConsolidationLength     = 8 + 8
+	pendingDepositLength           = fieldparams.BLSPubkeyLength + fieldparams.RootLength + 8 + fieldparams.BLSSignatureLength + 8 // pubkey + withdrawal_credentials + amount + signature + index
+	pendingPartialWithdrawalLength = 8 + 8 + 8                                                                                     // validator_index + amount + withdrawable_epoch
+	pendingConsolidationLength     = 8 + 8                                                                                         // souce and target index
 	proposerLookaheadLength        = 8 * 2 * fieldparams.SlotsPerEpoch
 )
 
