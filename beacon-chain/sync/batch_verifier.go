@@ -98,7 +98,7 @@ func (s *Service) validateWithBatchVerifier(ctx context.Context, message string,
 		if err != nil {
 			verErr := errors.Wrapf(err, "Could not verify %s", message)
 			tracing.AnnotateError(span, verErr)
-			return pubsub.ValidationReject, verErr
+			return pubsub.ValidationIgnore, verErr
 		}
 		if !verified {
 			verErr := errors.Errorf("Verification of %s failed", message)
