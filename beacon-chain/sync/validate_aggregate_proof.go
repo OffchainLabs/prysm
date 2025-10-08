@@ -26,6 +26,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var errInvalidAggregator = errors.New("invalid aggregator")
+
 // validateAggregateAndProof verifies the aggregated signature and the selection proof is valid before forwarding to the
 // network and downstream services.
 func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -212,11 +214,16 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		aggregatorIndex,
 		aggregateAndProof.GetSelectionProof(),
 	)
+
+	if errors.Is(err, errInvalidAggregator) {
+		attBadSelectionProofCount.Inc()
+		return pubsub.ValidationReject, nil
+	}
+
 	if err != nil {
 		wrappedErr := errors.Wrapf(err, "could not validate selection for validator %d", aggregateAndProof.GetAggregatorIndex())
 		tracing.AnnotateError(span, wrappedErr)
-		attBadSelectionProofCount.Inc()
-		return pubsub.ValidationReject, wrappedErr
+		return pubsub.ValidationIgnore, wrappedErr
 	}
 
 	// Verify selection signature, aggregator signature and attestation signature are valid.
@@ -317,7 +324,7 @@ func validateSelectionIndex(
 	defer span.End()
 
 	if !helpers.IsAggregator(uint64(len(committee)), proof) {
-		return nil, fmt.Errorf("validator is not an aggregator for slot %d", slot)
+		return nil, errInvalidAggregator
 	}
 
 	domain := params.BeaconConfig().DomainSelectionProof
@@ -325,23 +332,26 @@ func validateSelectionIndex(
 
 	v, err := bs.ValidatorAtIndexReadOnly(validatorIndex)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "validator at index read only")
 	}
+
 	pk := v.PublicKey()
 	publicKey, err := bls.PublicKeyFromBytes(pk[:])
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "public key from bytes")
 	}
 
 	d, err := signing.Domain(bs.Fork(), epoch, domain, bs.GenesisValidatorsRoot())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "domain")
 	}
+
 	sszUint := primitives.SSZUint64(slot)
 	root, err := signing.ComputeSigningRoot(&sszUint, d)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "compute signing root")
 	}
+
 	return &bls.SignatureBatch{
 		Signatures:   [][]byte{proof},
 		PublicKeys:   []bls.PublicKey{publicKey},

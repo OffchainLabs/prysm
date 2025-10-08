@@ -188,8 +188,7 @@ func TestVerifySelection_NotAnAggregator(t *testing.T) {
 	committee, err := helpers.BeaconCommitteeFromState(ctx, beaconState, data.Slot, data.CommitteeIndex)
 	require.NoError(t, err)
 	_, err = validateSelectionIndex(ctx, beaconState, data.Slot, committee, 0, sig.Marshal())
-	wanted := "validator is not an aggregator for slot"
-	assert.ErrorContains(t, wanted, err)
+	require.ErrorIs(t, err, errInvalidAggregator)
 }
 
 func TestValidateAggregateAndProof_NoBlock(t *testing.T) {
