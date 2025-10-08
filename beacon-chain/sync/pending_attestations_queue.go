@@ -303,25 +303,20 @@ func (s *Service) processVerifiedAttestation(
 }
 
 func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
-	att := aggregate.AggregateAttestationAndProof().AggregateVal()
-
-	if res, err := s.validateAggregatedAtt(ctx, aggregate); err != nil || res != pubsub.ValidationAccept {
+	if res, err := s.validateAggregatedAtt(ctx, aggregate); err != nil || res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
 		if err != nil {
 			log.WithError(err).Debug("Pending aggregated attestation failed validation")
 		}
 		return
 	}
 
-	if !s.validateBlockInAttestation(ctx, aggregate) {
-		return
-	}
-
+	att := aggregate.AggregateAttestationAndProof().AggregateVal()
 	if err := s.saveAttestation(att); err != nil {
 		log.WithError(err).Debug("Could not save aggregated attestation")
 		return
 	}
 
-	s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aap.GetAggregatorIndex())
+	s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
 
 	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 		log.WithError(err).Debug("Could not broadcast aggregated attestation")
