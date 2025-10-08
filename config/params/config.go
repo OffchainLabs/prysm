@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -384,10 +383,12 @@ func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
 	}
 }
 
-// TODO: this needs to be able to return an error
-// InitializeForkSchedule initializes the schedules forks baked into the config.
+// InitializeForkSchedule initializes the scheduled forks and BPOs baked into the config.
 func (b *BeaconChainConfig) InitializeForkSchedule() {
-	// Reset Fork Version Schedule.
+	// TODO: this needs to be able to return an error. The network schedule code has
+	// to implement weird fallbacks when it is not initialized properly, it would be better
+	// if the beacon node could crash if there isn't a valid fork schedule
+	// at the return of this function.
 	b.ForkVersionSchedule = configForkSchedule(b)
 	b.ForkVersionNames = configForkNames(b)
 	b.forkSchedule = initForkSchedule(b)
@@ -439,16 +440,18 @@ func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
 	return -1
 }
 
+func (ns *NetworkSchedule) safeIndex(idx int) NetworkScheduleEntry {
+	if idx < 0 || len(ns.entries) == 0 {
+		return genesisNetworkScheduleEntry()
+	}
+	if idx >= len(ns.entries) {
+		return ns.entries[len(ns.entries)-1]
+	}
+	return ns.entries[idx]
+}
+
 func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
-	lastIdx := len(ns.entries) - 1
-	idx := ns.epochIdx(epoch)
-	if idx < 0 {
-		return ns.entries[0]
-	}
-	if idx == lastIdx {
-		return ns.entries[lastIdx]
-	}
-	return ns.entries[idx+1]
+	return ns.safeIndex(ns.epochIdx(epoch) + 1)
 }
 
 func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
@@ -457,38 +460,21 @@ func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
 			return ns.entries[i]
 		}
 	}
-	return ns.entries[0]
+	return genesisNetworkScheduleEntry()
 }
 
 // LastFork is the last full fork (this is used by e2e testing)
 func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
 	for i := len(ns.entries) - 1; i >= 0; i-- {
-		if ns.entries[i].isFork {
+		if ns.entries[i].isFork && ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {
 			return ns.entries[i]
 		}
 	}
-	return ns.entries[0]
+	return genesisNetworkScheduleEntry()
 }
 
-func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
-	idx := ns.epochIdx(epoch)
-	if idx < 0 {
-		return ns.entries[0]
-	}
-	if idx >= len(ns.entries)-1 {
-		return ns.entries[len(ns.entries)-1]
-	}
-	return ns.entries[idx]
-}
-
-func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
-	ns.mu.RLock()
-	defer ns.mu.RUnlock()
-	if ns.byEpoch == nil {
-		return nil, false
-	}
-	entry, ok := ns.byEpoch[epoch]
-	return entry, ok
+func (ns *NetworkSchedule) forEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
+	return ns.safeIndex(ns.epochIdx(epoch))
 }
 
 func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
@@ -497,10 +483,15 @@ func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
 	merged = append(merged, other.entries...)
 	sort.Slice(merged, func(i, j int) bool {
 		if merged[i].Epoch == merged[j].Epoch {
-			if merged[i].VersionEnum == merged[j].VersionEnum {
-				return merged[i].isFork
+			// This can happen for 2 reasons:
+			// 1) both entries are forks in a test setup (eg starting genesis at a later fork)
+			// - break tie by version enum
+			// 2) one entry is a fork, the other is a BPO change
+			// - break tie by putting the fork first
+			if merged[i].isFork && merged[j].isFork {
+				return merged[i].VersionEnum < merged[j].VersionEnum
 			}
-			return merged[i].VersionEnum < merged[j].VersionEnum
+			return merged[i].isFork
 		}
 		return merged[i].Epoch < merged[j].Epoch
 	})
@@ -702,52 +693,12 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 // MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
-
-	if len(b.BlobSchedule) > 0 {
-		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-			return int(a.Epoch - b.Epoch)
-		}) {
-			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-				return int(a.Epoch - b.Epoch)
-			})
-		}
-
-		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
-			if epoch >= b.BlobSchedule[i].Epoch {
-				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
-			}
-		}
-	}
-
-	if epoch >= b.ElectraForkEpoch {
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	}
-
-	return b.DeprecatedMaxBlobsPerBlock
+	return b.MaxBlobsPerBlockAtEpoch(epoch)
 }
 
 // MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
-	if len(b.BlobSchedule) > 0 {
-		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-			return int(a.Epoch - b.Epoch)
-		}) {
-			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-				return int(a.Epoch - b.Epoch)
-			})
-		}
-
-		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
-			if epoch >= b.BlobSchedule[i].Epoch {
-				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
-			}
-		}
-	}
-
-	if epoch >= b.ElectraForkEpoch {
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	}
-	return b.DeprecatedMaxBlobsPerBlock
+	return int(b.networkSchedule.forEpoch(epoch).MaxBlobsPerBlock)
 }
 
 // DenebEnabled centralizes the check to determine if code paths that are specific to deneb should be allowed to execute.

@@ -3,7 +3,6 @@ package lookup
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -284,14 +283,9 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 
-	// Compute the first Fulu slot.
-	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-	fuluForkSlot := primitives.Slot(math.MaxUint64)
-	if fuluForkEpoch != primitives.Epoch(math.MaxUint64) {
-		fuluForkSlot, err = slots.EpochStart(fuluForkEpoch)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-		}
+	fuluForkSlot, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
 	}
 
 	// Convert versioned hashes to indices if provided

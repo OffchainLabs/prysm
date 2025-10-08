@@ -88,11 +88,11 @@ func NewEphemeralBlobStorageWithMocker(t testing.TB) (*BlobMocker, *BlobStorage)
 	return &BlobMocker{fs: fs, bs: bs}, bs
 }
 
-func NewMockBlobStorageSummarizer(t *testing.T, set map[[32]byte][]int) BlobStorageSummarizer {
+func NewMockBlobStorageSummarizer(t *testing.T, epoch primitives.Epoch, set map[[32]byte][]int) BlobStorageSummarizer {
 	c := newBlobStorageCache()
 	for k, v := range set {
 		for i := range v {
-			if err := c.ensure(blobIdent{root: k, epoch: 0, index: uint64(v[i])}); err != nil {
+			if err := c.ensure(blobIdent{root: k, epoch: epoch, index: uint64(v[i])}); err != nil {
 				t.Fatal(err)
 			}
 		}

@@ -439,6 +439,7 @@ func TestService_Synced(t *testing.T) {
 }
 
 func TestMissingBlobRequest(t *testing.T) {
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	cases := []struct {
 		name  string
 		setup func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage)
@@ -476,7 +477,7 @@ func TestMissingBlobRequest(t *testing.T) {
 		{
 			name: "2 commitments, 1 missing",
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
-				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
 				return bk, fs
@@ -486,7 +487,7 @@ func TestMissingBlobRequest(t *testing.T) {
 		{
 			name: "2 commitments, 0 missing",
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
-				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
 				return bk, fs

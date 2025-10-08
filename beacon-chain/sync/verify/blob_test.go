@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -11,6 +12,7 @@ import (
 )
 
 func TestBlobAlignsWithBlock(t *testing.T) {
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	tests := []struct {
 		name         string
 		blockAndBlob func(t *testing.T) (blocks.ROBlock, []blocks.ROBlob)
@@ -19,13 +21,13 @@ func TestBlobAlignsWithBlock(t *testing.T) {
 		{
 			name: "happy path",
 			blockAndBlob: func(t *testing.T) (blocks.ROBlock, []blocks.ROBlob) {
-				return util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
+				return util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 1)
 			},
 		},
 		{
 			name: "mismatched roots",
 			blockAndBlob: func(t *testing.T) (blocks.ROBlock, []blocks.ROBlob) {
-				blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
+				blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 1)
 				tweaked := blobs[0].BlobSidecar
 				tweaked.SignedBlockHeader.Header.Slot = tweaked.SignedBlockHeader.Header.Slot + 1
 				tampered, err := blocks.NewROBlob(tweaked)
@@ -37,7 +39,7 @@ func TestBlobAlignsWithBlock(t *testing.T) {
 		{
 			name: "mismatched roots - fake",
 			blockAndBlob: func(t *testing.T) (blocks.ROBlock, []blocks.ROBlob) {
-				blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 1)
+				blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 1)
 				copied := blobs[0].BlobSidecar
 				// exact same header, mess with the root
 				fake, err := blocks.NewROBlobWithRoot(copied, bytesutil.ToBytes32([]byte("derp")))

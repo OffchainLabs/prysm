@@ -25,6 +25,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -223,8 +224,14 @@ func (s *Service) findPeersWithSubnets(
 		// Skip nodes that are not subscribed to any of the defective subnets.
 		nodeSubnets, err := filter(node)
 		if err != nil {
-			return nil, errors.Wrap(err, "filter node")
+			log.WithError(err).WithFields(logrus.Fields{
+				"nodeID":      node.ID(),
+				"topicFormat": topicFormat,
+			}).Debug("Could not get needed subnets from peer")
+
+			continue
 		}
+
 		if len(nodeSubnets) == 0 {
 			continue
 		}
