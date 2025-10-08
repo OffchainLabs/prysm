@@ -169,7 +169,7 @@ func FetchDataColumnSidecars(
 		result[root] = sidecars
 	}
 
-	log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Failed to fetch data column sidecars from storage and peers using rescue mode")
+	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
 }
 
@@ -738,7 +738,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
-				log.WithError(err).Warning("Failed to send data column sidecars request")
+				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
 			}
 
