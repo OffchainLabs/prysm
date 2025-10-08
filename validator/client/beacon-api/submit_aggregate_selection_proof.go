@@ -98,11 +98,7 @@ func (c *beaconApiValidatorClient) getAttestationDataRootFromRequest(ctx context
 		return nil, errors.New("the node is currently optimistic and cannot serve validators")
 	}
 
-	isAggregator, err := helpers.IsAggregator(committeeLength, in.SlotSignature)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get aggregator status")
-	}
-	if !isAggregator {
+	if !helpers.IsAggregator(committeeLength, in.SlotSignature) {
 		return nil, errors.New("validator is not an aggregator")
 	}
 

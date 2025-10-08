@@ -132,11 +132,7 @@ func (vs *Server) processAggregateSelection(ctx context.Context, req *ethpb.Aggr
 	}
 
 	// Check if the validator is an aggregator
-	isAggregator, err := helpers.IsAggregator(uint64(len(committee)), req.SlotSignature)
-	if err != nil {
-		return 0, 0, status.Errorf(codes.Internal, "Could not get aggregator status: %v", err)
-	}
-	if !isAggregator {
+	if !helpers.IsAggregator(uint64(len(committee)), req.SlotSignature) {
 		return 0, 0, status.Errorf(codes.InvalidArgument, "Validator is not an aggregator")
 	}
 

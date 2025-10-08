@@ -316,11 +316,7 @@ func validateSelectionIndex(
 	_, span := trace.StartSpan(ctx, "sync.validateSelectionIndex")
 	defer span.End()
 
-	aggregator, err := helpers.IsAggregator(uint64(len(committee)), proof)
-	if err != nil {
-		return nil, err
-	}
-	if !aggregator {
+	if !helpers.IsAggregator(uint64(len(committee)), proof) {
 		return nil, fmt.Errorf("validator is not an aggregator for slot %d", slot)
 	}
 
