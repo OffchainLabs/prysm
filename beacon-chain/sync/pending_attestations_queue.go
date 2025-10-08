@@ -303,10 +303,13 @@ func (s *Service) processVerifiedAttestation(
 }
 
 func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
-	if res, err := s.validateAggregatedAtt(ctx, aggregate); err != nil || res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
-		if err != nil {
-			log.WithError(err).Debug("Pending aggregated attestation failed validation")
-		}
+	res, err := s.validateAggregatedAtt(ctx, aggregate)
+	if err != nil {
+		log.WithError(err).Debug("Pending aggregated attestation failed validation")
+		return
+	}
+	if res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
+		log.Debug("Pending aggregated attestation failed validation")
 		return
 	}
 
