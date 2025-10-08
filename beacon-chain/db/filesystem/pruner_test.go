@@ -142,6 +142,7 @@ func testRoots(n int) [][32]byte {
 }
 
 func TestLayoutPruneBefore(t *testing.T) {
+	electra := params.BeaconConfig().ElectraForkEpoch
 	roots := testRoots(10)
 	cases := []struct {
 		name        string
@@ -153,27 +154,27 @@ func TestLayoutPruneBefore(t *testing.T) {
 	}{
 		{
 			name:        "none pruned",
-			pruneBefore: 1,
+			pruneBefore: electra + 1,
 			pruned:      []testIdent{},
 			remain: []testIdent{
-				{offset: 1, blobIdent: blobIdent{root: roots[0], epoch: 1, index: 0}},
-				{offset: 1, blobIdent: blobIdent{root: roots[1], epoch: 1, index: 0}},
+				{offset: 1, blobIdent: blobIdent{root: roots[0], epoch: electra + 1, index: 0}},
+				{offset: 1, blobIdent: blobIdent{root: roots[1], epoch: electra + 1, index: 0}},
 			},
 		},
 		{
 			name:        "expected pruned before epoch",
-			pruneBefore: 3,
+			pruneBefore: electra + 3,
 			pruned: []testIdent{
-				{offset: 0, blobIdent: blobIdent{root: roots[0], epoch: 1, index: 0}},
-				{offset: 31, blobIdent: blobIdent{root: roots[1], epoch: 1, index: 5}},
-				{offset: 0, blobIdent: blobIdent{root: roots[2], epoch: 2, index: 0}},
-				{offset: 31, blobIdent: blobIdent{root: roots[3], epoch: 2, index: 3}},
+				{offset: 0, blobIdent: blobIdent{root: roots[0], epoch: electra + 1, index: 0}},
+				{offset: 31, blobIdent: blobIdent{root: roots[1], epoch: electra + 1, index: 5}},
+				{offset: 0, blobIdent: blobIdent{root: roots[2], epoch: electra + 2, index: 0}},
+				{offset: 31, blobIdent: blobIdent{root: roots[3], epoch: electra + 2, index: 3}},
 			},
 			remain: []testIdent{
-				{offset: 0, blobIdent: blobIdent{root: roots[4], epoch: 3, index: 2}},  // boundary
-				{offset: 31, blobIdent: blobIdent{root: roots[5], epoch: 3, index: 0}}, // boundary
-				{offset: 0, blobIdent: blobIdent{root: roots[6], epoch: 4, index: 1}},
-				{offset: 31, blobIdent: blobIdent{root: roots[7], epoch: 4, index: 5}},
+				{offset: 0, blobIdent: blobIdent{root: roots[4], epoch: electra + 3, index: 2}},  // boundary
+				{offset: 31, blobIdent: blobIdent{root: roots[5], epoch: electra + 3, index: 0}}, // boundary
+				{offset: 0, blobIdent: blobIdent{root: roots[6], epoch: electra + 4, index: 1}},
+				{offset: 31, blobIdent: blobIdent{root: roots[7], epoch: electra + 4, index: 5}},
 			},
 			sum: pruneSummary{blobsPruned: 4},
 		},

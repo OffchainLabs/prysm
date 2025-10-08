@@ -12,8 +12,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -29,6 +31,8 @@ func init() {
 // RunBlockProcessingTest executes "sanity/blocks" tests.
 func RunBlockProcessingTest(t *testing.T, config, folderPath string) {
 	require.NoError(t, utils.SetConfig(t, config))
+	cfg := params.BeaconConfig()
+	params.SetGenesisFork(t, cfg, version.Deneb)
 
 	testFolders, testsFolderPath := utils.TestFolders(t, config, "deneb", folderPath)
 	for _, folder := range testFolders {

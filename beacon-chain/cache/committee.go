@@ -5,7 +5,6 @@ package cache
 import (
 	"context"
 	"errors"
-	"math"
 	"sync"
 	"time"
 
@@ -272,7 +271,7 @@ func (c *CommitteeCache) checkInProgress(ctx context.Context, seed [32]byte) err
 		// for the in progress boolean to flip to false.
 		time.Sleep(time.Duration(delay) * time.Nanosecond)
 		delay *= delayFactor
-		delay = math.Min(delay, maxDelay)
+		delay = min(delay, maxDelay)
 	}
 	return nil
 }

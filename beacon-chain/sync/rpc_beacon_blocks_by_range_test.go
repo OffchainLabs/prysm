@@ -854,7 +854,7 @@ func TestRPCBeaconBlocksByRange_FilterBlocks(t *testing.T) {
 			blocks := make([]*ethpb.SignedBeaconBlock, 0, req.Count)
 			for i := req.StartSlot; i < req.StartSlot.Add(req.Count*req.Step); i += primitives.Slot(req.Step) {
 				code, _, err := ReadStatusCode(stream, &encoder.SszNetworkEncoder{})
-				if err != nil && err != io.EOF {
+				if err != nil && !errors.Is(err, io.EOF) {
 					t.Fatal(err)
 				}
 				if code != 0 || errors.Is(err, io.EOF) {
