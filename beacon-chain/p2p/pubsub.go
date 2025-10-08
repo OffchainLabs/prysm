@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
 	pbrpc "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -135,13 +134,15 @@ func (s *Service) peerInspector(peerMap map[peer.ID]*pubsub.PeerScoreSnapshot) {
 
 // pubsubOptions creates a list of options to configure our router with.
 func (s *Service) pubsubOptions() []pubsub.Option {
+	filt := pubsub.NewAllowlistSubscriptionFilter(s.allTopicStrings()...)
+	filt = pubsub.WrapLimitSubscriptionFilter(filt, pubsubSubscriptionRequestLimit)
 	psOpts := []pubsub.Option{
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageIdFn(func(pmsg *pubsubpb.Message) string {
 			return MsgID(s.genesisValidatorsRoot, pmsg)
 		}),
-		pubsub.WithSubscriptionFilter(s),
+		pubsub.WithSubscriptionFilter(filt),
 		pubsub.WithPeerOutboundQueueSize(int(s.cfg.QueueSize)),
 		pubsub.WithMaxMessageSize(int(MaxMessageSize())), // lint:ignore uintcast -- Max Message Size is a config value and is naturally bounded by networking limitations.
 		pubsub.WithValidateQueueSize(int(s.cfg.QueueSize)),
@@ -246,5 +247,5 @@ func ExtractGossipDigest(topic string) ([4]byte, error) {
 //	# Allow 1024 bytes for framing and encoding overhead but at least 1MiB in case MAX_PAYLOAD_SIZE is small.
 //	return max(max_compressed_len(MAX_PAYLOAD_SIZE) + 1024, 1024 * 1024)
 func MaxMessageSize() uint64 {
-	return mathutil.Max(encoder.MaxCompressedLen(params.BeaconConfig().MaxPayloadSize)+1024, 1024*1024)
+	return max(encoder.MaxCompressedLen(params.BeaconConfig().MaxPayloadSize)+1024, 1024*1024)
 }

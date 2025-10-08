@@ -125,11 +125,12 @@ func TestReconstructDataColumnSidecars(t *testing.T) {
 }
 
 func TestReconstructBlobs(t *testing.T) {
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
 
+	require.NoError(t, kzg.Start())
 	var emptyBlock blocks.ROBlock
+	fs := util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
 
 	t.Run("no index", func(t *testing.T) {
 		actual, err := peerdas.ReconstructBlobs(emptyBlock, nil, nil)
@@ -190,10 +191,10 @@ func TestReconstructBlobs(t *testing.T) {
 	})
 
 	t.Run("not committed to the same block", func(t *testing.T) {
-		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{1}))
-		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{2}))
+		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{1}), util.WithSlot(fs))
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{2}), util.WithSlot(fs))
 
-		_, err = peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, []int{0})
+		_, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, []int{0})
 		require.ErrorContains(t, peerdas.ErrRootMismatch.Error(), err)
 	})
 

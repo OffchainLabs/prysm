@@ -562,8 +562,9 @@ func TestNotifyIndex(t *testing.T) {
 	var root [32]byte
 	copy(root[:], "exampleRoot")
 
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	// Test notifying a new index
-	bn.notifyIndex(root, 1, 1)
+	bn.notifyIndex(root, 1, ds)
 	if !bn.seenIndex[root][1] {
 		t.Errorf("Index was not marked as seen")
 	}
@@ -580,7 +581,7 @@ func TestNotifyIndex(t *testing.T) {
 	}
 
 	// Test notifying a new index again
-	bn.notifyIndex(root, 2, 1)
+	bn.notifyIndex(root, 2, ds)
 	if !bn.seenIndex[root][2] {
 		t.Errorf("Index was not marked as seen")
 	}

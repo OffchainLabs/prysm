@@ -49,7 +49,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	batchSize := flags.Get().BlobBatchLimit
 	var ticker *time.Ticker
 	if len(blobIdents) > batchSize {
-		ticker = time.NewTicker(time.Second)
+		ticker = time.NewTicker(blobRpcThrottleInterval)
 	}
 
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
