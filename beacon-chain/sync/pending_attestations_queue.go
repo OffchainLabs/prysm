@@ -303,8 +303,7 @@ func (s *Service) processVerifiedAttestation(
 }
 
 func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
-	aap := aggregate.AggregateAttestationAndProof()
-	att := aap.AggregateVal()
+	att := aggregate.AggregateAttestationAndProof().AggregateVal()
 
 	if res, err := s.validateAggregatedAtt(ctx, aggregate); err != nil || res != pubsub.ValidationAccept {
 		if err != nil {
