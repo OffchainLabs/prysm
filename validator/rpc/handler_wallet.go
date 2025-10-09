@@ -168,7 +168,7 @@ func (s *Server) WalletConfig(w http.ResponseWriter, r *http.Request) {
 // Create N validator keystores from the seed specified by req.NumAccounts.
 // Set the wallet password to req.WalletPassword, then create the wallet from
 // the provided Mnemonic and return CreateWalletResponse.
-// DEPRECATED: this endpoint will be removed to improve the safety and security of interacting with wallets
+// Deprecated: this endpoint will be removed to improve the safety and security of interacting with wallets
 func (s *Server) RecoverWallet(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.web.RecoverWallet")
 	defer span.End()

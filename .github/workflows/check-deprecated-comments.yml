@@ -1,0 +1,41 @@
+name: Check Deprecated Comments
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ '*' ]
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  check-deprecated:
+    name: Check Deprecated Comments Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+
+      - name: Check for improper DEPRECATED comments
+        run: |
+          # Look for improper "DEPRECATED:" comments (should be "Deprecated:")
+          echo "Checking for improper DEPRECATED comments..."
+          if grep -rn "DEPRECATED:" --include="*.go" . ; then
+            echo "❌ Found improper DEPRECATED comments. Please use 'Deprecated:' instead."
+            exit 1
+          else
+            echo "✅ No improper DEPRECATED comments found."
+          fi
+          
+          # Look for proper "Deprecated:" comments
+          echo "Checking for proper Deprecated comments..."
+          if grep -rn "Deprecated:" --include="*.go" . ; then
+            echo "✅ Found proper Deprecated comments format."
+          else
+            echo "ℹ️ No Deprecated comments found."
+          fi
