@@ -11,11 +11,9 @@ import (
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
@@ -122,41 +120,9 @@ func (s *Service) rpcHandlerByTopicFromFork(forkIndex int) (map[string]rpcHandle
 	return nil, errors.Errorf("RPC handler not found for fork index %d", forkIndex)
 }
 
-// rpcHandlerByTopic returns the RPC handlers for a given epoch.
-func (s *Service) rpcHandlerByTopicFromEpoch(epoch primitives.Epoch) (map[string]rpcHandler, error) {
-	// Get the beacon config.
-	beaconConfig := params.BeaconConfig()
-
-	if epoch >= beaconConfig.FuluForkEpoch {
-		return s.rpcHandlerByTopicFromFork(version.Fulu)
-	}
-
-	if epoch >= beaconConfig.ElectraForkEpoch {
-		return s.rpcHandlerByTopicFromFork(version.Electra)
-	}
-
-	if epoch >= beaconConfig.DenebForkEpoch {
-		return s.rpcHandlerByTopicFromFork(version.Deneb)
-	}
-
-	if epoch >= beaconConfig.CapellaForkEpoch {
-		return s.rpcHandlerByTopicFromFork(version.Capella)
-	}
-
-	if epoch >= beaconConfig.BellatrixForkEpoch {
-		return s.rpcHandlerByTopicFromFork(version.Bellatrix)
-	}
-
-	if epoch >= beaconConfig.AltairForkEpoch {
-		return s.rpcHandlerByTopicFromFork(version.Altair)
-	}
-
-	return s.rpcHandlerByTopicFromFork(version.Phase0)
-}
-
 // addedRPCHandlerByTopic returns the RPC handlers that are added in the new map that are not present in the old map.
 func addedRPCHandlerByTopic(previous, next map[string]rpcHandler) map[string]rpcHandler {
-	added := make(map[string]rpcHandler)
+	added := make(map[string]rpcHandler, len(next))
 
 	for topic, handler := range next {
 		if _, ok := previous[topic]; !ok {
@@ -181,13 +147,12 @@ func removedRPCTopics(previous, next map[string]rpcHandler) map[string]bool {
 }
 
 // registerRPCHandlers for p2p RPC.
-func (s *Service) registerRPCHandlers() error {
-	// Get the current epoch.
-	currentSlot := s.cfg.clock.CurrentSlot()
-	currentEpoch := slots.ToEpoch(currentSlot)
-
+func (s *Service) registerRPCHandlers(nse params.NetworkScheduleEntry) error {
+	if s.digestActionDone(nse.ForkDigest, registerRpcOnce) {
+		return nil
+	}
 	// Get the RPC handlers for the current epoch.
-	handlerByTopic, err := s.rpcHandlerByTopicFromEpoch(currentEpoch)
+	handlerByTopic, err := s.rpcHandlerByTopicFromFork(nse.VersionEnum)
 	if err != nil {
 		return errors.Wrap(err, "rpc handler by topic from epoch")
 	}

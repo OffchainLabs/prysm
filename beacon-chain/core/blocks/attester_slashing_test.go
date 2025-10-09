@@ -242,8 +242,18 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 			currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
 			require.NoError(t, tc.st.SetSlot(currentSlot))
 
+			// Verify that ProcessAttesterSlashingsNoVerify and ProcessAttesterSlashings have the same outcome.
+			stNoVerify := tc.st.Copy()
+			newStateNoVerify, err := blocks.ProcessAttesterSlashingsNoVerify(t.Context(), stNoVerify, []ethpb.AttSlashing{tc.slashing}, v.ExitInformation(stNoVerify))
+			require.NoError(t, err)
+			sszNoVerify, err := newStateNoVerify.MarshalSSZ()
+			require.NoError(t, err)
 			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.ExitInformation(tc.st))
 			require.NoError(t, err)
+			ssz, err := newState.MarshalSSZ()
+			require.NoError(t, err)
+			assert.DeepEqual(t, sszNoVerify, ssz, "States resulting from ProcessAttesterSlashingsNoVerify and ProcessAttesterSlashings are not equal")
+
 			newRegistry := newState.Validators()
 
 			// Given the intersection of slashable indices is [1], only validator

@@ -233,7 +233,7 @@ func ProcessSlashings(st state.BeaconState) error {
 	// a callback is used here to apply the following actions to all validators
 	// below equally.
 	increment := params.BeaconConfig().EffectiveBalanceIncrement
-	minSlashing := math.Min(totalSlashing*slashingMultiplier, totalBalance)
+	minSlashing := min(totalSlashing*slashingMultiplier, totalBalance)
 
 	// Modified in Electra:EIP7251
 	var penaltyPerEffectiveBalanceIncrement uint64
