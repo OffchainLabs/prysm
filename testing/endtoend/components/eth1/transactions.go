@@ -482,4 +482,3 @@ func fundAccount(client *rpc.Client, sourceKey, destKey *keystore.Key) error {
 	}
 	return backend.SendTransaction(context.Background(), signedTx)
 }
-
