@@ -86,6 +86,12 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 		return err
 	}
 	fundedAccount = newKey
+	// Wait for the funding transaction to be mined before proceeding
+	backend := ethclient.NewClient(client)
+	if err := waitForBalance(backend, newKey.Address, 30*time.Second); err != nil {
+		return errors.Wrap(err, "failed to wait for account funding")
+	}
+	backend.Close()
 	rnd := make([]byte, 10000)
 	_, err = mathRand.Read(rnd) // #nosec G404
 	if err != nil {
@@ -481,4 +487,30 @@ func fundAccount(client *rpc.Client, sourceKey, destKey *keystore.Key) error {
 		return err
 	}
 	return backend.SendTransaction(context.Background(), signedTx)
+}
+
+// waitForBalance waits for an account to have a non-zero balance with a timeout
+func waitForBalance(backend *ethclient.Client, address common.Address, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.New("timeout waiting for account to be funded")
+		case <-ticker.C:
+			balance, err := backend.BalanceAt(context.Background(), address, nil)
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to check balance, retrying...")
+				continue
+			}
+			if balance.Cmp(big.NewInt(0)) > 0 {
+				logrus.Infof("Account %s funded with balance: %s wei", address.Hex(), balance.String())
+				return nil
+			}
+		}
+	}
 }

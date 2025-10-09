@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -52,6 +53,32 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			SignatureDomain: make([]byte, 4),
 			Object: &validatorpb.SignRequest_Slot{
 				Slot: 0,
+			},
+			SigningSlot: 0,
+		}
+	case "AGGREGATE_AND_PROOF":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_AggregateAttestationAndProof{
+				AggregateAttestationAndProof: &eth.AggregateAttestationAndProof{
+					AggregatorIndex: 0,
+					Aggregate: &eth.Attestation{
+						AggregationBits: bitfield.Bitlist{0b1101},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, 96),
+					},
+					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
+				},
 			},
 			SigningSlot: 0,
 		}
@@ -521,17 +548,29 @@ func AggregationSlotSignRequest() *types.AggregationSlotSignRequest {
 
 // AggregateAndProofV2SignRequest is a mock implementation of the AggregateAndProofV2SignRequest.
 func AggregateAndProofV2SignRequest(ver int) *types.AggregateAndProofV2SignRequest {
+	var aggregateAndProofJSON []byte
+	if ver < version.Electra {
+		aggregateAndProofData := &types.AggregateAndProof{
+			AggregatorIndex: "0",
+			Aggregate:       Attestation(),
+			SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+		}
+		aggregateAndProofJSON, _ = json.Marshal(aggregateAndProofData)
+	} else {
+		aggregateAndProofData := &types.AggregateAndProofElectra{
+			AggregatorIndex: "0",
+			Aggregate:       AttestationElectra(),
+			SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+		}
+		aggregateAndProofJSON, _ = json.Marshal(aggregateAndProofData)
+	}
 	return &types.AggregateAndProofV2SignRequest{
 		Type:        "AGGREGATE_AND_PROOF_V2",
 		ForkInfo:    ForkInfo(),
 		SigningRoot: make([]byte, fieldparams.RootLength),
 		AggregateAndProof: &types.AggregateAndProofV2{
 			Version: strings.ToUpper(version.String(ver)),
-			Data: &types.AggregateAndProofElectra{
-				AggregatorIndex: "0",
-				Aggregate:       AttestationElectra(),
-				SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
-			},
+			Data:    aggregateAndProofJSON,
 		},
 	}
 }
