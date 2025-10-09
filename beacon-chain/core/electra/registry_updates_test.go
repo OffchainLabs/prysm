@@ -1,7 +1,6 @@
 package electra_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
@@ -131,7 +130,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := electra.ProcessRegistryUpdates(context.TODO(), tt.state)
+			err := electra.ProcessRegistryUpdates(t.Context(), tt.state)
 			require.NoError(t, err)
 			if tt.check != nil {
 				tt.check(t, tt.state)
@@ -164,7 +163,7 @@ func Benchmark_ProcessRegistryUpdates_MassEjection(b *testing.B) {
 		}
 		b.StartTimer()
 
-		if err := electra.ProcessRegistryUpdates(context.TODO(), st); err != nil {
+		if err := electra.ProcessRegistryUpdates(b.Context(), st); err != nil {
 			panic(err)
 		}
 	}
