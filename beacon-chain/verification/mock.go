@@ -45,11 +45,11 @@ func (m *MockBlobVerifier) ValidProposerSignature(_ context.Context) (err error)
 	return m.ErrValidProposerSignature
 }
 
-func (m *MockBlobVerifier) SidecarParentSeen(_ func([32]byte) bool) (err error) {
+func (m *MockBlobVerifier) SidecarParentSeen(func([fieldparams.RootLength]byte) bool) (err error) {
 	return m.ErrSidecarParentSeen
 }
 
-func (m *MockBlobVerifier) SidecarParentValid(_ func([32]byte) bool) (err error) {
+func (m *MockBlobVerifier) SidecarParentValid(func([fieldparams.RootLength]byte) bool) (err error) {
 	return m.ErrSidecarParentValid
 }
 
@@ -73,7 +73,7 @@ func (m *MockBlobVerifier) SidecarProposerExpected(_ context.Context) (err error
 	return m.ErrSidecarProposerExpected
 }
 
-func (*MockBlobVerifier) SatisfyRequirement(_ Requirement) {}
+func (*MockBlobVerifier) SatisfyRequirement(Requirement) {}
 
 // Data column sidecars
 // --------------------

@@ -2,6 +2,7 @@ package sync
 
 import (
 	"bytes"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -23,7 +24,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/pkg/errors"
 )
 
 func TestValidateBlob_FromSelf(t *testing.T) {
@@ -170,92 +170,93 @@ func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
 }
 
 func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
+	randomErr := errors.Join(verification.ErrSidecarInvalid, errors.New("random error"))
+
 	tests := []struct {
 		name     string
-		error    error
 		verifier verification.NewBlobVerifier
 		result   pubsub.ValidationResult
 	}{
 		{
-			error: errors.New("blob index out of bound"),
+			name: "blob index out of bound",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrBlobIndexInBounds: errors.New("blob index out of bound")}
+				return &verification.MockBlobVerifier{ErrBlobIndexInBounds: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("slot too early"),
+			name: "slot too early",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSlotTooEarly: errors.New("slot too early")}
+				return &verification.MockBlobVerifier{ErrSlotTooEarly: randomErr}
 			},
 			result: pubsub.ValidationIgnore,
 		},
 		{
-			error: errors.New("slot above finalized"),
+			name: "slot above finalized",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSlotAboveFinalized: errors.New("slot above finalized")}
+				return &verification.MockBlobVerifier{ErrSlotAboveFinalized: randomErr}
 			},
 			result: pubsub.ValidationIgnore,
 		},
 		{
-			error: errors.New("valid proposer signature"),
+			name: "valid proposer signature",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrValidProposerSignature: errors.New("valid proposer signature")}
+				return &verification.MockBlobVerifier{ErrValidProposerSignature: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("sidecar parent seen"),
+			name: "sidecar parent seen",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarParentSeen: errors.New("sidecar parent seen")}
+				return &verification.MockBlobVerifier{ErrSidecarParentSeen: randomErr}
 			},
 			result: pubsub.ValidationIgnore,
 		},
 		{
-			error: errors.New("sidecar parent valid"),
+			name: "sidecar parent valid",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarParentValid: errors.New("sidecar parent valid")}
+				return &verification.MockBlobVerifier{ErrSidecarParentValid: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("sidecar parent slot lower"),
+			name: "sidecar parent slot lower",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarParentSlotLower: errors.New("sidecar parent slot lower")}
+				return &verification.MockBlobVerifier{ErrSidecarParentSlotLower: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("descends from finalized"),
+			name: "descends from finalized",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarDescendsFromFinalized: errors.New("descends from finalized")}
+				return &verification.MockBlobVerifier{ErrSidecarDescendsFromFinalized: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("inclusion proven"),
+			name: "inclusion proven",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarInclusionProven: errors.New("inclusion proven")}
+				return &verification.MockBlobVerifier{ErrSidecarInclusionProven: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("kzg proof verified"),
+			name: "kzg proof verified",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarKzgProofVerified: errors.New("kzg proof verified")}
+				return &verification.MockBlobVerifier{ErrSidecarKzgProofVerified: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 		{
-			error: errors.New("sidecar proposer expected"),
+			name: "sidecar proposer expected",
 			verifier: func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-				return &verification.MockBlobVerifier{ErrSidecarProposerExpected: errors.New("sidecar proposer expected")}
+				return &verification.MockBlobVerifier{ErrSidecarProposerExpected: randomErr}
 			},
 			result: pubsub.ValidationReject,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.error.Error(), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
 			p := p2ptest.NewTestP2P(t)
 			chainService := &mock.ChainService{Genesis: time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0)}
@@ -280,7 +281,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 					Data:  buf.Bytes(),
 					Topic: &topic,
 				}})
-			require.ErrorContains(t, tt.error.Error(), err)
+			require.ErrorIs(t, err, randomErr)
 			require.Equal(t, result, tt.result)
 		})
 	}

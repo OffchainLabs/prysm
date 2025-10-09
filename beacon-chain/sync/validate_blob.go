@@ -55,7 +55,7 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 	vf := s.newBlobVerifier(blob, verification.GossipBlobSidecarRequirements)
 
 	if err := vf.BlobIndexInBounds(); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	// [REJECT] The sidecar is for the correct subnet -- i.e. compute_subnet_for_blob_sidecar(sidecar.index) == subnet_id.
@@ -94,32 +94,32 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 	}
 
 	if err := vf.SidecarParentValid(s.hasBadBlock); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	if err := vf.ValidProposerSignature(ctx); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	if err := vf.SidecarParentSlotLower(); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	if err := vf.SidecarDescendsFromFinalized(); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	if err := vf.SidecarInclusionProven(); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	if err := vf.SidecarKzgProofVerified(); err != nil {
 		saveInvalidBlobToTemp(blob)
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	if err := vf.SidecarProposerExpected(ctx); err != nil {
-		return pubsub.ValidationReject, err
+		return rejectOrIgnore(err)
 	}
 
 	fields := blobFields(blob)
@@ -194,4 +194,13 @@ func saveInvalidBlobToTemp(b blocks.ROBlob) {
 	if err := file.WriteFile(fp, enc); err != nil {
 		log.WithError(err).Error("Failed to write to disk")
 	}
+}
+
+// rejectOrIgnore returns ValidationReject if the error is a verification.ErrSidecarInvalid, otherwise
+// it returns ValidationIgnore.
+func rejectOrIgnore(err error) (pubsub.ValidationResult, error) {
+	if errors.Is(err, verification.ErrSidecarInvalid) {
+		return pubsub.ValidationReject, err
+	}
+	return pubsub.ValidationIgnore, err
 }
