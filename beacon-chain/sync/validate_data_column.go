@@ -65,7 +65,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// Convert to a read-only data column sidecar.
 	roDataColumn, err := blocks.NewRODataColumn(dcsc)
 	if err != nil {
-		return pubsub.ValidationReject, errors.Wrap(err, "roDataColumn conversion failure")
+		return pubsub.ValidationIgnore, errors.Wrap(err, "new ro data column")
 	}
 
 	// Compute a batch of only one data column sidecar.
