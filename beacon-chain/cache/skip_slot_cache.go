@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"math"
 	"sync"
 	"time"
 
@@ -90,7 +89,7 @@ func (c *SkipSlotCache) Get(ctx context.Context, r [32]byte) (state.BeaconState,
 		// for the in progress boolean to flip to false.
 		time.Sleep(time.Duration(delay) * time.Nanosecond)
 		delay *= delayFactor
-		delay = math.Min(delay, maxDelay)
+		delay = min(delay, maxDelay)
 	}
 	span.SetAttributes(trace.BoolAttribute("inProgress", inProgress))
 

@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -378,9 +379,16 @@ func ProcessBlockForStateRoot(
 func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
 	var err error
 
-	exitInfo := v.ExitInformation(st)
-	if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
-		return nil, errors.Wrap(err, "could not update total active balance cache")
+	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
+	// exitInfo is only needed for voluntary exits pre Electra.
+	hasExits := st.Version() < version.Electra && len(beaconBlock.Body().VoluntaryExits()) > 0
+	exitInfo := &validators.ExitInfo{}
+	if hasSlashings || hasExits {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = v.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
+			return nil, errors.Wrap(err, "could not update total active balance cache")
+		}
 	}
 	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo)
 	if err != nil {
@@ -407,10 +415,15 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 // This calls phase 0 block operations.
 func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
 	var err error
-
-	exitInfo := v.ExitInformation(st)
-	if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
-		return nil, errors.Wrap(err, "could not update total active balance cache")
+	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
+	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
+	var exitInfo *v.ExitInfo
+	if hasSlashings || hasExits {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = v.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
+			return nil, errors.Wrap(err, "could not update total active balance cache")
+		}
 	}
 	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo)
 	if err != nil {

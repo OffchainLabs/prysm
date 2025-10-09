@@ -2413,6 +2413,8 @@ func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
 }
 
 func TestMissingBlobIndices(t *testing.T) {
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(ds)
 	cases := []struct {
 		name     string
 		expected [][]byte
@@ -2426,23 +2428,23 @@ func TestMissingBlobIndices(t *testing.T) {
 		},
 		{
 			name:     "expected exceeds max",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0) + 1),
+			expected: fakeCommitments(maxBlobs + 1),
 			err:      errMaxBlobsExceeded,
 		},
 		{
 			name:     "first missing",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			expected: fakeCommitments(maxBlobs),
 			present:  []uint64{1, 2, 3, 4, 5},
 			result:   fakeResult([]uint64{0}),
 		},
 		{
 			name:     "all missing",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			expected: fakeCommitments(maxBlobs),
 			result:   fakeResult([]uint64{0, 1, 2, 3, 4, 5}),
 		},
 		{
 			name:     "none missing",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			expected: fakeCommitments(maxBlobs),
 			present:  []uint64{0, 1, 2, 3, 4, 5},
 			result:   fakeResult([]uint64{}),
 		},
@@ -2475,8 +2477,8 @@ func TestMissingBlobIndices(t *testing.T) {
 	for _, c := range cases {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
-			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
-			missing, err := missingBlobIndices(bs, c.root, c.expected, 0)
+			require.NoError(t, bm.CreateFakeIndices(c.root, ds, c.present...))
+			missing, err := missingBlobIndices(bs, c.root, c.expected, ds)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return
@@ -2904,22 +2906,21 @@ type testIsAvailableParams struct {
 	columnsToSave           []uint64
 }
 
-func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
+func testIsAvailableSetup(t *testing.T, p testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
 	ctx, cancel := context.WithCancel(t.Context())
 	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
+	options := append(p.options, WithDataColumnStorage(dataColumnStorage))
 	service, _ := minimalTestService(t, options...)
+	fs := util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
 
-	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32 /*validator count*/)
-
-	err := service.saveGenesisData(ctx, genesisState)
-	require.NoError(t, err)
+	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32, util.WithElectraStateSlot(fs))
+	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 
 	conf := util.DefaultBlockGenConfig()
-	conf.NumBlobKzgCommitments = params.blobKzgCommitmentsCount
+	conf.NumBlobKzgCommitments = p.blobKzgCommitmentsCount
 
-	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
+	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, fs+1)
 	require.NoError(t, err)
 
 	block := signedBeaconBlock.Block
@@ -2929,8 +2930,8 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 	root, err := block.HashTreeRoot()
 	require.NoError(t, err)
 
-	dataColumnsParams := make([]util.DataColumnParam, 0, len(params.columnsToSave))
-	for _, i := range params.columnsToSave {
+	dataColumnsParams := make([]util.DataColumnParam, 0, len(p.columnsToSave))
+	for _, i := range p.columnsToSave {
 		dataColumnParam := util.DataColumnParam{
 			Index:         i,
 			Slot:          block.Slot,
@@ -2954,8 +2955,12 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 }
 
 func TestIsDataAvailable(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
 	t.Run("Fulu - out of retention window", func(t *testing.T) {
-		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
+		params := testIsAvailableParams{}
 		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
 
 		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
@@ -2972,7 +2977,6 @@ func TestIsDataAvailable(t *testing.T) {
 		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
-
 	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
 		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)

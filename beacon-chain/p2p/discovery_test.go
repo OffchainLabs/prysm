@@ -281,8 +281,12 @@ func TestCreateLocalNode(t *testing.T) {
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				cfg:                   tt.cfg,
+				ctx:                   t.Context(),
 				custodyInfo:           &custodyInfo{groupCount: custodyRequirement},
+				custodyInfoSet:        make(chan struct{}),
 			}
+
+			close(service.custodyInfoSet)
 
 			localNode, err := service.createLocalNode(privKey, address, udpPort, tcpPort, quicPort)
 			if tt.expectedError {
@@ -912,8 +916,12 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				ctx:                   t.Context(),
+				custodyInfoSet:        make(chan struct{}),
 				custodyInfo:           &custodyInfo{groupCount: custodyGroupCount},
 			}
+
+			close(service.custodyInfoSet)
 
 			// Set the listener and the metadata.
 			createListener := func() (*discover.UDPv5, error) {
