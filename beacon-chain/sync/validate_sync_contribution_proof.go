@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"errors"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
@@ -18,6 +17,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 )
 
 // validateSyncContributionAndProof verifies the aggregated signature and the selection proof is valid before forwarding to the
@@ -202,12 +202,14 @@ func (s *Service) rejectInvalidSelectionProof(m *ethpb.SignedContributionAndProo
 	return func(ctx context.Context) (pubsub.ValidationResult, error) {
 		ctx, span := trace.StartSpan(ctx, "sync.rejectInvalidSelectionProof")
 		defer span.End()
+
 		// The `contribution_and_proof.selection_proof` is a valid signature of the `SyncAggregatorSelectionData`.
-		if err := s.verifySyncSelectionData(ctx, m.Message); err != nil {
+		valid, err := s.verifySyncSelectionData(ctx, m.Message)
+		if err != nil {
 			tracing.AnnotateError(span, err)
-			return pubsub.ValidationReject, err
 		}
-		return pubsub.ValidationAccept, nil
+
+		return valid, nil
 	}
 }
 
@@ -379,23 +381,23 @@ func bitListOverlaps(bitLists [][]byte, b []byte) (bool, error) {
 
 // verifySyncSelectionData verifies that the provided sync contribution has a valid
 // selection proof.
-func (s *Service) verifySyncSelectionData(ctx context.Context, m *ethpb.ContributionAndProof) error {
+func (s *Service) verifySyncSelectionData(ctx context.Context, m *ethpb.ContributionAndProof) (pubsub.ValidationResult, error) {
 	selectionData := &ethpb.SyncAggregatorSelectionData{Slot: m.Contribution.Slot, SubcommitteeIndex: m.Contribution.SubcommitteeIndex}
 	domain, err := s.cfg.chain.HeadSyncSelectionProofDomain(ctx, m.Contribution.Slot)
 	if err != nil {
-		return err
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head sync selection proof domain")
 	}
 	pubkey, err := s.cfg.chain.HeadValidatorIndexToPublicKey(ctx, m.AggregatorIndex)
 	if err != nil {
-		return err
+		return pubsub.ValidationIgnore, errors.Wrap(err, "head validator index to public key")
 	}
 	publicKey, err := bls.PublicKeyFromBytes(pubkey[:])
 	if err != nil {
-		return err
+		return pubsub.ValidationIgnore, errors.Wrap(err, "public key from bytes")
 	}
 	root, err := signing.ComputeSigningRoot(selectionData, domain)
 	if err != nil {
-		return err
+		return pubsub.ValidationIgnore, errors.Wrap(err, "compute signing root")
 	}
 	set := &bls.SignatureBatch{
 		Messages:     [][32]byte{root},
@@ -405,10 +407,8 @@ func (s *Service) verifySyncSelectionData(ctx context.Context, m *ethpb.Contribu
 	}
 	valid, err := s.validateWithBatchVerifier(ctx, "sync contribution selection signature", set)
 	if err != nil {
-		return err
+		return pubsub.ValidationIgnore, errors.Wrap(err, "validate with batch verifier")
 	}
-	if valid != pubsub.ValidationAccept {
-		return errors.New("invalid sync selection proof provided")
-	}
-	return nil
+
+	return valid, nil
 }
