@@ -346,7 +346,7 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 				q.downscorePeer(response.blocksFrom, "invalidBlocks")
 			}
 
-			if errors.Is(response.err, verification.ErrBlobInvalid) {
+			if errors.Is(response.err, verification.ErrSidecarInvalid) {
 				q.downscorePeer(response.blobsFrom, "invalidBlobs")
 			}
 

@@ -101,7 +101,7 @@ func (bv *ROBlobVerifier) VerifiedROBlob() (blocks.VerifiedROBlob, error) {
 	if bv.results.allSatisfied() {
 		return blocks.NewVerifiedROBlob(bv.blob), nil
 	}
-	return blocks.VerifiedROBlob{}, bv.results.errors(ErrBlobInvalid)
+	return blocks.VerifiedROBlob{}, bv.results.errors(ErrSidecarInvalid)
 }
 
 // SatisfyRequirement allows the caller to assert that a requirement has been satisfied.

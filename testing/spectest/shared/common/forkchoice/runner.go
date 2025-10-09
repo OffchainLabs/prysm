@@ -230,7 +230,7 @@ func runBlobStep(t *testing.T,
 		require.NoError(t, err)
 		sh, err := beaconBlock.Header()
 		require.NoError(t, err)
-		requireVerifyExpected := errAssertionForStep(step, verification.ErrBlobInvalid)
+		requireVerifyExpected := errAssertionForStep(step, verification.ErrSidecarInvalid)
 		for index := 0; index*fieldparams.BlobLength < len(blobsSSZ); index++ {
 			var proof []byte
 			if index < len(proofs) {
@@ -452,7 +452,7 @@ func errAssertionForStep(step Step, expect error) func(t *testing.T, err error) 
 	}
 	return func(t *testing.T, err error) {
 		if err != nil {
-			require.ErrorIs(t, err, verification.ErrBlobInvalid)
+			require.ErrorIs(t, err, verification.ErrSidecarInvalid)
 			var me verification.VerificationMultiError
 			ok := errors.As(err, &me)
 			require.Equal(t, true, ok)

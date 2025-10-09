@@ -130,7 +130,7 @@ func TestOnDataReceivedDownscore(t *testing.T) {
 		},
 		{
 			name:     "invalid blob",
-			err:      errors.Wrap(verification.ErrBlobInvalid, "test"),
+			err:      errors.Wrap(verification.ErrSidecarInvalid, "test"),
 			downPeer: testDownscoreBlob,
 		},
 		{
@@ -149,7 +149,7 @@ func TestOnDataReceivedDownscore(t *testing.T) {
 				err:        c.err,
 			}
 			if c.downPeer == testDownscoreBlob {
-				require.Equal(t, true, verification.IsBlobValidationFailure(c.err))
+				require.Equal(t, true, verification.IsSidecarValidationFailure(c.err))
 			}
 			ctx := t.Context()
 			p2p := p2pt.NewTestP2P(t)

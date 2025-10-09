@@ -527,7 +527,7 @@ func TestRequirementSatisfaction(t *testing.T) {
 	v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 
 	_, err := v.VerifiedROBlob()
-	require.ErrorIs(t, err, ErrBlobInvalid)
+	require.ErrorIs(t, err, ErrSidecarInvalid)
 	var me VerificationMultiError
 	ok := errors.As(err, &me)
 	require.Equal(t, true, ok)

@@ -463,7 +463,7 @@ func isPunishableError(err error) bool {
 // updatePeerScorerStats adjusts monitored metrics for a peer.
 func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint64, err error) {
 	if isPunishableError(err) {
-		if verification.IsBlobValidationFailure(err) {
+		if verification.IsSidecarValidationFailure(err) {
 			s.downscorePeer(data.blobsFrom, "invalidBlobs")
 		} else {
 			s.downscorePeer(data.blocksFrom, "invalidBlocks")

@@ -884,7 +884,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 }
 
 func TestErrInvalidFetchedDataDistinction(t *testing.T) {
-	require.Equal(t, false, errors.Is(ErrInvalidFetchedData, verification.ErrBlobInvalid))
+	require.Equal(t, false, errors.Is(ErrInvalidFetchedData, verification.ErrSidecarInvalid))
 }
 
 func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
