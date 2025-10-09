@@ -32,6 +32,8 @@ func TestLifecycle(t *testing.T) {
 	// Query the service to ensure it really started.
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
 	require.NoError(t, err)
+	// Close response body to avoid leaking connections.
+	defer resp.Body.Close()
 	assert.NotEqual(t, uint64(0), resp.ContentLength, "Unexpected content length 0")
 
 	err = prometheusService.Stop()
