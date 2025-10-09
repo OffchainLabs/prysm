@@ -1,6 +1,7 @@
 package types_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -53,8 +54,13 @@ func TestGetAggregateAndProofV2SignRequest(t *testing.T) {
 				t.Errorf("GetAggregateAndProofV2SignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetAggregateAndProofV2SignRequest() got = %v, want %v", got, tt.want)
+			// Marshal to JSON for comparison since ForkInfo is generated dynamically
+			gotJSON, err := json.Marshal(got)
+			require.NoError(t, err)
+			wantJSON, err := json.Marshal(tt.want)
+			require.NoError(t, err)
+			if string(gotJSON) != string(wantJSON) {
+				t.Errorf("JSON mismatch:\ngot:  %s\nwant: %s", string(gotJSON), string(wantJSON))
 			}
 		})
 	}
