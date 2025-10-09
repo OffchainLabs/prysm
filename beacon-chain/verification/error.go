@@ -30,16 +30,16 @@ var (
 	ErrBlobIndexInvalid = errors.Join(ErrSidecarInvalid, errors.New("incorrect blob sidecar index"))
 
 	// errFromFutureSlot means RequireSlotNotTooEarly failed.
-	errFromFutureSlot = errors.New("slot is too far in the future")
+	errFromFutureSlot = errors.Join(ErrSidecarInvalid, errors.New("slot is too far in the future"))
 
 	// errSlotNotAfterFinalized means RequireSlotAboveFinalized failed.
-	errSlotNotAfterFinalized = errors.New("slot <= finalized checkpoint")
+	errSlotNotAfterFinalized = errors.Join(ErrSidecarInvalid, errors.New("slot <= finalized checkpoint"))
 
 	// ErrInvalidProposerSignature means RequireValidProposerSignature failed.
 	ErrInvalidProposerSignature = errors.Join(ErrSidecarInvalid, errors.New("proposer signature could not be verified"))
 
 	// errSidecarParentNotSeen means RequireSidecarParentSeen failed.
-	errSidecarParentNotSeen = errors.New("parent root has not been seen")
+	errSidecarParentNotSeen = errors.Join(ErrSidecarInvalid, errors.New("parent root has not been seen"))
 
 	// errSidecarParentInvalid means RequireSidecarParentValid failed.
 	errSidecarParentInvalid = errors.Join(ErrSidecarInvalid, errors.New("parent block is not valid"))
