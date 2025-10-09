@@ -50,7 +50,7 @@ func (s *Service) validateBlob(ctx context.Context, pid peer.ID, msg *pubsub.Mes
 	}
 	blob, err := blocks.NewROBlob(bpb)
 	if err != nil {
-		return pubsub.ValidationReject, errors.Wrap(err, "roblob conversion failure")
+		return pubsub.ValidationIgnore, errors.Wrap(err, "roblob conversion failure")
 	}
 	vf := s.newBlobVerifier(blob, verification.GossipBlobSidecarRequirements)
 
