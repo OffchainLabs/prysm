@@ -12,6 +12,7 @@ import (
 var (
 	knownAgentVersions = []string{
 		"erigon/caplin",
+		"grandine",
 		"js-libp2p",
 		"lighthouse",
 		"lodestar",
