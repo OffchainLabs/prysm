@@ -940,7 +940,7 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 
 	// We haven't performed any verification, VerifiedRODataColumns should error.
 	_, err := verifier.VerifiedRODataColumns()
-	require.ErrorIs(t, err, errColumnsInvalid)
+	require.ErrorIs(t, err, ErrSidecarInvalid)
 
 	var me VerificationMultiError
 	ok := errors.As(err, &me)
@@ -959,7 +959,7 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 
 	// One requirement is missing, VerifiedRODataColumns should still error.
 	_, err = verifier.VerifiedRODataColumns()
-	require.ErrorIs(t, err, errColumnsInvalid)
+	require.ErrorIs(t, err, ErrSidecarInvalid)
 
 	// Now, satisfy the first requirement.
 	verifier.results.record(GossipDataColumnSidecarRequirements[0], nil)

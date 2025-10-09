@@ -69,6 +69,15 @@ var (
 	// errBatchBlockRootMismatch is returned by verified sidecars in the scenario where the root of the given signed block
 	// does not match the block header in one of the corresponding sidecars.
 	errBatchBlockRootMismatch = errors.Join(ErrSidecarInvalid, errors.New("sidecar block header root does not match signed block"))
+
+	// errInvalidFields indicates that the sidecar has invalid fields, such as a nil field or a field with an invalid value.
+	errInvalidFields = errors.Join(ErrSidecarInvalid, errors.New("sidecar has invalid fields"))
+
+	// errBadTopicLength indicates that the length of the topic is invalid.
+	errBadTopicLength = errors.Join(ErrSidecarInvalid, errors.New("topic length is invalid"))
+
+	// errBadTopic indicates that the topic is not of the one expected.
+	errBadTopic = errors.Join(ErrSidecarInvalid, errors.New("topic is not of the one expected"))
 )
 
 // errVerificationImplementationFault indicates that a code path yielding verified sidecars has an implementation

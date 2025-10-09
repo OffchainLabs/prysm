@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -60,10 +61,6 @@ var (
 	// SpectestDataColumnSidecarRequirements is used by the forkchoice spectests when verifying data columns used in the on_block tests.
 	SpectestDataColumnSidecarRequirements = requirementList(GossipDataColumnSidecarRequirements).excluding(
 		RequireSidecarParentSeen, RequireSidecarParentValid)
-
-	errColumnsInvalid = errors.New("data columns failed verification")
-	errBadTopicLength = errors.New("topic length is invalid")
-	errBadTopic       = errors.New("topic is not of the one expected")
 )
 
 type (
@@ -85,7 +82,7 @@ var _ DataColumnsVerifier = &RODataColumnsVerifier{}
 // were not run, an error will be returned.
 func (dv *RODataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
 	if !dv.results.allSatisfied() {
-		return nil, dv.results.errors(errColumnsInvalid)
+		return nil, dv.results.errors(ErrSidecarInvalid)
 	}
 
 	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(dv.dataColumns))
@@ -124,7 +121,7 @@ func (dv *RODataColumnsVerifier) ValidFields() (err error) {
 
 	for _, dataColumn := range dv.dataColumns {
 		if err := peerdas.VerifyDataColumnSidecar(dataColumn); err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verify data column sidecar"))
+			return errInvalidFields
 		}
 	}
 
@@ -139,7 +136,7 @@ func (dv *RODataColumnsVerifier) CorrectSubnet(dataColumnSidecarSubTopic string,
 	defer dv.recordResult(RequireCorrectSubnet, &err)
 
 	if len(expectedTopics) != len(dv.dataColumns) {
-		return columnErrBuilder(errBadTopicLength)
+		return errBadTopicLength
 	}
 
 	for i := range dv.dataColumns {
@@ -152,7 +149,7 @@ func (dv *RODataColumnsVerifier) CorrectSubnet(dataColumnSidecarSubTopic string,
 		actualSubTopic := fmt.Sprintf(dataColumnSidecarSubTopic, actualSubnet)
 
 		if !strings.Contains(expectedTopic, actualSubTopic) {
-			return columnErrBuilder(errBadTopic)
+			return errBadTopic
 		}
 	}
 
@@ -188,13 +185,13 @@ func (dv *RODataColumnsVerifier) NotFromFutureSlot() (err error) {
 		// We lower the time by MAXIMUM_GOSSIP_CLOCK_DISPARITY in case system time is running slightly behind real time.
 		earliestStart, err := dv.clock.SlotStart(dataColumnSlot)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "failed to determine slot start time from clock waiter"))
+			return errors.Wrap(err, "slot start")
 		}
 		earliestStart = earliestStart.Add(-maximumGossipClockDisparity)
 
 		// If the system time is still before earliestStart, we consider the column from a future slot and return an error.
 		if now.Before(earliestStart) {
-			return columnErrBuilder(errFromFutureSlot)
+			return errFromFutureSlot
 		}
 	}
 
@@ -214,13 +211,13 @@ func (dv *RODataColumnsVerifier) SlotAboveFinalized() (err error) {
 	// Compute the first slot of the finalized checkpoint epoch.
 	startSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
 	if err != nil {
-		return columnErrBuilder(errors.Wrap(err, "epoch start"))
+		return errors.Wrap(err, "epoch start")
 	}
 
 	for _, dataColumn := range dv.dataColumns {
 		// Check if the data column slot is after first slot of the epoch corresponding to the finalized checkpoint.
 		if dataColumn.Slot() <= startSlot {
-			return columnErrBuilder(errSlotNotAfterFinalized)
+			return errSlotNotAfterFinalized
 		}
 	}
 
@@ -248,7 +245,7 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 			log.WithError(err).Debug("Reusing failed proposer signature validation from cache")
 
 			columnVerificationProposerSignatureCache.WithLabelValues("hit-invalid").Inc()
-			return columnErrBuilder(ErrInvalidProposerSignature)
+			return ErrInvalidProposerSignature
 		}
 
 		// If yes, we can skip the full verification.
@@ -262,12 +259,16 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 		// Retrieve the parent state.
 		parentState, err := dv.parentState(ctx, dataColumn)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent state"))
+			return errors.Wrap(err, "parent state")
 		}
 
 		// Full verification, which will subsequently be cached for anything sharing the signature cache.
-		if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verify signature"))
+		err = dv.sc.VerifySignature(signatureData, parentState)
+		if errors.Is(err, signing.ErrSigFailedToVerify) {
+			return ErrInvalidProposerSignature
+		}
+		if err != nil {
+			return errors.Wrap(err, "verify signature")
 		}
 	}
 
@@ -289,7 +290,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 		}
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(errSidecarParentNotSeen)
+			return errSidecarParentNotSeen
 		}
 	}
 
@@ -305,7 +306,7 @@ func (dv *RODataColumnsVerifier) SidecarParentValid(badParent func([fieldparams.
 
 	for _, dataColumn := range dv.dataColumns {
 		if badParent != nil && badParent(dataColumn.ParentRoot()) {
-			return columnErrBuilder(errSidecarParentInvalid)
+			return errSidecarParentInvalid
 		}
 	}
 
@@ -323,12 +324,12 @@ func (dv *RODataColumnsVerifier) SidecarParentSlotLower() (err error) {
 		// Compute the slot of the parent block.
 		parentSlot, err := dv.fc.Slot(dataColumn.ParentRoot())
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "slot"))
+			return errors.Wrap(err, "slot")
 		}
 
 		// Check if the data column slot is after the parent slot.
 		if parentSlot >= dataColumn.Slot() {
-			return columnErrBuilder(errSlotNotAfterParent)
+			return errSlotNotAfterParent
 		}
 	}
 
@@ -347,7 +348,7 @@ func (dv *RODataColumnsVerifier) SidecarDescendsFromFinalized() (err error) {
 		parentRoot := dataColumn.ParentRoot()
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(errSidecarNotFinalizedDescendent)
+			return errSidecarNotFinalizedDescendent
 		}
 	}
 
@@ -373,8 +374,15 @@ func (dv *RODataColumnsVerifier) SidecarInclusionProven() (err error) {
 			log.WithError(keyErr).Error("Failed to get inclusion proof key")
 		}
 
-		if err = peerdas.VerifyDataColumnSidecarInclusionProof(dataColumn); err != nil {
-			return columnErrBuilder(ErrSidecarInclusionProofInvalid)
+		err = peerdas.VerifyDataColumnSidecarInclusionProof(dataColumn)
+		if errors.Is(err, peerdas.ErrNilBlockHeader) ||
+			errors.Is(err, peerdas.ErrBadRootLength) ||
+			errors.Is(err, peerdas.ErrInvalidInclusionProof) {
+			return ErrSidecarInclusionProofInvalid
+		}
+
+		if err != nil {
+			return errors.Wrap(err, "verify data column sidecar inclusion proof")
 		}
 
 		if keyErr == nil {
@@ -396,9 +404,8 @@ func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
 
 	startTime := time.Now()
 
-	err = dv.verifyDataColumnsCommitment(dv.dataColumns)
-	if err != nil {
-		return columnErrBuilder(errors.Wrap(err, "verify data column commitment"))
+	if err = dv.verifyDataColumnsCommitment(dv.dataColumns); err != nil {
+		return ErrSidecarKzgProofInvalid
 	}
 
 	dataColumnBatchKZGVerificationHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
@@ -435,7 +442,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		// Compute the target root for the epoch.
 		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
 		if err != nil {
-			return [fieldparams.RootLength]byte{}, columnErrBuilder(errors.Wrap(err, "target root from epoch"))
+			return [fieldparams.RootLength]byte{}, errors.Wrap(err, "target root for epoch")
 		}
 
 		// Store the target root in the cache.
@@ -454,7 +461,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		// Compute the target root for the data column.
 		targetRoot, err := targetRootFromCache(dataColumnSlot, parentRoot)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "target root"))
+			return errors.Wrap(err, "target root from cache")
 		}
 
 		// Compute the epoch of the data column slot.
@@ -473,17 +480,17 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 			// Retrieve the parent state.
 			parentState, err := dv.parentState(ctx, dataColumn)
 			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "parent state"))
+				return errors.Wrap(err, "parent state")
 			}
 
 			idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
 			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				return errors.Wrap(err, "compute proposer")
 			}
 		}
 
 		if idx != dataColumn.ProposerIndex() {
-			return columnErrBuilder(errSidecarUnexpectedProposer)
+			return errSidecarUnexpectedProposer
 		}
 	}
 
@@ -521,11 +528,7 @@ func columnToSignatureData(d blocks.RODataColumn) signatureData {
 	}
 }
 
-func columnErrBuilder(baseErr error) error {
-	return errors.Wrap(baseErr, errColumnsInvalid.Error())
-}
-
-// incluseionProofKey computes a unique key based on the KZG commitments,
+// inclusionProofKey computes a unique key based on the KZG commitments,
 // the KZG commitments inclusion proof, and the signed block header root.
 func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	const (
@@ -535,7 +538,7 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 
 	if len(c.KzgCommitmentsInclusionProof) != commsIncProofLen {
 		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
-		return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
+		return [32]byte{}, ErrSidecarInclusionProofInvalid
 	}
 
 	commsByteCount := len(c.KzgCommitments) * fieldparams.KzgCommitmentSize
@@ -549,7 +552,7 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	// Include the block root in the key.
 	root, err := c.SignedBlockHeader.HashTreeRoot()
 	if err != nil {
-		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
+		return [32]byte{}, errors.Wrap(err, "hash tree root")
 	}
 
 	unhashedKey = append(unhashedKey, root[:]...)
