@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -165,7 +166,7 @@ func (bv *ROBlobVerifier) SlotAboveFinalized() (err error) {
 	fcp := bv.fc.FinalizedCheckpoint()
 	fSlot, err := slots.EpochStart(fcp.Epoch)
 	if err != nil {
-		return errors.Wrapf(errSlotNotAfterFinalized, "error computing epoch start slot for finalized checkpoint (%d) %s", fcp.Epoch, err.Error())
+		return errors.Wrapf(err, "error computing epoch start slot for finalized checkpoint (%d)", fcp.Epoch)
 	}
 	if bv.blob.Slot() <= fSlot {
 		log.WithFields(logging.BlobFields(bv.blob)).Debug("Sidecar slot is not after finalized checkpoint")
@@ -197,13 +198,20 @@ func (bv *ROBlobVerifier) ValidProposerSignature(ctx context.Context) (err error
 	parent, err := bv.parentState(ctx)
 	if err != nil {
 		log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("Could not replay parent state for blob signature verification")
-		return ErrInvalidProposerSignature
+		return errors.Wrap(err, "parent state")
 	}
+
 	// Full verification, which will subsequently be cached for anything sharing the signature cache.
-	if err = bv.sc.VerifySignature(sd, parent); err != nil {
+	err = bv.sc.VerifySignature(sd, parent)
+	if err == signing.ErrSigFailedToVerify {
 		log.WithFields(logging.BlobFields(bv.blob)).WithError(err).Debug("Signature verification failed")
 		return ErrInvalidProposerSignature
 	}
+
+	if err != nil {
+		return errors.Wrap(err, "verify signature")
+	}
+
 	return nil
 }
 
@@ -239,7 +247,7 @@ func (bv *ROBlobVerifier) SidecarParentSlotLower() (err error) {
 	defer bv.recordResult(RequireSidecarParentSlotLower, &err)
 	parentSlot, err := bv.fc.Slot(bv.blob.ParentRoot())
 	if err != nil {
-		return errors.Wrap(errSlotNotAfterParent, "Parent root not in forkchoice")
+		return errors.Wrap(err, "slot")
 	}
 	if parentSlot >= bv.blob.Slot() {
 		return errSlotNotAfterParent
@@ -295,7 +303,7 @@ func (bv *ROBlobVerifier) SidecarProposerExpected(ctx context.Context) (err erro
 	}
 	r, err := bv.fc.TargetRootForEpoch(bv.blob.ParentRoot(), e)
 	if err != nil {
-		return errSidecarUnexpectedProposer
+		return errors.Wrap(err, "target root for epoch")
 	}
 	c := &forkchoicetypes.Checkpoint{Root: r, Epoch: e}
 	idx, cached := bv.pc.Proposer(c, bv.blob.Slot())
@@ -303,12 +311,12 @@ func (bv *ROBlobVerifier) SidecarProposerExpected(ctx context.Context) (err erro
 		pst, err := bv.parentState(ctx)
 		if err != nil {
 			log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("State replay to parent_root failed")
-			return errSidecarUnexpectedProposer
+			return errors.Wrap(err, "parent state")
 		}
 		idx, err = bv.pc.ComputeProposer(ctx, bv.blob.ParentRoot(), bv.blob.Slot(), pst)
 		if err != nil {
 			log.WithError(err).WithFields(logging.BlobFields(bv.blob)).Debug("Error computing proposer index from parent state")
-			return errSidecarUnexpectedProposer
+			return errors.Wrap(err, "compute proposer")
 		}
 	}
 	if idx != bv.blob.ProposerIndex() {
