@@ -234,13 +234,15 @@ func TestClean(t *testing.T) {
 	// this one cleans up the locks every 100 ms
 	done := make(chan bool, 1)
 	go func() {
-		c := time.Tick(100 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		// Ensure ticker is stopped to avoid leaks.
+		defer ticker.Stop()
 	Loop:
 		for {
 			select {
 			case <-done:
 				break Loop
-			case <-c:
+			case <-ticker.C:
 				Clean()
 			}
 		}
