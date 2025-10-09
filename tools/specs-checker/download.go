@@ -41,7 +41,9 @@ func download(cliCtx *cli.Context) error {
 
 func getAndSaveFile(specDocUrl, outFilePath string) error {
 	// Create output file.
-	f, err := os.OpenFile(filepath.Clean(outFilePath), os.O_CREATE|os.O_EXCL, params.BeaconIoConfig().ReadWritePermissions)
+	// Open the output file in write-only mode; we intend to write to it.
+	// Using O_EXCL ensures we don't overwrite existing files.
+	f, err := os.OpenFile(filepath.Clean(outFilePath), os.O_CREATE|os.O_EXCL|os.O_WRONLY, params.BeaconIoConfig().ReadWritePermissions)
 	if err != nil {
 		return fmt.Errorf("cannot create output file: %w", err)
 	}
