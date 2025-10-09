@@ -93,7 +93,10 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
+
+	defer s.sendStateFeedOnBlock(cfg) // only send event after successful insertion
 	start := time.Now()
+
 	cfg.headRoot, err = s.cfg.ForkChoiceStore.Head(ctx)
 	if err != nil {
 		log.WithError(err).Warn("Could not update head")
@@ -101,22 +104,16 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	newBlockHeadElapsedTime.Observe(float64(time.Since(start).Milliseconds()))
 	if cfg.headRoot != cfg.roblock.Root() {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
-		// Mark as processed even for non-canonical blocks that succeed
-		s.sendStateFeedOnBlock(cfg)
 		return nil
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
-		// Mark as processed - block was successfully inserted even if FCU args failed
-		s.sendStateFeedOnBlock(cfg)
 		return nil
 	}
 	if err := s.sendFCU(cfg, fcuArgs); err != nil {
 		return errors.Wrap(err, "could not send FCU to engine")
 	}
 
-	// Block successfully processed
-	s.sendStateFeedOnBlock(cfg)
 	return nil
 }
 
