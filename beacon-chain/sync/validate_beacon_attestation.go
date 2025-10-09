@@ -115,8 +115,8 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		s.savePendingAtt(att)
 	}
 	if !s.cfg.chain.InForkchoice(blockRoot) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+		tracing.AnnotateError(span, blockchain.ErrRootNotInForkchoice(blockRoot))
+		return pubsub.ValidationIgnore, blockchain.ErrRootNotInForkchoice(blockRoot)
 	}
 	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
 		tracing.AnnotateError(span, err)

@@ -285,7 +285,7 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.ReadOn
 func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) (state.BeaconState, error) {
 	if !s.cfg.chain.InForkchoice(blk.Block().ParentRoot()) {
 		s.setBadBlock(ctx, blockRoot)
-		return nil, blockchain.ErrNotDescendantOfFinalized
+		return nil,blockchain.ErrRootNotInForkchoice(blk.Block().ParentRoot())
 	}
 
 	parentState, err := s.cfg.stateGen.StateByRoot(ctx, blk.Block().ParentRoot())

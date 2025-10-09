@@ -166,8 +166,8 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 
 	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+		tracing.AnnotateError(span, blockchain.ErrRootNotInForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)))
+		return pubsub.ValidationIgnore, blockchain.ErrRootNotInForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot))
 	}
 
 	bs, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)

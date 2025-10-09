@@ -2,8 +2,10 @@ package blockchain
 
 import (
 	stderrors "errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/pkg/errors"
 )
 
@@ -29,8 +31,6 @@ var (
 	errWSBlockNotFound = errors.New("weak subjectivity root not found in db")
 	// errWSBlockNotFoundInEpoch is returned when a block is not found in the WS cache or DB within epoch.
 	errWSBlockNotFoundInEpoch = errors.New("weak subjectivity root not found in db within epoch")
-	// ErrNotDescendantOfFinalized is returned when a block is not a descendant of the finalized checkpoint
-	ErrNotDescendantOfFinalized = invalidBlock{error: errors.New("not descendant of finalized checkpoint")}
 	// ErrNotCheckpoint is returned when a given checkpoint is not a
 	// checkpoint in any chain known to forkchoice
 	ErrNotCheckpoint = errors.New("not a checkpoint in forkchoice")
@@ -47,6 +47,11 @@ var (
 	// errBlockBeingSynced is returned when a block is being synced.
 	errBlockBeingSynced = errors.New("block is being synced")
 )
+
+// ErrRootNotInForkchoice is returned when a root cannot be found in forkchoice.
+func ErrRootNotInForkchoice(root [fieldparams.RootLength]byte) invalidBlock {
+	return invalidBlock{error: fmt.Errorf("root %#x not in forkchoice", root), root: root}
+}
 
 // An invalid block is the block that fails state transition based on the core protocol rules.
 // The beacon node shall not be accepting nor building blocks that branch off from an invalid block.

@@ -504,7 +504,7 @@ func (s *Service) validateStateTransition(ctx context.Context, preState state.Be
 	// Verify that the parent block is in forkchoice
 	parentRoot := b.ParentRoot()
 	if !s.InForkchoice(parentRoot) {
-		return nil, ErrNotDescendantOfFinalized
+		return nil, ErrRootNotInForkchoice(parentRoot)
 	}
 	stateTransitionStartTime := time.Now()
 	postState, err := transition.ExecuteStateTransition(ctx, preState, signed)
