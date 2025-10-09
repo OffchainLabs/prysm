@@ -96,7 +96,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 
 	defer s.sendStateFeedOnBlock(cfg) // only send event after successful insertion
 	start := time.Now()
-
 	cfg.headRoot, err = s.cfg.ForkChoiceStore.Head(ctx)
 	if err != nil {
 		log.WithError(err).Warn("Could not update head")
