@@ -151,7 +151,7 @@ func (s *Server) ListAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(v))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(v))
 	httputil.WriteJson(w, &structs.ListAttestationsResponse{
 		Version: version.String(v),
 		Data:    attsData,
@@ -225,9 +225,9 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestationsV2")
 	defer span.End()
 
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(api.EthConsensusVersionHeader)
 	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		httputil.HandleError(w, api.EthConsensusVersionHeader+" header is required", http.StatusBadRequest)
 		return
 	}
 	v, err := version.FromString(versionHeader)
@@ -786,7 +786,7 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 		Version: version.String(v),
 		Data:    attBytes,
 	}
-	w.Header().Set(api.VersionHeader, version.String(v))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(v))
 	httputil.WriteJson(w, resp)
 }
 
@@ -821,9 +821,9 @@ func (s *Server) SubmitAttesterSlashingsV2(w http.ResponseWriter, r *http.Reques
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttesterSlashingsV2")
 	defer span.End()
 
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(api.EthConsensusVersionHeader)
 	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		httputil.HandleError(w, api.EthConsensusVersionHeader+" header is required", http.StatusBadRequest)
 	}
 	v, err := version.FromString(versionHeader)
 	if err != nil {

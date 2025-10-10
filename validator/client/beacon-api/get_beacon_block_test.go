@@ -155,7 +155,7 @@ func TestGetBeaconBlock_Error(t *testing.T) {
 				gomock.Any(),
 			).Return(
 				b,
-				http.Header{"Content-Type": []string{"application/json"}},
+				http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 				nil,
 			).Times(1)
 
@@ -191,7 +191,7 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -231,9 +231,9 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"bellatrix"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"bellatrix"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -273,9 +273,9 @@ func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"bellatrix"},
-			api.ExecutionPayloadBlindedHeader: []string{"true"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"bellatrix"},
+			api.EthExecutionPayloadBlindedHeader: []string{"true"},
 		},
 		nil,
 	).Times(1)
@@ -315,9 +315,9 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"capella"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"capella"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -357,9 +357,9 @@ func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"capella"},
-			api.ExecutionPayloadBlindedHeader: []string{"true"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"capella"},
+			api.EthExecutionPayloadBlindedHeader: []string{"true"},
 		},
 		nil,
 	).Times(1)
@@ -399,9 +399,9 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"deneb"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"deneb"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -441,9 +441,9 @@ func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"deneb"},
-			api.ExecutionPayloadBlindedHeader: []string{"true"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"deneb"},
+			api.EthExecutionPayloadBlindedHeader: []string{"true"},
 		},
 		nil,
 	).Times(1)
@@ -483,9 +483,9 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"electra"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"electra"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -525,9 +525,9 @@ func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"electra"},
-			api.ExecutionPayloadBlindedHeader: []string{"true"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"electra"},
+			api.EthExecutionPayloadBlindedHeader: []string{"true"},
 		},
 		nil,
 	).Times(1)
@@ -563,9 +563,9 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 	).Return(
 		[]byte{},
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"unsupported"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"unsupported"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -596,9 +596,9 @@ func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"bellatrix"},
-			api.ExecutionPayloadBlindedHeader: []string{"invalid"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"bellatrix"},
+			api.EthExecutionPayloadBlindedHeader: []string{"invalid"},
 		},
 		nil,
 	).Times(1)
@@ -629,9 +629,9 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"invalid"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"invalid"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -687,9 +687,9 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"phase0"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"phase0"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -729,9 +729,9 @@ func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 	).Return(
 		bytes,
 		http.Header{
-			"Content-Type":                    []string{api.OctetStreamMediaType},
-			api.VersionHeader:                 []string{"altair"},
-			api.ExecutionPayloadBlindedHeader: []string{"false"},
+			api.ContentTypeHeader:                []string{api.OctetStreamMediaType},
+			api.EthConsensusVersionHeader:        []string{"altair"},
+			api.EthExecutionPayloadBlindedHeader: []string{"false"},
 		},
 		nil,
 	).Times(1)
@@ -776,7 +776,7 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -820,7 +820,7 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -865,7 +865,7 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -910,7 +910,7 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -955,7 +955,7 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -1000,7 +1000,7 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -1045,7 +1045,7 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -1090,7 +1090,7 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 
@@ -1135,7 +1135,7 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
 		b,
-		http.Header{"Content-Type": []string{"application/json"}},
+		http.Header{api.ContentTypeHeader: []string{api.JsonMediaType}},
 		nil,
 	).Times(1)
 

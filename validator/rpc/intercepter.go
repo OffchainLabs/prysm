@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -40,12 +41,12 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 		// if it's not initialize or has a web prefix
 		if (strings.Contains(r.URL.Path, api.WebApiUrlPrefix) || strings.Contains(r.URL.Path, api.KeymanagerApiPrefix)) && !strings.Contains(r.URL.Path, api.SystemLogsPrefix) {
 			// ignore some routes
-			reqToken := r.Header.Get("Authorization")
+			reqToken := r.Header.Get(api.AuthorizationHeader)
 			if reqToken == "" {
 				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
-			tokenParts := strings.Split(reqToken, "Bearer ")
+			tokenParts := strings.Split(reqToken, fmt.Sprintf("%s ", api.BearerAuthorization))
 			if len(tokenParts) != 2 {
 				httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
 				return
@@ -72,10 +73,10 @@ func (s *Server) authorize(ctx context.Context) error {
 	if !ok {
 		return status.Errorf(codes.Unauthenticated, "Authorization token could not be found")
 	}
-	if len(authHeader) < 1 || !strings.Contains(authHeader[0], "Bearer ") {
+	if len(authHeader) < 1 || !strings.Contains(authHeader[0], fmt.Sprintf("%s ", api.BearerAuthorization)) {
 		return status.Error(codes.Unauthenticated, "Invalid auth header, needs Bearer {token}")
 	}
-	token := strings.Split(authHeader[0], "Bearer ")[1]
+	token := strings.Split(authHeader[0], fmt.Sprintf("%s ", api.BearerAuthorization))[1]
 	if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
 		return status.Errorf(codes.Unauthenticated, "Forbidden: token value is invalid")
 	}

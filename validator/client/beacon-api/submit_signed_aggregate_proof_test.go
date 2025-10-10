@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -27,7 +28,7 @@ func TestSubmitSignedAggregateSelectionProof_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := t.Context()
-	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
@@ -59,7 +60,7 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := t.Context()
-	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
@@ -89,7 +90,7 @@ func TestSubmitSignedAggregateSelectionProof_Fallback(t *testing.T) {
 	ctx := t.Context()
 
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(signedAggregateAndProof.Message.Version())}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/validator/aggregate_and_proofs",
@@ -131,7 +132,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := t.Context()
-	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProofElectra.Message.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(signedAggregateAndProofElectra.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
@@ -163,7 +164,7 @@ func TestSubmitSignedAggregateSelectionProofElectra_BadRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := t.Context()
-	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProofElectra.Message.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(signedAggregateAndProofElectra.Message.Version())}
 	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/OffchainLabs/prysm/v6/api"
 )
 
 // ReqOption is a request functional option.
@@ -12,14 +14,14 @@ type ReqOption func(*http.Request)
 // WithSSZEncoding is a request functional option that adds SSZ encoding header.
 func WithSSZEncoding() ReqOption {
 	return func(req *http.Request) {
-		req.Header.Set("Accept", "application/octet-stream")
+		req.Header.Set(api.AcceptEncodingHeader, api.OctetStreamMediaType)
 	}
 }
 
 // WithAuthorizationToken is a request functional option that adds header for authorization token.
 func WithAuthorizationToken(token string) ReqOption {
 	return func(req *http.Request) {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+		req.Header.Set(api.AuthorizationHeader, fmt.Sprintf("%s %s", api.BearerAuthorization, token))
 	}
 }
 

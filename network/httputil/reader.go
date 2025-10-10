@@ -14,7 +14,7 @@ var priorityRegex = regexp.MustCompile(`q=(\d+(?:\.\d+)?)`)
 
 // RespondWithSsz takes a http request and checks to see if it should be requesting a ssz response.
 func RespondWithSsz(req *http.Request) bool {
-	accept := req.Header.Values("Accept")
+	accept := req.Header.Values(api.AcceptHeader)
 	if len(accept) == 0 {
 		return false
 	}
@@ -54,5 +54,5 @@ func RespondWithSsz(req *http.Request) bool {
 
 // IsRequestSsz checks if the request object should be interpreted as ssz
 func IsRequestSsz(req *http.Request) bool {
-	return req.Header.Get("Content-Type") == api.OctetStreamMediaType
+	return req.Header.Get(api.ContentTypeHeader) == api.OctetStreamMediaType
 }

@@ -123,20 +123,20 @@ func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *h
 		consensusBlockValue = "0"
 	}
 
-	w.Header().Set(api.ExecutionPayloadBlindedHeader, fmt.Sprintf("%v", v1alpha1resp.IsBlinded))
-	w.Header().Set(api.ExecutionPayloadValueHeader, v1alpha1resp.PayloadValue)
-	w.Header().Set(api.ConsensusBlockValueHeader, consensusBlockValue)
+	w.Header().Set(api.EthExecutionPayloadBlindedHeader, fmt.Sprintf("%v", v1alpha1resp.IsBlinded))
+	w.Header().Set(api.EthExecutionPayloadValueHeader, v1alpha1resp.PayloadValue)
+	w.Header().Set(api.EthConsensusBlockValueHeader, consensusBlockValue)
 
 	phase0Block, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Phase0)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Phase0))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		// rewards aren't used in phase 0
 		handleProducePhase0V3(w, isSSZ, phase0Block, v1alpha1resp.PayloadValue)
 		return
 	}
 	altairBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Altair)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Altair))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		handleProduceAltairV3(w, isSSZ, altairBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
@@ -151,61 +151,61 @@ func (s *Server) produceBlockV3(ctx context.Context, w http.ResponseWriter, r *h
 	}
 	blindedBellatrixBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedBellatrix)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Bellatrix))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		handleProduceBlindedBellatrixV3(w, isSSZ, blindedBellatrixBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	bellatrixBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Bellatrix)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Bellatrix))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		handleProduceBellatrixV3(w, isSSZ, bellatrixBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedCapellaBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedCapella)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Capella))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		handleProduceBlindedCapellaV3(w, isSSZ, blindedCapellaBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	capellaBlock, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Capella)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Capella))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		handleProduceCapellaV3(w, isSSZ, capellaBlock, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedDenebBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedDeneb)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Deneb))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		handleProduceBlindedDenebV3(w, isSSZ, blindedDenebBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	denebBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Deneb)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Deneb))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		handleProduceDenebV3(w, isSSZ, denebBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedElectraBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedElectra)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Electra))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		handleProduceBlindedElectraV3(w, isSSZ, blindedElectraBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	electraBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Electra)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Electra))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		handleProduceElectraV3(w, isSSZ, electraBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	blindedFuluBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_BlindedFulu)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Fulu))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		handleProduceBlindedFuluV3(w, isSSZ, blindedFuluBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}
 	fuluBlockContents, ok := v1alpha1resp.Block.(*eth.GenericBeaconBlock_Fulu)
 	if ok {
-		w.Header().Set(api.VersionHeader, version.String(version.Fulu))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		handleProduceFuluV3(w, isSSZ, fuluBlockContents, v1alpha1resp.PayloadValue, consensusBlockValue)
 		return
 	}

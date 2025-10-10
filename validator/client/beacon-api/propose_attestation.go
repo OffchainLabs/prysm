@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -22,7 +23,7 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 		return nil, err
 	}
 
-	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(attestation.Version())}
 	err = c.jsonRestHandler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",
@@ -67,7 +68,7 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(attestation.Version())}
 	if err = c.jsonRestHandler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",

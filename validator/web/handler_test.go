@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 )
 
@@ -48,7 +49,7 @@ func TestHandler(t *testing.T) {
 			Handler(res, req)
 			assert.Equal(t, tt.wantStatus, res.Result().StatusCode)
 			if tt.wantContentType != "" {
-				assert.Equal(t, tt.wantContentType, res.Result().Header.Get("Content-Type"))
+				assert.Equal(t, tt.wantContentType, res.Result().Header.Get(api.ContentTypeHeader))
 			}
 		})
 	}

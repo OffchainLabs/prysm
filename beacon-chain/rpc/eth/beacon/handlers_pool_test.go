@@ -656,7 +656,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(singleAtt)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -685,7 +685,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(multipleAtts)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -705,7 +705,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(singleAtt)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -721,7 +721,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(singleAttElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -734,7 +734,7 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -750,7 +750,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString("[]")
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -766,7 +766,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(invalidAtt)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -794,7 +794,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(singleAttElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -823,7 +823,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(multipleAttsElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -835,7 +835,7 @@ func TestSubmitAttestations(t *testing.T) {
 			})
 			t.Run("no body", func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -851,7 +851,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString("[]")
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -867,7 +867,7 @@ func TestSubmitAttestations(t *testing.T) {
 				_, err := body.WriteString(invalidAttElectra)
 				require.NoError(t, err)
 				request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-				request.Header.Set(api.VersionHeader, version.String(version.Electra))
+				request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 				writer := httptest.NewRecorder()
 				writer.Body = &bytes.Buffer{}
 
@@ -2168,7 +2168,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, err = body.Write(b)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_electras", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -2232,7 +2232,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 			_, err = body.Write(b)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_slashings", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -2262,7 +2262,7 @@ func TestSubmitAttesterSlashings(t *testing.T) {
 		_, err = body.WriteString(invalidAttesterSlashing)
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_slashings", &body)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 

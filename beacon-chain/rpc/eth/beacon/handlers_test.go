@@ -425,13 +425,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -448,13 +448,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -471,13 +471,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -494,13 +494,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -517,13 +517,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -540,13 +540,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -563,13 +563,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlockV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -1307,13 +1307,13 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blinded_blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlindedBlock(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -1329,13 +1329,13 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blinded_blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlindedBlock(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -1351,13 +1351,13 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blinded_blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlindedBlock(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -1373,13 +1373,13 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blinded_blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlindedBlock(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -1395,13 +1395,13 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blinded_blocks/{block_id}", nil)
 		request.SetPathValue("block_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBlindedBlock(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -1426,7 +1426,7 @@ func TestPublishBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1448,7 +1448,7 @@ func TestPublishBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.AltairBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1472,7 +1472,7 @@ func TestPublishBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1496,7 +1496,7 @@ func TestPublishBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.CapellaBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1551,7 +1551,7 @@ func TestPublishBlock(t *testing.T) {
 			SyncChecker:             &mockSync.Sync{IsSyncing: false},
 		}
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.DenebBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1574,7 +1574,7 @@ func TestPublishBlock(t *testing.T) {
 			SyncChecker:             &mockSync.Sync{IsSyncing: false},
 		}
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1642,7 +1642,7 @@ func TestPublishBlock(t *testing.T) {
 			SyncChecker:             &mockSync.Sync{IsSyncing: false},
 		}
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.FuluBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1654,7 +1654,7 @@ func TestPublishBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1667,7 +1667,7 @@ func TestPublishBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1888,8 +1888,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetPhase0().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1918,8 +1918,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetAltair().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1943,8 +1943,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1969,8 +1969,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetCapella().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -1995,8 +1995,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetDeneb().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -2021,8 +2021,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetElectra().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -2047,8 +2047,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetFulu().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -2067,8 +2067,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -2088,8 +2088,8 @@ func TestPublishBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -2106,7 +2106,7 @@ func TestPublishBlockSSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlock(writer, request)
@@ -2133,7 +2133,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2155,7 +2155,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.AltairBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2179,7 +2179,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2203,7 +2203,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedCapellaBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2227,7 +2227,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedDenebBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2251,7 +2251,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedElectraBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2321,7 +2321,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedFuluBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2333,7 +2333,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2346,7 +2346,7 @@ func TestPublishBlindedBlock(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2396,8 +2396,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetPhase0().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2426,8 +2426,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetAltair().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2452,8 +2452,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2478,8 +2478,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedCapella().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2504,8 +2504,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedDeneb().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2530,8 +2530,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedElectra().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2556,8 +2556,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedFulu().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2569,7 +2569,7 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2589,8 +2589,8 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2607,7 +2607,7 @@ func TestPublishBlindedBlockSSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -2634,7 +2634,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2656,7 +2656,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.AltairBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2680,7 +2680,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2704,7 +2704,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.CapellaBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2728,7 +2728,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.DenebBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2752,7 +2752,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2776,7 +2776,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.FuluBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2788,7 +2788,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2801,7 +2801,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2818,7 +2818,7 @@ func TestPublishBlockV2(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
+		assert.StringContains(t, api.EthConsensusVersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -2830,7 +2830,7 @@ func TestPublishBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2864,8 +2864,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetPhase0().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2894,8 +2894,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetAltair().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2919,8 +2919,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2945,8 +2945,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetCapella().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2971,8 +2971,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetDeneb().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -2997,8 +2997,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetElectra().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -3023,8 +3023,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetFulu().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -3043,8 +3043,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -3064,8 +3064,8 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -3078,12 +3078,12 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.CapellaBlock)))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
+		assert.StringContains(t, api.EthConsensusVersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -3095,7 +3095,7 @@ func TestPublishBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
@@ -3122,7 +3122,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3144,7 +3144,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.AltairBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3168,7 +3168,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3192,7 +3192,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedCapellaBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3216,7 +3216,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedDenebBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3240,7 +3240,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedElectraBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3264,7 +3264,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedFuluBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3276,7 +3276,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3289,7 +3289,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3306,7 +3306,7 @@ func TestPublishBlindedBlockV2(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
+		assert.StringContains(t, api.EthConsensusVersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -3351,8 +3351,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetPhase0().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3381,8 +3381,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetAltair().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3407,8 +3407,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3433,8 +3433,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedCapella().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3459,8 +3459,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedDeneb().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -3485,8 +3485,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedElectra().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -3511,8 +3511,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedFulu().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlock(writer, request)
@@ -3524,7 +3524,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3544,8 +3544,8 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
 		require.NoError(t, err)
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+		request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Capella))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3558,12 +3558,12 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedCapellaBlock)))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlockV2(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, api.VersionHeader+" header is required", writer.Body.String())
+		assert.StringContains(t, api.EthConsensusVersionHeader+" header is required", writer.Body.String())
 	})
 	t.Run("syncing", func(t *testing.T) {
 		chainService := &chainMock.ChainService{}
@@ -3575,7 +3575,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
+		request.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		server.PublishBlindedBlockV2(writer, request)
@@ -3870,7 +3870,7 @@ func TestGetStateFork(t *testing.T) {
 	ctx := t.Context()
 	request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/states/{state_id}/fork", nil)
 	request.SetPathValue("state_id", "head")
-	request.Header.Set("Accept", "application/octet-stream")
+	request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 	writer := httptest.NewRecorder()
 	writer.Body = &bytes.Buffer{}
 
@@ -3909,7 +3909,7 @@ func TestGetStateFork(t *testing.T) {
 	t.Run("execution optimistic", func(t *testing.T) {
 		request = httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/states/{state_id}/fork", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", "application/octet-stream")
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer = httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		parentRoot := [32]byte{'a'}
@@ -3940,7 +3940,7 @@ func TestGetStateFork(t *testing.T) {
 	t.Run("finalized", func(t *testing.T) {
 		request = httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/states/{state_id}/fork", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", "application/octet-stream")
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer = httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		parentRoot := [32]byte{'a'}
@@ -4838,7 +4838,7 @@ func TestGetDepositSnapshot(t *testing.T) {
 	})
 	t.Run("SSZ response", func(t *testing.T) {
 		writer.Body = &bytes.Buffer{}
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		s.GetDepositSnapshot(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &eth.DepositSnapshot{}
@@ -5177,7 +5177,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 
 		server.GetPendingConsolidations(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		var resp structs.GetPendingConsolidationsResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -5193,14 +5193,14 @@ func TestGetPendingConsolidations(t *testing.T) {
 	})
 	t.Run("ssz response", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
-		req.Header.Set("Accept", "application/octet-stream")
+		req.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		req.SetPathValue("state_id", "head")
 		rec := httptest.NewRecorder()
 		rec.Body = new(bytes.Buffer)
 
 		server.GetPendingConsolidations(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		responseBytes := rec.Body.Bytes()
 		var recoveredConsolidations []*eth.PendingConsolidation
@@ -5247,7 +5247,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 
 		// Test SSZ request
 		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_consolidations", nil)
-		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		sszReq.SetPathValue("state_id", "head")
 		sszRec := httptest.NewRecorder()
 		sszRec.Body = new(bytes.Buffer)
@@ -5370,7 +5370,7 @@ func TestGetPendingDeposits(t *testing.T) {
 
 		server.GetPendingDeposits(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		var resp structs.GetPendingDepositsResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -5386,14 +5386,14 @@ func TestGetPendingDeposits(t *testing.T) {
 	})
 	t.Run("ssz response", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
-		req.Header.Set("Accept", "application/octet-stream")
+		req.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		req.SetPathValue("state_id", "head")
 		rec := httptest.NewRecorder()
 		rec.Body = new(bytes.Buffer)
 
 		server.GetPendingDeposits(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		responseBytes := rec.Body.Bytes()
 		var recoveredDeposits []*eth.PendingDeposit
@@ -5440,7 +5440,7 @@ func TestGetPendingDeposits(t *testing.T) {
 
 		// Test SSZ request
 		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_deposits", nil)
-		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		sszReq.SetPathValue("state_id", "head")
 		sszRec := httptest.NewRecorder()
 		sszRec.Body = new(bytes.Buffer)
@@ -5557,7 +5557,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 
 		server.GetPendingPartialWithdrawals(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		var resp structs.GetPendingPartialWithdrawalsResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -5574,14 +5574,14 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 
 	t.Run("ssz response", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals", nil)
-		req.Header.Set("Accept", "application/octet-stream")
+		req.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		req.SetPathValue("state_id", "head")
 		rec := httptest.NewRecorder()
 		rec.Body = new(bytes.Buffer)
 
 		server.GetPendingPartialWithdrawals(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "electra", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "electra", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		responseBytes := rec.Body.Bytes()
 		var recoveredWithdrawals []*eth.PendingPartialWithdrawal
@@ -5628,7 +5628,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 
 		// Test SSZ request
 		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/pending_partial_withdrawals", nil)
-		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		sszReq.SetPathValue("state_id", "head")
 		sszRec := httptest.NewRecorder()
 		sszRec.Body = new(bytes.Buffer)
@@ -5745,7 +5745,7 @@ func TestGetProposerLookahead(t *testing.T) {
 
 		server.GetProposerLookahead(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "fulu", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "fulu", rec.Header().Get(api.EthConsensusVersionHeader))
 
 		var resp structs.GetProposerLookaheadResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -5765,14 +5765,14 @@ func TestGetProposerLookahead(t *testing.T) {
 
 	t.Run("ssz response", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
-		req.Header.Set("Accept", "application/octet-stream")
+		req.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		req.SetPathValue("state_id", "head")
 		rec := httptest.NewRecorder()
 		rec.Body = new(bytes.Buffer)
 
 		server.GetProposerLookahead(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, "fulu", rec.Header().Get(api.VersionHeader))
+		require.Equal(t, "fulu", rec.Header().Get(api.EthConsensusVersionHeader))
 		responseBytes := rec.Body.Bytes()
 		validatorIndexSize := (*primitives.ValidatorIndex)(nil).SizeSSZ()
 		require.Equal(t, len(responseBytes), validatorIndexSize*lookaheadSize)
@@ -5816,7 +5816,7 @@ func TestGetProposerLookahead(t *testing.T) {
 
 		// Test SSZ request
 		sszReq := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/beacon/states/{state_id}/proposer_lookahead", nil)
-		sszReq.Header.Set("Accept", "application/octet-stream")
+		sszReq.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		sszReq.SetPathValue("state_id", "head")
 		sszRec := httptest.NewRecorder()
 		sszRec.Body = new(bytes.Buffer)

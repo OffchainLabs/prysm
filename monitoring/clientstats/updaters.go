@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/OffchainLabs/prysm/v6/api"
 )
 
 type genericWriter struct {
@@ -30,7 +32,7 @@ type httpPoster struct {
 }
 
 func (gw *httpPoster) Update(r io.Reader) error {
-	resp, err := gw.client.Post(gw.url, "application/json", r)
+	resp, err := gw.client.Post(gw.url, api.JsonMediaType, r)
 	if err != nil {
 		return err
 	}

@@ -126,7 +126,7 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 			}
 		}
 
-		w.Header().Set(api.VersionHeader, version.String(v))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(v))
 		httputil.WriteSsz(w, data)
 		return
 	}
@@ -159,7 +159,7 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 		}
 		resp.Data = data
 	}
-	w.Header().Set(api.VersionHeader, version.String(v))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(v))
 	httputil.WriteJson(w, resp)
 }
 
@@ -357,9 +357,9 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(api.EthConsensusVersionHeader)
 	if versionHeader == "" {
-		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		httputil.HandleError(w, api.EthConsensusVersionHeader+" header is required", http.StatusBadRequest)
 		return
 	}
 	v, err := version.FromString(versionHeader)

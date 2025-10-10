@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -23,8 +24,8 @@ import (
 
 func getHappyPathTestServer(file string, t *testing.T) *httptest.Server {
 	return httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		if r.Method == http.MethodGet {
 			fmt.Println(r.RequestURI)
 			if r.RequestURI == "/eth/v1/beacon/pool/bls_to_execution_changes" {
@@ -217,8 +218,8 @@ func TestCallWithdrawalEndpoint_Errors(t *testing.T) {
 	require.NoError(t, err)
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.RequestURI == "/eth/v1/beacon/pool/bls_to_execution_changes" {
-			w.WriteHeader(400)
-			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			err = json.NewEncoder(w).Encode(&server.IndexedVerificationFailureError{
 				Failures: []*server.IndexedVerificationFailure{
 					{Index: 0, Message: "Could not validate SignedBLSToExecutionChange"},
@@ -227,8 +228,8 @@ func TestCallWithdrawalEndpoint_Errors(t *testing.T) {
 			require.NoError(t, err)
 		} else if r.Method == http.MethodGet {
 			if r.RequestURI == "/eth/v1/beacon/states/head/fork" {
-				w.WriteHeader(200)
-				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 				err := json.NewEncoder(w).Encode(&structs.GetStateForkResponse{
 					Data: &structs.Fork{
 						PreviousVersion: hexutil.Encode(params.BeaconConfig().CapellaForkVersion),
@@ -240,8 +241,8 @@ func TestCallWithdrawalEndpoint_Errors(t *testing.T) {
 				})
 				require.NoError(t, err)
 			} else if r.RequestURI == "/eth/v1/config/spec" {
-				w.WriteHeader(200)
-				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 				m := make(map[string]string)
 				m["CAPELLA_FORK_EPOCH"] = "1350"
 				err := json.NewEncoder(w).Encode(&structs.GetSpecResponse{
@@ -249,8 +250,8 @@ func TestCallWithdrawalEndpoint_Errors(t *testing.T) {
 				})
 				require.NoError(t, err)
 			} else {
-				w.WriteHeader(400)
-				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			}
 		}
 	}))
@@ -283,8 +284,8 @@ func TestCallWithdrawalEndpoint_ForkBeforeCapella(t *testing.T) {
 	l, err := net.Listen("tcp", baseurl)
 	require.NoError(t, err)
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		if r.RequestURI == "/eth/v1/beacon/states/head/fork" {
 
 			err := json.NewEncoder(w).Encode(&structs.GetStateForkResponse{
@@ -332,8 +333,8 @@ func TestVerifyWithdrawal_Multiple(t *testing.T) {
 	l, err := net.Listen("tcp", baseurl)
 	require.NoError(t, err)
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		if r.Method == http.MethodGet {
 			b, err := os.ReadFile(filepath.Clean(file))
 			require.NoError(t, err)

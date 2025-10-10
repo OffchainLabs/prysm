@@ -320,13 +320,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -344,13 +344,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Altair), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -368,13 +368,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Bellatrix), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -392,13 +392,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Capella), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
@@ -416,13 +416,13 @@ func TestGetBeaconStateSSZV2(t *testing.T) {
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v2/debug/beacon/states/{state_id}", nil)
 		request.SetPathValue("state_id", "head")
-		request.Header.Set("Accept", api.OctetStreamMediaType)
+		request.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
 		s.GetBeaconStateV2(writer, request)
 		require.Equal(t, http.StatusOK, writer.Code)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.EthConsensusVersionHeader))
 		sszExpected, err := fakeState.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())

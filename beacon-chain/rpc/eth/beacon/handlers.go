@@ -101,9 +101,9 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 // from the request. If the version header is not provided and not required, it attempts
 // to derive it from the request body.
 func validateVersionHeader(r *http.Request, body []byte, versionRequired bool) (string, error) {
-	versionHeader := r.Header.Get(api.VersionHeader)
+	versionHeader := r.Header.Get(api.EthConsensusVersionHeader)
 	if versionRequired && versionHeader == "" {
-		return "", fmt.Errorf("%s header is required", api.VersionHeader)
+		return "", fmt.Errorf("%s header is required", api.EthConsensusVersionHeader)
 	}
 
 	if !versionRequired && versionHeader == "" {
@@ -219,7 +219,7 @@ func (s *Server) getBlockV2Ssz(w http.ResponseWriter, blk interfaces.ReadOnlySig
 		httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 	httputil.WriteSsz(w, result)
 }
 
@@ -254,7 +254,7 @@ func (s *Server) getBlockV2Json(ctx context.Context, w http.ResponseWriter, blk 
 		httputil.HandleError(w, fmt.Sprintf("Unknown block type %T", blk), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, result.Version)
+	w.Header().Set(api.EthConsensusVersionHeader, result.Version)
 	httputil.WriteJson(w, result)
 }
 
@@ -368,7 +368,7 @@ func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) 
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, root),
 		Data:                attBytes,
 	}
-	w.Header().Set(api.VersionHeader, version.String(v))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(v))
 	httputil.WriteJson(w, resp)
 }
 
@@ -1693,7 +1693,7 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 		httputil.HandleError(w, "Could not get pending consolidations: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
 		sszData, err := serializeItems(pd)
 		if err != nil {
@@ -1749,7 +1749,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get pending deposits: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
 		sszData, err := serializeItems(pd)
 		if err != nil {
@@ -1805,7 +1805,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 		httputil.HandleError(w, "Could not get pending partial withdrawals: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
 		sszData, err := serializeItems(ppw)
 		if err != nil {
@@ -1858,7 +1858,7 @@ func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not get proposer look ahead: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(st.Version()))
 	if httputil.RespondWithSsz(r) {
 		sszLen := (*primitives.ValidatorIndex)(nil).SizeSSZ()
 		sszData := make([]byte, len(pl)*sszLen)

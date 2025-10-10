@@ -37,8 +37,8 @@ func TestGet(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		marshalledJson, err := json.Marshal(genesisJson)
 		require.NoError(t, err)
-		assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
-		w.Header().Set("Content-Type", api.JsonMediaType)
+		assert.Equal(t, version.BuildData(), r.Header.Get(api.UserAgentHeader))
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		_, err = w.Write(marshalledJson)
 		require.NoError(t, err)
 	})
@@ -70,9 +70,9 @@ func TestGetSSZ(t *testing.T) {
 
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
-			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
-			assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
-			w.Header().Set("Content-Type", api.OctetStreamMediaType)
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get(api.AcceptHeader))
+			assert.Equal(t, version.BuildData(), r.Header.Get(api.UserAgentHeader))
+			w.Header().Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 			_, err := w.Write(expectedBody)
 			require.NoError(t, err)
 		})
@@ -87,7 +87,7 @@ func TestGetSSZ(t *testing.T) {
 		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.DeepEqual(t, expectedBody, body)
-		require.StringContains(t, api.OctetStreamMediaType, header.Get("Content-Type"))
+		require.StringContains(t, api.OctetStreamMediaType, header.Get(api.ContentTypeHeader))
 	})
 
 	t.Run("Json Content-Type response", func(t *testing.T) {
@@ -96,8 +96,8 @@ func TestGetSSZ(t *testing.T) {
 		logHook := test.NewGlobal()
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
-			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
-			w.Header().Set("Content-Type", api.JsonMediaType)
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get(api.AcceptHeader))
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 
 			marshalledJson, err := json.Marshal(genesisJson)
 			require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestGetSSZ(t *testing.T) {
 		body, header, err := jsonRestHandler.GetSSZ(ctx, endpoint)
 		require.NoError(t, err)
 		assert.LogsContain(t, logHook, "Server responded with non primary accept type")
-		require.Equal(t, api.JsonMediaType, header.Get("Content-Type"))
+		require.Equal(t, api.JsonMediaType, header.Get(api.ContentTypeHeader))
 		resp := &structs.GetGenesisResponse{}
 		require.NoError(t, json.Unmarshal(body, resp))
 		require.Equal(t, "123", resp.Data.GenesisTime)
@@ -128,8 +128,8 @@ func TestGetSSZ(t *testing.T) {
 		logHook := test.NewGlobal()
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
-			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
-			w.Header().Set("Content-Type", "text/plain") // Invalid content type
+			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get(api.AcceptHeader))
+			w.Header().Set(api.ContentTypeHeader, api.PlainMediaType) // Invalid content type
 			_, err := w.Write([]byte("some text"))
 			require.NoError(t, err)
 		})
@@ -155,8 +155,8 @@ func TestAcceptOverrideSSZ(t *testing.T) {
 	}()
 	require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, name))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, name, r.Header.Get("Accept"))
-		w.WriteHeader(200)
+		require.Equal(t, name, r.Header.Get(api.AcceptHeader))
+		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("ok"))
 		require.NoError(t, err)
 	}))
@@ -184,8 +184,8 @@ func TestPost(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		// Make sure the request headers have been set
 		assert.Equal(t, "bar", r.Header.Get("foo"))
-		assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
-		assert.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
+		assert.Equal(t, version.BuildData(), r.Header.Get(api.UserAgentHeader))
+		assert.Equal(t, api.JsonMediaType, r.Header.Get(api.ContentTypeHeader))
 
 		// Make sure the data matches
 		receivedBytes := make([]byte, len(dataBytes))
@@ -197,7 +197,7 @@ func TestPost(t *testing.T) {
 		marshalledJson, err := json.Marshal(genesisJson)
 		require.NoError(t, err)
 
-		w.Header().Set("Content-Type", api.JsonMediaType)
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		_, err = w.Write(marshalledJson)
 		require.NoError(t, err)
 	})
@@ -223,7 +223,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {"application/json; charset=utf-8"}},
+			Header:     map[string][]string{api.ContentTypeHeader: {"application/json; charset=utf-8"}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -233,7 +233,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.OctetStreamMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -243,7 +243,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "204",
 			StatusCode: http.StatusNoContent,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.OctetStreamMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -255,7 +255,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "500",
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.OctetStreamMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.OctetStreamMediaType}},
 		}
 		err = decodeResp(r, nil)
 		errJson := &httputil.DefaultJsonError{}
@@ -272,7 +272,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.JsonMediaType}},
 		}
 		resp := &j{}
 		require.NoError(t, decodeResp(r, resp))
@@ -284,7 +284,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.JsonMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -294,7 +294,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "204",
 			StatusCode: http.StatusNoContent,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.JsonMediaType}},
 		}
 		require.NoError(t, decodeResp(r, nil))
 	})
@@ -307,7 +307,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "500",
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.JsonMediaType}},
 		}
 		err = decodeResp(r, nil)
 		errJson := &httputil.DefaultJsonError{}
@@ -323,7 +323,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "200",
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.JsonMediaType}},
 			Request:    &http.Request{},
 		}
 		resp := &j{}
@@ -338,7 +338,7 @@ func Test_decodeResp(t *testing.T) {
 			Status:     "500",
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(&body),
-			Header:     map[string][]string{"Content-Type": {api.JsonMediaType}},
+			Header:     map[string][]string{api.ContentTypeHeader: {api.JsonMediaType}},
 			Request:    &http.Request{},
 		}
 		err = decodeResp(r, nil)

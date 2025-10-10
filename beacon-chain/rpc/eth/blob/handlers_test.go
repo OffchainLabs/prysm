@@ -227,7 +227,7 @@ func TestBlobs(t *testing.T) {
 		}
 		s.Blobs(writer, request)
 
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -381,7 +381,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("ssz", func(t *testing.T) {
 		u := "http://foo.example/finalized?indices=0"
 		request := httptest.NewRequest("GET", u, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -393,7 +393,7 @@ func TestBlobs(t *testing.T) {
 			BlobStorage: bs,
 		}
 		s.Blobs(writer, request)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		require.Equal(t, len(writer.Body.Bytes()), fieldparams.BlobSidecarSize) // size of each sidecar
 		// can directly unmarshal to sidecar since there's only 1
@@ -404,7 +404,7 @@ func TestBlobs(t *testing.T) {
 	t.Run("ssz multiple blobs", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -467,7 +467,7 @@ func TestBlobs_Electra(t *testing.T) {
 		}
 		s.Blobs(writer, request)
 
-		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -499,7 +499,7 @@ func TestBlobs_Electra(t *testing.T) {
 		}
 		s.Blobs(writer, request)
 
-		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.SidecarsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -867,7 +867,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("ssz", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -879,7 +879,7 @@ func TestGetBlobs(t *testing.T) {
 			BlobStorage: bs,
 		}
 		s.GetBlobs(writer, request)
-		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Deneb), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		require.Equal(t, fieldparams.BlobSize*4, len(writer.Body.Bytes())) // size of 4 sidecars
 		// unmarshal all 4 blobs
@@ -889,7 +889,7 @@ func TestGetBlobs(t *testing.T) {
 	t.Run("ssz multiple blobs", func(t *testing.T) {
 		u := "http://foo.example/finalized"
 		request := httptest.NewRequest("GET", u, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 		s.Blocker = &lookup.BeaconDbBlocker{
@@ -1038,7 +1038,7 @@ func TestGetBlobs(t *testing.T) {
 		}
 		s.GetBlobs(writer, request)
 
-		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Electra), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetBlobsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -1078,7 +1078,7 @@ func TestGetBlobs(t *testing.T) {
 		}
 		s.GetBlobs(writer, request)
 
-		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetBlobsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
@@ -1132,7 +1132,7 @@ func TestGetBlobs(t *testing.T) {
 		}
 		s.GetBlobs(writer, request)
 
-		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.VersionHeader))
+		assert.Equal(t, version.String(version.Fulu), writer.Header().Get(api.EthConsensusVersionHeader))
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetBlobsResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))

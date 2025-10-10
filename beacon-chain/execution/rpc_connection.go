@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v6/io/logs"
@@ -120,7 +121,7 @@ func (s *Service) newRPCClientWithAuth(ctx context.Context, endpoint network.End
 		if err != nil {
 			return nil, err
 		}
-		headers.Set("Authorization", header)
+		headers.Set(api.AuthorizationHeader, header)
 	}
 	for _, h := range s.cfg.headers {
 		if h == "" {

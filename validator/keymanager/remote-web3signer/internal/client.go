@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -74,8 +75,8 @@ func (client *ApiClient) Sign(ctx context.Context, pubKey string, request SignRe
 	if resp.StatusCode == http.StatusPreconditionFailed {
 		return nil, fmt.Errorf("signing operation failed due to slashing protection rules,  Signing Request URL: %v, Status: %v", client.BaseURL.String()+requestPath, resp.StatusCode)
 	}
-	contentType := resp.Header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "application/json") {
+	contentType := resp.Header.Get(api.ContentTypeHeader)
+	if strings.HasPrefix(contentType, api.JsonMediaType) {
 		var sigResp SignatureResponse
 		if err := unmarshalResponse(resp.Body, &sigResp); err != nil {
 			return nil, err
@@ -148,7 +149,7 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid format, failed to create new Post Request Object")
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(api.ContentTypeHeader, api.JsonMediaType)
 
 	start := time.Now()
 	resp, err := client.RestClient.Do(req)

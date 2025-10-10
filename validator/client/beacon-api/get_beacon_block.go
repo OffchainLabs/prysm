@@ -30,12 +30,12 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 	if err != nil {
 		return nil, err
 	}
-	if strings.Contains(header.Get("Content-Type"), api.OctetStreamMediaType) {
-		ver, err := version.FromString(header.Get(api.VersionHeader))
+	if strings.Contains(header.Get(api.ContentTypeHeader), api.OctetStreamMediaType) {
+		ver, err := version.FromString(header.Get(api.EthConsensusVersionHeader))
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", header.Get(api.VersionHeader)))
+			return nil, errors.Wrap(err, fmt.Sprintf("unsupported header version %s", header.Get(api.EthConsensusVersionHeader)))
 		}
-		isBlindedRaw := header.Get(api.ExecutionPayloadBlindedHeader)
+		isBlindedRaw := header.Get(api.EthExecutionPayloadBlindedHeader)
 		isBlinded, err := strconv.ParseBool(isBlindedRaw)
 		if err != nil {
 			return nil, err

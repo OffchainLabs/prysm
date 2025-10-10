@@ -132,7 +132,7 @@ func TestContentTypeHandler(t *testing.T) {
 			}
 			req := httptest.NewRequest(httpMethod, "/", nil)
 			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+				req.Header.Set(api.ContentTypeHeader, tt.contentType)
 			}
 			rr := httptest.NewRecorder()
 
@@ -148,7 +148,7 @@ func TestContentTypeHandler(t *testing.T) {
 func TestAcceptEncodingHeaderHandler(t *testing.T) {
 	dummyContent := "Test gzip middleware content"
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", r.Header.Get("Accept"))
+		w.Header().Set(api.ContentTypeHeader, r.Header.Get(api.AcceptHeader))
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(dummyContent))
 		require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 		{
 			name:             "Accept gzip",
 			accept:           api.JsonMediaType,
-			acceptEncoding:   "gzip",
+			acceptEncoding:   api.GzipEncoding,
 			expectCompressed: true,
 		},
 		{
@@ -189,7 +189,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 		{
 			name:             "SSZ",
 			accept:           api.OctetStreamMediaType,
-			acceptEncoding:   "gzip",
+			acceptEncoding:   api.GzipEncoding,
 			expectCompressed: false,
 		},
 	}
@@ -197,16 +197,16 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
-			req.Header.Set("Accept", tt.accept)
+			req.Header.Set(api.AcceptHeader, tt.accept)
 			if tt.acceptEncoding != "" {
-				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+				req.Header.Set(api.AcceptEncodingHeader, tt.acceptEncoding)
 			}
 			rr := &frozenHeaderRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 			handler.ServeHTTP(rr, req)
 
 			if tt.expectCompressed {
-				require.Equal(t, "gzip", rr.frozenHeader.Get("Content-Encoding"), "Expected Content-Encoding header to be 'gzip'")
+				require.Equal(t, api.GzipEncoding, rr.frozenHeader.Get(api.ContentEncodingHeader), "Expected Content-Encoding header to be 'gzip'")
 
 				compressedBody := rr.Body.Bytes()
 				require.NotEqual(t, dummyContent, string(compressedBody), "Response body should be compressed and differ from the original")
@@ -230,7 +230,7 @@ func TestAcceptEncodingHeaderHandler(t *testing.T) {
 }
 
 func TestAcceptHeaderHandler(t *testing.T) {
-	acceptedTypes := []string{"application/json", "application/octet-stream"}
+	acceptedTypes := []string{api.JsonMediaType, api.OctetStreamMediaType}
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte("next handler"))
@@ -295,7 +295,7 @@ func TestAcceptHeaderHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
 			if tt.acceptHeader != "" {
-				req.Header.Set("Accept", tt.acceptHeader)
+				req.Header.Set(api.AcceptHeader, tt.acceptHeader)
 			}
 			rr := httptest.NewRecorder()
 

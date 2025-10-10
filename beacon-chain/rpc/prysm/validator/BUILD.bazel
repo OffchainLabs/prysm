@@ -34,6 +34,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/core/altair:go_default_library",

@@ -47,7 +47,7 @@ func ContentTypeHandler(acceptedMediaTypes []string) Middleware {
 				next.ServeHTTP(w, r)
 				return
 			}
-			contentType := r.Header.Get("Content-Type")
+			contentType := r.Header.Get(api.ContentTypeHeader)
 			if contentType == "" {
 				http.Error(w, "Content-Type header is missing", http.StatusUnsupportedMediaType)
 				return
@@ -75,7 +75,7 @@ func ContentTypeHandler(acceptedMediaTypes []string) Middleware {
 func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if _, ok := apiutil.Negotiate(r.Header.Get("Accept"), serverAcceptedTypes); !ok {
+			if _, ok := apiutil.Negotiate(r.Header.Get(api.AcceptHeader), serverAcceptedTypes); !ok {
 				http.Error(w, "Not Acceptable", http.StatusNotAcceptable)
 				return
 			}
@@ -88,7 +88,7 @@ func AcceptHeaderHandler(serverAcceptedTypes []string) Middleware {
 func AcceptEncodingHeaderHandler() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			if !strings.Contains(r.Header.Get(api.AcceptEncodingHeader), api.GzipEncoding) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -116,10 +116,10 @@ type gzipResponseWriter struct {
 }
 
 func (g *gzipResponseWriter) WriteHeader(statusCode int) {
-	if strings.Contains(g.Header().Get("Content-Type"), api.JsonMediaType) {
+	if strings.Contains(g.Header().Get(api.ContentTypeHeader), api.JsonMediaType) {
 		// Removing the current Content-Length because zipping will change it.
-		g.Header().Del("Content-Length")
-		g.Header().Set("Content-Encoding", "gzip")
+		g.Header().Del(api.ContentLengthHeader)
+		g.Header().Set(api.ContentEncodingHeader, api.GzipEncoding)
 		g.zip = true
 	}
 

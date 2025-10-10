@@ -82,6 +82,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//api/server/middleware:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/builder:go_default_library",

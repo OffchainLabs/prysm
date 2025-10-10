@@ -1,9 +1,11 @@
 package network
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/pkg/errors"
 )
@@ -47,6 +49,6 @@ func (t *jwtTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not produce signed JWT token")
 	}
-	req.Header.Set("Authorization", "Bearer "+tokenString)
+	req.Header.Set(api.AuthorizationHeader, fmt.Sprintf("%s %s", api.BearerAuthorization, tokenString))
 	return t.underlyingTransport.RoundTrip(req)
 }

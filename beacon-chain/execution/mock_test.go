@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -54,7 +55,7 @@ func (s *mockEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to decode request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 	defer func() {
 		require.NoError(s.t, r.Body.Close())
 	}()

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -28,7 +29,7 @@ func UnmarshalFromURL(ctx context.Context, from string, to interface{}) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to create http request")
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(api.ContentTypeHeader, api.JsonMediaType)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed to send http request")

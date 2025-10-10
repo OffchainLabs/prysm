@@ -48,7 +48,7 @@ func doJSONGETRequest(template, requestPath string, beaconNodeIdx int, resp inte
 
 	var body interface{}
 	if httpResp.StatusCode != http.StatusOK {
-		if httpResp.Header.Get("Content-Type") == api.JsonMediaType {
+		if httpResp.Header.Get(api.ContentTypeHeader) == api.JsonMediaType {
 			if err = json.NewDecoder(httpResp.Body).Decode(&body); err != nil {
 				return errors.Wrap(err, "failed to decode response body")
 			}
@@ -89,7 +89,7 @@ func doSSZGETRequest(template, requestPath string, beaconNodeIdx int, bnType ...
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to build request")
 	}
-	req.Header.Set("Accept", "application/octet-stream")
+	req.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "request failed")
@@ -132,7 +132,7 @@ func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj,
 	}
 	httpResp, err := http.Post(
 		basePath+requestPath,
-		"application/json",
+		api.JsonMediaType,
 		bytes.NewBuffer(b),
 	)
 	if err != nil {
@@ -141,7 +141,7 @@ func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj,
 
 	var body interface{}
 	if httpResp.StatusCode != http.StatusOK {
-		if httpResp.Header.Get("Content-Type") == api.JsonMediaType {
+		if httpResp.Header.Get(api.ContentTypeHeader) == api.JsonMediaType {
 			if err = json.NewDecoder(httpResp.Body).Decode(&body); err != nil {
 				return errors.Wrap(err, "failed to decode response body")
 			}
@@ -186,8 +186,8 @@ func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj i
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to build request")
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/octet-stream")
+	req.Header.Set(api.ContentTypeHeader, api.JsonMediaType)
+	req.Header.Set(api.AcceptHeader, api.OctetStreamMediaType)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "request failed")

@@ -82,7 +82,7 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer YOUR_JWT_TOKEN") // Replace with a valid JWT token
+		req.Header.Set(api.AuthorizationHeader, "Bearer YOUR_JWT_TOKEN") // Replace with a valid JWT token
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusForbidden, rr.Code)
 		errJson := &httputil.DefaultJsonError{}
@@ -93,7 +93,7 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/eth/v1/keystores", http.NoBody)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer "+token) // Replace with a valid JWT token
+		req.Header.Set(api.AuthorizationHeader, "Bearer "+token) // Replace with a valid JWT token
 		testHandler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
 	})

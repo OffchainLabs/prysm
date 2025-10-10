@@ -101,7 +101,7 @@ func (w *StreamingResponseWriterRecorder) RequireStatus(t *testing.T, status int
 }
 
 func (w *StreamingResponseWriterRecorder) Flush() {
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 	fw, ok := w.ResponseWriter.(http.Flusher)
 	if ok {
 		fw.Flush()

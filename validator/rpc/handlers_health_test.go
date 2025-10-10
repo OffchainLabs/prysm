@@ -90,10 +90,10 @@ func TestStreamBeaconLogs(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status OK but got %v", resp.StatusCode)
 	}
-	ct, ok := resp.Header["Content-Type"]
+	ct, ok := resp.Header[api.ContentTypeHeader]
 	require.Equal(t, ok, true)
 	require.Equal(t, ct[0], api.EventStreamMediaType)
-	cn, ok := resp.Header["Connection"]
+	cn, ok := resp.Header[api.ConnectionHeader]
 	require.Equal(t, ok, true)
 	require.Equal(t, cn[0], api.KeepAlive)
 	body, err := io.ReadAll(resp.Body)
@@ -141,10 +141,10 @@ func TestStreamValidatorLogs(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status OK but got %v", resp.StatusCode)
 	}
-	ct, ok := resp.Header["Content-Type"]
+	ct, ok := resp.Header[api.ContentTypeHeader]
 	require.Equal(t, ok, true)
 	require.Equal(t, ct[0], api.EventStreamMediaType)
-	cn, ok := resp.Header["Connection"]
+	cn, ok := resp.Header[api.ConnectionHeader]
 	require.Equal(t, ok, true)
 	require.Equal(t, cn[0], api.KeepAlive)
 	// Check if data was written
