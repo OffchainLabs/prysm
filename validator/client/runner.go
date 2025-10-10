@@ -146,8 +146,14 @@ func (r *runner) run(ctx context.Context) {
 				continue
 			}
 			// performRoles calls span.End()
-			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
+			rolesCtx, rolesCancel := context.WithDeadline(ctx, deadline) //nolint:govet
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
+			go func() {
+				// Cancel the roles context right after all tasks for this slot complete,
+				// to release timers and other resources before the deadline fires.
+				wg.Wait()
+				rolesCancel()
+			}()
 		case e := <-v.EventsChan():
 			v.ProcessEvent(ctx, e)
 		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
