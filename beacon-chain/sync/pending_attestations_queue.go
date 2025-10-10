@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -79,24 +80,37 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 }
 
 func (s *Service) processAttestations(ctx context.Context, attestations []any) {
-	if len(attestations) == 0 {
-		return
-	}
-
-	atts := make([]ethpb.Att, 0, len(attestations))
+	bucketMap := make(map[[32]byte]*attestationBucket)
+	var aggs []ethpb.SignedAggregateAttAndProof
 	for _, att := range attestations {
 		switch v := att.(type) {
 		case ethpb.Att:
-			atts = append(atts, v)
+			data := v.GetData()
+			dataHash, err := data.HashTreeRoot()
+			if err != nil {
+				log.WithError(err).Debug("Failed to hash attestation data, skipping attestation")
+				continue
+			}
+			if bucket, ok := bucketMap[dataHash]; ok {
+				bucket.attestations = append(bucket.attestations, v)
+			} else {
+				bucketMap[dataHash] = &attestationBucket{
+					dataHash:     dataHash,
+					data:         data,
+					attestations: []ethpb.Att{v},
+				}
+			}
 		case ethpb.SignedAggregateAttAndProof:
-			s.processAggregate(ctx, v)
+			aggs = append(aggs, v)
 		default:
 			log.Warnf("Unexpected attestation type %T, skipping", v)
 		}
 	}
-
-	for _, bucket := range bucketAttestationsByData(atts) {
+	for _, bucket := range bucketMap {
 		s.processAttestationBucket(ctx, bucket)
+	}
+	for _, agg := range aggs {
+		s.processAggregate(ctx, agg)
 	}
 }
 
@@ -107,82 +121,109 @@ type attestationBucket struct {
 	attestations []ethpb.Att
 }
 
+// normalizeAndValidateAtt validates and (if needed) converts an attestation
+// to Electra format for pool/verification, returning (bcast, pool, ok).
+func (s *Service) normalizeAndValidateAtt(
+	ctx context.Context,
+	preState state.ReadOnlyBeaconState, // adjust to your concrete type if needed
+	data *ethpb.AttestationData,
+	att ethpb.Att,
+) (bcast ethpb.Att, pool ethpb.Att, ok bool) {
+	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
+	if err != nil {
+		log.WithError(err).Debug("Failed to get committee from state")
+		return nil, nil, false
+	}
+	v, err := validateAttesterData(ctx, att, committee)
+	if err != nil {
+		log.WithError(err).Debug("Failed attester data validation")
+		return nil, nil, false
+	}
+	if v != pubsub.ValidationAccept {
+		log.Debug("Pending attestation rejected due to invalid data")
+		return nil, nil, false
+	}
+
+	var conv ethpb.Att
+	if att.Version() >= version.Electra {
+		single, ok := att.(*ethpb.SingleAttestation)
+		if !ok {
+			log.Debugf("Wrong type: expected %T, got %T", &ethpb.SingleAttestation{}, att)
+			return nil, nil, false
+		}
+		conv = single.ToAttestationElectra(committee)
+	} else {
+		conv = att
+	}
+	return att, conv, true
+}
+
 // processAttestationBucket processes a bucket of attestations with shared AttestationData.
 func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestationBucket) {
 	if bucket == nil || len(bucket.attestations) == 0 {
 		return
 	}
-
 	data := bucket.data
 
-	// Shared validations for the entire bucket.
+	// 1) Bucket-level checks
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		log.WithError(blockchain.ErrNotDescendantOfFinalized).WithField("root", fmt.Sprintf("%#x", data.BeaconBlockRoot)).Debug("Failed forkchoice check for bucket")
+		log.WithError(blockchain.ErrNotDescendantOfFinalized).Debug("Failed forkchoice check for bucket")
 		return
 	}
-
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
 		log.WithError(err).Debug("Failed to get attestation prestate for bucket")
 		return
 	}
-
 	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, bucket.attestations[0]); err != nil {
 		log.WithError(err).Debug("Failed FFG consistency check for bucket")
 		return
 	}
 
-	// Collect valid attestations for both single and electra formats.
-	// Broadcast takes single format but attestation pool and batch signature verification take electra format.
-	forBroadcast := make([]ethpb.Att, 0, len(bucket.attestations))
-	forPool := make([]ethpb.Att, 0, len(bucket.attestations))
+	// 2) Normalize/filter into parallel slices
+	bcast := make([]ethpb.Att, 0, len(bucket.attestations))
+	pool := make([]ethpb.Att, 0, len(bucket.attestations))
 
 	for _, att := range bucket.attestations {
-		committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
-		if err != nil {
-			log.WithError(err).Debug("Failed to get committee from state")
+		orig, conv, ok := s.normalizeAndValidateAtt(ctx, preState, data, att)
+		if !ok {
 			continue
 		}
-
-		valid, err := validateAttesterData(ctx, att, committee)
-		if err != nil {
-			log.WithError(err).Debug("Failed attester data validation")
-			continue
-		}
-		if valid != pubsub.ValidationAccept {
-			log.Debug("Pending attestation rejected due to invalid data")
-			continue
-		}
-
-		var conv ethpb.Att
-		if att.Version() >= version.Electra {
-			single, ok := att.(*ethpb.SingleAttestation)
-			if !ok {
-				log.Debugf("Wrong type: expected %T, got %T", &ethpb.SingleAttestation{}, att)
-				continue
-			}
-			conv = single.ToAttestationElectra(committee)
-		} else {
-			conv = att
-		}
-
-		forBroadcast = append(forBroadcast, att)
-		forPool = append(forPool, conv)
+		bcast = append(bcast, orig)
+		pool = append(pool, conv)
 	}
-
-	if len(forPool) == 0 {
+	if len(pool) == 0 {
 		return
 	}
 
-	verified := s.batchVerifyAttestationSignatures(ctx, forPool, preState)
-	verifiedSet := make(map[ethpb.Att]struct{}, len(verified))
-	for _, att := range verified {
-		verifiedSet[att] = struct{}{}
+	// 3) Batch verify → returns the same slice if all pass, or a filtered subset
+	passed := s.batchVerifyAttestationSignatures(ctx, pool, preState)
+
+	// 4) Process verified entries
+	// Fast path: if all passed (same slice returned), process all by index
+	if len(passed) == len(pool) {
+		for i := range pool {
+			s.processVerifiedAttestation(ctx, bcast[i], pool[i], preState)
+		}
+		return
 	}
 
-	for i, poolAtt := range forPool {
-		if _, ok := verifiedSet[poolAtt]; ok {
-			s.processVerifiedAttestation(ctx, forBroadcast[i], poolAtt, preState)
+	// Slow path: build ID map and match
+	passedSet := make(map[attestation.Id]struct{}, len(passed))
+	for _, a := range passed {
+		id, err := attestation.NewId(a, attestation.Data)
+		if err == nil {
+			passedSet[id] = struct{}{}
+		}
+	}
+
+	for i, poolAtt := range pool {
+		id, err := attestation.NewId(poolAtt, attestation.Data)
+		if err != nil {
+			continue
+		}
+		if _, ok := passedSet[id]; ok {
+			s.processVerifiedAttestation(ctx, bcast[i], poolAtt, preState)
 		}
 	}
 }
