@@ -4,6 +4,51 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.1.2](https://github.com/prysmaticlabs/prysm/compare/v6.1.1...v6.1.2) - 2025-10-10
+
+This release has several important fixes to improve Prysm's peering, stability, and attestation inclusion on mainnet and all testnets. All node operators are encouraged to update to this release as soon as practical for the best mainnet performance.
+
+### Added
+
+- Added a 1 minute timeout on PruneAttestationOnEpoch operations to prevent very large bolt transactions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15746)
+- Added expected delay before broadcasting light client p2p messages. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15776)
+
+### Changed
+
+- Replaced reflect.TypeOf with reflect.TypeFor. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15627)
+- Bazel builds with `--config=release` now properly apply `--strip=always` to strip debug symbols from the release assets. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15774)
+- Add sources for compute_fork_digest to specrefs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15699)
+- Aggregate logs when broadcasting data column sidecars (one per root instead of one per sidecar). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15748)
+- `c-kzg-4844`: Update from `v2.1.1` to `v2.1.5`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15708)
+- Process pending attestations as soon as the block arrives. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15791)
+- Compare received LC messages over gossipsub with locally computed ones before forwarding. Also no longer save updates. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15783)
+- Optimize pending attestation processing by adding batching. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15801)
+
+### Removed
+
+- removed unused configs and hides prysm specific configs from `/eth/v1/config/spec` endpoint. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15797)
+
+### Fixed
+
+- SSZ-QL: Support nested `List` type (e.g., `ExecutionPayload.Transactions`). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15725)
+- Fixing Unsupported config field kind; value forwarded verbatim errors for type string. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15773)
+- fix /eth/v1/config/spec endpoint to properly skip omitted values. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15777)
+- Fix ProduceSyncCommitteeContribution not returning error when committee index is out of range. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15770)
+- adding in improvements to getduties v2, replaces helpers.PrecomputeCommittees() ( exepensive ) with CommitteeAssignments. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15784)
+- Avoid unnecessary calls to `ExitInformation()`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15764)
+- `inclusionProofKey`: Include the commitments in the key. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15795)
+- Do not reject peers if they have a mismatched version|digest when the next for epoch is FAR_FUTURE_EPOCH. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15798)
+- Don't include entries in the fork schedule if their epoch is set to far future epoch. Avoids reporting next_fork_version == <unscheduled fork>. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15799)
+- Wait for custody info to be initialized before querying them. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15804)
+- fixes level=error msg="Could not clean up dirty states" error="OriginBlockRoot: not found in db" prefix=state-gen error when starting in kurtosis. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15808)
+- Correctly clear disconnected peers from `connected_libp2p_peers` and `connected_libp2p_peers_average_scores`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15807)
+- `buildStatusFromStream`: Respond `statusV2` only if Fulu is enabled. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15818)
+- Send our real earliest available slot when sending a Status request post Fulu instead of `0`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15818)
+- switch to built-in min/max. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15817)
+- `findPeersWithSubnets`: If the filter function returns an error for a given peer, log an error and skip the peer instead of aborting the whole function. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15815)
+- `computeIndicesByRootByPeer`: If the loop returns an error for a given peer, log an error and skip the peer instead of aborting the whole function. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15815)
+- Fixed issue #15738 where separate goroutines assume sole responsibility for topic registration. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15779)
+
 ## [v6.1.0](https://github.com/prysmaticlabs/prysm/compare/v6.0.5...v6.1.0) and [v6.1.1](https://github.com/prysmaticlabs/prysm/compare/v6.1.0...v6.1.1) - 2025-09-26
 
 This release has support for Fusaka testnets as well as many mainnet improvements. Testnet operators are required to updated prior to the testnet fork date. See [PR #15721](https://github.com/OffchainLabs/prysm/pull/15721).
