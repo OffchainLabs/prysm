@@ -174,18 +174,18 @@ var (
 )
 
 func (s *Service) updateMetrics() {
+	store := s.Host().Peerstore()
 	connectedPeers := s.peers.Connected()
+
 	p2pPeerCount.WithLabelValues("Connected").Set(float64(len(connectedPeers)))
 	p2pPeerCount.WithLabelValues("Disconnected").Set(float64(len(s.peers.Disconnected())))
 	p2pPeerCount.WithLabelValues("Connecting").Set(float64(len(s.peers.Connecting())))
 	p2pPeerCount.WithLabelValues("Disconnecting").Set(float64(len(s.peers.Disconnecting())))
 	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(s.peers.Bad())))
 
-	store := s.Host().Peerstore()
-	numConnectedPeersByClient := make(map[string]float64)
+	connectedPeersCountByClient := make(map[string]float64)
 	peerScoresByClient := make(map[string][]float64)
-	for i := 0; i < len(connectedPeers); i++ {
-		p := connectedPeers[i]
+	for _, p := range connectedPeers {
 		pid, err := peer.Decode(p.String())
 		if err != nil {
 			log.WithError(err).Debug("Could not decode peer string")
@@ -193,16 +193,18 @@ func (s *Service) updateMetrics() {
 		}
 
 		foundName := agentFromPid(pid, store)
-		numConnectedPeersByClient[foundName] += 1
+		connectedPeersCountByClient[foundName] += 1
 
 		// Get peer scoring data.
 		overallScore := s.peers.Scorers().Score(pid)
 		peerScoresByClient[foundName] = append(peerScoresByClient[foundName], overallScore)
 	}
+
 	connectedPeersCount.Reset() // Clear out previous results.
-	for agent, total := range numConnectedPeersByClient {
+	for agent, total := range connectedPeersCountByClient {
 		connectedPeersCount.WithLabelValues(agent).Set(total)
 	}
+
 	avgScoreConnectedClients.Reset() // Clear out previous results.
 	for agent, scoringData := range peerScoresByClient {
 		avgScore := average(scoringData)
