@@ -3,6 +3,7 @@ package p2p
 import (
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +27,15 @@ var (
 		Help: "The number of peers in a given state.",
 	},
 		[]string{"state"})
+	p2pMaxPeers = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_max_peers",
+		Help: "The target maximum number of peers.",
+	})
+	p2pPeerCountDirectionType = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "p2p_peer_count_direction_type",
+		Help: "The number of peers in a given direction and type.",
+	},
+		[]string{"direction", "type"})
 	connectedPeersCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "connected_libp2p_peers",
 		Help: "Tracks the total number of connected libp2p peers by agent string",
@@ -182,6 +192,14 @@ func (s *Service) updateMetrics() {
 	p2pPeerCount.WithLabelValues("Connecting").Set(float64(len(s.peers.Connecting())))
 	p2pPeerCount.WithLabelValues("Disconnecting").Set(float64(len(s.peers.Disconnecting())))
 	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(s.peers.Bad())))
+
+	upperTCP := strings.ToUpper(string(peers.TCP))
+	upperQUIC := strings.ToUpper(string(peers.QUIC))
+
+	p2pPeerCountDirectionType.WithLabelValues("inbound", upperTCP).Set(float64(len(s.peers.InboundConnectedWithProtocol(peers.TCP))))
+	p2pPeerCountDirectionType.WithLabelValues("inbound", upperQUIC).Set(float64(len(s.peers.InboundConnectedWithProtocol(peers.QUIC))))
+	p2pPeerCountDirectionType.WithLabelValues("outbound", upperTCP).Set(float64(len(s.peers.OutboundConnectedWithProtocol(peers.TCP))))
+	p2pPeerCountDirectionType.WithLabelValues("outbound", upperQUIC).Set(float64(len(s.peers.OutboundConnectedWithProtocol(peers.QUIC))))
 
 	connectedPeersCountByClient := make(map[string]float64)
 	peerScoresByClient := make(map[string][]float64)
