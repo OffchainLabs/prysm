@@ -42,7 +42,7 @@ func UnmarshalFromURL(ctx context.Context, from string, to interface{}) error {
 	if resp.StatusCode != http.StatusOK {
 		return errors.Errorf("http request to %v failed with status code %d", from, resp.StatusCode)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&to); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(to); err != nil {
 		return errors.Wrap(err, "failed to decode http response")
 	}
 	return nil
