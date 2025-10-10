@@ -11,14 +11,15 @@ import (
 
 var (
 	knownAgentVersions = []string{
+		"erigon/caplin",
+		"grandine",
+		"js-libp2p",
 		"lighthouse",
+		"lodestar",
 		"nimbus",
 		"prysm",
 		"teku",
-		"lodestar",
-		"js-libp2p",
 		"rust-libp2p",
-		"erigon/caplin",
 	}
 	p2pPeerCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "p2p_peer_count",
