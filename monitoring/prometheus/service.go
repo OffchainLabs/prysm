@@ -12,6 +12,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -91,7 +92,7 @@ func (s *Service) healthzHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle plain text content.
-	if contentType := negotiateContentType(r); contentType == contentTypePlainText {
+	if contentType := negotiateContentType(r); contentType == api.PlainMediaType {
 		var buf bytes.Buffer
 		for _, s := range statuses {
 			var status string
