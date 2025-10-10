@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	// "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
@@ -116,23 +116,8 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 	data := bucket.data
 
 	// Shared validations for the entire bucket.
-	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
-	if !s.cfg.chain.InForkchoice(blockRoot) {
-		// Enhanced logging to diagnose forkchoice pruning issues
-		currentSlot := s.cfg.clock.CurrentSlot()
-		finalizedCheckpoint := s.cfg.chain.FinalizedCheckpt()
-		log.WithFields(logrus.Fields{
-			"blockRoot":      fmt.Sprintf("%#x", data.BeaconBlockRoot),
-			"attSlot":        data.Slot,
-			"attTargetEpoch": data.Target.Epoch,
-			"attTargetRoot":  fmt.Sprintf("%#x", data.Target.Root),
-			"currentSlot":    currentSlot,
-			"finalizedEpoch": finalizedCheckpoint.Epoch,
-			"finalizedRoot":  fmt.Sprintf("%#x", finalizedCheckpoint.Root),
-			"attCount":       len(bucket.attestations),
-			"hasBlock":       s.cfg.beaconDB.HasBlock(ctx, blockRoot),
-			"isFinalized":    s.cfg.chain.IsFinalized(ctx, blockRoot),
-		}).Debug("Failed forkchoice check for bucket - block not descendant of finalized checkpoint")
+	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+		log.WithError(blockchain.ErrNotDescendantOfFinalized).WithField("root", fmt.Sprintf("%#x", data.BeaconBlockRoot)).Debug("Failed forkchoice check for bucket")
 		return
 	}
 
