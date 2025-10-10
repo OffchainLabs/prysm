@@ -81,8 +81,8 @@ const (
 type InternetProtocol string
 
 const (
-	TCP  = "tcp"
-	QUIC = "quic"
+	TCP  = InternetProtocol("tcp")
+	QUIC = InternetProtocol("quic")
 )
 
 // Status is the structure holding the peer status information.
