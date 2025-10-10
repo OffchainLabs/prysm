@@ -374,7 +374,7 @@ func TestFillForkChoiceMissingBlocks_FinalizedSibling(t *testing.T) {
 
 	err = service.fillInForkChoiceMissingBlocks(
 		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
-	require.Equal(t, ErrNotDescendantOfFinalized.Error(), err.Error())
+	require.Equal(t, ErrRootNotInForkchoice(bytesutil.ToBytes32(roots[8])), err.Error())
 }
 
 func TestFillForkChoiceMissingBlocks_ErrorCases(t *testing.T) {
@@ -3301,7 +3301,6 @@ func Test_postBlockProcess_EventSending(t *testing.T) {
 		})
 	}
 }
-
 
 func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
 	var l *util.TestLightClient
