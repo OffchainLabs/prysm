@@ -57,7 +57,10 @@ func (s *Service) disconnectFromPeerOnError(
 
 	// Only attempt a goodbye if we are still connected to the peer.
 	if s.host.Network().Connectedness(remotePeerID) == network.Connected {
-		if err := goodByeFunc(context.TODO(), remotePeerID); err != nil {
+		// Use a bounded context to avoid blocking on goodbye in unstable networks.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := goodByeFunc(ctx, remotePeerID); err != nil {
 			log.WithError(err).Error("Unable to disconnect from peer")
 		}
 	}
