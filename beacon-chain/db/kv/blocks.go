@@ -456,6 +456,18 @@ func (s *Store) DeleteHistoricalDataBeforeSlot(ctx context.Context, cutoffSlot p
 				return nil
 			}
 
+			// Remove the child from its parent's index before deleting the block itself.
+			// This keeps the parentRoot -> [children] index consistent during pruning.
+			if enc := tx.Bucket(blocksBucket).Get(sr.root[:]); enc != nil {
+				blk, uerr := unmarshalBlock(ctx, enc)
+				if uerr != nil {
+					return uerr
+				}
+				if derr := s.deleteMatchingParentIndex(tx, blk.Block().ParentRoot(), sr.root); derr != nil {
+					return derr
+				}
+			}
+
 			// Delete block
 			if err = s.deleteBlock(tx, sr.root[:]); err != nil {
 				return err
