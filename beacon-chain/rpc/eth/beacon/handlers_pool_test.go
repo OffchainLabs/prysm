@@ -1538,7 +1538,7 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 	s.SubmitBLSToExecutionChanges(writer, request)
 	assert.Equal(t, http.StatusBadRequest, writer.Code)
 	time.Sleep(10 * time.Millisecond) // Delay to allow the routine to start
-	require.StringContains(t, "One or more BLSToExecutionChange failed validation", writer.Body.String())
+	require.StringContains(t, "One or more messages failed validation", writer.Body.String())
 	assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 	assert.Equal(t, numValidators, len(broadcaster.BroadcastMessages)+1)
 
