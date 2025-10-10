@@ -508,29 +508,3 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 		}
 	}
 }
-
-// bucketAttestationsByData groups attestations by their AttestationData hash.
-func bucketAttestationsByData(attestations []ethpb.Att) map[[32]byte]*attestationBucket {
-	bucketMap := make(map[[32]byte]*attestationBucket)
-
-	for _, att := range attestations {
-		data := att.GetData()
-		dataHash, err := data.HashTreeRoot()
-		if err != nil {
-			log.WithError(err).Debug("Failed to hash attestation data, skipping attestation")
-			continue
-		}
-
-		if bucket, ok := bucketMap[dataHash]; ok {
-			bucket.attestations = append(bucket.attestations, att)
-		} else {
-			bucketMap[dataHash] = &attestationBucket{
-				dataHash:     dataHash,
-				data:         data,
-				attestations: []ethpb.Att{att},
-			}
-		}
-	}
-
-	return bucketMap
-}
