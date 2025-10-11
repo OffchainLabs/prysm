@@ -220,15 +220,9 @@ func (c beaconApiChainClient) Validators(ctx context.Context, in *ethpb.ListVali
 		return nil, errors.New("state validators data is nil")
 	}
 
-	start := pageToken * uint64(pageSize)
-	if start > uint64(len(stateValidators.Data)) {
-		start = uint64(len(stateValidators.Data))
-	}
+	start := min(pageToken*uint64(pageSize), uint64(len(stateValidators.Data)))
 
-	end := start + uint64(pageSize)
-	if end > uint64(len(stateValidators.Data)) {
-		end = uint64(len(stateValidators.Data))
-	}
+	end := min(start+uint64(pageSize), uint64(len(stateValidators.Data)))
 
 	validators := make([]*ethpb.Validators_ValidatorContainer, end-start)
 	for idx := start; idx < end; idx++ {

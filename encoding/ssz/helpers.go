@@ -80,12 +80,10 @@ func PackByChunk(serializedItems [][]byte) ([][bytesPerChunk]byte, error) {
 	numItems := len(orderedItems)
 	var chunks [][bytesPerChunk]byte
 	for i := 0; i < numItems; i += bytesPerChunk {
-		j := i + bytesPerChunk
-		// We create our upper bound index of the chunk, if it is greater than numItems,
-		// we set it as numItems itself.
-		if j > numItems {
-			j = numItems
-		}
+		j := min(
+			// We create our upper bound index of the chunk, if it is greater than numItems,
+			// we set it as numItems itself.
+			i+bytesPerChunk, numItems)
 		// We create chunks from the list of items based on the
 		// indices determined above.
 		// Right-pad the last chunk with zero bytes if it does not
