@@ -15,10 +15,7 @@ func ToBytes(x uint64, length int) []byte {
 	if length < 0 {
 		length = 0
 	}
-	makeLength := length
-	if length < 8 {
-		makeLength = 8
-	}
+	makeLength := max(length, 8)
 	bytes := make([]byte, makeLength)
 	binary.LittleEndian.PutUint64(bytes, x)
 	return bytes[:length]
