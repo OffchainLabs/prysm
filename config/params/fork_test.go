@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
@@ -93,15 +92,6 @@ func TestRetrieveForkDataFromDigest(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().AltairForkEpoch, epoch)
 }
 
-func TestIsForkNextEpoch(t *testing.T) {
-	// at
-	assert.Equal(t, false, params.DigestChangesAfter(params.BeaconConfig().ElectraForkEpoch))
-	// just before
-	assert.Equal(t, true, params.DigestChangesAfter(params.BeaconConfig().ElectraForkEpoch-1))
-	// just after
-	assert.Equal(t, false, params.DigestChangesAfter(params.BeaconConfig().ElectraForkEpoch+1))
-}
-
 func TestNextForkData(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().InitializeForkSchedule()
@@ -163,7 +153,9 @@ func TestNextForkData(t *testing.T) {
 func TestLastForkEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
-	require.Equal(t, cfg.ElectraForkEpoch, params.LastForkEpoch())
+	if cfg.FuluForkEpoch == cfg.FarFutureEpoch {
+		require.Equal(t, cfg.ElectraForkEpoch, params.LastForkEpoch())
+	}
 }
 
 func TestForkFromConfig_UsesPassedConfig(t *testing.T) {

@@ -18,8 +18,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ElectraStateOption func(*ethpb.BeaconStateElectra) error
+
+func WithElectraStateSlot(slot primitives.Slot) ElectraStateOption {
+	return func(s *ethpb.BeaconStateElectra) error {
+		s.Slot = slot
+		return nil
+	}
+}
+
 // DeterministicGenesisStateElectra returns a genesis state in Electra format made using the deterministic deposits.
-func DeterministicGenesisStateElectra(t testing.TB, numValidators uint64) (state.BeaconState, []bls.SecretKey) {
+func DeterministicGenesisStateElectra(t testing.TB, numValidators uint64, opts ...ElectraStateOption) (state.BeaconState, []bls.SecretKey) {
 	deposits, privKeys, err := DeterministicDepositsAndKeys(numValidators)
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get %d deposits", numValidators))
@@ -28,7 +37,7 @@ func DeterministicGenesisStateElectra(t testing.TB, numValidators uint64) (state
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get eth1data for %d deposits", numValidators))
 	}
-	beaconState, err := genesisBeaconStateElectra(t.Context(), deposits, uint64(0), eth1Data)
+	beaconState, err := genesisBeaconStateElectra(t.Context(), deposits, uint64(0), eth1Data, opts...)
 	if err != nil {
 		t.Fatal(errors.Wrapf(err, "failed to get genesis beacon state of %d validators", numValidators))
 	}
@@ -51,7 +60,7 @@ func setKeysToActive(beaconState state.BeaconState) error {
 }
 
 // genesisBeaconStateElectra returns the genesis beacon state.
-func genesisBeaconStateElectra(ctx context.Context, deposits []*ethpb.Deposit, genesisTime uint64, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
+func genesisBeaconStateElectra(ctx context.Context, deposits []*ethpb.Deposit, genesisTime uint64, eth1Data *ethpb.Eth1Data, opts ...ElectraStateOption) (state.BeaconState, error) {
 	st, err := emptyGenesisStateElectra()
 	if err != nil {
 		return nil, err
@@ -68,7 +77,7 @@ func genesisBeaconStateElectra(ctx context.Context, deposits []*ethpb.Deposit, g
 		return nil, errors.Wrap(err, "could not process validator deposits")
 	}
 
-	return buildGenesisBeaconStateElectra(genesisTime, st, st.Eth1Data())
+	return buildGenesisBeaconStateElectra(genesisTime, st, st.Eth1Data(), opts...)
 }
 
 // emptyGenesisStateElectra returns an empty genesis state in Electra format.
@@ -105,7 +114,7 @@ func emptyGenesisStateElectra() (state.BeaconState, error) {
 	return state_native.InitializeFromProtoElectra(st)
 }
 
-func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data) (state.BeaconState, error) {
+func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconState, eth1Data *ethpb.Eth1Data, opts ...ElectraStateOption) (state.BeaconState, error) {
 	if eth1Data == nil {
 		return nil, errors.New("no eth1data provided for genesis state")
 	}
@@ -212,6 +221,11 @@ func buildGenesisBeaconStateElectra(genesisTime uint64, preState state.BeaconSta
 		PendingDeposits:               make([]*ethpb.PendingDeposit, 0),
 		PendingPartialWithdrawals:     make([]*ethpb.PendingPartialWithdrawal, 0),
 		PendingConsolidations:         make([]*ethpb.PendingConsolidation, 0),
+	}
+	for _, opt := range opts {
+		if err := opt(st); err != nil {
+			return nil, err
+		}
 	}
 
 	var scBits [fieldparams.SyncAggregateSyncCommitteeBytesLength]byte

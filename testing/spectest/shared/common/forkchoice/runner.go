@@ -49,6 +49,8 @@ func Run(t *testing.T, config string, fork int) {
 
 func runTest(t *testing.T, config string, fork int, basePath string) { // nolint:gocognit
 	require.NoError(t, utils.SetConfig(t, config))
+	cfg := params.BeaconConfig()
+	params.SetGenesisFork(t, cfg, fork)
 	testFolders, _ := utils.TestFolders(t, config, version.String(fork), basePath)
 	if len(testFolders) == 0 {
 		t.Fatalf("No test folders found for %s/%s/%s", config, version.String(fork), basePath)

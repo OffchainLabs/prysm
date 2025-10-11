@@ -50,6 +50,12 @@ func WithPayloadSetter(p *enginev1.ExecutionPayloadDeneb) DenebBlockGeneratorOpt
 	}
 }
 
+func WithDenebSlot(slot primitives.Slot) DenebBlockGeneratorOption {
+	return func(g *denebBlockGenerator) {
+		g.slot = slot
+	}
+}
+
 func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primitives.Slot, nblobs int, opts ...DenebBlockGeneratorOption) (blocks.ROBlock, []blocks.ROBlob) {
 	g := &denebBlockGenerator{
 		parent: parent,
@@ -178,9 +184,11 @@ func fakeEmptyProof(_ *testing.T, _ *ethpb.BlobSidecar) [][]byte {
 }
 
 func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blocks.ROBlock, []blocks.ROBlob) {
+	deneb := params.BeaconConfig().DenebForkEpoch
+	denebSlot := SlotAtEpoch(t, deneb)
 	blobs := make([]blocks.ROBlob, 0)
 	if len(blks) == 0 {
-		blk, blb := GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 6)
+		blk, blb := GenerateTestDenebBlockWithSidecar(t, [32]byte{}, denebSlot, 6)
 		blobs = append(blobs, blb...)
 		blks = append(blks, blk)
 	}

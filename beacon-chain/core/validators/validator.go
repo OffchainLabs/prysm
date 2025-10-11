@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -60,7 +59,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	_ = err
 
 	// Apply minimum balance as per spec
-	exitInfo.TotalActiveBalance = mathutil.Max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
+	exitInfo.TotalActiveBalance = max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
 	return exitInfo
 }
 

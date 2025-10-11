@@ -1,7 +1,6 @@
 package voluntaryexits
 
 import (
-	"math"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -63,7 +62,7 @@ func (p *Pool) PendingExits() ([]*ethpb.SignedVoluntaryExit, error) {
 // return more than the block enforced MaxVoluntaryExits.
 func (p *Pool) ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slot) ([]*ethpb.SignedVoluntaryExit, error) {
 	p.lock.RLock()
-	length := int(math.Min(float64(params.BeaconConfig().MaxVoluntaryExits), float64(p.pending.Len())))
+	length := int(min(float64(params.BeaconConfig().MaxVoluntaryExits), float64(p.pending.Len())))
 	result := make([]*ethpb.SignedVoluntaryExit, 0, length)
 	node := p.pending.First()
 	for node != nil && len(result) < length {

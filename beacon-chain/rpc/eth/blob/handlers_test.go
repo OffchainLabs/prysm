@@ -30,18 +30,19 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestBlobs(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
-	cfg.DenebForkEpoch = 1
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4096*2
 	params.OverrideBeaconConfig(cfg)
+	es := util.SlotAtEpoch(t, cfg.ElectraForkEpoch)
+	ds := util.SlotAtEpoch(t, cfg.DenebForkEpoch)
 
 	db := testDB.SetupDB(t)
-	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
+	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, es, 4)
 	require.NoError(t, db.SaveBlock(t.Context(), denebBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
@@ -171,7 +172,7 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("slot", func(t *testing.T) {
-		u := "http://foo.example/123"
+		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -195,7 +196,7 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("slot not found", func(t *testing.T) {
-		u := "http://foo.example/122"
+		u := fmt.Sprintf("http://foo.example/%d", es-1)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -212,7 +213,7 @@ func TestBlobs(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, writer.Code)
 	})
 	t.Run("one blob only", func(t *testing.T) {
-		u := "http://foo.example/123?indices=2"
+		u := fmt.Sprintf("http://foo.example/%d?indices=2", es)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -243,7 +244,7 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
-		u := "http://foo.example/123"
+		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -267,10 +268,8 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		forkslot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
-		require.NoError(t, err)
-		overLimit := params.BeaconConfig().MaxBlobsPerBlock(forkslot)
-		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
+		overLimit := params.BeaconConfig().MaxBlobsPerBlock(ds)
+		u := fmt.Sprintf("http://foo.example/%d?indices=%d", es, overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -284,7 +283,7 @@ func TestBlobs(t *testing.T) {
 		assert.Equal(t, true, strings.Contains(e.Message, fmt.Sprintf("requested blob indices [%d] are invalid", overLimit)))
 	})
 	t.Run("outside retention period returns 200 with what we have", func(t *testing.T) {
-		u := "http://foo.example/123"
+		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -308,13 +307,13 @@ func TestBlobs(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("block without commitments returns 200 w/empty list ", func(t *testing.T) {
-		denebBlock, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 333, 0)
+		denebBlock, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, es+128, 0)
 		commitments, err := denebBlock.Block().Body().BlobKzgCommitments()
 		require.NoError(t, err)
 		require.Equal(t, len(commitments), 0)
 		require.NoError(t, db.SaveBlock(t.Context(), denebBlock))
 
-		u := "http://foo.example/333"
+		u := fmt.Sprintf("http://foo.example/%d", es+128)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -426,19 +425,17 @@ func TestBlobs(t *testing.T) {
 func TestBlobs_Electra(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
-	cfg.DenebForkEpoch = 0
-	cfg.ElectraForkEpoch = 1
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4096*2
 	cfg.BlobSchedule = []params.BlobScheduleEntry{
-		{Epoch: 0, MaxBlobsPerBlock: 6},
-		{Epoch: 1, MaxBlobsPerBlock: 9},
+		{Epoch: cfg.FuluForkEpoch + 4096, MaxBlobsPerBlock: 6},
+		{Epoch: cfg.FuluForkEpoch + 4096 + 128, MaxBlobsPerBlock: 9},
 	}
 	params.OverrideBeaconConfig(cfg)
 
+	es := util.SlotAtEpoch(t, cfg.ElectraForkEpoch)
 	db := testDB.SetupDB(t)
-	forkslot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
-	require.NoError(t, err)
-	overLimit := params.BeaconConfig().MaxBlobsPerBlock(forkslot)
-	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 123, overLimit)
+	overLimit := params.BeaconConfig().MaxBlobsPerBlock(es)
+	electraBlock, blobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, es, overLimit)
 	require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
 	bs := filesystem.NewEphemeralBlobStorage(t)
 	testSidecars := verification.FakeVerifySliceForTest(t, blobs)
@@ -456,7 +453,7 @@ func TestBlobs_Electra(t *testing.T) {
 		TimeFetcher:           mockChainService,
 	}
 	t.Run("max blobs for electra", func(t *testing.T) {
-		u := "http://foo.example/123"
+		u := fmt.Sprintf("http://foo.example/%d", es)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -487,8 +484,8 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("requested blob index at max", func(t *testing.T) {
-		limit := overLimit - 1
-		u := fmt.Sprintf("http://foo.example/123?indices=%d", limit)
+		limit := params.BeaconConfig().MaxBlobsPerBlock(es) - 1
+		u := fmt.Sprintf("http://foo.example/%d?indices=%d", es, limit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -519,7 +516,8 @@ func TestBlobs_Electra(t *testing.T) {
 		require.Equal(t, false, resp.Finalized)
 	})
 	t.Run("blob index over max", func(t *testing.T) {
-		u := fmt.Sprintf("http://foo.example/123?indices=%d", overLimit)
+		overLimit := params.BeaconConfig().MaxBlobsPerBlock(es)
+		u := fmt.Sprintf("http://foo.example/%d?indices=%d", es, overLimit)
 		request := httptest.NewRequest("GET", u, nil)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
@@ -535,6 +533,7 @@ func TestBlobs_Electra(t *testing.T) {
 }
 
 func Test_parseIndices(t *testing.T) {
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	tests := []struct {
 		name    string
 		query   string
@@ -564,7 +563,7 @@ func Test_parseIndices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseIndices(&url.URL{RawQuery: tt.query}, 0)
+			got, err := parseIndices(&url.URL{RawQuery: tt.query}, ds)
 			if err != nil && tt.wantErr != "" {
 				require.StringContains(t, tt.wantErr, err.Error())
 				return
@@ -593,6 +592,7 @@ func TestGetBlobs(t *testing.T) {
 		{Epoch: 20, MaxBlobsPerBlock: 12}, // Fulu
 	}
 	params.OverrideBeaconConfig(cfg)
+	es := util.SlotAtEpoch(t, cfg.ElectraForkEpoch)
 
 	db := testDB.SetupDB(t)
 	denebBlock, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 123, 4)
@@ -1014,9 +1014,7 @@ func TestGetBlobs(t *testing.T) {
 
 	// Test for Electra fork
 	t.Run("electra max blobs", func(t *testing.T) {
-		forkslot, err := slots.EpochStart(params.BeaconConfig().ElectraForkEpoch)
-		require.NoError(t, err)
-		overLimit := params.BeaconConfig().MaxBlobsPerBlock(forkslot)
+		overLimit := params.BeaconConfig().MaxBlobsPerBlock(es)
 		electraBlock, electraBlobs := util.GenerateTestElectraBlockWithSidecar(t, [32]byte{}, 323, overLimit)
 		require.NoError(t, db.SaveBlock(t.Context(), electraBlock))
 		electraBs := filesystem.NewEphemeralBlobStorage(t)

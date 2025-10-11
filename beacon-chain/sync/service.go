@@ -180,7 +180,7 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
-	registeredNetworkEntry           params.NetworkScheduleEntry
+	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
 
@@ -377,10 +377,13 @@ func (s *Service) waitForChainStart() {
 	}
 	s.ctxMap = ctxMap
 
-	// Register respective rpc handlers at state initialized event.
-	err = s.registerRPCHandlers()
-	if err != nil {
-		log.WithError(err).Error("Could not register rpc handlers")
+	// We need to register RPC handlers ASAP so that we can handle incoming status message
+	// requests from peers.
+	nse := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	if err := s.registerRPCHandlers(nse); err != nil {
+		// If we fail here, we won't be able to peer with anyone because we can't handle their status messages.
+		log.WithError(err).Error("Failed to register RPC handlers")
+		// TODO: need ability to bubble the error up to the top of the node init tree and exit safely.
 		return
 	}
 
@@ -401,22 +404,8 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 		return
 	}
 
-	// Compute the current epoch.
-	currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
-	currentEpoch := slots.ToEpoch(currentSlot)
-
-	// Compute the current fork forkDigest.
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		log.WithError(err).Error("Could not retrieve current fork digest")
-		return
-	}
-
-	// Register respective pubsub handlers at state synced event.
-	s.registerSubscribers(currentEpoch, forkDigest)
-
 	// Start the fork watcher.
-	go s.forkWatcher()
+	go s.p2pHandlerControlLoop()
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {
@@ -452,6 +441,15 @@ func (s *Service) pruneDataColumnCache() {
 
 func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
+}
+
+func (s *Service) waitForInitialSync(ctx context.Context) error {
+	select {
+	case <-s.initialSyncComplete:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Checker defines a struct which can verify whether a node is currently

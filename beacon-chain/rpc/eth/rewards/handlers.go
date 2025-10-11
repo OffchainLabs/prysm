@@ -151,7 +151,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, proposerReward, err := altair.ProcessSyncAggregate(r.Context(), st, sa)
+	_, proposerReward, err := altair.ProcessSyncAggregateNoVerifySig(r.Context(), st, sa)
 	if err != nil {
 		httputil.HandleError(w, "Could not get sync aggregate rewards: "+err.Error(), http.StatusInternalServerError)
 		return

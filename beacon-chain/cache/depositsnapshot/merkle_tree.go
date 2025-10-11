@@ -52,7 +52,7 @@ func create(leaves [][32]byte, depth uint64) MerkleTreeNode {
 	if depth == 0 {
 		return &LeafNode{hash: leaves[0]}
 	}
-	split := math.Min(math.PowerOf2(depth-1), length)
+	split := min(math.PowerOf2(depth-1), length)
 	left := create(leaves[0:split], depth-1)
 	right := create(leaves[split:], depth-1)
 	return &InnerNode{left: left, right: right}

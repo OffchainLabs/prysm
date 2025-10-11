@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/genesis"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -109,75 +110,80 @@ func TestConfigGenesisValidatorRoot(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().GenesisValidatorsRoot, genesis.ValidatorsRoot())
 }
 
-func TestMaxBlobsPerBlock(t *testing.T) {
-	t.Run("Before all forks and no BlobSchedule", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = nil
-		cfg.ElectraForkEpoch = 100
-		cfg.FuluForkEpoch = 200
-		require.Equal(t, cfg.MaxBlobsPerBlock(0), cfg.DeprecatedMaxBlobsPerBlock)
-	})
+func TestMaxBlobsJumbled(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4098*2
+	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
+	offsets := []primitives.Epoch{cfg.FuluForkEpoch}
+	for _, offset := range []primitives.Epoch{320, 640, 960, 1080} {
+		offsets = append(offsets, cfg.FuluForkEpoch+offset)
+	}
+	maxBlobs := map[primitives.Epoch]uint64{
+		cfg.FuluForkEpoch: electraMaxBlobs,
+		offsets[0]:        electraMaxBlobs + 3,
+		offsets[1]:        electraMaxBlobs + 6,
+		offsets[2]:        electraMaxBlobs + 9,
+		offsets[3]:        electraMaxBlobs + 12,
+	}
+	schedule := make([]params.BlobScheduleEntry, 0, len(maxBlobs))
+	for _, epoch := range offsets[1:] {
+		schedule = append(schedule, params.BlobScheduleEntry{Epoch: epoch, MaxBlobsPerBlock: maxBlobs[epoch]})
+	}
+	cfg.BlobSchedule = schedule
+	cfg.InitializeForkSchedule()
+	for i := 1; i < len(cfg.BlobSchedule); i++ {
+		beforeEpoch, epoch := cfg.BlobSchedule[i-1].Epoch, cfg.BlobSchedule[i].Epoch
+		before, after := maxBlobs[beforeEpoch], maxBlobs[epoch]
+		require.Equal(t, before, uint64(cfg.MaxBlobsPerBlockAtEpoch(epoch-1)))
+		require.Equal(t, after, uint64(cfg.MaxBlobsPerBlockAtEpoch(epoch)))
+		beforeSlot, err := cfg.SlotsPerEpoch.SafeMul(uint64(beforeEpoch))
+		require.NoError(t, err)
+		afterSlot, err := cfg.SlotsPerEpoch.SafeMul(uint64(epoch))
+		require.NoError(t, err)
+		require.Equal(t, before, uint64(cfg.MaxBlobsPerBlock(beforeSlot)))
+		require.Equal(t, after, uint64(cfg.MaxBlobsPerBlock(afterSlot)))
+	}
 
-	t.Run("Uses latest matching BlobSchedule entry", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-		}
-		slot := 11 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
-	})
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch-1))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch))
+	preBlobEpochs := []primitives.Epoch{cfg.DenebForkEpoch - 1, cfg.CapellaForkEpoch, cfg.BellatrixForkEpoch, cfg.AltairForkEpoch, 0}
+	for _, epoch := range preBlobEpochs {
+		require.Equal(t, 0, cfg.MaxBlobsPerBlockAtEpoch(epoch))
+	}
+}
 
-	t.Run("Uses earlier matching BlobSchedule entry", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-		}
-		slot := 6 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
-	})
+func TestFirstBPOAtFork(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4096*2
+	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: cfg.FuluForkEpoch, MaxBlobsPerBlock: electraMaxBlobs + 1},
+		{Epoch: cfg.FuluForkEpoch + 1, MaxBlobsPerBlock: electraMaxBlobs + 2},
+	}
+	cfg.InitializeForkSchedule()
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
+	require.Equal(t, electraMaxBlobs+1, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch)))
+	require.Equal(t, electraMaxBlobs+2, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch+2)))
+}
 
-	t.Run("Before first BlobSchedule entry falls back to fork logic", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.FuluForkEpoch = 1
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := primitives.Slot(2) // Epoch 0
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
-	})
-
-	t.Run("Unsorted BlobSchedule still picks latest matching entry", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := 11 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
-	})
-
-	t.Run("Unsorted BlobSchedule picks earlier matching entry correctly", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := 6 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
-	})
-
-	t.Run("Unsorted BlobSchedule falls back to fork logic when epoch is before all entries", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.ElectraForkEpoch = 2
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := primitives.Slot(1) // Epoch 0
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
-	})
+func TestMaxBlobsNoSchedule(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
+	cfg.BlobSchedule = nil
+	cfg.InitializeForkSchedule()
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch-1))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch))
+	preBlobEpochs := []primitives.Epoch{cfg.DenebForkEpoch - 1, cfg.CapellaForkEpoch, cfg.BellatrixForkEpoch, cfg.AltairForkEpoch, 0}
+	for _, epoch := range preBlobEpochs {
+		require.Equal(t, 0, cfg.MaxBlobsPerBlockAtEpoch(epoch))
+	}
 }
 
 func Test_TargetBlobCount(t *testing.T) {
@@ -286,4 +292,16 @@ func TestFarFuturePrepareFilter(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	entry := params.GetNetworkScheduleEntry(oldElectra)
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), entry.ForkVersion)
+}
+
+func TestMaxBlobsOverrideEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	require.Equal(t, 0, cfg.MaxBlobsPerBlockAtEpoch(0))
+	params.SetGenesisFork(t, cfg, version.Deneb)
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(0))
+	params.SetGenesisFork(t, cfg, version.Electra)
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlockElectra, cfg.MaxBlobsPerBlockAtEpoch(0))
+	params.SetGenesisFork(t, cfg, version.Fulu)
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlockElectra, cfg.MaxBlobsPerBlockAtEpoch(0))
 }

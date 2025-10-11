@@ -4,19 +4,14 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 )
-
-// DigestChangesAfter checks if an allotted fork is in the following epoch.
-func DigestChangesAfter(e primitives.Epoch) bool {
-	_, ok := BeaconConfig().networkSchedule.activatedAt(e + 1)
-	return ok
-}
 
 // ForkDigestUsingConfig retrieves the fork digest from the current schedule determined
 // by the provided epoch.
 func ForkDigestUsingConfig(epoch primitives.Epoch, cfg *BeaconChainConfig) [4]byte {
-	entry := cfg.networkSchedule.ForEpoch(epoch)
+	entry := cfg.networkSchedule.forEpoch(epoch)
 	return entry.ForkDigest
 }
 
@@ -42,10 +37,10 @@ func Fork(epoch primitives.Epoch) (*ethpb.Fork, error) {
 }
 
 func ForkFromConfig(cfg *BeaconChainConfig, epoch primitives.Epoch) *ethpb.Fork {
-	current := cfg.networkSchedule.ForEpoch(epoch)
+	current := cfg.networkSchedule.forEpoch(epoch)
 	previous := current
 	if current.Epoch > 0 {
-		previous = cfg.networkSchedule.ForEpoch(current.Epoch - 1)
+		previous = cfg.networkSchedule.forEpoch(current.Epoch - 1)
 	}
 	return &ethpb.Fork{
 		PreviousVersion: previous.ForkVersion[:],
@@ -102,11 +97,17 @@ func LastForkEpoch() primitives.Epoch {
 }
 
 func LastNetworkScheduleEntry() NetworkScheduleEntry {
-	lastIdx := len(BeaconConfig().networkSchedule.entries) - 1
-	return BeaconConfig().networkSchedule.entries[lastIdx]
+	return BeaconConfig().networkSchedule.LastEntry()
 }
 
 func GetNetworkScheduleEntry(epoch primitives.Epoch) NetworkScheduleEntry {
-	entry := BeaconConfig().networkSchedule.ForEpoch(epoch)
+	entry := BeaconConfig().networkSchedule.forEpoch(epoch)
 	return entry
+}
+
+func genesisNetworkScheduleEntry() NetworkScheduleEntry {
+	b := BeaconConfig()
+	// TODO: note this has a zero digest, but we would never hit this fallback condition on
+	// a properly initialized fork schedule.
+	return NetworkScheduleEntry{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0}
 }

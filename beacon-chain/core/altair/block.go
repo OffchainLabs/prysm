@@ -49,9 +49,18 @@ func ProcessSyncAggregate(ctx context.Context, s state.BeaconState, sync *ethpb.
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "could not filter sync committee votes")
 	}
-
 	if err := VerifySyncCommitteeSig(s, votedKeys, sync.SyncCommitteeSignature); err != nil {
 		return nil, 0, errors.Wrap(err, "could not verify sync committee signature")
+	}
+	return s, reward, nil
+}
+
+// ProcessSyncAggregateNoVerifySig processes the sync aggregate without verifying the sync committee signature.
+// This is useful in scenarios such as block reward calculation, where we can assume the data in the block is valid.
+func ProcessSyncAggregateNoVerifySig(ctx context.Context, s state.BeaconState, sync *ethpb.SyncAggregate) (state.BeaconState, uint64, error) {
+	s, _, reward, err := processSyncAggregate(ctx, s, sync)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "could not filter sync committee votes")
 	}
 	return s, reward, nil
 }
