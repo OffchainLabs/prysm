@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -114,6 +115,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	}
 
 	p2pMaxPeers.Set(float64(cfg.MaxPeers))
+	minimumPeersPerSubnet.Set(float64(flags.Get().MinimumPeersPerSubnet))
 
 	metaData, err := metaDataFromDB(ctx, cfg.DB)
 	if err != nil {
