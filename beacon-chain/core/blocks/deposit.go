@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
@@ -34,7 +33,7 @@ func ActivateValidatorWithEffectiveBalance(beaconState state.BeaconState, deposi
 		if err != nil {
 			return nil, err
 		}
-		validator.EffectiveBalance = math.Min(balance-balance%params.BeaconConfig().EffectiveBalanceIncrement, params.BeaconConfig().MaxEffectiveBalance)
+		validator.EffectiveBalance = min(balance-balance%params.BeaconConfig().EffectiveBalanceIncrement, params.BeaconConfig().MaxEffectiveBalance)
 		if validator.EffectiveBalance ==
 			params.BeaconConfig().MaxEffectiveBalance {
 			validator.ActivationEligibilityEpoch = 0

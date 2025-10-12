@@ -68,7 +68,10 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
-	return err
+	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
+		return errors.Wrap(err, "process pending atts for block")
+	}
+	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
@@ -267,16 +270,9 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 		unseenIndices[sidecar.Index] = true
 	}
 
-	// Broadcast all the data column sidecars we reconstructed but did not see via gossip.
-	for _, sidecar := range unseenSidecars {
-		// Compute the subnet for this data column sidecar.
-		subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-
-		// Broadcast the data column sidecar.
-		if err := s.cfg.p2p.BroadcastDataColumnSidecar(subnet, sidecar); err != nil {
-			// Don't return on error on broadcast failure, just log it.
-			log.WithError(err).Error("Broadcast data column")
-		}
+	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).
+	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars); err != nil {
+		return nil, errors.Wrap(err, "broadcast data column sidecars")
 	}
 
 	// Receive data column sidecars.
@@ -303,7 +299,7 @@ func (s *Service) columnIndicesToSample() (map[uint64]bool, error) {
 	nodeID := s.cfg.p2p.NodeID()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody group count")
 	}

@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/spf13/afero"
 )
 
@@ -18,9 +18,7 @@ func ezIdent(t *testing.T, rootStr string, epoch primitives.Epoch, index uint64)
 }
 
 func setupTestBlobFile(t *testing.T, ident blobIdent, offset primitives.Slot, fs afero.Fs, l fsLayout) {
-	slot, err := slots.EpochStart(ident.epoch)
-	require.NoError(t, err)
-	slot += offset
+	slot := util.SlotAtEpoch(t, ident.epoch) + offset
 	_, sc := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, 1)
 	scb, err := sc[0].MarshalSSZ()
 	require.NoError(t, err)
@@ -53,6 +51,7 @@ func testAssertFsMigrated(t *testing.T, fs afero.Fs, ident blobIdent, before, af
 }
 
 func TestMigrations(t *testing.T) {
+	de := params.BeaconConfig().DenebForkEpoch
 	cases := []struct {
 		name           string
 		forwardLayout  string
@@ -65,18 +64,18 @@ func TestMigrations(t *testing.T) {
 			forwardLayout:  LayoutNameByEpoch,
 			targets: []migrationTestTarget{
 				{
-					ident: ezIdent(t, "0x0125e54c64c925018c9296965a5b622d9f5ab626c10917860dcfb6aa09a0a00b", 1234, 0),
+					ident: ezIdent(t, "0x0125e54c64c925018c9296965a5b622d9f5ab626c10917860dcfb6aa09a0a00b", de+1234, 0),
 				},
 				{
-					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", 5330, 0),
+					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", de+5330, 0),
 					slotOffset: 31,
 				},
 				{
-					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", 5330, 1),
+					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", de+5330, 1),
 					slotOffset: 31,
 				},
 				{
-					ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", 16777216, 0),
+					ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", de+16777216, 0),
 					slotOffset: 16,
 				},
 			},
@@ -87,33 +86,33 @@ func TestMigrations(t *testing.T) {
 			forwardLayout:  LayoutNameByEpoch,
 			targets: []migrationTestTarget{
 				{
-					ident: ezIdent(t, "0x0125e54c64c925018c9296965a5b622d9f5ab626c10917860dcfb6aa09a0a00b", 1234, 0),
+					ident: ezIdent(t, "0x0125e54c64c925018c9296965a5b622d9f5ab626c10917860dcfb6aa09a0a00b", de+1234, 0),
 				},
 				{
-					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", 5330, 0),
+					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", de+5330, 0),
 					slotOffset: 31,
 				},
 				{
-					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", 5330, 1),
+					ident:      ezIdent(t, "0x0127dba6fd30fdbb47e73e861d5c6e602b38ac3ddc945bb6a2fc4e10761e9a86", de+5330, 1),
 					slotOffset: 31,
 				},
 				{
-					ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", 16777216, 0),
+					ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", de+16777216, 0),
 					slotOffset: 16,
 					migrated:   true,
 				},
 				{
-					ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", 16777216, 1),
+					ident:      ezIdent(t, "0x0232521756a0b965eab2c2245d7ad85feaeaf5f427cd14d1a7531f9d555b415c", de+16777216, 1),
 					slotOffset: 16,
 					migrated:   true,
 				},
 				{
-					ident:      ezIdent(t, "0x42eabe3d2c125410cd226de6f2825fb7575ab896c3f52e43de1fa29e4c809aba", 16777217, 0),
+					ident:      ezIdent(t, "0x42eabe3d2c125410cd226de6f2825fb7575ab896c3f52e43de1fa29e4c809aba", de+16777217, 0),
 					slotOffset: 16,
 					migrated:   true,
 				},
 				{
-					ident:    ezIdent(t, "0x666cea5034e22bd3b849cb33914cad59afd88ee08e4d5bc0e997411c945fbc1d", 11235, 1),
+					ident:    ezIdent(t, "0x666cea5034e22bd3b849cb33914cad59afd88ee08e4d5bc0e997411c945fbc1d", de+11235, 1),
 					migrated: true,
 				},
 			},

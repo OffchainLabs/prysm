@@ -1,2 +1,0 @@
-### Added 
-- PeerDAS: Implement reconstruction.

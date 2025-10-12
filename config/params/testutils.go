@@ -2,11 +2,40 @@ package params
 
 import (
 	"testing"
+
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
 const (
 	EnvNameOverrideAccept = "PRYSM_API_OVERRIDE_ACCEPT"
 )
+
+func SetGenesisFork(t *testing.T, cfg *BeaconChainConfig, fork int) {
+	setGenesisUpdateEpochs(cfg, fork)
+	OverrideBeaconConfig(cfg)
+}
+
+func setGenesisUpdateEpochs(b *BeaconChainConfig, fork int) {
+	switch fork {
+	case version.Fulu:
+		b.FuluForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Electra)
+	case version.Electra:
+		b.ElectraForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Deneb)
+	case version.Deneb:
+		b.DenebForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Capella)
+	case version.Capella:
+		b.CapellaForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Bellatrix)
+	case version.Bellatrix:
+		b.BellatrixForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Altair)
+	case version.Altair:
+		b.AltairForkEpoch = 0
+	}
+}
 
 // SetupTestConfigCleanup preserves configurations allowing to modify them within tests without any
 // restrictions, everything is restored after the test.

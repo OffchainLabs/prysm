@@ -12,13 +12,18 @@ import (
 
 func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*ethpb.ProposerSlashing, []ethpb.AttSlashing) {
 	var err error
-
+	proposerSlashings := vs.SlashingsPool.PendingProposerSlashings(ctx, head, false /*noLimit*/)
+	attSlashings := vs.SlashingsPool.PendingAttesterSlashings(ctx, head, false /*noLimit*/)
+	validProposerSlashings := make([]*ethpb.ProposerSlashing, 0, len(proposerSlashings))
+	validAttSlashings := make([]ethpb.AttSlashing, 0, len(attSlashings))
+	if len(proposerSlashings) == 0 && len(attSlashings) == 0 {
+		return validProposerSlashings, validAttSlashings
+	}
+	// ExitInformation is expensive to compute, only do it if we need it.
 	exitInfo := v.ExitInformation(head)
 	if err := helpers.UpdateTotalActiveBalanceCache(head, exitInfo.TotalActiveBalance); err != nil {
 		log.WithError(err).Warn("Could not update total active balance cache")
 	}
-	proposerSlashings := vs.SlashingsPool.PendingProposerSlashings(ctx, head, false /*noLimit*/)
-	validProposerSlashings := make([]*ethpb.ProposerSlashing, 0, len(proposerSlashings))
 	for _, slashing := range proposerSlashings {
 		_, err = blocks.ProcessProposerSlashing(ctx, head, slashing, exitInfo)
 		if err != nil {
@@ -27,8 +32,6 @@ func (vs *Server) getSlashings(ctx context.Context, head state.BeaconState) ([]*
 		}
 		validProposerSlashings = append(validProposerSlashings, slashing)
 	}
-	attSlashings := vs.SlashingsPool.PendingAttesterSlashings(ctx, head, false /*noLimit*/)
-	validAttSlashings := make([]ethpb.AttSlashing, 0, len(attSlashings))
 	for _, slashing := range attSlashings {
 		_, err = blocks.ProcessAttesterSlashing(ctx, head, slashing, exitInfo)
 		if err != nil {

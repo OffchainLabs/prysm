@@ -1,6 +1,8 @@
 package peerdas
 
 import (
+	"sort"
+
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -28,7 +30,8 @@ func MinimumColumnCountToReconstruct() uint64 {
 
 // ReconstructDataColumnSidecars reconstructs all the data column sidecars from the given input data column sidecars.
 // All input sidecars must be committed to the same block.
-// `inVerifiedRoSidecars` should contain enough (unique) sidecars to reconstruct the missing columns.
+// `inVerifiedRoSidecars` should contain enough sidecars to reconstruct the missing columns, and should not contain any duplicate.
+// WARNING: This function sorts inplace `verifiedRoSidecars` by index.
 func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	// Check if there is at least one input sidecar.
 	if len(verifiedRoSidecars) == 0 {
@@ -51,17 +54,16 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 		}
 	}
 
-	// Deduplicate sidecars.
-	sidecarByIndex := make(map[uint64]blocks.VerifiedRODataColumn, len(verifiedRoSidecars))
-	for _, inVerifiedRoSidecar := range verifiedRoSidecars {
-		sidecarByIndex[inVerifiedRoSidecar.Index] = inVerifiedRoSidecar
-	}
-
 	// Check if there is enough sidecars to reconstruct the missing columns.
-	sidecarCount := len(sidecarByIndex)
+	sidecarCount := len(verifiedRoSidecars)
 	if uint64(sidecarCount) < MinimumColumnCountToReconstruct() {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
+
+	// Sort the input sidecars by index.
+	sort.Slice(verifiedRoSidecars, func(i, j int) bool {
+		return verifiedRoSidecars[i].Index < verifiedRoSidecars[j].Index
+	})
 
 	// Recover cells and compute proofs in parallel.
 	var wg errgroup.Group
@@ -71,10 +73,10 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 			cellsIndices := make([]uint64, 0, sidecarCount)
 			cells := make([]kzg.Cell, 0, sidecarCount)
 
-			for columnIndex, sidecar := range sidecarByIndex {
+			for _, sidecar := range verifiedRoSidecars {
 				cell := sidecar.Column[blobIndex]
 				cells = append(cells, kzg.Cell(cell))
-				cellsIndices = append(cellsIndices, columnIndex)
+				cellsIndices = append(cellsIndices, sidecar.Index)
 			}
 
 			// Recover the cells and proofs for the corresponding blob

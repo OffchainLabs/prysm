@@ -27,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
@@ -614,18 +613,19 @@ func TestBlobValidatorFromRangeReq(t *testing.T) {
 }
 
 func TestSeqBlobValid(t *testing.T) {
-	one, oneBlobs := generateTestBlockWithSidecars(t, [32]byte{}, 0, 3)
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	one, oneBlobs := generateTestBlockWithSidecars(t, [32]byte{}, ds, 3)
 	r1, err := one.Block.HashTreeRoot()
 	require.NoError(t, err)
-	two, twoBlobs := generateTestBlockWithSidecars(t, r1, 1, 3)
+	two, twoBlobs := generateTestBlockWithSidecars(t, r1, ds+1, 3)
 	r2, err := two.Block.HashTreeRoot()
 	require.NoError(t, err)
-	_, oops := generateTestBlockWithSidecars(t, r2, 0, 4)
+	_, oops := generateTestBlockWithSidecars(t, r2, ds, 4)
 	oops[1].SignedBlockHeader.Header.ParentRoot = bytesutil.PadTo([]byte("derp"), 32)
 	wrongRoot, err := blocks.NewROBlobWithRoot(oops[2].BlobSidecar, bytesutil.ToBytes32([]byte("parentderp")))
 	require.NoError(t, err)
 	oob := oops[3]
-	oob.Index = uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
+	oob.Index = uint64(params.BeaconConfig().MaxBlobsPerBlock(ds))
 
 	cases := []struct {
 		name  string
@@ -704,7 +704,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 
 	t.Run("single blob - Deneb", func(t *testing.T) {
 		// Setup genesis such that we are currently in deneb.
-		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+		s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
 		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
 		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 		require.NoError(t, err)
@@ -713,7 +713,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 		p2 := p2ptest.NewTestP2P(t)
 		p1.Connect(p2)
 		// Set current slot to a deneb slot.
-		slot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch + 1)
+		slot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch+1)
 		// Create a simple handler that will return a valid response.
 		p2.SetStreamHandler(topic, func(stream network.Stream) {
 			defer func() {
@@ -757,7 +757,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			require.NoError(t, undo())
 		}()
 		// Setup genesis such that we are currently in deneb.
-		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+		s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)) * params.BeaconConfig().SecondsPerSlot
 		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
 		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 		require.NoError(t, err)
@@ -766,7 +766,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 		p2 := p2ptest.NewTestP2P(t)
 		p1.Connect(p2)
 		// Set current slot to the first slot of the last deneb epoch.
-		slot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)
+		slot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 		// Create a simple handler that will return a valid response.
 		p2.SetStreamHandler(topic, func(stream network.Stream) {
 			defer func() {
@@ -825,7 +825,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 			require.NoError(t, undo())
 		}()
 
-		s := uint64(slots.UnsafeEpochStart(params.BeaconConfig().ElectraForkEpoch)) * params.BeaconConfig().SecondsPerSlot
+		s := uint64(util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)) * params.BeaconConfig().SecondsPerSlot
 		clock := startup.NewClock(time.Now().Add(-time.Second*time.Duration(s)), [32]byte{})
 		ctxByte, err := ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 		require.NoError(t, err)
@@ -834,7 +834,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 		p2 := p2ptest.NewTestP2P(t)
 		p1.Connect(p2)
 
-		slot := slots.UnsafeEpochStart(params.BeaconConfig().ElectraForkEpoch)
+		slot := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
 		// Create a simple handler that will return a valid response.
 		p2.SetStreamHandler(topic, func(stream network.Stream) {
 			defer func() {

@@ -39,7 +39,7 @@ func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpe
 		entry := &blobCacheEntry{}
 		if len(onDisk) > 0 {
 			od := map[[32]byte][]int{blk.Root(): onDisk}
-			sumz := filesystem.NewMockBlobStorageSummarizer(t, od)
+			sumz := filesystem.NewMockBlobStorageSummarizer(t, slots.ToEpoch(slot), od)
 			sum := sumz.Summary(blk.Root())
 			entry.setDiskSummary(sum)
 		}

@@ -27,6 +27,7 @@ go_library(
         "lightclient.go",
         "logging.go",
         "merge.go",
+        "slot.go",
         "state.go",
         "sync_aggregate.go",
         "sync_committee.go",
