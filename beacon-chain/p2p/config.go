@@ -7,6 +7,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/sirupsen/logrus"
 )
 
 // This is the default queue size used if we have specified an invalid one.
@@ -63,12 +64,17 @@ func (cfg *Config) connManagerLowHigh() (int, int) {
 	return low, high
 }
 
-// validateConfig validates whether the values provided are accurate and will set
-// the appropriate values for those that are invalid.
-func validateConfig(cfg *Config) *Config {
-	if cfg.QueueSize == 0 {
-		log.Warnf("Invalid pubsub queue size of %d initialized, setting the quese size as %d instead", cfg.QueueSize, defaultPubsubQueueSize)
-		cfg.QueueSize = defaultPubsubQueueSize
+// validateConfig validates whether the provided config has valid values and sets
+// the invalid ones to default.
+func validateConfig(cfg *Config) {
+	if cfg.QueueSize > 0 {
+		return
 	}
-	return cfg
+
+	log.WithFields(logrus.Fields{
+		"queueSize": cfg.QueueSize,
+		"default":   defaultPubsubQueueSize,
+	}).Warning("Invalid pubsub queue size, setting the queue size to the default value")
+
+	cfg.QueueSize = defaultPubsubQueueSize
 }

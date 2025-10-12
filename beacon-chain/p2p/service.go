@@ -106,13 +106,13 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
 
-	cfg = validateConfig(cfg)
+	validateConfig(cfg)
+
 	privKey, err := privKey(cfg)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to generate p2p private key")
 	}
 
-	// Set metrics.
 	p2pMaxPeers.Set(float64(cfg.MaxPeers))
 
 	metaData, err := metaDataFromDB(ctx, cfg.DB)
