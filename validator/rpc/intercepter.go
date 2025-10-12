@@ -38,7 +38,7 @@ func (s *Server) AuthTokenInterceptor() grpc.UnaryServerInterceptor {
 func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// if it's not initialize or has a web prefix
-		if (strings.Contains(r.URL.Path, api.WebApiUrlPrefix) || strings.Contains(r.URL.Path, api.KeymanagerApiPrefix)) && !strings.Contains(r.URL.Path, api.SystemLogsPrefix) {
+		if (strings.HasPrefix(r.URL.Path, api.WebApiUrlPrefix) || strings.HasPrefix(r.URL.Path, api.KeymanagerApiPrefix)) && !strings.HasPrefix(r.URL.Path, "/"+api.SystemLogsPrefix) {
 			// ignore some routes
 			reqToken := r.Header.Get("Authorization")
 			if reqToken == "" {
