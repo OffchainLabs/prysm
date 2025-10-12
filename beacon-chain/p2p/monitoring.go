@@ -42,6 +42,10 @@ var (
 	},
 		[]string{"agent"},
 	)
+	minimumPeersPerSubnet = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_minimum_peers_per_subnet",
+		Help: "The minimum number of peers to connect to per subnet",
+	})
 	avgScoreConnectedClients = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "connected_libp2p_peers_average_scores",
 		Help: "Tracks the overall p2p scores of connected libp2p peers by agent string",
