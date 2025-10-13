@@ -30,14 +30,54 @@ func TestVerifyDataColumnSidecar(t *testing.T) {
 		require.ErrorIs(t, err, peerdas.ErrNoKzgCommitments)
 	})
 
+	t.Run("Too many commitments", func(t *testing.T) {
+		const (
+			maxBlobsPerBlock = 2
+			blobCount        = 10
+		)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
+		params.OverrideBeaconConfig(cfg)
+
+		column, kzgCommitments, kzgProofs := make([][]byte, blobCount), make([][]byte, blobCount), make([][]byte, blobCount)
+		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, kzgProofs)
+		err := peerdas.VerifyDataColumnSidecar(roSidecar)
+		require.ErrorIs(t, err, peerdas.ErrTooManyCommitments)
+	})
+
 	t.Run("KZG commitments size mismatch", func(t *testing.T) {
-		kzgCommitments := make([][]byte, 1)
+		const (
+			maxBlobsPerBlock = 1
+			blobCount        = 1
+		)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
+		params.OverrideBeaconConfig(cfg)
+
+		kzgCommitments := make([][]byte, blobCount)
 		roSidecar := createTestSidecar(t, 0, nil, kzgCommitments, nil)
 		err := peerdas.VerifyDataColumnSidecar(roSidecar)
 		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
 	})
 
 	t.Run("KZG proofs size mismatch", func(t *testing.T) {
+		const (
+			maxBlobsPerBlock = 1
+			blobCount        = 1
+		)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
+		params.OverrideBeaconConfig(cfg)
+
 		column, kzgCommitments := make([][]byte, 1), make([][]byte, 1)
 		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, nil)
 		err := peerdas.VerifyDataColumnSidecar(roSidecar)
@@ -45,7 +85,18 @@ func TestVerifyDataColumnSidecar(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		column, kzgCommitments, kzgProofs := make([][]byte, 1), make([][]byte, 1), make([][]byte, 1)
+		const (
+			maxBlobsPerBlock = 1
+			blobCount        = 1
+		)
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
+		params.OverrideBeaconConfig(cfg)
+
+		column, kzgCommitments, kzgProofs := make([][]byte, blobCount), make([][]byte, blobCount), make([][]byte, blobCount)
 		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, kzgProofs)
 		err := peerdas.VerifyDataColumnSidecar(roSidecar)
 		require.NoError(t, err)
