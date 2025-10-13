@@ -175,9 +175,11 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 	params.OverrideBeaconConfig(config)
 
 	t.Run("Valid update", func(t *testing.T) {
-		const initialSlot primitives.Slot = 50
-		const newSlot primitives.Slot = 100
-		const groupCount uint64 = 5
+		const (
+			initialSlot primitives.Slot = 50
+			newSlot     primitives.Slot = 100
+			groupCount  uint64          = 5
+		)
 
 		// Set up a scenario where we're far enough in the chain that increasing to newSlot is valid
 		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
