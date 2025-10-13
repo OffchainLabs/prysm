@@ -317,7 +317,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 	if err != nil {
 		if errors.Is(err, builderapi.ErrBadGateway) && block.IsBlinded() {
-			log.WithError(err).Info("Builder relay returned 502 error - relay temporarily unavailable, block may arrive over P2P")
+			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
 			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 		}
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
