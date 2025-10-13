@@ -51,7 +51,7 @@ Prysm maintains two permanent branches:
 
 ### 🛠 Contribution Guide
 
-Want to get involved? Check out our **[Contribution Guide](https://docs.prylabs.network/docs/contribute/contribution-guidelines/)** to learn more!
+Want to get involved? Check out our **[Contribution Guide](https://prysm.offchainlabs.com/docs/contribute/contribution-guidelines/)** to learn more!
 
 ---
 
