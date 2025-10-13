@@ -2,10 +2,14 @@ package query
 
 import (
 	"errors"
+
+	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 type SSZObject interface {
-	HashTreeRoot() ([32]byte, error)
+	ssz.Marshaler
+	ssz.Unmarshaler
+	ssz.HashRoot
 }
 
 // HashTreeRoot calls the HashTreeRoot method on the stored interface if it implements SSZObject.

@@ -13,6 +13,8 @@ type sszInfo struct {
 	sszType SSZType
 	// Type in Go. Need this for unmarshaling.
 	typ reflect.Type
+	// Original object being analyzed
+	source SSZObject
 
 	// isVariable is true if the struct contains any variable-size fields.
 	isVariable bool
@@ -33,9 +35,6 @@ type sszInfo struct {
 
 	// For Bitvector types.
 	bitvectorInfo *bitvectorInfo
-
-	// Original object being analyzed
-	source SSZObject
 }
 
 func (info *sszInfo) FixedSize() uint64 {
