@@ -15,7 +15,7 @@
 
 ## 📖 Overview
 
-This is the core repository for Prysm, a [Golang](https://golang.org/) implementation of the [Ethereum Consensus](https://ethereum.org/en/developers/docs/consensus-mechanisms/#proof-of-stake) [specification](https://github.com/ethereum/consensus-specs), developed by [Offchain Labs](https://www.offchainlabs.com).
+This is the core repository for Prysm, a [Golang](https://go.dev/) implementation of the [Ethereum Consensus](https://ethereum.org/en/developers/docs/consensus-mechanisms/#proof-of-stake) [specification](https://github.com/ethereum/consensus-specs), developed by [Offchain Labs](https://www.offchainlabs.com).
 
 See the [Changelog](https://github.com/OffchainLabs/prysm/releases) for details of the latest releases and upcoming breaking changes.
 
