@@ -11,7 +11,7 @@ go_library(
         "path.go",
         "query.go",
         "ssz_info.go",
-        "ssz_interface.go",
+        "ssz_object.go",
         "ssz_type.go",
         "tag_parser.go",
         "vector.go",
@@ -27,7 +27,6 @@ go_test(
         "analyzer_test.go",
         "path_test.go",
         "query_test.go",
-        "ssz_interface_test.go",
         "tag_parser_test.go",
     ],
     deps = [
