@@ -18,89 +18,46 @@ import (
 )
 
 func TestVerifyDataColumnSidecar(t *testing.T) {
-	t.Run("index too large", func(t *testing.T) {
-		roSidecar := createTestSidecar(t, 1_000_000, nil, nil, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrIndexTooLarge)
-	})
+	testCases := []struct {
+		name             string
+		index            uint64
+		blobCount        int
+		commitmentCount  int
+		proofCount       int
+		maxBlobsPerBlock uint64
+		expectedError    error
+	}{
+		{name: "index too large", index: 1_000_000, expectedError: peerdas.ErrIndexTooLarge},
+		{name: "no commitments", expectedError: peerdas.ErrNoKzgCommitments},
+		{name: "too many commitments", blobCount: 10, commitmentCount: 10, proofCount: 10, maxBlobsPerBlock: 2, expectedError: peerdas.ErrTooManyCommitments},
+		{name: "commitments size mismatch", commitmentCount: 1, maxBlobsPerBlock: 1, expectedError: peerdas.ErrMismatchLength},
+		{name: "proofs size mismatch", blobCount: 1, commitmentCount: 1, maxBlobsPerBlock: 1, expectedError: peerdas.ErrMismatchLength},
+		{name: "nominal", blobCount: 1, commitmentCount: 1, proofCount: 1, maxBlobsPerBlock: 1, expectedError: nil},
+	}
 
-	t.Run("no commitments", func(t *testing.T) {
-		roSidecar := createTestSidecar(t, 0, nil, nil, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrNoKzgCommitments)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig()
+			cfg.FuluForkEpoch = 0
+			cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: tc.maxBlobsPerBlock}}
+			params.OverrideBeaconConfig(cfg)
 
-	t.Run("Too many commitments", func(t *testing.T) {
-		const (
-			maxBlobsPerBlock = 2
-			blobCount        = 10
-		)
+			column := make([][]byte, tc.blobCount)
+			kzgCommitments := make([][]byte, tc.commitmentCount)
+			kzgProof := make([][]byte, tc.proofCount)
 
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
-		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
-		params.OverrideBeaconConfig(cfg)
+			roSidecar := createTestSidecar(t, tc.index, column, kzgCommitments, kzgProof)
+			err := peerdas.VerifyDataColumnSidecar(roSidecar)
 
-		column, kzgCommitments, kzgProofs := make([][]byte, blobCount), make([][]byte, blobCount), make([][]byte, blobCount)
-		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, kzgProofs)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrTooManyCommitments)
-	})
+			if tc.expectedError != nil {
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
 
-	t.Run("KZG commitments size mismatch", func(t *testing.T) {
-		const (
-			maxBlobsPerBlock = 1
-			blobCount        = 1
-		)
-
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
-		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
-		params.OverrideBeaconConfig(cfg)
-
-		kzgCommitments := make([][]byte, blobCount)
-		roSidecar := createTestSidecar(t, 0, nil, kzgCommitments, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
-	})
-
-	t.Run("KZG proofs size mismatch", func(t *testing.T) {
-		const (
-			maxBlobsPerBlock = 1
-			blobCount        = 1
-		)
-
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
-		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
-		params.OverrideBeaconConfig(cfg)
-
-		column, kzgCommitments := make([][]byte, 1), make([][]byte, 1)
-		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
-	})
-
-	t.Run("nominal", func(t *testing.T) {
-		const (
-			maxBlobsPerBlock = 1
-			blobCount        = 1
-		)
-
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.FuluForkEpoch = 0
-		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
-		params.OverrideBeaconConfig(cfg)
-
-		column, kzgCommitments, kzgProofs := make([][]byte, blobCount), make([][]byte, blobCount), make([][]byte, blobCount)
-		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, kzgProofs)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.NoError(t, err)
-	})
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
