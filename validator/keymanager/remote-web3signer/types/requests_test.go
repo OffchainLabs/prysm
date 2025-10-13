@@ -1,6 +1,7 @@
 package types_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 
 func TestGetAggregateAndProofV2SignRequest(t *testing.T) {
 	type args struct {
+		version               int
 		request               *validatorpb.SignRequest
 		genesisValidatorsRoot []byte
 	}
@@ -25,24 +27,40 @@ func TestGetAggregateAndProofV2SignRequest(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Happy Path Test",
+			name: "Happy Path Test Electra",
 			args: args{
+				version:               version.Electra,
 				request:               mock.GetMockSignRequest("AGGREGATE_AND_PROOF_V2"),
 				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
 			},
 			want:    mock.AggregateAndProofV2SignRequest(version.Electra),
 			wantErr: false,
 		},
+		{
+			name: "Happy Path Test Pre-Electra",
+			args: args{
+				version:               version.Deneb,
+				request:               mock.GetMockSignRequest("AGGREGATE_AND_PROOF"),
+				genesisValidatorsRoot: make([]byte, fieldparams.RootLength),
+			},
+			want:    mock.AggregateAndProofV2SignRequest(version.Deneb),
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := types.GetAggregateAndProofV2SignRequest(version.Electra, tt.args.request, tt.args.genesisValidatorsRoot)
+			got, err := types.GetAggregateAndProofV2SignRequest(tt.args.version, tt.args.request, tt.args.genesisValidatorsRoot)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetAggregateAndProofV2SignRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetAggregateAndProofV2SignRequest() got = %v, want %v", got, tt.want)
+			// Marshal to JSON for comparison since ForkInfo is generated dynamically
+			gotJSON, err := json.Marshal(got)
+			require.NoError(t, err)
+			wantJSON, err := json.Marshal(tt.want)
+			require.NoError(t, err)
+			if string(gotJSON) != string(wantJSON) {
+				t.Errorf("JSON mismatch:\ngot:  %s\nwant: %s", string(gotJSON), string(wantJSON))
 			}
 		})
 	}
