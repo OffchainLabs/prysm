@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -209,20 +208,13 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 	}
 
 	// Slow path: build ID map and match
-	passedSet := make(map[attestation.Id]struct{}, len(passed))
-	for _, a := range passed {
-		id, err := attestation.NewId(a, attestation.Data)
-		if err == nil {
-			passedSet[id] = struct{}{}
-		}
+	passedSet := make(map[ethpb.Att]struct{}, len(passed))
+	for _, att := range passed {
+		passedSet[att] = struct{}{}
 	}
 
 	for i, poolAtt := range pool {
-		id, err := attestation.NewId(poolAtt, attestation.Data)
-		if err != nil {
-			continue
-		}
-		if _, ok := passedSet[id]; ok {
+		if _, ok := passedSet[poolAtt]; ok {
 			s.processVerifiedAttestation(ctx, bcast[i], poolAtt, preState)
 		}
 	}

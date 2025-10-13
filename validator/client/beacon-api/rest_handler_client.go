@@ -241,7 +241,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
 		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s body %s", httpResp.Request.URL, body)
 		}
 		return nil, nil, errorJson
 	}
