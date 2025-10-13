@@ -1,3 +1,0 @@
-### Ignored
-- `requestAndSaveMissingDataColumnSidecars`: Fix log
-
