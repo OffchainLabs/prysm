@@ -23,7 +23,7 @@ See the [Changelog](https://github.com/OffchainLabs/prysm/releases) for details 
 
 ## 🚀 Getting Started
 
-A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://docs.prylabs.network)**.
+A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://prysm.offchainlabs.com/docs/)**.
 
 💬 **Need help?** Join our **[Discord Community](https://discord.gg/prysm)** for support.
 
