@@ -1,0 +1,3 @@
+### Fixed
+
+- Fixed [#15812](https://github.com/OffchainLabs/prysm/issues/15812): Gossip attestation validation incorrectly rejecting attestations that arrive before their referenced blocks. Previously, attestations were saved to the pending queue but immediately rejected by forkchoice validation, causing "not descendant of finalized checkpoint" errors. Now attestations for missing blocks return `ValidationIgnore` without error, allowing them to be properly processed when their blocks arrive. This eliminates false positive rejections and prevents potential incorrect peer downscoring during network congestion.
