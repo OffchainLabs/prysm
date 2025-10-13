@@ -1,4 +1,4 @@
-version: v1.6.0-beta.0
+version: v1.6.0-beta.1
 style: full
 
 specrefs:
@@ -18,6 +18,7 @@ exceptions:
     - UPDATE_TIMEOUT#altair
 
     # Not implemented: gloas (future fork)
+    - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
 
@@ -50,7 +51,6 @@ exceptions:
     # Not implemented: gloas (future fork)
     - BUILDER_PAYMENT_THRESHOLD_DENOMINATOR#gloas
     - BUILDER_PAYMENT_THRESHOLD_NUMERATOR#gloas
-    - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - BUILDER_WITHDRAWAL_PREFIX#gloas
     - DOMAIN_BEACON_BUILDER#gloas
     - DOMAIN_PTC_ATTESTER#gloas
@@ -82,6 +82,12 @@ exceptions:
     - Eth1Block#phase0
     - MatrixEntry#fulu
 
+    # Not implemented: capella
+    - LightClientBootstrap#capella
+    - LightClientFinalityUpdate#capella
+    - LightClientOptimisticUpdate#capella
+    - LightClientUpdate#capella
+
     # Not implemented: gloas (future fork)
     - BeaconBlockBody#gloas
     - BeaconState#gloas
@@ -105,6 +111,9 @@ exceptions:
     - LightClientStore#altair
     - OptimisticStore#bellatrix
     - Store#phase0
+
+    # Not implemented: capella
+    - LightClientStore#capella
 
     # Not implemented: gloas (future fork)
     - LatestMessage#gloas
@@ -213,6 +222,7 @@ exceptions:
     - xor#phase0
 
     # Not implemented: altair
+    - compute_merkle_proof#altair
     - compute_sync_committee_period_at_slot#altair
     - get_contribution_and_proof#altair
     - get_contribution_due_ms#altair
@@ -354,6 +364,7 @@ exceptions:
     - upgrade_to_gloas#gloas
     - validate_merge_block#gloas
     - validate_on_attestation#gloas
+    - verify_data_column_sidecar#gloas
     - verify_data_column_sidecar_inclusion_proof#gloas
     - verify_execution_payload_envelope_signature#gloas
     - verify_execution_payload_bid_signature#gloas

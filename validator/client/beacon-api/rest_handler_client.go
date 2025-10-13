@@ -135,7 +135,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
 		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
 		}
 		return nil, nil, errorJson
 	}
@@ -241,7 +241,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
 		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
 		}
 		return nil, nil, errorJson
 	}

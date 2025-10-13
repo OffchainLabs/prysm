@@ -726,6 +726,12 @@ func unexpectedStatusErr(response *http.Response, expected int) error {
 			return errors.Wrap(jsonErr, "unable to read response body")
 		}
 		return errors.Wrap(ErrNotOK, errMessage.Message)
+	case http.StatusBadGateway:
+		log.WithError(ErrBadGateway).Debug(msg)
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return errors.Wrap(ErrBadGateway, errMessage.Message)
 	default:
 		log.WithError(ErrNotOK).Debug(msg)
 		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))

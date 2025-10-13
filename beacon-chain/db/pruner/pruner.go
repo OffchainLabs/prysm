@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -25,17 +24,24 @@ const (
 	defaultNumBatchesToPrune = 15
 )
 
+// custodyUpdater is a tiny interface that p2p service implements; kept here to avoid
+// importing the p2p package and creating a cycle.
+type custodyUpdater interface {
+	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
+}
+
 type ServiceOption func(*Service)
 
 // WithRetentionPeriod allows the user to specify a different data retention period than the spec default.
 // The retention period is specified in epochs, and must be >= MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
 	return func(s *Service) {
-		defaultRetentionEpochs := helpers.MinEpochsForBlockRequests() + 1
+		defaultRetentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1
 		if retentionEpochs < defaultRetentionEpochs {
 			log.WithField("userEpochs", retentionEpochs).
 				WithField("minRequired", defaultRetentionEpochs).
-				Warn("Retention period too low, using minimum required value")
+				Warn("Retention period too low, ignoring and using minimum required value")
+			retentionEpochs = defaultRetentionEpochs
 		}
 
 		s.ps = pruneStartSlotFunc(retentionEpochs)
@@ -58,17 +64,23 @@ type Service struct {
 	slotTicker     slots.Ticker
 	backfillWaiter func() error
 	initSyncWaiter func() error
+	custody        custodyUpdater
 }
 
-func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, opts ...ServiceOption) (*Service, error) {
+func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, custody custodyUpdater, opts ...ServiceOption) (*Service, error) {
+	if custody == nil {
+		return nil, errors.New("custody updater is required for pruner but was not provided")
+	}
+
 	p := &Service{
 		ctx:            ctx,
 		db:             db,
-		ps:             pruneStartSlotFunc(helpers.MinEpochsForBlockRequests() + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
+		ps:             pruneStartSlotFunc(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
 		done:           make(chan struct{}),
 		slotTicker:     slots.NewSlotTicker(slots.UnsafeStartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
 		initSyncWaiter: initSyncWaiter,
 		backfillWaiter: backfillWaiter,
+		custody:        custody,
 	}
 
 	for _, o := range opts {
@@ -157,16 +169,44 @@ func (p *Service) prune(slot primitives.Slot) error {
 		return errors.Wrap(err, "failed to prune batches")
 	}
 
-	log.WithFields(logrus.Fields{
-		"prunedUpto":  pruneUpto,
-		"duration":    time.Since(tt),
-		"currentSlot": slot,
-		"batchSize":   defaultPrunableBatchSize,
-		"numBatches":  numBatches,
-	}).Debug("Successfully pruned chain data")
+	earliestAvailableSlot := pruneUpto + 1
 
 	// Update pruning checkpoint.
 	p.prunedUpto = pruneUpto
+
+	// Update the earliest available slot after pruning
+	if err := p.updateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+		return errors.Wrap(err, "update earliest available slot")
+	}
+
+	log.WithFields(logrus.Fields{
+		"prunedUpto":            pruneUpto,
+		"earliestAvailableSlot": earliestAvailableSlot,
+		"duration":              time.Since(tt),
+		"currentSlot":           slot,
+		"batchSize":             defaultPrunableBatchSize,
+		"numBatches":            numBatches,
+	}).Debug("Successfully pruned chain data")
+
+	return nil
+}
+
+// updateEarliestAvailableSlot updates the earliest available slot via the injected custody updater
+// and also persists it to the database.
+func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	if !params.FuluEnabled() {
+		return nil
+	}
+
+	// Update the p2p in-memory state
+	if err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+		return errors.Wrapf(err, "update earliest available slot after pruning to %d", earliestAvailableSlot)
+	}
+
+	// Persist to database to ensure it survives restarts
+	if err := p.db.UpdateEarliestAvailableSlot(p.ctx, earliestAvailableSlot); err != nil {
+		return errors.Wrapf(err, "update earliest available slot in database for slot %d", earliestAvailableSlot)
+	}
 
 	return nil
 }

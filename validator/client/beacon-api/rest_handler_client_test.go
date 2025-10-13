@@ -344,4 +344,18 @@ func Test_decodeResp(t *testing.T) {
 		err = decodeResp(r, nil)
 		assert.ErrorContains(t, "failed to decode response body into error json", err)
 	})
+	t.Run("500 not JSON", func(t *testing.T) {
+		body := bytes.Buffer{}
+		_, err := body.WriteString("foo")
+		require.NoError(t, err)
+		r := &http.Response{
+			Status:     "500",
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(&body),
+			Header:     map[string][]string{"Content-Type": {"text/plain"}},
+			Request:    &http.Request{},
+		}
+		err = decodeResp(r, nil)
+		assert.ErrorContains(t, "HTTP request unsuccessful (500: foo)", err)
+	})
 }

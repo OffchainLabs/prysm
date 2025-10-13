@@ -38,8 +38,8 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	defer cancel()
 
 	SetRPCStreamDeadlines(stream)
-	beaconConfig := params.BeaconConfig()
-	maxRequestDataColumnSidecars := beaconConfig.MaxRequestDataColumnSidecars
+	cfg := params.BeaconConfig()
+	maxRequestDataColumnSidecars := cfg.MaxRequestDataColumnSidecars
 	remotePeer := stream.Conn().RemotePeer()
 
 	log := log.WithFields(logrus.Fields{
@@ -70,6 +70,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	log.Trace("Serving data column sidecars by range")
 
 	if rangeParameters == nil {
+		closeStream(stream, log)
 		return nil
 	}
 
@@ -101,7 +102,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 
 		// Once the quota is reached, we're done serving the request.
 		if maxRequestDataColumnSidecars == 0 {
-			log.WithField("initialQuota", beaconConfig.MaxRequestDataColumnSidecars).Trace("Reached quota for data column sidecars by range request")
+			log.WithField("initialQuota", cfg.MaxRequestDataColumnSidecars).Trace("Reached quota for data column sidecars by range request")
 			break
 		}
 	}

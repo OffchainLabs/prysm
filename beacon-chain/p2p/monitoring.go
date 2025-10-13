@@ -3,6 +3,7 @@ package p2p
 import (
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,12 +27,25 @@ var (
 		Help: "The number of peers in a given state.",
 	},
 		[]string{"state"})
+	p2pMaxPeers = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_max_peers",
+		Help: "The target maximum number of peers.",
+	})
+	p2pPeerCountDirectionType = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "p2p_peer_count_direction_type",
+		Help: "The number of peers in a given direction and type.",
+	},
+		[]string{"direction", "type"})
 	connectedPeersCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "connected_libp2p_peers",
 		Help: "Tracks the total number of connected libp2p peers by agent string",
 	},
 		[]string{"agent"},
 	)
+	minimumPeersPerSubnet = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_minimum_peers_per_subnet",
+		Help: "The minimum number of peers to connect to per subnet",
+	})
 	avgScoreConnectedClients = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "connected_libp2p_peers_average_scores",
 		Help: "Tracks the overall p2p scores of connected libp2p peers by agent string",
@@ -174,18 +188,26 @@ var (
 )
 
 func (s *Service) updateMetrics() {
+	store := s.Host().Peerstore()
 	connectedPeers := s.peers.Connected()
+
 	p2pPeerCount.WithLabelValues("Connected").Set(float64(len(connectedPeers)))
 	p2pPeerCount.WithLabelValues("Disconnected").Set(float64(len(s.peers.Disconnected())))
 	p2pPeerCount.WithLabelValues("Connecting").Set(float64(len(s.peers.Connecting())))
 	p2pPeerCount.WithLabelValues("Disconnecting").Set(float64(len(s.peers.Disconnecting())))
 	p2pPeerCount.WithLabelValues("Bad").Set(float64(len(s.peers.Bad())))
 
-	store := s.Host().Peerstore()
-	numConnectedPeersByClient := make(map[string]float64)
+	upperTCP := strings.ToUpper(string(peers.TCP))
+	upperQUIC := strings.ToUpper(string(peers.QUIC))
+
+	p2pPeerCountDirectionType.WithLabelValues("inbound", upperTCP).Set(float64(len(s.peers.InboundConnectedWithProtocol(peers.TCP))))
+	p2pPeerCountDirectionType.WithLabelValues("inbound", upperQUIC).Set(float64(len(s.peers.InboundConnectedWithProtocol(peers.QUIC))))
+	p2pPeerCountDirectionType.WithLabelValues("outbound", upperTCP).Set(float64(len(s.peers.OutboundConnectedWithProtocol(peers.TCP))))
+	p2pPeerCountDirectionType.WithLabelValues("outbound", upperQUIC).Set(float64(len(s.peers.OutboundConnectedWithProtocol(peers.QUIC))))
+
+	connectedPeersCountByClient := make(map[string]float64)
 	peerScoresByClient := make(map[string][]float64)
-	for i := 0; i < len(connectedPeers); i++ {
-		p := connectedPeers[i]
+	for _, p := range connectedPeers {
 		pid, err := peer.Decode(p.String())
 		if err != nil {
 			log.WithError(err).Debug("Could not decode peer string")
@@ -193,16 +215,18 @@ func (s *Service) updateMetrics() {
 		}
 
 		foundName := agentFromPid(pid, store)
-		numConnectedPeersByClient[foundName] += 1
+		connectedPeersCountByClient[foundName] += 1
 
 		// Get peer scoring data.
 		overallScore := s.peers.Scorers().Score(pid)
 		peerScoresByClient[foundName] = append(peerScoresByClient[foundName], overallScore)
 	}
+
 	connectedPeersCount.Reset() // Clear out previous results.
-	for agent, total := range numConnectedPeersByClient {
+	for agent, total := range connectedPeersCountByClient {
 		connectedPeersCount.WithLabelValues(agent).Set(total)
 	}
+
 	avgScoreConnectedClients.Reset() // Clear out previous results.
 	for agent, scoringData := range peerScoresByClient {
 		avgScore := average(scoringData)

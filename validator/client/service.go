@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/OffchainLabs/prysm/v6/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v6/api/grpc"
 	"github.com/OffchainLabs/prysm/v6/async/event"
@@ -79,6 +80,7 @@ type Config struct {
 	BeaconNodeGRPCEndpoint  string
 	BeaconNodeCert          string
 	BeaconApiEndpoint       string
+	BeaconApiHeaders        map[string][]string
 	BeaconApiTimeout        time.Duration
 	Graffiti                string
 	GraffitiStruct          *graffiti.Graffiti
@@ -142,7 +144,8 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 	s.conn = validatorHelpers.NewNodeConnection(
 		grpcConn,
 		cfg.BeaconApiEndpoint,
-		cfg.BeaconApiTimeout,
+		validatorHelpers.WithBeaconApiHeaders(cfg.BeaconApiHeaders),
+		validatorHelpers.WithBeaconApiTimeout(cfg.BeaconApiTimeout),
 	)
 
 	return s, nil
@@ -185,8 +188,9 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
+	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, v.conn.GetBeaconApiHeaders())
 	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(headersTransport)},
 		hosts[0],
 	)
 

@@ -1049,9 +1049,8 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 		s.SubmitSyncCommitteeSubscription(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 		subnets, _, _, _ := cache.SyncSubnetIDs.GetSyncCommitteeSubnets(pubkeys[1], 0)
-		require.Equal(t, 2, len(subnets))
+		require.Equal(t, 1, len(subnets))
 		assert.Equal(t, uint64(0), subnets[0])
-		assert.Equal(t, uint64(2), subnets[1])
 	})
 	t.Run("multiple", func(t *testing.T) {
 		cache.SyncSubnetIDs.EmptyAllCaches()
@@ -1070,7 +1069,7 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 		assert.Equal(t, uint64(0), subnets[0])
 		subnets, _, _, _ = cache.SyncSubnetIDs.GetSyncCommitteeSubnets(pubkeys[1], 0)
 		require.Equal(t, 1, len(subnets))
-		assert.Equal(t, uint64(2), subnets[0])
+		assert.Equal(t, uint64(0), subnets[0])
 	})
 	t.Run("no body", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)

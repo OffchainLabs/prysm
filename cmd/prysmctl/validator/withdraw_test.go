@@ -220,8 +220,8 @@ func TestCallWithdrawalEndpoint_Errors(t *testing.T) {
 		if r.Method == http.MethodPost && r.RequestURI == "/eth/v1/beacon/pool/bls_to_execution_changes" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
-			err = json.NewEncoder(w).Encode(&server.IndexedVerificationFailureError{
-				Failures: []*server.IndexedVerificationFailure{
+			err = json.NewEncoder(w).Encode(&server.IndexedErrorContainer{
+				Failures: []*server.IndexedError{
 					{Index: 0, Message: "Could not validate SignedBLSToExecutionChange"},
 				},
 			})

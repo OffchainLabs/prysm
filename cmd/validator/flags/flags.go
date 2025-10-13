@@ -45,6 +45,13 @@ var (
 		Usage: "Beacon node REST API provider endpoint.",
 		Value: "http://127.0.0.1:3500",
 	}
+	// BeaconRESTApiHeaders defines a list of headers to send with all HTTP requests to the beacon node.
+	BeaconRESTApiHeaders = &cli.StringFlag{
+		Name: "beacon-rest-api-headers",
+		Usage: `Comma-separated list of key value pairs to pass as headers for all HTTP calls to the beacon node. 
+		To provide multiple values for the same key, specify the same key for each value. 
+		Example: --grpc-headers=key1=value1,key1=value2,key2=value3`,
+	}
 	// CertFlag defines a flag for the node's TLS certificate.
 	CertFlag = &cli.StringFlag{
 		Name:  "tls-cert",

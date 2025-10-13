@@ -441,6 +441,7 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		for i := range blobCount {
 			require.Equal(t, len(expectedCellsAndProofs[i].Cells), len(actualCellsAndProofs[i].Cells))
 			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), len(actualCellsAndProofs[i].Proofs))
+			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), cap(actualCellsAndProofs[i].Proofs))
 
 			// Compare cells
 			for j, expectedCell := range expectedCellsAndProofs[i].Cells {
