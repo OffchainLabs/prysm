@@ -229,10 +229,11 @@ var (
 		Name:  "disable-debug-rpc-endpoints",
 		Usage: "Disables the debug Beacon API namespace.",
 	}
-	// SubscribeToAllSubnets defines a flag to specify whether to subscribe to all possible attestation/sync subnets or not.
-	SubscribeToAllSubnets = &cli.BoolFlag{
-		Name:  "subscribe-all-subnets",
-		Usage: "Subscribe to all possible attestation and sync subnets.",
+	// SubscribeToAllAttAndSyncSubnets defines a flag to specify whether to subscribe to all possible attestation/sync subnets or not.
+	SubscribeToAllAttAndSyncSubnets = &cli.BoolFlag{
+		Name:    "subscribe-all-attestation-and-sync-subnets",
+		Aliases: []string{"subscribe-all-subnets"},
+		Usage:   "Subscribe to all possible attestation and sync subnets.",
 	}
 	// HistoricalSlasherNode is a set of beacon node flags required for performing historical detection with a slasher.
 	HistoricalSlasherNode = &cli.BoolFlag{

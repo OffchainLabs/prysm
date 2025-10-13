@@ -64,7 +64,7 @@ var appFlags = []cli.Flag{
 	flags.InteropMockEth1DataVotesFlag,
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
-	flags.SubscribeToAllSubnets,
+	flags.SubscribeToAllAttAndSyncSubnets,
 	flags.SubscribeAllDataSubnets,
 	flags.HistoricalSlasherNode,
 	flags.ChainID,

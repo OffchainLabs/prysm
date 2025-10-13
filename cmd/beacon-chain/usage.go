@@ -106,7 +106,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MaxConcurrentDials,
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
-			flags.SubscribeToAllSubnets,
+			flags.SubscribeToAllAttAndSyncSubnets,
 			flags.SubscribeAllDataSubnets,
 		},
 	},
