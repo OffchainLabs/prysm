@@ -49,6 +49,11 @@ func (info *sszInfo) Size() uint64 {
 		return 0
 	}
 
+	// Using fastssz's SizeSSZ method if source is available.
+	if info.source != nil {
+		return uint64(info.source.SizeSSZ())
+	}
+
 	// Easy case: if the type is not variable, we can return the fixed size.
 	if !info.isVariable {
 		return info.fixedSize
@@ -62,6 +67,9 @@ func (info *sszInfo) Size() uint64 {
 		return info.bitlistInfo.Size()
 
 	case Container:
+		// TODO: Remove this panic.
+		panic("unreachable: variable-size Container without source")
+
 		size := info.fixedSize
 		for _, fieldInfo := range info.containerInfo.fields {
 			if !fieldInfo.sszInfo.isVariable {
