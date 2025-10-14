@@ -1092,10 +1092,9 @@ func TestDataColumns_FarFutureFuluForkEpoch(t *testing.T) {
 	}()
 
 	_, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(blockRoot[:]), nil)
-	// The function completed without overflow errors from slots.EpochStart(MaxUint64)
-	if rpcErr != nil {
-		t.Logf("Function returned error (acceptable): %v", rpcErr.Err)
-		require.NotEqual(t, "could not calculate Fulu start slot", rpcErr.Err.Error(),
-			"Should not fail on Fulu slot calculation when epoch is MaxUint64")
-	}
+
+	// Should return BadRequest error since Fulu fork is disabled (MaxUint64)
+	require.NotNil(t, rpcErr, "Should return error when Fulu fork is disabled")
+	require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
+	require.Equal(t, "data columns are not supported when Fulu fork is disabled", rpcErr.Err.Error())
 }

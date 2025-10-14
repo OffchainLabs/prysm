@@ -515,14 +515,18 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 	}
 
 	slot := roSignedBlock.Block().Slot()
-	if fuluForkEpoch := params.BeaconConfig().FuluForkEpoch; fuluForkEpoch != primitives.Epoch(math.MaxUint64) {
-		fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
-		if err != nil {
-			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-		}
-		if slot < fuluForkSlot {
-			return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
-		}
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	if fuluForkEpoch == primitives.Epoch(math.MaxUint64) {
+		// Fulu fork is disabled - data columns are never supported
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported when Fulu fork is disabled"), Reason: core.BadRequest}
+	}
+
+	fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
+	if err != nil {
+		return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
+	}
+	if slot < fuluForkSlot {
+		return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
 	}
 
 	roBlock := roSignedBlock.Block()
