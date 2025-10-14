@@ -109,7 +109,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 		}
 
 		// Dereference first in case value is a pointer.
-		derefValue := dereferencePointer(value)
+		derefValue := dereferencePointer2(value)
 
 		// Start with the fixed size of this Container.
 		currentOffset := sszInfo.FixedSize()
@@ -398,8 +398,8 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 	return sszInfo, nil
 }
 
-// dereferencePointer dereferences a pointer to get the underlying value using reflection.
-func dereferencePointer(obj any) reflect.Value {
+// dereferencePointer2 dereferences a pointer to get the underlying value using reflection.
+func dereferencePointer2(obj any) reflect.Value {
 	value := reflect.ValueOf(obj)
 	if value.Kind() == reflect.Ptr {
 		if value.IsNil() {
