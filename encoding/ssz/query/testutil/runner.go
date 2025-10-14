@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
@@ -10,14 +11,11 @@ import (
 
 func RunStructTest(t *testing.T, spec TestSpec) {
 	t.Run(spec.Name, func(t *testing.T) {
-		object, ok := spec.Type.(query.SSZObject)
-		require.Equal(t, true, ok, "spec.Type must implement SSZObject interface")
-		require.NotNil(t, object, "spec.Type must not be nil")
-		info, err := query.AnalyzeObject(object)
+		info, err := query.AnalyzeObject(spec.Type)
 		require.NoError(t, err)
 
 		testInstance := spec.Instance
-		err = query.PopulateVariableLengthInfo(info, testInstance)
+		err = query.PopulateVariableLengthInfo(info, reflect.ValueOf(testInstance))
 		require.NoError(t, err)
 
 		marshaller, ok := testInstance.(ssz.Marshaler)
