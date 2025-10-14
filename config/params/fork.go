@@ -111,3 +111,13 @@ func genesisNetworkScheduleEntry() NetworkScheduleEntry {
 	// a properly initialized fork schedule.
 	return NetworkScheduleEntry{Epoch: b.GenesisEpoch, isFork: true, ForkVersion: to4(b.GenesisForkVersion), VersionEnum: version.Phase0}
 }
+
+// SlotOrFarFuture either returns the slot for the given epoch
+// or the maximum slot value if the conversion to slot will overflow.
+func SlotOrFarFuture(e primitives.Epoch) primitives.Slot {
+	cfg := BeaconConfig()
+	if e > cfg.MaxEpoch() {
+		return MaxSlot
+	}
+	return primitives.Slot(e) * cfg.SlotsPerEpoch
+}

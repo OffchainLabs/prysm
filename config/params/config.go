@@ -22,6 +22,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const MaxSlot = primitives.Slot(math.MaxUint64)
+
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
 type BeaconChainConfig struct {
 	// Constants (non-configurable)
@@ -322,6 +324,16 @@ type BeaconChainConfig struct {
 	forkSchedule    *NetworkSchedule
 	bpoSchedule     *NetworkSchedule
 	networkSchedule *NetworkSchedule
+
+	maxe primitives.Epoch
+}
+
+// MaxEpoch computes the highest epoch value that can be used without overflowing in the conversion to slots.
+func (b *BeaconChainConfig) MaxEpoch() primitives.Epoch {
+	if b.maxe == 0 {
+		b.maxe = primitives.Epoch(MaxSlot / b.SlotsPerEpoch)
+	}
+	return b.maxe
 }
 
 func (b *BeaconChainConfig) VersionToForkEpochMap() map[int]primitives.Epoch {

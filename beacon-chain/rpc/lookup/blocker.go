@@ -283,11 +283,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 
-	fuluForkSlot, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
-	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-	}
-
 	// Convert versioned hashes to indices if provided
 	indices := cfg.Indices
 	if len(cfg.VersionedHashes) > 0 {
@@ -328,7 +323,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		}
 	}
 
-	if roBlock.Slot() >= fuluForkSlot {
+	if roBlock.Slot() >= params.SlotOrFarFuture(params.BeaconConfig().FuluForkEpoch) {
 		roBlock, err := blocks.NewROBlockWithRoot(roSignedBlock, root)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
