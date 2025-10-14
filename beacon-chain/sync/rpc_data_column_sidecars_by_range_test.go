@@ -32,7 +32,6 @@ import (
 func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	beaconConfig := params.BeaconConfig()
-	//beaconConfig.FuluForkEpoch = beaconConfig.ElectraForkEpoch + 100
 	beaconConfig.FuluForkEpoch = 0
 	params.OverrideBeaconConfig(beaconConfig)
 	params.BeaconConfig().InitializeForkSchedule()
