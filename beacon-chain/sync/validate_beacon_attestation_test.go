@@ -638,14 +638,14 @@ func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
 	count := helpers.SlotCommitteeCount(valCount)
 
 	// committee_index == count - 1 should be accepted.
-	att.Data.CommitteeIndex = count - 1
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count - 1)
 	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, res)
 
 	// committee_index == count should be rejected (out of range).
-	att.Data.CommitteeIndex = count
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count)
 	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
-	require.Error(t, err)
+	require.ErrorContains(t, "committee index", err)
 	require.Equal(t, pubsub.ValidationReject, res)
 }
