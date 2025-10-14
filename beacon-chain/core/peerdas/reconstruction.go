@@ -257,7 +257,7 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 			return nil, errors.Wrap(err, "compute cells")
 		}
 
-		kzgProofs := make([]kzg.Proof, 0, numberOfColumns*kzg.BytesPerProof)
+		kzgProofs := make([]kzg.Proof, 0, numberOfColumns)
 		for _, kzgProofBytes := range blobAndProof.KzgProofs {
 			if len(kzgProofBytes) != kzg.BytesPerProof {
 				return nil, errors.New("wrong KZG proof size - should never happen")
