@@ -11,10 +11,7 @@ import (
 
 func RunStructTest(t *testing.T, spec TestSpec) {
 	t.Run(spec.Name, func(t *testing.T) {
-		object, ok := spec.Type.(query.SSZObject)
-		require.Equal(t, true, ok, "spec.Type must implement SSZObject interface")
-		require.NotNil(t, object, "spec.Type must not be nil")
-		info, err := query.AnalyzeObject(object)
+		info, err := query.AnalyzeObject(spec.Type)
 		require.NoError(t, err)
 
 		testInstance := spec.Instance

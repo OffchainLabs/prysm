@@ -49,8 +49,9 @@ func (info *sszInfo) Size() uint64 {
 		return 0
 	}
 
-	// Using fastssz's SizeSSZ method if source is available.
-	// Note that Container should always have source pointer to calculate size.
+	// Using existing API if the pointer is available.
+	// Note that SSZ Container should always have source pointer to calculate size.
+	// Otherwise, it will fallback to zero later.
 	if info.source != nil {
 		return uint64(info.source.SizeSSZ())
 	}
@@ -63,10 +64,8 @@ func (info *sszInfo) Size() uint64 {
 	switch info.sszType {
 	case List:
 		return info.listInfo.Size()
-
 	case Bitlist:
 		return info.bitlistInfo.Size()
-
 	default:
 		return 0
 	}

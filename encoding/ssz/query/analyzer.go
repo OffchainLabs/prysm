@@ -21,7 +21,7 @@ func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
 	// Populate variable-length information using the actual value.
 	err = PopulateVariableLengthInfo(info, value)
 	if err != nil {
-		return nil, fmt.Errorf("could not populate variable length info: %w", err)
+		return nil, fmt.Errorf("could not populate variable length info for type %s: %w", value.Type().Name(), err)
 	}
 
 	return info, nil
@@ -228,11 +228,11 @@ func analyzeHomogeneousColType(value reflect.Value, tag *reflect.StructTag) (*ss
 		return nil, errors.New("ssz tag is required for slice types")
 	}
 
-	// Analyze element type with remaining dimensions
 	// NOTE: Elem() won't panic because value is guaranteed to be a slice here.
 	elementType := value.Type().Elem()
-	// For element analysis, we analyze a new zero value of the element type,
-	// as we CANNOT get an element by index from an empty slice.
+	// Analyze element type with remaining dimensions
+	// Note that it is enough to analyze by a zero value,
+	// as the actual value with variable-sized type will be populated later.
 	elementInfo, err := analyzeType(reflect.New(elementType), remainingTag)
 	if err != nil {
 		return nil, fmt.Errorf("could not analyze element type for homogeneous collection: %w", err)
@@ -348,38 +348,27 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 	fields := make(map[string]*fieldInfo)
 	order := make([]string, 0)
 
-	sszInfo := &sszInfo{
-		sszType: Container,
-		typ:     containerTyp,
-		source:  castToSSZObject(value),
-	}
+	isVariable := false
 	var currentOffset uint64
 
 	for i := 0; i < value.NumField(); i++ {
-		fieldType := containerTyp.Field(i)
-		fieldValue := value.Field(i)
+		structFieldInfo := containerTyp.Field(i)
 
 		// Protobuf-generated structs contain private fields we must skip.
 		// e.g., state, sizeCache, unknownFields, etc.
-		if !fieldType.IsExported() {
+		if !structFieldInfo.IsExported() {
 			continue
 		}
 
-		// The JSON tag contains the field name in the first part.
-		// e.g., "attesting_indices,omitempty" -> "attesting_indices".
-		jsonTag := fieldType.Tag.Get("json")
-		if jsonTag == "" {
-			return nil, fmt.Errorf("field %s has no JSON tag", fieldType.Name)
-		}
-
-		// NOTE: `fieldName` is a string with `snake_case` format (following consensus specs).
-		fieldName := strings.Split(jsonTag, ",")[0]
-		if fieldName == "" {
-			return nil, fmt.Errorf("field %s has an empty JSON tag", fieldType.Name)
+		tag := structFieldInfo.Tag
+		goFieldName := structFieldInfo.Name
+		fieldName, err := parseFieldNameFromTag(tag)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse field name from tag for field %s: %w", goFieldName, err)
 		}
 
 		// Analyze each field so that we can complete full SSZ information.
-		info, err := analyzeType(fieldValue, &fieldType.Tag)
+		info, err := analyzeType(value.Field(i), &tag)
 		if err != nil {
 			return nil, fmt.Errorf("could not analyze type for field %s: %w", fieldName, err)
 		}
@@ -388,7 +377,7 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 		fields[fieldName] = &fieldInfo{
 			sszInfo:     info,
 			offset:      currentOffset,
-			goFieldName: fieldType.Name,
+			goFieldName: goFieldName,
 		}
 		// Persist order
 		order = append(order, fieldName)
@@ -397,20 +386,26 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 		if info.isVariable {
 			// If one of the fields is variable-sized,
 			// the entire struct is considered variable-sized.
-			sszInfo.isVariable = true
+			isVariable = true
 			currentOffset += offsetBytes
 		} else {
 			currentOffset += info.fixedSize
 		}
 	}
 
-	sszInfo.fixedSize = currentOffset
-	sszInfo.containerInfo = &containerInfo{
-		fields: fields,
-		order:  order,
-	}
+	return &sszInfo{
+		sszType: Container,
+		typ:     containerTyp,
+		source:  castToSSZObject(value),
 
-	return sszInfo, nil
+		isVariable: isVariable,
+		fixedSize:  currentOffset,
+
+		containerInfo: &containerInfo{
+			fields: fields,
+			order:  order,
+		},
+	}, nil
 }
 
 // dereferencePointer dereferences a pointer to get the underlying value using reflection.
@@ -419,8 +414,7 @@ func dereferencePointer(value reflect.Value) reflect.Value {
 
 	if value.IsValid() && value.Kind() == reflect.Pointer {
 		if value.IsNil() {
-			// If we encounter a nil pointer before the end of the path, we can still proceed
-			// by analyzing the type, not the value.
+			// Create a zero value if the pointer is nil.
 			derefValue = reflect.New(value.Type().Elem()).Elem()
 		} else {
 			derefValue = value.Elem()
@@ -431,23 +425,48 @@ func dereferencePointer(value reflect.Value) reflect.Value {
 }
 
 // castToSSZObject attempts to cast a reflect.Value to the SSZObject interface.
+// If failed, it returns nil.
 func castToSSZObject(value reflect.Value) SSZObject {
-	// Check validity for preventing panics
-	if !(value.IsValid() && value.CanInterface()) {
+	if !value.IsValid() {
 		return nil
 	}
 
-	// 1. Try the value as-is (might already be a pointer)
-	if sszObj, ok := value.Interface().(SSZObject); ok {
+	// SSZObject is only implemented by struct types.
+	if value.Kind() != reflect.Struct {
+		return nil
+	}
+
+	// To cast to SSZObject, we need the addressable value.
+	if !value.CanAddr() {
+		return nil
+	}
+
+	if sszObj, ok := value.Addr().Interface().(SSZObject); ok {
 		return sszObj
 	}
 
-	// If it's a struct value and addressable, try getting its address
-	if value.Kind() == reflect.Struct && value.CanAddr() {
-		if sszObj, ok := value.Addr().Interface().(SSZObject); ok {
-			return sszObj
-		}
+	return nil
+}
+
+// parseFieldNameFromTag extracts the field name (`snake_case` format)
+// from a struct tag by looking for the json tag.
+// The JSON tag contains the field name in the first part.
+// e.g., "attesting_indices,omitempty" -> "attesting_indices".
+func parseFieldNameFromTag(tag reflect.StructTag) (string, error) {
+	jsonTag := tag.Get("json")
+	if jsonTag == "" {
+		return "", errors.New("no JSON tag found")
 	}
 
-	return nil
+	substrings := strings.Split(jsonTag, ",")
+	if len(substrings) == 0 {
+		return "", errors.New("invalid JSON tag format")
+	}
+
+	fieldName := strings.TrimSpace(substrings[0])
+	if fieldName == "" {
+		return "", errors.New("empty field name")
+	}
+
+	return fieldName, nil
 }
