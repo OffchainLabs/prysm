@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 )
 
@@ -45,6 +46,7 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
+
 	t.Run("invalid request", func(t *testing.T) {
 		slot := primitives.Slot(400)
 		mockNower.SetSlot(t, clock, slot)
@@ -90,6 +92,48 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		if util.WaitTimeout(&wg, 1*time.Second) {
 			t.Fatal("Did not receive stream within 1 sec")
 		}
+	})
+
+	t.Run("in the future", func(t *testing.T) {
+		slot := primitives.Slot(400)
+		mockNower.SetSlot(t, clock, slot)
+
+		localP2P, remoteP2P := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+		protocolID := protocol.ID(fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1))
+
+		service := &Service{
+			cfg: &config{
+				p2p: localP2P,
+				chain: &chainMock.ChainService{
+					Slot: &slot,
+				},
+				clock: clock,
+			},
+			rateLimiter: newRateLimiter(localP2P),
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
+			defer wg.Done()
+
+			_, err := readChunkedDataColumnSidecar(stream, remoteP2P, ctxMap)
+			assert.Equal(t, true, errors.Is(err, io.EOF))
+		})
+
+		localP2P.Connect(remoteP2P)
+		stream, err := localP2P.BHost.NewStream(ctx, remoteP2P.BHost.ID(), protocolID)
+		require.NoError(t, err)
+
+		msg := &pb.DataColumnSidecarsByRangeRequest{
+			StartSlot: slot + 1,
+			Count:     50,
+			Columns:   []uint64{1, 2, 3, 4, 6, 7, 8, 9, 10},
+		}
+
+		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
+		require.NoError(t, err)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
