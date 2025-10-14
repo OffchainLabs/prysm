@@ -117,8 +117,8 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value reflect.Value) error {
 		// Reset the pointer to the new value.
 		sszInfo.source = castToSSZObject(derefValue)
 
-		// Start with the fixed size of this Container.
-		currentOffset := sszInfo.FixedSize()
+		// Start with the end offset of this Container.
+		currentOffset := containerInfo.endOffset
 
 		for _, fieldName := range containerInfo.order {
 			fieldInfo := containerInfo.fields[fieldName]
@@ -183,31 +183,29 @@ func analyzeType(value reflect.Value, tag *reflect.StructTag) (*sszInfo, error) 
 
 // analyzeBasicType analyzes SSZ basic types (uintN, bool) and returns its info.
 func analyzeBasicType(value reflect.Value) (*sszInfo, error) {
-	sszInfo := &sszInfo{
-		typ: value.Type(),
-
-		// Every basic type is fixed-size and not variable.
-		isVariable: false,
-	}
+	var sszType SSZType
 
 	switch value.Kind() {
 	case reflect.Uint64:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 8
+		sszType = Uint64
 	case reflect.Uint32:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 4
+		sszType = Uint32
 	case reflect.Uint16:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 2
+		sszType = Uint16
 	case reflect.Uint8:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 1
+		sszType = Uint8
 	case reflect.Bool:
-		sszInfo.sszType = Boolean
-		sszInfo.fixedSize = 1
+		sszType = Boolean
 	default:
 		return nil, fmt.Errorf("unsupported basic type %v for SSZ calculation", value.Kind())
+	}
+
+	sszInfo := &sszInfo{
+		sszType: sszType,
+		typ:     value.Type(),
+
+		// Every basic type is fixed-size and not variable.
+		isVariable: false,
 	}
 
 	return sszInfo, nil
@@ -270,7 +268,6 @@ func analyzeListType(value reflect.Value, elementInfo *sszInfo, limit uint64, is
 			sszType: Bitlist,
 			typ:     value.Type(),
 
-			fixedSize:  offsetBytes,
 			isVariable: true,
 
 			bitlistInfo: &bitlistInfo{
@@ -287,7 +284,6 @@ func analyzeListType(value reflect.Value, elementInfo *sszInfo, limit uint64, is
 		sszType: List,
 		typ:     value.Type(),
 
-		fixedSize:  offsetBytes,
 		isVariable: true,
 
 		listInfo: &listInfo{
@@ -304,8 +300,6 @@ func analyzeVectorType(value reflect.Value, elementInfo *sszInfo, length uint64,
 			sszType: Bitvector,
 			typ:     value.Type(),
 
-			// Size in bytes
-			fixedSize:  length,
 			isVariable: false,
 
 			bitvectorInfo: &bitvectorInfo{
@@ -328,7 +322,6 @@ func analyzeVectorType(value reflect.Value, elementInfo *sszInfo, length uint64,
 		sszType: Vector,
 		typ:     value.Type(),
 
-		fixedSize:  length * elementInfo.Size(),
 		isVariable: false,
 
 		vectorInfo: &vectorInfo{
@@ -389,7 +382,7 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 			isVariable = true
 			currentOffset += offsetBytes
 		} else {
-			currentOffset += info.fixedSize
+			currentOffset += info.Size()
 		}
 	}
 
@@ -399,11 +392,11 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 		source:  castToSSZObject(value),
 
 		isVariable: isVariable,
-		fixedSize:  currentOffset,
 
 		containerInfo: &containerInfo{
-			fields: fields,
-			order:  order,
+			fields:    fields,
+			order:     order,
+			endOffset: currentOffset,
 		},
 	}, nil
 }
