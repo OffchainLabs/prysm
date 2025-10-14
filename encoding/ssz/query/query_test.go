@@ -302,7 +302,7 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 
 	return testutil.TestSpec{
 		Name:     "FixedTestContainer",
-		Type:     sszquerypb.FixedTestContainer{},
+		Type:     &sszquerypb.FixedTestContainer{},
 		Instance: testContainer,
 		PathTests: []testutil.PathTest{
 			// Basic types
@@ -361,6 +361,62 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 				Expected: testContainer.TrailingField,
 			},
 		},
+	}
+}
+
+func TestSSZObject_batch(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  any
+	}{
+		{
+			name: "FixedNestedContainer",
+			obj: &sszquerypb.FixedNestedContainer{
+				Value1: 42,
+				Value2: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+			},
+		},
+		{
+			name: "FixedTestContainer",
+			obj:  createFixedTestContainer(),
+		},
+		{
+			name: "VariableNestedContainer",
+			obj: &sszquerypb.VariableNestedContainer{
+				Value1:          84,
+				FieldListUint64: []uint64{1, 2, 3, 4, 5},
+				NestedListField: [][]byte{
+					{0x0a, 0x0b, 0x0c},
+					{0x1a, 0x1b, 0x1c, 0x1d},
+				},
+			},
+		},
+		{
+			name: "VariableTestContainer",
+			obj:  createVariableTestContainer(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Analyze the object to get its sszInfo
+			object, ok := tt.obj.(query.SSZObject)
+			require.Equal(t, true, ok, "Expected object to implement SSZObject")
+			info, err := query.AnalyzeObject(object)
+			require.NoError(t, err)
+			require.NotNil(t, info, "Expected non-nil SSZ info")
+
+			// Ensure the original object implements SSZObject
+			originalFunctions, ok := tt.obj.(query.SSZObject)
+			require.Equal(t, ok, true, "Original object does not implement SSZObject")
+
+			// Call HashTreeRoot on the sszInfo and compare results
+			hashTreeRoot, err := info.HashTreeRoot()
+			require.NoError(t, err, "HashTreeRoot should not return an error")
+			expectedHashTreeRoot, err := originalFunctions.HashTreeRoot()
+			require.NoError(t, err, "HashTreeRoot on original object should not return an error")
+			require.Equal(t, expectedHashTreeRoot, hashTreeRoot, "HashTreeRoot from sszInfo should match original object's HashTreeRoot")
+		})
 	}
 }
 
@@ -439,7 +495,7 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 
 	return testutil.TestSpec{
 		Name:     "VariableTestContainer",
-		Type:     sszquerypb.VariableTestContainer{},
+		Type:     &sszquerypb.VariableTestContainer{},
 		Instance: testContainer,
 		PathTests: []testutil.PathTest{
 			// Fixed leading field

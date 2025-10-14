@@ -11,6 +11,7 @@ go_library(
         "path.go",
         "query.go",
         "ssz_info.go",
+        "ssz_object.go",
         "ssz_type.go",
         "tag_parser.go",
         "vector.go",
