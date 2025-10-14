@@ -50,6 +50,7 @@ func (info *sszInfo) Size() uint64 {
 	}
 
 	// Using fastssz's SizeSSZ method if source is available.
+	// Note that Container should always have source pointer to calculate size.
 	if info.source != nil {
 		return uint64(info.source.SizeSSZ())
 	}
@@ -65,25 +66,6 @@ func (info *sszInfo) Size() uint64 {
 
 	case Bitlist:
 		return info.bitlistInfo.Size()
-
-	case Container:
-		// TODO: Remove this panic.
-		panic("unreachable: variable-size Container without source")
-
-		size := info.fixedSize
-		for _, fieldInfo := range info.containerInfo.fields {
-			if !fieldInfo.sszInfo.isVariable {
-				continue
-			}
-
-			// Include offset bytes inside nested lists.
-			if fieldInfo.sszInfo.sszType == List {
-				size += fieldInfo.sszInfo.listInfo.OffsetBytes()
-			}
-
-			size += fieldInfo.sszInfo.Size()
-		}
-		return size
 
 	default:
 		return 0
