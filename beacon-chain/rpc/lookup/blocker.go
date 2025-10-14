@@ -3,6 +3,7 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -514,13 +515,14 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 	}
 
 	slot := roSignedBlock.Block().Slot()
-	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-	fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
-	if err != nil {
-		return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
-	}
-	if slot < fuluForkSlot {
-		return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
+	if fuluForkEpoch := params.BeaconConfig().FuluForkEpoch; fuluForkEpoch != primitives.Epoch(math.MaxUint64) {
+		fuluForkSlot, err := slots.EpochStart(fuluForkEpoch)
+		if err != nil {
+			return nil, &core.RpcError{Err: errors.Wrap(err, "could not calculate Fulu start slot"), Reason: core.Internal}
+		}
+		if slot < fuluForkSlot {
+			return nil, &core.RpcError{Err: errors.New("data columns are not supported before Fulu fork"), Reason: core.BadRequest}
+		}
 	}
 
 	roBlock := roSignedBlock.Block()
