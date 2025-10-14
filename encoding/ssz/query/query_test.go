@@ -11,6 +11,34 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
+func TestSize(t *testing.T) {
+	tests := []struct {
+		name         string
+		obj          query.SSZObject
+		expectedSize uint64
+	}{
+		{
+			name:         "FixedTestContainer",
+			obj:          &sszquerypb.FixedTestContainer{},
+			expectedSize: 565,
+		},
+		{
+			name:         "VariableTestContainer",
+			obj:          &sszquerypb.VariableTestContainer{},
+			expectedSize: 128,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := query.AnalyzeObject(tt.obj)
+			require.NoError(t, err)
+			require.NotNil(t, info)
+			require.Equal(t, tt.expectedSize, info.Size())
+		})
+	}
+}
+
 func TestCalculateOffsetAndLength(t *testing.T) {
 	type testCase struct {
 		name           string
