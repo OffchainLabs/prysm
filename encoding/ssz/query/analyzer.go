@@ -11,20 +11,17 @@ const offsetBytes = 4
 
 // AnalyzeObject analyzes given object and returns its SSZ information.
 func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
-	value := dereferencePointer(obj)
+	value := reflect.ValueOf(obj)
 
-	info, err := analyzeType(value.Type(), nil)
+	info, err := analyzeType(value, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not analyze type %s: %w", value.Type().Name(), err)
 	}
 
-	// Store the original object interface
-	info.source = obj
-
 	// Populate variable-length information using the actual value.
-	err = PopulateVariableLengthInfo(info, value.Interface())
+	err = PopulateVariableLengthInfo(info, value)
 	if err != nil {
-		return nil, fmt.Errorf("could not populate variable length info: %w", err)
+		return nil, fmt.Errorf("could not populate variable length info for type %s: %w", value.Type().Name(), err)
 	}
 
 	return info, nil
@@ -33,13 +30,13 @@ func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
 // PopulateVariableLengthInfo populates runtime information for SSZ fields of variable-sized types.
 // This function updates the sszInfo structure with actual lengths and offsets that can only
 // be determined at runtime for variable-sized items like Lists and variable-sized Container fields.
-func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
+func PopulateVariableLengthInfo(sszInfo *sszInfo, value reflect.Value) error {
 	if sszInfo == nil {
 		return errors.New("sszInfo is nil")
 	}
 
-	if value == nil {
-		return errors.New("value is nil")
+	if !value.IsValid() {
+		return errors.New("value is invalid")
 	}
 
 	// Short circuit: If the type is fixed-sized, we don't need to fill in the info.
@@ -59,18 +56,18 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			return errors.New("listInfo is nil")
 		}
 
-		val := reflect.ValueOf(value)
-		if val.Kind() != reflect.Slice {
-			return fmt.Errorf("expected slice for List type, got %v", val.Kind())
+		if value.Kind() != reflect.Slice {
+			return fmt.Errorf("expected slice for List type, got %v", value.Kind())
 		}
-		length := val.Len()
+
+		length := value.Len()
 
 		if listInfo.element.isVariable {
 			listInfo.elementSizes = make([]uint64, 0, length)
 
 			// Populate nested variable-sized type element lengths recursively.
 			for i := range length {
-				if err := PopulateVariableLengthInfo(listInfo.element, val.Index(i).Interface()); err != nil {
+				if err := PopulateVariableLengthInfo(listInfo.element, value.Index(i)); err != nil {
 					return fmt.Errorf("could not populate nested list element at index %d: %w", i, err)
 				}
 				listInfo.elementSizes = append(listInfo.elementSizes, listInfo.element.Size())
@@ -94,8 +91,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			return errors.New("bitlistInfo is nil")
 		}
 
-		val := reflect.ValueOf(value)
-		if err := bitlistInfo.SetLengthFromBytes(val.Bytes()); err != nil {
+		if err := bitlistInfo.SetLengthFromBytes(value.Bytes()); err != nil {
 			return fmt.Errorf("could not set bitlist length from bytes: %w", err)
 		}
 
@@ -108,11 +104,21 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			return fmt.Errorf("could not get container info: %w", err)
 		}
 
+		if containerInfo == nil {
+			return errors.New("containerInfo is nil")
+		}
+
 		// Dereference first in case value is a pointer.
 		derefValue := dereferencePointer(value)
+		if derefValue.Kind() != reflect.Struct {
+			return fmt.Errorf("expected struct for Container type, got %v", derefValue.Kind())
+		}
 
-		// Start with the fixed size of this Container.
-		currentOffset := sszInfo.FixedSize()
+		// Reset the pointer to the new value.
+		sszInfo.source = castToSSZObject(derefValue)
+
+		// Start with the end offset of this Container.
+		currentOffset := containerInfo.fixedOffset
 
 		for _, fieldName := range containerInfo.order {
 			fieldInfo := containerInfo.fields[fieldName]
@@ -128,13 +134,15 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 
 			// Recursively populate variable-sized fields.
 			fieldValue := derefValue.FieldByName(fieldInfo.goFieldName)
-			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue.Interface()); err != nil {
+			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue); err != nil {
 				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
 			}
 
 			// Each variable-sized element needs an offset entry.
-			if childSszInfo.sszType == List {
-				currentOffset += childSszInfo.listInfo.OffsetBytes()
+			if listInfo, err := childSszInfo.ListInfo(); err == nil && listInfo != nil {
+				if listInfo.element.isVariable {
+					currentOffset += listInfo.Length() * offsetBytes
+				}
 			}
 
 			// Set the actual offset for variable-sized fields.
@@ -149,66 +157,64 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 	}
 }
 
-// analyzeType is an entry point that inspects a reflect.Type and computes its SSZ layout information.
-func analyzeType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
-	switch typ.Kind() {
+// analyzeType is an entry point that inspects a reflect.Value and computes its SSZ layout information.
+func analyzeType(value reflect.Value, tag *reflect.StructTag) (*sszInfo, error) {
+	switch value.Kind() {
 	// Basic types (e.g., uintN where N is 8, 16, 32, 64)
 	// NOTE: uint128 and uint256 are represented as []byte in Go,
 	// so we handle them as slices. See `analyzeHomogeneousColType`.
 	case reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Bool:
-		return analyzeBasicType(typ)
+		return analyzeBasicType(value)
 
 	case reflect.Slice:
-		return analyzeHomogeneousColType(typ, tag)
+		return analyzeHomogeneousColType(value, tag)
 
 	case reflect.Struct:
-		return analyzeContainerType(typ)
+		return analyzeContainerType(value)
 
-	case reflect.Ptr:
-		// Dereference pointer types.
-		return analyzeType(typ.Elem(), tag)
+	case reflect.Pointer:
+		derefValue := dereferencePointer(value)
+		return analyzeType(derefValue, tag)
 
 	default:
-		return nil, fmt.Errorf("unsupported type %v for SSZ calculation", typ.Kind())
+		return nil, fmt.Errorf("unsupported type %v for SSZ calculation", value.Kind())
 	}
 }
 
 // analyzeBasicType analyzes SSZ basic types (uintN, bool) and returns its info.
-func analyzeBasicType(typ reflect.Type) (*sszInfo, error) {
+func analyzeBasicType(value reflect.Value) (*sszInfo, error) {
+	var sszType SSZType
+
+	switch value.Kind() {
+	case reflect.Uint64:
+		sszType = Uint64
+	case reflect.Uint32:
+		sszType = Uint32
+	case reflect.Uint16:
+		sszType = Uint16
+	case reflect.Uint8:
+		sszType = Uint8
+	case reflect.Bool:
+		sszType = Boolean
+	default:
+		return nil, fmt.Errorf("unsupported basic type %v for SSZ calculation", value.Kind())
+	}
+
 	sszInfo := &sszInfo{
-		typ: typ,
+		sszType: sszType,
+		typ:     value.Type(),
 
 		// Every basic type is fixed-size and not variable.
 		isVariable: false,
-	}
-
-	switch typ.Kind() {
-	case reflect.Uint64:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 8
-	case reflect.Uint32:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 4
-	case reflect.Uint16:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 2
-	case reflect.Uint8:
-		sszInfo.sszType = UintN
-		sszInfo.fixedSize = 1
-	case reflect.Bool:
-		sszInfo.sszType = Boolean
-		sszInfo.fixedSize = 1
-	default:
-		return nil, fmt.Errorf("unsupported basic type %v for SSZ calculation", typ.Kind())
 	}
 
 	return sszInfo, nil
 }
 
 // analyzeHomogeneousColType analyzes homogeneous collection types (e.g., List, Vector, Bitlist, Bitvector) and returns its SSZ info.
-func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
-	if typ.Kind() != reflect.Slice {
-		return nil, fmt.Errorf("can only analyze slice types, got %v", typ.Kind())
+func analyzeHomogeneousColType(value reflect.Value, tag *reflect.StructTag) (*sszInfo, error) {
+	if value.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("can only analyze slice types, got %v", value.Kind())
 	}
 
 	// Parse the first dimension from the tag and get remaining tag for element
@@ -220,8 +226,12 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 		return nil, errors.New("ssz tag is required for slice types")
 	}
 
+	// NOTE: Elem() won't panic because value is guaranteed to be a slice here.
+	elementType := value.Type().Elem()
 	// Analyze element type with remaining dimensions
-	elementInfo, err := analyzeType(typ.Elem(), remainingTag)
+	// Note that it is enough to analyze by a zero value,
+	// as the actual value with variable-sized type will be populated later.
+	elementInfo, err := analyzeType(reflect.New(elementType), remainingTag)
 	if err != nil {
 		return nil, fmt.Errorf("could not analyze element type for homogeneous collection: %w", err)
 	}
@@ -233,7 +243,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get list limit: %w", err)
 		}
 
-		return analyzeListType(typ, elementInfo, limit, sszDimension.isBitfield)
+		return analyzeListType(value, elementInfo, limit, sszDimension.isBitfield)
 	}
 
 	// 2. Handle Vector/Bitvector type
@@ -243,7 +253,7 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 			return nil, fmt.Errorf("could not get vector length: %w", err)
 		}
 
-		return analyzeVectorType(typ, elementInfo, length, sszDimension.isBitfield)
+		return analyzeVectorType(value, elementInfo, length, sszDimension.isBitfield)
 	}
 
 	// Parsing ssz tag doesn't provide enough information to determine the collection type,
@@ -252,13 +262,12 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 }
 
 // analyzeListType analyzes SSZ List/Bitlist type and returns its SSZ info.
-func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeListType(value reflect.Value, elementInfo *sszInfo, limit uint64, isBitfield bool) (*sszInfo, error) {
 	if isBitfield {
 		return &sszInfo{
 			sszType: Bitlist,
-			typ:     typ,
+			typ:     value.Type(),
 
-			fixedSize:  offsetBytes,
 			isVariable: true,
 
 			bitlistInfo: &bitlistInfo{
@@ -273,9 +282,8 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBit
 
 	return &sszInfo{
 		sszType: List,
-		typ:     typ,
+		typ:     value.Type(),
 
-		fixedSize:  offsetBytes,
 		isVariable: true,
 
 		listInfo: &listInfo{
@@ -286,14 +294,12 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBit
 }
 
 // analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
-func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeVectorType(value reflect.Value, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
 	if isBitfield {
 		return &sszInfo{
 			sszType: Bitvector,
-			typ:     typ,
+			typ:     value.Type(),
 
-			// Size in bytes
-			fixedSize:  length,
 			isVariable: false,
 
 			bitvectorInfo: &bitvectorInfo{
@@ -314,9 +320,8 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, is
 
 	return &sszInfo{
 		sszType: Vector,
-		typ:     typ,
+		typ:     value.Type(),
 
-		fixedSize:  length * elementInfo.Size(),
 		isVariable: false,
 
 		vectorInfo: &vectorInfo{
@@ -327,44 +332,36 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, is
 }
 
 // analyzeContainerType analyzes SSZ Container type and returns its SSZ info.
-func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
-	if typ.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("can only analyze struct types, got %v", typ.Kind())
+func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
+	if value.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("can only analyze struct types, got %v", value.Kind())
 	}
 
+	containerTyp := value.Type()
 	fields := make(map[string]*fieldInfo)
-	order := make([]string, 0, typ.NumField())
+	order := make([]string, 0)
 
-	sszInfo := &sszInfo{
-		sszType: Container,
-		typ:     typ,
-	}
+	isVariable := false
 	var currentOffset uint64
 
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for i := 0; i < value.NumField(); i++ {
+		structFieldInfo := containerTyp.Field(i)
 
 		// Protobuf-generated structs contain private fields we must skip.
 		// e.g., state, sizeCache, unknownFields, etc.
-		if !field.IsExported() {
+		if !structFieldInfo.IsExported() {
 			continue
 		}
 
-		// The JSON tag contains the field name in the first part.
-		// e.g., "attesting_indices,omitempty" -> "attesting_indices".
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == "" {
-			return nil, fmt.Errorf("field %s has no JSON tag", field.Name)
-		}
-
-		// NOTE: `fieldName` is a string with `snake_case` format (following consensus specs).
-		fieldName := strings.Split(jsonTag, ",")[0]
-		if fieldName == "" {
-			return nil, fmt.Errorf("field %s has an empty JSON tag", field.Name)
+		tag := structFieldInfo.Tag
+		goFieldName := structFieldInfo.Name
+		fieldName, err := parseFieldNameFromTag(tag)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse field name from tag for field %s: %w", goFieldName, err)
 		}
 
 		// Analyze each field so that we can complete full SSZ information.
-		info, err := analyzeType(field.Type, &field.Tag)
+		info, err := analyzeType(value.Field(i), &tag)
 		if err != nil {
 			return nil, fmt.Errorf("could not analyze type for field %s: %w", fieldName, err)
 		}
@@ -373,7 +370,7 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		fields[fieldName] = &fieldInfo{
 			sszInfo:     info,
 			offset:      currentOffset,
-			goFieldName: field.Name,
+			goFieldName: goFieldName,
 		}
 		// Persist order
 		order = append(order, fieldName)
@@ -382,34 +379,87 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 		if info.isVariable {
 			// If one of the fields is variable-sized,
 			// the entire struct is considered variable-sized.
-			sszInfo.isVariable = true
+			isVariable = true
 			currentOffset += offsetBytes
 		} else {
-			currentOffset += info.fixedSize
+			currentOffset += info.Size()
 		}
 	}
 
-	sszInfo.fixedSize = currentOffset
-	sszInfo.containerInfo = &containerInfo{
-		fields: fields,
-		order:  order,
-	}
+	return &sszInfo{
+		sszType: Container,
+		typ:     containerTyp,
+		source:  castToSSZObject(value),
 
-	return sszInfo, nil
+		isVariable: isVariable,
+
+		containerInfo: &containerInfo{
+			fields:      fields,
+			order:       order,
+			fixedOffset: currentOffset,
+		},
+	}, nil
 }
 
 // dereferencePointer dereferences a pointer to get the underlying value using reflection.
-func dereferencePointer(obj any) reflect.Value {
-	value := reflect.ValueOf(obj)
-	if value.Kind() == reflect.Ptr {
+func dereferencePointer(value reflect.Value) reflect.Value {
+	derefValue := value
+
+	if value.IsValid() && value.Kind() == reflect.Pointer {
 		if value.IsNil() {
-			// If we encounter a nil pointer before the end of the path, we can still proceed
-			// by analyzing the type, not the value.
-			value = reflect.New(value.Type().Elem()).Elem()
+			// Create a zero value if the pointer is nil.
+			derefValue = reflect.New(value.Type().Elem()).Elem()
 		} else {
-			value = value.Elem()
+			derefValue = value.Elem()
 		}
 	}
 
-	return value
+	return derefValue
+}
+
+// castToSSZObject attempts to cast a reflect.Value to the SSZObject interface.
+// If failed, it returns nil.
+func castToSSZObject(value reflect.Value) SSZObject {
+	if !value.IsValid() {
+		return nil
+	}
+
+	// SSZObject is only implemented by struct types.
+	if value.Kind() != reflect.Struct {
+		return nil
+	}
+
+	// To cast to SSZObject, we need the addressable value.
+	if !value.CanAddr() {
+		return nil
+	}
+
+	if sszObj, ok := value.Addr().Interface().(SSZObject); ok {
+		return sszObj
+	}
+
+	return nil
+}
+
+// parseFieldNameFromTag extracts the field name (`snake_case` format)
+// from a struct tag by looking for the json tag.
+// The JSON tag contains the field name in the first part.
+// e.g., "attesting_indices,omitempty" -> "attesting_indices".
+func parseFieldNameFromTag(tag reflect.StructTag) (string, error) {
+	jsonTag := tag.Get("json")
+	if jsonTag == "" {
+		return "", errors.New("no JSON tag found")
+	}
+
+	substrings := strings.Split(jsonTag, ",")
+	if len(substrings) == 0 {
+		return "", errors.New("invalid JSON tag format")
+	}
+
+	fieldName := strings.TrimSpace(substrings[0])
+	if fieldName == "" {
+		return "", errors.New("empty field name")
+	}
+
+	return fieldName, nil
 }
