@@ -19,7 +19,7 @@ func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
 	}
 
 	// Populate variable-length information using the actual value.
-	err = PopulateVariableLengthInfo(info, value.Interface())
+	err = PopulateVariableLengthInfo(info, value)
 	if err != nil {
 		return nil, fmt.Errorf("could not populate variable length info: %w", err)
 	}
@@ -30,13 +30,13 @@ func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
 // PopulateVariableLengthInfo populates runtime information for SSZ fields of variable-sized types.
 // This function updates the sszInfo structure with actual lengths and offsets that can only
 // be determined at runtime for variable-sized items like Lists and variable-sized Container fields.
-func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
+func PopulateVariableLengthInfo(sszInfo *sszInfo, value reflect.Value) error {
 	if sszInfo == nil {
 		return errors.New("sszInfo is nil")
 	}
 
-	if value == nil {
-		return errors.New("value is nil")
+	if !value.IsValid() {
+		return errors.New("value is invalid")
 	}
 
 	// Short circuit: If the type is fixed-sized, we don't need to fill in the info.
@@ -56,18 +56,18 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			return errors.New("listInfo is nil")
 		}
 
-		val := reflect.ValueOf(value)
-		if val.Kind() != reflect.Slice {
-			return fmt.Errorf("expected slice for List type, got %v", val.Kind())
+		if value.Kind() != reflect.Slice {
+			return fmt.Errorf("expected slice for List type, got %v", value.Kind())
 		}
-		length := val.Len()
+
+		length := value.Len()
 
 		if listInfo.element.isVariable {
 			listInfo.elementSizes = make([]uint64, 0, length)
 
 			// Populate nested variable-sized type element lengths recursively.
 			for i := range length {
-				if err := PopulateVariableLengthInfo(listInfo.element, val.Index(i).Interface()); err != nil {
+				if err := PopulateVariableLengthInfo(listInfo.element, value.Index(i)); err != nil {
 					return fmt.Errorf("could not populate nested list element at index %d: %w", i, err)
 				}
 				listInfo.elementSizes = append(listInfo.elementSizes, listInfo.element.Size())
@@ -91,8 +91,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			return errors.New("bitlistInfo is nil")
 		}
 
-		val := reflect.ValueOf(value)
-		if err := bitlistInfo.SetLengthFromBytes(val.Bytes()); err != nil {
+		if err := bitlistInfo.SetLengthFromBytes(value.Bytes()); err != nil {
 			return fmt.Errorf("could not set bitlist length from bytes: %w", err)
 		}
 
@@ -105,8 +104,18 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			return fmt.Errorf("could not get container info: %w", err)
 		}
 
+		if containerInfo == nil {
+			return errors.New("containerInfo is nil")
+		}
+
 		// Dereference first in case value is a pointer.
-		derefValue := dereferencePointer2(value)
+		derefValue := dereferencePointer(value)
+		if derefValue.Kind() != reflect.Struct {
+			return fmt.Errorf("expected struct for Container type, got %v", derefValue.Kind())
+		}
+
+		// Reset the pointer to the new value.
+		sszInfo.source = castToSSZObject(derefValue)
 
 		// Start with the fixed size of this Container.
 		currentOffset := sszInfo.FixedSize()
@@ -125,7 +134,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 
 			// Recursively populate variable-sized fields.
 			fieldValue := derefValue.FieldByName(fieldInfo.goFieldName)
-			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue.Interface()); err != nil {
+			if err := PopulateVariableLengthInfo(childSszInfo, fieldValue); err != nil {
 				return fmt.Errorf("could not populate from value for field %s: %w", fieldName, err)
 			}
 
@@ -400,22 +409,6 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 	}
 
 	return sszInfo, nil
-}
-
-// dereferencePointer2 dereferences a pointer to get the underlying value using reflection.
-func dereferencePointer2(obj any) reflect.Value {
-	value := reflect.ValueOf(obj)
-	if value.Kind() == reflect.Ptr {
-		if value.IsNil() {
-			// If we encounter a nil pointer before the end of the path, we can still proceed
-			// by analyzing the type, not the value.
-			value = reflect.New(value.Type().Elem()).Elem()
-		} else {
-			value = value.Elem()
-		}
-	}
-
-	return value
 }
 
 // dereferencePointer dereferences a pointer to get the underlying value using reflection.
