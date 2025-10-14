@@ -23,7 +23,6 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -132,12 +131,12 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 				signedBeaconBlockPb.Block.ParentRoot = roots[i-1][:]
 			}
 
-			signedBeaconBlock, err := consensusblocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+			signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
 			require.NoError(t, err)
 
 			// There is a discrepancy between the root of the beacon block and the rodata column root,
 			// but for the sake of this test, we actually don't care.
-			roblock, err := consensusblocks.NewROBlockWithRoot(signedBeaconBlock, roots[i])
+			roblock, err := blocks.NewROBlockWithRoot(signedBeaconBlock, roots[i])
 			require.NoError(t, err)
 
 			roBlocks = append(roBlocks, roblock)
@@ -214,7 +213,6 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		err = service.dataColumnSidecarsByRangeRPCHandler(ctx, msg, stream)
 		require.NoError(t, err)
 	})
-
 }
 
 func TestValidateDataColumnsByRange(t *testing.T) {
