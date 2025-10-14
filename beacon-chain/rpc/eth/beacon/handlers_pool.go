@@ -317,6 +317,13 @@ func (s *Server) handleAttestationsElectra(
 		validAttestations = append(validAttestations, att)
 	}
 
+	// We store the error for the first failed broadcast and use it in the log message in case
+	// there are broadcast issues. Having a single log at the end instead of logging
+	// for every failed broadcast prevents log noise in case there are many failures.
+	// Even though we only retain the first error, there is a very good chance that all
+	// broadcasts fail for the same reason, so this should be sufficient in most cases.
+	var broadcastErr error
+
 	for i, singleAtt := range validAttestations {
 		s.OperationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.SingleAttReceived,
@@ -346,7 +353,9 @@ func (s *Server) handleAttestationsElectra(
 				Index:   i,
 				Message: server.NewBroadcastFailedError("SingleAttestation", err).Error(),
 			})
-			log.WithError(err).Debug("Could not broadcast single attestation")
+			if broadcastErr == nil {
+				broadcastErr = err
+			}
 			continue
 		}
 
@@ -359,6 +368,10 @@ func (s *Server) handleAttestationsElectra(
 				log.WithError(err).Error("could not save attestation")
 			}
 		}
+	}
+
+	if len(failedBroadcasts) > 0 {
+		log.WithError(broadcastErr).Errorf("%d/%d attestations failed to be broadcast", len(failedBroadcasts), len(validAttestations))
 	}
 
 	return attFailures, failedBroadcasts, nil
@@ -402,6 +415,13 @@ func (s *Server) handleAttestations(
 		validAttestations = append(validAttestations, att)
 	}
 
+	// We store the error for the first failed broadcast and use it in the log message in case
+	// there are broadcast issues. Having a single log at the end instead of logging
+	// for every failed broadcast prevents log noise in case there are many failures.
+	// Even though we only retain the first error, there is a very good chance that all
+	// broadcasts fail for the same reason, so this should be sufficient in most cases.
+	var broadcastErr error
+
 	for i, att := range validAttestations {
 		// Broadcast the unaggregated attestation on a feed to notify other services in the beacon node
 		// of a received unaggregated attestation.
@@ -427,7 +447,9 @@ func (s *Server) handleAttestations(
 				Index:   i,
 				Message: server.NewBroadcastFailedError("Attestation", err).Error(),
 			})
-			log.WithError(err).Debug("Could not broadcast attestation")
+			if broadcastErr == nil {
+				broadcastErr = err
+			}
 			continue
 		}
 
@@ -444,6 +466,10 @@ func (s *Server) handleAttestations(
 				log.WithError(err).Error("could not save unaggregated attestation")
 			}
 		}
+	}
+
+	if len(failedBroadcasts) > 0 {
+		log.WithError(broadcastErr).Errorf("%d/%d attestations failed to be broadcast", len(failedBroadcasts), len(validAttestations))
 	}
 
 	return attFailures, failedBroadcasts, nil
