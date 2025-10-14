@@ -29,6 +29,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const broadcastBLSChangesRateLimit = 128
@@ -371,7 +372,10 @@ func (s *Server) handleAttestationsElectra(
 	}
 
 	if len(failedBroadcasts) > 0 {
-		log.WithError(broadcastErr).Errorf("%d/%d attestations failed to be broadcast", len(failedBroadcasts), len(validAttestations))
+		log.WithFields(logrus.Fields{
+			"failedCount": len(failedBroadcasts),
+			"totalCount":  len(validAttestations),
+		}).WithError(broadcastErr).Error("Some attestations failed to be broadcast")
 	}
 
 	return attFailures, failedBroadcasts, nil
@@ -469,7 +473,10 @@ func (s *Server) handleAttestations(
 	}
 
 	if len(failedBroadcasts) > 0 {
-		log.WithError(broadcastErr).Errorf("%d/%d attestations failed to be broadcast", len(failedBroadcasts), len(validAttestations))
+		log.WithFields(logrus.Fields{
+			"failedCount": len(failedBroadcasts),
+			"totalCount":  len(validAttestations),
+		}).WithError(broadcastErr).Error("Some attestations failed to be broadcast")
 	}
 
 	return attFailures, failedBroadcasts, nil
