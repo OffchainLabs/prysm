@@ -118,7 +118,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value reflect.Value) error {
 		sszInfo.source = castToSSZObject(derefValue)
 
 		// Start with the end offset of this Container.
-		currentOffset := containerInfo.endOffset
+		currentOffset := containerInfo.fixedOffset
 
 		for _, fieldName := range containerInfo.order {
 			fieldInfo := containerInfo.fields[fieldName]
@@ -394,9 +394,9 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 		isVariable: isVariable,
 
 		containerInfo: &containerInfo{
-			fields:    fields,
-			order:     order,
-			endOffset: currentOffset,
+			fields:      fields,
+			order:       order,
+			fixedOffset: currentOffset,
 		},
 	}, nil
 }
