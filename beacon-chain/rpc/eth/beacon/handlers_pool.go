@@ -346,6 +346,7 @@ func (s *Server) handleAttestationsElectra(
 				Index:   i,
 				Message: server.NewBroadcastFailedError("SingleAttestation", err).Error(),
 			})
+			log.WithError(err).Debug("Could not broadcast single attestation")
 			continue
 		}
 
@@ -426,6 +427,7 @@ func (s *Server) handleAttestations(
 				Index:   i,
 				Message: server.NewBroadcastFailedError("Attestation", err).Error(),
 			})
+			log.WithError(err).Debug("Could not broadcast attestation")
 			continue
 		}
 

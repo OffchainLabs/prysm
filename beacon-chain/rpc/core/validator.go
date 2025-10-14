@@ -343,6 +343,7 @@ func (s *Service) SubmitSignedContributionAndProof(
 	// Wait for p2p broadcast to complete and return the first error (if any)
 	err := errs.Wait()
 	if err != nil {
+		log.WithError(err).Debug("Could not broadcast signed contribution and proof")
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedContributionAndProof", err), Reason: Internal}
 	}
 
@@ -394,6 +395,7 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	}
 
 	if err := s.Broadcaster.Broadcast(ctx, agg); err != nil {
+		log.WithError(err).Debug("Could not broadcast signed aggregate att and proof")
 		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
