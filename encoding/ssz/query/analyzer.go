@@ -139,8 +139,10 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value reflect.Value) error {
 			}
 
 			// Each variable-sized element needs an offset entry.
-			if childSszInfo.sszType == List {
-				currentOffset += childSszInfo.listInfo.OffsetBytes()
+			if listInfo, err := childSszInfo.ListInfo(); err == nil && listInfo != nil {
+				if listInfo.element.isVariable {
+					currentOffset += listInfo.Length() * offsetBytes
+				}
 			}
 
 			// Set the actual offset for variable-sized fields.
