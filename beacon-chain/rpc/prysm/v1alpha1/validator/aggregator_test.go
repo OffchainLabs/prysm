@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	attaggregation "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
@@ -169,15 +170,15 @@ func TestSubmitAggregateAndProof_AggregateOk(t *testing.T) {
 
 	require.NoError(t, aggregatorServer.AttPool.SaveAggregatedAttestation(att0))
 	require.NoError(t, aggregatorServer.AttPool.SaveAggregatedAttestation(att1))
-	_, err = aggregatorServer.SubmitAggregateSelectionProof(ctx, req)
+	res, err := aggregatorServer.SubmitAggregateSelectionProof(ctx, req)
 	require.NoError(t, err)
 
-	aggregatedAtts := aggregatorServer.AttPool.AggregatedAttestations()
-	wanted, err := attaggregation.AggregatePair(att0, att1)
-	require.NoError(t, err)
-	if reflect.DeepEqual(aggregatedAtts, wanted) {
+	// Validate the server returned one of the pre-existing aggregated attestations (no pool mutation expected).
+	if !equality.DeepEqual(res.AggregateAndProof.Aggregate, att0) && !equality.DeepEqual(res.AggregateAndProof.Aggregate, att1) {
 		t.Error("Did not receive wanted attestation")
 	}
+	// Optionally confirm the pool was not mutated by the call.
+	assert.Equal(t, 2, len(aggregatorServer.AttPool.AggregatedAttestations()))
 }
 
 func TestSubmitAggregateAndProof_AggregateNotOk(t *testing.T) {
