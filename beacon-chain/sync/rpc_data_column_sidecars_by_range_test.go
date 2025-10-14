@@ -72,8 +72,8 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
 			defer wg.Done()
 			code, _, err := readStatusCodeNoDeadline(stream, localP2P.Encoding())
-			require.NoError(t, err)
-			require.Equal(t, responseCodeInvalidRequest, code)
+			assert.NoError(t, err)
+			assert.Equal(t, responseCodeInvalidRequest, code)
 		})
 
 		localP2P.Connect(remoteP2P)
@@ -220,28 +220,28 @@ func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 					break
 				}
 
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				sidecars = append(sidecars, sidecar)
 			}
 
-			require.Equal(t, 8, len(sidecars))
-			require.Equal(t, root0, sidecars[0].BlockRoot())
-			require.Equal(t, root0, sidecars[1].BlockRoot())
-			require.Equal(t, root0, sidecars[2].BlockRoot())
-			require.Equal(t, root3, sidecars[3].BlockRoot())
-			require.Equal(t, root3, sidecars[4].BlockRoot())
-			require.Equal(t, root5, sidecars[5].BlockRoot())
-			require.Equal(t, root5, sidecars[6].BlockRoot())
-			require.Equal(t, root5, sidecars[7].BlockRoot())
+			assert.Equal(t, 8, len(sidecars))
+			assert.Equal(t, root0, sidecars[0].BlockRoot())
+			assert.Equal(t, root0, sidecars[1].BlockRoot())
+			assert.Equal(t, root0, sidecars[2].BlockRoot())
+			assert.Equal(t, root3, sidecars[3].BlockRoot())
+			assert.Equal(t, root3, sidecars[4].BlockRoot())
+			assert.Equal(t, root5, sidecars[5].BlockRoot())
+			assert.Equal(t, root5, sidecars[6].BlockRoot())
+			assert.Equal(t, root5, sidecars[7].BlockRoot())
 
-			require.Equal(t, uint64(1), sidecars[0].Index)
-			require.Equal(t, uint64(2), sidecars[1].Index)
-			require.Equal(t, uint64(3), sidecars[2].Index)
-			require.Equal(t, uint64(4), sidecars[3].Index)
-			require.Equal(t, uint64(6), sidecars[4].Index)
-			require.Equal(t, uint64(7), sidecars[5].Index)
-			require.Equal(t, uint64(8), sidecars[6].Index)
-			require.Equal(t, uint64(9), sidecars[7].Index)
+			assert.Equal(t, uint64(1), sidecars[0].Index)
+			assert.Equal(t, uint64(2), sidecars[1].Index)
+			assert.Equal(t, uint64(3), sidecars[2].Index)
+			assert.Equal(t, uint64(4), sidecars[3].Index)
+			assert.Equal(t, uint64(6), sidecars[4].Index)
+			assert.Equal(t, uint64(7), sidecars[5].Index)
+			assert.Equal(t, uint64(8), sidecars[6].Index)
+			assert.Equal(t, uint64(9), sidecars[7].Index)
 		})
 
 		localP2P.Connect(remoteP2P)
