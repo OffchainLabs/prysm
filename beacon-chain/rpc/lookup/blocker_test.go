@@ -1046,3 +1046,56 @@ func TestGetDataColumns(t *testing.T) {
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 }
+
+func TestDataColumns_FarFutureFuluForkEpoch(t *testing.T) {
+	// Test for commit d64d79e154e9dd895af94de67f7704d172a4209a
+	// "Fix data column validation for far future Fulu fork epoch"
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.DenebForkEpoch = 1
+	cfg.FuluForkEpoch = primitives.Epoch(math.MaxUint64)
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	db := testDB.SetupDB(t)
+
+	// Create a block with blob commitments
+	block := util.NewBeaconBlockDeneb()
+	block.Block.Slot = 1000 // Well beyond Deneb fork
+	block.Block.Body.BlobKzgCommitments = [][]byte{
+		bytesutil.PadTo([]byte("commitment1"), 48),
+	}
+
+	wrapped, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	blockRoot, err := wrapped.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	require.NoError(t, db.SaveBlock(ctx, wrapped))
+
+	dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx,
+		filesystem.WithDataColumnBasePath(t.TempDir()),
+		filesystem.WithDataColumnRetentionEpochs(10),
+	)
+	require.NoError(t, err)
+
+	blocker := &BeaconDbBlocker{
+		BeaconDB:          db,
+		DataColumnStorage: dataColumnStorage,
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("DataColumns crashed with panic when FuluForkEpoch is MaxUint64: %v", r)
+		}
+	}()
+
+	_, rpcErr := blocker.DataColumns(ctx, hexutil.Encode(blockRoot[:]), nil)
+	// The function completed without overflow errors from slots.EpochStart(MaxUint64)
+	if rpcErr != nil {
+		t.Logf("Function returned error (acceptable): %v", rpcErr.Err)
+		require.NotEqual(t, "could not calculate Fulu start slot", rpcErr.Err.Error(),
+			"Should not fail on Fulu slot calculation when epoch is MaxUint64")
+	}
+}
