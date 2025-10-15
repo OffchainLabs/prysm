@@ -70,6 +70,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	log.Trace("Serving data column sidecars by range")
 
 	if rangeParameters == nil {
+		closeStream(stream, log)
 		return nil
 	}
 

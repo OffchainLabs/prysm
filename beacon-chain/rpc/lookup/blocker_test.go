@@ -587,6 +587,51 @@ func TestGetBlob(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
 		require.StringContains(t, "not supported before", rpcErr.Err.Error())
 	})
+
+	t.Run("fulu fork epoch not set (MaxUint64)", func(t *testing.T) {
+		// Setup with Deneb fork enabled but Fulu fork epoch set to MaxUint64 (not set/far future)
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 1
+		cfg.FuluForkEpoch = primitives.Epoch(math.MaxUint64) // Not set / far future
+		params.OverrideBeaconConfig(cfg)
+
+		// Create and save Deneb block and blob sidecars
+		denebSlot := util.SlotAtEpoch(t, cfg.DenebForkEpoch)
+		_, tempBlobStorage := filesystem.NewEphemeralBlobStorageAndFs(t)
+
+		denebBlockWithBlobs, denebBlobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [fieldparams.RootLength]byte{}, denebSlot, 2, util.WithDenebSlot(denebSlot))
+		denebBlockRoot := denebBlockWithBlobs.Root()
+
+		verifiedDenebBlobs := verification.FakeVerifySliceForTest(t, denebBlobSidecars)
+		for i := range verifiedDenebBlobs {
+			err := tempBlobStorage.Save(verifiedDenebBlobs[i])
+			require.NoError(t, err)
+		}
+
+		err := db.SaveBlock(t.Context(), denebBlockWithBlobs)
+		require.NoError(t, err)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: tempBlobStorage,
+		}
+
+		// Should successfully retrieve blobs even when FuluForkEpoch is not set
+		retrievedBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(denebBlockRoot[:]))
+		require.IsNil(t, rpcErr)
+		require.Equal(t, 2, len(retrievedBlobs))
+
+		// Verify blob content matches
+		for i, retrievedBlob := range retrievedBlobs {
+			require.NotNil(t, retrievedBlob.BlobSidecar)
+			require.DeepEqual(t, denebBlobSidecars[i].Blob, retrievedBlob.Blob)
+			require.DeepEqual(t, denebBlobSidecars[i].KzgCommitment, retrievedBlob.KzgCommitment)
+		}
+	})
 }
 
 func TestBlobs_CommitmentOrdering(t *testing.T) {
