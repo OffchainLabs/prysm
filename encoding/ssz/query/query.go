@@ -40,7 +40,7 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 				index := *elem.Index
 				listInfo := walk.listInfo
 				if index >= listInfo.length {
-					return nil, 0, 0, fmt.Errorf("index %d out of bounds for field %s", index, elem.Name)
+					return nil, 0, 0, fmt.Errorf("index %d out of bounds for field %s with size %d", index, elem.Name, listInfo.length)
 				}
 
 				walk = listInfo.element
@@ -67,14 +67,14 @@ func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, u
 				index := *elem.Index
 				vectorInfo := walk.vectorInfo
 				if index >= vectorInfo.length {
-					return nil, 0, 0, fmt.Errorf("index %d out of bounds for field %s", index, elem.Name)
+					return nil, 0, 0, fmt.Errorf("index %d out of bounds for field %s with size %d", index, elem.Name, vectorInfo.length)
 				}
 
 				offset += index * vectorInfo.element.Size()
 				walk = vectorInfo.element
 
 			default:
-				return nil, 0, 0, fmt.Errorf("field %s type %s cannot apply index", elem.Name, walk.sszType)
+				return nil, 0, 0, fmt.Errorf("field %s of type %s does not support index access", elem.Name, walk.sszType)
 			}
 		}
 	}
