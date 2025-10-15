@@ -25,7 +25,7 @@ func TestSize(t *testing.T) {
 		{
 			name:         "VariableTestContainer",
 			obj:          &sszquerypb.VariableTestContainer{},
-			expectedSize: 128,
+			expectedSize: 132,
 		},
 	}
 
