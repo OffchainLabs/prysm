@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -108,7 +107,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 			commonRoot = params.BeaconConfig().ZeroHash
 		}
 		dis := headSlot + newHeadSlot - 2*forkSlot
-		dep := math.Max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot))
+		dep := max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot))
 		oldWeight, err := s.cfg.ForkChoiceStore.Weight(oldHeadRoot)
 		if err != nil {
 			log.WithField("root", fmt.Sprintf("%#x", oldHeadRoot)).Warn("Could not determine node weight")
@@ -135,7 +134,7 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 			Type: statefeed.Reorg,
 			Data: &ethpbv1.EventChainReorg{
 				Slot:                newHeadSlot,
-				Depth:               math.Max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot)),
+				Depth:               max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot)),
 				OldHeadBlock:        oldHeadRoot[:],
 				NewHeadBlock:        newHeadRoot[:],
 				OldHeadState:        oldStateRoot[:],
@@ -347,13 +346,24 @@ func (s *Service) notifyNewHeadEvent(
 	if err != nil {
 		return errors.Wrap(err, "could not check if node is optimistically synced")
 	}
+
+	parentRoot, err := s.ParentRoot([32]byte(newHeadRoot))
+	if err != nil {
+		return errors.Wrap(err, "could not obtain parent root in forkchoice")
+	}
+	parentSlot, err := s.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not obtain parent slot in forkchoice")
+	}
+	epochTransition := slots.ToEpoch(newHeadSlot) > slots.ToEpoch(parentSlot)
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.NewHead,
 		Data: &ethpbv1.EventHead{
 			Slot:                      newHeadSlot,
 			Block:                     newHeadRoot,
 			State:                     newHeadStateRoot,
-			EpochTransition:           slots.IsEpochStart(newHeadSlot),
+			EpochTransition:           epochTransition,
 			PreviousDutyDependentRoot: previousDutyDependentRoot[:],
 			CurrentDutyDependentRoot:  currentDutyDependentRoot[:],
 			ExecutionOptimistic:       isOptimistic,

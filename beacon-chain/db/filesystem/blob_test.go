@@ -21,7 +21,8 @@ import (
 )
 
 func TestBlobStorage_SaveBlobData(t *testing.T) {
-	_, sidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, params.BeaconConfig().MaxBlobsPerBlock(1))
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	_, sidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, params.BeaconConfig().MaxBlobsPerBlock(ds))
 	testSidecars := verification.FakeVerifySliceForTest(t, sidecars)
 
 	t.Run("no error for duplicate", func(t *testing.T) {
@@ -127,21 +128,22 @@ func TestBlobStorage_SaveBlobData(t *testing.T) {
 }
 
 func TestBlobIndicesBounds(t *testing.T) {
+	es := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
 	fs := afero.NewMemMapFs()
 	root := [32]byte{}
 
-	okIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(0)) - 1
-	writeFakeSSZ(t, fs, root, 0, okIdx)
+	okIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(es)) - 1
+	writeFakeSSZ(t, fs, root, es, okIdx)
 	bs := NewWarmedEphemeralBlobStorageUsingFs(t, fs, WithLayout(LayoutNameByEpoch))
 	indices := bs.Summary(root).mask
-	expected := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(0))
+	expected := make([]bool, params.BeaconConfig().MaxBlobsPerBlock(es))
 	expected[okIdx] = true
 	for i := range expected {
 		require.Equal(t, expected[i], indices[i])
 	}
 
-	oobIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(0))
-	writeFakeSSZ(t, fs, root, 0, oobIdx)
+	oobIdx := uint64(params.BeaconConfig().MaxBlobsPerBlock(es))
+	writeFakeSSZ(t, fs, root, es, oobIdx)
 	// This now fails at cache warmup time.
 	require.ErrorIs(t, warmCache(bs.layout, bs.cache), errIndexOutOfBounds)
 }

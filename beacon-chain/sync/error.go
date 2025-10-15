@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"errors"
 	"io"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -12,6 +11,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	multiplex "github.com/libp2p/go-mplex"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,7 +38,7 @@ func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (ui
 	b := make([]byte, 1)
 	_, err := stream.Read(b)
 	if err != nil {
-		return 0, "", err
+		return 0, "", errors.Wrap(err, "stream read")
 	}
 
 	if b[0] == responseCodeSuccess {
@@ -52,7 +52,7 @@ func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (ui
 	SetStreamReadDeadline(stream, params.BeaconConfig().RespTimeoutDuration())
 	msg := &types.ErrorMessage{}
 	if err := encoding.DecodeWithMaxLength(stream, msg); err != nil {
-		return 0, "", err
+		return 0, "", errors.Wrap(err, "decode error message")
 	}
 
 	return b[0], string(*msg), nil

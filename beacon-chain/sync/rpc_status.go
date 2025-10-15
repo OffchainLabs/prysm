@@ -160,7 +160,10 @@ func (s *Service) sendRPCStatusRequest(ctx context.Context, peer peer.ID) error 
 	}
 
 	cp := s.cfg.chain.FinalizedCheckpt()
-	status := s.buildStatusFromEpoch(currentEpoch, forkDigest, cp.Root, cp.Epoch, headRoot)
+	status, err := s.buildStatusFromEpoch(ctx, currentEpoch, forkDigest, cp.Root, cp.Epoch, headRoot)
+	if err != nil {
+		return errors.Wrap(err, "build status from epoch")
+	}
 
 	stream, err := s.cfg.p2p.Send(ctx, status, topic, peer)
 	if err != nil {
@@ -312,7 +315,7 @@ func (s *Service) respondWithStatus(ctx context.Context, stream network.Stream) 
 	}
 
 	cp := s.cfg.chain.FinalizedCheckpt()
-	status, err := s.buildStatusFromStream(stream, forkDigest, cp.Root, cp.Epoch, headRoot)
+	status, err := s.buildStatusFromStream(ctx, stream, forkDigest, cp.Root, cp.Epoch, headRoot)
 	if err != nil {
 		return errors.Wrap(err, "build status")
 	}
@@ -329,6 +332,7 @@ func (s *Service) respondWithStatus(ctx context.Context, stream network.Stream) 
 }
 
 func (s *Service) buildStatusFromStream(
+	ctx context.Context,
 	stream libp2pcore.Stream,
 	forkDigest [4]byte,
 	finalizedRoot []byte,
@@ -353,8 +357,8 @@ func (s *Service) buildStatusFromStream(
 		return nil, err
 	}
 
-	if streamVersion == p2p.SchemaVersionV2 {
-		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot(s.ctx)
+	if params.FuluEnabled() && streamVersion == p2p.SchemaVersionV2 {
+		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "earliest available slot")
 		}
@@ -383,24 +387,30 @@ func (s *Service) buildStatusFromStream(
 }
 
 func (s *Service) buildStatusFromEpoch(
+	ctx context.Context,
 	epoch primitives.Epoch,
 	forkDigest [4]byte,
 	finalizedRoot []byte,
 	FinalizedEpoch primitives.Epoch,
 	headRoot []byte,
-) ssz.Marshaler {
+) (ssz.Marshaler, error) {
 	// Get the stream version from the protocol.
 	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		earliestAvailableSlot, err := s.cfg.p2p.EarliestAvailableSlot(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "earliest available slot")
+		}
+
 		status := &pb.StatusV2{
 			ForkDigest:            forkDigest[:],
 			FinalizedRoot:         finalizedRoot,
 			FinalizedEpoch:        FinalizedEpoch,
 			HeadRoot:              headRoot,
 			HeadSlot:              s.cfg.chain.HeadSlot(),
-			EarliestAvailableSlot: 0,
+			EarliestAvailableSlot: earliestAvailableSlot,
 		}
 
-		return status
+		return status, nil
 	}
 
 	status := &pb.Status{
@@ -411,7 +421,7 @@ func (s *Service) buildStatusFromEpoch(
 		HeadSlot:       s.cfg.chain.HeadSlot(),
 	}
 
-	return status
+	return status, nil
 }
 
 func (s *Service) validateStatusMessage(ctx context.Context, genericMsg interface{}) error {

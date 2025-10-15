@@ -202,10 +202,10 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 
 func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 	tests := []struct {
-		name          string
-		block         *ethpb.GenericSignedBeaconBlock
-		expectedPath  string
-		wantErr       bool
+		name         string
+		block        *ethpb.GenericSignedBeaconBlock
+		expectedPath string
+		wantErr      bool
 		errorMessage string
 	}{
 		{
@@ -374,7 +374,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).Return(nil, nil, tt.sszError).Times(1)
-			
+
 			if tt.expectJSON {
 				// When SSZ fails, it falls back to JSON
 				jsonRestHandler.EXPECT().Post(

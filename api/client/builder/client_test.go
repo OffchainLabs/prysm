@@ -21,6 +21,7 @@ import (
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/prysmaticlabs/go-bitfield"
 	log "github.com/sirupsen/logrus"
 )
@@ -170,8 +171,11 @@ func TestClient_RegisterValidator(t *testing.T) {
 
 func TestClient_GetHeader(t *testing.T) {
 	ctx := t.Context()
-	expectedPath := "/eth/v1/builder/header/23/0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2/0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
-	var slot primitives.Slot = 23
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	es := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
+	expectedPath := "/eth/v1/builder/header/%d/0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2/0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a"
+	expectedPath = fmt.Sprintf(expectedPath, ds)
+	var slot primitives.Slot = ds
 	parentHash := ezDecode(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
 	pubkey := ezDecode(t, "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a")
 	t.Run("server error", func(t *testing.T) {
@@ -533,7 +537,7 @@ func TestClient_GetHeader(t *testing.T) {
 				require.Equal(t, expectedPath, r.URL.Path)
 				epr := &ExecHeaderResponseElectra{}
 				require.NoError(t, json.Unmarshal([]byte(testExampleHeaderResponseElectra), epr))
-				pro, err := epr.ToProto(100)
+				pro, err := epr.ToProto(es)
 				require.NoError(t, err)
 				ssz, err := pro.MarshalSSZ()
 				require.NoError(t, err)

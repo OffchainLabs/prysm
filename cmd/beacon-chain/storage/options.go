@@ -68,8 +68,13 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		filesystem.WithLayout(c.String(BlobStorageLayout.Name)), // This is validated in the Action func for BlobStorageLayout.
 	)
 
+	dataColumnRetentionEpoch, err := dataColumnRetentionEpoch(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "data column retention epoch")
+	}
+
 	dataColumnStorageOption := node.WithDataColumnStorageOptions(
-		filesystem.WithDataColumnRetentionEpochs(blobRetentionEpoch),
+		filesystem.WithDataColumnRetentionEpochs(dataColumnRetentionEpoch),
 		filesystem.WithDataColumnBasePath(dataColumnStoragePath(c)),
 	)
 
@@ -114,6 +119,26 @@ func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	}
 
 	return re, nil
+}
+
+// dataColumnRetentionEpoch returns the spec default MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUEST
+// or a user-specified flag overriding this value. If a user-specified override is
+// smaller than the spec default, an error will be returned.
+func dataColumnRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
+	defaultValue := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
+	if !cliCtx.IsSet(BlobRetentionEpochFlag.Name) {
+		return defaultValue, nil
+	}
+
+	// We use on purpose the same retention flag for both blobs and data columns.
+	customValue := primitives.Epoch(cliCtx.Uint64(BlobRetentionEpochFlag.Name))
+
+	// Validate the epoch value against the spec default.
+	if customValue < defaultValue {
+		return defaultValue, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", BlobRetentionEpochFlag.Name, customValue, defaultValue)
+	}
+
+	return customValue, nil
 }
 
 func init() {

@@ -169,7 +169,7 @@ func FetchDataColumnSidecars(
 		result[root] = sidecars
 	}
 
-	log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Failed to fetch data column sidecars from storage and peers using rescue mode")
+	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
 }
 
@@ -738,7 +738,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
-				log.WithError(err).Warning("Failed to send data column sidecars request")
+				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
 			}
 
@@ -1022,17 +1022,20 @@ func computeIndicesByRootByPeer(
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
 	for peer := range peers {
+		log := log.WithField("peerID", peer)
+
 		// Computes the custody columns for each peer
 		nodeID, err := prysmP2P.ConvertPeerIDToNodeID(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "convert peer ID to node ID for peer %s", peer)
+			log.WithError(err).Debug("Failed to convert peer ID to node ID")
+			continue
 		}
 
 		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
-
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrapf(err, "peerdas info for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer DAS info")
+			continue
 		}
 
 		for column := range dasInfo.CustodyColumns {
@@ -1045,11 +1048,13 @@ func computeIndicesByRootByPeer(
 		// Compute the head slot for each peer
 		peerChainState, err := p2p.Peers().ChainState(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "get chain state for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer chain state")
+			continue
 		}
 
 		if peerChainState == nil {
-			return nil, errors.Errorf("chain state is nil for peer %s", peer)
+			log.Debug("Peer chain state is nil")
+			continue
 		}
 
 		// Our view of the head slot of a peer is not updated in real time.
