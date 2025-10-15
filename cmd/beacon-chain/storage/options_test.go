@@ -61,6 +61,45 @@ func TestConfigureBlobRetentionEpoch(t *testing.T) {
 	_, err = blobRetentionEpoch(cliCtx)
 	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
 }
+
+func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
+	specValue := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
+
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	cliCtx := cli.NewContext(&app, set, nil)
+
+	// Test case: Specification value
+	expected := specValue
+
+	actual, err := dataColumnRetentionEpoch(cliCtx)
+	require.NoError(t, err)
+	require.Equal(t, expected, actual)
+
+	// Manually define the flag in the set, so the following code can use set.Set
+	set.Uint64(BlobRetentionEpochFlag.Name, 0, "")
+
+	// Test case: Input epoch is greater than or equal to specification value.
+	expected = specValue + 1
+
+	err = set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
+	require.NoError(t, err)
+
+	actual, err = dataColumnRetentionEpoch(cliCtx)
+	require.NoError(t, err)
+	require.Equal(t, primitives.Epoch(expected), actual)
+
+	// Test case: Input epoch is less than specification value.
+	expected = specValue - 1
+
+	err = set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
+	require.NoError(t, err)
+
+	actual, err = dataColumnRetentionEpoch(cliCtx)
+	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
+	require.Equal(t, specValue, actual)
+}
+
 func TestDataColumnStoragePath_FlagSpecified(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)
