@@ -25,7 +25,7 @@ func TestSize(t *testing.T) {
 		{
 			name:         "VariableTestContainer",
 			obj:          &sszquerypb.VariableTestContainer{},
-			expectedSize: 128,
+			expectedSize: 132,
 		},
 	}
 
@@ -102,12 +102,32 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 				expectedOffset: 85,
 				expectedLength: 192, // 24 * 8 bytes
 			},
+			// Accessing an element in the vector
+			{
+				name:           "vector field (0th element)",
+				path:           ".vector_field[0]",
+				expectedOffset: 85,
+				expectedLength: 8,
+			},
+			{
+				name:           "vector field (10th element)",
+				path:           ".vector_field[10]",
+				expectedOffset: 165,
+				expectedLength: 8,
+			},
 			// 2D bytes field
 			{
 				name:           "two_dimension_bytes_field",
 				path:           ".two_dimension_bytes_field",
 				expectedOffset: 277,
 				expectedLength: 160, // 5 * 32 bytes
+			},
+			// Accessing an element in the 2D bytes field
+			{
+				name:           "two_dimension_bytes_field (1st element)",
+				path:           ".two_dimension_bytes_field[1]",
+				expectedOffset: 309,
+				expectedLength: 32,
 			},
 			// Bitvector fields
 			{
@@ -161,26 +181,53 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "field_list_uint64",
 				path:           ".field_list_uint64",
-				expectedOffset: 112, // First part of variable-sized type.
+				expectedOffset: 116, // First part of variable-sized type.
 				expectedLength: 40,  // 5 elements * uint64 (8 bytes each)
+			},
+			// Accessing an element in the list
+			{
+				name:           "field_list_uint64 (2nd element)",
+				path:           ".field_list_uint64[2]",
+				expectedOffset: 132,
+				expectedLength: 8,
 			},
 			{
 				name:           "field_list_container",
 				path:           ".field_list_container",
-				expectedOffset: 152, // Second part of variable-sized type.
+				expectedOffset: 156, // Second part of variable-sized type.
 				expectedLength: 120, // 3 elements * FixedNestedContainer (40 bytes each)
+			},
+			// Accessing an element in the list of containers
+			{
+				name:           "field_list_container (1st element)",
+				path:           ".field_list_container[1]",
+				expectedOffset: 196,
+				expectedLength: 40,
 			},
 			{
 				name:           "field_list_bytes32",
 				path:           ".field_list_bytes32",
-				expectedOffset: 272,
+				expectedOffset: 276,
 				expectedLength: 96, // 3 elements * 32 bytes each
+			},
+			// Accessing an element in the list of bytes32
+			{
+				name:           "field_list_bytes32 (0th element)",
+				path:           ".field_list_bytes32[0]",
+				expectedOffset: 276,
+				expectedLength: 32,
+			},
+			{
+				name:           "field_list_bytes32 (2nd element)",
+				path:           ".field_list_bytes32[2]",
+				expectedOffset: 340,
+				expectedLength: 32,
 			},
 			// Nested paths
 			{
 				name:           "nested",
 				path:           ".nested",
-				expectedOffset: 368,
+				expectedOffset: 372,
 				// Calculated with:
 				// - Value1: 8 bytes
 				// - field_list_uint64 offset: 4 bytes
@@ -194,40 +241,85 @@ func TestCalculateOffsetAndLength(t *testing.T) {
 			{
 				name:           "nested.value1",
 				path:           ".nested.value1",
-				expectedOffset: 368,
+				expectedOffset: 372,
 				expectedLength: 8,
 			},
 			{
 				name:           "nested.field_list_uint64",
 				path:           ".nested.field_list_uint64",
-				expectedOffset: 384,
+				expectedOffset: 388,
 				expectedLength: 40,
+			},
+			{
+				name:           "nested.field_list_uint64 (3rd element)",
+				path:           ".nested.field_list_uint64[3]",
+				expectedOffset: 412,
+				expectedLength: 8,
 			},
 			{
 				name:           "nested.nested_list_field",
 				path:           ".nested.nested_list_field",
-				expectedOffset: 436,
+				expectedOffset: 440,
 				expectedLength: 99,
+			},
+			// Accessing an element in the nested list of bytes
+			{
+				name:           "nested.nested_list_field (1st element)",
+				path:           ".nested.nested_list_field[1]",
+				expectedOffset: 472,
+				expectedLength: 33,
+			},
+			{
+				name:           "nested.nested_list_field (2nd element)",
+				path:           ".nested.nested_list_field[2]",
+				expectedOffset: 505,
+				expectedLength: 34,
+			},
+			// Variable list of variable-sized containers
+			{
+				name:           "variable_container_list",
+				path:           ".variable_container_list",
+				expectedOffset: 547,
+				expectedLength: 604,
 			},
 			// Bitlist field
 			{
 				name:           "bitlist_field",
 				path:           ".bitlist_field",
-				expectedOffset: 535,
+				expectedOffset: 1151,
 				expectedLength: 33, // 32 bytes + 1 byte for length delimiter
 			},
 			// 2D bytes field
 			{
 				name:           "nested_list_field",
 				path:           ".nested_list_field",
-				expectedOffset: 580,
+				expectedOffset: 1196,
 				expectedLength: 99,
+			},
+			// Accessing an element in the list of nested bytes
+			{
+				name:           "nested_list_field (0th element)",
+				path:           ".nested_list_field[0]",
+				expectedOffset: 1196,
+				expectedLength: 32,
+			},
+			{
+				name:           "nested_list_field (1st element)",
+				path:           ".nested_list_field[1]",
+				expectedOffset: 1228,
+				expectedLength: 33,
+			},
+			{
+				name:           "nested_list_field (2nd element)",
+				path:           ".nested_list_field[2]",
+				expectedOffset: 1261,
+				expectedLength: 34,
 			},
 			// Fixed trailing field
 			{
 				name:           "trailing_field",
 				path:           ".trailing_field",
-				expectedOffset: 56, // After leading_field + 6 offset pointers
+				expectedOffset: 60, // After leading_field + 7 offset pointers
 				expectedLength: 56,
 			},
 		}
@@ -419,10 +511,26 @@ func getFixedTestContainerSpec() testutil.TestSpec {
 				Path:     ".vector_field",
 				Expected: testContainer.VectorField,
 			},
+			{
+				Path:     ".vector_field[0]",
+				Expected: testContainer.VectorField[0],
+			},
+			{
+				Path:     ".vector_field[10]",
+				Expected: testContainer.VectorField[10],
+			},
 			// 2D bytes field
 			{
 				Path:     ".two_dimension_bytes_field",
 				Expected: testContainer.TwoDimensionBytesField,
+			},
+			{
+				Path:     ".two_dimension_bytes_field[0]",
+				Expected: testContainer.TwoDimensionBytesField[0],
+			},
+			{
+				Path:     ".two_dimension_bytes_field[1]",
+				Expected: testContainer.TwoDimensionBytesField[1],
 			},
 			// Bitvector fields
 			{
@@ -481,6 +589,28 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 		}
 	}
 
+	// Two VariableOuterContainer elements, each with two VariableInnerContainer elements
+	variableContainerList := make([]*sszquerypb.VariableOuterContainer, 2)
+	for i := range variableContainerList {
+		// Inner1: 8 + 4 + 4 + (8*3) + (4*3) + 99 = 151 bytes
+		inner1 := &sszquerypb.VariableNestedContainer{
+			Value1:          42,
+			FieldListUint64: []uint64{uint64(i), uint64(i + 1), uint64(i + 2)},
+			NestedListField: nestedListField,
+		}
+		// Inner2: 8 + 4 + 4 + (8*2) + (4*3) + 99 = 143 bytes
+		inner2 := &sszquerypb.VariableNestedContainer{
+			Value1:          84,
+			FieldListUint64: []uint64{uint64(i + 3), uint64(i + 4)},
+			NestedListField: nestedListField,
+		}
+		// (4*2) + 151 + 143 = 302 bytes per VariableOuterContainer
+		variableContainerList[i] = &sszquerypb.VariableOuterContainer{
+			Inner_1: inner1,
+			Inner_2: inner2,
+		}
+	}
+
 	return &sszquerypb.VariableTestContainer{
 		// Fixed leading field
 		LeadingField: leadingField,
@@ -500,6 +630,9 @@ func createVariableTestContainer() *sszquerypb.VariableTestContainer {
 			FieldListUint64: []uint64{1, 2, 3, 4, 5},
 			NestedListField: nestedListField,
 		},
+
+		// Variable list of variable-sized containers
+		VariableContainerList: variableContainerList,
 
 		// Bitlist field
 		BitlistField: bitlistField,
@@ -530,10 +663,23 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 				Path:     ".field_list_uint64",
 				Expected: testContainer.FieldListUint64,
 			},
+			{
+				Path:     ".field_list_uint64[2]",
+				Expected: testContainer.FieldListUint64[2],
+			},
 			// Variable-size list of (fixed-size) containers
 			{
 				Path:     ".field_list_container",
 				Expected: testContainer.FieldListContainer,
+			},
+			// Accessing an element in the list of containers
+			{
+				Path:     ".field_list_container[0]",
+				Expected: testContainer.FieldListContainer[0],
+			},
+			{
+				Path:     ".field_list_container[1]",
+				Expected: testContainer.FieldListContainer[1],
 			},
 			// Variable-size list of bytes32
 			{
@@ -554,8 +700,53 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 				Expected: testContainer.Nested.FieldListUint64,
 			},
 			{
+				Path:     ".nested.field_list_uint64[3]",
+				Expected: testContainer.Nested.FieldListUint64[3],
+			},
+			{
 				Path:     ".nested.nested_list_field",
 				Expected: testContainer.Nested.NestedListField,
+			},
+			{
+				Path:     ".nested.nested_list_field[0]",
+				Expected: testContainer.Nested.NestedListField[0],
+			},
+			{
+				Path:     ".nested.nested_list_field[1]",
+				Expected: testContainer.Nested.NestedListField[1],
+			},
+			{
+				Path:     ".nested.nested_list_field[2]",
+				Expected: testContainer.Nested.NestedListField[2],
+			},
+			// Variable list of variable-sized containers
+			{
+				Path:     ".variable_container_list",
+				Expected: testContainer.VariableContainerList,
+			},
+			{
+				Path:     ".variable_container_list[0]",
+				Expected: testContainer.VariableContainerList[0],
+			},
+			{
+				Path:     ".variable_container_list[0].inner_1.field_list_uint64[1]",
+				Expected: testContainer.VariableContainerList[0].Inner_1.FieldListUint64[1],
+			},
+			{
+				Path:     ".variable_container_list[0].inner_2.field_list_uint64[1]",
+				Expected: testContainer.VariableContainerList[0].Inner_2.FieldListUint64[1],
+			},
+			{
+				Path:     ".variable_container_list[1]",
+				Expected: testContainer.VariableContainerList[1],
+			},
+			{
+				Path:     ".variable_container_list[1].inner_1.field_list_uint64[1]",
+				Expected: testContainer.VariableContainerList[1].Inner_1.FieldListUint64[1],
+			},
+			{
+				Path:     ".variable_container_list[1].inner_2.field_list_uint64[1]",
+				Expected: testContainer.VariableContainerList[1].Inner_2.FieldListUint64[1],
 			},
 			// Bitlist field
 			{
@@ -566,6 +757,18 @@ func getVariableTestContainerSpec() testutil.TestSpec {
 			{
 				Path:     ".nested_list_field",
 				Expected: testContainer.NestedListField,
+			},
+			{
+				Path:     ".nested_list_field[0]",
+				Expected: testContainer.NestedListField[0],
+			},
+			{
+				Path:     ".nested_list_field[1]",
+				Expected: testContainer.NestedListField[1],
+			},
+			{
+				Path:     ".nested_list_field[2]",
+				Expected: testContainer.NestedListField[2],
 			},
 			// Fixed trailing field
 			{
