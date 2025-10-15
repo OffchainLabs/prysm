@@ -171,6 +171,14 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	earliestAvailableSlot := pruneUpto + 1
 
+	// Update pruning checkpoint.
+	p.prunedUpto = pruneUpto
+
+	// Update the earliest available slot after pruning
+	if err := p.updateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+		return errors.Wrap(err, "failed to update earliest available slot")
+	}
+
 	log.WithFields(logrus.Fields{
 		"prunedUpto":            pruneUpto,
 		"earliestAvailableSlot": earliestAvailableSlot,
@@ -180,20 +188,12 @@ func (p *Service) prune(slot primitives.Slot) error {
 		"numBatches":            numBatches,
 	}).Debug("Successfully pruned chain data")
 
-	// Update pruning checkpoint.
-	p.prunedUpto = pruneUpto
-
-	// Update the earliest available slot after pruning
-	if err := p.updateEarliestSlot(earliestAvailableSlot); err != nil {
-		return errors.Wrap(err, "failed to update earliest available slot")
-	}
-
 	return nil
 }
 
-// updateEarliestSlot updates the earliest available slot via the injected custody updater
+// updateEarliestAvailableSlot updates the earliest available slot via the injected custody updater
 // and also persists it to the database.
-func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) error {
+func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	if !params.FuluEnabled() {
 		return nil
 	}
