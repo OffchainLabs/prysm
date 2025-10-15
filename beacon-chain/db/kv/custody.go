@@ -2,10 +2,13 @@ package kv
 
 import (
 	"context"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
@@ -38,6 +41,8 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 			storedEarliestAvailableSlot = primitives.Slot(bytesutil.BytesToUint64BigEndian(storedEarliestAvailableSlotBytes))
 		}
 
+		originalStoredGroupCount := storedGroupCount
+
 		// Update custody group count only if it increased.
 		if custodyGroupCount > storedGroupCount {
 			storedGroupCount = custodyGroupCount
@@ -50,7 +55,44 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 		// Update earliest available slot if it advanced.
 		// This is for pruning to work correctly as blocks are pruned,
 		// the earliest available slot moves forward independently of custody group changes.
+		//
+		// IMPORTANT: If we're increasing earliestAvailableSlot without also increasing
+		// custodyGroupCount, we must ensure the new slot doesn't exceed the minimum
+		// required slot (based on MIN_EPOCHS_FOR_BLOCK_REQUESTS from current time).
+		// This prevents nodes from arbitrarily refusing to serve mandatory historical data.
 		if earliestAvailableSlot > storedEarliestAvailableSlot {
+			// If custody group count is NOT increasing, validate the increase is allowed
+			// Use originalStoredGroupCount to check if custody is actually increasing in this call
+			if custodyGroupCount <= originalStoredGroupCount {
+				genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+				currentSlot := slots.CurrentSlot(genesisTime)
+				currentEpoch := slots.ToEpoch(currentSlot)
+				minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+				// Calculate the minimum required epoch (or 0 if we're early in the chain)
+				minRequiredEpoch := primitives.Epoch(0)
+				if currentEpoch > minEpochsForBlocks {
+					minRequiredEpoch = currentEpoch - minEpochsForBlocks
+				}
+
+				// Convert to slot to ensure we compare at slot-level granularity
+				minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+				if err != nil {
+					return errors.Wrap(err, "calculate minimum required slot")
+				}
+
+				// Prevent any increase that would put earliest available slot beyond the minimum required slot
+				// when custody group count is not increasing
+				if earliestAvailableSlot > minRequiredSlot {
+					return errors.Errorf(
+						"cannot increase earliest available slot to %d (epoch %d) without increasing custody group count, "+
+							"as it exceeds minimum required slot %d (epoch %d). This would prevent serving mandatory historical data.",
+						earliestAvailableSlot, slots.ToEpoch(earliestAvailableSlot),
+						minRequiredSlot, minRequiredEpoch,
+					)
+				}
+			}
+
 			storedEarliestAvailableSlot = earliestAvailableSlot
 			bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
 			if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {

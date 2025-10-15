@@ -3,10 +3,13 @@ package kv
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -83,6 +86,133 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
 		require.Equal(t, earliestSlot, storedSlot)
 		require.Equal(t, groupCount, storedCount)
+	})
+
+	t.Run("validation: prevent increasing slot beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS without custody increase", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Calculate the current slot and minimum required slot based on actual current time
+		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+		currentSlot := slots.CurrentSlot(genesisTime)
+		currentEpoch := slots.ToEpoch(currentSlot)
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+		var minRequiredEpoch primitives.Epoch
+		if currentEpoch > minEpochsForBlocks {
+			minRequiredEpoch = currentEpoch - minEpochsForBlocks
+		} else {
+			minRequiredEpoch = 0
+		}
+
+		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+		require.NoError(t, err)
+
+		// Initial setup: set a valid earliest slot (well before minRequiredSlot)
+		const initialCount = uint64(5)
+		initialSlot := primitives.Slot(1000)
+
+		_, _, err = db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Try to set earliest slot beyond the minimum required slot
+		// This simulates a node trying to refuse serving mandatory historical data
+		invalidSlot := minRequiredSlot + 100
+
+		// This should fail because we're trying to refuse serving mandatory historical data
+		_, _, err = db.UpdateCustodyInfo(ctx, invalidSlot, initialCount)
+		require.ErrorContains(t, "cannot increase earliest available slot", err)
+		require.ErrorContains(t, "without increasing custody group count", err)
+		require.ErrorContains(t, "exceeds minimum required slot", err)
+
+		// Verify the database wasn't updated
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, initialSlot, storedSlot)
+		require.Equal(t, initialCount, storedCount)
+	})
+
+	t.Run("validation: allow increasing slot within MIN_EPOCHS_FOR_BLOCK_REQUESTS without custody increase", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Calculate the current slot and minimum required slot based on actual current time
+		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+		currentSlot := slots.CurrentSlot(genesisTime)
+		currentEpoch := slots.ToEpoch(currentSlot)
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+		var minRequiredEpoch primitives.Epoch
+		if currentEpoch > minEpochsForBlocks {
+			minRequiredEpoch = currentEpoch - minEpochsForBlocks
+		} else {
+			minRequiredEpoch = 0
+		}
+
+		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+		require.NoError(t, err)
+
+		// Initial setup: set earliest slot well before minRequiredSlot (safe zone)
+		const groupCount = uint64(5)
+		initialSlot := primitives.Slot(1000) // Very early in chain history
+
+		_, _, err = db.UpdateCustodyInfo(ctx, initialSlot, groupCount)
+		require.NoError(t, err)
+
+		// Try to increase to a slot that's still BEFORE minRequiredSlot (should succeed)
+		// We want: initialSlot < validSlot < minRequiredSlot
+		// This demonstrates that we can prune within the allowed range without custody increase
+		validSlot := minRequiredSlot - 100 // stay within the allowed range
+
+		slot, count, err := db.UpdateCustodyInfo(ctx, validSlot, groupCount)
+		require.NoError(t, err)
+		require.Equal(t, validSlot, slot)
+		require.Equal(t, groupCount, count)
+
+		// Verify the database was updated
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, validSlot, storedSlot)
+		require.Equal(t, groupCount, storedCount)
+	})
+
+	t.Run("validation: allow increasing slot beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS when custody increases", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Calculate the current slot and minimum required slot based on actual current time
+		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+		currentSlot := slots.CurrentSlot(genesisTime)
+		currentEpoch := slots.ToEpoch(currentSlot)
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+		var minRequiredEpoch primitives.Epoch
+		if currentEpoch > minEpochsForBlocks {
+			minRequiredEpoch = currentEpoch - minEpochsForBlocks
+		} else {
+			minRequiredEpoch = 0
+		}
+
+		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+		require.NoError(t, err)
+
+		// Initial setup: set earliest slot well before minRequiredSlot
+		const initialCount = uint64(5)
+		initialSlot := primitives.Slot(1000)
+
+		_, _, err = db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Increase both slot AND custody group count
+		// The new slot should be BEYOND minRequiredSlot (in the "forbidden" zone)
+		// This should succeed because increasing custody group count allows changing the earliest slot
+		newSlot := minRequiredSlot + 1000 // Explicitly beyond the mandatory retention period
+		newCount := uint64(10)              // Custody increased from 5 to 10
+
+		slot, count, err := db.UpdateCustodyInfo(ctx, newSlot, newCount)
+		require.NoError(t, err)
+		require.Equal(t, newSlot, slot)
+		require.Equal(t, newCount, count)
+
+		// Verify the database was updated
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, newSlot, storedSlot)
+		require.Equal(t, newCount, storedCount)
 	})
 
 	t.Run("update with higher group count", func(t *testing.T) {
