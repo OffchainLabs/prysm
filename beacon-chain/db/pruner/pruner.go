@@ -27,7 +27,6 @@ const (
 // custodyUpdater is a tiny interface that p2p service implements; kept here to avoid
 // importing the p2p package and creating a cycle.
 type custodyUpdater interface {
-	CustodyGroupCount(context.Context) (uint64, error)
 	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error)
 }
 

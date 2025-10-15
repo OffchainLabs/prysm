@@ -14,7 +14,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// UpdateCustodyInfo updates the custody group count if it is greater than the stored one,
+// UpdateCustodyInfo atomically updates the custody group count if it is greater than the stored one,
 // and updates the earliest available slot if it is greater than the stored one.
 // It returns the (potentially updated) custody group count and earliest available slot.
 func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {

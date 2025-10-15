@@ -147,10 +147,6 @@ type mockCustodyUpdater struct {
 	updateCallCount       int
 }
 
-func (m *mockCustodyUpdater) CustodyGroupCount(context.Context) (uint64, error) {
-	return m.custodyGroupCount, nil
-}
-
 func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
 	m.earliestAvailableSlot = earliestAvailableSlot
@@ -235,10 +231,6 @@ func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
 // Mock custody updater that returns an error for UpdateEarliestAvailableSlot
 type mockCustodyUpdaterWithUpdateError struct {
 	updateCallCount int
-}
-
-func (m *mockCustodyUpdaterWithUpdateError) CustodyGroupCount(context.Context) (uint64, error) {
-	return 4, nil
 }
 
 func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
