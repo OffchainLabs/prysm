@@ -43,6 +43,13 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 		return ErrNoKzgCommitments
 	}
 
+	// A sidecar with more commitments than the max blob count for this block is invalid.
+	slot := sidecar.Slot()
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if len(sidecar.KzgCommitments) > maxBlobsPerBlock {
+		return ErrTooManyCommitments
+	}
+
 	// The column length must be equal to the number of commitments/proofs.
 	if len(sidecar.Column) != len(sidecar.KzgCommitments) || len(sidecar.Column) != len(sidecar.KzgProofs) {
 		return ErrMismatchLength
