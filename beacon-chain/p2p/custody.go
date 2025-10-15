@@ -116,18 +116,17 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 }
 
 // UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
-// the current custody group count.
-func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
-	// Only update custody info if Fulu is enabled
-	if !params.FuluEnabled() {
-		return nil
-	}
-
+// the current custody group count. It returns the (possibly updated) earliest available slot
+// and the custody group count.
+//
+// IMPORTANT: This function should only be called when Fulu is enabled. The caller is responsible
+// for checking params.FuluEnabled() before calling this function.
+func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
 	s.custodyInfoLock.Lock()
 	defer s.custodyInfoLock.Unlock()
 
 	if s.custodyInfo == nil {
-		return errors.New("no custody info available")
+		return 0, 0, errors.New("no custody info available")
 	}
 
 	currentSlot := slots.CurrentSlot(s.genesisTime)
@@ -136,7 +135,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
 		s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
-		return nil
+		return s.custodyInfo.earliestAvailableSlot, s.custodyInfo.groupCount, nil
 	}
 
 	// Prevent increase within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period
@@ -145,30 +144,28 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 
 	// Calculate the minimum required epoch (or 0 if we're early in the chain)
-	var minRequiredEpoch primitives.Epoch
+	minRequiredEpoch := primitives.Epoch(0)
 	if currentEpoch > minEpochsForBlocks {
 		minRequiredEpoch = currentEpoch - minEpochsForBlocks
-	} else {
-		minRequiredEpoch = 0
 	}
 
 	// Convert to slot to ensure we compare at slot-level granularity, not epoch-level
 	// This prevents allowing increases to slots within minRequiredEpoch that are after its first slot
 	minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
 	if err != nil {
-		return errors.Wrap(err, "epoch start")
+		return 0, 0, errors.Wrap(err, "epoch start")
 	}
 
 	// Prevent any increase that would put earliest slot beyond the minimum required slot
 	if earliestAvailableSlot > s.custodyInfo.earliestAvailableSlot && earliestAvailableSlot > minRequiredSlot {
-		return errors.Errorf(
+		return 0, 0, errors.Errorf(
 			"cannot increase earliest available slot to %d (epoch %d) as it exceeds minimum required slot %d (epoch %d)",
 			earliestAvailableSlot, slots.ToEpoch(earliestAvailableSlot), minRequiredSlot, minRequiredEpoch,
 		)
 	}
 
 	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
-	return nil
+	return s.custodyInfo.earliestAvailableSlot, s.custodyInfo.groupCount, nil
 }
 
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.

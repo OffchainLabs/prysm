@@ -130,12 +130,12 @@ func (dch *mockCustodyManager) UpdateCustodyInfo(earliestAvailableSlot primitive
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
-func (dch *mockCustodyManager) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+func (dch *mockCustodyManager) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
 	dch.mut.Lock()
 	defer dch.mut.Unlock()
 
 	dch.earliestAvailableSlot = earliestAvailableSlot
-	return nil
+	return earliestAvailableSlot, dch.custodyGroupCount, nil
 }
 
 func (dch *mockCustodyManager) CustodyGroupCountFromPeer(peer.ID) uint64 {

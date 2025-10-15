@@ -500,12 +500,12 @@ func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 }
 
 // UpdateEarliestAvailableSlot .
-func (s *TestP2P) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+func (s *TestP2P) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
 	s.custodyInfoMut.Lock()
 	defer s.custodyInfoMut.Unlock()
 
 	s.earliestAvailableSlot = earliestAvailableSlot
-	return nil
+	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }
 
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.

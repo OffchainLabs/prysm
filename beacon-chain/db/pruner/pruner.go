@@ -28,7 +28,7 @@ const (
 // importing the p2p package and creating a cycle.
 type custodyUpdater interface {
 	CustodyGroupCount(context.Context) (uint64, error)
-	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
+	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error)
 }
 
 type ServiceOption func(*Service)
@@ -69,6 +69,10 @@ type Service struct {
 }
 
 func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSyncWaiter, backfillWaiter func() error, custody custodyUpdater, opts ...ServiceOption) (*Service, error) {
+	if custody == nil {
+		return nil, errors.New("custody updater is required for pruner but was not provided")
+	}
+
 	p := &Service{
 		ctx:            ctx,
 		db:             db,
@@ -191,20 +195,20 @@ func (p *Service) prune(slot primitives.Slot) error {
 // updateEarliestSlot updates the earliest available slot via the injected custody updater
 // and also persists it to the database.
 func (p *Service) updateEarliestSlot(earliestAvailableSlot primitives.Slot) error {
-	// Update the p2p in-memory state
-	if err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+	if !params.FuluEnabled() {
+		return nil
+	}
+
+	// Update the p2p in-memory state and get the custody group count in one call
+	updatedSlot, custodyGroupCount, err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
+	if err != nil {
 		return errors.Wrapf(err, "failed to update earliest available slot after pruning to %d", earliestAvailableSlot)
 	}
 
 	// Persist to database to ensure it survives restarts
-	custodyGroupCount, err := p.custody.CustodyGroupCount(p.ctx)
+	_, _, err = p.db.UpdateCustodyInfo(p.ctx, updatedSlot, custodyGroupCount)
 	if err != nil {
-		return errors.Wrapf(err, "failed to get custody group count for earliest slot %d", earliestAvailableSlot)
-	}
-
-	_, _, err = p.db.UpdateCustodyInfo(p.ctx, earliestAvailableSlot, custodyGroupCount)
-	if err != nil {
-		return errors.Wrapf(err, "failed to update custody info in database for earliest slot %d", earliestAvailableSlot)
+		return errors.Wrapf(err, "failed to update custody info in database for earliest slot %d", updatedSlot)
 	}
 
 	return nil

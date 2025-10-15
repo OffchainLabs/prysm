@@ -151,10 +151,10 @@ func (m *mockCustodyUpdater) CustodyGroupCount(context.Context) (uint64, error) 
 	return m.custodyGroupCount, nil
 }
 
-func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
 	m.earliestAvailableSlot = earliestAvailableSlot
-	return nil
+	return earliestAvailableSlot, m.custodyGroupCount, nil
 }
 
 func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
@@ -241,9 +241,9 @@ func (m *mockCustodyUpdaterWithUpdateError) CustodyGroupCount(context.Context) (
 	return 4, nil
 }
 
-func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
 	m.updateCallCount++
-	return errors.New("failed to update earliest available slot")
+	return 0, 0, errors.New("failed to update earliest available slot")
 }
 
 func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {

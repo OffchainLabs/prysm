@@ -1115,19 +1115,13 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 		opts = append(opts, pruner.WithRetentionPeriod(primitives.Epoch(uv)))
 	}
 
-	// P2P service is required for pruner to update earliest available slot after pruning
-	p2pService := b.fetchP2P()
-	if p2pService == nil {
-		return errors.New("P2P service is required for pruner but was not available")
-	}
-
 	p, err := pruner.New(
 		cliCtx.Context,
 		b.db,
 		genesis,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
-		p2pService,
+		b.fetchP2P(),
 		opts...,
 	)
 	if err != nil {
