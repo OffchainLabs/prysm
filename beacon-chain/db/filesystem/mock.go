@@ -126,7 +126,7 @@ func NewWarmedEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts 
 
 func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
 	opts = append(opts,
-		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
+		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest),
 		WithDataColumnFs(fs),
 	)
 

@@ -45,6 +45,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
 	params.OverrideBeaconConfig(cfg)
 
 	// Start the trusted setup.
@@ -759,6 +760,12 @@ func TestBuildByRootRequest(t *testing.T) {
 func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 2}}
+	params.OverrideBeaconConfig(cfg)
 
 	t.Run("nominal", func(t *testing.T) {
 		const (
