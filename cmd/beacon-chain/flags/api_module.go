@@ -14,7 +14,7 @@ func EnableHTTPEthAPI(httpModules string) bool {
 }
 
 func enableAPI(httpModules, api string) bool {
-	for _, m := range strings.Split(httpModules, ",") {
+	for m := range strings.SplitSeq(httpModules, ",") {
 		if strings.EqualFold(m, api) {
 			return true
 		}
