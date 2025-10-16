@@ -299,6 +299,20 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.NotNil(t, err, "Should prevent increasing earliest slot within the mandatory retention window, even early in chain")
 		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
 	})
+
+	t.Run("Nil custody info - should return error", func(t *testing.T) {
+		service := &Service{
+			genesisTime: time.Now(),
+			custodyInfo: nil, // No custody info set
+		}
+
+		slot, groupCount, err := service.UpdateEarliestAvailableSlot(100)
+
+		require.NotNil(t, err)
+		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
+		require.Equal(t, primitives.Slot(0), slot)
+		require.Equal(t, uint64(0), groupCount)
+	})
 }
 
 func TestCustodyGroupCountFromPeer(t *testing.T) {
