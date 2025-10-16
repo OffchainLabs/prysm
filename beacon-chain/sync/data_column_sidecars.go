@@ -1129,7 +1129,12 @@ func randomPeer(
 				"peerCount": peerCount,
 				"delay":     waitPeriod,
 			}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
-			time.Sleep(waitPeriod)
+
+			select {
+			case <-time.After(waitPeriod):
+			case <-ctx.Done():
+			}
+
 			continue
 		}
 
