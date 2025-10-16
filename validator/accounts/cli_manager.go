@@ -84,6 +84,7 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 	conn := validatorHelpers.NewNodeConnection(
 		grpcConn,
 		acm.beaconApiEndpoint,
+		nil,
 		acm.beaconApiTimeout,
 	)
 
