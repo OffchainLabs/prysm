@@ -78,7 +78,6 @@ func findGenesisFile(dir string) (GenesisData, error) {
 		if err != nil {
 			continue
 		}
-		// Only return genesis file if it matches the expected network GVR
 		if gd.ValidatorsRoot == params.BeaconConfig().GenesisValidatorsRoot {
 			return gd, nil
 		}
@@ -91,7 +90,7 @@ func tryParseFname(dir string, f os.DirEntry) (GenesisData, error) {
 	if f.IsDir() {
 		return gd, ErrNotGenesisStateFile
 	}
-	extParts := strings.Split(f.Name(), ".")
+	extParts := strings.Split(f.Name(), ".")ß
 	if len(extParts) != 2 || extParts[1] != "ssz" {
 		return gd, ErrNotGenesisStateFile
 	}
