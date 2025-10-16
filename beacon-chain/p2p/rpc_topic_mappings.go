@@ -345,17 +345,17 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 		return "", errors.Errorf("%s: %s", invalidRPCMessageType, msg)
 	}
 
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	// Check if the message is to be updated in fulu.
-	if epoch >= beaconConfig.FuluForkEpoch {
+	if epoch >= cfg.FuluForkEpoch {
 		if version, ok := fuluMapping[msg]; ok {
 			return protocolPrefix + msg + version, nil
 		}
 	}
 
 	// Check if the message is to be updated in altair.
-	if epoch >= beaconConfig.AltairForkEpoch {
+	if epoch >= cfg.AltairForkEpoch {
 		if version, ok := altairMapping[msg]; ok {
 			return protocolPrefix + msg + version, nil
 		}
