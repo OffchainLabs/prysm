@@ -23,7 +23,7 @@ func Initialize(ctx context.Context, dir string, providers ...Provider) error {
 		setPkgVar(emb, true)
 		return nil
 	}
-	gd, err := findGenesisFile(dir)
+	gd, err := FindStateFile(dir)
 	if err == nil {
 		setPkgVar(gd, true)
 		return nil
@@ -65,7 +65,8 @@ func newGenesisData(st state.BeaconState, dir string) (GenesisData, error) {
 	}, nil
 }
 
-func findGenesisFile(dir string) (GenesisData, error) {
+// FindStateFile searches for a valid genesis state file in the specified directory.
+func FindStateFile(dir string) (GenesisData, error) {
 	if dir == "" {
 		return GenesisData{}, ErrFilePathUnset
 	}
