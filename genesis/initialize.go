@@ -90,7 +90,7 @@ func tryParseFname(dir string, f os.DirEntry) (GenesisData, error) {
 	if f.IsDir() {
 		return gd, ErrNotGenesisStateFile
 	}
-	extParts := strings.Split(f.Name(), ".")ß
+	extParts := strings.Split(f.Name(), ".")
 	if len(extParts) != 2 || extParts[1] != "ssz" {
 		return gd, ErrNotGenesisStateFile
 	}
