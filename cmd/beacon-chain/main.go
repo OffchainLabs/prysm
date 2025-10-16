@@ -87,6 +87,7 @@ var appFlags = []cli.Flag{
 	flags.BeaconDBPruning,
 	flags.PrunerRetentionEpochs,
 	flags.EnableBuilderSSZ,
+	flags.BlobToAddressFlag,
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.RPCMaxPageSizeFlag,

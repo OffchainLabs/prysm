@@ -238,3 +238,11 @@ func WithReconstructionRandGen(rg *rand.Rand) Option {
 		return nil
 	}
 }
+
+// WithBlobToAddress sets the address to filter blob transactions for.
+func WithBlobToAddress(address string) Option {
+	return func(s *Service) error {
+		s.cfg.blobToAddress = address
+		return nil
+	}
+}

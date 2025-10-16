@@ -107,6 +107,7 @@ type config struct {
 	blobStorage             *filesystem.BlobStorage
 	dataColumnStorage       *filesystem.DataColumnStorage
 	batchVerifierLimit      int
+	blobToAddress           string
 }
 
 // This defines the interface for interacting with block chain service

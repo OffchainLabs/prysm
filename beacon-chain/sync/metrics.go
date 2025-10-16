@@ -192,6 +192,21 @@ var (
 		},
 	)
 
+	// Metrics for blob retrieval from execution layer based on transaction filtering
+	blobRetrievalAttemptsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "blob_retrieval_attempts_total",
+			Help: "Count the number of times blob retrieval from EL was attempted for filtered transactions.",
+		},
+	)
+
+	blobRetrievalSuccessTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "blob_retrieval_success_total",
+			Help: "Count the number of times blob retrieval from EL was successful for filtered transactions.",
+		},
+	)
+
 	// Data column sidecar validation, beacon metrics specs
 	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_data_column_sidecar_processing_requests_total",

@@ -344,4 +344,9 @@ var (
 		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
 		Value: 1000,
 	}
+	BlobToAddressFlag = &cli.StringFlag{
+		Name:  "blob-to-address",
+		Usage: "Ethereum address to filter type 3 (blob) transactions for processing. When set, only blob transactions sent to this address will be used to try to retrieve blobs from the execution layer and save them.",
+		Value: "",
+	}
 )
