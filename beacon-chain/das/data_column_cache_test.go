@@ -58,7 +58,7 @@ func TestStash(t *testing.T) {
 func TestAppendDataColumns(t *testing.T) {
 	t.Run("All available", func(t *testing.T) {
 		sum := filesystem.NewDataColumnStorageSummary(42, [fieldparams.NumberOfColumns]bool{false, true, false, true})
-		notStored := indicesNotStored(sum, peerdas.NewColumnIndicesFromSlice([]uint64{1, 3}))
+		notStored := IndicesNotStored(sum, peerdas.NewColumnIndicesFromSlice([]uint64{1, 3}))
 		actual, err := newDataColumnCacheEntry().append([]blocks.RODataColumn{}, [fieldparams.RootLength]byte{}, notStored)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(actual))
@@ -67,7 +67,7 @@ func TestAppendDataColumns(t *testing.T) {
 	t.Run("Some scs missing", func(t *testing.T) {
 		sum := filesystem.NewDataColumnStorageSummary(42, [fieldparams.NumberOfColumns]bool{})
 
-		notStored := indicesNotStored(sum, peerdas.NewColumnIndicesFromSlice([]uint64{1}))
+		notStored := IndicesNotStored(sum, peerdas.NewColumnIndicesFromSlice([]uint64{1}))
 		actual, err := newDataColumnCacheEntry().append([]blocks.RODataColumn{}, [fieldparams.RootLength]byte{}, notStored)
 		require.Equal(t, 0, len(actual))
 		require.NotNil(t, err)
@@ -83,7 +83,7 @@ func TestAppendDataColumns(t *testing.T) {
 		sum := filesystem.NewDataColumnStorageSummary(42, [fieldparams.NumberOfColumns]bool{false, true})
 		entry := dataColumnCacheEntry{scs: scs}
 
-		actual, err := entry.append([]blocks.RODataColumn{}, expected[0].BlockRoot(), indicesNotStored(sum, indices))
+		actual, err := entry.append([]blocks.RODataColumn{}, expected[0].BlockRoot(), IndicesNotStored(sum, indices))
 		require.NoError(t, err)
 
 		require.DeepEqual(t, expected, actual)

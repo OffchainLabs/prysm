@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -72,7 +73,7 @@ func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current 
 	if err != nil {
 		return nil, errors.Wrap(err, "custody group count")
 	}
-	cb, err := buildColumnBatch(ctx, b, blks, p)
+	cb, err := buildColumnBatch(ctx, b, blks, p, cfg.colStore)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +175,7 @@ func currentCustodiedColumns(ctx context.Context, p p2p.P2P) (peerdas.ColumnIndi
 	return peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns), nil
 }
 
-func buildColumnBatch(ctx context.Context, b batch, fuluBlocks verifiedROBlocks, p p2p.P2P) (*columnBatch, error) {
+func buildColumnBatch(ctx context.Context, b batch, fuluBlocks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage) (*columnBatch, error) {
 	if len(fuluBlocks) == 0 {
 		return nil, nil
 	}
@@ -210,15 +211,18 @@ func buildColumnBatch(ctx context.Context, b batch, fuluBlocks verifiedROBlocks,
 		if len(cmts) == 0 {
 			continue
 		}
-		slot := b.Block().Slot()
+		// At this point in the loop we know the block has blobs.
+		// The last block this part of the loop sees will be the last one
+		// we need to download blobs for.
+		summary.last = b.Block().Slot()
 		if len(summary.toDownload) == 0 {
-			summary.first = slot
+			// toDownload is only empty the first time through, so this is the first block with blobs.
+			summary.first = summary.last
 		}
 		summary.toDownload[b.Root()] = &toDownload{
-			remaining:   indices.Copy(),
+			remaining:   das.IndicesNotStored(store.Summary(b.Root()), indices),
 			commitments: cmts,
 		}
-		summary.last = slot
 	}
 
 	return summary, nil

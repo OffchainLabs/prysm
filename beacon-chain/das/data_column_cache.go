@@ -89,8 +89,8 @@ func (e *dataColumnCacheEntry) append(sidecars []blocks.RODataColumn, root [32]b
 	return sidecars, nil
 }
 
-// indicesNotStored filters the list of indices to only include those that are not found in the storage summary.
-func indicesNotStored(sum filesystem.DataColumnStorageSummary, indices peerdas.ColumnIndices) peerdas.ColumnIndices {
+// IndicesNotStored filters the list of indices to only include those that are not found in the storage summary.
+func IndicesNotStored(sum filesystem.DataColumnStorageSummary, indices peerdas.ColumnIndices) peerdas.ColumnIndices {
 	indices = indices.Copy()
 	for col := range indices {
 		if sum.HasIndex(col) {
