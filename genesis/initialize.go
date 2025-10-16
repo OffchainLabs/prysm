@@ -78,7 +78,10 @@ func findGenesisFile(dir string) (GenesisData, error) {
 		if err != nil {
 			continue
 		}
-		return gd, nil
+		// Only return genesis file if it matches the expected network GVR
+		if gd.ValidatorsRoot == params.BeaconConfig().GenesisValidatorsRoot {
+			return gd, nil
+		}
 	}
 	return GenesisData{}, ErrGenesisFileNotFound
 }
