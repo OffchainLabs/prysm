@@ -71,17 +71,3 @@ func (l *listInfo) Size() uint64 {
 	}
 	return totalSize
 }
-
-// OffsetBytes returns the total number of offset bytes used for the list elements.
-// Each variable-sized element uses 4 bytes to store its offset.
-func (l *listInfo) OffsetBytes() uint64 {
-	if l == nil {
-		return 0
-	}
-
-	if !l.element.isVariable {
-		return 0
-	}
-
-	return offsetBytes * l.length
-}

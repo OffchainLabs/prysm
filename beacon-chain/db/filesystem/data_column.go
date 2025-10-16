@@ -1032,5 +1032,5 @@ func extractFileMetadata(path string) (*fileMetadata, error) {
 
 // period computes the period of a given epoch.
 func period(epoch primitives.Epoch) uint64 {
-	return uint64(epoch / params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
+	return uint64(epoch / params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	builderapi "github.com/OffchainLabs/prysm/v6/api/client/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
@@ -3629,6 +3630,54 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 		}
 
 		// Unblinded blocks should not trigger post-Fulu condition, even at epoch >= FuluForkEpoch
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("blinded block - 502 error handling", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 10
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:         true,
+			Cfg:                   &builderTest.Config{BeaconDB: db},
+			PayloadDeneb:          &enginev1.ExecutionPayloadDeneb{},
+			ErrSubmitBlindedBlock: builderapi.ErrBadGateway,
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160 // This puts us at epoch 5 (160/32 = 5)
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// Should handle 502 error gracefully and continue with original blinded block
 		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
 		require.NoError(t, err)
 		require.NotNil(t, res)

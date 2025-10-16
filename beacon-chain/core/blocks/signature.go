@@ -114,9 +114,12 @@ func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState,
 	}
 	proposerPubKey := proposer.PublicKey
 	sig := blk.Signature()
-	return signing.VerifyBlockSigningRoot(proposerPubKey, sig[:], domain, func() ([32]byte, error) {
+	if err := signing.VerifyBlockSigningRoot(proposerPubKey, sig[:], domain, func() ([32]byte, error) {
 		return blkRoot, nil
-	})
+	}); err != nil {
+		return ErrInvalidSignature
+	}
+	return nil
 }
 
 // BlockSignatureBatch retrieves the block signature batch from the provided block and its corresponding state.
