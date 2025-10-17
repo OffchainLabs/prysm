@@ -18,6 +18,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
+// QueryBeaconState handles SSZ Query request for BeaconState.
+// Returns as bytes serialized SSZQueryResponse.
 func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.QueryBeaconState")
 	defer span.End()
@@ -28,25 +30,9 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stateRoot, err := s.Stater.StateRoot(ctx, []byte(stateID))
-	if err != nil {
-		var rootNotFoundErr *lookup.StateRootNotFoundError
-		if errors.As(err, &rootNotFoundErr) {
-			httputil.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
-			return
-		}
-		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	st, err := s.Stater.State(ctx, []byte(stateID))
-	if err != nil {
-		shared.WriteStateFetchError(w, err)
-		return
-	}
-
+	// Validate path before lookup: it might be expensive.
 	var req structs.QuerySSZRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
@@ -64,6 +50,23 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	path, err := query.ParsePath(req.Query)
 	if err != nil {
 		httputil.HandleError(w, "Could not parse path '"+req.Query+"': "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	stateRoot, err := s.Stater.StateRoot(ctx, []byte(stateID))
+	if err != nil {
+		var rootNotFoundErr *lookup.StateRootNotFoundError
+		if errors.As(err, &rootNotFoundErr) {
+			httputil.HandleError(w, "State root not found: "+rootNotFoundErr.Error(), http.StatusNotFound)
+			return
+		}
+		httputil.HandleError(w, "Could not get state root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	st, err := s.Stater.State(ctx, []byte(stateID))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -108,6 +111,7 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		Root:   stateRoot,
 		Result: encodedState[offset : offset+length],
 	}
+
 	responseSsz, err := response.MarshalSSZ()
 	if err != nil {
 		httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
@@ -118,28 +122,15 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteSsz(w, responseSsz)
 }
 
+// QueryBeaconState handles SSZ Query request for BeaconState.
+// Returns as bytes serialized SSZQueryResponse.
 func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.QueryBeaconBlock")
 	defer span.End()
 
-	blockId := r.PathValue("block_id")
-	if blockId == "" {
-		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
-		return
-	}
-
-	signedBlock, err := s.Blocker.Block(ctx, []byte(blockId))
-	if !shared.WriteBlockFetchError(w, signedBlock, err) {
-		return
-	}
-	blockRoot, err := signedBlock.Block().HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not compute block root: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	// Validate path first as lookup may be expensive.
 	var req structs.QuerySSZRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
 		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
@@ -160,7 +151,25 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	blockId := r.PathValue("block_id")
+	if blockId == "" {
+		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+
+	signedBlock, err := s.Blocker.Block(ctx, []byte(blockId))
+	if !shared.WriteBlockFetchError(w, signedBlock, err) {
+		return
+	}
+
+	blockRoot, err := signedBlock.Block().HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not compute block root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	block := signedBlock.Block()
+
 	info, err := query.AnalyzeObject(block)
 	if err != nil {
 		httputil.HandleError(w, "Could not analyze block object: "+err.Error(), http.StatusInternalServerError)
@@ -183,6 +192,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		Root:   blockRoot[:],
 		Result: encodedState[offset : offset+length],
 	}
+
 	responseSsz, err := response.MarshalSSZ()
 	if err != nil {
 		httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
