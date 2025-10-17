@@ -18,6 +18,7 @@ type Server struct {
 	CanonicalHistory      *stategen.CanonicalHistory
 	BeaconDB              beacondb.ReadOnlyDatabase
 	Stater                lookup.Stater
+	Blocker               lookup.Blocker
 	ChainInfoFetcher      blockchain.ChainInfoFetcher
 	FinalizationFetcher   blockchain.FinalizationFetcher
 	CoreService           *core.Service
