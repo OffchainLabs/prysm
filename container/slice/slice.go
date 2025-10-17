@@ -347,10 +347,6 @@ func NotSlot(a, b []primitives.Slot) []primitives.Slot {
 	return set
 }
 
-// IsInSlots returns true if a is in b and False otherwise.
-func IsInSlots(a primitives.Slot, b []primitives.Slot) bool {
-	return slices.Contains(b, a)
-}
 
 // Unique returns an array with duplicates filtered based on the type given
 func Unique[T comparable](a []T) []T {
