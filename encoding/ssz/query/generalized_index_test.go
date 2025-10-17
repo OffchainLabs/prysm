@@ -158,7 +158,7 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			name:         "bitlist_field[-1]",
 			path:         "bitlist_field[-1]",
 			expectError:  true,
-			errorMessage: "invalid array index: strconv.ParseUint: parsing \"-1\"",
+			errorMessage: "cannot process negative indices \"-1\"",
 		},
 		{
 			name:          "len(bitlist_field)",
