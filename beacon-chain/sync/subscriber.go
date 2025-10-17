@@ -716,10 +716,6 @@ func (s *Service) samplingSize() (uint64, error) {
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) map[uint64]bool {
-	if flags.Get().SubscribeToAllSubnets {
-		return mapFromCount(params.BeaconConfig().AttestationSubnetCount)
-	}
-
 	persistentSubnetIndices := persistentSubnetIndices()
 	aggregatorSubnetIndices := aggregatorSubnetIndices(currentSlot)
 

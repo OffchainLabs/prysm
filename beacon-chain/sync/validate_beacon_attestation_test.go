@@ -611,3 +611,41 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		})
 	})
 }
+
+func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
+	ctx := t.Context()
+
+	// Create a minimal state with a known number of validators.
+	validators := uint64(64)
+	bs, _ := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, bs.SetSlot(1))
+
+	s := &Service{}
+
+	// Build a minimal Phase0 attestation (unaggregated path).
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			Slot:           1,
+			CommitteeIndex: 0,
+		},
+	}
+
+	// First call to obtain the active validator count used to derive committees per slot.
+	_, valCount, res, err := s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	count := helpers.SlotCommitteeCount(valCount)
+
+	// committee_index == count - 1 should be accepted.
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count - 1)
+	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	// committee_index == count should be rejected (out of range).
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count)
+	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.ErrorContains(t, "committee index", err)
+	require.Equal(t, pubsub.ValidationReject, res)
+}

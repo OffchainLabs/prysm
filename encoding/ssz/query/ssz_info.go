@@ -18,8 +18,6 @@ type sszInfo struct {
 
 	// isVariable is true if the struct contains any variable-size fields.
 	isVariable bool
-	// fixedSize is the total size of the struct's fixed part.
-	fixedSize uint64
 
 	// For Container types.
 	containerInfo *containerInfo
@@ -37,45 +35,37 @@ type sszInfo struct {
 	bitvectorInfo *bitvectorInfo
 }
 
-func (info *sszInfo) FixedSize() uint64 {
-	if info == nil {
-		return 0
-	}
-	return info.fixedSize
-}
-
 func (info *sszInfo) Size() uint64 {
 	if info == nil {
 		return 0
 	}
 
-	// Easy case: if the type is not variable, we can return the fixed size.
-	if !info.isVariable {
-		return info.fixedSize
-	}
-
 	switch info.sszType {
+	case Uint8:
+		return 1
+	case Uint16:
+		return 2
+	case Uint32:
+		return 4
+	case Uint64:
+		return 8
+	case Boolean:
+		return 1
+	case Container:
+		// Using existing API if the pointer is available.
+		if info.source != nil {
+			return uint64(info.source.SizeSSZ())
+		}
+
+		return 0
+	case Vector:
+		return info.vectorInfo.Size()
 	case List:
 		return info.listInfo.Size()
-
+	case Bitvector:
+		return info.bitvectorInfo.Size()
 	case Bitlist:
 		return info.bitlistInfo.Size()
-
-	case Container:
-		size := info.fixedSize
-		for _, fieldInfo := range info.containerInfo.fields {
-			if !fieldInfo.sszInfo.isVariable {
-				continue
-			}
-
-			// Include offset bytes inside nested lists.
-			if fieldInfo.sszInfo.sszType == List {
-				size += fieldInfo.sszInfo.listInfo.OffsetBytes()
-			}
-
-			size += fieldInfo.sszInfo.Size()
-		}
-		return size
 
 	default:
 		return 0
@@ -193,7 +183,7 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 
 	switch info.sszType {
 	case Container:
-		builder.WriteString(fmt.Sprintf("%s (%s / fixed size: %d, total size: %d)\n", info, sizeDesc, info.FixedSize(), info.Size()))
+		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info, sizeDesc, info.Size()))
 
 		for i, key := range info.containerInfo.order {
 			connector := "├─"

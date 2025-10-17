@@ -25,3 +25,15 @@ func (v *vectorInfo) Element() (*sszInfo, error) {
 
 	return v.element, nil
 }
+
+func (v *vectorInfo) Size() uint64 {
+	if v == nil {
+		return 0
+	}
+
+	if v.element == nil {
+		return 0
+	}
+
+	return v.length * v.element.Size()
+}
