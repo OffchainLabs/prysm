@@ -6,8 +6,8 @@ import (
 )
 
 // CalculateOffsetAndLength calculates the offset and length of a given path within the SSZ object.
-// By walking the given path, it accumulates the offsets based on sszInfo.
-func CalculateOffsetAndLength(sszInfo *sszInfo, path []PathElement) (*sszInfo, uint64, uint64, error) {
+// By walking the given path, it accumulates the offsets based on SszInfo.
+func CalculateOffsetAndLength(sszInfo *SszInfo, path []PathElement) (*SszInfo, uint64, uint64, error) {
 	if sszInfo == nil {
 		return nil, 0, 0, errors.New("sszInfo is nil")
 	}

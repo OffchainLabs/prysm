@@ -10,7 +10,7 @@ import (
 const offsetBytes = 4
 
 // AnalyzeObject analyzes given object and returns its SSZ information.
-func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
+func AnalyzeObject(obj SSZObject) (*SszInfo, error) {
 	value := dereferencePointer(obj)
 
 	info, err := analyzeType(value.Type(), nil)
@@ -31,9 +31,9 @@ func AnalyzeObject(obj SSZObject) (*sszInfo, error) {
 }
 
 // PopulateVariableLengthInfo populates runtime information for SSZ fields of variable-sized types.
-// This function updates the sszInfo structure with actual lengths and offsets that can only
+// This function updates the SszInfo structure with actual lengths and offsets that can only
 // be determined at runtime for variable-sized items like Lists and variable-sized Container fields.
-func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
+func PopulateVariableLengthInfo(sszInfo *SszInfo, value any) error {
 	if sszInfo == nil {
 		return errors.New("sszInfo is nil")
 	}
@@ -118,7 +118,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 			fieldInfo := containerInfo.fields[fieldName]
 			childSszInfo := fieldInfo.sszInfo
 			if childSszInfo == nil {
-				return fmt.Errorf("sszInfo is nil for field %s", fieldName)
+				return fmt.Errorf("SszInfo is nil for field %s", fieldName)
 			}
 
 			// Skip fixed-size fields.
@@ -150,7 +150,7 @@ func PopulateVariableLengthInfo(sszInfo *sszInfo, value any) error {
 }
 
 // analyzeType is an entry point that inspects a reflect.Type and computes its SSZ layout information.
-func analyzeType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
+func analyzeType(typ reflect.Type, tag *reflect.StructTag) (*SszInfo, error) {
 	switch typ.Kind() {
 	// Basic types (e.g., uintN where N is 8, 16, 32, 64)
 	// NOTE: uint128 and uint256 are represented as []byte in Go,
@@ -174,8 +174,8 @@ func analyzeType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
 }
 
 // analyzeBasicType analyzes SSZ basic types (uintN, bool) and returns its info.
-func analyzeBasicType(typ reflect.Type) (*sszInfo, error) {
-	sszInfo := &sszInfo{
+func analyzeBasicType(typ reflect.Type) (*SszInfo, error) {
+	sszInfo := &SszInfo{
 		typ: typ,
 
 		// Every basic type is fixed-size and not variable.
@@ -206,7 +206,7 @@ func analyzeBasicType(typ reflect.Type) (*sszInfo, error) {
 }
 
 // analyzeHomogeneousColType analyzes homogeneous collection types (e.g., List, Vector, Bitlist, Bitvector) and returns its SSZ info.
-func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszInfo, error) {
+func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*SszInfo, error) {
 	if typ.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("can only analyze slice types, got %v", typ.Kind())
 	}
@@ -252,9 +252,9 @@ func analyzeHomogeneousColType(typ reflect.Type, tag *reflect.StructTag) (*sszIn
 }
 
 // analyzeListType analyzes SSZ List/Bitlist type and returns its SSZ info.
-func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeListType(typ reflect.Type, elementInfo *SszInfo, limit uint64, isBitfield bool) (*SszInfo, error) {
 	if isBitfield {
-		return &sszInfo{
+		return &SszInfo{
 			sszType: Bitlist,
 			typ:     typ,
 
@@ -271,7 +271,7 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBit
 		return nil, errors.New("element info is required for List")
 	}
 
-	return &sszInfo{
+	return &SszInfo{
 		sszType: List,
 		typ:     typ,
 
@@ -286,9 +286,9 @@ func analyzeListType(typ reflect.Type, elementInfo *sszInfo, limit uint64, isBit
 }
 
 // analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
-func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeVectorType(typ reflect.Type, elementInfo *SszInfo, length uint64, isBitfield bool) (*SszInfo, error) {
 	if isBitfield {
-		return &sszInfo{
+		return &SszInfo{
 			sszType: Bitvector,
 			typ:     typ,
 
@@ -312,7 +312,7 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, is
 		return nil, fmt.Errorf("vector length must be greater than 0, got %d", length)
 	}
 
-	return &sszInfo{
+	return &SszInfo{
 		sszType: Vector,
 		typ:     typ,
 
@@ -327,7 +327,7 @@ func analyzeVectorType(typ reflect.Type, elementInfo *sszInfo, length uint64, is
 }
 
 // analyzeContainerType analyzes SSZ Container type and returns its SSZ info.
-func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
+func analyzeContainerType(typ reflect.Type) (*SszInfo, error) {
 	if typ.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("can only analyze struct types, got %v", typ.Kind())
 	}
@@ -335,7 +335,7 @@ func analyzeContainerType(typ reflect.Type) (*sszInfo, error) {
 	fields := make(map[string]*fieldInfo)
 	order := make([]string, 0, typ.NumField())
 
-	sszInfo := &sszInfo{
+	sszInfo := &SszInfo{
 		sszType: Container,
 		typ:     typ,
 	}
