@@ -56,58 +56,59 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 		// Allow decrease (for backfill scenarios)
 		// When backfilling blocks, we're discovering earlier data, so earliestAvailableSlot
 		// should decrease to reflect the newly available earlier blocks.
-		if earliestAvailableSlot < storedEarliestAvailableSlot {
+		if earliestAvailableSlot <= storedEarliestAvailableSlot {
 			storedEarliestAvailableSlot = earliestAvailableSlot
 			bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
 			if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
 				return errors.Wrap(err, "put earliest available slot")
 			}
-		} else if earliestAvailableSlot > storedEarliestAvailableSlot {
-			// Update earliest available slot if it advanced.
-			// This is for pruning to work correctly as blocks are pruned,
-			// the earliest available slot moves forward independently of custody group changes.
-			//
-			// IMPORTANT: If we're increasing earliestAvailableSlot without also increasing
-			// custodyGroupCount, we must ensure the new slot doesn't exceed the minimum
-			// required slot (based on MIN_EPOCHS_FOR_BLOCK_REQUESTS from current time).
-			// This prevents nodes from arbitrarily refusing to serve mandatory historical data.
-			// If custody group count is NOT increasing, validate the increase is allowed
-			// Use originalStoredGroupCount to check if custody is actually increasing in this call
-			if custodyGroupCount <= originalStoredGroupCount {
-				genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
-				currentSlot := slots.CurrentSlot(genesisTime)
-				currentEpoch := slots.ToEpoch(currentSlot)
-				minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+			return nil
+		}
 
-				// Calculate the minimum required epoch (or 0 if we're early in the chain)
-				minRequiredEpoch := primitives.Epoch(0)
-				if currentEpoch > minEpochsForBlocks {
-					minRequiredEpoch = currentEpoch - minEpochsForBlocks
-				}
+		// Update earliest available slot if it advanced.
+		// This is for pruning to work correctly as blocks are pruned,
+		// the earliest available slot moves forward independently of custody group changes.
+		//
+		// IMPORTANT: If we're increasing earliestAvailableSlot without also increasing
+		// custodyGroupCount, we must ensure the new slot doesn't exceed the minimum
+		// required slot (based on MIN_EPOCHS_FOR_BLOCK_REQUESTS from current time).
+		// This prevents nodes from arbitrarily refusing to serve mandatory historical data.
+		// If custody group count is NOT increasing, validate the increase is allowed
+		// Use originalStoredGroupCount to check if custody is actually increasing in this call
+		if custodyGroupCount <= originalStoredGroupCount {
+			genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+			currentSlot := slots.CurrentSlot(genesisTime)
+			currentEpoch := slots.ToEpoch(currentSlot)
+			minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 
-				// Convert to slot to ensure we compare at slot-level granularity
-				minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
-				if err != nil {
-					return errors.Wrap(err, "calculate minimum required slot")
-				}
-
-				// Prevent any increase that would put earliest available slot beyond the minimum required slot
-				// when custody group count is not increasing
-				if earliestAvailableSlot > minRequiredSlot {
-					return errors.Errorf(
-						"cannot increase earliest available slot to %d (epoch %d) without increasing custody group count, "+
-							"as it exceeds minimum required slot %d (epoch %d). This would prevent serving mandatory historical data.",
-						earliestAvailableSlot, slots.ToEpoch(earliestAvailableSlot),
-						minRequiredSlot, minRequiredEpoch,
-					)
-				}
+			// Calculate the minimum required epoch (or 0 if we're early in the chain)
+			minRequiredEpoch := primitives.Epoch(0)
+			if currentEpoch > minEpochsForBlocks {
+				minRequiredEpoch = currentEpoch - minEpochsForBlocks
 			}
 
-			storedEarliestAvailableSlot = earliestAvailableSlot
-			bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
-			if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
-				return errors.Wrap(err, "put earliest available slot")
+			// Convert to slot to ensure we compare at slot-level granularity
+			minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+			if err != nil {
+				return errors.Wrap(err, "calculate minimum required slot")
 			}
+
+			// Prevent any increase that would put earliest available slot beyond the minimum required slot
+			// when custody group count is not increasing
+			if earliestAvailableSlot > minRequiredSlot {
+				return errors.Errorf(
+					"cannot increase earliest available slot to %d (epoch %d) without increasing custody group count, "+
+						"as it exceeds minimum required slot %d (epoch %d). This would prevent serving mandatory historical data.",
+					earliestAvailableSlot, slots.ToEpoch(earliestAvailableSlot),
+					minRequiredSlot, minRequiredEpoch,
+				)
+			}
+		}
+
+		storedEarliestAvailableSlot = earliestAvailableSlot
+		bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
+		if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
+			return errors.Wrap(err, "put earliest available slot")
 		}
 
 		return nil
