@@ -8,7 +8,7 @@ load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
 
 proto_library(
     name = "proto",
-    srcs = ["ssz_query.proto"],
+    srcs = ["test_containers.proto"],
     visibility = ["//visibility:public"],
     deps = [
         "//proto/eth/ext:proto",
@@ -20,7 +20,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -35,7 +35,7 @@ go_proto_library(
 # SSZ generation for test proto messages
 ssz_gen_marshal(
     name = "ssz_generated",
-    out = "ssz_query.ssz.go",
+    out = "test_containers.ssz.go",
     go_proto = ":go_proto",
     objs = [
         "FixedTestContainer",
@@ -50,7 +50,7 @@ go_library(
         ":ssz_generated",  # keep
     ],
     embed = [":go_proto"],
-    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query",
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing",
     visibility = ["//visibility:public"],
     deps = SSZ_DEPS + [
         "//proto/eth/ext:go_default_library",
@@ -61,7 +61,7 @@ go_library(
 
 ssz_proto_files(
     name = "ssz_proto_files",
-    srcs = ["ssz_query.proto"],
+    srcs = ["test_containers.proto"],
     config = select({
         "//conditions:default": "mainnet",
         "//proto:ssz_mainnet": "mainnet",
