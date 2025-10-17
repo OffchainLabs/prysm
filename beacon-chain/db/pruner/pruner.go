@@ -198,16 +198,16 @@ func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 		return nil
 	}
 
-	// Update the p2p in-memory state and get the custody group count in one call
-	updatedSlot, custodyGroupCount, err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
+	// Update the p2p in-memory state
+	updatedSlot, _, err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
 	if err != nil {
 		return errors.Wrapf(err, "failed to update earliest available slot after pruning to %d", earliestAvailableSlot)
 	}
 
 	// Persist to database to ensure it survives restarts
-	_, _, err = p.db.UpdateCustodyInfo(p.ctx, updatedSlot, custodyGroupCount)
+	_, _, err = p.db.UpdateEarliestAvailableSlot(p.ctx, updatedSlot)
 	if err != nil {
-		return errors.Wrapf(err, "failed to update custody info in database for earliest slot %d", updatedSlot)
+		return errors.Wrapf(err, "failed to update earliest available slot in database for slot %d", updatedSlot)
 	}
 
 	return nil
