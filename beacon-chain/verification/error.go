@@ -71,9 +71,15 @@ var (
 	errBatchBlockRootMismatch = errors.Join(ErrBlobInvalid, errors.New("sidecar block header root does not match signed block"))
 )
 
-// errVerificationImplementationFault indicates that a code path yielding VerifiedROBlobs has an implementation
-// error, leading it to call VerifiedROBlobError with a nil error.
-var errVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob")
+var (
+	// errBlobVerificationImplementationFault indicates that a code path yielding VerifiedROBlobs has an implementation
+	// error, leading it to call VerifiedROBlobError with a nil error.
+	errBlobVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob")
+
+	// errDataColumnVerificationImplementationFault indicates that a code path yielding VerifiedRODataColumns has an implementation
+	// error, leading it to call VerifiedRODataColumnError with a nil error.
+	errDataColumnVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob")
+)
 
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
 type VerificationMultiError struct {
@@ -111,7 +117,7 @@ func newVerificationMultiError(r *results, err error) VerificationMultiError {
 // create a value of that type in order to generate an error return value.
 func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
 	if err == nil {
-		return blocks.VerifiedROBlob{}, errVerificationImplementationFault
+		return blocks.VerifiedROBlob{}, errBlobVerificationImplementationFault
 	}
 	return blocks.VerifiedROBlob{}, err
 }
@@ -120,7 +126,7 @@ func VerifiedROBlobError(err error) (blocks.VerifiedROBlob, error) {
 // create a value of that type in order to generate an error return value.
 func VerifiedRODataColumnError(err error) (blocks.VerifiedRODataColumn, error) {
 	if err == nil {
-		return blocks.VerifiedRODataColumn{}, errVerificationImplementationFault
+		return blocks.VerifiedRODataColumn{}, errDataColumnVerificationImplementationFault
 	}
 	return blocks.VerifiedRODataColumn{}, err
 }

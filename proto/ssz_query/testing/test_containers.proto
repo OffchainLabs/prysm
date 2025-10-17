@@ -71,6 +71,13 @@ message VariableNestedContainer {
   ];
 }
 
+
+// Mock of AttesterSlashingElectra
+message VariableOuterContainer {
+  VariableNestedContainer inner_1 = 1;
+  VariableNestedContainer inner_2 = 2;
+}
+
 // VariableTestContainer - comprehensive variable-size container for SSZ query testing
 // Tests: Variable-size lists, offsets in variable containers, mixed fixed/variable fields
 message VariableTestContainer {
@@ -93,8 +100,12 @@ message VariableTestContainer {
   // Variable nested container - test nested container access within variable container
   VariableNestedContainer nested = 5;
 
+  // List of variable-sized containers
+  // e.g., BeaconBlockBody.attester_slashings 
+  repeated VariableOuterContainer variable_container_list = 6 [ (ethereum.eth.ext.ssz_max) = "10" ]; // Test: List[VariableOuterContainer, 10]
+
   // Bitlist type - test bitlist serialization
-  bytes bitlist_field = 6 [
+  bytes bitlist_field = 7 [
     (ethereum.eth.ext.ssz_max) = "2048",
     (ethereum.eth.ext.cast_type) =
         "github.com/prysmaticlabs/go-bitfield.Bitlist"
@@ -102,12 +113,12 @@ message VariableTestContainer {
 
   // 2D bytes list - test list of bytelists.
   // e.g., ExecutionPayload.transactions
-  repeated bytes nested_list_field = 7 [
+  repeated bytes nested_list_field = 8 [
     (ethereum.eth.ext.ssz_size) = "?,?",
     (ethereum.eth.ext.ssz_max) = "100,50"
   ];
 
   // Fixed-size trailing field - test fixed field after variable fields
   // Verifies correct offset calculation after variable-size fields
-  bytes trailing_field = 8 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 + 4 + 4 = 56
+  bytes trailing_field = 9 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 + 4 + 4 + 4 = 60
 }

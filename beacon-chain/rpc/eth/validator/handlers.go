@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/api"
+	"github.com/OffchainLabs/prysm/v6/api/server"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
@@ -268,21 +269,60 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	for _, item := range reqData {
+	var failures []*server.IndexedError
+	var failedBroadcasts []*server.IndexedError
+
+	for i, item := range reqData {
 		var contribution structs.SignedContributionAndProof
 		if err := json.Unmarshal(item, &contribution); err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
-			return
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not unmarshal message: " + err.Error(),
+			})
+			continue
 		}
 		consensusItem, err := contribution.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
-			return
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not convert request contribution to consensus contribution: " + err.Error(),
+			})
+			continue
 		}
-		if rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem); rpcError != nil {
-			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-			return
+
+		rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem)
+		if rpcError != nil {
+			var broadcastFailedErr *server.BroadcastFailedError
+			if errors.As(rpcError.Err, &broadcastFailedErr) {
+				failedBroadcasts = append(failedBroadcasts, &server.IndexedError{
+					Index:   i,
+					Message: rpcError.Err.Error(),
+				})
+				continue
+			} else {
+				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+				return
+			}
 		}
+	}
+
+	if len(failures) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
+	}
+	if len(failedBroadcasts) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusInternalServerError,
+			Message:  server.ErrIndexedBroadcastFail,
+			Failures: failedBroadcasts,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
 	}
 }
 
@@ -322,8 +362,8 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 		}
 		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
 		if rpcError != nil {
-			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
-			ok := errors.As(rpcError.Err, &aggregateBroadcastFailedError)
+			var broadcastFailedErr *server.BroadcastFailedError
+			ok := errors.As(rpcError.Err, &broadcastFailedErr)
 			if ok {
 				broadcastFailed = true
 			} else {
@@ -368,49 +408,83 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	broadcastFailed := false
+	var failures []*server.IndexedError
+	var failedBroadcasts []*server.IndexedError
+
 	var rpcError *core.RpcError
-	for _, raw := range reqData {
+	for i, raw := range reqData {
 		if v >= version.Electra {
 			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
 			err = json.Unmarshal(raw, &signedAggregate)
 			if err != nil {
-				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not parse message: " + err.Error(),
+				})
+				continue
 			}
 			consensusItem, err := signedAggregate.ToConsensus()
 			if err != nil {
-				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
+				})
+				continue
 			}
 			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
 		} else {
 			var signedAggregate structs.SignedAggregateAttestationAndProof
 			err = json.Unmarshal(raw, &signedAggregate)
 			if err != nil {
-				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not parse message: " + err.Error(),
+				})
+				continue
 			}
 			consensusItem, err := signedAggregate.ToConsensus()
 			if err != nil {
-				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
+				})
+				continue
 			}
 			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
 		}
 
 		if rpcError != nil {
-			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
-			if errors.As(rpcError.Err, &aggregateBroadcastFailedError) {
-				broadcastFailed = true
+			var broadcastFailedErr *server.BroadcastFailedError
+			if errors.As(rpcError.Err, &broadcastFailedErr) {
+				failedBroadcasts = append(failedBroadcasts, &server.IndexedError{
+					Index:   i,
+					Message: rpcError.Err.Error(),
+				})
+				continue
 			} else {
 				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 				return
 			}
 		}
 	}
-	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+
+	if len(failures) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
+	}
+	if len(failedBroadcasts) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusInternalServerError,
+			Message:  server.ErrIndexedBroadcastFail,
+			Failures: failedBroadcasts,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
 	}
 }
 

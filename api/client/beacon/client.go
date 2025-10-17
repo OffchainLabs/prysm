@@ -284,7 +284,7 @@ func (c *Client) SubmitChangeBLStoExecution(ctx context.Context, request []*stru
 	if resp.StatusCode != http.StatusOK {
 		decoder := json.NewDecoder(resp.Body)
 		decoder.DisallowUnknownFields()
-		errorJson := &server.IndexedVerificationFailureError{}
+		errorJson := &server.IndexedErrorContainer{}
 		if err := decoder.Decode(errorJson); err != nil {
 			return errors.Wrapf(err, "failed to decode error JSON for %s", resp.Request.URL)
 		}

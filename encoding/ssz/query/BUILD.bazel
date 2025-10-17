@@ -24,7 +24,6 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "analyzer_test.go",
         "path_test.go",
         "query_test.go",
         "tag_parser_test.go",

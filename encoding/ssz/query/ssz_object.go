@@ -4,6 +4,7 @@ import "errors"
 
 type SSZObject interface {
 	HashTreeRoot() ([32]byte, error)
+	SizeSSZ() int
 }
 
 // HashTreeRoot calls the HashTreeRoot method on the stored interface if it implements SSZObject.
