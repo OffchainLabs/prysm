@@ -7,6 +7,7 @@ go_library(
         "bitlist.go",
         "bitvector.go",
         "container.go",
+        "generalized_index.go",
         "list.go",
         "path.go",
         "query.go",
@@ -24,6 +25,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "generalized_index_test.go",
         "path_test.go",
         "query_test.go",
         "tag_parser_test.go",
