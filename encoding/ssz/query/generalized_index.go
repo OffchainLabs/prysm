@@ -69,7 +69,7 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 		// checks if a path element is an array index (e.g., field_name[5])
 		var idx *uint64
 		if element.indices != nil && len(*element.indices) > 0 {
-			// TODO: just a shortcut for now; extend to multi-dimensional arrays later
+			// note: shortcut extend to multi-dimensional arrays later
 			idx = &(*element.indices)[0]
 		}
 
