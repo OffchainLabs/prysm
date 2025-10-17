@@ -307,11 +307,11 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		require.Equal(t, groupCount, storedCount)
 	})
 
-	t.Run("should not update with lower earliest slot", func(t *testing.T) {
+	t.Run("allow decreasing earliest slot (backfill scenario)", func(t *testing.T) {
 		const (
 			initialSlot  = primitives.Slot(300)
 			initialCount = uint64(10)
-			earliestSlot = primitives.Slot(200) // Lower than initial
+			earliestSlot = primitives.Slot(200) // Lower than initial (backfill discovered earlier blocks)
 			groupCount   = uint64(10)
 		)
 
@@ -320,14 +320,14 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
 		require.NoError(t, err)
 
-		// Try to update with a lower slot (should not update)
+		// Update with a lower slot (should update for backfill)
 		slot, count, err := db.UpdateCustodyInfo(ctx, earliestSlot, groupCount)
 		require.NoError(t, err)
-		require.Equal(t, initialSlot, slot) // Should keep the higher slot
+		require.Equal(t, earliestSlot, slot) // Should update to the lower slot for backfill
 		require.Equal(t, initialCount, count)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
-		require.Equal(t, initialSlot, storedSlot) // Should keep the higher slot
+		require.Equal(t, earliestSlot, storedSlot) // Should update to the lower slot for backfill
 		require.Equal(t, initialCount, storedCount)
 	})
 }

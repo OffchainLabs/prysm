@@ -15,7 +15,8 @@ import (
 )
 
 // UpdateCustodyInfo atomically updates the custody group count if it is greater than the stored one,
-// and updates the earliest available slot if it is greater than the stored one.
+// and updates the earliest available slot.
+// The earliest available slot can decrease (for backfill scenarios) or increase (for pruning scenarios).
 // It returns the (potentially updated) custody group count and earliest available slot.
 func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateCustodyInfo")
@@ -52,15 +53,24 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 			}
 		}
 
-		// Update earliest available slot if it advanced.
-		// This is for pruning to work correctly as blocks are pruned,
-		// the earliest available slot moves forward independently of custody group changes.
-		//
-		// IMPORTANT: If we're increasing earliestAvailableSlot without also increasing
-		// custodyGroupCount, we must ensure the new slot doesn't exceed the minimum
-		// required slot (based on MIN_EPOCHS_FOR_BLOCK_REQUESTS from current time).
-		// This prevents nodes from arbitrarily refusing to serve mandatory historical data.
-		if earliestAvailableSlot > storedEarliestAvailableSlot {
+		// Allow decrease (for backfill scenarios)
+		// When backfilling blocks, we're discovering earlier data, so earliestAvailableSlot
+		// should decrease to reflect the newly available earlier blocks.
+		if earliestAvailableSlot < storedEarliestAvailableSlot {
+			storedEarliestAvailableSlot = earliestAvailableSlot
+			bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
+			if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
+				return errors.Wrap(err, "put earliest available slot")
+			}
+		} else if earliestAvailableSlot > storedEarliestAvailableSlot {
+			// Update earliest available slot if it advanced.
+			// This is for pruning to work correctly as blocks are pruned,
+			// the earliest available slot moves forward independently of custody group changes.
+			//
+			// IMPORTANT: If we're increasing earliestAvailableSlot without also increasing
+			// custodyGroupCount, we must ensure the new slot doesn't exceed the minimum
+			// required slot (based on MIN_EPOCHS_FOR_BLOCK_REQUESTS from current time).
+			// This prevents nodes from arbitrarily refusing to serve mandatory historical data.
 			// If custody group count is NOT increasing, validate the increase is allowed
 			// Use originalStoredGroupCount to check if custody is actually increasing in this call
 			if custodyGroupCount <= originalStoredGroupCount {
