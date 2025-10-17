@@ -430,6 +430,35 @@ func (s *Store) storeValidatorEntriesSeparately(ctx context.Context, tx *bolt.Tx
 func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 	_, span := trace.StartSpan(ctx, "BeaconDB.HasState")
 	defer span.End()
+
+	// If state diff is enabled, we just need to check if the slot aligns with the exponents.
+	if features.Get().EnableStateDiff {
+		var slot primitives.Slot
+
+		stateSummary, err := s.StateSummary(ctx, blockRoot)
+		if err != nil {
+			log.WithError(err).WithField("Block Root", blockRoot).Error("Failed to get state summary")
+			return false
+		}
+		if stateSummary == nil {
+			blk, err := s.Block(ctx, blockRoot)
+			if err != nil {
+				log.WithError(err).WithField("Block Root", blockRoot).Error("Failed to get block")
+				return false
+			}
+			if blk == nil || blk.IsNil() {
+				log.WithField("Block Root", blockRoot).Error("Failed to get block")
+				return false
+			}
+			slot = blk.Block().Slot()
+		} else {
+			slot = stateSummary.Slot
+		}
+
+		stateLvl := computeLevel(s.getOffset(), slot)
+		return stateLvl != -1
+	}
+
 	hasState := false
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateBucket)
