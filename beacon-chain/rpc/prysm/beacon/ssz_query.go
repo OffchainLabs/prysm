@@ -103,7 +103,7 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 
 	_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusBadRequest)
+		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -128,7 +128,13 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.QueryBeaconBlock")
 	defer span.End()
 
-	// Validate path first as lookup may be expensive.
+	blockId := r.PathValue("block_id")
+	if blockId == "" {
+		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+
+	// Validate path before lookup: it might be expensive.
 	var req structs.QuerySSZRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
@@ -148,12 +154,6 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	path, err := query.ParsePath(req.Query)
 	if err != nil {
 		httputil.HandleError(w, "Could not parse path '"+req.Query+"': "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	blockId := r.PathValue("block_id")
-	if blockId == "" {
-		httputil.HandleError(w, "block_id is required in URL params", http.StatusBadRequest)
 		return
 	}
 
@@ -184,7 +184,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 
 	_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 	if err != nil {
-		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusBadRequest)
+		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
