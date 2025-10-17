@@ -15,7 +15,7 @@ The idea is to diagram the cold-state database as a forest:
 
 ### Saving state diffs. 
 
-Let us assume that we have a running node that already has an hdiff compatible database. That is, some snapshot with a full state is saved at some slot `o` (for *offset*). Suppose that we have just updated finalization, thus we have some blocks that we may need to save a state diff (or even a snapshot). Suppose we try for a block with slot `c`. Then at each of the slots
+Let us assume that we have a running node that already has an hdiff compatible database. That is, some snapshot with a full state is saved at some slot `o` (for *offset*). Suppose that we have just updated finalization, thus we have some blocks that we may need to save a state diff (or even a snapshot) for. Suppose we try for a block with slot `c`. Then at each of the slots
 
 o, o + λ_0, o + 2 λ_0, ..., o + k_0 λ_0
 
@@ -25,9 +25,9 @@ o + k_0 λ_0 + λ_1, o + k_0 λ_0 + 2 λ_1, ..., o + k_0 λ_0 + k_1 λ_1
 
 we have stored a state diff between the state at that slot and *s_0*. We assume that 
 
-o + k_0 \lambda_0 + (k_1+1) \lambda_1 > c
+o + k_0 λ_0 + (k_1+1) λ_1 > c
 
-so that the latest diff at level one is in fact at slot o + k_0 \lambda_0 + k_1 \lambda_1. Let us call the sate at that slot *s_1*, it is obtained by applying the state diff saved at that slot to the state *s_0*. Similarly at the next level, for each slot
+so that the latest diff at level one is in fact at slot o + k_0 λ_0 + k_1 λ_1. Let us call the sate at that slot *s_1*. it is obtained by applying the state diff saved at that slot to the state *s_0*. Similarly at the next level, for each slot
 
 o + k_0 λ_0 + k_1 λ_1 + λ_2, o + k_0 λ_0 + k_1 λ_1 + 2 λ_2, ..., o + k_0 λ_0 + k_1 λ_1 + k_2 λ_2
 
@@ -109,7 +109,7 @@ Starting up from a clean database and from genesis will set o = 0 and start sync
 
 ### Backfill
 
-The following is added as an configurable option, pass the flag `--backfill-origin-state ssz`, in this case the node will download the state `ssz` and set as offset this state's slot. Will download the checkpoint state and start syncing forward as usual but will not call `MigrateToCold` until the backfill service as finished. In the background the node will download all blocks all the way up to the state ssz, then start syncing forward those blocks regenerating the finalized states and when they are of the form o + k λ_h. Once the forward syncing has caught up with the finalized checkpoint, we can start calling `MigrateToCold` again. This backfill mechanism is much faster than the current foward syncing to regenerate the states: we do not need to do any checks on the EL since the blocks are already finalized and trusted, the hashes are already confirmed. 
+The following is added as an configurable option, pass the flag `--backfill-origin-state ssz`, in this case the node will download the state `ssz` and set as offset this state's slot. Will download the checkpoint state and start syncing forward as usual but will not call `MigrateToCold` until the backfill service is finished. In the background the node will download all blocks all the way up to the state ssz, then start forward syncing those blocks regenerating the finalized states and when they are of the form o + k λ_h. Once the forward syncing has caught up with the finalized checkpoint, we can start calling `MigrateToCold` again. This backfill mechanism is much faster than the current foward syncing to regenerate the states: we do not need to do any checks on the EL since the blocks are already finalized and trusted, the hashes are already confirmed. 
 
 ### Database Prunning
 
@@ -269,7 +269,7 @@ The latest Block header is treated exactly like the Fork pointer.
 
 ##### Block Roots
 
-The block roots slice is deserialized literally as a full slice of beacon block roots, this may seem like a large waste of memory and space since this slice is 8192 roots, each of 32 bytes. However, the serialization process is as follows, if a blockroot has not changed between the source and the target state, we store a full zero root `0x00...`. For states that are *close by*, the block roots slice will not have changed much, this will produce a slice that is mostly zeroes, and these gets stored occupying minimal space with Snappy compression. When two states are more than 8192 slots appart, the target block roots slice will have to be saved in its entirety, which is what this method achieves. 
+The block roots slice is deserialized literally as a full slice of beacon block roots, this may seem like a large waste of memory and space since this slice is 8192 roots, each 32 bytes. However, the serialization process is as follows, if a blockroot has not changed between the source and the target state, we store a full zero root `0x00...`. For states that are *close by*, the block roots slice will not have changed much, this will produce a slice that is mostly zeroes, and these gets stored occupying minimal space with Snappy compression. When two states are more than 8192 slots appart, the target block roots slice will have to be saved in its entirety, which is what this method achieves. 
 
 We could get a little more performance here if instead of keeping a full zeroed out root in the internal `hdiff` structure, we stored an empty slice. But this way the check for lengths becomes slightly more complicated. 
 
@@ -306,7 +306,7 @@ The slashings slice is stored as the algebraic difference between the target and
 
 ##### Pending Attestations
 
-Pending attestations are only present in Phase 0 states. So the paths to deserialize them (both for *previous and current epoch attestations*) is only executed in case the target state is a Phase 0 state (notice that this implies that the source state must have been a Phase0 state as well. 
+Pending attestations are only present in Phase 0 states. So the paths to deserialize them (both for *previous and current epoch attestations*) is only executed in case the target state is a Phase 0 state (notice that this implies that the source state must have been a Phase0 state as well). 
 
 For both of these slices we store first the length in the first 8 bytes. Then we loop over the remaining bytes deserializing each pending attestation. Each of them is of variable size and is deserialized as follows, the first 8 bytes contain the attestation aggregation bits length. The next bytes (how many is determined by the aggregation bits length) encode the aggregation bits. The next 128 bytes are the SSZ encoded attestation data. Finally the inclusion delay and the proposer index are serialized as 8 bytes `uint64`. 
 
@@ -334,7 +334,7 @@ If the first byte is 0, then the sync committee is set to be nil (and therefore 
 This is serialized exactly like the sync committes. Notice that the implementation of `readExecutionPayloadHeader` is more involved because the SSZ serialization of the header depends on the state's version. 
 
 ##### Withdrawal Indices
-The fields `nextWithdrawalIndex` and `nextWithdrawalValidatorIndex` are treated just like the Slot field. 
+The fields `nextWithdrawalIndex` and `nextWithdrawalValidatorIndex` are treated just like the `Slot` field. 
 
 ##### Historical Summaries
 
@@ -346,7 +346,7 @@ The fields `depositRequestsStartIndex`, `depositBalanceToConsume`, `exitBalanceT
 
 ##### Pending Deposits
 
-The first 8 bytes store the `pendingDepositIndex`, the next 8 bytes store the length of the pending deposit diff slice. The remaining bytes store a the slice of  SSZ serialized `PendingDeposit` objects. 
+The first 8 bytes store the `pendingDepositIndex`, the next 8 bytes store the length of the pending deposit diff slice. The remaining bytes store a slice of SSZ serialized `PendingDeposit` objects. 
 
 This diff slice is different than others, we store the extra index `pendingDepositIndex` in the `hdiff` structure that is used as follows. This index indicates how many pending deposits need to be dropped from the source state. The remaining slice is added to the end of the source state's pending deposits. The rationale for this serialization algorithm is that if taking the diff of two close enough states, the pending deposit queue may be very large. Between the source and the target, the first few deposits may have already been consumed, but the remaining large majority would still be there in the target. The target state may have some more extra deposits to be added in the end. 
 
