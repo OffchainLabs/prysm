@@ -72,7 +72,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 	}
-	defer s.sendStateFeedOnBlock(cfg)
+
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
 
@@ -93,6 +93,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
+
+	defer s.sendStateFeedOnBlock(cfg) // only send event after successful insertion
 	start := time.Now()
 	cfg.headRoot, err = s.cfg.ForkChoiceStore.Head(ctx)
 	if err != nil {
@@ -712,7 +714,7 @@ func (s *Service) areDataColumnsAvailable(
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount(ctx)
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
 	}

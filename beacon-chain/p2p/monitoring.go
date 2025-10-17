@@ -11,14 +11,15 @@ import (
 
 var (
 	knownAgentVersions = []string{
+		"erigon/caplin",
+		"grandine",
+		"js-libp2p",
 		"lighthouse",
+		"lodestar",
 		"nimbus",
 		"prysm",
 		"teku",
-		"lodestar",
-		"js-libp2p",
 		"rust-libp2p",
-		"erigon/caplin",
 	}
 	p2pPeerCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "p2p_peer_count",
@@ -198,9 +199,11 @@ func (s *Service) updateMetrics() {
 		overallScore := s.peers.Scorers().Score(pid)
 		peerScoresByClient[foundName] = append(peerScoresByClient[foundName], overallScore)
 	}
+	connectedPeersCount.Reset() // Clear out previous results.
 	for agent, total := range numConnectedPeersByClient {
 		connectedPeersCount.WithLabelValues(agent).Set(total)
 	}
+	avgScoreConnectedClients.Reset() // Clear out previous results.
 	for agent, scoringData := range peerScoresByClient {
 		avgScore := average(scoringData)
 		avgScoreConnectedClients.WithLabelValues(agent).Set(avgScore)

@@ -1,10 +1,13 @@
 package mock
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
@@ -55,6 +58,32 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 			},
 			SigningSlot: 0,
 		}
+	case "AGGREGATE_AND_PROOF":
+		return &validatorpb.SignRequest{
+			PublicKey:       make([]byte, fieldparams.BLSPubkeyLength),
+			SigningRoot:     make([]byte, fieldparams.RootLength),
+			SignatureDomain: make([]byte, 4),
+			Object: &validatorpb.SignRequest_AggregateAttestationAndProof{
+				AggregateAttestationAndProof: &eth.AggregateAttestationAndProof{
+					AggregatorIndex: 0,
+					Aggregate: &eth.Attestation{
+						AggregationBits: bitfield.Bitlist{0b1101},
+						Data: &eth.AttestationData{
+							BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+							Source: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+							Target: &eth.Checkpoint{
+								Root: make([]byte, fieldparams.RootLength),
+							},
+						},
+						Signature: make([]byte, 96),
+					},
+					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
+				},
+			},
+			SigningSlot: 0,
+		}
 	case "AGGREGATE_AND_PROOF_V2":
 		committeeBits := bitfield.NewBitvector64()
 		committeeBits.SetBitAt(0, true)
@@ -82,7 +111,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 					SelectionProof: make([]byte, fieldparams.BLSSignatureLength),
 				},
 			},
-			SigningSlot: 0,
+			SigningSlot: primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch),
 		}
 	case "ATTESTATION":
 		return &validatorpb.SignRequest{
@@ -521,17 +550,34 @@ func AggregationSlotSignRequest() *types.AggregationSlotSignRequest {
 
 // AggregateAndProofV2SignRequest is a mock implementation of the AggregateAndProofV2SignRequest.
 func AggregateAndProofV2SignRequest(ver int) *types.AggregateAndProofV2SignRequest {
+	var aggregateAndProofJSON []byte
+	var slot primitives.Slot
+	if ver < version.Electra {
+		aggregateAndProofData := &types.AggregateAndProof{
+			AggregatorIndex: "0",
+			Aggregate:       Attestation(),
+			SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+		}
+		aggregateAndProofJSON, _ = json.Marshal(aggregateAndProofData)
+		slot = 0 // Pre-Electra slot
+	} else {
+		aggregateAndProofData := &types.AggregateAndProofElectra{
+			AggregatorIndex: "0",
+			Aggregate:       AttestationElectra(),
+			SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
+		}
+		aggregateAndProofJSON, _ = json.Marshal(aggregateAndProofData)
+		slot = primitives.Slot(params.BeaconConfig().ElectraForkEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+	}
+	// Generate ForkInfo dynamically based on the slot
+	forkInfo, _ := types.MapForkInfo(slot, make([]byte, fieldparams.RootLength))
 	return &types.AggregateAndProofV2SignRequest{
 		Type:        "AGGREGATE_AND_PROOF_V2",
-		ForkInfo:    ForkInfo(),
+		ForkInfo:    forkInfo,
 		SigningRoot: make([]byte, fieldparams.RootLength),
 		AggregateAndProof: &types.AggregateAndProofV2{
 			Version: strings.ToUpper(version.String(ver)),
-			Data: &types.AggregateAndProofElectra{
-				AggregatorIndex: "0",
-				Aggregate:       AttestationElectra(),
-				SelectionProof:  make([]byte, fieldparams.BLSSignatureLength),
-			},
+			Data:    aggregateAndProofJSON,
 		},
 	}
 }

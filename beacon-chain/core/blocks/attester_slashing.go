@@ -42,9 +42,34 @@ func ProcessAttesterSlashings(
 	slashings []ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if exitInfo == nil && len(slashings) > 0 {
+		return nil, errors.New("exit info required to process attester slashings")
+	}
 	var err error
 	for _, slashing := range slashings {
 		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return beaconState, nil
+}
+
+// ProcessAttesterSlashingsNoVerify processes attester slashings without verifying them.
+// This is useful in scenarios such as block reward calculation, where we can assume the data
+// in the block is valid.
+func ProcessAttesterSlashingsNoVerify(
+	ctx context.Context,
+	beaconState state.BeaconState,
+	slashings []ethpb.AttSlashing,
+	exitInfo *validators.ExitInfo,
+) (state.BeaconState, error) {
+	if exitInfo == nil && len(slashings) > 0 {
+		return nil, errors.New("exit info required to process attester slashings")
+	}
+	var err error
+	for _, slashing := range slashings {
+		beaconState, err = ProcessAttesterSlashingNoVerify(ctx, beaconState, slashing, exitInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -59,9 +84,36 @@ func ProcessAttesterSlashing(
 	slashing ethpb.AttSlashing,
 	exitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process attester slashing")
+	}
 	if err := VerifyAttesterSlashing(ctx, beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify attester slashing")
 	}
+	return processAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+}
+
+// ProcessAttesterSlashingNoVerify processes individual attester slashing without verifying it.
+// This is useful in scenarios such as block reward calculation, where we can assume the data
+// in the block is valid.
+func ProcessAttesterSlashingNoVerify(
+	ctx context.Context,
+	beaconState state.BeaconState,
+	slashing ethpb.AttSlashing,
+	exitInfo *validators.ExitInfo,
+) (state.BeaconState, error) {
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process attester slashing")
+	}
+	return processAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+}
+
+func processAttesterSlashing(
+	ctx context.Context,
+	beaconState state.BeaconState,
+	slashing ethpb.AttSlashing,
+	exitInfo *validators.ExitInfo,
+) (state.BeaconState, error) {
 	slashableIndices := SlashableAttesterIndices(slashing)
 	sort.SliceStable(slashableIndices, func(i, j int) bool {
 		return slashableIndices[i] < slashableIndices[j]

@@ -316,6 +316,10 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
+		if errors.Is(err, builderapi.ErrBadGateway) && block.IsBlinded() {
+			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
+			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+		}
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
 	}
 
@@ -352,7 +356,7 @@ func (vs *Server) broadcastAndReceiveSidecars(
 	dataColumnSidecars []blocks.RODataColumn,
 ) error {
 	if block.Version() >= version.Fulu {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSidecars, root); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSidecars); err != nil {
 			return errors.Wrap(err, "broadcast and receive data columns")
 		}
 		return nil
@@ -495,43 +499,22 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 }
 
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
-func (vs *Server) broadcastAndReceiveDataColumns(
-	ctx context.Context,
-	roSidecars []blocks.RODataColumn,
-	root [fieldparams.RootLength]byte,
-) error {
-	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
-	eg, _ := errgroup.WithContext(ctx)
-	for _, roSidecar := range roSidecars {
-		// We build this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
-		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roSidecar)
-		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
-
-		eg.Go(func() error {
-			// Compute the subnet index based on the column index.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(roSidecar.Index)
-
-			if err := vs.P2P.BroadcastDataColumnSidecar(subnet, verifiedRODataColumn); err != nil {
-				return errors.Wrap(err, "broadcast data column")
-			}
-
-			return nil
-		})
+func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars []blocks.RODataColumn) error {
+	// We built this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
+	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
+	for _, sidecar := range roSidecars {
+		verifiedSidecar := blocks.NewVerifiedRODataColumn(sidecar)
+		verifiedSidecars = append(verifiedSidecars, verifiedSidecar)
 	}
 
-	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedRODataColumns); err != nil {
-		return errors.Wrap(err, "receive data column")
+	// Broadcast sidecars (non blocking).
+	if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars); err != nil {
+		return errors.Wrap(err, "broadcast data column sidecars")
 	}
 
-	for _, verifiedRODataColumn := range verifiedRODataColumns {
-		vs.OperationNotifier.OperationFeed().Send(&feed.Event{
-			Type: operation.DataColumnSidecarReceived,
-			Data: &operation.DataColumnSidecarReceivedData{DataColumn: &verifiedRODataColumn}, // #nosec G601
-		})
-	}
-
-	if err := eg.Wait(); err != nil {
-		return errors.Wrap(err, "wait for data columns to be broadcasted")
+	// In parallel, receive sidecars.
+	if err := vs.DataColumnReceiver.ReceiveDataColumns(verifiedSidecars); err != nil {
+		return errors.Wrap(err, "receive data columns")
 	}
 
 	return nil

@@ -25,6 +25,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -223,8 +224,14 @@ func (s *Service) findPeersWithSubnets(
 		// Skip nodes that are not subscribed to any of the defective subnets.
 		nodeSubnets, err := filter(node)
 		if err != nil {
-			return nil, errors.Wrap(err, "filter node")
+			log.WithError(err).WithFields(logrus.Fields{
+				"nodeID":      node.ID(),
+				"topicFormat": topicFormat,
+			}).Debug("Could not get needed subnets from peer")
+
+			continue
 		}
+
 		if len(nodeSubnets) == 0 {
 			continue
 		}
@@ -507,17 +514,26 @@ func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
 //
 //	return [compute_subscribed_subnet(node_id, epoch, index) for index in range(SUBNETS_PER_NODE)]
 func computeSubscribedSubnets(nodeID enode.ID, epoch primitives.Epoch) ([]uint64, error) {
-	subnetsPerNode := params.BeaconConfig().SubnetsPerNode
-	subs := make([]uint64, 0, subnetsPerNode)
+	beaconConfig := params.BeaconConfig()
 
-	for i := uint64(0); i < subnetsPerNode; i++ {
+	if flags.Get().SubscribeToAllSubnets {
+		subnets := make([]uint64, 0, beaconConfig.AttestationSubnetCount)
+		for i := range beaconConfig.AttestationSubnetCount {
+			subnets = append(subnets, i)
+		}
+		return subnets, nil
+	}
+
+	subnets := make([]uint64, 0, beaconConfig.SubnetsPerNode)
+	for i := range beaconConfig.SubnetsPerNode {
 		sub, err := computeSubscribedSubnet(nodeID, epoch, i)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "compute subscribed subnet")
 		}
-		subs = append(subs, sub)
+		subnets = append(subnets, sub)
 	}
-	return subs, nil
+
+	return subnets, nil
 }
 
 //	Spec pseudocode definition:

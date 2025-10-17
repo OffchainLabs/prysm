@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
@@ -46,6 +45,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
 	params.OverrideBeaconConfig(cfg)
 
 	// Start the trusted setup.
@@ -144,7 +144,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		HeadSlot: 8,
 	})
 
-	p2p.Peers().SetMetadata(other.PeerID(), wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+	p2p.Peers().SetMetadata(other.PeerID(), wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{
 		CustodyGroupCount: 128,
 	}))
 
@@ -760,6 +760,12 @@ func TestBuildByRootRequest(t *testing.T) {
 func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 2}}
+	params.OverrideBeaconConfig(cfg)
 
 	t.Run("nominal", func(t *testing.T) {
 		const (

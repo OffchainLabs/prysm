@@ -399,7 +399,6 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	ctx, span := trace.StartSpan(ctx, "helpers.CommitteeAssignments")
 	defer span.End()
 
-	// Verify if the epoch is valid for assignment based on the provided state.
 	if err := VerifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
 	}
@@ -407,12 +406,15 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	if err != nil {
 		return nil, err
 	}
-	vals := make(map[primitives.ValidatorIndex]struct{})
+
+	// Deduplicate and make set for O(1) membership checks.
+	vals := make(map[primitives.ValidatorIndex]struct{}, len(validators))
 	for _, v := range validators {
 		vals[v] = struct{}{}
 	}
-	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment)
-	// Compute committee assignments for each slot in the epoch.
+	remaining := len(vals)
+
+	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment, len(vals))
 	for slot := startSlot; slot < startSlot+params.BeaconConfig().SlotsPerEpoch; slot++ {
 		committees, err := BeaconCommittees(ctx, state, slot)
 		if err != nil {
@@ -420,7 +422,7 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 		}
 		for j, committee := range committees {
 			for _, vIndex := range committee {
-				if _, ok := vals[vIndex]; !ok { // Skip if the validator is not in the provided validators slice.
+				if _, ok := vals[vIndex]; !ok {
 					continue
 				}
 				if _, ok := assignments[vIndex]; !ok {
@@ -429,6 +431,11 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 				assignments[vIndex].Committee = committee
 				assignments[vIndex].AttesterSlot = slot
 				assignments[vIndex].CommitteeIndex = primitives.CommitteeIndex(j)
+				delete(vals, vIndex)
+				remaining--
+				if remaining == 0 {
+					return assignments, nil // early exit
+				}
 			}
 		}
 	}

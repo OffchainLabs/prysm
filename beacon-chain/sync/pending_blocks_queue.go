@@ -147,6 +147,11 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
+			// Process pending attestations for this block.
+			if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
+				log.WithError(err).Debug("Failed to process pending attestations for block")
+			}
+
 			// Remove the processed block from the queue.
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
 				return err

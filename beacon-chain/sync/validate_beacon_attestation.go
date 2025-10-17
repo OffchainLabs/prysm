@@ -112,8 +112,12 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
+		// Block not yet available - save attestation to pending queue for later processing
+		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
 		s.savePendingAtt(att)
+		return pubsub.ValidationIgnore, nil
 	}
+	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
 	if !s.cfg.chain.InForkchoice(blockRoot) {
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
 		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
@@ -274,8 +278,8 @@ func (s *Service) validateCommitteeIndexAndCount(
 	} else {
 		ci = a.GetCommitteeIndex()
 	}
-	if uint64(ci) > count {
-		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
+	if uint64(ci) >= count {
+		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d >= %d", ci, count)
 	}
 	return ci, valCount, pubsub.ValidationAccept, nil
 }

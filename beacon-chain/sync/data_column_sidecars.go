@@ -20,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -170,7 +169,7 @@ func FetchDataColumnSidecars(
 		result[root] = sidecars
 	}
 
-	log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Failed to fetch data column sidecars from storage and peers using rescue mode")
+	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
 }
 
@@ -739,7 +738,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
-				log.WithError(err).Warning("Failed to send data column sidecars request")
+				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
 			}
 
@@ -921,7 +920,7 @@ func buildByRangeRequests(
 func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool) p2ptypes.DataColumnsByRootIdentifiers {
 	identifiers := make(p2ptypes.DataColumnsByRootIdentifiers, 0, len(indicesByRoot))
 	for root, indices := range indicesByRoot {
-		identifier := &eth.DataColumnsByRootIdentifier{
+		identifier := &ethpb.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
 			Columns:   helpers.SortedSliceFromMap(indices),
 		}
@@ -929,7 +928,7 @@ func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint6
 	}
 
 	// Sort identifiers to have a deterministic output.
-	slices.SortFunc(identifiers, func(left, right *eth.DataColumnsByRootIdentifier) int {
+	slices.SortFunc(identifiers, func(left, right *ethpb.DataColumnsByRootIdentifier) int {
 		if cmp := bytes.Compare(left.BlockRoot, right.BlockRoot); cmp != 0 {
 			return cmp
 		}
@@ -1023,17 +1022,20 @@ func computeIndicesByRootByPeer(
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
 	for peer := range peers {
+		log := log.WithField("peerID", peer)
+
 		// Computes the custody columns for each peer
 		nodeID, err := prysmP2P.ConvertPeerIDToNodeID(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "convert peer ID to node ID for peer %s", peer)
+			log.WithError(err).Debug("Failed to convert peer ID to node ID")
+			continue
 		}
 
 		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
-
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrapf(err, "peerdas info for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer DAS info")
+			continue
 		}
 
 		for column := range dasInfo.CustodyColumns {
@@ -1046,11 +1048,13 @@ func computeIndicesByRootByPeer(
 		// Compute the head slot for each peer
 		peerChainState, err := p2p.Peers().ChainState(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "get chain state for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer chain state")
+			continue
 		}
 
 		if peerChainState == nil {
-			return nil, errors.Errorf("chain state is nil for peer %s", peer)
+			log.Debug("Peer chain state is nil")
+			continue
 		}
 
 		// Our view of the head slot of a peer is not updated in real time.
@@ -1118,19 +1122,21 @@ func randomPeer(
 			}
 		}
 
-		slices.Sort(nonRateLimitedPeers)
-
-		if len(nonRateLimitedPeers) == 0 {
-			log.WithFields(logrus.Fields{
-				"peerCount": peerCount,
-				"delay":     waitPeriod,
-			}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
-			time.Sleep(waitPeriod)
-			continue
+		if len(nonRateLimitedPeers) > 0 {
+			slices.Sort(nonRateLimitedPeers)
+			randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
+			return nonRateLimitedPeers[randomIndex], nil
 		}
 
-		randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
-		return nonRateLimitedPeers[randomIndex], nil
+		log.WithFields(logrus.Fields{
+			"peerCount": peerCount,
+			"delay":     waitPeriod,
+		}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
+
+		select {
+		case <-time.After(waitPeriod):
+		case <-ctx.Done():
+		}
 	}
 
 	return "", ctx.Err()

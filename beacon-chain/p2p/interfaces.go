@@ -52,7 +52,7 @@ type (
 		BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
 		BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
 		BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
-		BroadcastDataColumnSidecar(columnSubnet uint64, dataColumnSidecar blocks.VerifiedRODataColumn) error
+		BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error
 	}
 
 	// SetStreamHandler configures p2p to handle streams of a certain topic ID.
@@ -123,8 +123,8 @@ type (
 
 	// CustodyManager abstracts some data columns related methods.
 	CustodyManager interface {
-		EarliestAvailableSlot() (primitives.Slot, error)
-		CustodyGroupCount() (uint64, error)
+		EarliestAvailableSlot(ctx context.Context) (primitives.Slot, error)
+		CustodyGroupCount(ctx context.Context) (uint64, error)
 		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 		CustodyGroupCountFromPeer(peer.ID) uint64
 	}

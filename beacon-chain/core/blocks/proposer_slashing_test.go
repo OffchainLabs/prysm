@@ -172,8 +172,17 @@ func TestProcessProposerSlashings_AppliesCorrectStatus(t *testing.T) {
 	block := util.NewBeaconBlock()
 	block.Block.Body.ProposerSlashings = slashings
 
+	// Verify that ProcessProposerSlashingsNoVerify and ProcessProposerSlashings have the same outcome.
+	beaconStateNoVerify := beaconState.Copy()
+	newStateNoVerify, err := blocks.ProcessProposerSlashingsNoVerify(t.Context(), beaconStateNoVerify, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconStateNoVerify))
+	require.NoError(t, err)
+	sszNoVerify, err := newStateNoVerify.MarshalSSZ()
+	require.NoError(t, err)
 	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	require.NoError(t, err)
+	ssz, err := newState.MarshalSSZ()
+	require.NoError(t, err)
+	assert.DeepEqual(t, sszNoVerify, ssz, "States resulting from ProcessProposerSlashingsNoVerify and ProcessProposerSlashings are not equal")
 
 	newStateVals := newState.Validators()
 	if newStateVals[1].ExitEpoch != beaconState.Validators()[1].ExitEpoch {

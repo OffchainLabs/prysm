@@ -68,8 +68,12 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	exitInfo := validators.ExitInformation(st)
-	st, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), exitInfo)
+	var exitInfo *validators.ExitInfo
+	if len(blk.Body().ProposerSlashings()) > 0 || len(blk.Body().AttesterSlashings()) > 0 {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = validators.ExitInformation(st)
+	}
+	st, err = coreblocks.ProcessAttesterSlashingsNoVerify(ctx, st, blk.Body().AttesterSlashings(), exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get attester slashing rewards: " + err.Error(),
@@ -83,7 +87,7 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	st, err = coreblocks.ProcessProposerSlashings(ctx, st, blk.Body().ProposerSlashings(), exitInfo)
+	st, err = coreblocks.ProcessProposerSlashingsNoVerify(ctx, st, blk.Body().ProposerSlashings(), exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get proposer slashing rewards: " + err.Error(),
@@ -105,7 +109,7 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 		}
 	}
 	var syncCommitteeReward uint64
-	_, syncCommitteeReward, err = altair.ProcessSyncAggregate(ctx, st, sa)
+	_, syncCommitteeReward, err = altair.ProcessSyncAggregateNoVerifySig(ctx, st, sa)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get sync aggregate rewards: " + err.Error(),

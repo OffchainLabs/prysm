@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
+	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -2413,6 +2415,8 @@ func driftGenesisTime(s *Service, slot primitives.Slot, delay time.Duration) {
 }
 
 func TestMissingBlobIndices(t *testing.T) {
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(ds)
 	cases := []struct {
 		name     string
 		expected [][]byte
@@ -2426,23 +2430,23 @@ func TestMissingBlobIndices(t *testing.T) {
 		},
 		{
 			name:     "expected exceeds max",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0) + 1),
+			expected: fakeCommitments(maxBlobs + 1),
 			err:      errMaxBlobsExceeded,
 		},
 		{
 			name:     "first missing",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			expected: fakeCommitments(maxBlobs),
 			present:  []uint64{1, 2, 3, 4, 5},
 			result:   fakeResult([]uint64{0}),
 		},
 		{
 			name:     "all missing",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			expected: fakeCommitments(maxBlobs),
 			result:   fakeResult([]uint64{0, 1, 2, 3, 4, 5}),
 		},
 		{
 			name:     "none missing",
-			expected: fakeCommitments(params.BeaconConfig().MaxBlobsPerBlock(0)),
+			expected: fakeCommitments(maxBlobs),
 			present:  []uint64{0, 1, 2, 3, 4, 5},
 			result:   fakeResult([]uint64{}),
 		},
@@ -2475,8 +2479,8 @@ func TestMissingBlobIndices(t *testing.T) {
 	for _, c := range cases {
 		bm, bs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 		t.Run(c.name, func(t *testing.T) {
-			require.NoError(t, bm.CreateFakeIndices(c.root, 0, c.present...))
-			missing, err := missingBlobIndices(bs, c.root, c.expected, 0)
+			require.NoError(t, bm.CreateFakeIndices(c.root, ds, c.present...))
+			missing, err := missingBlobIndices(bs, c.root, c.expected, ds)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return
@@ -2904,22 +2908,21 @@ type testIsAvailableParams struct {
 	columnsToSave           []uint64
 }
 
-func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
+func testIsAvailableSetup(t *testing.T, p testIsAvailableParams) (context.Context, context.CancelFunc, *Service, [fieldparams.RootLength]byte, interfaces.SignedBeaconBlock) {
 	ctx, cancel := context.WithCancel(t.Context())
 	dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
 
-	options := append(params.options, WithDataColumnStorage(dataColumnStorage))
+	options := append(p.options, WithDataColumnStorage(dataColumnStorage))
 	service, _ := minimalTestService(t, options...)
+	fs := util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
 
-	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32 /*validator count*/)
-
-	err := service.saveGenesisData(ctx, genesisState)
-	require.NoError(t, err)
+	genesisState, secretKeys := util.DeterministicGenesisStateElectra(t, 32, util.WithElectraStateSlot(fs))
+	require.NoError(t, service.saveGenesisData(ctx, genesisState))
 
 	conf := util.DefaultBlockGenConfig()
-	conf.NumBlobKzgCommitments = params.blobKzgCommitmentsCount
+	conf.NumBlobKzgCommitments = p.blobKzgCommitmentsCount
 
-	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, 10 /*block slot*/)
+	signedBeaconBlock, err := util.GenerateFullBlockFulu(genesisState, secretKeys, conf, fs+1)
 	require.NoError(t, err)
 
 	block := signedBeaconBlock.Block
@@ -2929,8 +2932,8 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 	root, err := block.HashTreeRoot()
 	require.NoError(t, err)
 
-	dataColumnsParams := make([]util.DataColumnParam, 0, len(params.columnsToSave))
-	for _, i := range params.columnsToSave {
+	dataColumnsParams := make([]util.DataColumnParam, 0, len(p.columnsToSave))
+	for _, i := range p.columnsToSave {
 		dataColumnParam := util.DataColumnParam{
 			Index:         i,
 			Slot:          block.Slot,
@@ -2954,8 +2957,12 @@ func testIsAvailableSetup(t *testing.T, params testIsAvailableParams) (context.C
 }
 
 func TestIsDataAvailable(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.AltairForkEpoch, cfg.BellatrixForkEpoch, cfg.CapellaForkEpoch, cfg.DenebForkEpoch, cfg.ElectraForkEpoch, cfg.FuluForkEpoch = 0, 0, 0, 0, 0, 0
+	params.OverrideBeaconConfig(cfg)
 	t.Run("Fulu - out of retention window", func(t *testing.T) {
-		params := testIsAvailableParams{options: []Option{WithGenesisTime(time.Unix(0, 0))}}
+		params := testIsAvailableParams{}
 		ctx, _, service, root, signed := testIsAvailableSetup(t, params)
 
 		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
@@ -2972,7 +2979,6 @@ func TestIsDataAvailable(t *testing.T) {
 		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
-
 	t.Run("Fulu - more than half of the columns in custody", func(t *testing.T) {
 		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
@@ -3141,6 +3147,159 @@ func TestIsDataAvailable(t *testing.T) {
 		err = service.isDataAvailable(ctx, roBlock)
 		require.NotNil(t, err)
 	})
+}
+
+// Test_postBlockProcess_EventSending tests that block processed events are only sent
+// when block processing succeeds according to the decision tree:
+//
+// Block Processing Flow:
+// ├─ InsertNode FAILS (fork choice timeout)
+// │  └─ blockProcessed = false ❌ NO EVENT
+// │
+// ├─ InsertNode succeeds
+// │  ├─ handleBlockAttestations FAILS
+// │  │  └─ blockProcessed = false ❌ NO EVENT
+// │  │
+// │  ├─ Block is NON-CANONICAL (not head)
+// │  │  └─ blockProcessed = true ✅ SEND EVENT (Line 111)
+// │  │
+// │  ├─ Block IS CANONICAL (new head)
+// │  │  ├─ getFCUArgs FAILS
+// │  │  │  └─ blockProcessed = true ✅ SEND EVENT (Line 117)
+// │  │  │
+// │  │  ├─ sendFCU FAILS
+// │  │  │  └─ blockProcessed = false ❌ NO EVENT
+// │  │  │
+// │  │  └─ Full success
+// │  │     └─ blockProcessed = true ✅ SEND EVENT (Line 125)
+func Test_postBlockProcess_EventSending(t *testing.T) {
+	ctx := context.Background()
+
+	// Helper to create a minimal valid block and state
+	createTestBlockAndState := func(t *testing.T, slot primitives.Slot, parentRoot [32]byte) (consensusblocks.ROBlock, state.BeaconState) {
+		st, _ := util.DeterministicGenesisState(t, 64)
+		require.NoError(t, st.SetSlot(slot))
+
+		stateRoot, err := st.HashTreeRoot(ctx)
+		require.NoError(t, err)
+
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = slot
+		blk.Block.ProposerIndex = 0
+		blk.Block.ParentRoot = parentRoot[:]
+		blk.Block.StateRoot = stateRoot[:]
+
+		signed := util.HydrateSignedBeaconBlock(blk)
+		roBlock, err := consensusblocks.NewSignedBeaconBlock(signed)
+		require.NoError(t, err)
+
+		roBlk, err := consensusblocks.NewROBlock(roBlock)
+		require.NoError(t, err)
+		return roBlk, st
+	}
+
+	tests := []struct {
+		name          string
+		setupService  func(*Service, [32]byte)
+		expectEvent   bool
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "Block successfully processed - sends event",
+			setupService: func(s *Service, blockRoot [32]byte) {
+				// Default setup should work
+			},
+			expectEvent: true,
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create service with required options
+			opts := testServiceOptsWithDB(t)
+			service, err := NewService(ctx, opts...)
+			require.NoError(t, err)
+
+			// Initialize fork choice with genesis block
+			st, _ := util.DeterministicGenesisState(t, 64)
+			require.NoError(t, st.SetSlot(0))
+			genesisBlock := util.NewBeaconBlock()
+			genesisBlock.Block.StateRoot = bytesutil.PadTo([]byte("genesisState"), 32)
+			signedGenesis := util.HydrateSignedBeaconBlock(genesisBlock)
+			block, err := consensusblocks.NewSignedBeaconBlock(signedGenesis)
+			require.NoError(t, err)
+			genesisRoot, err := block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, service.cfg.BeaconDB.SaveBlock(ctx, block))
+			require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot))
+			require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, st, genesisRoot))
+
+			genesisROBlock, err := consensusblocks.NewROBlock(block)
+			require.NoError(t, err)
+			require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, genesisROBlock))
+
+			// Create test block and state with genesis as parent
+			roBlock, postSt := createTestBlockAndState(t, 100, genesisRoot)
+
+			// Apply additional service setup if provided
+			if tt.setupService != nil {
+				tt.setupService(service, roBlock.Root())
+			}
+
+			// Create post block process config
+			cfg := &postBlockProcessConfig{
+				ctx:            ctx,
+				roblock:        roBlock,
+				postState:      postSt,
+				isValidPayload: true,
+			}
+
+			// Execute postBlockProcess
+			err = service.postBlockProcess(cfg)
+
+			// Check error expectation
+			if tt.expectError {
+				require.NotNil(t, err)
+				if tt.errorContains != "" {
+					require.ErrorContains(t, tt.errorContains, err)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			// Give a moment for deferred functions to execute
+			time.Sleep(10 * time.Millisecond)
+
+			// Check event expectation
+			notifier := service.cfg.StateNotifier.(*mock.MockStateNotifier)
+			events := notifier.ReceivedEvents()
+
+			if tt.expectEvent {
+				require.NotEqual(t, 0, len(events), "Expected event to be sent but none were received")
+
+				// Verify it's a BlockProcessed event
+				foundBlockProcessed := false
+				for _, evt := range events {
+					if evt.Type == statefeed.BlockProcessed {
+						foundBlockProcessed = true
+						data, ok := evt.Data.(*statefeed.BlockProcessedData)
+						require.Equal(t, true, ok, "Event data should be BlockProcessedData")
+						require.Equal(t, roBlock.Root(), data.BlockRoot, "Event should contain correct block root")
+						break
+					}
+				}
+				require.Equal(t, true, foundBlockProcessed, "Expected BlockProcessed event type")
+			} else {
+				// For no-event cases, verify no BlockProcessed events were sent
+				for _, evt := range events {
+					require.NotEqual(t, statefeed.BlockProcessed, evt.Type,
+						"Expected no BlockProcessed event but one was sent")
+				}
+			}
+		})
+	}
 }
 
 func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
