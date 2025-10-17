@@ -56,15 +56,6 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 			return 0, fmt.Errorf("indexing requires a container field step first, got %s", currentInfo.sszType)
 		}
 
-		// Check if a path element is a length field
-		if element.length {
-			root, currentInfo, err = processLengthField(currentInfo, element.name, root)
-			if err != nil {
-				return 0, err
-			}
-			continue
-		}
-
 		// Check if path element contains an array index (e.g., field_name[5])
 		var idx *uint64
 		if element.indices != nil && len(*element.indices) > 0 {
@@ -87,6 +78,17 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 		// Update the generalized index to point to the specified field
 		root = updateRoot(root, 1, chunkCount, fieldPos)
 		currentInfo = fieldSsz
+
+		// Check if a path element is a length field
+		if element.length {
+			// Length field is only valid for List and Bitlist types
+			if fieldSsz.sszType != List && fieldSsz.sszType != Bitlist {
+				return 0, fmt.Errorf("len() is only supported for List and Bitlist types, got %s", fieldSsz.sszType)
+			}
+			currentInfo = &sszInfo{sszType: UintN, fixedSize: 8}
+			root = updateRoot(root, 1, 2, 1)
+			continue
+		}
 
 		if idx != nil {
 			switch fieldSsz.sszType {
@@ -170,34 +172,6 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 	}
 
 	return root, nil
-}
-
-// processLengthField processes length field (len(...)) and returns the updated generalized index and SSZInfo
-// Length field is only valid for List and Bitlist types
-func processLengthField(info *sszInfo, name string, root uint64) (uint64, *sszInfo, error) {
-	// Retrieve the field position and SSZInfo for the
-	fieldPos, fieldSsz, err := getContainerFieldByName(info, name)
-	if err != nil {
-		return 0, nil, fmt.Errorf("container field %q not found: %w", name, err)
-	}
-
-	// Length field is only valid for List and Bitlist types
-	if fieldSsz.sszType != List && fieldSsz.sszType != Bitlist {
-		return 0, nil, fmt.Errorf("len() is only supported for List and Bitlist types, got %s", fieldSsz.sszType)
-	}
-
-	// Compute the chunk count for the field
-	chunkCount, err := getChunkCount(info)
-	if err != nil {
-		return 0, nil, fmt.Errorf("chunk count error: %w", err)
-	}
-	currentRoot := updateRoot(root, 1, chunkCount, fieldPos)
-
-	// After len(), the type is uint64 (basic). If there are more path elements, reject.
-	currentInfo := &sszInfo{sszType: UintN, fixedSize: 8}
-	currentRoot = updateRoot(currentRoot, 1, 2, 1)
-
-	return currentRoot, currentInfo, nil
 }
 
 // updateRoot computes the new generalized index based on the current root, base index, chunk count, and offset
