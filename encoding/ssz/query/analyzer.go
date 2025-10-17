@@ -158,7 +158,7 @@ func PopulateVariableLengthInfo(sszInfo *SszInfo, value reflect.Value) error {
 }
 
 // analyzeType is an entry point that inspects a reflect.Value and computes its SSZ layout information.
-func analyzeType(value reflect.Value, tag *reflect.StructTag) (*sszInfo, error) {
+func analyzeType(value reflect.Value, tag *reflect.StructTag) (*SszInfo, error) {
 	switch value.Kind() {
 	// Basic types (e.g., uintN where N is 8, 16, 32, 64)
 	// NOTE: uint128 and uint256 are represented as []byte in Go,
@@ -182,7 +182,7 @@ func analyzeType(value reflect.Value, tag *reflect.StructTag) (*sszInfo, error) 
 }
 
 // analyzeBasicType analyzes SSZ basic types (uintN, bool) and returns its info.
-func analyzeBasicType(value reflect.Value) (*sszInfo, error) {
+func analyzeBasicType(value reflect.Value) (*SszInfo, error) {
 	var sszType SSZType
 
 	switch value.Kind() {
@@ -200,7 +200,7 @@ func analyzeBasicType(value reflect.Value) (*sszInfo, error) {
 		return nil, fmt.Errorf("unsupported basic type %v for SSZ calculation", value.Kind())
 	}
 
-	sszInfo := &sszInfo{
+	sszInfo := &SszInfo{
 		sszType: sszType,
 		typ:     value.Type(),
 
@@ -212,7 +212,7 @@ func analyzeBasicType(value reflect.Value) (*sszInfo, error) {
 }
 
 // analyzeHomogeneousColType analyzes homogeneous collection types (e.g., List, Vector, Bitlist, Bitvector) and returns its SSZ info.
-func analyzeHomogeneousColType(value reflect.Value, tag *reflect.StructTag) (*sszInfo, error) {
+func analyzeHomogeneousColType(value reflect.Value, tag *reflect.StructTag) (*SszInfo, error) {
 	if value.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("can only analyze slice types, got %v", value.Kind())
 	}
@@ -262,7 +262,7 @@ func analyzeHomogeneousColType(value reflect.Value, tag *reflect.StructTag) (*ss
 }
 
 // analyzeListType analyzes SSZ List/Bitlist type and returns its SSZ info.
-func analyzeListType(value reflect.Value, elementInfo *sszInfo, limit uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeListType(value reflect.Value, elementInfo *SszInfo, limit uint64, isBitfield bool) (*SszInfo, error) {
 	if isBitfield {
 		return &SszInfo{
 			sszType: Bitlist,
@@ -294,7 +294,7 @@ func analyzeListType(value reflect.Value, elementInfo *sszInfo, limit uint64, is
 }
 
 // analyzeVectorType analyzes SSZ Vector/Bitvector type and returns its SSZ info.
-func analyzeVectorType(value reflect.Value, elementInfo *sszInfo, length uint64, isBitfield bool) (*sszInfo, error) {
+func analyzeVectorType(value reflect.Value, elementInfo *SszInfo, length uint64, isBitfield bool) (*SszInfo, error) {
 	if isBitfield {
 		return &SszInfo{
 			sszType: Bitvector,
@@ -332,7 +332,7 @@ func analyzeVectorType(value reflect.Value, elementInfo *sszInfo, length uint64,
 }
 
 // analyzeContainerType analyzes SSZ Container type and returns its SSZ info.
-func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
+func analyzeContainerType(value reflect.Value) (*SszInfo, error) {
 	if value.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("can only analyze struct types, got %v", value.Kind())
 	}
@@ -386,7 +386,7 @@ func analyzeContainerType(value reflect.Value) (*sszInfo, error) {
 		}
 	}
 
-	return &sszInfo{
+	return &SszInfo{
 		sszType: Container,
 		typ:     containerTyp,
 		source:  castToSSZObject(value),
