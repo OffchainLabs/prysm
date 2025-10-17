@@ -14,12 +14,17 @@ import (
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestQueryBeaconState(t *testing.T) {
@@ -213,4 +218,120 @@ func TestQueryBeaconStateInvalidRequest(t *testing.T) {
 	}
 }
 
-func TestServer_QueryBeaconBlock(t *testing.T) {}
+func TestQueryBeaconBlock(t *testing.T) {
+	randaoReveal, err := hexutil.Decode("0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505")
+	require.NoError(t, err)
+	root, err := hexutil.Decode("0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2")
+	require.NoError(t, err)
+	signature, err := hexutil.Decode("0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505")
+	require.NoError(t, err)
+	att := &eth.Attestation{
+		AggregationBits: bitfield.Bitlist{0x01},
+		Data: &eth.AttestationData{
+			Slot:            1,
+			CommitteeIndex:  1,
+			BeaconBlockRoot: root,
+			Source: &eth.Checkpoint{
+				Epoch: 1,
+				Root:  root,
+			},
+			Target: &eth.Checkpoint{
+				Epoch: 1,
+				Root:  root,
+			},
+		},
+		Signature: signature,
+	}
+
+	tests := []struct {
+		name          string
+		path          string
+		block         interfaces.ReadOnlySignedBeaconBlock
+		expectedValue []byte
+	}{
+		{
+			name: "slot",
+			path: ".slot",
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Slot = 123
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b := make([]byte, 8)
+				binary.LittleEndian.PutUint64(b, 123)
+				return b
+			}(),
+		},
+		{
+			name: "randao_reveal",
+			path: ".body.randao_reveal",
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.RandaoReveal = randaoReveal
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: randaoReveal,
+		},
+		{
+			name: "attestations",
+			path: ".body.attestations",
+			block: func() interfaces.ReadOnlySignedBeaconBlock {
+				b := util.NewBeaconBlock()
+				b.Block.Body.Attestations = []*eth.Attestation{
+					att,
+				}
+				sb, err := blocks.NewSignedBeaconBlock(b)
+				require.NoError(t, err)
+				return sb
+			}(),
+			expectedValue: func() []byte {
+				b, err := att.MarshalSSZ()
+				require.NoError(t, err)
+				return b
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: tt.block}
+			mockChainService := &chainMock.ChainService{
+				FinalizedRoots: map[[32]byte]bool{},
+			}
+			s := &Server{
+				FinalizationFetcher: mockChainService,
+				Blocker:             mockBlockFetcher,
+			}
+			requestBody := &structs.QuerySSZRequest{
+				Query: tt.path,
+			}
+			var buf bytes.Buffer
+			require.NoError(t, json.NewEncoder(&buf).Encode(requestBody))
+
+			request := httptest.NewRequest(http.MethodPost, "http://example.com/prysm/v1/beacon/blocks/{block_id}/query", &buf)
+			request.SetPathValue("block_id", "head")
+			writer := httptest.NewRecorder()
+			writer.Body = &bytes.Buffer{}
+
+			s.QueryBeaconBlock(writer, request)
+			require.Equal(t, http.StatusOK, writer.Code)
+			assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
+
+			blockRoot, err := tt.block.Block().HashTreeRoot()
+			require.NoError(t, err)
+
+			expectedResponse := &sszquerypb.SSZQueryResponse{
+				Root:   blockRoot[:],
+				Result: tt.expectedValue,
+			}
+			sszExpectedResponse, err := expectedResponse.MarshalSSZ()
+			require.NoError(t, err)
+			assert.DeepEqual(t, sszExpectedResponse, writer.Body.Bytes())
+		})
+	}
+}

@@ -162,23 +162,47 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blockRoot, err := signedBlock.Block().HashTreeRoot()
+	encodedBlock, err := signedBlock.Block().MarshalSSZ()
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	protoBlock, err := signedBlock.Block().Proto()
+	if err != nil {
+		httputil.HandleError(w, "Could not convert block to proto: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var block query.SSZObject
+	switch signedBlock.Version() {
+	case version.Phase0:
+		block = protoBlock.(*ethpb.BeaconBlock)
+	case version.Altair:
+		block = protoBlock.(*ethpb.BeaconBlockAltair)
+	case version.Bellatrix:
+		block = protoBlock.(*ethpb.BeaconBlockBellatrix)
+	case version.Capella:
+		block = protoBlock.(*ethpb.BeaconBlockCapella)
+	case version.Deneb:
+		block = protoBlock.(*ethpb.BeaconBlockDeneb)
+	case version.Electra:
+	case version.Fulu:
+		block = protoBlock.(*ethpb.BeaconBlockElectra)
+	default:
+		httputil.HandleError(w, "Unsupported block version for querying: "+version.String(signedBlock.Version()), http.StatusBadRequest)
+		return
+	}
+
+	blockRoot, err := block.HashTreeRoot()
 	if err != nil {
 		httputil.HandleError(w, "Could not compute block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	block := signedBlock.Block()
-
 	info, err := query.AnalyzeObject(block)
 	if err != nil {
 		httputil.HandleError(w, "Could not analyze block object: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	encodedState, err := block.MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -190,7 +214,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 
 	response := &sszquerypb.SSZQueryResponse{
 		Root:   blockRoot[:],
-		Result: encodedState[offset : offset+length],
+		Result: encodedBlock[offset : offset+length],
 	}
 
 	responseSsz, err := response.MarshalSSZ()
