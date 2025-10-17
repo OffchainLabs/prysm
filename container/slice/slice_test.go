@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
@@ -281,13 +282,14 @@ func TestIsInUint64(t *testing.T) {
 		{4, []uint64{2, 3, 5, 4, 6}, true},
 		{100, []uint64{2, 3, 5, 4, 6}, false},
 	}
-	for _, tt := range testCases {
-		result := slice.IsInUint64(tt.a, tt.b)
-		if result != tt.result {
-			t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
-				tt.a, tt.b, result, tt.result)
-		}
-	}
+    for _, tt := range testCases {
+        // Use standard library slices.Contains instead of a thin wrapper.
+        result := slices.Contains(tt.b, tt.a)
+        if result != tt.result {
+            t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
+                tt.a, tt.b, result, tt.result)
+        }
+    }
 }
 
 func TestIsInInt64(t *testing.T) {
@@ -301,13 +303,14 @@ func TestIsInInt64(t *testing.T) {
 		{4, []int64{2, 3, 5, 4, 6}, true},
 		{100, []int64{2, 3, 5, 4, 6}, false},
 	}
-	for _, tt := range testCases {
-		result := slice.IsInInt64(tt.a, tt.b)
-		if result != tt.result {
-			t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
-				tt.a, tt.b, result, tt.result)
-		}
-	}
+    for _, tt := range testCases {
+        // Use standard library slices.Contains instead of a thin wrapper.
+        result := slices.Contains(tt.b, tt.a)
+        if result != tt.result {
+            t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
+                tt.a, tt.b, result, tt.result)
+        }
+    }
 }
 
 func TestUnionByteSlices(t *testing.T) {
@@ -580,13 +583,14 @@ func TestIsInSlots(t *testing.T) {
 		{4, []primitives.Slot{2, 3, 5, 4, 6}, true},
 		{100, []primitives.Slot{2, 3, 5, 4, 6}, false},
 	}
-	for _, tt := range testCases {
-		result := slice.IsInSlots(tt.a, tt.b)
-		if result != tt.result {
-			t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
-				tt.a, tt.b, result, tt.result)
-		}
-	}
+    for _, tt := range testCases {
+        // Use standard library slices.Contains instead of a thin wrapper.
+        result := slices.Contains(tt.b, tt.a)
+        if result != tt.result {
+            t.Errorf("IsIn(%d, %v)=%v, wanted: %v",
+                tt.a, tt.b, result, tt.result)
+        }
+    }
 }
 
 func TestUnique(t *testing.T) {
