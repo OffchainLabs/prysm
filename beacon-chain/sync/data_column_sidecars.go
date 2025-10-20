@@ -1133,10 +1133,7 @@ func randomPeer(
 			"delay":     waitPeriod,
 		}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
 
-		select {
-		case <-time.After(waitPeriod):
-		case <-ctx.Done():
-		}
+		helpers.Sleep(ctx, waitPeriod)
 	}
 
 	return "", ctx.Err()
