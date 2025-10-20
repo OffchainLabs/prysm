@@ -200,6 +200,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 		fileMetadata, err := extractFileMetadata(path)
 		if err != nil {
 			log.WithError(err).Error("Error encountered while extracting file metadata")
+			return nil
 		}
 
 		// Open the data column filesystem file.
