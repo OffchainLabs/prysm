@@ -118,7 +118,8 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 //   - All `dataColumnSidecars` has to be committed to the same block, and
 //   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
 //   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
-//     or either enough sidecars to reconstruct the blobs.
+//   - either enough sidecars to reconstruct the blobs.git a
+//
 // The skipKzgProofs parameter indicates whether to skip expensive KZG proof computations (post-Fulu optimization).
 func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int, skipKzgProofs bool) ([]*blocks.VerifiedROBlob, error) {
 	// Return early if no blobs are requested.
@@ -258,7 +259,7 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 			return nil, errors.Wrap(err, "compute cells")
 		}
 
-		kzgProofs := make([]kzg.Proof, 0, numberOfColumns*kzg.BytesPerProof)
+		kzgProofs := make([]kzg.Proof, 0, numberOfColumns)
 		for _, kzgProofBytes := range blobAndProof.KzgProofs {
 			if len(kzgProofBytes) != kzg.BytesPerProof {
 				return nil, errors.New("wrong KZG proof size - should never happen")
