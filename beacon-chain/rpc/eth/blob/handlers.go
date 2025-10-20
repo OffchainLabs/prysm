@@ -149,7 +149,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 			versionedHashes[i] = hash
 		}
 	}
-	verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, options.WithVersionedHashes(versionedHashes))
+	verifiedBlobs, rpcErr = s.Blocker.Blobs(ctx, blockId, options.WithVersionedHashes(versionedHashes), options.WithSkipKzgProofs())
 	if rpcErr != nil {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {
