@@ -81,15 +81,15 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encodedState, err := st.MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal state to SSZ: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 	if err != nil {
 		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	encodedState, err := st.MarshalSSZ()
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal state to SSZ: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -148,12 +148,6 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encodedBlock, err := signedBlock.Block().MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	protoBlock, err := signedBlock.Block().Proto()
 	if err != nil {
 		httputil.HandleError(w, "Could not convert block to proto: "+err.Error(), http.StatusInternalServerError)
@@ -166,12 +160,6 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blockRoot, err := block.HashTreeRoot()
-	if err != nil {
-		httputil.HandleError(w, "Could not compute block root: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	info, err := query.AnalyzeObject(block)
 	if err != nil {
 		httputil.HandleError(w, "Could not analyze block object: "+err.Error(), http.StatusInternalServerError)
@@ -181,6 +169,18 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 	if err != nil {
 		httputil.HandleError(w, "Could not calculate offset and length for path '"+req.Query+"': "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	encodedBlock, err := signedBlock.Block().MarshalSSZ()
+	if err != nil {
+		httputil.HandleError(w, "Could not marshal block to SSZ: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	blockRoot, err := block.HashTreeRoot()
+	if err != nil {
+		httputil.HandleError(w, "Could not compute block root: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
