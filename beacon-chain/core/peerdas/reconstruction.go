@@ -197,15 +197,13 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 }
 
 // ComputeCellsAndProofsFromFlat computes the cells and proofs from blobs and cell flat proofs.
-// Post-Fulu, cellProofs may be empty to skip expensive KZG proof computations.
 func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([]kzg.CellsAndProofs, error) {
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	blobCount := uint64(len(blobs))
 	cellProofsCount := uint64(len(cellProofs))
 
-	// Post-Fulu, allow empty proofs (cellProofsCount == 0).
 	cellsCount := blobCount * numberOfColumns
-	if cellProofsCount != 0 && cellsCount != cellProofsCount {
+	if cellsCount != cellProofsCount {
 		return nil, ErrBlobsCellsProofsMismatch
 	}
 
@@ -223,19 +221,13 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([]kzg.C
 		}
 
 		var proofs []kzg.Proof
-		// Post-Fulu, if no proofs are provided, use zero proofs.
-		if cellProofsCount > 0 {
-			for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
-				var kzgProof kzg.Proof
-				if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
-					return nil, errors.New("wrong KZG proof size - should never happen")
-				}
-
-				proofs = append(proofs, kzgProof)
+		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
+			var kzgProof kzg.Proof
+			if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
+				return nil, errors.New("wrong KZG proof size - should never happen")
 			}
-		} else {
-			// Use zero proofs when not provided.
-			proofs = make([]kzg.Proof, numberOfColumns)
+
+			proofs = append(proofs, kzgProof)
 		}
 
 		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: proofs}
@@ -266,26 +258,18 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 			return nil, errors.Wrap(err, "compute cells")
 		}
 
-		var kzgProofs []kzg.Proof
-		// Post-Fulu, the execution engine may not provide KZG proofs.
-		// If proofs are provided, use them; otherwise, use zero proofs.
-		if len(blobAndProof.KzgProofs) > 0 {
-			kzgProofs = make([]kzg.Proof, 0, numberOfColumns)
-			for _, kzgProofBytes := range blobAndProof.KzgProofs {
-				if len(kzgProofBytes) != kzg.BytesPerProof {
-					return nil, errors.New("wrong KZG proof size - should never happen")
-				}
-
-				var kzgProof kzg.Proof
-				if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
-					return nil, errors.New("wrong copied KZG proof size - should never happen")
-				}
-
-				kzgProofs = append(kzgProofs, kzgProof)
+		kzgProofs := make([]kzg.Proof, 0, numberOfColumns*kzg.BytesPerProof)
+		for _, kzgProofBytes := range blobAndProof.KzgProofs {
+			if len(kzgProofBytes) != kzg.BytesPerProof {
+				return nil, errors.New("wrong KZG proof size - should never happen")
 			}
-		} else {
-			// Use zero proofs when not provided by the execution engine.
-			kzgProofs = make([]kzg.Proof, numberOfColumns)
+
+			var kzgProof kzg.Proof
+			if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
+				return nil, errors.New("wrong copied KZG proof size - should never happen")
+			}
+
+			kzgProofs = append(kzgProofs, kzgProof)
 		}
 
 		cellsProofs := kzg.CellsAndProofs{Cells: cells, Proofs: kzgProofs}
