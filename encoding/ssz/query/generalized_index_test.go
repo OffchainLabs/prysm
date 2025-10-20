@@ -58,13 +58,13 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 		{
 			name:          "Value2 -> element[0]",
 			path:          "value2[0]",
-			expectedIndex: 96,
+			expectedIndex: 3,
 			expectError:   false,
 		},
 		{
 			name:          "Value2 -> element[31]",
 			path:          "value2[31]",
-			expectedIndex: 127,
+			expectedIndex: 3,
 			expectError:   false,
 		},
 		{

@@ -106,22 +106,18 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				if err != nil {
 					return 0, fmt.Errorf("vector element error: %w", err)
 				}
-				var (
-					offset     uint64
-					multiplier uint64
-				)
+				var chunkPos uint64
 				if isBasicType(elem.sszType) {
-					multiplier = nextPowerOfTwo(vi.Length())
-					offset = *element.Index
+					start := *element.Index * itemLengthFromInfo(elem)
+					chunkPos = start / bytesPerChunk
 				} else {
-					innerChunkCount, err := getChunkCount(fieldSsz)
-					if err != nil {
-						return 0, fmt.Errorf("chunk count error: %w", err)
-					}
-					multiplier = nextPowerOfTwo(innerChunkCount)
-					offset = *element.Index
+					chunkPos = *element.Index
 				}
-				root = updateRoot(root, 1, multiplier, offset)
+				innerChunkCount, err := getChunkCount(fieldSsz)
+				if err != nil {
+					return 0, fmt.Errorf("chunk count error: %w", err)
+				}
+				root = updateRoot(root, 1, innerChunkCount, chunkPos)
 				currentInfo = elem
 
 			case Bitlist:
