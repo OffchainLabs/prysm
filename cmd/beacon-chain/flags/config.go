@@ -1,7 +1,11 @@
 package flags
 
 import (
+	"math"
+
 	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
 
@@ -19,6 +23,7 @@ type GlobalFlags struct {
 	BlobBatchLimitBurstFactor       int
 	DataColumnBatchLimit            int
 	DataColumnBatchLimitBurstFactor int
+	StateDiffExponents              []int
 }
 
 var globalConfig *GlobalFlags
@@ -38,7 +43,7 @@ func Init(c *GlobalFlags) {
 
 // ConfigureGlobalFlags initializes the global config.
 // based on the provided cli context.
-func ConfigureGlobalFlags(ctx *cli.Context) {
+func ConfigureGlobalFlags(ctx *cli.Context) error {
 	cfg := &GlobalFlags{}
 
 	if ctx.Bool(SubscribeToAllSubnets.Name) {
@@ -49,6 +54,18 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 	if ctx.Bool(SubscribeAllDataSubnets.Name) {
 		log.Warning("Subscribing to all data subnets")
 		cfg.SubscribeAllDataSubnets = true
+	}
+
+	// State-diff-exponents
+	cfg.StateDiffExponents = ctx.IntSlice(StateDiffExponents.Name)
+	if features.Get().EnableStateDiff {
+		if err := validateStateDiffExponents(cfg.StateDiffExponents); err != nil {
+			return err
+		}
+	} else {
+		if ctx.IsSet(StateDiffExponents.Name) {
+			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
+		}
 	}
 
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
@@ -63,6 +80,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 	configureMinimumPeers(ctx, cfg)
 
 	Init(cfg)
+	return nil
 }
 
 // MaxDialIsActive checks if the user has enabled the max dial flag.
@@ -77,4 +95,22 @@ func configureMinimumPeers(ctx *cli.Context, cfg *GlobalFlags) {
 		log.Warnf("Changing Minimum Sync Peers to %d", maxPeers)
 		cfg.MinimumSyncPeers = maxPeers
 	}
+}
+
+func validateStateDiffExponents(exponents []int) error {
+	length := len(exponents)
+	if length == 0 || length > 15 {
+		return errors.New("state diff exponents must contain between 1 and 15 values")
+	}
+	if exponents[length-1] < 5 {
+		return errors.New("the last state diff exponent must be at least 5")
+	}
+	prev := math.MaxInt
+	for _, exp := range exponents {
+		if exp >= prev {
+			return errors.New("state diff exponents must be in strictly decreasing order")
+		}
+		prev = exp
+	}
+	return nil
 }

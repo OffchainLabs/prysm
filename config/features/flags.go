@@ -172,6 +172,10 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	enableStateDiff = &cli.BoolFlag{
+		Name:  "enable-state-diff",
+		Usage: "Enables the experimental state diff feature.",
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",

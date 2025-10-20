@@ -91,6 +91,7 @@ type Store struct {
 	blockCache          *ristretto.Cache[string, interfaces.ReadOnlySignedBeaconBlock]
 	validatorEntryCache *ristretto.Cache[[]byte, *ethpb.Validator]
 	stateSummaryCache   *stateSummaryCache
+	stateDiffCache      *stateDiffCache
 	ctx                 context.Context
 }
 
@@ -112,6 +113,7 @@ var Buckets = [][]byte{
 	lightClientUpdatesBucket,
 	lightClientBootstrapBucket,
 	lightClientSyncCommitteeBucket,
+	stateDiffBucket,
 	// Indices buckets.
 	blockSlotIndicesBucket,
 	stateSlotIndicesBucket,
@@ -199,6 +201,14 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 	// Setup the type of block storage used depending on whether or not this is a fresh database.
 	if err := kv.setupBlockStorageType(ctx); err != nil {
 		return nil, err
+	}
+
+	if features.Get().EnableStateDiff {
+		sdCache, err := newStateDiffCache(kv)
+		if err != nil {
+			return nil, err
+		}
+		kv.stateDiffCache = sdCache
 	}
 
 	return kv, nil
