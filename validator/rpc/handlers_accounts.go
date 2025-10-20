@@ -75,25 +75,49 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
 		return
 	}
-	accs := make([]*Account, len(keys))
+	// Build optional filter set from query public_keys.
+	var filterSet map[string]struct{}
+	if len(pubkeys) > 0 {
+		filterSet = make(map[string]struct{}, len(pubkeys))
+		for _, pk := range pubkeys {
+			filterSet[string(pk)] = struct{}{}
+		}
+	}
+	// Build accounts list, optionally filtering by provided public_keys.
+	accs := make([]*Account, 0, len(keys))
 	for i := 0; i < len(keys); i++ {
-		accs[i] = &Account{
+		if filterSet != nil {
+			if _, ok := filterSet[string(keys[i][:])]; !ok {
+				continue
+			}
+		}
+		acc := &Account{
 			ValidatingPublicKey: hexutil.Encode(keys[i][:]),
 			AccountName:         petnames.DeterministicName(keys[i][:], "-"),
 		}
 		if s.wallet.KeymanagerKind() == keymanager.Derived {
-			accs[i].DerivationPath = fmt.Sprintf(derived.ValidatingKeyDerivationPathTemplate, i)
+			acc.DerivationPath = fmt.Sprintf(derived.ValidatingKeyDerivationPathTemplate, i)
 		}
+		accs = append(accs, acc)
 	}
 	if r.URL.Query().Get("all") == "true" {
 		httputil.WriteJson(w, &ListAccountsResponse{
 			Accounts:      accs,
-			TotalSize:     int32(len(keys)),
+			TotalSize:     int32(len(accs)),
 			NextPageToken: "",
 		})
 		return
 	}
-	start, end, nextPageToken, err := pagination.StartAndEndPage(pageToken, int(ps), len(keys))
+	// If no accounts after filtering, return an empty page.
+	if len(accs) == 0 {
+		httputil.WriteJson(w, &ListAccountsResponse{
+			Accounts:      accs,
+			TotalSize:     0,
+			NextPageToken: "",
+		})
+		return
+	}
+	start, end, nextPageToken, err := pagination.StartAndEndPage(pageToken, int(ps), len(accs))
 	if err != nil {
 		httputil.HandleError(w, fmt.Errorf("Could not paginate results: %w",
 			err).Error(), http.StatusInternalServerError)
@@ -101,7 +125,7 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.WriteJson(w, &ListAccountsResponse{
 		Accounts:      accs[start:end],
-		TotalSize:     int32(len(keys)),
+		TotalSize:     int32(len(accs)),
 		NextPageToken: nextPageToken,
 	})
 }
