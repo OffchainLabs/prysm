@@ -1,2 +1,0 @@
-### Changed
-- Use static subscriptions for all blob sidecar topics instead of "subscribeWithParameters".
