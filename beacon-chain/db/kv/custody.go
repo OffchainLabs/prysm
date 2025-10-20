@@ -73,10 +73,8 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 	return storedEarliestAvailableSlot, storedGroupCount, nil
 }
 
-// UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
-// the current custody group count. It returns the (possibly updated) earliest available slot
-// and the custody group count.
-func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
+// UpdateEarliestAvailableSlot updates the earliest available slot.
+func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateEarliestAvailableSlot")
 	defer span.End()
 
@@ -146,7 +144,7 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 
 		return nil
 	}); err != nil {
-		return 0, 0, err
+		return err
 	}
 
 	log.WithFields(logrus.Fields{
@@ -154,7 +152,7 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 		"groupCount":            storedGroupCount,
 	}).Debug("Updated earliest available slot")
 
-	return storedEarliestAvailableSlot, storedGroupCount, nil
+	return nil
 }
 
 // UpdateSubscribedToAllDataSubnets updates the "subscribed to all data subnets" status in the database

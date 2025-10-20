@@ -27,7 +27,7 @@ const (
 // custodyUpdater is a tiny interface that p2p service implements; kept here to avoid
 // importing the p2p package and creating a cycle.
 type custodyUpdater interface {
-	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error)
+	UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 }
 
 type ServiceOption func(*Service)
@@ -176,7 +176,7 @@ func (p *Service) prune(slot primitives.Slot) error {
 
 	// Update the earliest available slot after pruning
 	if err := p.updateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
-		return errors.Wrap(err, "failed to update earliest available slot")
+		return errors.Wrap(err, "update earliest available slot")
 	}
 
 	log.WithFields(logrus.Fields{
@@ -199,15 +199,13 @@ func (p *Service) updateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	}
 
 	// Update the p2p in-memory state
-	updatedSlot, _, err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot)
-	if err != nil {
-		return errors.Wrapf(err, "failed to update earliest available slot after pruning to %d", earliestAvailableSlot)
+	if err := p.custody.UpdateEarliestAvailableSlot(earliestAvailableSlot); err != nil {
+		return errors.Wrapf(err, "update earliest available slot after pruning to %d", earliestAvailableSlot)
 	}
 
 	// Persist to database to ensure it survives restarts
-	_, _, err = p.db.UpdateEarliestAvailableSlot(p.ctx, updatedSlot)
-	if err != nil {
-		return errors.Wrapf(err, "failed to update earliest available slot in database for slot %d", updatedSlot)
+	if err := p.db.UpdateEarliestAvailableSlot(p.ctx, earliestAvailableSlot); err != nil {
+		return errors.Wrapf(err, "update earliest available slot in database for slot %d", earliestAvailableSlot)
 	}
 
 	return nil

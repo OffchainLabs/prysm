@@ -152,10 +152,8 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update with a lower slot (should update for backfill)
-		slot, count, err := db.UpdateEarliestAvailableSlot(ctx, earliestSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, earliestSlot)
 		require.NoError(t, err)
-		require.Equal(t, earliestSlot, slot)
-		require.Equal(t, initialCount, count)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
 		require.Equal(t, earliestSlot, storedSlot)
@@ -191,10 +189,8 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		// Try to increase to a slot that's still BEFORE minRequiredSlot (should succeed)
 		validSlot := minRequiredSlot - 100
 
-		slot, count, err := db.UpdateEarliestAvailableSlot(ctx, validSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, validSlot)
 		require.NoError(t, err)
-		require.Equal(t, validSlot, slot)
-		require.Equal(t, groupCount, count)
 
 		// Verify the database was updated
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
@@ -232,7 +228,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		invalidSlot := minRequiredSlot + 100
 
 		// This should fail
-		_, _, err = db.UpdateEarliestAvailableSlot(ctx, invalidSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, invalidSlot)
 		require.ErrorContains(t, "cannot increase earliest available slot", err)
 		require.ErrorContains(t, "exceeds minimum required slot", err)
 
@@ -255,10 +251,8 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update with the same slot
-		slot, count, err := db.UpdateEarliestAvailableSlot(ctx, initialSlot)
+		err = db.UpdateEarliestAvailableSlot(ctx, initialSlot)
 		require.NoError(t, err)
-		require.Equal(t, initialSlot, slot)
-		require.Equal(t, initialCount, count)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
 		require.Equal(t, initialSlot, storedSlot)

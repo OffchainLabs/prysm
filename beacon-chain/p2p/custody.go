@@ -116,17 +116,16 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 }
 
 // UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
-// the current custody group count. It returns the (possibly updated) earliest available slot
-// and the custody group count.
+// the current custody group count.
 //
 // IMPORTANT: This function should only be called when Fulu is enabled. The caller is responsible
 // for checking params.FuluEnabled() before calling this function.
-func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
+func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	s.custodyInfoLock.Lock()
 	defer s.custodyInfoLock.Unlock()
 
 	if s.custodyInfo == nil {
-		return 0, 0, errors.New("no custody info available")
+		return errors.New("no custody info available")
 	}
 
 	currentSlot := slots.CurrentSlot(s.genesisTime)
@@ -135,7 +134,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
 		s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
-		return s.custodyInfo.earliestAvailableSlot, s.custodyInfo.groupCount, nil
+		return nil
 	}
 
 	// Prevent increase within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period
@@ -153,19 +152,19 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	// This prevents allowing increases to slots within minRequiredEpoch that are after its first slot
 	minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "epoch start")
+		return errors.Wrap(err, "epoch start")
 	}
 
 	// Prevent any increase that would put earliest slot beyond the minimum required slot
 	if earliestAvailableSlot > s.custodyInfo.earliestAvailableSlot && earliestAvailableSlot > minRequiredSlot {
-		return 0, 0, errors.Errorf(
+		return errors.Errorf(
 			"cannot increase earliest available slot to %d (epoch %d) as it exceeds minimum required slot %d (epoch %d)",
 			earliestAvailableSlot, slots.ToEpoch(earliestAvailableSlot), minRequiredSlot, minRequiredEpoch,
 		)
 	}
 
 	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
-	return s.custodyInfo.earliestAvailableSlot, s.custodyInfo.groupCount, nil
+	return nil
 }
 
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.

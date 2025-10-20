@@ -147,10 +147,10 @@ type mockCustodyUpdater struct {
 	updateCallCount       int
 }
 
-func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
+func (m *mockCustodyUpdater) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	m.updateCallCount++
 	m.earliestAvailableSlot = earliestAvailableSlot
-	return earliestAvailableSlot, m.custodyGroupCount, nil
+	return nil
 }
 
 func TestPruner_UpdatesEarliestAvailableSlot(t *testing.T) {
@@ -233,9 +233,9 @@ type mockCustodyUpdaterWithUpdateError struct {
 	updateCallCount int
 }
 
-func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) (primitives.Slot, uint64, error) {
+func (m *mockCustodyUpdaterWithUpdateError) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
 	m.updateCallCount++
-	return 0, 0, errors.New("failed to update earliest available slot")
+	return errors.New("failed to update earliest available slot")
 }
 
 func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {

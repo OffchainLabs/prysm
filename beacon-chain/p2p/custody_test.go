@@ -195,11 +195,9 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 			},
 		}
 
-		returnedSlot, returnedCount, err := service.UpdateEarliestAvailableSlot(newSlot)
+		err := service.UpdateEarliestAvailableSlot(newSlot)
 
 		require.NoError(t, err)
-		require.Equal(t, newSlot, returnedSlot)
-		require.Equal(t, groupCount, returnedCount)
 		require.Equal(t, newSlot, service.custodyInfo.earliestAvailableSlot)
 		require.Equal(t, groupCount, service.custodyInfo.groupCount) // Should preserve group count
 	})
@@ -216,10 +214,9 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 			},
 		}
 
-		returnedSlot, _, err := service.UpdateEarliestAvailableSlot(earlierSlot)
+		err := service.UpdateEarliestAvailableSlot(earlierSlot)
 
 		require.NoError(t, err)
-		require.Equal(t, earlierSlot, returnedSlot)
 		require.Equal(t, earlierSlot, service.custodyInfo.earliestAvailableSlot) // Should decrease for backfill
 	})
 
@@ -244,7 +241,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 			},
 		}
 
-		_, _, err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
 
 		require.NotNil(t, err)
 		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
@@ -269,7 +266,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 			},
 		}
 
-		_, _, err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
 
 		require.NotNil(t, err, "Should prevent increasing earliest slot beyond the minimum required SLOT (not just epoch)")
 		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
@@ -294,7 +291,7 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 			},
 		}
 
-		_, _, err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
 
 		require.NotNil(t, err, "Should prevent increasing earliest slot within the mandatory retention window, even early in chain")
 		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
@@ -306,12 +303,10 @@ func TestUpdateEarliestAvailableSlot(t *testing.T) {
 			custodyInfo: nil, // No custody info set
 		}
 
-		slot, groupCount, err := service.UpdateEarliestAvailableSlot(100)
+		err := service.UpdateEarliestAvailableSlot(100)
 
 		require.NotNil(t, err)
 		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
-		require.Equal(t, primitives.Slot(0), slot)
-		require.Equal(t, uint64(0), groupCount)
 	})
 }
 
