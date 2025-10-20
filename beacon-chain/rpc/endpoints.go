@@ -1272,7 +1272,8 @@ func (s *Service) prysmBeaconEndpoints(
 			template: "/prysm/v1/beacon/states/{state_id}/query",
 			name:     namespace + ".QueryBeaconState",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.QueryBeaconState,
@@ -1282,7 +1283,8 @@ func (s *Service) prysmBeaconEndpoints(
 			template: "/prysm/v1/beacon/blocks/{block_id}/query",
 			name:     namespace + ".QueryBeaconBlock",
 			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.QueryBeaconBlock,
