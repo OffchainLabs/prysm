@@ -133,7 +133,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 				topic := p2p.LightClientOptimisticUpdateTopicFormat
 				digest, err := s.currentForkDigest()
 				require.NoError(t, err)
-				topic = s.addDigestToTopic(topic, digest)
+				topic = s.buildTopicWithoutSubnet(topic, digest)
 
 				r, err := s.validateLightClientOptimisticUpdate(ctx, "", &pubsub.Message{
 					Message: &pb.Message{
@@ -259,7 +259,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 				topic := p2p.LightClientFinalityUpdateTopicFormat
 				digest, err := s.currentForkDigest()
 				require.NoError(t, err)
-				topic = s.addDigestToTopic(topic, digest)
+				topic = s.buildTopicWithoutSubnet(topic, digest)
 
 				r, err := s.validateLightClientFinalityUpdate(ctx, "", &pubsub.Message{
 					Message: &pb.Message{

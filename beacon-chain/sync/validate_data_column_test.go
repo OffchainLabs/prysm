@@ -85,7 +85,7 @@ func TestValidateDataColumn(t *testing.T) {
 		digest, err := service.currentForkDigest()
 		require.NoError(t, err)
 
-		topic = service.addDigestToTopic(topic, digest)
+		topic = service.buildTopicWithoutSubnet(topic, digest)
 
 		message := &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}}
 

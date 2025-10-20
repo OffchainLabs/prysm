@@ -64,7 +64,8 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	fullTopic := r.buildTopicWithoutSubnet(topic, nse.ForkDigest)
+	r.subscribe(topic, fullTopic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
 		m, ok := msg.(*pb.SignedVoluntaryExit)
 		assert.Equal(t, true, ok, "Object is not of type *pb.SignedVoluntaryExit")
 		if m.Exit == nil || m.Exit.Epoch != 55 {
@@ -110,12 +111,12 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	p2pService.Digest = nse.ForkDigest
 	topic := "/eth2/%x/voluntary_exit"
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	fullTopic := r.buildTopicWithoutSubnet(topic, nse.ForkDigest)
+	r.subscribe(topic, fullTopic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
 		return nil
 	}, nse)
 	r.markForChainStart()
 
-	fullTopic := fmt.Sprintf(topic, p2pService.Digest) + p2pService.Encoding().ProtocolSuffix()
 	assert.Equal(t, true, r.subHandler.topicExists(fullTopic))
 	topics := p2pService.PubSub().GetTopics()
 	assert.Equal(t, fullTopic, topics[0])
@@ -162,7 +163,8 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	wg.Add(1)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+	fullTopic := r.buildTopicWithoutSubnet(topic, nse.ForkDigest)
+	r.subscribe(topic, fullTopic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.attesterSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
@@ -217,7 +219,8 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	params.OverrideBeaconConfig(params.MainnetConfig())
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+	fullTopic := r.buildTopicWithoutSubnet(topic, nse.ForkDigest)
+	r.subscribe(topic, fullTopic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.proposerSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
@@ -266,7 +269,8 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	fullTopic := r.buildTopicWithoutSubnet(topic, nse.ForkDigest)
+	r.subscribe(topic, fullTopic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
 		defer wg.Done()
 		panic("bad")
 	}, nse)
@@ -305,7 +309,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 
 	// committee index 1
 	c1 := uint64(1)
-	fullTopic := params.fullTopic(c1, r.cfg.p2p.Encoding().ProtocolSuffix())
+	fullTopic := r.buildTopicWithSubnet(params.topicFormat, params.nse.ForkDigest, c1)
 	_, topVal := r.wrapAndReportValidation(fullTopic, r.noopValidator)
 	require.NoError(t, r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal))
 	sub1, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
@@ -314,7 +318,7 @@ func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
 
 	// committee index 2
 	c2 := uint64(2)
-	fullTopic = params.fullTopic(c2, r.cfg.p2p.Encoding().ProtocolSuffix())
+	fullTopic = r.buildTopicWithSubnet(params.topicFormat, params.nse.ForkDigest, c2)
 	_, topVal = r.wrapAndReportValidation(fullTopic, r.noopValidator)
 	err = r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal)
 	require.NoError(t, err)
@@ -484,11 +488,11 @@ func TestFilterSubnetPeers(t *testing.T) {
 	defer cache.SubnetIDs.EmptyAllCaches()
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	defaultTopic := "/eth2/%x/beacon_attestation_%d" + r.cfg.p2p.Encoding().ProtocolSuffix()
-	subnet10 := r.addDigestAndIndexToTopic(defaultTopic, digest, 10)
+	defaultTopic := "/eth2/%x/beacon_attestation_%d"
+	subnet10 := r.buildTopicWithSubnet(defaultTopic, digest, 10)
 	cache.SubnetIDs.AddAggregatorSubnetID(currSlot, 10)
 
-	subnet20 := r.addDigestAndIndexToTopic(defaultTopic, digest, 20)
+	subnet20 := r.buildTopicWithSubnet(defaultTopic, digest, 20)
 	cache.SubnetIDs.AddAttesterSubnetID(currSlot, 20)
 
 	p1 := createPeer(t, subnet10)

@@ -104,7 +104,7 @@ func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(exit)]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),

@@ -82,7 +82,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(f, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
 	f.Fuzz(func(t *testing.T, pid string, from, data, topic []byte) {
@@ -166,7 +166,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(f, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
 	f.Fuzz(func(t *testing.T, pid string, from, data, topic []byte) {
@@ -250,7 +250,7 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(f, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 
 	f.Add("junk", []byte("junk"), buf.Bytes(), []byte(topic))
 	f.Fuzz(func(t *testing.T, pid string, from, data, topic []byte) {

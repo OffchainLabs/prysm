@@ -95,7 +95,7 @@ func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -165,7 +165,7 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -212,7 +212,7 @@ func TestValidateBeaconBlockPubSub_BlockAlreadyPresentInDB(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -275,7 +275,7 @@ func TestValidateBeaconBlockPubSub_CanRecoverStateSummary(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -341,7 +341,7 @@ func TestValidateBeaconBlockPubSub_IsInCache(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -407,7 +407,7 @@ func TestValidateBeaconBlockPubSub_ValidProposerSignature(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -476,7 +476,7 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -544,7 +544,7 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -653,7 +653,7 @@ func TestValidateBeaconBlockPubSub_IgnoreAndQueueBlocksFromNearFuture(t *testing
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -704,7 +704,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -755,7 +755,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromThePast(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -834,7 +834,7 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msgClone)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -975,7 +975,7 @@ func TestValidateBeaconBlockPubSub_ParentNotFinalizedDescendant(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -1041,7 +1041,7 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -1135,7 +1135,7 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -1220,7 +1220,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, digest)
+	topic = r.buildTopicWithoutSubnet(topic, digest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -1323,7 +1323,7 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 	genesisValidatorsRoot := r.cfg.clock.GenesisValidatorsRoot()
 	BellatrixDigest, err := signing.ComputeForkDigest(params.BeaconConfig().BellatrixForkVersion, genesisValidatorsRoot[:])
 	require.NoError(t, err)
-	topic = r.addDigestToTopic(topic, BellatrixDigest)
+	topic = r.buildTopicWithoutSubnet(topic, BellatrixDigest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -1395,7 +1395,7 @@ func TestValidateBeaconBlockPubSub_InvalidPayloadTimestamp(t *testing.T) {
 	genesisValidatorsRoot := r.cfg.clock.GenesisValidatorsRoot()
 	BellatrixDigest, err := signing.ComputeForkDigest(params.BeaconConfig().BellatrixForkVersion, genesisValidatorsRoot[:])
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, BellatrixDigest)
+	topic = r.buildTopicWithoutSubnet(topic, BellatrixDigest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -1558,7 +1558,7 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 	genesisValidatorsRoot := r.cfg.clock.GenesisValidatorsRoot()
 	BellatrixDigest, err := signing.ComputeForkDigest(params.BeaconConfig().BellatrixForkVersion, genesisValidatorsRoot[:])
 	require.NoError(t, err)
-	topic = r.addDigestToTopic(topic, BellatrixDigest)
+	topic = r.buildTopicWithoutSubnet(topic, BellatrixDigest)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),

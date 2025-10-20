@@ -70,7 +70,7 @@ func TestValidateBlob_InvalidMessageType(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	topic = s.addDigestToTopic(topic, digest)
+	topic = s.buildTopicWithoutSubnet(topic, digest)
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
 		Message: &pb.Message{
 			Data:  buf.Bytes(),
@@ -129,7 +129,7 @@ func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(b)]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	topic = s.addDigestAndIndexToTopic(topic, digest, 0)
+	topic = s.buildTopicWithSubnet(topic, digest, 0)
 
 	s.setSeenBlobIndex(sc.Slot(), sc.SignedBlockHeader.Header.ProposerIndex, 0)
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
@@ -159,7 +159,7 @@ func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	topic = s.addDigestAndIndexToTopic(topic, digest, 1)
+	topic = s.buildTopicWithSubnet(topic, digest, 1)
 	result, err := s.validateBlob(ctx, "", &pubsub.Message{
 		Message: &pb.Message{
 			Data:  buf.Bytes(),
@@ -274,7 +274,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 			topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
 			digest, err := s.currentForkDigest()
 			require.NoError(t, err)
-			topic = s.addDigestAndIndexToTopic(topic, digest, 0)
+			topic = s.buildTopicWithSubnet(topic, digest, 0)
 			result, err := s.validateBlob(ctx, "", &pubsub.Message{
 				Message: &pb.Message{
 					Data:  buf.Bytes(),

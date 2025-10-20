@@ -132,7 +132,7 @@ func TestValidateProposerSlashing_ValidSlashing(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -175,7 +175,7 @@ func TestValidateProposerSlashing_ValidOldSlashing(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),

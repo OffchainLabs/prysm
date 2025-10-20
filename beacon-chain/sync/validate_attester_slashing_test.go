@@ -101,7 +101,7 @@ func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -146,7 +146,7 @@ func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -191,7 +191,7 @@ func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -240,7 +240,7 @@ func TestValidateAttesterSlashing_CanFilter(t *testing.T) {
 	topic := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.AttesterSlashing{})]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
-	topic = r.addDigestToTopic(topic, d)
+	topic = r.buildTopicWithoutSubnet(topic, d)
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, &ethpb.AttesterSlashing{
 		Attestation_1: util.HydrateIndexedAttestation(&ethpb.IndexedAttestation{
