@@ -47,9 +47,6 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 			return 0, fmt.Errorf("indexing requires a container field step first, got %s", currentInfo.sszType)
 		}
 
-		// Check if path element contains an array index (e.g., field_name[5])
-		var idx *uint64
-
 		// Retrieve the field position and SSZInfo for the field in the current container
 		fieldPos, fieldSsz, err := getContainerFieldByName(currentInfo, element.Name)
 		if err != nil {
@@ -72,12 +69,13 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 			if fieldSsz.sszType != List && fieldSsz.sszType != Bitlist {
 				return 0, fmt.Errorf("len() is only supported for List and Bitlist types, got %s", fieldSsz.sszType)
 			}
-			currentInfo = &sszInfo{sszType: Uint8}
+			// Length is a uint64 per SSZ spec
+			currentInfo = &sszInfo{sszType: Uint64}
 			root = updateRoot(root, 1, 2, 1)
 			continue
 		}
 
-		if idx != nil {
+		if element.Index != nil {
 			switch fieldSsz.sszType {
 			case List:
 				li, err := fieldSsz.ListInfo()
@@ -91,10 +89,10 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				// Compute chunk position for the element
 				var chunkPos uint64
 				if isBasicType(elem.sszType) {
-					start := *idx * itemLengthFromInfo(elem)
+					start := *element.Index * itemLengthFromInfo(elem)
 					chunkPos = start / bytesPerChunk
 				} else {
-					chunkPos = *idx
+					chunkPos = *element.Index
 				}
 				innerChunkCount, err := getChunkCount(fieldSsz)
 				if err != nil {
@@ -115,10 +113,10 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				// Compute chunk position for the element
 				var chunkPos uint64
 				if isBasicType(elem.sszType) {
-					start := *idx * itemLengthFromInfo(elem)
+					start := *element.Index * itemLengthFromInfo(elem)
 					chunkPos = start / bytesPerChunk
 				} else {
-					chunkPos = *idx
+					chunkPos = *element.Index
 				}
 				innerChunkCount, err := getChunkCount(fieldSsz)
 				if err != nil {
@@ -129,7 +127,7 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 
 			case Bitlist:
 				// Bits packed into 256-bit chunks; select the chunk containing the bit
-				chunkPos := *idx / bitsPerChunk
+				chunkPos := *element.Index / bitsPerChunk
 				innerChunkCount, err := getChunkCount(fieldSsz)
 				if err != nil {
 					return 0, fmt.Errorf("chunk count error: %w", err)
@@ -139,7 +137,7 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				currentInfo = &sszInfo{sszType: Boolean}
 
 			case Bitvector:
-				chunkPos := *idx / bitsPerChunk
+				chunkPos := *element.Index / bitsPerChunk
 				innerChunkCount, err := getChunkCount(fieldSsz)
 				if err != nil {
 					return 0, fmt.Errorf("chunk count error: %w", err)
