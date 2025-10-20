@@ -297,7 +297,7 @@ type GetBlobsResponse struct {
 	Data                []string `json:"data"` //blobs
 }
 
-type QuerySSZRequest struct {
+type SSZQueryRequest struct {
 	Query        string `json:"query"`
 	IncludeProof bool   `json:"include_proof,omitempty"`
 }

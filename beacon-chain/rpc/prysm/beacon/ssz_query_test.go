@@ -107,7 +107,7 @@ func TestQueryBeaconState(t *testing.T) {
 				},
 			}
 
-			requestBody := &structs.QuerySSZRequest{
+			requestBody := &structs.SSZQueryRequest{
 				Query: tt.path,
 			}
 			var buf bytes.Buffer
@@ -191,7 +191,7 @@ func TestQueryBeaconStateInvalidRequest(t *testing.T) {
 				},
 			}
 
-			requestBody := &structs.QuerySSZRequest{
+			requestBody := &structs.SSZQueryRequest{
 				Query: tt.path,
 			}
 			var buf bytes.Buffer
@@ -307,7 +307,7 @@ func TestQueryBeaconBlock(t *testing.T) {
 				FinalizationFetcher: mockChainService,
 				Blocker:             mockBlockFetcher,
 			}
-			requestBody := &structs.QuerySSZRequest{
+			requestBody := &structs.SSZQueryRequest{
 				Query: tt.path,
 			}
 			var buf bytes.Buffer

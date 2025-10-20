@@ -31,7 +31,7 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate path before lookup: it might be expensive.
-	var req structs.QuerySSZRequest
+	var req structs.SSZQueryRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
@@ -135,7 +135,7 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate path before lookup: it might be expensive.
-	var req structs.QuerySSZRequest
+	var req structs.SSZQueryRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	switch {
 	case errors.Is(err, io.EOF):
