@@ -69,6 +69,8 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NOTE: Using unsafe conversion to proto is acceptable here,
+	// as we play with a copy of the state returned by Stater.
 	sszObject, ok := st.ToProtoUnsafe().(query.SSZObject)
 	if !ok {
 		httputil.HandleError(w, "Unsupported state version for querying: "+version.String(st.Version()), http.StatusBadRequest)
