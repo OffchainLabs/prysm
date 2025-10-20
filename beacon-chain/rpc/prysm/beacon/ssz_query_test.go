@@ -206,8 +206,6 @@ func TestQueryBeaconStateInvalidRequest(t *testing.T) {
 
 			if tt.code == 0 {
 				tt.code = http.StatusBadRequest
-			} else {
-				tt.code = tt.code
 			}
 			require.Equal(t, tt.code, writer.Code)
 			if tt.errorString != "" {
