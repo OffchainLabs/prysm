@@ -53,8 +53,8 @@ func (s *Server) registerBeaconClient() error {
 	conn := validatorHelpers.NewNodeConnection(
 		grpcConn,
 		s.beaconApiEndpoint,
-		s.beaconApiHeaders,
-		s.beaconApiTimeout,
+		validatorHelpers.WithBeaconApiHeaders(s.beaconApiHeaders),
+		validatorHelpers.WithBeaconApiTimeout(s.beaconApiTimeout),
 	)
 
 	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, conn.GetBeaconApiHeaders())

@@ -144,8 +144,8 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 	s.conn = validatorHelpers.NewNodeConnection(
 		grpcConn,
 		cfg.BeaconApiEndpoint,
-		cfg.BeaconApiHeaders,
-		cfg.BeaconApiTimeout,
+		validatorHelpers.WithBeaconApiHeaders(cfg.BeaconApiHeaders),
+		validatorHelpers.WithBeaconApiTimeout(cfg.BeaconApiTimeout),
 	)
 
 	return s, nil
