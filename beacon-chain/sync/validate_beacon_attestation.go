@@ -278,8 +278,8 @@ func (s *Service) validateCommitteeIndexAndCount(
 	} else {
 		ci = a.GetCommitteeIndex()
 	}
-	if uint64(ci) > count {
-		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
+	if uint64(ci) >= count {
+		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d >= %d", ci, count)
 	}
 	return ci, valCount, pubsub.ValidationAccept, nil
 }
