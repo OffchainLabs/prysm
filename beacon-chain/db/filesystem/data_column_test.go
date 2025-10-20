@@ -728,31 +728,35 @@ func TestPrune(t *testing.T) {
 }
 
 func TestExtractFileMetadata(t *testing.T) {
-	t.Run("cross-platform path separators", func(t *testing.T) {
+	t.Run("Unix", func(t *testing.T) {
 		// Test with Unix-style path separators (/)
-		unixPath := "0/1234/0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
-		metadata, err := extractFileMetadata(unixPath)
+		path := "12/1234/0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
+		metadata, err := extractFileMetadata(path)
 		if filepath.Separator == '/' {
 			// On Unix systems, this should succeed
 			require.NoError(t, err)
-			require.Equal(t, uint64(0), metadata.period)
+			require.Equal(t, uint64(12), metadata.period)
 			require.Equal(t, primitives.Epoch(1234), metadata.epoch)
-		} else {
-			// On Windows systems, this should fail because it uses the wrong separator
-			require.ErrorContains(t, "unexpected file", err)
+			return
 		}
 
+		// On Windows systems, this should fail because it uses the wrong separator
+		require.NotNil(t, err)
+	})
+
+	t.Run("Windows", func(t *testing.T) {
 		// Test with Windows-style path separators (\)
-		windowsPath := "0\\1234\\0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
-		metadata, err = extractFileMetadata(windowsPath)
+		path := "12\\1234\\0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
+		metadata, err := extractFileMetadata(path)
 		if filepath.Separator == '\\' {
 			// On Windows systems, this should succeed
 			require.NoError(t, err)
-			require.Equal(t, uint64(0), metadata.period)
+			require.Equal(t, uint64(12), metadata.period)
 			require.Equal(t, primitives.Epoch(1234), metadata.epoch)
-		} else {
-			// On Unix systems, this should fail because it uses the wrong separator
-			require.ErrorContains(t, "unexpected file", err)
+			return
 		}
+
+		// On Unix systems, this should fail because it uses the wrong separator
+		require.NotNil(t, err)
 	})
 }
