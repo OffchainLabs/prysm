@@ -988,8 +988,7 @@ func filePath(root [fieldparams.RootLength]byte, epoch primitives.Epoch) string 
 // extractFileMetadata extracts the metadata from a file path.
 // If the path is not a leaf, it returns nil.
 func extractFileMetadata(path string) (*fileMetadata, error) {
-	// Is this Windows friendly?
-	parts := strings.Split(path, "/")
+	parts := strings.Split(path, string(filepath.Separator))
 	if len(parts) != 3 {
 		return nil, errors.Errorf("unexpected file %s", path)
 	}
