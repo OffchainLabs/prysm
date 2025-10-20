@@ -6,7 +6,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v6.1.3](https://github.com/prysmaticlabs/prysm/compare/v6.1.2...v6.1.3) - 2025-10-20
 
-This release has several important fixes to Prysm's beacon APIs, and P2P on mainnet and all testnets. All node operators are encouraged to update to this release as soon as practical for the best mainnet performance.
+This release has several important beacon API and p2p fixes.
 
 ### Added
 
