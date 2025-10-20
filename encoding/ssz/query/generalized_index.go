@@ -56,7 +56,8 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 		}
 
 		// Update the generalized index to point to the specified field
-		root = updateRoot(root, 1, chunkCount, fieldPos)
+		// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+		root = root*nextPowerOfTwo(chunkCount) + fieldPos
 		currentInfo = fieldSsz
 
 		// Check if a path element is a length field
@@ -67,7 +68,8 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 			}
 			// Length is a uint64 per SSZ spec
 			currentInfo = &sszInfo{sszType: Uint64}
-			root = updateRoot(root, 1, 2, 1)
+			// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+			root = root*2 + 1
 			continue
 		}
 
@@ -94,7 +96,8 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				if err != nil {
 					return 0, fmt.Errorf("chunk count error: %w", err)
 				}
-				root = updateRoot(root, listBaseIndex, innerChunkCount, chunkPos)
+				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+				root = root*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
 				currentInfo = elem
 
 			case Vector:
@@ -117,7 +120,9 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				if err != nil {
 					return 0, fmt.Errorf("chunk count error: %w", err)
 				}
-				root = updateRoot(root, 1, innerChunkCount, chunkPos)
+				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+				root = root*nextPowerOfTwo(innerChunkCount) + chunkPos
+
 				currentInfo = elem
 
 			case Bitlist:
@@ -127,7 +132,9 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				if err != nil {
 					return 0, fmt.Errorf("chunk count error: %w", err)
 				}
-				root = updateRoot(root, listBaseIndex, innerChunkCount, chunkPos)
+				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+				root = root*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+
 				// Bits element is not further descendable; set to basic to guard further steps
 				currentInfo = &sszInfo{sszType: Boolean}
 
@@ -137,7 +144,9 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				if err != nil {
 					return 0, fmt.Errorf("chunk count error: %w", err)
 				}
-				root = updateRoot(root, 1, innerChunkCount, chunkPos)
+				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+				root = root*nextPowerOfTwo(innerChunkCount) + chunkPos
+
 				// Bits element is not further descendable; set to basic to guard further steps
 				currentInfo = &sszInfo{sszType: Boolean}
 
@@ -148,13 +157,6 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 	}
 
 	return root, nil
-}
-
-// updateRoot computes the new generalized index based on the current root, base index, chunk count, and offset
-// base index is typically 1 for containers and 2 for lists
-// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
-func updateRoot(root uint64, baseIndex uint64, chunkCount uint64, offset uint64) uint64 {
-	return root*baseIndex*nextPowerOfTwo(chunkCount) + offset
 }
 
 // isBasicType checks if the SSZType is a basic type
