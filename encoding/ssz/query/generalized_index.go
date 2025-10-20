@@ -72,7 +72,7 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 			if fieldSsz.sszType != List && fieldSsz.sszType != Bitlist {
 				return 0, fmt.Errorf("len() is only supported for List and Bitlist types, got %s", fieldSsz.sszType)
 			}
-			currentInfo = &sszInfo{sszType: UintN, fixedSize: 8}
+			currentInfo = &sszInfo{sszType: Uint8}
 			root = updateRoot(root, 1, 2, 1)
 			continue
 		}
@@ -112,22 +112,19 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				if err != nil {
 					return 0, fmt.Errorf("vector element error: %w", err)
 				}
-				var (
-					offset     uint64
-					multiplier uint64
-				)
+				// Compute chunk position for the element
+				var chunkPos uint64
 				if isBasicType(elem.sszType) {
-					multiplier = nextPowerOfTwo(vi.Length())
-					offset = *idx
+					start := *idx * itemLengthFromInfo(elem)
+					chunkPos = start / bytesPerChunk
 				} else {
-					innerChunkCount, err := getChunkCount(fieldSsz)
-					if err != nil {
-						return 0, fmt.Errorf("chunk count error: %w", err)
-					}
-					multiplier = nextPowerOfTwo(innerChunkCount)
-					offset = *idx
+					chunkPos = *idx
 				}
-				root = updateRoot(root, 1, multiplier, offset)
+				innerChunkCount, err := getChunkCount(fieldSsz)
+				if err != nil {
+					return 0, fmt.Errorf("chunk count error: %w", err)
+				}
+				root = updateRoot(root, 1, innerChunkCount, chunkPos)
 				currentInfo = elem
 
 			case Bitlist:
@@ -139,7 +136,7 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				}
 				root = updateRoot(root, listBaseIndex, innerChunkCount, chunkPos)
 				// Bits element is not further descendable; set to basic to guard further steps
-				currentInfo = &sszInfo{sszType: Boolean, fixedSize: 1}
+				currentInfo = &sszInfo{sszType: Boolean}
 
 			case Bitvector:
 				chunkPos := *idx / bitsPerChunk
@@ -149,12 +146,11 @@ func GetGeneralizedIndexFromPath(info *sszInfo, path []PathElement) (uint64, err
 				}
 				root = updateRoot(root, 1, innerChunkCount, chunkPos)
 				// Bits element is not further descendable; set to basic to guard further steps
-				currentInfo = &sszInfo{sszType: Boolean, fixedSize: 1}
+				currentInfo = &sszInfo{sszType: Boolean}
 
 			default:
 				return 0, fmt.Errorf("indexing not supported for type %s", fieldSsz.sszType)
 			}
-			continue
 		}
 	}
 
@@ -171,7 +167,7 @@ func updateRoot(root uint64, baseIndex uint64, chunkCount uint64, offset uint64)
 // isBasicType checks if the SSZType is a basic type
 func isBasicType(sszType SSZType) bool {
 	switch sszType {
-	case UintN, Byte, Boolean:
+	case Uint8, Uint16, Uint32, Uint64, Boolean:
 		return true
 	default:
 		return false
@@ -181,7 +177,7 @@ func isBasicType(sszType SSZType) bool {
 // getChunkCount returns the number of chunks for the given SSZInfo (equivalent to chunk_count in the spec)
 func getChunkCount(info *sszInfo) (uint64, error) {
 	switch info.sszType {
-	case UintN, Byte, Boolean:
+	case Uint8, Uint16, Uint32, Uint64, Boolean:
 		return 1, nil
 	case Container:
 		containerInfo, err := info.ContainerInfo()
@@ -200,7 +196,7 @@ func getChunkCount(info *sszInfo) (uint64, error) {
 			return 0, err
 		}
 		elemLength := itemLengthFromInfo(elementInfo)
-		return (listInfo.Limit()*uint64(elemLength) + 31) / bytesPerChunk, nil
+		return (listInfo.Limit()*elemLength + 31) / bytesPerChunk, nil
 	case Vector:
 		vectorInfo, err := info.VectorInfo()
 		if err != nil {
@@ -212,7 +208,7 @@ func getChunkCount(info *sszInfo) (uint64, error) {
 			return 0, err
 		}
 		elemLength := itemLengthFromInfo(elementInfo)
-		return (vectorInfo.Length()*uint64(elemLength) + 31) / bytesPerChunk, nil
+		return (vectorInfo.Length()*elemLength + 31) / bytesPerChunk, nil
 	case Bitlist:
 		bitlistInfo, err := info.BitlistInfo()
 		if err != nil {
@@ -220,11 +216,11 @@ func getChunkCount(info *sszInfo) (uint64, error) {
 		}
 		return (bitlistInfo.Limit() + 255) / bitsPerChunk, nil // Bits are packed into 256-bit chunks
 	case Bitvector:
-		vectorInfo, err := info.BitvectorInfo()
+		bitvectorInfo, err := info.BitvectorInfo()
 		if err != nil {
 			return 0, err
 		}
-		return (vectorInfo.Length() + 255) / bitsPerChunk, nil // Bits are packed into 256-bit chunks
+		return (bitvectorInfo.Length() + 255) / bitsPerChunk, nil // Bits are packed into 256-bit chunks
 	default:
 		return 0, errors.New("unsupported SSZ type for chunk count calculation")
 	}
