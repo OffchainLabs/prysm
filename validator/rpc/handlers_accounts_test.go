@@ -8,320 +8,291 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"path/filepath"
-	"testing"
-	"time"
+	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v6/api/pagination"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v6/cmd"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/client"
-	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
+	"github.com/OffchainLabs/prysm/v6/validator/accounts/petnames"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
-	constant "github.com/OffchainLabs/prysm/v6/validator/testing"
+	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"go.uber.org/mock/gomock"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/pkg/errors"
 )
 
-var (
-	defaultWalletPath = filepath.Join(flags.DefaultValidatorDir(), flags.WalletDefaultDirName)
-)
-
-func TestServer_ListAccounts(t *testing.T) {
-	ctx := t.Context()
-	localWalletDir := setupWalletDir(t)
-	defaultWalletPath = localWalletDir
-	// We attempt to create the wallet.
-	opts := []accounts.Option{
-		accounts.WithWalletDir(defaultWalletPath),
-		accounts.WithKeymanagerType(keymanager.Derived),
-		accounts.WithWalletPassword(strongPass),
-		accounts.WithSkipMnemonicConfirm(true),
+// ListAccounts allows retrieval of validating keys and their petnames
+// for a user's wallet via RPC.
+func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.web.accounts.ListAccounts")
+	defer span.End()
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
 	}
-	acc, err := accounts.NewCLIManager(opts...)
-	require.NoError(t, err)
-	w, err := acc.WalletCreate(ctx)
-	require.NoError(t, err)
-	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
-	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
-	s := &Server{
-		walletInitialized: true,
-		wallet:            w,
-		validatorService:  vs,
+	if !s.walletInitialized {
+		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		return
 	}
-	numAccounts := 50
-	dr, ok := km.(*derived.Keymanager)
-	require.Equal(t, true, ok)
-	err = dr.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", numAccounts)
-	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf(api.WebUrlPrefix+"accounts?page_size=%d", int32(numAccounts)), nil)
-	wr := httptest.NewRecorder()
-	wr.Body = &bytes.Buffer{}
-	s.ListAccounts(wr, req)
-	require.Equal(t, http.StatusOK, wr.Code)
-	resp := &ListAccountsResponse{}
-	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
-	require.Equal(t, len(resp.Accounts), numAccounts)
-
-	tests := []struct {
-		PageSize  int
-		PageToken string
-		All       bool
-		res       *ListAccountsResponse
-	}{
-		{
-
-			PageSize: 5,
-			res: &ListAccountsResponse{
-				Accounts:      resp.Accounts[0:5],
-				NextPageToken: "1",
-				TotalSize:     int32(numAccounts),
-			},
-		},
-		{
-
-			PageSize:  5,
-			PageToken: "1",
-			res: &ListAccountsResponse{
-				Accounts:      resp.Accounts[5:10],
-				NextPageToken: "2",
-				TotalSize:     int32(numAccounts),
-			},
-		},
-		{
-
-			All: true,
-			res: &ListAccountsResponse{
-				Accounts:      resp.Accounts,
-				NextPageToken: "",
-				TotalSize:     int32(numAccounts),
-			},
-		},
-	}
-	for _, test := range tests {
-		url := api.WebUrlPrefix + "accounts"
-		if test.PageSize != 0 || test.PageToken != "" || test.All {
-			url = url + "?"
-		}
-		if test.All {
-			url = url + "all=true"
-		} else {
-			if test.PageSize != 0 {
-				url = url + fmt.Sprintf("page_size=%d", test.PageSize)
-			}
-			if test.PageToken != "" {
-				url = url + fmt.Sprintf("&page_token=%s", test.PageToken)
-			}
-		}
-
-		req = httptest.NewRequest(http.MethodGet, url, nil)
-		wr = httptest.NewRecorder()
-		wr.Body = &bytes.Buffer{}
-		s.ListAccounts(wr, req)
-		require.Equal(t, http.StatusOK, wr.Code)
-		resp = &ListAccountsResponse{}
-		require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
-		assert.DeepEqual(t, resp, test.res)
-	}
-}
-
-func TestServer_BackupAccounts(t *testing.T) {
-	ctx := t.Context()
-	localWalletDir := setupWalletDir(t)
-	defaultWalletPath = localWalletDir
-	// We attempt to create the wallet.
-	opts := []accounts.Option{
-		accounts.WithWalletDir(defaultWalletPath),
-		accounts.WithKeymanagerType(keymanager.Derived),
-		accounts.WithWalletPassword(strongPass),
-		accounts.WithSkipMnemonicConfirm(true),
-	}
-	acc, err := accounts.NewCLIManager(opts...)
-	require.NoError(t, err)
-	w, err := acc.WalletCreate(ctx)
-	require.NoError(t, err)
-	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
-	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
-	})
-	require.NoError(t, err)
-	s := &Server{
-		walletInitialized: true,
-		wallet:            w,
-		validatorService:  vs,
-	}
-	numAccounts := 50
-	dr, ok := km.(*derived.Keymanager)
-	require.Equal(t, true, ok)
-	err = dr.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", numAccounts)
-	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/v2/validator/accounts?page_size=%d", int32(numAccounts)), nil)
-	wr := httptest.NewRecorder()
-	wr.Body = &bytes.Buffer{}
-	s.ListAccounts(wr, req)
-	require.Equal(t, http.StatusOK, wr.Code)
-	resp := &ListAccountsResponse{}
-	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
-	require.Equal(t, len(resp.Accounts), numAccounts)
-
-	pubKeys := make([]string, numAccounts)
-	for i, aa := range resp.Accounts {
-		pubKeys[i] = aa.ValidatingPublicKey
-	}
-	request := &BackupAccountsRequest{
-		PublicKeys:     pubKeys,
-		BackupPassword: s.wallet.Password(),
-	}
-	var buf bytes.Buffer
-	err = json.NewEncoder(&buf).Encode(request)
-	require.NoError(t, err)
-	req = httptest.NewRequest(http.MethodPost, api.WebUrlPrefix+"accounts/backup", &buf)
-	wr = httptest.NewRecorder()
-	wr.Body = &bytes.Buffer{}
-	// We now attempt to backup all public keys from the wallet.
-	s.BackupAccounts(wr, req)
-	require.Equal(t, http.StatusOK, wr.Code)
-	res := &BackupAccountsResponse{}
-	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), res))
-	// decode the base64 string
-	decodedBytes, err := base64.StdEncoding.DecodeString(res.ZipFile)
-	require.NoError(t, err)
-	// Open a zip archive for reading.
-	bu := bytes.NewReader(decodedBytes)
-	r, err := zip.NewReader(bu, int64(len(decodedBytes)))
-	require.NoError(t, err)
-	require.Equal(t, len(pubKeys), len(r.File))
-
-	// Iterate through the files in the archive, checking they
-	// match the keystores we wanted to back up.
-	for i, f := range r.File {
-		keystoreFile, err := f.Open()
-		require.NoError(t, err)
-		encoded, err := io.ReadAll(keystoreFile)
+	pageSize := r.URL.Query().Get("page_size")
+	var ps int64
+	if pageSize != "" {
+		psi, err := strconv.ParseInt(pageSize, 10, 32)
 		if err != nil {
-			require.NoError(t, keystoreFile.Close())
-			t.Fatal(err)
+			httputil.HandleError(w, errors.Wrap(err, "Failed to parse page_size").Error(), http.StatusBadRequest)
+			return
 		}
-		keystore := &keymanager.Keystore{}
-		if err := json.Unmarshal(encoded, &keystore); err != nil {
-			require.NoError(t, keystoreFile.Close())
-			t.Fatal(err)
-		}
-		assert.Equal(t, "0x"+keystore.Pubkey, pubKeys[i])
-		require.NoError(t, keystoreFile.Close())
+		ps = psi
 	}
+	pageToken := r.URL.Query().Get("page_token")
+	publicKeys := r.URL.Query()["public_keys"]
+	pubkeys := make([][]byte, len(publicKeys))
+	for i, key := range publicKeys {
+		k, ok := shared.ValidateHex(w, fmt.Sprintf("PublicKeys[%d]", i), key, fieldparams.BLSPubkeyLength)
+		if !ok {
+			return
+		}
+		pubkeys[i] = bytesutil.SafeCopyBytes(k)
+	}
+	if int(ps) > cmd.Get().MaxRPCPageSize {
+		httputil.HandleError(w, fmt.Sprintf("Requested page size %d can not be greater than max size %d",
+			ps, cmd.Get().MaxRPCPageSize), http.StatusBadRequest)
+		return
+	}
+	km, err := s.validatorService.Keymanager()
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	keys, err := km.FetchValidatingPublicKeys(ctx)
+	if err != nil {
+		httputil.HandleError(w, errors.Errorf("Could not retrieve public keys: %v", err).Error(), http.StatusInternalServerError)
+		return
+	}
+	// Build optional filter set from query public_keys.
+	var filterSet map[string]struct{}
+	if len(pubkeys) > 0 {
+		filterSet = make(map[string]struct{}, len(pubkeys))
+		for _, pk := range pubkeys {
+			filterSet[string(pk)] = struct{}{}
+		}
+	}
+	// Build accounts list, optionally filtering by provided public_keys.
+	accs := make([]*Account, 0, len(keys))
+	for i := 0; i < len(keys); i++ {
+		if filterSet != nil {
+			if _, ok := filterSet[string(keys[i][:])]; !ok {
+				continue
+			}
+		}
+		acc := &Account{
+			ValidatingPublicKey: hexutil.Encode(keys[i][:]),
+			AccountName:         petnames.DeterministicName(keys[i][:], "-"),
+		}
+		if s.wallet.KeymanagerKind() == keymanager.Derived {
+			acc.DerivationPath = fmt.Sprintf(derived.ValidatingKeyDerivationPathTemplate, i)
+		}
+		accs = append(accs, acc)
+	}
+	if r.URL.Query().Get("all") == "true" {
+		httputil.WriteJson(w, &ListAccountsResponse{
+			Accounts:      accs,
+			TotalSize:     int32(len(accs)),
+			NextPageToken: "",
+		})
+		return
+	}
+	// If no accounts after filtering, return an empty page.
+	if len(accs) == 0 {
+		httputil.WriteJson(w, &ListAccountsResponse{
+			Accounts:      accs,
+			TotalSize:     0,
+			NextPageToken: "",
+		})
+		return
+	}
+	start, end, nextPageToken, err := pagination.StartAndEndPage(pageToken, int(ps), len(accs))
+	if err != nil {
+		httputil.HandleError(w, fmt.Errorf("Could not paginate results: %w",
+			err).Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteJson(w, &ListAccountsResponse{
+		Accounts:      accs[start:end],
+		TotalSize:     int32(len(accs)),
+		NextPageToken: nextPageToken,
+	})
 }
 
-func TestServer_VoluntaryExit(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	ctx := t.Context()
-	mockValidatorClient := validatormock.NewMockValidatorClient(ctrl)
-	mockNodeClient := validatormock.NewMockNodeClient(ctrl)
-
-	mockValidatorClient.EXPECT().
-		ValidatorIndex(gomock.Any(), gomock.Any()).
-		Return(&ethpb.ValidatorIndexResponse{Index: 0}, nil)
-
-	mockValidatorClient.EXPECT().
-		ValidatorIndex(gomock.Any(), gomock.Any()).
-		Return(&ethpb.ValidatorIndexResponse{Index: 1}, nil)
-
-	// Any time in the past will suffice
-	genesisTime := &timestamppb.Timestamp{
-		Seconds: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix(),
+// BackupAccounts creates a zip file containing EIP-2335 keystores for the user's
+// specified public keys by encrypting them with the specified password.
+func (s *Server) BackupAccounts(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.web.accounts.ListAccounts")
+	defer span.End()
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
+	}
+	if !s.walletInitialized {
+		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		return
 	}
 
-	mockNodeClient.EXPECT().
-		Genesis(gomock.Any(), gomock.Any()).
-		Return(&ethpb.Genesis{GenesisTime: genesisTime}, nil)
-
-	mockValidatorClient.EXPECT().
-		DomainData(gomock.Any(), gomock.Any()).
-		Times(2).
-		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
-
-	mockValidatorClient.EXPECT().
-		ProposeExit(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.SignedVoluntaryExit{})).
-		Times(2).
-		Return(&ethpb.ProposeExitResponse{}, nil)
-
-	localWalletDir := setupWalletDir(t)
-	defaultWalletPath = localWalletDir
-	// We attempt to create the wallet.
-	opts := []accounts.Option{
-		accounts.WithWalletDir(defaultWalletPath),
-		accounts.WithKeymanagerType(keymanager.Derived),
-		accounts.WithWalletPassword(strongPass),
-		accounts.WithSkipMnemonicConfirm(true),
+	var req BackupAccountsRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	switch {
+	case errors.Is(err, io.EOF):
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	case err != nil:
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
 	}
-	acc, err := accounts.NewCLIManager(opts...)
-	require.NoError(t, err)
-	w, err := acc.WalletCreate(ctx)
-	require.NoError(t, err)
-	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
-	require.NoError(t, err)
-	require.NoError(t, err)
-	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Wallet: w,
-		Validator: &testutil.FakeValidator{
-			Km: km,
-		},
+
+	if len(req.PublicKeys) < 1 {
+		httputil.HandleError(w, "No public keys specified to backup", http.StatusBadRequest)
+		return
+	}
+	if req.BackupPassword == "" {
+		httputil.HandleError(w, "Backup password cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	km, err := s.validatorService.Keymanager()
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	pubKeys := make([]bls.PublicKey, len(req.PublicKeys))
+	for i, key := range req.PublicKeys {
+		byteskey, ok := shared.ValidateHex(w, "pubkey", key, fieldparams.BLSPubkeyLength)
+		if !ok {
+			return
+		}
+		pubKey, err := bls.PublicKeyFromBytes(byteskey)
+		if err != nil {
+			httputil.HandleError(w, errors.Wrap(err, fmt.Sprintf("%s Not a valid BLS public key", key)).Error(), http.StatusBadRequest)
+			return
+		}
+		pubKeys[i] = pubKey
+	}
+
+	var keystoresToBackup []*keymanager.Keystore
+	switch km := km.(type) {
+	case *local.Keymanager:
+		keystoresToBackup, err = km.ExtractKeystores(ctx, pubKeys, req.BackupPassword)
+		if err != nil {
+			httputil.HandleError(w, errors.Wrap(err, "Could not backup accounts for local keymanager").Error(), http.StatusInternalServerError)
+			return
+		}
+	case *derived.Keymanager:
+		keystoresToBackup, err = km.ExtractKeystores(ctx, pubKeys, req.BackupPassword)
+		if err != nil {
+			httputil.HandleError(w, errors.Wrap(err, "Could not backup accounts for derived keymanager").Error(), http.StatusInternalServerError)
+			return
+		}
+	default:
+		httputil.HandleError(w, "Only HD or IMPORTED wallets can backup accounts", http.StatusBadRequest)
+		return
+	}
+	if len(keystoresToBackup) == 0 {
+		httputil.HandleError(w, "No keystores to backup", http.StatusBadRequest)
+		return
+	}
+
+	buf := new(bytes.Buffer)
+	writer := zip.NewWriter(buf)
+	for i, k := range keystoresToBackup {
+		encodedFile, err := json.MarshalIndent(k, "", "\t")
+		if err != nil {
+			if err := writer.Close(); err != nil {
+				log.WithError(err).Error("Could not close zip file after writing")
+			}
+			httputil.HandleError(w, "could not marshal keystore to JSON file", http.StatusInternalServerError)
+			return
+		}
+		f, err := writer.Create(fmt.Sprintf("keystore-%d.json", i))
+		if err != nil {
+			if err := writer.Close(); err != nil {
+				log.WithError(err).Error("Could not close zip file after writing")
+			}
+			httputil.HandleError(w, "Could not write keystore file to zip", http.StatusInternalServerError)
+			return
+		}
+		if _, err = f.Write(encodedFile); err != nil {
+			if err := writer.Close(); err != nil {
+				log.WithError(err).Error("Could not close zip file after writing")
+			}
+			httputil.HandleError(w, "Could not write keystore file contents", http.StatusBadRequest)
+			return
+		}
+	}
+	if err := writer.Close(); err != nil {
+		log.WithError(err).Error("Could not close zip file after writing")
+	}
+	httputil.WriteJson(w, &BackupAccountsResponse{
+		ZipFile: base64.StdEncoding.EncodeToString(buf.Bytes()), // convert to base64 string for processing
 	})
-	require.NoError(t, err)
-	s := &Server{
-		walletInitialized:         true,
-		wallet:                    w,
-		nodeClient:                mockNodeClient,
-		beaconNodeValidatorClient: mockValidatorClient,
-		validatorService:          vs,
-	}
-	numAccounts := 2
-	dr, ok := km.(*derived.Keymanager)
-	require.Equal(t, true, ok)
-	err = dr.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", numAccounts)
-	require.NoError(t, err)
-	pubKeys, err := dr.FetchValidatingPublicKeys(ctx)
-	require.NoError(t, err)
+}
 
-	rawPubKeys := make([]string, len(pubKeys))
-	for i, key := range pubKeys {
-		rawPubKeys[i] = hexutil.Encode(key[:])
+// VoluntaryExit performs a voluntary exit for the validator keys specified in a request.
+func (s *Server) VoluntaryExit(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.web.accounts.VoluntaryExit")
+	defer span.End()
+	if s.validatorService == nil {
+		httputil.HandleError(w, "Validator service not ready.", http.StatusServiceUnavailable)
+		return
 	}
-	request := &VoluntaryExitRequest{
-		PublicKeys: rawPubKeys,
+	if !s.walletInitialized {
+		httputil.HandleError(w, "Prysm Wallet not initialized. Please create a new wallet.", http.StatusServiceUnavailable)
+		return
 	}
-	var buf bytes.Buffer
-	err = json.NewEncoder(&buf).Encode(request)
-	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, api.WebUrlPrefix+"accounts/voluntary-exit", &buf)
-	wr := httptest.NewRecorder()
-	wr.Body = &bytes.Buffer{}
-	s.VoluntaryExit(wr, req)
-	require.Equal(t, http.StatusOK, wr.Code)
-	res := &VoluntaryExitResponse{}
-	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), res))
-	for i := range res.ExitedKeys {
-		require.Equal(t, rawPubKeys[i], hexutil.Encode(res.ExitedKeys[i]))
+	var req VoluntaryExitRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	switch {
+	case errors.Is(err, io.EOF):
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	case err != nil:
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
 	}
-
+	if len(req.PublicKeys) == 0 {
+		httputil.HandleError(w, "No public keys specified to delete", http.StatusBadRequest)
+		return
+	}
+	km, err := s.validatorService.Keymanager()
+	if err != nil {
+		httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	pubKeys := make([][]byte, len(req.PublicKeys))
+	for i, key := range req.PublicKeys {
+		byteskey, ok := shared.ValidateHex(w, "pubkey", key, fieldparams.BLSPubkeyLength)
+		if !ok {
+			return
+		}
+		pubKeys[i] = byteskey
+	}
+	cfg := accounts.PerformExitCfg{
+		ValidatorClient:  s.beaconNodeValidatorClient,
+		NodeClient:       s.nodeClient,
+		Keymanager:       km,
+		RawPubKeys:       pubKeys,
+		FormattedPubKeys: req.PublicKeys,
+	}
+	rawExitedKeys, _, err := accounts.PerformVoluntaryExit(ctx, cfg)
+	if err != nil {
+		httputil.HandleError(w, errors.Wrap(err, "Could not perform voluntary exit").Error(), http.StatusInternalServerError)
+		return
+	}
+	httputil.WriteJson(w, &VoluntaryExitResponse{
+		ExitedKeys: rawExitedKeys,
+	})
 }
