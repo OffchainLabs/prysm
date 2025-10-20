@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher"
@@ -146,7 +147,7 @@ func (s *Simulator) Start() {
 
 	// Wait some time and then send a "chain started" event over a notifier
 	// for slasher to pick up a genesis time.
-	time.Sleep(time.Second)
+	helpers.Sleep(s.ctx, time.Second)
 	s.genesisTime = time.Now()
 	var vr [32]byte
 	if err := s.srvConfig.ClockSetter.SetClock(startup.NewClock(s.genesisTime, vr)); err != nil {

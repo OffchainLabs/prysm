@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -194,7 +195,7 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 		// https://github.com/quic-go/quic-go/issues/3291
 		defer func() {
 			if strings.Contains(stream.Conn().RemoteMultiaddr().String(), "quic-v1") {
-				time.Sleep(2 * time.Second)
+				helpers.Sleep(s.ctx, 2*time.Second)
 			}
 
 			_err := stream.Reset()

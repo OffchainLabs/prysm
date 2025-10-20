@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
@@ -164,7 +165,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 				currentTime := prysmTime.Now()
 
 				// Wait for peer to initiate handshake
-				time.Sleep(timeForStatus)
+				helpers.Sleep(s.ctx, timeForStatus)
 
 				// Exit if we are disconnected with the peer.
 				if s.host.Network().Connectedness(remotePeer) != network.Connected {

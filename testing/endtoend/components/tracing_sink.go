@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	coreHelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
@@ -124,7 +125,7 @@ func (ts *TracingSink) initializeSink(ctx context.Context) {
 			default:
 				// Sleep for 100ms and do nothing while waiting for
 				// cancellation.
-				time.Sleep(100 * time.Millisecond)
+				coreHelpers.Sleep(ctx, 100*time.Millisecond)
 			}
 		}
 	}()

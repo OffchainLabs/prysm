@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v6/io/logs"
@@ -98,7 +99,7 @@ func (s *Service) retryExecutionClientConnection(ctx context.Context, err error)
 	s.runError = errors.Wrap(err, "retryExecutionClientConnection")
 	s.updateConnectedETH1(false)
 	// Back off for a while before redialing.
-	time.Sleep(backOffPeriod)
+	helpers.Sleep(ctx, backOffPeriod)
 	currClient := s.rpcClient
 	if err := s.setupExecutionClientConnections(ctx, s.cfg.currHttpEndpoint); err != nil {
 		s.runError = errors.Wrap(err, "setupExecutionClientConnections")

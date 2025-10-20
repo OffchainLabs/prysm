@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -64,7 +65,7 @@ func (v *validator) retryWaitForActivation(ctx context.Context, span octrace.Spa
 	attempts := activationAttempts(ctx)
 	log.WithError(err).WithField("attempts", attempts).Error(message)
 	// Reconnection attempt backoff, up to 60s.
-	time.Sleep(time.Second * time.Duration(min(uint64(attempts), 60)))
+	helpers.Sleep(ctx, time.Second*time.Duration(min(uint64(attempts), 60)))
 	// TODO: refactor this to use the health tracker instead for reattempt
 	return v.WaitForActivation(incrementRetries(ctx))
 }

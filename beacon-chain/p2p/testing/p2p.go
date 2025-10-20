@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
@@ -174,7 +175,6 @@ func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	// PubSub requires some delay after connecting for the (*PubSub).processLoop method to
 	// pick up the newly connected peer.
 	time.Sleep(time.Millisecond * 100)
-
 	castedMsg, ok := msg.(ssz.Marshaler)
 	if !ok {
 		p.t.Fatalf("%T doesn't support ssz marshaler", msg)
@@ -403,7 +403,7 @@ func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid p
 	}
 	// Delay returning the stream for testing purposes
 	if p.DelaySend {
-		time.Sleep(1 * time.Second)
+		helpers.Sleep(ctx, 1*time.Second)
 	}
 
 	return stream, nil

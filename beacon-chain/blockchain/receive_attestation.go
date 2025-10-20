@@ -79,7 +79,7 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 					log.WithError(err).Error("Giving up waiting for genesis time")
 					return
 				}
-				time.Sleep(1 * time.Second)
+				helpers.Sleep(s.ctx, 1*time.Second)
 			}
 			log.Warn("Genesis time received, now available to process attestations")
 		}

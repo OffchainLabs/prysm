@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
 	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -62,7 +63,7 @@ func WaitForBlocks(ctx context.Context, web3 *ethclient.Client, key *keystore.Ke
 			return err
 		}
 		nonce++
-		time.Sleep(timeGapPerMiningTX)
+		helpers.Sleep(ctx, timeGapPerMiningTX)
 		block, err = web3.BlockByNumber(ctx, nil)
 		if err != nil {
 			return err

@@ -12,6 +12,7 @@ go_library(
     deps = [
         "//api/client:go_default_library",
         "//api/client/event:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//config/proposer:go_default_library",

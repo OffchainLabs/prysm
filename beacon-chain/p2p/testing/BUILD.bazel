@@ -19,6 +19,7 @@ go_library(
         "//testing:__subpackages__",
     ],
     deps = [
+        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",

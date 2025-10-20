@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -235,7 +236,7 @@ func (q *blocksQueue) loop() {
 						} else {
 							q.exitConditions.noRequiredPeersErrRetries++
 							log.Debug("Waiting for finalized peers")
-							time.Sleep(noRequiredPeersErrRefreshInterval)
+							helpers.Sleep(q.ctx, noRequiredPeersErrRefreshInterval)
 						}
 						continue
 					}

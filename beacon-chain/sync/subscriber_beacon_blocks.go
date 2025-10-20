@@ -209,7 +209,7 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					return nil, ctx.Err()
 				}
 
-				time.Sleep(delay)
+				helpers.Sleep(ctx, delay)
 				continue
 			}
 

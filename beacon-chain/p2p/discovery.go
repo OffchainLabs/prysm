@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -348,7 +349,7 @@ func (s *Service) listenForNewNodes() {
 			if s.isPeerAtLimit(all) {
 				// Pause the main loop for a period to stop looking for new peers.
 				log.Trace("Not looking for peers, at peer limit")
-				time.Sleep(pollingPeriod)
+				helpers.Sleep(s.ctx, pollingPeriod)
 				continue
 			}
 

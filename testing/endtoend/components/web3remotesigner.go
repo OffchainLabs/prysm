@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/io/file"
@@ -153,7 +154,7 @@ func (w *Web3RemoteSigner) monitorStart() {
 			close(w.started)
 			return
 		}
-		time.Sleep(time.Second)
+		helpers.Sleep(w.ctx, time.Second)
 	}
 }
 

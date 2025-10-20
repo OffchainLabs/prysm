@@ -8,6 +8,7 @@ import (
 
 	api "github.com/OffchainLabs/prysm/v6/api/client"
 	"github.com/OffchainLabs/prysm/v6/api/client/event"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/config/proposer"
@@ -263,7 +264,7 @@ func (*FakeValidator) HasProposerSettings() bool {
 
 // PushProposerSettings for mocking
 func (fv *FakeValidator) PushProposerSettings(ctx context.Context, _ primitives.Slot, _ bool) error {
-	time.Sleep(fv.ProposerSettingWait)
+	helpers.Sleep(ctx, fv.ProposerSettingWait)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		log.Error("Deadline exceeded")
 		// can't return error as it will trigger a log.fatal

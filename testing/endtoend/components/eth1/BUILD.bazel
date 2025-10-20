@@ -15,6 +15,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/testing/endtoend/components/eth1",
     visibility = ["//testing/endtoend:__subpackages__"],
     deps = [
+        "//beacon-chain/core/helpers:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//contracts/deposit:go_default_library",

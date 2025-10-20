@@ -322,7 +322,7 @@ func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
 			"suitable": len(peers),
 			"required": required,
 		}).Info("Waiting for enough suitable peers before syncing")
-		time.Sleep(handshakePollingInterval)
+		helpers.Sleep(s.ctx, handshakePollingInterval)
 	}
 }
 

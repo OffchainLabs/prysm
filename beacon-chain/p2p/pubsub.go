@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -94,7 +95,7 @@ func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte,
 		case <-ctx.Done():
 			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
 		default:
-			time.Sleep(100 * time.Millisecond)
+			helpers.Sleep(ctx, 100*time.Millisecond)
 		}
 	}
 }

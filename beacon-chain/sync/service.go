@@ -17,6 +17,7 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -389,7 +390,7 @@ func (s *Service) waitForChainStart() {
 
 	// Wait for chainstart in separate routine.
 	if startTime.After(prysmTime.Now()) {
-		time.Sleep(prysmTime.Until(startTime))
+		helpers.Sleep(s.ctx, prysmTime.Until(startTime))
 	}
 	log.WithField("startTime", startTime).Debug("Chain started in sync service")
 	s.markForChainStart()
