@@ -89,14 +89,14 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 // ComputeColumnsForCustodyGroup computes the columns for a given custody group.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#compute_columns_for_custody_group
 func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
-	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+	cfg := params.BeaconConfig()
+	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 
 	if custodyGroup >= numberOfCustodyGroups {
 		return nil, ErrCustodyGroupTooLarge
 	}
 
-	numberOfColumns := beaconConfig.NumberOfColumns
+	numberOfColumns := cfg.NumberOfColumns
 
 	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
 
@@ -112,9 +112,9 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 // ComputeCustodyGroupForColumn computes the custody group for a given column.
 // It is the reciprocal function of ComputeColumnsForCustodyGroup.
 func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
-	numberOfColumns := beaconConfig.NumberOfColumns
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+	cfg := params.BeaconConfig()
+	numberOfColumns := cfg.NumberOfColumns
+	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 
 	if columnIndex >= numberOfColumns {
 		return 0, ErrIndexTooLarge

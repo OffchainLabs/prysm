@@ -524,12 +524,12 @@ func TestSubnetComputation(t *testing.T) {
 	require.NoError(t, err)
 
 	localNode := enode.NewLocalNode(db, convertedKey)
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	t.Run("standard", func(t *testing.T) {
 		retrievedSubnets, err := computeSubscribedSubnets(localNode.ID(), 1000)
 		require.NoError(t, err)
-		require.Equal(t, beaconConfig.SubnetsPerNode, uint64(len(retrievedSubnets)))
+		require.Equal(t, cfg.SubnetsPerNode, uint64(len(retrievedSubnets)))
 		require.Equal(t, retrievedSubnets[0]+1, retrievedSubnets[1])
 	})
 
@@ -541,8 +541,8 @@ func TestSubnetComputation(t *testing.T) {
 
 		retrievedSubnets, err := computeSubscribedSubnets(localNode.ID(), 1000)
 		require.NoError(t, err)
-		require.Equal(t, beaconConfig.AttestationSubnetCount, uint64(len(retrievedSubnets)))
-		for i := range beaconConfig.AttestationSubnetCount {
+		require.Equal(t, cfg.AttestationSubnetCount, uint64(len(retrievedSubnets)))
+		for i := range cfg.AttestationSubnetCount {
 			require.Equal(t, i, retrievedSubnets[i])
 		}
 	})
