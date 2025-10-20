@@ -13,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
@@ -70,21 +69,8 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sszObject query.SSZObject
-	switch st.Version() {
-	case version.Phase0:
-		sszObject = st.ToProto().(*ethpb.BeaconState)
-	case version.Altair:
-		sszObject = st.ToProto().(*ethpb.BeaconStateAltair)
-	case version.Bellatrix:
-		sszObject = st.ToProto().(*ethpb.BeaconStateBellatrix)
-	case version.Capella:
-		sszObject = st.ToProto().(*ethpb.BeaconStateCapella)
-	case version.Deneb:
-		sszObject = st.ToProto().(*ethpb.BeaconStateDeneb)
-	case version.Fulu:
-		sszObject = st.ToProto().(*ethpb.BeaconStateFulu)
-	default:
+	sszObject, ok := st.ToProtoUnsafe().(query.SSZObject)
+	if !ok {
 		httputil.HandleError(w, "Unsupported state version for querying: "+version.String(st.Version()), http.StatusBadRequest)
 		return
 	}
@@ -174,22 +160,8 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var block query.SSZObject
-	switch signedBlock.Version() {
-	case version.Phase0:
-		block = protoBlock.(*ethpb.BeaconBlock)
-	case version.Altair:
-		block = protoBlock.(*ethpb.BeaconBlockAltair)
-	case version.Bellatrix:
-		block = protoBlock.(*ethpb.BeaconBlockBellatrix)
-	case version.Capella:
-		block = protoBlock.(*ethpb.BeaconBlockCapella)
-	case version.Deneb:
-		block = protoBlock.(*ethpb.BeaconBlockDeneb)
-	case version.Electra:
-	case version.Fulu:
-		block = protoBlock.(*ethpb.BeaconBlockElectra)
-	default:
+	block, ok := protoBlock.(query.SSZObject)
+	if !ok {
 		httputil.HandleError(w, "Unsupported block version for querying: "+version.String(signedBlock.Version()), http.StatusBadRequest)
 		return
 	}
