@@ -650,6 +650,10 @@ func parseBeaconApiHeaders(rawHeaders string) map[string][]string {
 		}
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			// Skip malformed pairs
+			continue
+		}
 		result[key] = append(result[key], value)
 	}
 	return result
