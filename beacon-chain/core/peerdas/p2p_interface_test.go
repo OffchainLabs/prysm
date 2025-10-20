@@ -68,6 +68,14 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
+	t.Run("size mismatch", func(t *testing.T) {
+		sidecars := generateRandomSidecars(t, seed, blobCount)
+		sidecars[0].Column[0] = sidecars[0].Column[0][:len(sidecars[0].Column[0])-1] // Remove one byte to create size mismatch
+
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
+		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
+	})
+
 	t.Run("invalid proof", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
 		sidecars[0].Column[0][0]++ // It is OK to overflow
