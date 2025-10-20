@@ -24,6 +24,7 @@ type nodeConnection struct {
 	beaconApiTimeout time.Duration
 }
 
+// NodeConnectionOption is a functional option for configuring the node connection.
 type NodeConnectionOption func(nc NodeConnection)
 
 // WithBeaconApiHeaders sets the HTTP headers that should be sent to the server along with each request.
