@@ -56,7 +56,6 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 		}
 
 		// Update the generalized index to point to the specified field
-		// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
 		root = root*nextPowerOfTwo(chunkCount) + fieldPos
 		currentInfo = fieldSsz
 
@@ -68,98 +67,96 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 			}
 			// Length is a uint64 per SSZ spec
 			currentInfo = &SszInfo{sszType: Uint64}
-			// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
 			root = root*2 + 1
 			continue
 		}
 
-		if element.Index != nil {
-			switch fieldSsz.sszType {
-			case List:
-				li, err := fieldSsz.ListInfo()
-				if err != nil {
-					return 0, fmt.Errorf("list info error: %w", err)
-				}
-				elem, err := li.Element()
-				if err != nil {
-					return 0, fmt.Errorf("list element error: %w", err)
-				}
-				if *element.Index >= li.Limit() {
-					return 0, fmt.Errorf("index %d out of bounds for list with limit %d", *element.Index, li.Limit())
-				}
-				// Compute chunk position for the element
-				var chunkPos uint64
-				if isBasicType(elem.sszType) {
-					start := *element.Index * itemLengthFromInfo(elem)
-					chunkPos = start / bytesPerChunk
-				} else {
-					chunkPos = *element.Index
-				}
-				innerChunkCount, err := getChunkCount(fieldSsz)
-				if err != nil {
-					return 0, fmt.Errorf("chunk count error: %w", err)
-				}
-				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
-				root = root*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
-				currentInfo = elem
-
-			case Vector:
-				vi, err := fieldSsz.VectorInfo()
-				if err != nil {
-					return 0, fmt.Errorf("vector info error: %w", err)
-				}
-				elem, err := vi.Element()
-				if err != nil {
-					return 0, fmt.Errorf("vector element error: %w", err)
-				}
-				if *element.Index >= vi.Length() {
-					return 0, fmt.Errorf("index %d out of bounds for vector with length %d", *element.Index, vi.Length())
-				}
-				var chunkPos uint64
-				if isBasicType(elem.sszType) {
-					start := *element.Index * itemLengthFromInfo(elem)
-					chunkPos = start / bytesPerChunk
-				} else {
-					chunkPos = *element.Index
-				}
-				innerChunkCount, err := getChunkCount(fieldSsz)
-				if err != nil {
-					return 0, fmt.Errorf("chunk count error: %w", err)
-				}
-				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
-				root = root*nextPowerOfTwo(innerChunkCount) + chunkPos
-
-				currentInfo = elem
-
-			case Bitlist:
-				// Bits packed into 256-bit chunks; select the chunk containing the bit
-				chunkPos := *element.Index / bitsPerChunk
-				innerChunkCount, err := getChunkCount(fieldSsz)
-				if err != nil {
-					return 0, fmt.Errorf("chunk count error: %w", err)
-				}
-				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
-				root = root*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
-
-				// Bits element is not further descendable; set to basic to guard further steps
-				currentInfo = &SszInfo{sszType: Boolean}
-
-			case Bitvector:
-				chunkPos := *element.Index / bitsPerChunk
-				innerChunkCount, err := getChunkCount(fieldSsz)
-				if err != nil {
-					return 0, fmt.Errorf("chunk count error: %w", err)
-				}
-				// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
-				root = root*nextPowerOfTwo(innerChunkCount) + chunkPos
-
-				// Bits element is not further descendable; set to basic to guard further steps
-				currentInfo = &SszInfo{sszType: Boolean}
-
-			default:
-				return 0, fmt.Errorf("indexing not supported for type %s", fieldSsz.sszType)
-			}
+		if element.Index == nil {
+			continue
 		}
+		switch fieldSsz.sszType {
+		case List:
+			li, err := fieldSsz.ListInfo()
+			if err != nil {
+				return 0, fmt.Errorf("list info error: %w", err)
+			}
+			elem, err := li.Element()
+			if err != nil {
+				return 0, fmt.Errorf("list element error: %w", err)
+			}
+			if *element.Index >= li.Limit() {
+				return 0, fmt.Errorf("index %d out of bounds for list with limit %d", *element.Index, li.Limit())
+			}
+			// Compute chunk position for the element
+			var chunkPos uint64
+			if isBasicType(elem.sszType) {
+				start := *element.Index * itemLengthFromInfo(elem)
+				chunkPos = start / bytesPerChunk
+			} else {
+				chunkPos = *element.Index
+			}
+			innerChunkCount, err := getChunkCount(fieldSsz)
+			if err != nil {
+				return 0, fmt.Errorf("chunk count error: %w", err)
+			}
+			// root = root * base_index * pow2ceil(chunk_count(container)) + fieldPos
+			root = root*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+			currentInfo = elem
+
+		case Vector:
+			vi, err := fieldSsz.VectorInfo()
+			if err != nil {
+				return 0, fmt.Errorf("vector info error: %w", err)
+			}
+			elem, err := vi.Element()
+			if err != nil {
+				return 0, fmt.Errorf("vector element error: %w", err)
+			}
+			if *element.Index >= vi.Length() {
+				return 0, fmt.Errorf("index %d out of bounds for vector with length %d", *element.Index, vi.Length())
+			}
+			var chunkPos uint64
+			if isBasicType(elem.sszType) {
+				start := *element.Index * itemLengthFromInfo(elem)
+				chunkPos = start / bytesPerChunk
+			} else {
+				chunkPos = *element.Index
+			}
+			innerChunkCount, err := getChunkCount(fieldSsz)
+			if err != nil {
+				return 0, fmt.Errorf("chunk count error: %w", err)
+			}
+			root = root*nextPowerOfTwo(innerChunkCount) + chunkPos
+
+			currentInfo = elem
+
+		case Bitlist:
+			// Bits packed into 256-bit chunks; select the chunk containing the bit
+			chunkPos := *element.Index / bitsPerChunk
+			innerChunkCount, err := getChunkCount(fieldSsz)
+			if err != nil {
+				return 0, fmt.Errorf("chunk count error: %w", err)
+			}
+			root = root*listBaseIndex*nextPowerOfTwo(innerChunkCount) + chunkPos
+
+			// Bits element is not further descendable; set to basic to guard further steps
+			currentInfo = &SszInfo{sszType: Boolean}
+
+		case Bitvector:
+			chunkPos := *element.Index / bitsPerChunk
+			innerChunkCount, err := getChunkCount(fieldSsz)
+			if err != nil {
+				return 0, fmt.Errorf("chunk count error: %w", err)
+			}
+			root = root*nextPowerOfTwo(innerChunkCount) + chunkPos
+
+			// Bits element is not further descendable; set to basic to guard further steps
+			currentInfo = &SszInfo{sszType: Boolean}
+
+		default:
+			return 0, fmt.Errorf("indexing not supported for type %s", fieldSsz.sszType)
+		}
+
 	}
 
 	return root, nil
@@ -191,7 +188,6 @@ func getChunkCount(info *SszInfo) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		// For Lists with basic element types, multiple elements can be packed into 32-byte chunks
 		elementInfo, err := listInfo.Element()
 		if err != nil {
 			return 0, err
@@ -203,7 +199,6 @@ func getChunkCount(info *SszInfo) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		// For Vectors with basic element types, multiple elements can be packed into 32-byte chunks
 		elementInfo, err := vectorInfo.Element()
 		if err != nil {
 			return 0, err
