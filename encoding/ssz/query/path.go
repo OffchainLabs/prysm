@@ -24,8 +24,7 @@ type PathElement struct {
 // 4. Handles leading dots and validates path format.
 func ParsePath(rawPath string) ([]PathElement, error) {
 	// Enforce snake_case for field names
-	snakeCasePath := toSnakeCase(rawPath)
-	rawElements := strings.Split(snakeCasePath, ".")
+	rawElements := strings.Split(rawPath, ".")
 
 	if rawElements[0] == "" {
 		// Remove leading dot if present
@@ -37,10 +36,11 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 		if elem == "" {
 			return nil, errors.New("invalid path: consecutive dots or trailing dot")
 		}
+		snakeCasePath := toSnakeCase(elem)
 
 		var pathElement PathElement
 		// Processing element string
-		processingField := elem
+		processingField := snakeCasePath
 
 		re := regexp.MustCompile(`^\s*len\s*\(\s*([^)]+?)\s*\)\s*$`)
 		matches := re.FindStringSubmatch(processingField)
