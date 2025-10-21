@@ -115,8 +115,7 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
-// UpdateEarliestAvailableSlot updates only the earliest available slot while preserving
-// the current custody group count.
+// UpdateEarliestAvailableSlot updates the earliest available slot.
 //
 // IMPORTANT: This function should only be called when Fulu is enabled. The caller is responsible
 // for checking params.FuluEnabled() before calling this function.

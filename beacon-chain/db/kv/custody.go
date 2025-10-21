@@ -78,18 +78,12 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateEarliestAvailableSlot")
 	defer span.End()
 
-	storedGroupCount, storedEarliestAvailableSlot := uint64(0), primitives.Slot(0)
+	storedEarliestAvailableSlot := primitives.Slot(0)
 	if err := s.db.Update(func(tx *bolt.Tx) error {
 		// Retrieve the custody bucket.
 		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
 		if err != nil {
 			return errors.Wrap(err, "create custody bucket")
-		}
-
-		// Retrieve the stored custody group count.
-		storedGroupCountBytes := bucket.Get(groupCountKey)
-		if len(storedGroupCountBytes) != 0 {
-			storedGroupCount = bytesutil.BytesToUint64BigEndian(storedGroupCountBytes)
 		}
 
 		// Retrieve the stored earliest available slot.
@@ -149,7 +143,6 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 
 	log.WithFields(logrus.Fields{
 		"earliestAvailableSlot": storedEarliestAvailableSlot,
-		"groupCount":            storedGroupCount,
 	}).Debug("Updated earliest available slot")
 
 	return nil
