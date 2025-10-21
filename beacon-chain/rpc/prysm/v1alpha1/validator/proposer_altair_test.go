@@ -9,6 +9,7 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -198,4 +199,95 @@ func Test_aggregatedSyncCommitteeMessages_NoIntersectionWithPoolContributions(t 
 	require.NoError(t, err)
 	require.Equal(t, 1, len(aggregated))
 	assert.Equal(t, false, aggregated[0].AggregationBits.BitAt(3))
+}
+
+func TestGetSyncAggregate_CorrectStateAtSyncCommitteePeriodBoundary(t *testing.T) {
+	helpers.ClearCache()
+	syncPeriodBoundaryEpoch := primitives.Epoch(274176) // Real epoch from the bug report
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+	preEpochState, keys := util.DeterministicGenesisStateAltair(t, 100)
+	require.NoError(t, preEpochState.SetSlot(primitives.Slot(syncPeriodBoundaryEpoch)*slotsPerEpoch-1)) // Last slot of previous epoch
+
+	postEpochState := preEpochState.Copy()
+	require.NoError(t, postEpochState.SetSlot(primitives.Slot(syncPeriodBoundaryEpoch)*slotsPerEpoch+2)) // After 2 missed slots
+
+	oldCommittee := &ethpb.SyncCommittee{
+		Pubkeys: make([][]byte, params.BeaconConfig().SyncCommitteeSize),
+	}
+	newCommittee := &ethpb.SyncCommittee{
+		Pubkeys: make([][]byte, params.BeaconConfig().SyncCommitteeSize),
+	}
+
+	for i := 0; i < int(params.BeaconConfig().SyncCommitteeSize); i++ {
+		if i < len(keys) {
+			oldCommittee.Pubkeys[i] = keys[i%len(keys)].PublicKey().Marshal()
+			// Use different keys for new committee to simulate rotation
+			newCommittee.Pubkeys[i] = keys[(i+10)%len(keys)].PublicKey().Marshal()
+		}
+	}
+
+	require.NoError(t, preEpochState.SetCurrentSyncCommittee(oldCommittee))
+	require.NoError(t, postEpochState.SetCurrentSyncCommittee(newCommittee))
+
+	mockChainService := &chainmock.ChainService{
+		State: postEpochState,
+	}
+
+	proposerServer := &Server{
+		HeadFetcher:       mockChainService,
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		SyncCommitteePool: synccommittee.NewStore(),
+	}
+
+	slot := primitives.Slot(syncPeriodBoundaryEpoch)*slotsPerEpoch + 1 // First slot of new epoch
+	blockRoot := [32]byte{0x01, 0x02, 0x03}
+
+	msg1 := &ethpb.SyncCommitteeMessage{
+		Slot:           slot,
+		BlockRoot:      blockRoot[:],
+		ValidatorIndex: 0, // This validator is in position 0 of OLD committee
+		Signature:      bls.NewAggregateSignature().Marshal(),
+	}
+	msg2 := &ethpb.SyncCommitteeMessage{
+		Slot:           slot,
+		BlockRoot:      blockRoot[:],
+		ValidatorIndex: 1, // This validator is in position 1 of OLD committee
+		Signature:      bls.NewAggregateSignature().Marshal(),
+	}
+
+	require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeMessage(msg1))
+	require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeMessage(msg2))
+
+	aggregateWrongState, err := proposerServer.getSyncAggregate(t.Context(), slot, blockRoot, postEpochState)
+	require.NoError(t, err)
+
+	aggregateCorrectState, err := proposerServer.getSyncAggregate(t.Context(), slot, blockRoot, preEpochState)
+	require.NoError(t, err)
+
+	wrongStateBits := bitfield.Bitlist(aggregateWrongState.SyncCommitteeBits)
+	correctStateBits := bitfield.Bitlist(aggregateCorrectState.SyncCommitteeBits)
+
+	wrongStateHasValidators := false
+	correctStateHasValidators := false
+
+	for i := 0; i < len(wrongStateBits); i++ {
+		if wrongStateBits[i] != 0 {
+			wrongStateHasValidators = true
+			break
+		}
+	}
+
+	for i := 0; i < len(correctStateBits); i++ {
+		if correctStateBits[i] != 0 {
+			correctStateHasValidators = true
+			break
+		}
+	}
+
+	assert.Equal(t, true, correctStateHasValidators, "Correct state should include validators that sent messages")
+	assert.Equal(t, false, wrongStateHasValidators, "Wrong state should not find validators in incorrect sync committee")
+
+	t.Logf("Wrong state aggregate bits: %x (has validators: %v)", wrongStateBits, wrongStateHasValidators)
+	t.Logf("Correct state aggregate bits: %x (has validators: %v)", correctStateBits, correctStateHasValidators)
 }
