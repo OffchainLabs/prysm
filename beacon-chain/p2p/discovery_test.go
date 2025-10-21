@@ -24,7 +24,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
@@ -960,6 +962,170 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 
 			// Run a check.
 			checkPingCountCacheMetadataRecord(t, service, tc.checks[3])
+
+			// Clean the test.
+			service.dv5Listener.Close()
+			cache.SubnetIDs.EmptyAllCaches()
+			cache.SyncSubnetIDs.EmptyAllCaches()
+		})
+	}
+
+	// Reset the config.
+	params.OverrideBeaconConfig(defaultCfg)
+}
+
+func TestRefreshPersistentSubnets_SubscribeAllSubnets(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+
+	// Clean up caches after usage.
+	defer cache.SubnetIDs.EmptyAllCaches()
+	defer cache.SyncSubnetIDs.EmptyAllCaches()
+
+	const (
+		altairForkEpoch = 5
+		fuluForkEpoch   = 10
+	)
+
+	custodyGroupCount := params.BeaconConfig().CustodyRequirement
+
+	// Set up epochs.
+	defaultCfg := params.BeaconConfig()
+	cfg := defaultCfg.Copy()
+	cfg.AltairForkEpoch = altairForkEpoch
+	cfg.FuluForkEpoch = fuluForkEpoch
+	params.OverrideBeaconConfig(cfg)
+
+	// Compute the number of seconds per epoch.
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	secondsPerEpoch := secondsPerSlot * uint64(slotsPerEpoch)
+
+	testCases := []struct {
+		name                 string
+		epochSinceGenesis    uint64
+		subscribeAllSubnets  bool
+		expectedSyncNets     []uint64
+		udpPort              uint
+	}{
+		{
+			name:                "Altair with all subnets enabled",
+			epochSinceGenesis:   altairForkEpoch,
+			subscribeAllSubnets: true,
+			expectedSyncNets:    []uint64{0, 1, 2, 3},
+			udpPort:             2100,
+		},
+		{
+			name:                "Altair with all subnets disabled",
+			epochSinceGenesis:   altairForkEpoch,
+			subscribeAllSubnets: false,
+			expectedSyncNets:    []uint64{1, 2}, // 从缓存中获取的特定子网
+			udpPort:             2110,
+		},
+		{
+			name:                "Fulu with all subnets enabled",
+			epochSinceGenesis:   fuluForkEpoch,
+			subscribeAllSubnets: true,
+			expectedSyncNets:    []uint64{0, 1, 2, 3},
+			udpPort:             2200,
+		},
+		{
+			name:                "Fulu with all subnets disabled",
+			epochSinceGenesis:   fuluForkEpoch,
+			subscribeAllSubnets: false,
+			expectedSyncNets:    []uint64{1, 2}, // 从缓存中获取的特定子网
+			udpPort:             2210,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set the subscribe to all subnets flag based on test case
+			gFlags := new(flags.GlobalFlags)
+			gFlags.SubscribeToAllSubnets = tc.subscribeAllSubnets
+			flags.Init(gFlags)
+			defer flags.Init(new(flags.GlobalFlags))
+
+			// Initialize the ping count.
+			actualPingCount = 0
+
+			// Create the private key.
+			privateKeyBytes := make([]byte, 32)
+			for i := 0; i < 32; i++ {
+				privateKeyBytes[i] = byte(i)
+			}
+
+			unmarshalledPrivateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
+			require.NoError(t, err)
+
+			privateKey, err := ecdsaprysm.ConvertFromInterfacePrivKey(unmarshalledPrivateKey)
+			require.NoError(t, err)
+
+			// Create a p2p service.
+			p2p := testp2p.NewTestP2P(t)
+
+			// Create and connect a peer.
+			createAndConnectPeer(t, p2p, 1)
+
+			// Create a service.
+			service := &Service{
+				pingMethod: func(_ context.Context, _ peer.ID) error {
+					actualPingCount++
+					return nil
+				},
+				cfg:                   &Config{UDPPort: tc.udpPort, DB: testDB.SetupDB(t)},
+				peers:                 p2p.Peers(),
+				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
+				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				ctx:                   t.Context(),
+				custodyInfoSet:        make(chan struct{}),
+				custodyInfo:           &custodyInfo{groupCount: custodyGroupCount},
+			}
+
+			close(service.custodyInfoSet)
+
+			// Set the listener and the metadata.
+			createListener := func() (*discover.UDPv5, error) {
+				return service.createListener(nil, privateKey)
+			}
+
+			listener, err := newListener(createListener)
+			require.NoError(t, err)
+
+			service.dv5Listener = listener
+
+			// Initialize metadata based on the fork version
+			if tc.epochSinceGenesis >= fuluForkEpoch {
+				service.metaData = wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{})
+			} else if tc.epochSinceGenesis >= altairForkEpoch {
+				service.metaData = wrapper.WrappedMetadataV1(&ethpb.MetaDataV1{})
+			} else {
+				service.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
+			}
+
+			// For non-all-subnets cases, add specific sync committee subnets to cache
+			if !tc.subscribeAllSubnets {
+				cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte{'a'}, primitives.Epoch(tc.epochSinceGenesis), []uint64{1, 2}, 1*time.Hour)
+			}
+
+			// Refresh the persistent subnets.
+			service.RefreshPersistentSubnets()
+			time.Sleep(10 * time.Millisecond)
+
+			// Verify that syncnets are set to all subnets
+			expectedBitS := bitfield.NewBitvector4()
+			for _, idx := range tc.expectedSyncNets {
+				expectedBitS.SetBitAt(idx, true)
+			}
+
+			// Check syncnets in ENR.
+			var actualBitSENR bitfield.Bitvector4
+			err = service.dv5Listener.LocalNode().Node().Record().Load(enr.WithEntry(syncCommsSubnetEnrKey, &actualBitSENR))
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, expectedBitS, actualBitSENR)
+
+			// Check syncnets in metadata.
+			actualBitSMetadata := service.metaData.SyncnetsBitfield()
+			require.DeepSSZEqual(t, expectedBitS, actualBitSMetadata)
 
 			// Clean the test.
 			service.dv5Listener.Close()
