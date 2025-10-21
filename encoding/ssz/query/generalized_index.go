@@ -61,6 +61,9 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 
 		// Check if a path element is a length field
 		if element.Length {
+			if element.Index != nil {
+				return 0, fmt.Errorf("len() is not supported for indexed elements (multi-dimensional arrays)")
+			}
 			// Length field is only valid for List and Bitlist types
 			if fieldSsz.sszType != List && fieldSsz.sszType != Bitlist {
 				return 0, fmt.Errorf("len() is only supported for List and Bitlist types, got %s", fieldSsz.sszType)
@@ -74,6 +77,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 		if element.Index == nil {
 			continue
 		}
+
 		switch fieldSsz.sszType {
 		case List:
 			li, err := fieldSsz.ListInfo()

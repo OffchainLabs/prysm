@@ -177,7 +177,6 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			expectedIndex: 4608,
 			expectError:   false,
 		},
-
 		{
 			name:          "nested",
 			path:          "nested",
@@ -189,6 +188,43 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			path:          "nested.field_list_uint64[10]",
 			expectedIndex: 5186,
 			expectError:   false,
+		},
+		{
+			name:          "variable_container_list",
+			path:          "variable_container_list",
+			expectedIndex: 21,
+			expectError:   false,
+		},
+		{
+			name:          "len(variable_container_list)",
+			path:          "len(variable_container_list)",
+			expectedIndex: 43,
+			expectError:   false,
+		},
+		{
+			name:          "variable_container_list[0]",
+			path:          "variable_container_list[0]",
+			expectedIndex: 672,
+			expectError:   false,
+		},
+		{
+			name:          "variable_container_list[0].inner_1",
+			path:          "variable_container_list[0].inner_1",
+			expectedIndex: 1344,
+			expectError:   false,
+		},
+		{
+			name:          "variable_container_list[0].inner_1.field_list_uint64[1]",
+			path:          "variable_container_list[0].inner_1.field_list_uint64[1]",
+			expectedIndex: 344128,
+			expectError:   false,
+		},
+		{
+			name:          "variable_container_list[0].inner_1.len(nested_list_field[3])",
+			path:          "variable_container_list[0].inner_1.len(nested_list_field[3])",
+			expectedIndex: 1376775,
+			expectError:   true,
+			errorMessage:  "len() is not supported for indexed elements (multi-dimensional arrays)",
 		},
 	}
 
