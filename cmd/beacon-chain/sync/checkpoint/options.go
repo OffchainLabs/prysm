@@ -50,10 +50,9 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 	switch {
 	case blockPath == "" && statePath == "":
 		return nil, nil
-	case blockPath == "" || statePath == "":
-		if blockPath == "" {
-			return nil, errors.New("--checkpoint-state specified, but not --checkpoint-block. both are required")
-		}
+	case blockPath == "":
+		return nil, errors.New("--checkpoint-state specified, but not --checkpoint-block. both are required")
+	case statePath == "":
 		return nil, errors.New("--checkpoint-block specified, but not --checkpoint-state. both are required")
 	default:
 		opt := func(node *node.BeaconNode) (err error) {
