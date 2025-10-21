@@ -97,7 +97,7 @@ func (s *Service) endpoints(
 	endpoints = append(endpoints, s.beaconEndpoints(ch, stater, blocker, validatorServer, coreService)...)
 	endpoints = append(endpoints, s.configEndpoints()...)
 	endpoints = append(endpoints, s.eventsEndpoints()...)
-	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, coreService)...)
+	endpoints = append(endpoints, s.prysmBeaconEndpoints(ch, stater, blocker, coreService)...)
 	endpoints = append(endpoints, s.prysmNodeEndpoints()...)
 	endpoints = append(endpoints, s.prysmValidatorEndpoints(stater, coreService)...)
 
@@ -1184,6 +1184,7 @@ func (s *Service) eventsEndpoints() []endpoint {
 func (s *Service) prysmBeaconEndpoints(
 	ch *stategen.CanonicalHistory,
 	stater lookup.Stater,
+	blocker lookup.Blocker,
 	coreService *core.Service,
 ) []endpoint {
 	server := &beaconprysm.Server{
@@ -1194,6 +1195,7 @@ func (s *Service) prysmBeaconEndpoints(
 		CanonicalHistory:      ch,
 		BeaconDB:              s.cfg.BeaconDB,
 		Stater:                stater,
+		Blocker:               blocker,
 		ChainInfoFetcher:      s.cfg.ChainInfoFetcher,
 		FinalizationFetcher:   s.cfg.FinalizationFetcher,
 		CoreService:           coreService,
@@ -1264,6 +1266,28 @@ func (s *Service) prysmBeaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.PublishBlobs,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/prysm/v1/beacon/states/{state_id}/query",
+			name:     namespace + ".QueryBeaconState",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.QueryBeaconState,
+			methods: []string{http.MethodPost},
+		},
+		{
+			template: "/prysm/v1/beacon/blocks/{block_id}/query",
+			name:     namespace + ".QueryBeaconBlock",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.QueryBeaconBlock,
 			methods: []string{http.MethodPost},
 		},
 	}
