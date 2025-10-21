@@ -605,7 +605,8 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		slotsPerEpoch         = 32
 		custodyRequirement    = uint64(4)
 		earliestStoredSlot    = primitives.Slot(12)
-		numberOfCustodyGroups = uint64(128)
+		numberOfCustodyGroups = uint64(64)
+		numberOfColumns       = uint64(128)
 	)
 
 	params.SetupTestConfigCleanup(t)
@@ -614,6 +615,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 	cfg.SlotsPerEpoch = slotsPerEpoch
 	cfg.CustodyRequirement = custodyRequirement
 	cfg.NumberOfCustodyGroups = numberOfCustodyGroups
+	cfg.NumberOfColumns = numberOfColumns
 	params.OverrideBeaconConfig(cfg)
 
 	ctx := t.Context()
