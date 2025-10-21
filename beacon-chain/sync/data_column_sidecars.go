@@ -988,6 +988,10 @@ func verifyDataColumnSidecarsByPeer(
 func verifyByRPCDataColumnSidecars(ctx context.Context, newVerifier verification.NewDataColumnsVerifier, roDataColumns []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	verifier := newVerifier(roDataColumns, verification.ByRPCRequestDataColumnSidecarRequirements)
 
+	if err := verifier.ValidProposerSignature(ctx); err != nil {
+		return nil, errors.Wrap(err, "valid proposer signature")
+	}
+
 	if err := verifier.ValidFields(); err != nil {
 		return nil, errors.Wrap(err, "valid fields")
 	}

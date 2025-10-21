@@ -44,6 +44,7 @@ var (
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
 	ByRPCRequestDataColumnSidecarRequirements = []Requirement{
+		RequireValidProposerSignature,
 		RequireValidFields,
 		RequireSidecarInclusionProven,
 		RequireSidecarKzgProofVerified,
