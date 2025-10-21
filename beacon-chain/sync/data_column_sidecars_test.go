@@ -761,6 +761,8 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
+	ctx := t.Context()
+
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.FuluForkEpoch = 0
@@ -788,11 +790,11 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 
 		waiter := verification.NewInitializerWaiter(gs, nil, nil)
-		initializer, err := waiter.WaitForInitializer(t.Context())
+		initializer, err := waiter.WaitForInitializer(ctx)
 		require.NoError(t, err)
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
+		actual, err := verifyDataColumnSidecarsByPeer(ctx, p2p, newDataColumnsVerifier, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, stop-start, len(actual))
@@ -833,11 +835,11 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 
 		waiter := verification.NewInitializerWaiter(gs, nil, nil)
-		initializer, err := waiter.WaitForInitializer(t.Context())
+		initializer, err := waiter.WaitForInitializer(ctx)
 		require.NoError(t, err)
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
+		actual, err := verifyDataColumnSidecarsByPeer(ctx, p2p, newDataColumnsVerifier, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, middle-start, len(actual))
