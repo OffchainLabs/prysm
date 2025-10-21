@@ -1001,11 +1001,11 @@ func TestRefreshPersistentSubnets_SubscribeAllSubnets(t *testing.T) {
 	secondsPerEpoch := secondsPerSlot * uint64(slotsPerEpoch)
 
 	testCases := []struct {
-		name                 string
-		epochSinceGenesis    uint64
-		subscribeAllSubnets  bool
-		expectedSyncNets     []uint64
-		udpPort              uint
+		name                string
+		epochSinceGenesis   uint64
+		subscribeAllSubnets bool
+		expectedSyncNets    []uint64
+		udpPort             uint
 	}{
 		{
 			name:                "Altair with all subnets enabled",
@@ -1018,7 +1018,7 @@ func TestRefreshPersistentSubnets_SubscribeAllSubnets(t *testing.T) {
 			name:                "Altair with all subnets disabled",
 			epochSinceGenesis:   altairForkEpoch,
 			subscribeAllSubnets: false,
-			expectedSyncNets:    []uint64{1, 2}, // 从缓存中获取的特定子网
+			expectedSyncNets:    []uint64{1, 2},
 			udpPort:             2110,
 		},
 		{
@@ -1032,7 +1032,7 @@ func TestRefreshPersistentSubnets_SubscribeAllSubnets(t *testing.T) {
 			name:                "Fulu with all subnets disabled",
 			epochSinceGenesis:   fuluForkEpoch,
 			subscribeAllSubnets: false,
-			expectedSyncNets:    []uint64{1, 2}, // 从缓存中获取的特定子网
+			expectedSyncNets:    []uint64{1, 2},
 			udpPort:             2210,
 		},
 	}
