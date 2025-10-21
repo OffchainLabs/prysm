@@ -602,7 +602,6 @@ func TestNotifyIndex(t *testing.T) {
 func TestUpdateCustodyInfoInDB(t *testing.T) {
 	const (
 		fuluForkEpoch         = 10
-		slotsPerEpoch         = 32
 		custodyRequirement    = uint64(4)
 		earliestStoredSlot    = primitives.Slot(12)
 		numberOfCustodyGroups = uint64(64)
@@ -612,7 +611,6 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.FuluForkEpoch = fuluForkEpoch
-	cfg.SlotsPerEpoch = slotsPerEpoch
 	cfg.CustodyRequirement = custodyRequirement
 	cfg.NumberOfCustodyGroups = numberOfCustodyGroups
 	cfg.NumberOfColumns = numberOfColumns
@@ -657,7 +655,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 
 		// After Fulu
 		// ----------
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(fuluForkEpoch*primitives.Slot(slotsPerEpoch) + 1)
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1)
 		require.NoError(t, err)
 		require.Equal(t, earliestStoredSlot, actualEas)
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
@@ -688,7 +686,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		slot := fuluForkEpoch*primitives.Slot(slotsPerEpoch) + 1
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
 		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot)
 		require.NoError(t, err)
 		require.Equal(t, slot, actualEas)
