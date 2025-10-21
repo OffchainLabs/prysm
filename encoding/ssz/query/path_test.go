@@ -45,6 +45,11 @@ func TestParsePath(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "invalid index in array path",
+			path:    ".data.target.root[a]",
+			wantErr: true,
+		},
+		{
 			name:    "multidimensional array index in path",
 			path:    ".data.target.root[0][1]",
 			wantErr: true,

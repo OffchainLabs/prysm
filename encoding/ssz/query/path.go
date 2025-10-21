@@ -24,7 +24,7 @@ type PathElement struct {
 // 4. Handles leading dots and validates path format.
 func ParsePath(rawPath string) ([]PathElement, error) {
 	// Enforce snake_case for field names
-	snakeCasePath := ToSnakeCase(rawPath)
+	snakeCasePath := toSnakeCase(rawPath)
 	rawElements := strings.Split(snakeCasePath, ".")
 
 	if rawElements[0] == "" {
@@ -85,11 +85,13 @@ func extractFieldName(name string) string {
 	return name
 }
 
+var arrayIndexRegex = regexp.MustCompile(`\[\s*([^\]]+)\s*\]`)
+
 // extractArrayIndices returns every bracketed, non-negative index in the name,
 // e.g. "array[0][1]" -> []uint64{0, 1}. Errors if none are found or if any index is invalid.
 func extractArrayIndices(name string) ([]uint64, error) {
 	// Match all bracketed content, then we'll parse as unsigned to catch negatives explicitly
-	re := regexp.MustCompile(`\[\s*([^\]]+)\s*\]`)
+	re := arrayIndexRegex
 	matches := re.FindAllStringSubmatch(name, -1)
 
 	if len(matches) == 0 {
@@ -115,7 +117,7 @@ func extractArrayIndices(name string) ([]uint64, error) {
 var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
 
-func ToSnakeCase(str string) string {
+func toSnakeCase(str string) string {
 	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
 	return strings.ToLower(snake)
