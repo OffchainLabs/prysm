@@ -39,6 +39,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v6/testing/mock"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/crypto/random"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -4886,7 +4887,7 @@ func Test_validateBlobs(t *testing.T) {
 	require.NoError(t, kzg.Start())
 
 	denebMax := params.BeaconConfig().MaxBlobsPerBlock(ds)
-	blob := util.GetRandBlob(123)
+	blob := random.GetRandBlob(123)
 	// Generate proper commitment and proof for the blob
 	var kzgBlob kzg.Blob
 	copy(kzgBlob[:], blob[:])
@@ -4998,7 +4999,7 @@ func Test_validateBlobs(t *testing.T) {
 		var kzgBlobs []kzg.Blob
 
 		for i := 0; i < blobCount; i++ {
-			blob := util.GetRandBlob(int64(i))
+			blob := random.GetRandBlob(int64(i))
 			fuluBlobs[i] = blob[:]
 			var kzgBlob kzg.Blob
 			copy(kzgBlob[:], blob[:])
@@ -5041,7 +5042,7 @@ func Test_validateBlobs(t *testing.T) {
 		commitments := make([][]byte, blobCount)
 		fuluBlobs := make([][]byte, blobCount)
 		for i := 0; i < blobCount; i++ {
-			blob := util.GetRandBlob(int64(i))
+			blob := random.GetRandBlob(int64(i))
 			fuluBlobs[i] = blob[:]
 
 			var kzgBlob kzg.Blob
@@ -5064,7 +5065,7 @@ func Test_validateBlobs(t *testing.T) {
 	})
 
 	t.Run("Deneb block with invalid blob proof", func(t *testing.T) {
-		blob := util.GetRandBlob(123)
+		blob := random.GetRandBlob(123)
 		invalidProof := make([]byte, 48) // All zeros - invalid proof
 
 		sk, err := bls.RandKey()
