@@ -51,15 +51,15 @@ func TestProposer_GetSyncAggregate_OK(t *testing.T) {
 		require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeContribution(cont))
 	}
 
-	aggregate, err := proposerServer.getSyncAggregate(t.Context(), 1, bytesutil.ToBytes32(conts[0].BlockRoot))
+	aggregate, err := proposerServer.getSyncAggregate(t.Context(), 1, bytesutil.ToBytes32(conts[0].BlockRoot), st)
 	require.NoError(t, err)
 	require.DeepEqual(t, bitfield.Bitvector32{0xf, 0xf, 0xf, 0xf}, aggregate.SyncCommitteeBits)
 
-	aggregate, err = proposerServer.getSyncAggregate(t.Context(), 2, bytesutil.ToBytes32(conts[0].BlockRoot))
+	aggregate, err = proposerServer.getSyncAggregate(t.Context(), 2, bytesutil.ToBytes32(conts[0].BlockRoot), st)
 	require.NoError(t, err)
 	require.DeepEqual(t, bitfield.Bitvector32{0xaa, 0xaa, 0xaa, 0xaa}, aggregate.SyncCommitteeBits)
 
-	aggregate, err = proposerServer.getSyncAggregate(t.Context(), 3, bytesutil.ToBytes32(conts[0].BlockRoot))
+	aggregate, err = proposerServer.getSyncAggregate(t.Context(), 3, bytesutil.ToBytes32(conts[0].BlockRoot), st)
 	require.NoError(t, err)
 	require.DeepEqual(t, bitfield.NewBitvector32(), aggregate.SyncCommitteeBits)
 }
@@ -68,7 +68,7 @@ func TestServer_SetSyncAggregate_EmptyCase(t *testing.T) {
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockAltair())
 	require.NoError(t, err)
 	s := &Server{} // Sever is not initialized with sync committee pool.
-	s.setSyncAggregate(t.Context(), b)
+	s.setSyncAggregate(t.Context(), b, nil)
 	agg, err := b.Block().Body().SyncAggregate()
 	require.NoError(t, err)
 
@@ -138,7 +138,7 @@ func TestProposer_GetSyncAggregate_IncludesSyncCommitteeMessages(t *testing.T) {
 	}
 
 	// The final sync aggregates must have indexes [0,1,2,3] set for both subcommittees
-	sa, err := proposerServer.getSyncAggregate(t.Context(), 1, r)
+	sa, err := proposerServer.getSyncAggregate(t.Context(), 1, r, st)
 	require.NoError(t, err)
 	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(0))
 	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(1))
@@ -194,7 +194,7 @@ func Test_aggregatedSyncCommitteeMessages_NoIntersectionWithPoolContributions(t 
 		BlockRoot:         r[:],
 	}
 
-	aggregated, err := proposerServer.aggregatedSyncCommitteeMessages(t.Context(), 1, r, []*ethpb.SyncCommitteeContribution{cont})
+	aggregated, err := proposerServer.aggregatedSyncCommitteeMessages(t.Context(), 1, r, []*ethpb.SyncCommitteeContribution{cont}, st)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(aggregated))
 	assert.Equal(t, false, aggregated[0].AggregationBits.BitAt(3))
