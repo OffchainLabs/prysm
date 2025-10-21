@@ -100,3 +100,24 @@ func (b *BeaconState) DequeuePendingPartialWithdrawals(n uint64) error {
 
 	return nil
 }
+
+// SetPendingPartialWithdrawals sets the pending partial withdrawals. This method mutates the state.
+func (b *BeaconState) SetPendingPartialWithdrawals(pendingPartialWithdrawals []*eth.PendingPartialWithdrawal) error {
+	if b.version < version.Electra {
+		return errNotSupported("SetPendingPartialWithdrawals", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	if pendingPartialWithdrawals == nil {
+		return errors.New("cannot set nil pending partial withdrawals")
+	}
+	b.sharedFieldReferences[types.PendingPartialWithdrawals].MinusRef()
+	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+
+	b.pendingPartialWithdrawals = pendingPartialWithdrawals
+	b.markFieldAsDirty(types.PendingPartialWithdrawals)
+
+	return nil
+}

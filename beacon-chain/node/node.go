@@ -1108,6 +1108,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 		genesis,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
+		b.fetchP2P(),
 		opts...,
 	)
 	if err != nil {
