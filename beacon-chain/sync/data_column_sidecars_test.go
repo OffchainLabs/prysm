@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -154,12 +155,6 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 	require.NoError(t, err)
 
-	waiter := verification.NewInitializerWaiter(gs, nil, nil)
-	initializer, err := waiter.WaitForInitializer(t.Context())
-	require.NoError(t, err)
-
-	newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-
 	other.SetStreamHandler(byRangeProtocol, func(stream network.Stream) {
 		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
 			StartSlot: 3,
@@ -247,7 +242,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		RateLimiter: leakybucket.NewCollector(1., 10, time.Second, false /* deleteEmptyBuckets */),
 		CtxMap:      ctxMap,
 		Storage:     storage,
-		NewVerifier: newDataColumnsVerifier,
+		NewVerifier: testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}),
 	}
 
 	expectedResult := map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn{
@@ -785,15 +780,8 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 			"peer2": roDataColumnSidecars[5:9],
 			"peer3": roDataColumnSidecars[9:stop],
 		}
-		gs := startup.NewClockSynchronizer()
-		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
-		initializer, err := waiter.WaitForInitializer(ctx)
-		require.NoError(t, err)
-
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		newDataColumnsVerifier := testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{})
 		actual, err := verifyDataColumnSidecarsByPeer(ctx, p2p, newDataColumnsVerifier, roDataColumnsByPeer)
 		require.NoError(t, err)
 
@@ -818,27 +806,13 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		// Setup test data and expectations
 		_, roDataColumnSidecars, expected := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		// Modify one sidecar to ensure proof verification fails.
-		if roDataColumnSidecars[middle].KzgProofs[0][0] == 0 {
-			roDataColumnSidecars[middle].KzgProofs[0][0]++
-		} else {
-			roDataColumnSidecars[middle].KzgProofs[0][0]--
-		}
-
 		roDataColumnsByPeer := map[peer.ID][]blocks.RODataColumn{
 			"peer1": roDataColumnSidecars[start:middle],
 			"peer2": roDataColumnSidecars[5:middle],
 			"peer3": roDataColumnSidecars[middle:stop],
 		}
-		gs := startup.NewClockSynchronizer()
-		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
-		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
-		initializer, err := waiter.WaitForInitializer(ctx)
-		require.NoError(t, err)
-
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		newDataColumnsVerifier := testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{FailIndex: middle, ErrSidecarKzgProofVerifiedOnFailIndex: errors.New("an error")})
 		actual, err := verifyDataColumnSidecarsByPeer(ctx, p2p, newDataColumnsVerifier, roDataColumnsByPeer)
 		require.NoError(t, err)
 

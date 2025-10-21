@@ -79,24 +79,34 @@ func (*MockBlobVerifier) SatisfyRequirement(_ Requirement) {}
 // --------------------
 
 type MockDataColumnsVerifier struct {
-	ErrValidFields                  error
-	ErrCorrectSubnet                error
-	ErrNotFromFutureSlot            error
-	ErrSlotAboveFinalized           error
-	ErrSidecarParentSeen            error
-	ErrSidecarParentValid           error
-	ErrValidProposerSignature       error
-	ErrSidecarParentSlotLower       error
-	ErrSidecarDescendsFromFinalized error
-	ErrSidecarInclusionProven       error
-	ErrSidecarKzgProofVerified      error
-	ErrSidecarProposerExpected      error
+	ErrValidFields                        error
+	ErrCorrectSubnet                      error
+	ErrNotFromFutureSlot                  error
+	ErrSlotAboveFinalized                 error
+	ErrSidecarParentSeen                  error
+	ErrSidecarParentValid                 error
+	ErrValidProposerSignature             error
+	ErrSidecarParentSlotLower             error
+	ErrSidecarDescendsFromFinalized       error
+	ErrSidecarInclusionProven             error
+	ErrSidecarKzgProofVerified            error
+	ErrSidecarKzgProofVerifiedOnFailIndex error
+	ErrSidecarProposerExpected            error
+
+	FailIndex uint64
+	Sidecars  []blocks.RODataColumn
 }
 
 var _ DataColumnsVerifier = &MockDataColumnsVerifier{}
 
 func (m *MockDataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
-	return []blocks.VerifiedRODataColumn{{}}, nil
+	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(m.Sidecars))
+	for _, sidecar := range m.Sidecars {
+		verifiedSidecar := blocks.NewVerifiedRODataColumn(sidecar)
+		verifiedSidecars = append(verifiedSidecars, verifiedSidecar)
+	}
+
+	return verifiedSidecars, nil
 }
 
 func (m *MockDataColumnsVerifier) SatisfyRequirement(_ Requirement) {}
@@ -142,6 +152,13 @@ func (m *MockDataColumnsVerifier) SidecarInclusionProven() error {
 }
 
 func (m *MockDataColumnsVerifier) SidecarKzgProofVerified() error {
+	for _, sidecar := range m.Sidecars {
+		if m.ErrSidecarKzgProofVerifiedOnFailIndex != nil && sidecar.Index == m.FailIndex {
+			m.Sidecars = nil
+			return m.ErrSidecarKzgProofVerifiedOnFailIndex
+		}
+	}
+
 	return m.ErrSidecarKzgProofVerified
 }
 

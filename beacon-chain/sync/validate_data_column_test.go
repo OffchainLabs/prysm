@@ -218,7 +218,8 @@ func TestValidateDataColumn(t *testing.T) {
 }
 
 func testNewDataColumnSidecarsVerifier(verifier verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
-	return func([]blocks.RODataColumn, []verification.Requirement) verification.DataColumnsVerifier {
+	return func(sidecars []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+		verifier.Sidecars = sidecars
 		return &verifier
 	}
 }
