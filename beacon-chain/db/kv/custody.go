@@ -141,9 +141,7 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 		return err
 	}
 
-	log.WithFields(logrus.Fields{
-		"earliestAvailableSlot": storedEarliestAvailableSlot,
-	}).Debug("Updated earliest available slot")
+	log.WithField("earliestAvailableSlot", storedEarliestAvailableSlot).Debug("Updated earliest available slot")
 
 	return nil
 }
