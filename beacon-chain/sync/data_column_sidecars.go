@@ -985,7 +985,7 @@ func verifyDataColumnSidecarsByPeer(
 // verifyByRootDataColumnSidecars verifies the provided read-only data columns against the
 // requirements for data column sidecars received via the by root request.
 func verifyByRootDataColumnSidecars(newVerifier verification.NewDataColumnsVerifier, roDataColumns []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
-	verifier := newVerifier(roDataColumns, verification.ByRootRequestDataColumnSidecarRequirements)
+	verifier := newVerifier(roDataColumns, verification.ByRPCRequestDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
 		return nil, errors.Wrap(err, "valid fields")
