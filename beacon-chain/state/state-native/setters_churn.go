@@ -91,3 +91,33 @@ func (b *BeaconState) exitEpochAndUpdateChurn(totalActiveBalance primitives.Gwei
 
 	return b.earliestExitEpoch, nil
 }
+
+// SetExitBalanceToConsume sets the exit balance to consume. This method mutates the state.
+func (b *BeaconState) SetExitBalanceToConsume(exitBalanceToConsume primitives.Gwei) error {
+	if b.version < version.Electra {
+		return errNotSupported("SetExitBalanceToConsume", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.exitBalanceToConsume = exitBalanceToConsume
+	b.markFieldAsDirty(types.ExitBalanceToConsume)
+
+	return nil
+}
+
+// SetEarliestExitEpoch sets the earliest exit epoch. This method mutates the state.
+func (b *BeaconState) SetEarliestExitEpoch(earliestExitEpoch primitives.Epoch) error {
+	if b.version < version.Electra {
+		return errNotSupported("SetEarliestExitEpoch", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.earliestExitEpoch = earliestExitEpoch
+	b.markFieldAsDirty(types.EarliestExitEpoch)
+
+	return nil
+}

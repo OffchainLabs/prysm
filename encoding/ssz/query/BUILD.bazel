@@ -31,7 +31,7 @@ go_test(
     deps = [
         ":go_default_library",
         "//encoding/ssz/query/testutil:go_default_library",
-        "//proto/ssz_query:go_default_library",
+        "//proto/ssz_query/testing:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
