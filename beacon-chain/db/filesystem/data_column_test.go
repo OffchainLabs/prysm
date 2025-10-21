@@ -3,6 +3,7 @@ package filesystem
 import (
 	"encoding/binary"
 	"os"
+	"path/filepath"
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -723,5 +724,39 @@ func TestPrune(t *testing.T) {
 		dirs, err = listDir(dataColumnStorage.fs, "3/14098")
 		require.NoError(t, err)
 		require.Equal(t, true, compareSlices([]string{"0x0de28a18cae63cbc6f0b20dc1afb0b1df38da40824a5f09f92d485ade04de97f.sszs"}, dirs))
+	})
+}
+
+func TestExtractFileMetadata(t *testing.T) {
+	t.Run("Unix", func(t *testing.T) {
+		// Test with Unix-style path separators (/)
+		path := "12/1234/0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
+		metadata, err := extractFileMetadata(path)
+		if filepath.Separator == '/' {
+			// On Unix systems, this should succeed
+			require.NoError(t, err)
+			require.Equal(t, uint64(12), metadata.period)
+			require.Equal(t, primitives.Epoch(1234), metadata.epoch)
+			return
+		}
+
+		// On Windows systems, this should fail because it uses the wrong separator
+		require.NotNil(t, err)
+	})
+
+	t.Run("Windows", func(t *testing.T) {
+		// Test with Windows-style path separators (\)
+		path := "12\\1234\\0x8bb2f09de48c102635622dc27e6de03ae2b22639df7c33edbc8222b2ec423746.sszs"
+		metadata, err := extractFileMetadata(path)
+		if filepath.Separator == '\\' {
+			// On Windows systems, this should succeed
+			require.NoError(t, err)
+			require.Equal(t, uint64(12), metadata.period)
+			require.Equal(t, primitives.Epoch(1234), metadata.epoch)
+			return
+		}
+
+		// On Unix systems, this should fail because it uses the wrong separator
+		require.NotNil(t, err)
 	})
 }

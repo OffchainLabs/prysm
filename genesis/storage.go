@@ -100,7 +100,8 @@ type GenesisData struct {
 	initialized    bool
 }
 
-func (d GenesisData) filePath() string {
+// FilePath returns the full path to the genesis state file.
+func (d GenesisData) FilePath() string {
 	parts := [3]string{}
 	parts[genesisPart] = "genesis"
 	parts[timePart] = strconv.FormatInt(d.Time.Unix(), 10)
@@ -115,7 +116,7 @@ func persist(d GenesisData) error {
 	if d.FileDir == "" {
 		return ErrFilePathUnset
 	}
-	fpath := d.filePath()
+	fpath := d.FilePath()
 	sb, err := d.State.MarshalSSZ()
 	if err != nil {
 		return errors.Wrap(err, "marshal ssz")
@@ -144,7 +145,7 @@ func loadState() (state.BeaconState, error) {
 	stateMu.Lock()
 	defer stateMu.Unlock()
 
-	s, err := stateFromFile(data.filePath())
+	s, err := stateFromFile(data.FilePath())
 	if err != nil {
 		return nil, errors.Wrapf(err, "InitializeFromProtoUnsafePhase0")
 	}

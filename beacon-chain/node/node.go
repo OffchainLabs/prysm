@@ -177,6 +177,9 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	}
 	beacon.db = kvdb
 
+	if err := dbClearer.clearGenesis(dataDir); err != nil {
+		return nil, errors.Wrap(err, "could not clear genesis state")
+	}
 	providers := append(beacon.GenesisProviders, kv.NewLegacyGenesisProvider(kvdb))
 	if err := genesis.Initialize(ctx, dataDir, providers...); err != nil {
 		return nil, errors.Wrap(err, "could not initialize genesis state")

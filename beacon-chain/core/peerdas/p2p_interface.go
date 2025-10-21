@@ -79,10 +79,30 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 
 	for _, sidecar := range sidecars {
 		for i := range sidecar.Column {
-			commitments = append(commitments, kzg.Bytes48(sidecar.KzgCommitments[i]))
+			var (
+				commitment kzg.Bytes48
+				cell       kzg.Cell
+				proof      kzg.Bytes48
+			)
+
+			commitmentBytes := sidecar.KzgCommitments[i]
+			cellBytes := sidecar.Column[i]
+			proofBytes := sidecar.KzgProofs[i]
+
+			if len(commitmentBytes) != len(commitment) ||
+				len(cellBytes) != len(cell) ||
+				len(proofBytes) != len(proof) {
+				return ErrMismatchLength
+			}
+
+			copy(commitment[:], commitmentBytes)
+			copy(cell[:], cellBytes)
+			copy(proof[:], proofBytes)
+
+			commitments = append(commitments, commitment)
 			indices = append(indices, sidecar.Index)
-			cells = append(cells, kzg.Cell(sidecar.Column[i]))
-			proofs = append(proofs, kzg.Bytes48(sidecar.KzgProofs[i]))
+			cells = append(cells, cell)
+			proofs = append(proofs, proof)
 		}
 	}
 
