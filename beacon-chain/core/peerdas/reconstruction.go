@@ -113,18 +113,10 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 	return reconstructedVerifiedRoSidecars, nil
 }
 
-// ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
-// The following constraints must be satisfied:
-//   - All `dataColumnSidecars` has to be committed to the same block, and
-//   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
-//   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
-//   - either enough sidecars to reconstruct the blobs.
-func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
-	// Return early if no blobs are requested.
-	if len(indices) == 0 {
-		return nil, nil
-	}
-
+// validateAndPrepareDataColumns validates the input data column sidecars and returns the prepared sidecars
+// (reconstructed if necessary). This function performs common validation and reconstruction logic used by
+// both ReconstructBlobs and ReconstructBlobsData.
+func validateAndPrepareDataColumns(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, blobCount int) ([]blocks.VerifiedRODataColumn, error) {
 	if len(verifiedDataColumnSidecars) == 0 {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
@@ -146,6 +138,34 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
+	// If all column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
+	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
+		return verifiedDataColumnSidecars, nil
+	}
+
+	// We need to reconstruct the data column sidecars.
+	return ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
+}
+
+// ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
+// The following constraints must be satisfied:
+//   - All `dataColumnSidecars` has to be committed to the same block, and
+//   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
+//   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
+//   - either enough sidecars to reconstruct the blobs.
+func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
+	// Return early if no blobs are requested.
+	if len(indices) == 0 {
+		return nil, nil
+	}
+
+	// Validate and prepare data columns (reconstruct if necessary).
+	// This also checks if input is empty.
+	preparedDataColumnSidecars, err := validateAndPrepareDataColumns(verifiedDataColumnSidecars, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	// Check if the blob index is too high.
 	commitments, err := block.Block().Body().BlobKzgCommitments()
 	if err != nil {
@@ -159,8 +179,8 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 	}
 
 	// Check if the data column sidecars are aligned with the block.
-	dataColumnSidecars := make([]blocks.RODataColumn, 0, len(verifiedDataColumnSidecars))
-	for _, verifiedDataColumnSidecar := range verifiedDataColumnSidecars {
+	dataColumnSidecars := make([]blocks.RODataColumn, 0, len(preparedDataColumnSidecars))
+	for _, verifiedDataColumnSidecar := range preparedDataColumnSidecars {
 		dataColumnSidecar := verifiedDataColumnSidecar.RODataColumn
 		dataColumnSidecars = append(dataColumnSidecars, dataColumnSidecar)
 	}
@@ -169,25 +189,8 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 		return nil, errors.Wrap(err, "data columns align with block")
 	}
 
-	// If all column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
-	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
-		// Convert verified data column sidecars to verified blob sidecars.
-		blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, verifiedDataColumnSidecars, indices)
-		if err != nil {
-			return nil, errors.Wrap(err, "blob sidecars from data column sidecars")
-		}
-
-		return blobSidecars, nil
-	}
-
-	// We need to reconstruct the data column sidecars.
-	reconstructedDataColumnSidecars, err := ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
-	if err != nil {
-		return nil, errors.Wrap(err, "reconstruct data column sidecars")
-	}
-
 	// Convert verified data column sidecars to verified blob sidecars.
-	blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, reconstructedDataColumnSidecars, indices)
+	blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, preparedDataColumnSidecars, indices)
 	if err != nil {
 		return nil, errors.Wrap(err, "blob sidecars from data column sidecars")
 	}
@@ -291,51 +294,26 @@ func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColu
 		return nil, nil
 	}
 
-	if len(verifiedDataColumnSidecars) == 0 {
-		return nil, ErrNotEnoughDataColumnSidecars
-	}
-
-	// Check if the sidecars are sorted by index and do not contain duplicates.
-	previousColumnIndex := verifiedDataColumnSidecars[0].Index
-	for _, dataColumnSidecar := range verifiedDataColumnSidecars[1:] {
-		columnIndex := dataColumnSidecar.Index
-		if columnIndex <= previousColumnIndex {
-			return nil, ErrDataColumnSidecarsNotSortedByIndex
-		}
-
-		previousColumnIndex = columnIndex
-	}
-
-	// Check if we have enough columns.
-	cellsPerBlob := fieldparams.CellsPerBlob
-	if len(verifiedDataColumnSidecars) < cellsPerBlob {
-		return nil, ErrNotEnoughDataColumnSidecars
-	}
-
 	// Check if the blob index is too high.
-	referenceSidecar := verifiedDataColumnSidecars[0]
-	blobCount := len(referenceSidecar.Column)
-	for _, blobIndex := range indices {
-		if blobIndex >= blobCount {
-			return nil, ErrBlobIndexTooHigh
+	if len(verifiedDataColumnSidecars) > 0 {
+		referenceSidecar := verifiedDataColumnSidecars[0]
+		blobCount := len(referenceSidecar.Column)
+		for _, blobIndex := range indices {
+			if blobIndex >= blobCount {
+				return nil, ErrBlobIndexTooHigh
+			}
 		}
 	}
 
-	// Determine if we need to reconstruct.
-	var dataColumnSidecars []blocks.VerifiedRODataColumn
-	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
-		// All column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
-		dataColumnSidecars = verifiedDataColumnSidecars
-	} else {
-		// We need to reconstruct the data column sidecars.
-		reconstructedDataColumnSidecars, err := ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
-		if err != nil {
-			return nil, errors.Wrap(err, "reconstruct data column sidecars")
-		}
-		dataColumnSidecars = reconstructedDataColumnSidecars
+	// Validate and prepare data columns (reconstruct if necessary).
+	// We pass 0 for blobCount since we already validated above.
+	dataColumnSidecars, err := validateAndPrepareDataColumns(verifiedDataColumnSidecars, 0)
+	if err != nil {
+		return nil, err
 	}
 
 	// Extract blob data without computing proofs.
+	cellsPerBlob := fieldparams.CellsPerBlob
 	blobs := make([][]byte, 0, len(indices))
 	for _, blobIndex := range indices {
 		var blob kzg.Blob
