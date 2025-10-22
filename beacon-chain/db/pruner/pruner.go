@@ -36,7 +36,7 @@ type ServiceOption func(*Service)
 // The retention period is specified in epochs, and must be >= MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 func WithRetentionPeriod(retentionEpochs primitives.Epoch) ServiceOption {
 	return func(s *Service) {
-		defaultRetentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1
+		defaultRetentionEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 		if retentionEpochs < defaultRetentionEpochs {
 			log.WithField("userEpochs", retentionEpochs).
 				WithField("minRequired", defaultRetentionEpochs).
@@ -75,7 +75,7 @@ func New(ctx context.Context, db iface.Database, genesisTime time.Time, initSync
 	p := &Service{
 		ctx:            ctx,
 		db:             db,
-		ps:             pruneStartSlotFunc(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests) + 1), // Default retention epochs is MIN_EPOCHS_FOR_BLOCK_REQUESTS + 1 from the current slot.
+		ps:             pruneStartSlotFunc(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)),
 		done:           make(chan struct{}),
 		slotTicker:     slots.NewSlotTicker(slots.UnsafeStartTime(genesisTime, 0), params.BeaconConfig().SecondsPerSlot),
 		initSyncWaiter: initSyncWaiter,
