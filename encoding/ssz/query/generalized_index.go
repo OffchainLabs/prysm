@@ -33,7 +33,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 
 		// If we descend to a basic type, the path cannot continue further
 		if isBasicType(currentInfo.sszType) {
-			return 0, fmt.Errorf("cannot descend into basic type %s for path element %q", currentInfo.sszType, pathElement.Name)
+			return 0, fmt.Errorf("cannot descend into basic type %s for path element %s", currentInfo.sszType, pathElement.Name)
 		}
 
 		// Check that we are in a container to access fields
@@ -44,7 +44,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 		// Retrieve the field position and SSZInfo for the field in the current container
 		fieldPos, fieldSsz, err := getContainerFieldByName(currentInfo, element.Name)
 		if err != nil {
-			return 0, fmt.Errorf("container field %q not found: %w", element.Name, err)
+			return 0, fmt.Errorf("container field %s not found: %w", element.Name, err)
 		}
 
 		// Get the chunk count for the current container
@@ -175,13 +175,13 @@ func getContainerFieldByName(info *SszInfo, fieldName string) (uint64, *SszInfo,
 		if name == fieldName {
 			fieldInfo := containerInfo.fields[name]
 			if fieldInfo == nil || fieldInfo.sszInfo == nil {
-				return 0, nil, fmt.Errorf("field %q has no ssz info", name)
+				return 0, nil, fmt.Errorf("field %s has no ssz info", name)
 			}
 			return uint64(index), fieldInfo.sszInfo, nil
 		}
 	}
 
-	return 0, nil, fmt.Errorf("field %q not found", fieldName)
+	return 0, nil, fmt.Errorf("field %s not found", fieldName)
 }
 
 // itemLengthFromInfo calculates the byte length of an SSZ item based on its type information.
