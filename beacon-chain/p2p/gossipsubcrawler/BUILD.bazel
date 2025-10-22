@@ -2,9 +2,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "interface.go",
-    ],
+    srcs = ["interface.go"],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler",
     visibility = [
         "//beacon-chain:__subpackages__",
@@ -14,4 +12,3 @@ go_library(
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
     ],
 )
-

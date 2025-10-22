@@ -42,7 +42,6 @@ go_library(
         "//tools:__subpackages__",
     ],
     deps = [
-        "//beacon-chain/p2p/gossipsubcrawler:go_default_library",
         "//async:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
@@ -53,6 +52,7 @@ go_library(
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/kv:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
+        "//beacon-chain/p2p/gossipsubcrawler:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//beacon-chain/p2p/peers/scorers:go_default_library",
