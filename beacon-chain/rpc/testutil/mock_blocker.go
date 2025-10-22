@@ -44,6 +44,11 @@ func (*MockBlocker) Blobs(_ context.Context, _ string, _ ...options.BlobsOption)
 	return nil, &core.RpcError{}
 }
 
+// BlobsData --
+func (*MockBlocker) BlobsData(_ context.Context, _ string, _ ...options.BlobsOption) ([][]byte, *core.RpcError) {
+	return nil, &core.RpcError{}
+}
+
 // DataColumns --
 func (m *MockBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
 	if m.DataColumnsFunc != nil {
