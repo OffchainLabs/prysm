@@ -68,7 +68,10 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 	}
 
 	if defaultKeysExist {
-		log.WithField("filePath", defaultKeyPath).Info("Reading static P2P private key from a file. To generate a new random private key at every start, please remove this file.")
+		if !params.FuluEnabled() {
+			log.WithField("filePath", defaultKeyPath).Info("Reading static P2P private key from a file. To generate a new random private key at every start, please remove this file.")
+		}
+
 		return privKeyFromFile(defaultKeyPath)
 	}
 
