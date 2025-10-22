@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
@@ -17,6 +18,25 @@ import (
 // UpgradeToFulu updates inputs a generic state to return the version Fulu state.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/fork.md#upgrading-the-state
 func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.BeaconState, error) {
+	s, err := ConvertToFulu(beaconState)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert to fulu")
+	}
+	proposerLookahead, err := helpers.InitializeProposerLookahead(ctx, beaconState, slots.ToEpoch(beaconState.Slot()))
+	if err != nil {
+		return nil, err
+	}
+	pl := make([]primitives.ValidatorIndex, len(proposerLookahead))
+	for i, v := range proposerLookahead {
+		pl[i] = primitives.ValidatorIndex(v)
+	}
+	if err := s.SetProposerLookahead(pl); err != nil {
+		return nil, errors.Wrap(err, "failed to set proposer lookahead")
+	}
+	return s, nil
+}
+
+func ConvertToFulu(beaconState state.BeaconState) (state.BeaconState, error) {
 	currentSyncCommittee, err := beaconState.CurrentSyncCommittee()
 	if err != nil {
 		return nil, err
@@ -105,11 +125,6 @@ func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.Be
 	if err != nil {
 		return nil, err
 	}
-	proposerLookahead, err := helpers.InitializeProposerLookahead(ctx, beaconState, slots.ToEpoch(beaconState.Slot()))
-	if err != nil {
-		return nil, err
-	}
-
 	s := &ethpb.BeaconStateFulu{
 		GenesisTime:           uint64(beaconState.GenesisTime().Unix()),
 		GenesisValidatorsRoot: beaconState.GenesisValidatorsRoot(),
@@ -171,14 +186,6 @@ func UpgradeToFulu(ctx context.Context, beaconState state.BeaconState) (state.Be
 		PendingDeposits:               pendingDeposits,
 		PendingPartialWithdrawals:     pendingPartialWithdrawals,
 		PendingConsolidations:         pendingConsolidations,
-		ProposerLookahead:             proposerLookahead,
 	}
-
-	// Need to cast the beaconState to use in helper functions
-	post, err := state_native.InitializeFromProtoUnsafeFulu(s)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize post fulu beaconState")
-	}
-
-	return post, nil
+	return state_native.InitializeFromProtoUnsafeFulu(s)
 }
