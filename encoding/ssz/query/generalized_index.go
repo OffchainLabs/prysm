@@ -3,13 +3,11 @@ package query
 import (
 	"errors"
 	"fmt"
+
+	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 )
 
-const (
-	bytesPerChunk = 32
-	bitsPerChunk  = 256
-	listBaseIndex = 2
-)
+const listBaseIndex = 2
 
 // GetGeneralizedIndexFromPath calculates the generalized index for a given path.
 // To calculate the generalized index, two inputs are needed:
@@ -95,7 +93,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 			var chunkPos uint64
 			if isBasicType(elem.sszType) {
 				start := *element.Index * itemLengthFromInfo(elem)
-				chunkPos = start / bytesPerChunk
+				chunkPos = start / ssz.BytesPerChunk
 			} else {
 				chunkPos = *element.Index
 			}
@@ -122,7 +120,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 			var chunkPos uint64
 			if isBasicType(elem.sszType) {
 				start := *element.Index * itemLengthFromInfo(elem)
-				chunkPos = start / bytesPerChunk
+				chunkPos = start / ssz.BytesPerChunk
 			} else {
 				chunkPos = *element.Index
 			}
@@ -136,7 +134,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 
 		case Bitlist:
 			// Bits packed into 256-bit chunks; select the chunk containing the bit
-			chunkPos := *element.Index / bitsPerChunk
+			chunkPos := *element.Index / ssz.BitsPerChunk
 			innerChunkCount, err := getChunkCount(fieldSsz)
 			if err != nil {
 				return 0, fmt.Errorf("chunk count error: %w", err)
@@ -147,7 +145,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 			currentInfo = &SszInfo{sszType: Boolean}
 
 		case Bitvector:
-			chunkPos := *element.Index / bitsPerChunk
+			chunkPos := *element.Index / ssz.BitsPerChunk
 			innerChunkCount, err := getChunkCount(fieldSsz)
 			if err != nil {
 				return 0, fmt.Errorf("chunk count error: %w", err)
@@ -197,7 +195,7 @@ func getChunkCount(info *SszInfo) (uint64, error) {
 			return 0, err
 		}
 		elemLength := itemLengthFromInfo(elementInfo)
-		return (listInfo.Limit()*elemLength + 31) / bytesPerChunk, nil
+		return (listInfo.Limit()*elemLength + 31) / ssz.BytesPerChunk, nil
 	case Vector:
 		vectorInfo, err := info.VectorInfo()
 		if err != nil {
@@ -208,19 +206,19 @@ func getChunkCount(info *SszInfo) (uint64, error) {
 			return 0, err
 		}
 		elemLength := itemLengthFromInfo(elementInfo)
-		return (vectorInfo.Length()*elemLength + 31) / bytesPerChunk, nil
+		return (vectorInfo.Length()*elemLength + 31) / ssz.BytesPerChunk, nil
 	case Bitlist:
 		bitlistInfo, err := info.BitlistInfo()
 		if err != nil {
 			return 0, err
 		}
-		return (bitlistInfo.Limit() + 255) / bitsPerChunk, nil // Bits are packed into 256-bit chunks
+		return (bitlistInfo.Limit() + 255) / ssz.BitsPerChunk, nil // Bits are packed into 256-bit chunks
 	case Bitvector:
 		bitvectorInfo, err := info.BitvectorInfo()
 		if err != nil {
 			return 0, err
 		}
-		return (bitvectorInfo.Length() + 255) / bitsPerChunk, nil // Bits are packed into 256-bit chunks
+		return (bitvectorInfo.Length() + 255) / ssz.BitsPerChunk, nil // Bits are packed into 256-bit chunks
 	default:
 		return 0, errors.New("unsupported SSZ type for chunk count calculation")
 	}
@@ -249,13 +247,13 @@ func getContainerFieldByName(info *SszInfo, fieldName string) (uint64, *SszInfo,
 // itemLengthFromInfo calculates the byte length of an SSZ item based on its type information.
 // For basic SSZ types (uint8, uint16, uint32, uint64, bool, etc.), it returns the actual
 // size of the type in bytes. For complex types (containers, lists, vectors), it returns
-// bytesPerChunk which represents the standard SSZ chunk size (32 bytes) used for
+// BytesPerChunk which represents the standard SSZ chunk size (32 bytes) used for
 // Merkle tree operations in the SSZ serialization format.
 func itemLengthFromInfo(info *SszInfo) uint64 {
 	if isBasicType(info.sszType) {
 		return info.Size()
 	}
-	return bytesPerChunk
+	return ssz.BytesPerChunk
 }
 
 // Helpers for input processing
