@@ -142,7 +142,9 @@ func (s *Service) hasSeenSyncMessageIndexSlot(ctx context.Context, m *ethpb.Sync
 	}
 	if !s.cfg.chain.InForkchoice(root) && !s.cfg.beaconDB.HasBlock(ctx, root) {
 		syncMessagesForUnknownBlocks.Inc()
-		return true
+		// Previously cached block no longer exists in forkchoice or DB.
+		// The old cached entry is now invalid, so allow the new message through.
+		return false
 	}
 	msgRoot := [32]byte(m.BlockRoot)
 	if !s.cfg.chain.InForkchoice(msgRoot) && !s.cfg.beaconDB.HasBlock(ctx, msgRoot) {
