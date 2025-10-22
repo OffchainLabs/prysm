@@ -10,7 +10,9 @@ import (
 
 // pruneExpired prunes attestations pool on every slot interval.
 func (s *Service) pruneExpired() {
-	slotTicker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	offset := time.Duration(secondsPerSlot-1) * time.Second
+	slotTicker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, secondsPerSlot)
 	defer slotTicker.Done()
 	for {
 		select {
