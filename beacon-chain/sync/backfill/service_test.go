@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
@@ -84,7 +83,7 @@ func TestServiceInit(t *testing.T) {
 }
 
 func TestMinimumBackfillSlot(t *testing.T) {
-	oe := helpers.MinEpochsForBlockRequests()
+	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 
 	currSlot := (oe + 100).Mul(uint64(params.BeaconConfig().SlotsPerEpoch))
 	minSlot := minimumBackfillSlot(primitives.Slot(currSlot))
@@ -109,7 +108,7 @@ func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []ba
 }
 
 func TestBackfillMinSlotDefault(t *testing.T) {
-	oe := helpers.MinEpochsForBlockRequests()
+	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 	current := primitives.Slot((oe + 100).Mul(uint64(params.BeaconConfig().SlotsPerEpoch)))
 	s := &Service{}
 	specMin := minimumBackfillSlot(current)

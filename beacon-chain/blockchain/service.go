@@ -493,7 +493,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	// Compute the custody group count.
 	custodyGroupCount := custodyRequirement
 	if isSubscribedToAllDataSubnets {
-		custodyGroupCount = beaconConfig.NumberOfColumns
+		custodyGroupCount = beaconConfig.NumberOfCustodyGroups
 	}
 
 	// Safely compute the fulu fork slot.
