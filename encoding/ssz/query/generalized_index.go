@@ -18,7 +18,7 @@ const (
 // It walks the path step by step, updating the generalized index at each step.
 func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, error) {
 	if info == nil {
-		return 0, errors.New("sszInfo is nil")
+		return 0, errors.New("SszInfo is nil")
 	}
 
 	// If path is empty, no generalized index can be computed.
