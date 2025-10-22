@@ -21,7 +21,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 		return 0, errors.New("sszInfo is nil")
 	}
 
-	// If path element list is empty, no generalized index can be computed.
+	// If path is empty, no generalized index can be computed.
 	if len(path) == 0 {
 		return 0, errors.New("cannot compute generalized index for an empty path")
 	}
