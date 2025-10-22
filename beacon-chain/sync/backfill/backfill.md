@@ -13,7 +13,7 @@
 
 ## Overview
 
-The backfill mechanism in Prysm is designed to retroactively download historical blocks for nodes that are initialized via **checkpoint sync**. When a node syncs from a checkpoint (a recent finalized state), it starts from that checkpoint but lacks all historical blocks from genesis up to that checkpoint. The backfill service fills this gap by working backwards from the checkpoint toward genesis (or a specified minimum slot).
+The backfill mechanism in Prysm is designed to retroactively download historical blocks and blob or data column sidecars for nodes that are initialized via **checkpoint sync**. When a node syncs from a checkpoint (a recent finalized state), it starts from that checkpoint but lacks all historical blocks from genesis up to that checkpoint. The backfill service fills this gap by working backwards from the checkpoint toward genesis (or a specified minimum slot).
 
 **Key characteristics:**
 - Runs in the background after initial sync completes
@@ -85,6 +85,10 @@ The backfill system consists of several key components working together:
            │  - Blocks storage            │
            │  - Backfill status tracking  │
            │  - Finalized index updates   │
+           |                              |
+           |    Blob Storage              |
+           |  - Blob data                 |
+           |  - Column sidecar data       |
            └──────────────────────────────┘
 ```
 
@@ -108,7 +112,7 @@ Tracks backfill progress:
   - `LowParentRoot`: Parent root of lowest block (next target)
   - `OriginSlot`: Checkpoint sync origin slot
   - `OriginRoot`: Checkpoint sync origin root
-- Provides `AvailableBlock()` to check if a slot is available
+- Provides `AvailableBlock()` as an interface method which other services can use to check if a slot is available
 - Thread-safe access to status
 
 **Location**: `beacon-chain/sync/backfill/status.go`
@@ -169,36 +173,14 @@ Handles blob sidecars for Deneb+ blocks:
    - Verifier prepared (waits for genesis data)
 
 2. **Service Start** (`Start`)
-   ```
-   ┌─────────────────────────────────────────┐
-   │ Check if enabled (--enable-backfill)    │
-   └────────────┬────────────────────────────┘
-                ↓
-   ┌─────────────────────────────────────────┐
-   │ Wait for clock (genesis data)           │
-   └────────────┬────────────────────────────┘
-                ↓
-   ┌─────────────────────────────────────────┐
-   │ Check if genesis sync (short-circuit)   │
-   └────────────┬────────────────────────────┘
-                ↓
-   ┌─────────────────────────────────────────┐
-   │ Check if already complete               │
-   │ (LowSlot <= minimumBackfillSlot)        │
-   └────────────┬────────────────────────────┘
-                ↓
-   ┌─────────────────────────────────────────┐
-   │ Initialize verifier with origin state   │
-   └────────────┬────────────────────────────┘
-                ↓
-   ┌─────────────────────────────────────────┐
-   │ Wait for initial sync to complete       │
-   └────────────┬────────────────────────────┘
-                ↓
-   ┌─────────────────────────────────────────┐
-   │ Spawn workers and start main loop       │
-   └─────────────────────────────────────────┘
-   ```
+
+- Check if enabled (--enable-backfill)
+- Wait for clock (genesis data)
+- Check if genesis sync (short-circuit)
+- Check if already complete (LowSlot <= minimumBackfillSlot)
+- Initialize verifier with origin state
+- Wait for initial sync to complete
+- Spawn workers and start main loop
 
 3. **Worker Spawn**
    - N workers start listening for batches
@@ -269,7 +251,7 @@ blocks := p2p.BeaconBlocksByRange(peer, request)
 - If blobs needed, batch state → `batchBlobSync`
 - Worker downloads blobs via `BlobSidecarsByRange`
 - Verify KZG proofs and commitments
-- Store blobs to filesystem
+- Hold blobs in memory in `AvailabilityStore` for later saving to filesystem upon a call to `IsDataAvailable` is succesful
 
 **6. Batch Completion**
 - Worker returns batch with state `batchImportable`
@@ -280,7 +262,7 @@ blocks := p2p.BeaconBlocksByRange(peer, request)
 // Service calls sequencer.importable()
 // Returns batches that:
 // 1. Are in batchImportable state
-// 2. Have no non-importable batches before them
+// 2. Have no non-importable batches before them (between them and the lowest block that has been backfilled to db)
 
 importable := [batch1, batch2, batch3]
 ```
@@ -698,7 +680,7 @@ When all batches are `batchEndSequence`:
 
 **Blocks**:
 - Saved via `SaveROBlocks(ctx, blocks, cache=false)`
-- No caching during backfill (blocks are historical)
+- No caching during backfill: historical blocks are not typically needed for fast lookup, we keep a cache in the db-layer for the recent blocks that are typically needed for faster lookup and avoid backfill blocks polluting this cache.
 
 **Finalized Index**:
 - Updated via `BackfillFinalizedIndex(ctx, blocks, finalizedChildRoot)`
