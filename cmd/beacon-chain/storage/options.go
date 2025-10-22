@@ -133,6 +133,11 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 		}
 	}()
 
+	// When we go looking for existing by-root directories, we only need to find one directory
+	// but one of those directories could be the `by-epoch` layout's top-level directory,
+	// and it seems possible that on some platforms we could get extra system directories that I don't
+	// know how to anticipate (looking at you, Windows), so I picked 16 as a small number with a generous
+	// amount of wiggle room to be confident that we'll likely see a by-root director if one exists.
 	entries, err := base.Readdirnames(16)
 	if err != nil {
 		return "", errors.Wrap(err, "reading blob storage directory")
