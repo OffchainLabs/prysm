@@ -133,13 +133,13 @@ func TestReconstructBlobs(t *testing.T) {
 	fs := util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
 
 	t.Run("no index", func(t *testing.T) {
-		actual, err := peerdas.ReconstructBlobs(emptyBlock, nil, nil, false)
+		actual, err := peerdas.ReconstructBlobs(emptyBlock, nil, nil)
 		require.NoError(t, err)
 		require.IsNil(t, actual)
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		_, err := peerdas.ReconstructBlobs(emptyBlock, nil, []int{0}, false)
+		_, err := peerdas.ReconstructBlobs(emptyBlock, nil, []int{0})
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
@@ -149,7 +149,7 @@ func TestReconstructBlobs(t *testing.T) {
 		// Arbitrarily change the order of the sidecars.
 		verifiedRoSidecars[3], verifiedRoSidecars[2] = verifiedRoSidecars[2], verifiedRoSidecars[3]
 
-		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0}, false)
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
 		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
 	})
 
@@ -159,7 +159,7 @@ func TestReconstructBlobs(t *testing.T) {
 		// [0, 1, 1, 3, 4, ...]
 		verifiedRoSidecars[2] = verifiedRoSidecars[1]
 
-		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0}, false)
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
 		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
 	})
 
@@ -169,7 +169,7 @@ func TestReconstructBlobs(t *testing.T) {
 		// [0, 1, 2, 1, 4, ...]
 		verifiedRoSidecars[3] = verifiedRoSidecars[1]
 
-		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0}, false)
+		_, err := peerdas.ReconstructBlobs(emptyBlock, verifiedRoSidecars, []int{0})
 		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
 	})
 
@@ -177,7 +177,7 @@ func TestReconstructBlobs(t *testing.T) {
 		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3)
 
 		inputSidecars := verifiedRoSidecars[:fieldparams.CellsPerBlob-1]
-		_, err := peerdas.ReconstructBlobs(emptyBlock, inputSidecars, []int{0}, false)
+		_, err := peerdas.ReconstructBlobs(emptyBlock, inputSidecars, []int{0})
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
@@ -186,7 +186,7 @@ func TestReconstructBlobs(t *testing.T) {
 
 		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
 
-		_, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, []int{1, blobCount}, false)
+		_, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, []int{1, blobCount})
 		require.ErrorIs(t, err, peerdas.ErrBlobIndexTooHigh)
 	})
 
@@ -194,7 +194,7 @@ func TestReconstructBlobs(t *testing.T) {
 		_, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{1}), util.WithSlot(fs))
 		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, 3, util.WithParentRoot([fieldparams.RootLength]byte{2}), util.WithSlot(fs))
 
-		_, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, []int{0}, false)
+		_, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, []int{0})
 		require.ErrorContains(t, peerdas.ErrRootMismatch.Error(), err)
 	})
 
@@ -260,7 +260,7 @@ func TestReconstructBlobs(t *testing.T) {
 
 		t.Run("no reconstruction needed", func(t *testing.T) {
 			// Reconstruct blobs.
-			reconstructedVerifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, indices, false)
+			reconstructedVerifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(roBlock, verifiedRoSidecars, indices)
 			require.NoError(t, err)
 
 			// Compare blobs.
@@ -280,7 +280,7 @@ func TestReconstructBlobs(t *testing.T) {
 			}
 
 			// Reconstruct blobs.
-			reconstructedVerifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(roBlock, filteredSidecars, indices, false)
+			reconstructedVerifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(roBlock, filteredSidecars, indices)
 			require.NoError(t, err)
 
 			// Compare blobs.

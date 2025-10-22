@@ -118,10 +118,8 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 //   - All `dataColumnSidecars` has to be committed to the same block, and
 //   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
 //   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
-//   - either enough sidecars to reconstruct the blobs.git a
-//
-// The skipKzgProofs parameter indicates whether to skip expensive KZG proof computations (post-Fulu optimization).
-func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int, skipKzgProofs bool) ([]*blocks.VerifiedROBlob, error) {
+//   - either enough sidecars to reconstruct the blobs.
+func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
 	// Return early if no blobs are requested.
 	if len(indices) == 0 {
 		return nil, nil
@@ -174,7 +172,7 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 	// If all column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
 	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
 		// Convert verified data column sidecars to verified blob sidecars.
-		blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, verifiedDataColumnSidecars, indices, skipKzgProofs)
+		blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, verifiedDataColumnSidecars, indices)
 		if err != nil {
 			return nil, errors.Wrap(err, "blob sidecars from data column sidecars")
 		}
@@ -189,7 +187,7 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 	}
 
 	// Convert verified data column sidecars to verified blob sidecars.
-	blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, reconstructedDataColumnSidecars, indices, skipKzgProofs)
+	blobSidecars, err := blobSidecarsFromDataColumnSidecars(block, reconstructedDataColumnSidecars, indices)
 	if err != nil {
 		return nil, errors.Wrap(err, "blob sidecars from data column sidecars")
 	}
@@ -280,9 +278,85 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 	return cellsAndProofs, nil
 }
 
+// ReconstructBlobsData reconstructs blob data from data column sidecars without computing KZG proofs or creating sidecars.
+// This is an optimized version for when only the blob data is needed (e.g., for the GetBlobs endpoint).
+// The following constraints must be satisfied:
+//   - All `dataColumnSidecars` must be committed to the same block, and
+//   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
+//   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
+//   - or enough sidecars to reconstruct the blobs.
+func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([][]byte, error) {
+	// Return early if no blobs are requested.
+	if len(indices) == 0 {
+		return nil, nil
+	}
+
+	if len(verifiedDataColumnSidecars) == 0 {
+		return nil, ErrNotEnoughDataColumnSidecars
+	}
+
+	// Check if the sidecars are sorted by index and do not contain duplicates.
+	previousColumnIndex := verifiedDataColumnSidecars[0].Index
+	for _, dataColumnSidecar := range verifiedDataColumnSidecars[1:] {
+		columnIndex := dataColumnSidecar.Index
+		if columnIndex <= previousColumnIndex {
+			return nil, ErrDataColumnSidecarsNotSortedByIndex
+		}
+
+		previousColumnIndex = columnIndex
+	}
+
+	// Check if we have enough columns.
+	cellsPerBlob := fieldparams.CellsPerBlob
+	if len(verifiedDataColumnSidecars) < cellsPerBlob {
+		return nil, ErrNotEnoughDataColumnSidecars
+	}
+
+	// Check if the blob index is too high.
+	referenceSidecar := verifiedDataColumnSidecars[0]
+	blobCount := len(referenceSidecar.Column)
+	for _, blobIndex := range indices {
+		if blobIndex >= blobCount {
+			return nil, ErrBlobIndexTooHigh
+		}
+	}
+
+	// Determine if we need to reconstruct.
+	var dataColumnSidecars []blocks.VerifiedRODataColumn
+	if verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1) {
+		// All column sidecars corresponding to (non-extended) blobs are present, no need to reconstruct.
+		dataColumnSidecars = verifiedDataColumnSidecars
+	} else {
+		// We need to reconstruct the data column sidecars.
+		reconstructedDataColumnSidecars, err := ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
+		if err != nil {
+			return nil, errors.Wrap(err, "reconstruct data column sidecars")
+		}
+		dataColumnSidecars = reconstructedDataColumnSidecars
+	}
+
+	// Extract blob data without computing proofs.
+	blobs := make([][]byte, 0, len(indices))
+	for _, blobIndex := range indices {
+		var blob kzg.Blob
+
+		// Compute the content of the blob.
+		for columnIndex := range cellsPerBlob {
+			dataColumnSidecar := dataColumnSidecars[columnIndex]
+			cell := dataColumnSidecar.Column[blobIndex]
+			if copy(blob[kzg.BytesPerCell*columnIndex:], cell) != kzg.BytesPerCell {
+				return nil, errors.New("wrong cell size - should never happen")
+			}
+		}
+
+		blobs = append(blobs, blob[:])
+	}
+
+	return blobs, nil
+}
+
 // blobSidecarsFromDataColumnSidecars converts verified data column sidecars to verified blob sidecars.
-// The skipKzgProofs parameter indicates whether to skip expensive KZG proof computations (post-Fulu optimization).
-func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSidecars []blocks.VerifiedRODataColumn, indices []int, skipKzgProofs bool) ([]*blocks.VerifiedROBlob, error) {
+func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
 	referenceSidecar := dataColumnSidecars[0]
 
 	kzgCommitments := referenceSidecar.KzgCommitments
@@ -307,19 +381,11 @@ func blobSidecarsFromDataColumnSidecars(roBlock blocks.ROBlock, dataColumnSideca
 			return nil, errors.New("wrong KZG commitment size - should never happen")
 		}
 
-		// Conditionally compute the blob KZG proof based on caller's needs.
-		// For GetBlobs endpoint (which only returns blob data), we skip the expensive computation.
-		// For GetBlobSidecars endpoint (which returns full sidecars), we compute the proof.
-		var blobKzgProof kzg.Proof
-		if !skipKzgProofs {
-			// Compute the blob KZG proof only when needed (e.g., for GetBlobSidecars).
-			computedProof, err := kzg.ComputeBlobKZGProof(&blob, kzgCommitment)
-			if err != nil {
-				return nil, errors.Wrap(err, "compute blob KZG proof")
-			}
-			blobKzgProof = computedProof
+		// Compute the blob KZG proof.
+		blobKzgProof, err := kzg.ComputeBlobKZGProof(&blob, kzgCommitment)
+		if err != nil {
+			return nil, errors.Wrap(err, "compute blob KZG proof")
 		}
-		// If skipKzgProofs is true, blobKzgProof remains zero (default value)
 
 		// Build the inclusion proof for the blob.
 		var kzgBlob kzg.Blob

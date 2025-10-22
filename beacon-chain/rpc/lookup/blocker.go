@@ -339,7 +339,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
 		}
 
-		return p.blobsFromStoredDataColumns(roBlock, indices, cfg.SkipKzgProofs)
+		return p.blobsFromStoredDataColumns(roBlock, indices)
 	}
 
 	return p.blobsFromStoredBlobs(commitments, root, indices)
@@ -399,8 +399,7 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(commitments [][]byte, root [field
 // This function expects data column sidecars to be stored (aka. no blob sidecars).
 // If not enough data column sidecars are available to convert blobs from them
 // (either directly or after reconstruction), an error is returned.
-// The skipKzgProofs parameter indicates whether to skip expensive KZG proof computations (post-Fulu optimization).
-func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indices []int, skipKzgProofs bool) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	root := block.Root()
 
 	// Use all indices if none are provided.
@@ -441,7 +440,7 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indic
 	}
 
 	// Reconstruct blob sidecars from data column sidecars.
-	verifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(block, verifiedRoDataColumnSidecars, indices, skipKzgProofs)
+	verifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(block, verifiedRoDataColumnSidecars, indices)
 	if err != nil {
 		return nil, &core.RpcError{
 			Err:    errors.Wrap(err, "blobs from data columns"),
