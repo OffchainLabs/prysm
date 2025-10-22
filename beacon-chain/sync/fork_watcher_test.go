@@ -47,6 +47,8 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 		subHandler:          newSubTopicHandler(),
 		initialSyncComplete: closedChan,
 	}
+
+	r.gossipTopicManager = NewGossipTopicManager(ctx, r)
 	return r
 }
 
@@ -71,7 +73,7 @@ func TestRegisterSubscriptions_Idempotent(t *testing.T) {
 	}
 	// the goal of this callback is just to assert that spawn is never called.
 	s.subscriptionSpawner = func(func()) { t.Error("registration routines spawned twice for the same digest") }
-	require.NoError(t, s.ensureRegistrationsForEpoch(fulu))
+	require.NoError(t, s.gossipTopicManager.ensureRegistrationsForEpoch(fulu))
 }
 
 func TestService_CheckForNextEpochFork(t *testing.T) {
@@ -195,7 +197,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			current := tt.epochAtRegistration(tt.forkEpoch)
 			s := testForkWatcherService(t, current)
 			wg := attachSpawner(s)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
+			require.NoError(t, s.gossipTopicManager.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 			wg.Wait()
 			tt.checkRegistration(t, s)
 
@@ -217,13 +219,13 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			// Move the clock to just before the next fork epoch and ensure deregistration is correct
 			wg = attachSpawner(s)
 			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
+			require.NoError(t, s.gossipTopicManager.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 			wg.Wait()
 
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch))
+			require.NoError(t, s.gossipTopicManager.ensureDeregistrationForEpoch(tt.nextForkEpoch))
 			assert.Equal(t, true, s.subHandler.digestExists(digest))
 			// deregister as if it is the epoch after the next fork epoch
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
+			require.NoError(t, s.gossipTopicManager.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
 			assert.Equal(t, false, s.subHandler.digestExists(digest))
 			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
 		})

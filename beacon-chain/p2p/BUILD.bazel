@@ -7,6 +7,7 @@ go_library(
         "broadcaster.go",
         "config.go",
         "connection_gater.go",
+        "crawler.go",
         "custody.go",
         "dial_relay_node.go",
         "discovery.go",
@@ -41,6 +42,7 @@ go_library(
         "//tools:__subpackages__",
     ],
     deps = [
+        "//beacon-chain/p2p/gossipsubcrawler:go_default_library",
         "//async:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/altair:go_default_library",

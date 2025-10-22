@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -64,3 +65,6 @@ func (*MockPeerManager) FindAndDialPeersWithSubnets(ctx context.Context, topicFo
 
 // AddPingMethod .
 func (*MockPeerManager) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {}
+
+// Crawler.
+func (*MockPeerManager) Crawler() gossipsubcrawler.Crawler { return nil }

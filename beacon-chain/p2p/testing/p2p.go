@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -48,6 +49,36 @@ const (
 	metadataV2Topic = "/eth2/beacon_chain/req/metadata/2"
 	metadataV3Topic = "/eth2/beacon_chain/req/metadata/3"
 )
+
+// MockCrawler is a minimal mock implementation of PeerCrawler for testing
+type MockCrawler struct{}
+
+// Start does nothing as this is a mock
+func (m *MockCrawler) Start(_ func(context.Context, *enode.Node) ([]string, error)) error {
+	return nil
+}
+
+// Stop does nothing as this is a mock
+func (m *MockCrawler) Stop() {}
+
+// SetTopicExtractor does nothing as this is a mock
+func (m *MockCrawler) SetTopicExtractor(extractor func(context.Context, *enode.Node) ([]string, error)) error {
+	return nil
+}
+
+// RemoveTopic does nothing as this is a mock
+func (m *MockCrawler) RemoveTopic(topic string) {}
+
+// RemovePeer does nothing as this is a mock
+func (m *MockCrawler) RemovePeer(enodeID enode.ID) {}
+
+// RemovePeerByPeerID does nothing as this is a mock
+func (m *MockCrawler) RemovePeerByPeerID(pid peer.ID) {}
+
+// PeersForTopic returns empty list as this is a mock
+func (m *MockCrawler) PeersForTopic(topic string) []*enode.Node {
+	return []*enode.Node{}
+}
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
@@ -447,6 +478,11 @@ func (*TestP2P) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {
 	// no-op
 }
 
+// Crawler returns a mock crawler implementation for testing.
+func (*TestP2P) Crawler() gossipsubcrawler.Crawler {
+	return &MockCrawler{}
+}
+
 // InterceptPeerDial .
 func (*TestP2P) InterceptPeerDial(peer.ID) (allow bool) {
 	return true
@@ -548,4 +584,19 @@ func (s *TestP2P) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 	}
 
 	return custodyGroupCount
+}
+
+// AttestationSubnets extracts attestation subnet bits from a node's ENR record.
+func (s *TestP2P) AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return map[uint64]bool{}, nil
+}
+
+// SyncSubnets extracts sync committee subnet bits from a node's ENR record.
+func (s *TestP2P) SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return map[uint64]bool{}, nil
+}
+
+// DataColumnSubnets extracts data column subnets from a node's ENR record and ID.
+func (s *TestP2P) DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return map[uint64]bool{}, nil
 }

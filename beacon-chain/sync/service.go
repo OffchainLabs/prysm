@@ -181,7 +181,8 @@ type Service struct {
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
-	subscriptionSpawner              func(func()) // see Service.spawn for details
+	subscriptionSpawner              func(func())        // see Service.spawn for details
+	gossipTopicManager               *GossipTopicManager // Manages gossip topic families and control loop
 }
 
 // NewService initializes new regular sync service.
@@ -299,6 +300,16 @@ func (s *Service) Stop() error {
 		}
 	}()
 
+	// Stop the gossip topic manager if it exists
+	if s.gossipTopicManager != nil {
+		s.gossipTopicManager.Stop()
+	}
+
+	// Stop the crawler if it exists
+	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
+		crawler.Stop()
+	}
+
 	// Create context with timeout to prevent hanging
 	goodbyeCtx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
@@ -404,8 +415,23 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 		return
 	}
 
-	// Start the fork watcher.
-	go s.p2pHandlerControlLoop()
+	// Create and configure the GossipTopicManager
+	s.gossipTopicManager = NewGossipTopicManager(s.ctx, s)
+
+	// Configure the crawler with the topic extractor if available
+	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
+
+		// Start the crawler now that it has the extractor
+		if err := crawler.Start(s.gossipTopicManager.ExtractTopics); err != nil {
+			log.WithError(err).Warn("Failed to start peer crawler")
+		}
+	} else {
+		log.Info("No crawler available, topic extraction disabled")
+	}
+
+	// Start the gossip topic manager's control loop
+	// This replaces the old p2pHandlerControlLoop
+	go s.gossipTopicManager.Start()
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

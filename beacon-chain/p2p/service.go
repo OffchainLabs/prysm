@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -46,6 +47,8 @@ const (
 
 	// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
 	maxBadResponses = 5
+
+	crawlInterval = 1 * time.Second
 )
 
 var (
@@ -93,6 +96,7 @@ type Service struct {
 	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
 	custodyInfoSet        chan struct{}
 	allForkDigests        map[[4]byte]struct{}
+	crawler               gossipsubcrawler.Crawler
 }
 
 type custodyInfo struct {
@@ -235,6 +239,15 @@ func (s *Service) Start() {
 
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
+
+		// Create the crawler using the local constructor, passing the service reference
+		crawler, err := newCrawler(s.ctx, s.dv5Listener, s, crawlInterval)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to create peer crawler")
+			s.startupErr = err
+			return
+		}
+		s.crawler = crawler
 	}
 
 	s.started = true
@@ -305,6 +318,9 @@ func (s *Service) Start() {
 func (s *Service) Stop() error {
 	defer s.cancel()
 	s.started = false
+	if s.crawler != nil {
+		s.crawler.Stop() // Stop the crawler before closing discovery
+	}
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
 	}
@@ -364,6 +380,11 @@ func (s *Service) PeerID() peer.ID {
 // Disconnect from a peer.
 func (s *Service) Disconnect(pid peer.ID) error {
 	return s.host.Network().ClosePeer(pid)
+}
+
+// Crawler returns the p2p service's peer crawler.
+func (s *Service) Crawler() gossipsubcrawler.Crawler {
+	return s.crawler
 }
 
 // Connect to a specific peer.
@@ -550,4 +571,28 @@ func (s *Service) isInitialized() bool {
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
 	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
+func (s *Service) AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	if !s.filterPeer(node) {
+		return map[uint64]bool{}, nil
+	}
+
+	return attestationSubnets(record)
+}
+
+func (s *Service) SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	if !s.filterPeer(node) {
+		return map[uint64]bool{}, nil
+	}
+
+	return syncSubnets(record)
+}
+
+func (s *Service) DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	if !s.filterPeer(node) {
+		return map[uint64]bool{}, nil
+	}
+
+	return dataColumnSubnets(nodeID, record)
 }

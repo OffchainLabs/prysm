@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -198,6 +199,11 @@ func (*FakeP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
+// Crawler -- fake.
+func (*FakeP2P) Crawler() gossipsubcrawler.Crawler {
+	return &MockCrawler{}
+}
+
 // EarliestAvailableSlot -- fake.
 func (*FakeP2P) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
 	return 0, nil
@@ -216,4 +222,19 @@ func (s *FakeP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 // CustodyGroupCountFromPeer -- fake.
 func (*FakeP2P) CustodyGroupCountFromPeer(peer.ID) uint64 {
 	return 0
+}
+
+// AttestationSubnets -- fake.
+func (*FakeP2P) AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return map[uint64]bool{}, nil
+}
+
+// SyncSubnets -- fake.
+func (*FakeP2P) SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return map[uint64]bool{}, nil
+}
+
+// DataColumnSubnets -- fake.
+func (*FakeP2P) DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return map[uint64]bool{}, nil
 }
