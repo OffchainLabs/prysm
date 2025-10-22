@@ -387,10 +387,10 @@ func generateRandomSidecars(t testing.TB, seed, blobCount int64) []blocks.ROData
 	sBlock, err := blocks.NewSignedBeaconBlock(dbBlock)
 	require.NoError(t, err)
 
-	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
 	rob, err := blocks.NewROBlock(sBlock)
 	require.NoError(t, err)
-	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	sidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	return sidecars

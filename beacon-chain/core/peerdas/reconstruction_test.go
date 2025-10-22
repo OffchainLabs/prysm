@@ -207,7 +207,8 @@ func TestReconstructBlobs(t *testing.T) {
 		// Compute cells and proofs from blob sidecars.
 		var wg errgroup.Group
 		blobs := make([][]byte, blobCount)
-		inputCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+		inputCellsPerBlob := make([][]kzg.Cell, blobCount)
+		inputProofsPerBlob := make([][]kzg.Proof, blobCount)
 		for i := range blobCount {
 			blob := roBlobSidecars[i].Blob
 			blobs[i] = blob
@@ -217,14 +218,15 @@ func TestReconstructBlobs(t *testing.T) {
 				count := copy(kzgBlob[:], blob)
 				require.Equal(t, len(kzgBlob), count)
 
-				cp, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+				cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 				if err != nil {
 					return errors.Wrapf(err, "compute cells and kzg proofs for blob %d", i)
 				}
 
 				// It is safe for multiple goroutines to concurrently write to the same slice,
 				// as long as they are writing to different indices, which is the case here.
-				inputCellsAndProofs[i] = cp
+				inputCellsPerBlob[i] = cells
+				inputProofsPerBlob[i] = proofs
 
 				return nil
 			})
@@ -235,18 +237,18 @@ func TestReconstructBlobs(t *testing.T) {
 
 		// Flatten proofs.
 		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
-		for _, cp := range inputCellsAndProofs {
-			for _, proof := range cp.Proofs {
+		for _, proofs := range inputProofsPerBlob {
+			for _, proof := range proofs {
 				cellProofs = append(cellProofs, proof[:])
 			}
 		}
 
 		// Compute celles and proofs from the blobs and cell proofs.
-		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
 		require.NoError(t, err)
 
 		// Construct data column sidears from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
 		require.NoError(t, err)
 
 		// Convert to verified data column sidecars.
@@ -310,7 +312,7 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 		// Create proofs for 2 blobs worth of columns
 		cellProofs := make([][]byte, 2*numberOfColumns)
 
-		_, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		_, _, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
 		require.ErrorIs(t, err, peerdas.ErrBlobsCellsProofsMismatch)
 	})
 
@@ -323,7 +325,8 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 		// Extract blobs and compute expected cells and proofs
 		blobs := make([][]byte, blobCount)
-		expectedCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+		expectedCellsPerBlob := make([][]kzg.Cell, blobCount)
+		expectedProofsPerBlob := make([][]kzg.Proof, blobCount)
 		var wg errgroup.Group
 
 		for i := range blobCount {
@@ -335,12 +338,13 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 				count := copy(kzgBlob[:], blob)
 				require.Equal(t, len(kzgBlob), count)
 
-				cp, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+				cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 				if err != nil {
 					return errors.Wrapf(err, "compute cells and kzg proofs for blob %d", i)
 				}
 
-				expectedCellsAndProofs[i] = cp
+				expectedCellsPerBlob[i] = cells
+				expectedProofsPerBlob[i] = proofs
 				return nil
 			})
 		}
@@ -350,30 +354,30 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 		// Flatten proofs
 		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
-		for _, cp := range expectedCellsAndProofs {
-			for _, proof := range cp.Proofs {
+		for _, proofs := range expectedProofsPerBlob {
+			for _, proof := range proofs {
 				cellProofs = append(cellProofs, proof[:])
 			}
 		}
 
 		// Test ComputeCellsAndProofs
-		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
+		actualCellsPerBlob, actualProofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(blobs, cellProofs)
 		require.NoError(t, err)
-		require.Equal(t, blobCount, len(actualCellsAndProofs))
+		require.Equal(t, blobCount, len(actualCellsPerBlob))
 
 		// Verify the results match expected
 		for i := range blobCount {
-			require.Equal(t, len(expectedCellsAndProofs[i].Cells), len(actualCellsAndProofs[i].Cells))
-			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), len(actualCellsAndProofs[i].Proofs))
+			require.Equal(t, len(expectedCellsPerBlob[i]), len(actualCellsPerBlob[i]))
+			require.Equal(t, len(expectedProofsPerBlob[i]), len(actualProofsPerBlob[i]))
 
 			// Compare cells
-			for j, expectedCell := range expectedCellsAndProofs[i].Cells {
-				require.Equal(t, expectedCell, actualCellsAndProofs[i].Cells[j])
+			for j, expectedCell := range expectedCellsPerBlob[i] {
+				require.Equal(t, expectedCell, actualCellsPerBlob[i][j])
 			}
 
 			// Compare proofs
-			for j, expectedProof := range expectedCellsAndProofs[i].Proofs {
-				require.Equal(t, expectedProof, actualCellsAndProofs[i].Proofs[j])
+			for j, expectedProof := range expectedProofsPerBlob[i] {
+				require.Equal(t, expectedProof, actualProofsPerBlob[i][j])
 			}
 		}
 	})
@@ -381,7 +385,7 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 	t.Run("nil blob and proof", func(t *testing.T) {
-		_, err := peerdas.ComputeCellsAndProofsFromStructured([]*pb.BlobAndProofV2{nil})
+		_, _, err := peerdas.ComputeCellsAndProofsFromStructured([]*pb.BlobAndProofV2{nil})
 		require.ErrorIs(t, err, peerdas.ErrNilBlobAndProof)
 	})
 
@@ -397,7 +401,8 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 
 		// Extract blobs and compute expected cells and proofs
 		blobsAndProofs := make([]*pb.BlobAndProofV2, blobCount)
-		expectedCellsAndProofs := make([]kzg.CellsAndProofs, blobCount)
+		expectedCellsPerBlob := make([][]kzg.Cell, blobCount)
+		expectedProofsPerBlob := make([][]kzg.Proof, blobCount)
 
 		var wg errgroup.Group
 		for i := range blobCount {
@@ -408,14 +413,15 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 				count := copy(kzgBlob[:], blob)
 				require.Equal(t, len(kzgBlob), count)
 
-				cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+				cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 				if err != nil {
 					return errors.Wrapf(err, "compute cells and kzg proofs for blob %d", i)
 				}
-				expectedCellsAndProofs[i] = cellsAndProofs
+				expectedCellsPerBlob[i] = cells
+				expectedProofsPerBlob[i] = proofs
 
-				kzgProofs := make([][]byte, 0, len(cellsAndProofs.Proofs))
-				for _, proof := range cellsAndProofs.Proofs {
+				kzgProofs := make([][]byte, 0, len(proofs))
+				for _, proof := range proofs {
 					kzgProofs = append(kzgProofs, proof[:])
 				}
 
@@ -433,24 +439,24 @@ func TestComputeCellsAndProofsFromStructured(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test ComputeCellsAndProofs
-		actualCellsAndProofs, err := peerdas.ComputeCellsAndProofsFromStructured(blobsAndProofs)
+		actualCellsPerBlob, actualProofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(blobsAndProofs)
 		require.NoError(t, err)
-		require.Equal(t, blobCount, len(actualCellsAndProofs))
+		require.Equal(t, blobCount, len(actualCellsPerBlob))
 
 		// Verify the results match expected
 		for i := range blobCount {
-			require.Equal(t, len(expectedCellsAndProofs[i].Cells), len(actualCellsAndProofs[i].Cells))
-			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), len(actualCellsAndProofs[i].Proofs))
-			require.Equal(t, len(expectedCellsAndProofs[i].Proofs), cap(actualCellsAndProofs[i].Proofs))
+			require.Equal(t, len(expectedCellsPerBlob[i]), len(actualCellsPerBlob[i]))
+			require.Equal(t, len(expectedProofsPerBlob[i]), len(actualProofsPerBlob[i]))
+			require.Equal(t, len(expectedProofsPerBlob[i]), cap(actualProofsPerBlob[i]))
 
 			// Compare cells
-			for j, expectedCell := range expectedCellsAndProofs[i].Cells {
-				require.Equal(t, expectedCell, actualCellsAndProofs[i].Cells[j])
+			for j, expectedCell := range expectedCellsPerBlob[i] {
+				require.Equal(t, expectedCell, actualCellsPerBlob[i][j])
 			}
 
 			// Compare proofs
-			for j, expectedProof := range expectedCellsAndProofs[i].Proofs {
-				require.Equal(t, expectedProof, actualCellsAndProofs[i].Proofs[j])
+			for j, expectedProof := range expectedProofsPerBlob[i] {
+				require.Equal(t, expectedProof, actualProofsPerBlob[i][j])
 			}
 		}
 	})

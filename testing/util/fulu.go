@@ -146,11 +146,11 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
 
-	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
+	cellsPerBlob, proofsPerBlob := GenerateCellsAndProofs(t, blobs)
 
 	rob, err := blocks.NewROBlockWithRoot(signedBeaconBlock, root)
 	require.NoError(t, err)
-	roSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
@@ -167,12 +167,14 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	return roBlock, roSidecars, verifiedRoSidecars
 }
 
-func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) []kzg.CellsAndProofs {
-	cellsAndProofs := make([]kzg.CellsAndProofs, len(blobs))
+func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) ([][]kzg.Cell, [][]kzg.Proof) {
+	cellsPerBlob := make([][]kzg.Cell, len(blobs))
+	proofsPerBlob := make([][]kzg.Proof, len(blobs))
 	for i := range blobs {
-		cp, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])
 		require.NoError(t, err)
-		cellsAndProofs[i] = cp
+		cellsPerBlob[i] = cells
+		proofsPerBlob[i] = proofs
 	}
-	return cellsAndProofs
+	return cellsPerBlob, proofsPerBlob
 }
