@@ -58,7 +58,7 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 			pathElement.Name = extractFieldName(processingField)
 			indices, err := extractArrayIndices(processingField)
 			if err != nil {
-				return []PathElement{}, err
+				return nil, err
 			}
 			// Although extractArrayIndices supports multiple indices,
 			// only a single index is supported per PathElement, e.g., "transactions[0]" is valid
