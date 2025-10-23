@@ -23,7 +23,6 @@ type PathElement struct {
 // 3. Supports length access using len() notation (e.g., "len(array_field)").
 // 4. Handles leading dots and validates path format.
 func ParsePath(rawPath string) ([]PathElement, error) {
-	// Enforce snake_case for field names
 	rawElements := strings.Split(rawPath, ".")
 
 	if rawElements[0] == "" {
