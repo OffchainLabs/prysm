@@ -42,18 +42,16 @@ func TestComputeCellsAndKzgProofs(t *testing.T) {
 			}
 			b := kzgPrysm.Blob(blob)
 
-			cellsAndProofsForBlob, err := kzgPrysm.ComputeCellsAndKZGProofs(&b)
+			cells, proofs, err := kzgPrysm.ComputeCellsAndKZGProofs(&b)
 			if test.Output != nil {
 				require.NoError(t, err)
 				var combined [][]string
-				cs := cellsAndProofsForBlob.Cells
-				csRaw := make([]string, 0, len(cs))
-				for _, c := range cs {
+				csRaw := make([]string, 0, len(cells))
+				for _, c := range cells {
 					csRaw = append(csRaw, hexutil.Encode(c[:]))
 				}
-				ps := cellsAndProofsForBlob.Proofs
-				psRaw := make([]string, 0, len(ps))
-				for _, p := range ps {
+				psRaw := make([]string, 0, len(proofs))
+				for _, p := range proofs {
 					psRaw = append(psRaw, hexutil.Encode(p[:]))
 				}
 				combined = append(combined, csRaw)
