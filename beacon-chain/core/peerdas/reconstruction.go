@@ -314,10 +314,13 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 //   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
 //   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
 //   - or enough sidecars to reconstruct the blobs.
-func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([][]byte, error) {
-	// Return early if no blobs are requested.
+func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int, blobCount int) ([][]byte, error) {
+	// If no specific indices are requested, populate with all blob indices.
 	if len(indices) == 0 {
-		return nil, nil
+		indices = make([]int, blobCount)
+		for i := range indices {
+			indices[i] = i
+		}
 	}
 
 	if len(verifiedDataColumnSidecars) == 0 {
@@ -341,9 +344,14 @@ func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColu
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
 
-	// Check if the blob index is too high.
+	// Verify that the actual blob count from the first sidecar matches the expected count
 	referenceSidecar := verifiedDataColumnSidecars[0]
-	blobCount := len(referenceSidecar.Column)
+	actualBlobCount := len(referenceSidecar.Column)
+	if actualBlobCount != blobCount {
+		return nil, errors.Errorf("blob count mismatch: expected %d, got %d", blobCount, actualBlobCount)
+	}
+
+	// Check if the blob index is too high.
 	for _, blobIndex := range indices {
 		if blobIndex >= blobCount {
 			return nil, ErrBlobIndexTooHigh

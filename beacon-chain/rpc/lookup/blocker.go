@@ -395,7 +395,7 @@ func (p *BeaconDbBlocker) BlobsData(ctx context.Context, id string, opts ...opti
 
 	// Check if this is a post-Fulu block (uses data columns)
 	if bctx.roBlock.Root() != [32]byte{} {
-		return p.blobsDataFromStoredDataColumns(bctx.root, bctx.indices)
+		return p.blobsDataFromStoredDataColumns(bctx.root, bctx.indices, len(bctx.commitments))
 	}
 
 	// Pre-Fulu block (uses blob sidecars)
@@ -441,7 +441,7 @@ func (p *BeaconDbBlocker) blobsDataFromStoredBlobs(root [fieldparams.RootLength]
 }
 
 // blobsDataFromStoredDataColumns retrieves blob data from stored data columns without computing KZG proofs.
-func (p *BeaconDbBlocker) blobsDataFromStoredDataColumns(root [fieldparams.RootLength]byte, indices []int) ([][]byte, *core.RpcError) {
+func (p *BeaconDbBlocker) blobsDataFromStoredDataColumns(root [fieldparams.RootLength]byte, indices []int, blobCount int) ([][]byte, *core.RpcError) {
 	// Count how many columns we have in the store.
 	summary := p.DataColumnStorage.Summary(root)
 	stored := summary.Stored()
@@ -465,7 +465,7 @@ func (p *BeaconDbBlocker) blobsDataFromStoredDataColumns(root [fieldparams.RootL
 	}
 
 	// Use optimized path to get just blob data without computing proofs.
-	blobsData, err := peerdas.ReconstructBlobsData(verifiedRoDataColumnSidecars, indices)
+	blobsData, err := peerdas.ReconstructBlobsData(verifiedRoDataColumnSidecars, indices, blobCount)
 	if err != nil {
 		return nil, &core.RpcError{
 			Err:    errors.Wrap(err, "reconstruct blobs data"),
