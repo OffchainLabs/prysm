@@ -126,7 +126,8 @@ message BeaconBlockGloas {
 }
 
 // BeaconBlockBodyGloas represents the body of a beacon block in the Gloas fork.
-// New fields: signed_execution_payload_header and payload_attestations
+// New fields: signed_execution_payload_bid and payload_attestations
+// Removed fields: execution_payload, blob_kzg_commitments, execution_requests
 //
 // Spec:
 // class BeaconBlockBody(Container):
@@ -291,6 +292,7 @@ message BeaconStateGloas {
   repeated PendingConsolidation pending_consolidations = 12009
   [ (ethereum.eth.ext.ssz_max) = "pending_consolidations_limit" ];
 
+  // Fields introduced in Fulu fork [13001-14000]
   repeated uint64 proposer_lookahead = 13001
   [ (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size" ];
 

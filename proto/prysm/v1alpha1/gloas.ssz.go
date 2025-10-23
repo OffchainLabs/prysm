@@ -54,7 +54,7 @@ func (e *ExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.MarshalUint64(dst, uint64(e.Slot))
 
 	// Field (7) 'Value'
-	dst = ssz.MarshalUint64(dst, e.Value)
+	dst = ssz.MarshalUint64(dst, uint64(e.Value))
 
 	// Field (8) 'BlobKzgCommitmentsRoot'
 	if size := len(e.BlobKzgCommitmentsRoot); size != 32 {
@@ -108,7 +108,7 @@ func (e *ExecutionPayloadBid) UnmarshalSSZ(buf []byte) error {
 	e.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[132:140]))
 
 	// Field (7) 'Value'
-	e.Value = ssz.UnmarshallUint64(buf[140:148])
+	e.Value = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[140:148]))
 
 	// Field (8) 'BlobKzgCommitmentsRoot'
 	if cap(e.BlobKzgCommitmentsRoot) == 0 {
@@ -172,7 +172,7 @@ func (e *ExecutionPayloadBid) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.PutUint64(uint64(e.Slot))
 
 	// Field (7) 'Value'
-	hh.PutUint64(e.Value)
+	hh.PutUint64(uint64(e.Value))
 
 	// Field (8) 'BlobKzgCommitmentsRoot'
 	if size := len(e.BlobKzgCommitmentsRoot); size != 32 {
