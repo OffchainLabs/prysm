@@ -17,7 +17,7 @@ type PathElement struct {
 }
 
 // ParsePath parses a raw path string into a slice of PathElements.
-// note: field names are stored in snake_case format. rawPath is enforced to be snake_case.
+// note: field names are stored in snake case format. rawPath has to be provided in snake case.
 // 1. Supports dot notation for field access (e.g., "field1.field2").
 // 2. Supports array indexing using square brackets (e.g., "array_field[0]").
 // 3. Supports length access using len() notation (e.g., "len(array_field)").
@@ -35,11 +35,10 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 		if elem == "" {
 			return nil, errors.New("invalid path: consecutive dots or trailing dot")
 		}
-		snakeCasePath := toSnakeCase(elem)
 
-		var pathElement PathElement
 		// Processing element string
-		processingField := snakeCasePath
+		processingField := elem
+		var pathElement PathElement
 
 		re := regexp.MustCompile(`^\s*len\s*\(\s*([^)]+?)\s*\)\s*$`)
 		matches := re.FindStringSubmatch(processingField)
@@ -111,13 +110,4 @@ func extractArrayIndices(name string) ([]uint64, error) {
 		indices = append(indices, idx)
 	}
 	return indices, nil
-}
-
-var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
-var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
-
-func toSnakeCase(str string) string {
-	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
-	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
-	return strings.ToLower(snake)
 }

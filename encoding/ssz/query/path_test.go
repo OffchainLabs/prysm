@@ -37,26 +37,6 @@ func TestParsePath(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "convert to snake case in path",
-			path: ".DataCL.TargetCheckpoint.Root",
-			expected: []query.PathElement{
-				{Name: "data_cl"},
-				{Name: "target_checkpoint"},
-				{Name: "root"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "convert to snake case in path + array index",
-			path: ".DataCL.TargetCheckpoint.Root[0]",
-			expected: []query.PathElement{
-				{Name: "data_cl"},
-				{Name: "target_checkpoint"},
-				{Name: "root", Index: &index},
-			},
-			wantErr: false,
-		},
-		{
 			name:    "cannot provide consecutive dots in raw path",
 			path:    "data..target.root",
 			wantErr: true,
