@@ -99,16 +99,6 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 	return root, nil
 }
 
-// isBasicType checks if the SSZType is a basic type
-func isBasicType(sszType SSZType) bool {
-	switch sszType {
-	case Uint8, Uint16, Uint32, Uint64, Boolean:
-		return true
-	default:
-		return false
-	}
-}
-
 // getChunkCount returns the number of chunks for the given SSZInfo (equivalent to chunk_count in the spec)
 func getChunkCount(info *SszInfo) (uint64, error) {
 	switch info.sszType {
@@ -185,7 +175,7 @@ func getContainerFieldByName(info *SszInfo, fieldName string) (uint64, *SszInfo,
 // BytesPerChunk which represents the standard SSZ chunk size (32 bytes) used for
 // Merkle tree operations in the SSZ serialization format.
 func itemLengthFromInfo(info *SszInfo) uint64 {
-	if isBasicType(info.sszType) {
+	if info.sszType.isBasic() {
 		return info.Size()
 	}
 	return ssz.BytesPerChunk
@@ -224,7 +214,7 @@ func calculateListGeneralizedIndex(fieldSsz *SszInfo, element PathElement, root 
 	}
 	// Compute chunk position for the element
 	var chunkPos uint64
-	if isBasicType(elem.sszType) {
+	if elem.sszType.isBasic() {
 		start := *element.Index * itemLengthFromInfo(elem)
 		chunkPos = start / ssz.BytesPerChunk
 	} else {
@@ -255,7 +245,7 @@ func calculateVectorGeneralizedIndex(fieldSsz *SszInfo, element PathElement, roo
 		return nil, 0, fmt.Errorf("index %d out of bounds for vector with length %d", *element.Index, vi.Length())
 	}
 	var chunkPos uint64
-	if isBasicType(elem.sszType) {
+	if elem.sszType.isBasic() {
 		start := *element.Index * itemLengthFromInfo(elem)
 		chunkPos = start / ssz.BytesPerChunk
 	} else {
