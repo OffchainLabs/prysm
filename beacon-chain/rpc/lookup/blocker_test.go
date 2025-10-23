@@ -306,16 +306,18 @@ func TestGetBlob(t *testing.T) {
 	fuluBlock, fuluBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, fs, blobCount)
 	fuluBlockRoot := fuluBlock.Root()
 
-	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobSidecars))
+	cellsPerBlobList := make([][]kzg.Cell, 0, len(fuluBlobSidecars))
+	proofsPerBlobList := make([][]kzg.Proof, 0, len(fuluBlobSidecars))
 	for _, blob := range fuluBlobSidecars {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+		cellsPerBlobList = append(cellsPerBlobList, cells)
+		proofsPerBlobList = append(proofsPerBlobList, proofs)
 	}
 
-	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlobList, proofsPerBlobList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
@@ -665,16 +667,18 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	require.Equal(t, 3, len(commitments))
 
 	// Convert blob sidecars to data column sidecars for Fulu
-	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobs))
+	cellsPerBlobList := make([][]kzg.Cell, 0, len(fuluBlobs))
+	proofsPerBlobList := make([][]kzg.Proof, 0, len(fuluBlobs))
 	for _, blob := range fuluBlobs {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+		cellsPerBlobList = append(cellsPerBlobList, cells)
+		proofsPerBlobList = append(proofsPerBlobList, proofs)
 	}
 
-	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(cellsPerBlobList, proofsPerBlobList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecarPb))
@@ -829,16 +833,18 @@ func TestGetDataColumns(t *testing.T) {
 	fuluBlock, fuluBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, fuluForkSlot, blobCount)
 	fuluBlockRoot := fuluBlock.Root()
 
-	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobSidecars))
+	cellsPerBlobList := make([][]kzg.Cell, 0, len(fuluBlobSidecars))
+	proofsPerBlobList := make([][]kzg.Proof, 0, len(fuluBlobSidecars))
 	for _, blob := range fuluBlobSidecars {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+		cellsPerBlobList = append(cellsPerBlobList, cells)
+		proofsPerBlobList = append(proofsPerBlobList, proofs)
 	}
 
-	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlobList, proofsPerBlobList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
