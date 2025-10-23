@@ -3,6 +3,7 @@ package rpc
 import (
 	"net/http"
 
+	api "github.com/OffchainLabs/prysm/v6/api/client"
 	grpcutil "github.com/OffchainLabs/prysm/v6/api/grpc"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/client"
@@ -52,11 +53,13 @@ func (s *Server) registerBeaconClient() error {
 	conn := validatorHelpers.NewNodeConnection(
 		grpcConn,
 		s.beaconApiEndpoint,
-		s.beaconApiTimeout,
+		validatorHelpers.WithBeaconApiHeaders(s.beaconApiHeaders),
+		validatorHelpers.WithBeaconApiTimeout(s.beaconApiTimeout),
 	)
 
+	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, conn.GetBeaconApiHeaders())
 	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(headersTransport)},
 		s.beaconApiEndpoint,
 	)
 

@@ -23,6 +23,7 @@ go_library(
     ],
     deps = [
         "//api:go_default_library",
+        "//api/client:go_default_library",
         "//api/grpc:go_default_library",
         "//api/pagination:go_default_library",
         "//api/server:go_default_library",
