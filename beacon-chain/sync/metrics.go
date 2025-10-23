@@ -192,6 +192,13 @@ var (
 		},
 	)
 
+	dataColumnsRecoveredFromELTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "data_columns_recovered_from_el_total",
+			Help: "Count the number of times data columns have been recovered from the execution layer.",
+		},
+	)
+
 	// Data column sidecar validation, beacon metrics specs
 	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_data_column_sidecar_processing_requests_total",
