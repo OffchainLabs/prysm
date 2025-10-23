@@ -119,7 +119,7 @@ func getChunkCount(info *SszInfo) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		return uint64(len(containerInfo.order)), nil
+		return uint64(len(containerInfo.fields)), nil
 	case List:
 		listInfo, err := info.ListInfo()
 		if err != nil {
