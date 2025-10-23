@@ -93,6 +93,7 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			flags.CertFlag,
 			flags.BeaconRPCProviderFlag,
+			flags.BeaconRESTApiHeaders,
 			flags.EnableRPCFlag,
 			flags.RPCHost,
 			flags.RPCPort,

@@ -188,7 +188,7 @@ func TestListDir(t *testing.T) {
 			name:     "root filter",
 			dirPath:  ".",
 			expected: []string{childlessBlob.name, blobWithSsz.name, blobWithSszAndTmp.name},
-			filter:   isRootDir,
+			filter:   IsBlockRootDir,
 		},
 		{
 			name:     "ssz filter",

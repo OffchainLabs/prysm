@@ -34,6 +34,7 @@ type Config struct {
 	GRPCHeaders            []string
 	BeaconNodeGRPCEndpoint string
 	BeaconApiEndpoint      string
+	BeaconAPIHeaders       map[string][]string
 	BeaconApiTimeout       time.Duration
 	BeaconNodeCert         string
 	DB                     db.Database
@@ -64,6 +65,7 @@ type Server struct {
 	authTokenPath             string
 	beaconNodeCert            string
 	beaconApiEndpoint         string
+	beaconApiHeaders          map[string][]string
 	beaconNodeEndpoint        string
 	healthClient              ethpb.HealthClient
 	nodeClient                iface.NodeClient
@@ -103,6 +105,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		wallet:                 cfg.Wallet,
 		beaconApiTimeout:       cfg.BeaconApiTimeout,
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
+		beaconApiHeaders:       cfg.BeaconAPIHeaders,
 		beaconNodeEndpoint:     cfg.BeaconNodeGRPCEndpoint,
 		router:                 cfg.Router,
 	}
