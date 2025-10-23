@@ -72,9 +72,9 @@ func ComputeBlobKZGProof(blob *Blob, commitment Commitment) (Proof, error) {
 
 	proof, err := kzg4844.ComputeBlobProof(&kzgBlob, kzg4844.Commitment(commitment))
 	if err != nil {
-		return [48]byte{}, err
+		return Proof{}, err
 	}
-	return Proof(proof), nil
+	return Proof(proof[:]), nil
 }
 
 // ComputeCellsAndKZGProofs computes the cells and cells KZG proofs from a given blob.
@@ -91,7 +91,7 @@ func ComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
 	proofs := make([]Proof, len(ckzgProofs))
 	for i := range ckzgCells {
 		cells[i] = Cell(ckzgCells[i])
-		proofs[i] = Proof(ckzgProofs[i])
+		proofs[i] = Proof(ckzgProofs[i][:])
 	}
 
 	return cells, proofs, nil
@@ -149,7 +149,7 @@ func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) ([]Cell
 	proofs := make([]Proof, len(ckzgProofs))
 	for i := range ckzgCells {
 		cells[i] = Cell(ckzgCells[i])
-		proofs[i] = Proof(ckzgProofs[i])
+		proofs[i] = Proof(ckzgProofs[i][:])
 	}
 
 	return cells, proofs, nil

@@ -203,13 +203,13 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		require.NoError(t, err)
 
 		// Compute cells and proofs
-		cellsAndProofs, err := ComputeCellsAndKZGProofs(&blob)
+		_, proofs, err := ComputeCellsAndKZGProofs(&blob)
 		require.NoError(t, err)
 
 		// Create flattened cell proofs (like execution client format)
 		cellProofs := make([][]byte, numberOfColumns)
 		for i := range numberOfColumns {
-			cellProofs[i] = cellsAndProofs.Proofs[i][:]
+			cellProofs[i] = proofs[i][:]
 		}
 
 		blobs := [][]byte{blob[:]}
@@ -236,7 +236,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 			require.NoError(t, err)
 
 			// Compute cells and proofs
-			cellsAndProofs, err := ComputeCellsAndKZGProofs(&blob)
+			_, proofs, err := ComputeCellsAndKZGProofs(&blob)
 			require.NoError(t, err)
 
 			blobs[i] = blob[:]
@@ -244,7 +244,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 
 			// Add cell proofs for this blob
 			for j := range numberOfColumns {
-				allCellProofs = append(allCellProofs, cellsAndProofs.Proofs[j][:])
+				allCellProofs = append(allCellProofs, proofs[j][:])
 			}
 		}
 
@@ -319,7 +319,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 		randBlob := random.GetRandBlob(123)
 		var blob Blob
 		copy(blob[:], randBlob[:])
-		cellsAndProofs, err := ComputeCellsAndKZGProofs(&blob)
+		_, proofs, err := ComputeCellsAndKZGProofs(&blob)
 		require.NoError(t, err)
 
 		// Generate wrong commitment from different blob
@@ -331,7 +331,7 @@ func TestVerifyCellKZGProofBatchFromBlobData(t *testing.T) {
 
 		cellProofs := make([][]byte, numberOfColumns)
 		for i := range numberOfColumns {
-			cellProofs[i] = cellsAndProofs.Proofs[i][:]
+			cellProofs[i] = proofs[i][:]
 		}
 
 		blobs := [][]byte{blob[:]}
