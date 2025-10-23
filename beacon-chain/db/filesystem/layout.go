@@ -19,11 +19,13 @@ import (
 const (
 	// Full root in directory will be 66 chars, eg:
 	// >>> len('0x0002fb4db510b8618b04dc82d023793739c26346a8b02eb73482e24b0fec0555') == 66
-	rootStringLen        = 66
-	sszExt               = "ssz"
-	partExt              = "part"
-	periodicEpochBaseDir = "by-epoch"
+	rootStringLen = 66
+	sszExt        = "ssz"
+	partExt       = "part"
 )
+
+// PeriodicEpochBaseDir is the name of the base directory for the by-epoch layout.
+const PeriodicEpochBaseDir = "by-epoch"
 
 const (
 	LayoutNameFlat    = "flat"
@@ -130,11 +132,11 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 	if iter.atEOF() {
 		return errLayoutNotDetected
 	}
-	log.WithField("fromLayout", from.name()).WithField("toLayout", to.name()).Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache).")
 	lastMoved := ""
 	parentDirs := make(map[string]bool) // this map should have < 65k keys by design
 	moved := 0
 	dc := newDirCleaner()
+	migrationLogged := false
 	for ident, err := iter.next(); !errors.Is(err, io.EOF); ident, err = iter.next() {
 		if err != nil {
 			if errors.Is(err, errIdentFailure) {
@@ -145,6 +147,11 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 				continue
 			}
 			return errors.Wrapf(errMigrationFailure, "failed to iterate previous layout structure while migrating blobs, err=%s", err.Error())
+		}
+		if !migrationLogged {
+			log.WithField("fromLayout", from.name()).WithField("toLayout", to.name()).
+				Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache).")
+			migrationLogged = true
 		}
 		src := from.dir(ident)
 		target := to.dir(ident)

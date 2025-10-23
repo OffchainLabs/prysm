@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.1.3](https://github.com/prysmaticlabs/prysm/compare/v6.1.2...v6.1.3) - 2025-10-20
+
+This release has several important beacon API and p2p fixes.
+
+### Added
+
+- Add Grandine to P2P known agents. (Useful for metrics). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15829)
+- Delegate sszInfo HashTreeRoot to FastSSZ-generated implementations via SSZObject, enabling roots calculation for generated types while avoiding duplicate logic. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15805)
+- SSZ-QL: Use `fastssz`'s `SizeSSZ` method for calculating the size of `Container` type. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15864)
+- SSZ-QL: Access n-th element in `List`/`Vector`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15767)
+
+### Changed
+
+- Do not verify block data when calculating rewards. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15819)
+- Process pending attestations after pending blocks are cleared. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15824)
+- updated web3signer to 25.9.1. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15832)
+- Gracefully handle submit blind block returning 502 errors. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15848)
+- Improve returning individual message errors from Beacon API. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15835)
+- SSZ-QL: Clarify `Size` method with more sophisticated `SSZType`s. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15864)
+
+### Fixed
+
+- Use service context and continue on slasher attestation errors (#15803). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15803)
+- block event probably shouldn't be sent on certain block processing failures, now sends only on successing processing Block is NON-CANONICAL, Block IS CANONICAL but getFCUArgs FAILS, and Full success. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15814)
+- Fixed web3signer e2e, issues caused due to a regression on old fork support. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15832)
+- Do not mark blocks as invalid from ErrNotDescendantOfFinalized. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15846)
+- Fixed [#15812](https://github.com/OffchainLabs/prysm/issues/15812): Gossip attestation validation incorrectly rejecting attestations that arrive before their referenced blocks. Previously, attestations were saved to the pending queue but immediately rejected by forkchoice validation, causing "not descendant of finalized checkpoint" errors. Now attestations for missing blocks return `ValidationIgnore` without error, allowing them to be properly processed when their blocks arrive. This eliminates false positive rejections and prevents potential incorrect peer downscoring during network congestion. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15840)
+- Mark the block as invalid if it has an invalid signature. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15847)
+- Display error messages from the server verbatim when they are not encoded as `application/json`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15860)
+- `HasAtLeastOneIndex`: Check the index is not too high. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15865)
+- Fix `/eth/v1/beacon/blob_sidecars/` beacon API is the fulu fork epoch is set to the far future epoch. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15867)
+- `dataColumnSidecarsByRangeRPCHandler`: Gracefully close the stream if no data to return. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15866)
+- `VerifyDataColumnSidecar`: Check if there is no too many commitments. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15859)
+- `WithDataColumnRetentionEpochs`: Use `dataColumnRetentionEpoch` instead of `blobColumnRetentionEpoch`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15872)
+- Mark epoch transition correctly on new head events. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15871)
+- reject committee index >= committees_per_slot in unaggregated attestation validation. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15855)
+- Decreased attestation gossip validation batch deadline to 5ms. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15882)
+
 ## [v6.1.2](https://github.com/prysmaticlabs/prysm/compare/v6.1.1...v6.1.2) - 2025-10-10
 
 This release has several important fixes to improve Prysm's peering, stability, and attestation inclusion on mainnet and all testnets. All node operators are encouraged to update to this release as soon as practical for the best mainnet performance.

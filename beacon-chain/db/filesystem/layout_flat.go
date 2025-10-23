@@ -30,7 +30,7 @@ func (l *flatLayout) iterateIdents(before primitives.Epoch) (*identIterator, err
 		if os.IsNotExist(err) {
 			return &identIterator{eof: true}, nil // The directory is non-existent, which is fine; stop iteration.
 		}
-		return nil, errors.Wrapf(err, "error reading path %s", periodicEpochBaseDir)
+		return nil, errors.Wrap(err, "error reading blob base dir")
 	}
 	entries, err := listDir(l.fs, ".")
 	if err != nil {
@@ -199,10 +199,10 @@ func (l *flatSlotReader) isSSZAndBefore(fname string) bool {
 // the epoch can be determined.
 func isFlatCachedAndBefore(cache *blobStorageSummaryCache, before primitives.Epoch) func(string) bool {
 	if before == 0 {
-		return isRootDir
+		return IsBlockRootDir
 	}
 	return func(p string) bool {
-		if !isRootDir(p) {
+		if !IsBlockRootDir(p) {
 			return false
 		}
 		root, err := rootFromPath(p)
