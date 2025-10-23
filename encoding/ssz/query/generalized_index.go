@@ -99,57 +99,8 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 	return root, nil
 }
 
-// getChunkCount returns the number of chunks for the given SSZInfo (equivalent to chunk_count in the spec)
-func getChunkCount(info *SszInfo) (uint64, error) {
-	switch info.sszType {
-	case Uint8, Uint16, Uint32, Uint64, Boolean:
-		return 1, nil
-	case Container:
-		containerInfo, err := info.ContainerInfo()
-		if err != nil {
-			return 0, err
-		}
-		return uint64(len(containerInfo.fields)), nil
-	case List:
-		listInfo, err := info.ListInfo()
-		if err != nil {
-			return 0, err
-		}
-		elementInfo, err := listInfo.Element()
-		if err != nil {
-			return 0, err
-		}
-		elemLength := itemLengthFromInfo(elementInfo)
-		return (listInfo.Limit()*elemLength + 31) / ssz.BytesPerChunk, nil
-	case Vector:
-		vectorInfo, err := info.VectorInfo()
-		if err != nil {
-			return 0, err
-		}
-		elementInfo, err := vectorInfo.Element()
-		if err != nil {
-			return 0, err
-		}
-		elemLength := itemLengthFromInfo(elementInfo)
-		return (vectorInfo.Length()*elemLength + 31) / ssz.BytesPerChunk, nil
-	case Bitlist:
-		bitlistInfo, err := info.BitlistInfo()
-		if err != nil {
-			return 0, err
-		}
-		return (bitlistInfo.Limit() + 255) / ssz.BitsPerChunk, nil // Bits are packed into 256-bit chunks
-	case Bitvector:
-		bitvectorInfo, err := info.BitvectorInfo()
-		if err != nil {
-			return 0, err
-		}
-		return (bitvectorInfo.Length() + 255) / ssz.BitsPerChunk, nil // Bits are packed into 256-bit chunks
-	default:
-		return 0, errors.New("unsupported SSZ type for chunk count calculation")
-	}
-}
-
-// getContainerFieldByName finds a container field by name.
+// getContainerFieldByName finds a container field by its name
+// and returns its index and SSZInfo.
 func getContainerFieldByName(info *SszInfo, fieldName string) (uint64, *SszInfo, error) {
 	containerInfo, err := info.ContainerInfo()
 	if err != nil {
@@ -167,18 +118,6 @@ func getContainerFieldByName(info *SszInfo, fieldName string) (uint64, *SszInfo,
 	}
 
 	return 0, nil, fmt.Errorf("field %s not found", fieldName)
-}
-
-// itemLengthFromInfo calculates the byte length of an SSZ item based on its type information.
-// For basic SSZ types (uint8, uint16, uint32, uint64, bool, etc.), it returns the actual
-// size of the type in bytes. For complex types (containers, lists, vectors), it returns
-// BytesPerChunk which represents the standard SSZ chunk size (32 bytes) used for
-// Merkle tree operations in the SSZ serialization format.
-func itemLengthFromInfo(info *SszInfo) uint64 {
-	if info.sszType.isBasic() {
-		return info.Size()
-	}
-	return ssz.BytesPerChunk
 }
 
 // Helpers for Generalized Index calculation per type
@@ -215,7 +154,7 @@ func calculateListGeneralizedIndex(fieldSsz *SszInfo, element PathElement, root 
 	// Compute chunk position for the element
 	var chunkPos uint64
 	if elem.sszType.isBasic() {
-		start := *element.Index * itemLengthFromInfo(elem)
+		start := *element.Index * itemLength(elem)
 		chunkPos = start / ssz.BytesPerChunk
 	} else {
 		chunkPos = *element.Index
@@ -246,7 +185,7 @@ func calculateVectorGeneralizedIndex(fieldSsz *SszInfo, element PathElement, roo
 	}
 	var chunkPos uint64
 	if elem.sszType.isBasic() {
-		start := *element.Index * itemLengthFromInfo(elem)
+		start := *element.Index * itemLength(elem)
 		chunkPos = start / ssz.BytesPerChunk
 	} else {
 		chunkPos = *element.Index
@@ -290,6 +229,20 @@ func calculateBitvectorGeneralizedIndex(fieldSsz *SszInfo, element PathElement, 
 	return currentInfo, bitvectorRoot, nil
 }
 
+// Helper functions from SSZ spec
+
+// itemLength calculates the byte length of an SSZ item based on its type information.
+// For basic SSZ types (uint8, uint16, uint32, uint64, bool, etc.), it returns the actual
+// size of the type in bytes. For compound types (containers, lists, vectors), it returns
+// BytesPerChunk which represents the standard SSZ chunk size (32 bytes) used for
+// Merkle tree operations in the SSZ serialization format.
+func itemLength(info *SszInfo) uint64 {
+	if info.sszType.isBasic() {
+		return info.Size()
+	}
+	return ssz.BytesPerChunk
+}
+
 // nextPowerOfTwo computes the next power of two greater than or equal to v.
 func nextPowerOfTwo(v uint64) uint64 {
 	v--
@@ -300,4 +253,54 @@ func nextPowerOfTwo(v uint64) uint64 {
 	v |= v >> 16
 	v++
 	return uint64(v)
+}
+
+// getChunkCount returns the number of chunks for the given SSZInfo (equivalent to chunk_count in the spec)
+func getChunkCount(info *SszInfo) (uint64, error) {
+	switch info.sszType {
+	case Uint8, Uint16, Uint32, Uint64, Boolean:
+		return 1, nil
+	case Container:
+		containerInfo, err := info.ContainerInfo()
+		if err != nil {
+			return 0, err
+		}
+		return uint64(len(containerInfo.fields)), nil
+	case List:
+		listInfo, err := info.ListInfo()
+		if err != nil {
+			return 0, err
+		}
+		elementInfo, err := listInfo.Element()
+		if err != nil {
+			return 0, err
+		}
+		elemLength := itemLength(elementInfo)
+		return (listInfo.Limit()*elemLength + 31) / ssz.BytesPerChunk, nil
+	case Vector:
+		vectorInfo, err := info.VectorInfo()
+		if err != nil {
+			return 0, err
+		}
+		elementInfo, err := vectorInfo.Element()
+		if err != nil {
+			return 0, err
+		}
+		elemLength := itemLength(elementInfo)
+		return (vectorInfo.Length()*elemLength + 31) / ssz.BytesPerChunk, nil
+	case Bitlist:
+		bitlistInfo, err := info.BitlistInfo()
+		if err != nil {
+			return 0, err
+		}
+		return (bitlistInfo.Limit() + 255) / ssz.BitsPerChunk, nil // Bits are packed into 256-bit chunks
+	case Bitvector:
+		bitvectorInfo, err := info.BitvectorInfo()
+		if err != nil {
+			return 0, err
+		}
+		return (bitvectorInfo.Length() + 255) / ssz.BitsPerChunk, nil // Bits are packed into 256-bit chunks
+	default:
+		return 0, errors.New("unsupported SSZ type for chunk count calculation")
+	}
 }
