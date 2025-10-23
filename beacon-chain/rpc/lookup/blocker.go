@@ -409,9 +409,9 @@ func (p *BeaconDbBlocker) blobsDataFromStoredBlobs(root [fieldparams.RootLength]
 	// If no indices are provided, use all indices that are available in the summary.
 	if len(indices) == 0 {
 		maxBlobCount := summary.MaxBlobsForEpoch()
-		for index := uint64(0); index < maxBlobCount; index++ {
-			if summary.HasIndex(index) {
-				indices = append(indices, int(index))
+		for index := 0; uint64(index) < maxBlobCount; index++ { // needed for safe conversion
+			if summary.HasIndex(uint64(index)) {
+				indices = append(indices, index)
 			}
 		}
 	}
