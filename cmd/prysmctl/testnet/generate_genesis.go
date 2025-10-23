@@ -320,7 +320,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 				generateGenesisStateFlags.ExecutionEndpoint)
 		}
 		client := ethclient.NewClient(conn)
-		header, err := client.HeaderByNumber(ctx, big.NewInt(0))
+		header, err := client.HeaderByNumber(ctx, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get header by number")
 		}
