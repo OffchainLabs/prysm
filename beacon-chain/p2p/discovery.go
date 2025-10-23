@@ -224,16 +224,7 @@ func (s *Service) RefreshPersistentSubnets() {
 
 	// Get the current sync subnet bitfield.
 	bitS := bitfield.Bitvector4{byte(0x00)}
-	var syncCommittees []uint64
-	if flags.Get().SubscribeToAllSubnets {
-		// If subscribed to all subnets, set all sync committee subnet bits
-		syncCommittees = make([]uint64, 0, params.BeaconConfig().SyncCommitteeSubnetCount)
-		for i := range params.BeaconConfig().SyncCommitteeSubnetCount {
-			syncCommittees = append(syncCommittees, i)
-		}
-	} else {
-		syncCommittees = cache.SyncSubnetIDs.GetAllSubnets(currentEpoch)
-	}
+	syncCommittees := cache.SyncSubnetIDs.GetAllSubnets(currentEpoch)
 	for _, idx := range syncCommittees {
 		bitS.SetBitAt(idx, true)
 	}

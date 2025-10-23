@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
@@ -59,6 +60,15 @@ func (s *syncSubnetIDs) GetSyncCommitteeSubnets(pubkey []byte, epoch primitives.
 func (s *syncSubnetIDs) GetAllSubnets(currEpoch primitives.Epoch) []uint64 {
 	s.sCommiteeLock.RLock()
 	defer s.sCommiteeLock.RUnlock()
+
+	if flags.Get().SubscribeToAllSubnets {
+		total := params.BeaconConfig().SyncCommitteeSubnetCount
+		subnets := make([]uint64, 0, total)
+		for i := uint64(0); i < total; i++ {
+			subnets = append(subnets, i)
+		}
+		return subnets
+	}
 
 	itemsMap := s.sCommittee.Items()
 	var committees []uint64

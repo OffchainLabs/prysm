@@ -3,6 +3,7 @@ package cache
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -55,4 +56,29 @@ func TestSyncSubnetIDsCache_ValidateCurrentEpoch(t *testing.T) {
 
 	coms = c.GetAllSubnets(99)
 	assert.Equal(t, 20, len(coms))
+}
+
+func TestSyncSubnetIDsCache_AllSubnetsFlag(t *testing.T) {
+	c := newSyncSubnetIDs()
+
+	gFlags := new(flags.GlobalFlags)
+	gFlags.SubscribeToAllSubnets = true
+	flags.Init(gFlags)
+	defer flags.Init(new(flags.GlobalFlags))
+
+	subnets := c.GetAllSubnets(0)
+
+	total := params.BeaconConfig().SyncCommitteeSubnetCount
+	require.Equal(t, total, uint64(len(subnets)))
+
+	expected := make(map[uint64]struct{}, total)
+	for i := uint64(0); i < total; i++ {
+		expected[i] = struct{}{}
+	}
+
+	for _, subnet := range subnets {
+		delete(expected, subnet)
+	}
+
+	require.Equal(t, 0, len(expected))
 }
