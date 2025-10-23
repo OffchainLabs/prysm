@@ -13,9 +13,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-var errInvalidBatchChain = errors.New("parent_root of block does not match the previous block's root")
-var errProposerIndexTooHigh = errors.New("proposer index not present in origin state")
-var errUnknownDomain = errors.New("runtime error looking up signing domain for fork")
+var (
+	errInvalidBlocks        = errors.New("block validation failure")
+	errInvalidBatchChain    = errors.Wrap(errInvalidBlocks, "parent_root of block does not match the previous block's root")
+	errProposerIndexTooHigh = errors.Wrap(errInvalidBlocks, "proposer index not present in origin state")
+	errUnknownDomain        = errors.Wrap(errInvalidBlocks, "runtime error looking up signing domain for fork")
+	errBatchSignatureFailed = errors.Wrap(errInvalidBlocks, "failed to verify block signature in batch")
+	errInvalidSignatureData = errors.Wrap(errInvalidBlocks, "could not verify signatures in block batch due to invalid signature data")
+)
 
 // verifiedROBlocks represents a slice of blocks that have passed signature verification.
 type verifiedROBlocks []blocks.ROBlock
@@ -90,10 +95,12 @@ func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	}
 	v, err := sigSet.Verify()
 	if err != nil {
-		return nil, errors.Wrap(err, "SignatureBatch Verify")
+		// TODO: we break the blst signature inheritance because there isn't a checkable
+		// base error, so we reverse wrap it to make it checkable.
+		return nil, errors.Wrap(errInvalidSignatureData, err.Error())
 	}
 	if !v {
-		return nil, errors.New("SignatureBatch Verify invalid")
+		return nil, errBatchSignatureFailed
 	}
 	return blks, nil
 }

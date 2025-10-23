@@ -154,6 +154,9 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	vb, err := w.cfg.verifier.verify(toVerify)
 	blockVerifyMs.Observe(float64(time.Since(dlt).Milliseconds()))
 	if err != nil {
+		if shouldDownscore(err) {
+			w.cfg.downscore(b.blockPid, "invalid SignedBeaconBlock batch rpc response", err)
+		}
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch validation failed")
 		return b.withRetryableError(err)
 	}
@@ -238,7 +241,7 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	_, err := sync.SendDataColumnSidecarsByRangeRequest(p, b.columns.peer, vr.req, vr.validate)
 	if err != nil {
 		if shouldDownscore(err) {
-			w.cfg.downscore(b.columns.peer, "bad SendDataColumnSidecarsByRangeRequest response", err)
+			w.cfg.downscore(b.columns.peer, "invalid DataColumnSidecar rpc response", err)
 		}
 		return b.withRetryableError(errors.Wrap(err, "failed to request data column sidecars"))
 	}
@@ -248,5 +251,6 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 
 func shouldDownscore(err error) bool {
 	return errors.Is(err, errInvalidDataColumnResponse) ||
-		errors.Is(err, sync.ErrInvalidFetchedData)
+		errors.Is(err, sync.ErrInvalidFetchedData) ||
+		errors.Is(err, errInvalidBlocks)
 }
