@@ -7,8 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
-var index = uint64(0)
-
 func TestParsePath(t *testing.T) {
 	tests := []struct {
 		name     string

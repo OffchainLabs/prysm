@@ -36,18 +36,16 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 			errorMessage: "field value3 not found",
 		},
 		{
-			name:          "Basic field cannot descend",
-			path:          "value1.value1",
-			expectedIndex: 0,
-			expectError:   true,
-			errorMessage:  "indexing requires a container field step first, got Uint64",
+			name:         "Basic field cannot descend",
+			path:         "value1.value1",
+			expectError:  true,
+			errorMessage: "indexing requires a container field step first, got Uint64",
 		},
 		{
-			name:          "Indexing without container step",
-			path:          "value2.value2[0]",
-			expectedIndex: 0,
-			expectError:   true,
-			errorMessage:  "indexing requires a container field step first",
+			name:         "Indexing without container step",
+			path:         "value2.value2[0]",
+			expectError:  true,
+			errorMessage: "indexing requires a container field step first",
 		},
 		{
 			name:          "Value2 field",
@@ -68,11 +66,10 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:          "Empty path error",
-			path:          "",
-			expectedIndex: 0,
-			expectError:   true,
-			errorMessage:  "empty path",
+			name:         "Empty path error",
+			path:         "",
+			expectError:  true,
+			errorMessage: "empty path",
 		},
 	}
 
@@ -220,11 +217,10 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:          "variable_container_list[0].inner_1.len(nested_list_field[3])",
-			path:          "variable_container_list[0].inner_1.len(nested_list_field[3])",
-			expectedIndex: 1376775,
-			expectError:   true,
-			errorMessage:  "len() is not supported for indexed elements (multi-dimensional arrays)",
+			name:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
+			path:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
+			expectError:  true,
+			errorMessage: "len() is not supported for indexed elements (multi-dimensional arrays)",
 		},
 	}
 
