@@ -111,7 +111,7 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 // ColumnIndices is a map of column indices where the key is the column index and the value is a boolean.
 // The boolean could indicate different things, eg whether the column is needed (in the context of satisfying custody requirements)
 // or present (in the context of a custody check on disk or in cache).
-type ColumnIndices map[uint64]bool
+type ColumnIndices map[uint64]struct{}
 
 // Has returns true if the index is present in the ColumnIndices.
 func (ci ColumnIndices) Has(index uint64) bool {
@@ -126,7 +126,7 @@ func (ci ColumnIndices) Count() int {
 
 // Set sets the index in the ColumnIndices.
 func (ci ColumnIndices) Set(index uint64) {
-	ci[index] = true
+	ci[index] = struct{}{}
 }
 
 // Unset removes the index from the ColumnIndices.
@@ -166,7 +166,7 @@ func (ci ColumnIndices) Union(other ColumnIndices) {
 // ToMap converts a ColumnIndices into a map of uint64 to bool.
 // In the future ColumnIndices may be changed to a bit map, so using
 // ToMap will ensure forwards-compatibility.
-func (ci ColumnIndices) ToMap() map[uint64]bool {
+func (ci ColumnIndices) ToMap() map[uint64]struct{} {
 	return ci.Copy()
 }
 
@@ -184,20 +184,22 @@ func (ci ColumnIndices) ToSlice() []uint64 {
 func NewColumnIndicesFromSlice(indices []uint64) ColumnIndices {
 	ci := make(ColumnIndices, len(indices))
 	for _, index := range indices {
-		ci[index] = true
+		ci[index] = struct{}{}
 	}
 	return ci
 }
 
-// NewColumnIndicesFromMap creates a ColumnIndices from a map of uint64 to bool.
-// Unlike the untyped map, this explicitly indicates that the boolean value is meaningful.
+// NewColumnIndicesFromMap creates a ColumnIndices from a map[uint64]bool. This kind of map
+// is used in several places in peerdas code. Converting from this map type to ColumnIndices
+// will allow us to move ColumnIndices underlying type to a bitmap in the future and avoid
+// lots of loops for things like intersections/unions or copies.
 func NewColumnIndicesFromMap(indices map[uint64]bool) ColumnIndices {
 	ci := make(ColumnIndices, len(indices))
 	for index, set := range indices {
 		if !set {
 			continue
 		}
-		ci[index] = true
+		ci[index] = struct{}{}
 	}
 	return ci
 }
