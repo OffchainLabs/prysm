@@ -11,6 +11,7 @@ import (
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	slottest "github.com/OffchainLabs/prysm/v6/time/slots/testing"
 	"github.com/sirupsen/logrus"
 
@@ -247,11 +248,22 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 	ctx := t.Context()
 	beaconDB := dbtest.SetupDB(t)
 
-	// Get the minimum required epochs (272 + 1 = 273 for minimal)
-	minRequiredEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests + 1)
+	// Get the minimum required epochs (272 for minimal)
+	minRequiredEpochs := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 
 	// Use a slot that's guaranteed to be after the minimum retention period
 	currentSlot := primitives.Slot(minRequiredEpochs+100) * (params.BeaconConfig().SlotsPerEpoch)
+
+	// Calculate epoch-aligned expected prune slot
+	// For epoch-aligned pruning: pruneUpto = epochStart(currentEpoch - retention) - 1
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	// Helper function to calculate expected prune slot for a given retention
+	calcExpectedPruneSlot := func(retention primitives.Epoch) primitives.Slot {
+		minEpoch := currentEpoch - retention
+		minSlot, _ := slots.EpochStart(minEpoch)
+		return minSlot - 1
+	}
 
 	tests := []struct {
 		name                string
@@ -262,19 +274,19 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 		{
 			name:                "User value below minimum - should use minimum",
 			userRetentionEpochs: 2, // Way below minimum
-			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs)*params.BeaconConfig().SlotsPerEpoch,
+			expectedPruneSlot:   calcExpectedPruneSlot(minRequiredEpochs),
 			description:         "Should use minimum when user value is too low",
 		},
 		{
 			name:                "User value at minimum",
 			userRetentionEpochs: minRequiredEpochs,
-			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs)*params.BeaconConfig().SlotsPerEpoch,
+			expectedPruneSlot:   calcExpectedPruneSlot(minRequiredEpochs),
 			description:         "Should use user value when at minimum",
 		},
 		{
 			name:                "User value above minimum",
 			userRetentionEpochs: minRequiredEpochs + 10,
-			expectedPruneSlot:   currentSlot - primitives.Slot(minRequiredEpochs+10)*params.BeaconConfig().SlotsPerEpoch,
+			expectedPruneSlot:   calcExpectedPruneSlot(minRequiredEpochs + 10),
 			description:         "Should use user value when above minimum",
 		},
 	}
@@ -307,6 +319,135 @@ func TestWithRetentionPeriod_EnforcesMinimum(t *testing.T) {
 			if tt.userRetentionEpochs < minRequiredEpochs {
 				assert.LogsContain(t, hook, "Retention period too low, ignoring and using minimum required value")
 			}
+		})
+	}
+}
+
+func TestWithRetentionPeriod_AcceptsSpecMinimum(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.MinimalSpecConfig()
+	params.OverrideBeaconConfig(config)
+
+	ctx := t.Context()
+	beaconDB := dbtest.SetupDB(t)
+
+	hook := logTest.NewGlobal()
+	logrus.SetLevel(logrus.WarnLevel)
+
+	// The spec minimum - this SHOULD be accepted without warning
+	specMinimum := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+	// Use a slot that's guaranteed to be after the minimum retention period
+	currentSlot := primitives.Slot(specMinimum+100) * (params.BeaconConfig().SlotsPerEpoch)
+
+	mockCustody := &mockCustodyUpdater{}
+	p, err := New(
+		ctx,
+		beaconDB,
+		time.Now(),
+		nil,
+		nil,
+		mockCustody,
+		WithRetentionPeriod(specMinimum),
+	)
+	require.NoError(t, err)
+
+	// Test the pruning calculation
+	pruneUptoSlot := p.ps(currentSlot)
+
+	// The expected prune slot should use epoch-aligned calculation
+	// pruneUpto = epochStart(currentEpoch - retention) - 1
+	currentEpoch := slots.ToEpoch(currentSlot)
+	minRequiredEpoch := currentEpoch - specMinimum
+	minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+	require.NoError(t, err)
+	expectedPruneSlot := minRequiredSlot - 1
+
+	// This should pass: spec minimum should be accepted and used
+	assert.Equal(t, expectedPruneSlot, pruneUptoSlot,
+		"Pruner should accept and use MIN_EPOCHS_FOR_BLOCK_REQUESTS without adding 1")
+
+	// This should pass: no warning should be logged for the spec minimum
+	for _, entry := range hook.AllEntries() {
+		if entry.Level == logrus.WarnLevel {
+			t.Errorf("Unexpected warning when using spec minimum: %s", entry.Message)
+		}
+	}
+}
+
+func TestPruneStartSlotFunc_EpochAlignment(t *testing.T) {
+	// This test verifies that the pruning calculation is epoch-aligned.
+	params.SetupTestConfigCleanup(t)
+	config := params.MinimalSpecConfig()
+	params.OverrideBeaconConfig(config)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch // 8 for minimal config
+	retentionEpochs := primitives.Epoch(3)
+
+	tests := []struct {
+		name                    string
+		currentSlot             primitives.Slot
+		expectedEpochAlignment  bool
+		expectedMinRequiredSlot primitives.Slot
+		description             string
+	}{
+		{
+			name:                    "Pruning at epoch boundary",
+			currentSlot:             primitives.Slot(4 * slotsPerEpoch), // Slot 32 (epoch 4, slot 0 of epoch)
+			expectedEpochAlignment:  true,
+			expectedMinRequiredSlot: primitives.Slot(1 * slotsPerEpoch), // Epoch 1 start = slot 8
+			description:             "When pruning at epoch boundary, earliestAvailableSlot should be at epoch boundary",
+		},
+		{
+			name:                    "Pruning at middle of epoch",
+			currentSlot:             primitives.Slot(4*slotsPerEpoch + 4), // Slot 36 (epoch 4, slot 4 of epoch)
+			expectedEpochAlignment:  true,
+			expectedMinRequiredSlot: primitives.Slot(1 * slotsPerEpoch), // Epoch 1 start = slot 8
+			description:             "When pruning mid-epoch, earliestAvailableSlot must still be at epoch boundary",
+		},
+		{
+			name:                    "Pruning at end of epoch",
+			currentSlot:             primitives.Slot(5*slotsPerEpoch - 1), // Slot 39 (epoch 4, last slot)
+			expectedEpochAlignment:  true,
+			expectedMinRequiredSlot: primitives.Slot(1 * slotsPerEpoch), // Epoch 1 start = slot 8
+			description:             "When pruning at epoch end, earliestAvailableSlot must be at epoch boundary",
+		},
+		{
+			name:                    "Pruning at various epoch positions",
+			currentSlot:             primitives.Slot(8*slotsPerEpoch + 5), // Slot 69 (epoch 8, slot 5 of epoch)
+			expectedEpochAlignment:  true,
+			expectedMinRequiredSlot: primitives.Slot(5 * slotsPerEpoch), // Epoch 5 start = slot 40
+			description:             "EarliestAvailableSlot should always align to epoch boundary",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create the prune start slot function
+			ps := pruneStartSlotFunc(retentionEpochs)
+
+			// Calculate pruneUpto slot
+			pruneUpto := ps(tt.currentSlot)
+
+			// EarliestAvailableSlot is pruneUpto + 1
+			earliestAvailableSlot := pruneUpto + 1
+
+			// Verify epoch alignment: earliestAvailableSlot should be at an epoch boundary
+			if tt.expectedEpochAlignment {
+				// Check if earliestAvailableSlot is at the start of an epoch
+				epoch := slots.ToEpoch(earliestAvailableSlot)
+				epochStartSlot, err := slots.EpochStart(epoch)
+				require.NoError(t, err)
+
+				assert.Equal(t, epochStartSlot, earliestAvailableSlot,
+					"%s: earliestAvailableSlot (%d) should be at epoch boundary (slot %d of epoch %d)",
+					tt.description, earliestAvailableSlot, epochStartSlot, epoch)
+			}
+
+			// Verify it matches the expected minimum required slot for custody validation
+			assert.Equal(t, tt.expectedMinRequiredSlot, earliestAvailableSlot,
+				"%s: earliestAvailableSlot should match custody minimum required slot",
+				tt.description)
 		})
 	}
 }
