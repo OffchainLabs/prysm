@@ -402,10 +402,6 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 	} else {
 		fmt.Printf("Showing %d validator accounts\n", numAccounts)
 	}
-	fmt.Println(
-		au.BrightRed("View the eth1 deposit transaction data for your accounts " +
-			"by running `validator accounts list --show-deposit-data`"),
-	)
 
 	pubKeys, err := km.FetchValidatingPublicKeys(ctx)
 	if err != nil {

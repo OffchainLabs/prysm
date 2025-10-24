@@ -221,10 +221,10 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 	// Expected output format definition
 	const prologLength = 4
 	const accountLength = 4
-	const epilogLength = 2
-	const nameOffset = 1
-	const keyOffset = 2
-	const privkeyOffset = 3
+	const epilogLength = 1
+
+	const keyOffset = 1
+	const privkeyOffset = 2
 
 	// Require the output has correct number of lines
 	lineCount := prologLength + accountLength*numAccounts + epilogLength
@@ -242,7 +242,7 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 
 	// Assert that account names are printed on the correct lines
 	for i, accountName := range accountNames {
-		lineNumber := prologLength + accountLength*i + nameOffset
+		lineNumber := prologLength + accountLength*i
 		accountNameFound := strings.Contains(lines[lineNumber], accountName)
 		assert.Equal(t, true, accountNameFound, "Account Name %s not found on line number %d", accountName, lineNumber)
 	}

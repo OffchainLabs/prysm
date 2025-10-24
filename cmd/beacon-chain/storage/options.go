@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -25,15 +28,23 @@ var (
 		Aliases: []string{"extend-blob-retention-epoch"},
 	}
 	BlobStorageLayout = &cli.StringFlag{
-		Name:  "blob-storage-layout",
-		Usage: layoutFlagUsage(),
-		Value: filesystem.LayoutNameFlat,
+		Name:        "blob-storage-layout",
+		Usage:       layoutFlagUsage(),
+		DefaultText: fmt.Sprintf("\"%s\", unless a different existing layout is detected", filesystem.LayoutNameByEpoch),
 	}
 	DataColumnStoragePathFlag = &cli.PathFlag{
 		Name:  "data-column-path",
 		Usage: "Location for data column storage. Default location will be a 'data-columns' directory next to the beacon db.",
 	}
 )
+
+// Flags is the list of CLI flags for configuring blob storage.
+var Flags = []cli.Flag{
+	BlobStoragePathFlag,
+	BlobRetentionEpochFlag,
+	BlobStorageLayout,
+	DataColumnStoragePathFlag,
+}
 
 func layoutOptions() string {
 	return "available options are: " + strings.Join(filesystem.LayoutNames, ", ") + "."
@@ -62,10 +73,20 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		return nil, errors.Wrap(err, "blob retention epoch")
 	}
 
+	blobPath := blobStoragePath(c)
+	layout, err := detectLayout(blobPath, c)
+	if err != nil {
+		return nil, errors.Wrap(err, "detecting blob storage layout")
+	}
+	if layout == filesystem.LayoutNameFlat {
+		log.Warnf("Existing '%s' blob storage layout detected. Consider setting the flag --%s=%s for faster startup and more reliable pruning. Setting this flag will automatically migrate your existing blob storage to the newer layout on the next restart.",
+
+			filesystem.LayoutNameFlat, BlobStorageLayout.Name, filesystem.LayoutNameByEpoch)
+	}
 	blobStorageOptions := node.WithBlobStorageOptions(
 		filesystem.WithBlobRetentionEpochs(blobRetentionEpoch),
-		filesystem.WithBasePath(blobStoragePath(c)),
-		filesystem.WithLayout(c.String(BlobStorageLayout.Name)), // This is validated in the Action func for BlobStorageLayout.
+		filesystem.WithBasePath(blobPath),
+		filesystem.WithLayout(layout), // This is validated in the Action func for BlobStorageLayout.
 	)
 
 	dataColumnRetentionEpoch, err := dataColumnRetentionEpoch(c)
@@ -80,6 +101,53 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 
 	opts := []node.Option{blobStorageOptions, dataColumnStorageOption}
 	return opts, nil
+}
+
+// stringFlagGetter makes testing detectLayout easier
+// because we don't need to mess with FlagSets and cli types.
+type stringFlagGetter interface {
+	String(name string) string
+}
+
+// detectLayout determines which layout to use based on explicit user flags or by probing the
+// blob directory to determine the previously used layout.
+// - explicit: If the user has specified a layout flag, that layout is returned.
+// - flat: If directories that look like flat layout's block root paths are present.
+// - by-epoch: default if neither of the above is true.
+func detectLayout(dir string, c stringFlagGetter) (string, error) {
+	explicit := c.String(BlobStorageLayout.Name)
+	if explicit != "" {
+		return explicit, nil
+	}
+
+	dir = path.Clean(dir)
+	// nosec: this path is provided by the node operator via flag
+	base, err := os.Open(dir) // #nosec G304
+	if err != nil {
+		// 'blobs' directory does not exist yet, so default to by-epoch.
+		return filesystem.LayoutNameByEpoch, nil
+	}
+	defer func() {
+		if err := base.Close(); err != nil {
+			log.WithError(err).Errorf("Could not close blob storage directory")
+		}
+	}()
+
+	// When we go looking for existing by-root directories, we only need to find one directory
+	// but one of those directories could be the `by-epoch` layout's top-level directory,
+	// and it seems possible that on some platforms we could get extra system directories that I don't
+	// know how to anticipate (looking at you, Windows), so I picked 16 as a small number with a generous
+	// amount of wiggle room to be confident that we'll likely see a by-root director if one exists.
+	entries, err := base.Readdirnames(16)
+	if err != nil {
+		return "", errors.Wrap(err, "reading blob storage directory")
+	}
+	for _, entry := range entries {
+		if filesystem.IsBlockRootDir(entry) {
+			return filesystem.LayoutNameFlat, nil
+		}
+	}
+	return filesystem.LayoutNameByEpoch, nil
 }
 
 func blobStoragePath(c *cli.Context) string {

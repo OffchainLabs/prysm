@@ -34,7 +34,7 @@ func (l *periodicEpochLayout) name() string {
 
 func (l *periodicEpochLayout) blockParentDirs(ident blobIdent) []string {
 	return []string{
-		periodicEpochBaseDir,
+		PeriodicEpochBaseDir,
 		l.periodDir(ident.epoch),
 		l.epochDir(ident.epoch),
 	}
@@ -50,28 +50,28 @@ func (l *periodicEpochLayout) notify(ident blobIdent) error {
 
 // If before == 0, it won't be used as a filter and all idents will be returned.
 func (l *periodicEpochLayout) iterateIdents(before primitives.Epoch) (*identIterator, error) {
-	_, err := l.fs.Stat(periodicEpochBaseDir)
+	_, err := l.fs.Stat(PeriodicEpochBaseDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &identIterator{eof: true}, nil // The directory is non-existent, which is fine; stop iteration.
 		}
-		return nil, errors.Wrapf(err, "error reading path %s", periodicEpochBaseDir)
+		return nil, errors.Wrapf(err, "error reading path %s", PeriodicEpochBaseDir)
 	}
 	// iterate root, which should have directories named by "period"
-	entries, err := listDir(l.fs, periodicEpochBaseDir)
+	entries, err := listDir(l.fs, PeriodicEpochBaseDir)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to list %s", periodicEpochBaseDir)
+		return nil, errors.Wrapf(err, "failed to list %s", PeriodicEpochBaseDir)
 	}
 
 	return &identIterator{
 		fs:   l.fs,
-		path: periodicEpochBaseDir,
+		path: PeriodicEpochBaseDir,
 		// Please see comments on the `layers` field in `identIterator`` if the role of the layers is unclear.
 		layers: []layoutLayer{
 			{populateIdent: populateNoop, filter: isBeforePeriod(before)},
 			{populateIdent: populateEpoch, filter: isBeforeEpoch(before)},
-			{populateIdent: populateRoot, filter: isRootDir},  // extract root from path
-			{populateIdent: populateIndex, filter: isSszFile}, // extract index from filename
+			{populateIdent: populateRoot, filter: IsBlockRootDir}, // extract root from path
+			{populateIdent: populateIndex, filter: isSszFile},     // extract index from filename
 		},
 		entries: entries,
 	}, nil
@@ -98,7 +98,7 @@ func (l *periodicEpochLayout) epochDir(epoch primitives.Epoch) string {
 }
 
 func (l *periodicEpochLayout) periodDir(epoch primitives.Epoch) string {
-	return filepath.Join(periodicEpochBaseDir, fmt.Sprintf("%d", periodForEpoch(epoch)))
+	return filepath.Join(PeriodicEpochBaseDir, fmt.Sprintf("%d", periodForEpoch(epoch)))
 }
 
 func (l *periodicEpochLayout) sszPath(n blobIdent) string {
