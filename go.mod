@@ -41,7 +41,7 @@ require (
 	github.com/k0kubun/go-ansi v0.0.0-20180517002512-3bf9e2903213
 	github.com/kisielk/errcheck v1.8.0
 	github.com/kr/pretty v0.3.1
-	github.com/libp2p/go-libp2p v0.39.1
+	github.com/libp2p/go-libp2p v0.39.2-0.20251024111126-d25a46e04c9d
 	github.com/libp2p/go-libp2p-mplex v0.9.0
 	github.com/libp2p/go-libp2p-pubsub v0.14.2
 	github.com/libp2p/go-mplex v0.7.0
