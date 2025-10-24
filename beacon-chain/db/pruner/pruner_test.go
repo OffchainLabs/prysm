@@ -363,11 +363,9 @@ func TestWithRetentionPeriod_AcceptsSpecMinimum(t *testing.T) {
 	require.NoError(t, err)
 	expectedPruneSlot := minRequiredSlot - 1
 
-	// This should pass: spec minimum should be accepted and used
 	assert.Equal(t, expectedPruneSlot, pruneUptoSlot,
 		"Pruner should accept and use MIN_EPOCHS_FOR_BLOCK_REQUESTS without adding 1")
 
-	// This should pass: no warning should be logged for the spec minimum
 	for _, entry := range hook.AllEntries() {
 		if entry.Level == logrus.WarnLevel {
 			t.Errorf("Unexpected warning when using spec minimum: %s", entry.Message)
