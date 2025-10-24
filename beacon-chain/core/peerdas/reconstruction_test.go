@@ -298,6 +298,253 @@ func TestReconstructBlobs(t *testing.T) {
 
 }
 
+func TestReconstructBlobsData(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+
+	require.NoError(t, kzg.Start())
+	fs := util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
+
+	t.Run("empty indices with blobCount > 0", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		// Generate data column sidecars
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Call with empty indices - should return all blobs
+		reconstructedBlobs, err := peerdas.ReconstructBlobsData(verifiedRoSidecars, []int{}, blobCount)
+		require.NoError(t, err)
+		require.Equal(t, blobCount, len(reconstructedBlobs))
+
+		// Verify each blob matches
+		for i := 0; i < blobCount; i++ {
+			require.DeepEqual(t, blobs[i][:], reconstructedBlobs[i])
+		}
+	})
+
+	t.Run("specific indices", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Request only blobs at indices 0 and 2
+		indices := []int{0, 2}
+		reconstructedBlobs, err := peerdas.ReconstructBlobsData(verifiedRoSidecars, indices, blobCount)
+		require.NoError(t, err)
+		require.Equal(t, len(indices), len(reconstructedBlobs))
+
+		// Verify requested blobs match
+		for i, blobIndex := range indices {
+			require.DeepEqual(t, blobs[blobIndex][:], reconstructedBlobs[i])
+		}
+	})
+
+	t.Run("blob count mismatch", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Pass wrong blob count
+		wrongBlobCount := 5
+		_, err = peerdas.ReconstructBlobsData(verifiedRoSidecars, []int{0}, wrongBlobCount)
+		require.ErrorContains(t, "blob count mismatch", err)
+	})
+
+	t.Run("empty data columns", func(t *testing.T) {
+		_, err := peerdas.ReconstructBlobsData([]blocks.VerifiedRODataColumn{}, []int{0}, 1)
+		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
+	})
+
+	t.Run("index too high", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Request blob index that's too high
+		_, err = peerdas.ReconstructBlobsData(verifiedRoSidecars, []int{blobCount}, blobCount)
+		require.ErrorIs(t, err, peerdas.ErrBlobIndexTooHigh)
+	})
+
+	t.Run("not enough columns", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Only provide 63 columns (need at least 64)
+		inputSidecars := verifiedRoSidecars[:fieldparams.CellsPerBlob-1]
+		_, err = peerdas.ReconstructBlobsData(inputSidecars, []int{0}, blobCount)
+		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
+	})
+
+	t.Run("not sorted", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Swap two sidecars to make them unsorted
+		verifiedRoSidecars[3], verifiedRoSidecars[2] = verifiedRoSidecars[2], verifiedRoSidecars[3]
+
+		_, err = peerdas.ReconstructBlobsData(verifiedRoSidecars, []int{0}, blobCount)
+		require.ErrorIs(t, err, peerdas.ErrDataColumnSidecarsNotSortedByIndex)
+	})
+
+	t.Run("with reconstruction needed", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Keep only even-indexed columns (will need reconstruction)
+		filteredSidecars := make([]blocks.VerifiedRODataColumn, 0, len(verifiedRoSidecars)/2)
+		for i := 0; i < len(verifiedRoSidecars); i += 2 {
+			filteredSidecars = append(filteredSidecars, verifiedRoSidecars[i])
+		}
+
+		// Reconstruct all blobs
+		reconstructedBlobs, err := peerdas.ReconstructBlobsData(filteredSidecars, []int{}, blobCount)
+		require.NoError(t, err)
+		require.Equal(t, blobCount, len(reconstructedBlobs))
+
+		// Verify all blobs match
+		for i := 0; i < blobCount; i++ {
+			require.DeepEqual(t, blobs[i][:], reconstructedBlobs[i])
+		}
+	})
+
+	t.Run("no reconstruction needed - all non-extended columns present", func(t *testing.T) {
+		const blobCount = 3
+		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
+
+		blobs := make([]kzg.Blob, blobCount)
+		for i := range blobCount {
+			copy(blobs[i][:], roBlobSidecars[i].Blob)
+		}
+
+		cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+		roBlock, _, _ := util.GenerateTestFuluBlockWithSidecars(t, blobCount, util.WithSlot(fs))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+
+		verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
+		for _, roDataColumnSidecar := range roDataColumnSidecars {
+			verifiedRoSidecar := blocks.NewVerifiedRODataColumn(roDataColumnSidecar)
+			verifiedRoSidecars = append(verifiedRoSidecars, verifiedRoSidecar)
+		}
+
+		// Use all columns (no reconstruction needed since we have all non-extended columns 0-63)
+		reconstructedBlobs, err := peerdas.ReconstructBlobsData(verifiedRoSidecars, []int{1}, blobCount)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(reconstructedBlobs))
+
+		// Verify blob matches
+		require.DeepEqual(t, blobs[1][:], reconstructedBlobs[0])
+	})
+}
+
 func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 	// Start the trusted setup.
 	err := kzg.Start()
