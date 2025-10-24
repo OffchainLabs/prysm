@@ -129,7 +129,7 @@ func getContainerFieldByName(info *SszInfo, fieldName string) (uint64, *SszInfo,
 // - its generalized index.
 func calculateLengthGeneralizedIndex(fieldSsz *SszInfo, element PathElement, parentIndex uint64) (*SszInfo, uint64, error) {
 	if element.Index != nil {
-		return nil, 0, fmt.Errorf("len() is not supported for indexed elements (multi-dimensional arrays)")
+		return nil, 0, fmt.Errorf("len() is not supported for multi-dimensional arrays")
 	}
 	// Length field is only valid for List and Bitlist types
 	if fieldSsz.sszType != List && fieldSsz.sszType != Bitlist {
