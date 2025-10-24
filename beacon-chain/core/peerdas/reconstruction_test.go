@@ -510,7 +510,7 @@ func TestReconstructBlobsData(t *testing.T) {
 		require.Equal(t, blobCount, len(reconstructedBlobs))
 
 		// Verify all blobs match
-		for i := 0; i < blobCount; i++ {
+		for i := range blobCount {
 			require.DeepEqual(t, blobs[i][:], reconstructedBlobs[i])
 		}
 	})
