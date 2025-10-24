@@ -56,7 +56,8 @@ func (vs *Server) circuitBreakBuilder(s primitives.Slot) (bool, error) {
 		return true, errors.New("no fork choicer configured")
 	}
 
-	// Circuit breaker is active if the missing consecutive slots greater than `MaxBuilderConsecutiveMissedSlots`.
+	// Circuit breaker is active if the missing consecutive slots are greater than or equal to
+	// `MaxBuilderConsecutiveMissedSlots`.
 	highestReceivedSlot := vs.ForkchoiceFetcher.HighestReceivedBlockSlot()
 	maxConsecutiveSkipSlotsAllowed := params.BeaconConfig().MaxBuilderConsecutiveMissedSlots
 	diff, err := s.SafeSubSlot(highestReceivedSlot)
@@ -66,8 +67,8 @@ func (vs *Server) circuitBreakBuilder(s primitives.Slot) (bool, error) {
 
 	if diff >= maxConsecutiveSkipSlotsAllowed {
 		log.WithFields(logrus.Fields{
-			"currentSlot":                    s,
-			"highestReceivedSlot":            highestReceivedSlot,
+			"currentSlot":                   s,
+			"highestReceivedSlot":           highestReceivedSlot,
 			"maxConsecutiveSkipSlotsAllowed": maxConsecutiveSkipSlotsAllowed,
 		}).Warn("Circuit breaker activated due to missing consecutive slot. Ignore if mev-boost is not used")
 		return true, nil
@@ -78,7 +79,8 @@ func (vs *Server) circuitBreakBuilder(s primitives.Slot) (bool, error) {
 		return false, nil
 	}
 
-	// Circuit breaker is active if the missing slots per epoch (rolling window) greater than `MaxBuilderEpochMissedSlots`.
+	// Circuit breaker is active if the missing slots per epoch (rolling window) are greater than or
+	// equal to `MaxBuilderEpochMissedSlots`.
 	receivedCount, err := vs.ForkchoiceFetcher.ReceivedBlocksLastEpoch()
 	if err != nil {
 		return true, err
