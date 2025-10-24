@@ -312,7 +312,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
-		if errors.Is(err, builderapi.ErrBadGateway) && block.IsBlinded() {
+		if errors.Is(err, builderapi.ErrBadGateway) {
 			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
 			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 		}
