@@ -239,15 +239,37 @@ func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
 }
 
 // pruneStartSlotFunc returns the function to determine the start slot to start pruning.
+// The pruning calculation is epoch-aligned,
+// ensuring that earliestAvailableSlot is always at an epoch boundary.
+// So that we prune epoch-wise.
+// e.g. if retentionEpochs is 3 i.e. we should keep at least 3 epochs from current slot, 
+//  current slot is 325 (=> current epoch is 10), 
+//  then we should keep epoch 7 onwards (inclusive of epoch 7). 
+//  So we can prune up to the last slot of 6th epoch i.e. 32 x 7 - 1 = 223
+//  Earliest available slot would be 224 in that case. 
 func pruneStartSlotFunc(retentionEpochs primitives.Epoch) func(primitives.Slot) primitives.Slot {
 	return func(current primitives.Slot) primitives.Slot {
 		if retentionEpochs > slots.MaxSafeEpoch() {
 			retentionEpochs = slots.MaxSafeEpoch()
 		}
-		offset := slots.UnsafeEpochStart(retentionEpochs)
-		if offset >= current {
+
+		// Calculate epoch-aligned minimum required slot
+		currentEpoch := slots.ToEpoch(current)
+		var minRequiredEpoch primitives.Epoch
+		if currentEpoch > retentionEpochs {
+			minRequiredEpoch = currentEpoch - retentionEpochs
+		} else {
+			minRequiredEpoch = 0
+		}
+
+		// Get the start slot of the minimum required epoch
+		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+		if err != nil || minRequiredSlot == 0 {
 			return 0
 		}
-		return current - offset
+
+		// Prune up to (but not including) the minimum required slot
+		// This ensures earliestAvailableSlot (pruneUpto + 1) is at the epoch boundary
+		return minRequiredSlot - 1
 	}
 }
