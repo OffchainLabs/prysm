@@ -56,69 +56,69 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 	// Check bitfield once, avoid repeated string operations
 	isBitfield := strings.Contains(tag.Get(castTypeTag), bitfieldMarker)
 
-	 // Get tags once to avoid multiple lookups
-    sszSize := tag.Get(sszSizeTag)
-    sszMax := tag.Get(sszMaxTag)
+	// Get tags once to avoid multiple lookups
+	sszSize := tag.Get(sszSizeTag)
+	sszMax := tag.Get(sszMaxTag)
 
 	// Early return if both tags are empty
-    if sszSize == "" && sszMax == "" {
-        return nil, nil, errListRequiresMax
-    }
+	if sszSize == "" && sszMax == "" {
+		return nil, nil, errListRequiresMax
+	}
 
 	var sizeStr, maxStr string
 	var newTagParts []string
 
 	// Parse ssz-size tag
 	if sszSize != "" {
-        if idx := strings.IndexByte(sszSize, ','); idx != -1 {
-            sizeStr = sszSize[:idx]
-            // Only allocate if there are remaining dimensions
-            if idx+1 < len(sszSize) {
-                newTagParts = append(newTagParts, sszSizeTag+`:"`+sszSize[idx+1:]+`"`)
-            }
-        } else {
-            sizeStr = sszSize
-        }
-    }
+		if idx := strings.IndexByte(sszSize, ','); idx != -1 {
+			sizeStr = sszSize[:idx]
+			// Only allocate if there are remaining dimensions
+			if idx+1 < len(sszSize) {
+				newTagParts = append(newTagParts, sszSizeTag+`:"`+sszSize[idx+1:]+`"`)
+			}
+		} else {
+			sizeStr = sszSize
+		}
+	}
 
 	// Parse ssz-max tag
 	if sszMax != "" {
-        if idx := strings.IndexByte(sszMax, ','); idx != -1 {
-            maxStr = sszMax[:idx]
-            // Only allocate if there are remaining dimensions
-            if idx+1 < len(sszMax) {
-                newTagParts = append(newTagParts, sszMaxTag+`:"`+sszMax[idx+1:]+`"`)
-            }
-        } else {
-            maxStr = sszMax
-        }
-    }
+		if idx := strings.IndexByte(sszMax, ','); idx != -1 {
+			maxStr = sszMax[:idx]
+			// Only allocate if there are remaining dimensions
+			if idx+1 < len(sszMax) {
+				newTagParts = append(newTagParts, sszMaxTag+`:"`+sszMax[idx+1:]+`"`)
+			}
+		} else {
+			maxStr = sszMax
+		}
+	}
 
 	// Create new tag with remaining dimensions only.
 	// We don't have to preserve other tags like json, protobuf.
 	var newTag *reflect.StructTag
 	if len(newTagParts) > 0 {
-        // Pre-calculate capacity to avoid reallocation
-        totalLen := 0
-        for i := range newTagParts {
-            totalLen += len(newTagParts[i])
-            if i > 0 {
-                totalLen++ // space separator
-            }
-        }
-        
-        var sb strings.Builder
-        sb.Grow(totalLen)
-        for i, part := range newTagParts {
-            if i > 0 {
-                sb.WriteByte(' ')
-            }
-            sb.WriteString(part)
-        }
-        
-        t := reflect.StructTag(sb.String())
-        newTag = &t
-    }
+		// Pre-calculate capacity to avoid reallocation
+		totalLen := 0
+		for i := range newTagParts {
+			totalLen += len(newTagParts[i])
+			if i > 0 {
+				totalLen++ // space separator
+			}
+		}
+
+		var sb strings.Builder
+		sb.Grow(totalLen)
+		for i, part := range newTagParts {
+			if i > 0 {
+				sb.WriteByte(' ')
+			}
+			sb.WriteString(part)
+		}
+
+		t := reflect.StructTag(sb.String())
+		newTag = &t
+	}
 
 	// Parse the first dimension based on ssz-size and ssz-max rules.
 	// 1. If ssz-size is not specified (wildcard or empty), it must be a list.
