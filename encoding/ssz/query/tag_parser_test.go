@@ -185,3 +185,50 @@ func TestParseSSZTag(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkParseSSZTag(b *testing.B) {
+    tests := []struct {
+        name string
+        tag  string
+    }{
+        // Vector tests
+        {"single dimension vector", `ssz-size:"32"`},
+        {"multi-dimensional vector", `ssz-size:"5,32"`},
+        {"three-dimensional vector", `ssz-size:"5,10,32"`},
+        {"large vector", `ssz-size:"1048576"`},
+
+        // List tests
+        {"single dimension list", `ssz-max:"100"`},
+        {"multi-dimensional list", `ssz-max:"100,200"`},
+        {"large list", `ssz-max:"1048576"`},
+        {"wildcard size becomes list", `ssz-size:"?" ssz-max:"100"`},
+        {"wildcard with remaining dimensions", `ssz-size:"?,32" ssz-max:"100"`},
+        {"empty size becomes list", `ssz-size:"" ssz-max:"100"`},
+        {"list of vectors", `ssz-size:"?,32" ssz-max:"100"`},
+
+        // Error cases
+        {"empty tag", ""},
+        {"zero vector length", `ssz-size:"0"`},
+        {"zero list limit", `ssz-max:"0"`},
+        {"invalid vector length", `ssz-size:"abc"`},
+        {"invalid list limit", `ssz-max:"xyz"`},
+        {"both wildcard", `ssz-size:"?" ssz-max:"?"`},
+        {"list without max", `ssz-size:"?"`},
+    }
+
+    for _, tt := range tests {
+        b.Run(tt.name, func(b *testing.B) {
+            var tag *reflect.StructTag
+            if tt.tag != "" {
+                t := reflect.StructTag(tt.tag)
+                tag = &t
+            }
+            b.ResetTimer()
+            for i := 0; i < b.N; i++ {
+                _, _, _ = query.ParseSSZTag(tag)
+            }
+        })
+    }
+}
+
+

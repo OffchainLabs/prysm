@@ -19,6 +19,20 @@ const (
 	// castTypeTag specifies special custom casting instructions.
 	// e.g., "github.com/prysmaticlabs/go-bitfield.Bitlist".
 	castTypeTag = "cast-type"
+
+	// Bitfield substring for fast checking
+	bitfieldMarker = "go-bitfield"
+)
+
+// Pre-allocated errors to avoid allocations
+var (
+	errNilStructTag       = errors.New("nil struct tag")
+	errBothWildcard       = errors.New("ssz-size and ssz-max cannot both be '?'")
+	errListRequiresMax    = errors.New("list requires ssz-max value")
+	errMaxMustBePositive  = errors.New("ssz-max must be greater than 0")
+	errSizeMustBePositive = errors.New("ssz-size must be greater than 0")
+	errNotVectorDimension = errors.New("not a vector dimension")
+	errNotListDimension   = errors.New("not a list dimension")
 )
 
 // SSZDimension holds parsed SSZ tag information for current dimension.
@@ -36,60 +50,84 @@ type SSZDimension struct {
 // This function validates the tags and returns an error if they are malformed.
 func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, error) {
 	if tag == nil {
-		return nil, nil, errors.New("nil struct tag")
+		return nil, nil, errNilStructTag
 	}
 
-	var newTagParts []string
+	// Check bitfield once, avoid repeated string operations
+	isBitfield := strings.Contains(tag.Get(castTypeTag), bitfieldMarker)
+
+	 // Get tags once to avoid multiple lookups
+    sszSize := tag.Get(sszSizeTag)
+    sszMax := tag.Get(sszMaxTag)
+
+	// Early return if both tags are empty
+    if sszSize == "" && sszMax == "" {
+        return nil, nil, errListRequiresMax
+    }
+
 	var sizeStr, maxStr string
-	var isBitfield bool
-
-	if castType := tag.Get(castTypeTag); strings.Contains(castType, "go-bitfield") {
-		isBitfield = true
-	}
+	var newTagParts []string
 
 	// Parse ssz-size tag
-	if sszSize := tag.Get(sszSizeTag); sszSize != "" {
-		dims := strings.Split(sszSize, ",")
-		if len(dims) > 0 {
-			sizeStr = dims[0]
-
-			if len(dims) > 1 {
-				remainingSize := strings.Join(dims[1:], ",")
-				newTagParts = append(newTagParts, fmt.Sprintf(`%s:"%s"`, sszSizeTag, remainingSize))
-			}
-		}
-	}
+	if sszSize != "" {
+        if idx := strings.IndexByte(sszSize, ','); idx != -1 {
+            sizeStr = sszSize[:idx]
+            // Only allocate if there are remaining dimensions
+            if idx+1 < len(sszSize) {
+                newTagParts = append(newTagParts, sszSizeTag+`:"`+sszSize[idx+1:]+`"`)
+            }
+        } else {
+            sizeStr = sszSize
+        }
+    }
 
 	// Parse ssz-max tag
-	if sszMax := tag.Get(sszMaxTag); sszMax != "" {
-		dims := strings.Split(sszMax, ",")
-		if len(dims) > 0 {
-			maxStr = dims[0]
-
-			if len(dims) > 1 {
-				remainingMax := strings.Join(dims[1:], ",")
-				newTagParts = append(newTagParts, fmt.Sprintf(`%s:"%s"`, sszMaxTag, remainingMax))
-			}
-		}
-	}
+	if sszMax != "" {
+        if idx := strings.IndexByte(sszMax, ','); idx != -1 {
+            maxStr = sszMax[:idx]
+            // Only allocate if there are remaining dimensions
+            if idx+1 < len(sszMax) {
+                newTagParts = append(newTagParts, sszMaxTag+`:"`+sszMax[idx+1:]+`"`)
+            }
+        } else {
+            maxStr = sszMax
+        }
+    }
 
 	// Create new tag with remaining dimensions only.
 	// We don't have to preserve other tags like json, protobuf.
 	var newTag *reflect.StructTag
 	if len(newTagParts) > 0 {
-		newTagStr := strings.Join(newTagParts, " ")
-		t := reflect.StructTag(newTagStr)
-		newTag = &t
-	}
+        // Pre-calculate capacity to avoid reallocation
+        totalLen := 0
+        for i := range newTagParts {
+            totalLen += len(newTagParts[i])
+            if i > 0 {
+                totalLen++ // space separator
+            }
+        }
+        
+        var sb strings.Builder
+        sb.Grow(totalLen)
+        for i, part := range newTagParts {
+            if i > 0 {
+                sb.WriteByte(' ')
+            }
+            sb.WriteString(part)
+        }
+        
+        t := reflect.StructTag(sb.String())
+        newTag = &t
+    }
 
 	// Parse the first dimension based on ssz-size and ssz-max rules.
 	// 1. If ssz-size is not specified (wildcard or empty), it must be a list.
 	if sizeStr == "?" || sizeStr == "" {
 		if maxStr == "?" {
-			return nil, nil, errors.New("ssz-size and ssz-max cannot both be '?'")
+			return nil, nil, errBothWildcard
 		}
 		if maxStr == "" {
-			return nil, nil, errors.New("list requires ssz-max value")
+			return nil, nil, errListRequiresMax
 		}
 
 		limit, err := strconv.ParseUint(maxStr, 10, 64)
@@ -97,7 +135,7 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 			return nil, nil, fmt.Errorf("invalid ssz-max value: %w", err)
 		}
 		if limit == 0 {
-			return nil, nil, errors.New("ssz-max must be greater than 0")
+			return nil, nil, errMaxMustBePositive
 		}
 
 		return &SSZDimension{listLimit: &limit, isBitfield: isBitfield}, newTag, nil
@@ -109,7 +147,7 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 		return nil, nil, fmt.Errorf("invalid ssz-size value: %w", err)
 	}
 	if length == 0 {
-		return nil, nil, errors.New("ssz-size must be greater than 0")
+		return nil, nil, errSizeMustBePositive
 	}
 
 	return &SSZDimension{vectorLength: &length, isBitfield: isBitfield}, newTag, nil
@@ -128,7 +166,7 @@ func (d *SSZDimension) IsList() bool {
 // GetVectorLength returns the length for a vector in current dimension
 func (d *SSZDimension) GetVectorLength() (uint64, error) {
 	if !d.IsVector() {
-		return 0, errors.New("not a vector dimension")
+		return 0, errNotVectorDimension
 	}
 	return *d.vectorLength, nil
 }
@@ -136,7 +174,7 @@ func (d *SSZDimension) GetVectorLength() (uint64, error) {
 // GetListLimit returns the limit for a list in current dimension
 func (d *SSZDimension) GetListLimit() (uint64, error) {
 	if !d.IsList() {
-		return 0, errors.New("not a list dimension")
+		return 0, errNotListDimension
 	}
 	return *d.listLimit, nil
 }
