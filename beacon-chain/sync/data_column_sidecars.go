@@ -1133,9 +1133,14 @@ func randomPeer(
 			"delay":     waitPeriod,
 		}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
 
+		timer := time.NewTimer(waitPeriod)
 		select {
-		case <-time.After(waitPeriod):
+		case <-timer.C:
+			// Timer expired, retry the loop
 		case <-ctx.Done():
+			// Context cancelled - stop timer to prevent leak
+			timer.Stop()
+			return "", ctx.Err()
 		}
 	}
 
