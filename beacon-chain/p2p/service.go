@@ -574,25 +574,13 @@ func (s *Service) downscorePeer(peerID peer.ID, reason string) {
 }
 
 func (s *Service) AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
-	if !s.filterPeer(node) {
-		return map[uint64]bool{}, nil
-	}
-
 	return attestationSubnets(record)
 }
 
 func (s *Service) SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
-	if !s.filterPeer(node) {
-		return map[uint64]bool{}, nil
-	}
-
 	return syncSubnets(record)
 }
 
 func (s *Service) DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
-	if !s.filterPeer(node) {
-		return map[uint64]bool{}, nil
-	}
-
 	return dataColumnSubnets(nodeID, record)
 }
