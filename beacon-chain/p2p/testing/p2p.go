@@ -69,9 +69,6 @@ func (m *MockCrawler) SetTopicExtractor(extractor func(context.Context, *enode.N
 // RemoveTopic does nothing as this is a mock
 func (m *MockCrawler) RemoveTopic(topic string) {}
 
-// RemovePeer does nothing as this is a mock
-func (m *MockCrawler) RemovePeer(enodeID enode.ID) {}
-
 // RemovePeerByPeerID does nothing as this is a mock
 func (m *MockCrawler) RemovePeerByPeerID(pid peer.ID) {}
 

@@ -90,10 +90,9 @@ func (c *Crawler) Start(topicExtractor gossipsubcrawler.TopicExtractor) error {
 	c.mu.Unlock()
 
 	log.Info("Starting peer crawler")
-	c.wg.Add(3)
+	c.wg.Add(2)
 	go c.run()
 	go c.logStats()
-	go c.cleanupPeers()
 	return nil
 }
 
@@ -104,28 +103,6 @@ func (c *Crawler) Stop() {
 	c.wg.Wait()
 
 	log.Info("Peer crawler stopped")
-}
-
-func (c *Crawler) cleanupPeers() {
-	defer c.wg.Done()
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			for _, pNode := range c.peerNodes {
-				pNode := pNode
-				if len(pNode.topics) == 0 {
-					c.RemovePeer(pNode.id)
-				} else if err := c.service.Peers().IsBad(pNode.peerID); err != nil {
-					c.RemovePeer(pNode.id)
-				}
-			}
-
-		case <-c.ctx.Done():
-			return
-		}
-	}
 }
 
 func (c *Crawler) run() {
@@ -198,7 +175,9 @@ func (c *Crawler) crawl() {
 		}
 
 		if !c.service.filterPeer(node) {
-			c.RemovePeer(node.ID())
+			c.mu.Lock()
+			c.removePeerUnlocked(node.ID())
+			c.mu.Unlock()
 			continue
 		}
 
@@ -211,7 +190,9 @@ func (c *Crawler) crawl() {
 		if len(topics) == 0 {
 			// If no topics are returned, we don't track the peer.
 			// We should also remove it if it's already tracked.
-			c.RemovePeer(node.ID())
+			c.mu.Lock()
+			c.removePeerUnlocked(node.ID())
+			c.mu.Unlock()
 			continue
 		}
 		c.addOrUpdatePeer(node, topics)
@@ -267,13 +248,6 @@ func (c *Crawler) RemoveTopic(topic string) {
 			c.removePeerUnlocked(enodeID)
 		}
 	}
-}
-
-func (c *Crawler) RemovePeer(enodeID enode.ID) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.removePeerUnlocked(enodeID)
 }
 
 func (c *Crawler) removePeerUnlocked(enodeID enode.ID) {
