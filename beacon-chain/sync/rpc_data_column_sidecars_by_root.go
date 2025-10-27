@@ -56,18 +56,6 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrap(err, "validate data columns by root request")
 	}
 
-	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
-	for _, columnIdent := range requestedColumnIdents {
-		var root [fieldparams.RootLength]byte
-		copy(root[:], columnIdent.BlockRoot)
-		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Columns...)
-	}
-
-	// Sort by column index for each root.
-	for _, columns := range requestedColumnsByRoot {
-		slices.Sort(columns)
-	}
-
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
 	minReqSlot, err := dataColumnsRPCMinValidSlot(s.cfg.clock.CurrentSlot())
 	if err != nil {
@@ -84,6 +72,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	}
 
 	if log.Logger.Level >= logrus.TraceLevel {
+		requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
+		for _, ident := range requestedColumnIdents {
+			root := bytesutil.ToBytes32(ident.BlockRoot)
+			requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], ident.Columns...)
+		}
+
 		// We optimistially assume the peer requests the same set of columns for all roots,
 		// pre-sizing the map accordingly.
 		requestedRootsByColumnSet := make(map[string][]string, 1)
