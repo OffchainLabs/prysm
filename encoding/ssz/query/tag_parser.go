@@ -24,7 +24,6 @@ const (
 	bitfieldMarker = "go-bitfield"
 )
 
-// Pre-allocated errors to avoid allocations
 var (
 	errNilStructTag       = errors.New("nil struct tag")
 	errBothWildcard       = errors.New("ssz-size and ssz-max cannot both be '?'")
@@ -53,10 +52,8 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 		return nil, nil, errNilStructTag
 	}
 
-	// Check bitfield once, avoid repeated string operations
 	isBitfield := strings.Contains(tag.Get(castTypeTag), bitfieldMarker)
 
-	// Get tags once to avoid multiple lookups
 	sszSize := tag.Get(sszSizeTag)
 	sszMax := tag.Get(sszMaxTag)
 
@@ -98,7 +95,6 @@ func ParseSSZTag(tag *reflect.StructTag) (*SSZDimension, *reflect.StructTag, err
 	// We don't have to preserve other tags like json, protobuf.
 	var newTag *reflect.StructTag
 	if len(newTagParts) > 0 {
-		// Pre-calculate capacity to avoid reallocation
 		totalLen := 0
 		for i := range newTagParts {
 			totalLen += len(newTagParts[i])
