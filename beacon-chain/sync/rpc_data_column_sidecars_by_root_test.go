@@ -10,6 +10,7 @@ import (
 
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -116,9 +117,31 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		err := dataColumnStorage.Save(verifiedRODataColumns)
 		require.NoError(t, err)
 
+		beaconDB := testDB.SetupDB(t)
+		indices := [...]int{0, 3, 5}
+
+		roBlocks := make([]blocks.ROBlock, 0, len(indices))
+		for _, i := range indices {
+			blockPb := util.NewBeaconBlock()
+
+			signedBeaconBlock, err := blocks.NewSignedBeaconBlock(blockPb)
+			require.NoError(t, err)
+
+			// Here the block root has to match the sidecar's block root.
+			// (However, the block root does not match the actual root of the block, but we don't care for this test.)
+			roBlock, err := blocks.NewROBlockWithRoot(signedBeaconBlock, verifiedRODataColumns[i].BlockRoot())
+			require.NoError(t, err)
+
+			roBlocks = append(roBlocks, roBlock)
+		}
+
+		err = beaconDB.SaveROBlocks(ctx, roBlocks, false /*cache*/)
+		require.NoError(t, err)
+
 		service := &Service{
 			cfg: &config{
 				p2p:               localP2P,
+				beaconDB:          beaconDB,
 				clock:             clock,
 				dataColumnStorage: dataColumnStorage,
 				chain:             &chainMock.ChainService{},
