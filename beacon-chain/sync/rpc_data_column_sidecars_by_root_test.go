@@ -20,6 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -173,22 +174,22 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 					break
 				}
 
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				sidecars = append(sidecars, sidecar)
 			}
 
-			require.Equal(t, 5, len(sidecars))
-			require.Equal(t, root3, sidecars[0].BlockRoot())
-			require.Equal(t, root3, sidecars[1].BlockRoot())
-			require.Equal(t, root5, sidecars[2].BlockRoot())
-			require.Equal(t, root5, sidecars[3].BlockRoot())
-			require.Equal(t, root5, sidecars[4].BlockRoot())
+			assert.Equal(t, 5, len(sidecars))
+			assert.Equal(t, root3, sidecars[0].BlockRoot())
+			assert.Equal(t, root3, sidecars[1].BlockRoot())
+			assert.Equal(t, root5, sidecars[2].BlockRoot())
+			assert.Equal(t, root5, sidecars[3].BlockRoot())
+			assert.Equal(t, root5, sidecars[4].BlockRoot())
 
-			require.Equal(t, uint64(4), sidecars[0].Index)
-			require.Equal(t, uint64(6), sidecars[1].Index)
-			require.Equal(t, uint64(7), sidecars[2].Index)
-			require.Equal(t, uint64(8), sidecars[3].Index)
-			require.Equal(t, uint64(9), sidecars[4].Index)
+			assert.Equal(t, uint64(4), sidecars[0].Index)
+			assert.Equal(t, uint64(6), sidecars[1].Index)
+			assert.Equal(t, uint64(7), sidecars[2].Index)
+			assert.Equal(t, uint64(8), sidecars[3].Index)
+			assert.Equal(t, uint64(9), sidecars[4].Index)
 		})
 
 		localP2P.Connect(remoteP2P)
