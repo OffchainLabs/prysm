@@ -668,13 +668,13 @@ func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParam
 }
 
 func (s *Service) unSubscribeFromTopic(topic string) {
-    log.WithField("topic", topic).Info("Unsubscribed from")
-    if crawler := s.cfg.p2p.Crawler(); crawler != nil {
-        crawler.RemoveTopic(topic)
-    }
-    if err := s.cfg.p2p.PubSub().UnregisterTopicValidator(topic); err != nil {
-        log.WithError(err).Error("Could not unregister topic validator")
-    }
+	log.WithField("topic", topic).Info("Unsubscribed from")
+	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
+		crawler.RemoveTopic(topic)
+	}
+	if err := s.cfg.p2p.PubSub().UnregisterTopicValidator(topic); err != nil {
+		log.WithError(err).Error("Could not unregister topic validator")
+	}
 	sub := s.subHandler.subForTopic(topic)
 	if sub != nil {
 		sub.Cancel()
