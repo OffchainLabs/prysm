@@ -103,23 +103,24 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		localP2P := p2ptest.NewTestP2P(t)
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
-		params := []util.DataColumnParam{
-			{Slot: 10, Index: 1}, {Slot: 10, Index: 2}, {Slot: 10, Index: 3},
-			{Slot: 40, Index: 4}, {Slot: 40, Index: 6},
-			{Slot: 45, Index: 7}, {Slot: 45, Index: 8}, {Slot: 45, Index: 9},
-		}
+		_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(
+			t,
+			[]util.DataColumnParam{
+				{Slot: 10, Index: 1}, {Slot: 10, Index: 2}, {Slot: 10, Index: 3},
+				{Slot: 40, Index: 4}, {Slot: 40, Index: 6},
+				{Slot: 45, Index: 7}, {Slot: 45, Index: 8}, {Slot: 45, Index: 9},
+			},
+		)
 
-		_, verifiedRODataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
-
-		storage := filesystem.NewEphemeralDataColumnStorage(t)
-		err := storage.Save(verifiedRODataColumns)
+		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
+		err := dataColumnStorage.Save(verifiedRODataColumns)
 		require.NoError(t, err)
 
 		service := &Service{
 			cfg: &config{
 				p2p:               localP2P,
 				clock:             clock,
-				dataColumnStorage: storage,
+				dataColumnStorage: dataColumnStorage,
 				chain:             &chainMock.ChainService{},
 			},
 			rateLimiter: newRateLimiter(localP2P),
