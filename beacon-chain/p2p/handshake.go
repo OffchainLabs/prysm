@@ -74,7 +74,7 @@ func (s *Service) disconnectFromPeerOnError(
 
 	s.peers.SetConnectionState(remotePeerID, peers.Disconnected)
 	if s.crawler != nil {
-		s.crawler.RemovePeerByPeerID(remotePeerID)
+		s.crawler.RemovePeerID(remotePeerID)
 	}
 }
 
@@ -228,7 +228,7 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 					return
 				}
 				if s.crawler != nil {
-					s.crawler.RemovePeerByPeerID(peerID)
+					s.crawler.RemovePeerID(peerID)
 				}
 
 				priorState, err := s.peers.ConnectionState(peerID)

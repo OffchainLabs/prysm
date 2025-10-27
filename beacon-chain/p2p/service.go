@@ -241,7 +241,7 @@ func (s *Service) Start() {
 		go s.listenForNewNodes()
 
 		// Create the crawler using the local constructor, passing the service reference
-		crawler, err := newCrawler(s.ctx, s.dv5Listener, s, crawlInterval)
+		crawler, err := newCrawler(s.dv5Listener, s, crawlInterval)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to create peer crawler")
 			s.startupErr = err

@@ -18,6 +18,6 @@ type Crawler interface {
 	Start(topicExtractor TopicExtractor) error
 	Stop()
 	RemoveTopic(topic string)
-	RemovePeerByPeerID(pid peer.ID)
+	RemovePeerID(pid peer.ID)
 	PeersForTopic(topic string) []*enode.Node
 }

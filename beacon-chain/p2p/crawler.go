@@ -21,12 +21,195 @@ type peerNode struct {
 	id     enode.ID
 	node   *enode.Node
 	peerID peer.ID
-	topics []string
+	topics map[string]struct{}
+}
+
+type crawledPeers struct {
+	mu       sync.RWMutex
+	byEnode  map[enode.ID]*peerNode
+	byPeerId map[peer.ID]*peerNode
+	byTopic  map[string]map[peer.ID]struct{}
+}
+
+func newCrawledPeers() *crawledPeers {
+	return &crawledPeers{
+		byEnode:  make(map[enode.ID]*peerNode),
+		byPeerId: make(map[peer.ID]*peerNode),
+		byTopic:  make(map[string]map[peer.ID]struct{}),
+	}
+}
+
+// PeersForTopic returns a slice of peers known to be associated with the given topic.
+func (p *crawledPeers) PeersForTopic(topic string) []*enode.Node {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	peers, ok := p.byTopic[topic]
+	if !ok {
+		return nil
+	}
+	var result []*enode.Node
+	for pid := range peers {
+		if pNode, ok := p.byPeerId[pid]; ok {
+			result = append(result, pNode.node)
+		}
+	}
+	return result
+}
+
+// RemoveTopic removes all peer associations for a given topic.
+func (p *crawledPeers) RemoveTopic(topic string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	peers, ok := p.byTopic[topic]
+	if !ok {
+		return
+	}
+	delete(p.byTopic, topic)
+
+	for pid := range peers {
+		pNode, ok := p.byPeerId[pid]
+		if !ok {
+			continue
+		}
+		// Remove the topic from the peer's topic set.
+		delete(pNode.topics, topic)
+
+		// If the peer is no longer in any topics, remove it entirely.
+		if len(pNode.topics) == 0 {
+			p.removePeerUnlocked(pNode.id)
+		}
+	}
+}
+
+// RemovePeerID removes a peer using its libp2p peer.ID.
+func (p *crawledPeers) RemovePeerID(pid peer.ID) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	pNode, ok := p.byPeerId[pid]
+	if ok {
+		p.removePeerUnlocked(pNode.id)
+	}
+}
+
+func (p *crawledPeers) removePeer(enodeID enode.ID) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.removePeerUnlocked(enodeID)
+}
+
+func (p *crawledPeers) removePeerUnlocked(enodeID enode.ID) {
+	pNode, ok := p.byEnode[enodeID]
+	if !ok {
+		return
+	}
+	delete(p.byPeerId, pNode.peerID)
+	delete(p.byEnode, enodeID)
+
+	for topic := range pNode.topics {
+		if peers, ok := p.byTopic[topic]; ok {
+			delete(peers, pNode.peerID)
+			if len(peers) == 0 {
+				delete(p.byTopic, topic)
+			}
+		}
+	}
+}
+
+// setPeer sets or updates a peer's topics and node record. If topics is empty, removes the peer.
+func (p *crawledPeers) setPeer(node *enode.Node, topics []string) {
+	// If topics empty, remove immediately without needing peer conversion.
+	if len(topics) == 0 {
+		p.removePeer(node.ID())
+		return
+	}
+
+	peerData, _, err := convertToAddrInfo(node)
+	if err != nil || peerData == nil {
+		log.WithError(err).WithField("node", node.ID()).Debug("Failed to convert node to peer address info")
+		return
+	}
+
+	// Build new topic set
+	newSet := make(map[string]struct{}, len(topics))
+	for _, t := range topics {
+		newSet[t] = struct{}{}
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.shouldUpdateUnlocked(node) {
+		return
+	}
+
+	enodeID := node.ID()
+	pNode, exists := p.byEnode[enodeID]
+	if exists {
+		// Diff remove: topics present before but not now
+		for old := range pNode.topics {
+			if _, ok := newSet[old]; !ok {
+				if peers, ok := p.byTopic[old]; ok {
+					delete(peers, pNode.peerID)
+					if len(peers) == 0 {
+						delete(p.byTopic, old)
+					}
+				}
+				delete(pNode.topics, old)
+			}
+		}
+		// Diff add: topics present now but not before
+		for t := range newSet {
+			if _, ok := pNode.topics[t]; !ok {
+				if _, ok := p.byTopic[t]; !ok {
+					p.byTopic[t] = make(map[peer.ID]struct{})
+				}
+				p.byTopic[t][pNode.peerID] = struct{}{}
+				pNode.topics[t] = struct{}{}
+			}
+		}
+		// Update node reference
+		pNode.node = node
+		// If peer ID changed, update index
+		if pNode.peerID != peerData.ID {
+			delete(p.byPeerId, pNode.peerID)
+			pNode.peerID = peerData.ID
+			p.byPeerId[peerData.ID] = pNode
+		}
+	} else {
+		// Create new entry
+		newPeer := &peerNode{
+			id:     enodeID,
+			node:   node,
+			peerID: peerData.ID,
+			topics: newSet,
+		}
+		p.byEnode[enodeID] = newPeer
+		p.byPeerId[peerData.ID] = newPeer
+		for t := range newSet {
+			if _, ok := p.byTopic[t]; !ok {
+				p.byTopic[t] = make(map[peer.ID]struct{})
+			}
+			p.byTopic[t][peerData.ID] = struct{}{}
+		}
+	}
+}
+
+// shouldUpdateUnlocked checks if we should update a peer's information.
+// It returns true if the peer is new or the new node record has a higher sequence number.
+func (p *crawledPeers) shouldUpdateUnlocked(node *enode.Node) bool {
+	enodeID := node.ID()
+	existingPNode, ok := p.byEnode[enodeID]
+	if !ok {
+		return true // Peer is new.
+	}
+	// only update if new record is newer.
+	return node.Seq() > existingPNode.node.Seq()
 }
 
 // Crawler periodically crawls the discovery network for peers and maintains a
 // mapping of topics to the peers that support them and their ENRs.
-// TODO: Prevent unbounded growth of the topicToPeers map.
 type Crawler struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -44,32 +227,26 @@ type Crawler struct {
 
 	wg sync.WaitGroup
 
-	mu              sync.RWMutex
-	started         bool                             // track if crawler has been started
-	peerNodes       map[enode.ID]*peerNode           // enode.ID -> peerNode record
-	topicToPeers    map[string]map[enode.ID]struct{} // topic -> set of enode.IDs
-	peerIDToEnodeID map[peer.ID]enode.ID             // libp2p peer.ID -> discv5 enode.ID
+	peers *crawledPeers
 }
 
 // newCrawler creates a new peer crawler.
-func newCrawler(ctx context.Context, dv5 Listener, service *Service, interval time.Duration) (*Crawler, error) {
+func newCrawler(dv5 Listener, service *Service, interval time.Duration) (*Crawler, error) {
 	if dv5 == nil {
 		return nil, errors.New("discovery client is required")
 	}
 	if service == nil {
 		return nil, errors.New("p2p service reference is required")
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Crawler{
-		ctx:             ctx,
-		cancel:          cancel,
-		dv5:             dv5,
-		service:         service,
-		crawlInterval:   interval,
-		crawlTimeout:    crawlTimeout,
-		peerNodes:       make(map[enode.ID]*peerNode),
-		topicToPeers:    make(map[string]map[enode.ID]struct{}),
-		peerIDToEnodeID: make(map[peer.ID]enode.ID),
+		ctx:           ctx,
+		cancel:        cancel,
+		dv5:           dv5,
+		service:       service,
+		crawlInterval: interval,
+		crawlTimeout:  crawlTimeout,
+		peers:         newCrawledPeers(),
 	}, nil
 }
 
@@ -78,21 +255,16 @@ func (c *Crawler) Start(topicExtractor gossipsubcrawler.TopicExtractor) error {
 	if topicExtractor == nil {
 		return errors.New("topic extractor cannot be nil")
 	}
+	return sync.OnceValue(func() error {
+		return c.spawn(topicExtractor)
+	})()
+}
+
+func (c *Crawler) spawn(topicExtractor gossipsubcrawler.TopicExtractor) error {
 	c.topicExtractor = topicExtractor
-
-	// Mark crawler as started
-	c.mu.Lock()
-	if c.started {
-		c.mu.Unlock()
-		return errors.New("crawler already started")
-	}
-	c.started = true
-	c.mu.Unlock()
-
 	log.Info("Starting peer crawler")
-	c.wg.Add(2)
-	go c.run()
-	go c.logStats()
+	c.wg.Go(c.run)
+	c.wg.Go(c.logStats)
 	return nil
 }
 
@@ -106,7 +278,6 @@ func (c *Crawler) Stop() {
 }
 
 func (c *Crawler) run() {
-	defer c.wg.Done()
 	ticker := time.NewTicker(c.crawlInterval)
 	defer ticker.Stop()
 
@@ -124,16 +295,15 @@ func (c *Crawler) run() {
 
 // logStats logs statistics about topics and peers periodically
 func (c *Crawler) logStats() {
-	defer c.wg.Done()
 	ticker := time.NewTicker(logStatsInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			c.mu.RLock()
-			totalPeers := len(c.peerNodes)
-			totalTopics := len(c.topicToPeers)
+			c.peers.mu.RLock()
+			totalPeers := len(c.peers.byEnode)
+			totalTopics := len(c.peers.byTopic)
 
 			fields := logrus.Fields{
 				"totalPeers":  totalPeers,
@@ -141,10 +311,10 @@ func (c *Crawler) logStats() {
 			}
 
 			// Log each topic and its peer count
-			for topic, peers := range c.topicToPeers {
+			for topic, peers := range c.peers.byTopic {
 				fields[topic] = len(peers)
 			}
-			c.mu.RUnlock()
+			c.peers.mu.RUnlock()
 
 			log.WithFields(fields).Debug("Crawler topic statistics")
 		case <-c.ctx.Done():
@@ -175,7 +345,7 @@ func (c *Crawler) crawl() {
 		}
 
 		if !c.service.filterPeer(node) {
-			c.removePeer(node.ID())
+			c.peers.setPeer(node, nil)
 			continue
 		}
 
@@ -186,179 +356,21 @@ func (c *Crawler) crawl() {
 			continue
 		}
 		if len(topics) == 0 {
-			// If no topics are returned, we don't track the peer.
-			// We should also remove it if it's already tracked.
-			c.removePeer(node.ID())
+			// If no topics are returned, remove it if tracked.
+			c.peers.setPeer(node, nil)
 			continue
 		}
-		c.addOrUpdatePeer(node, topics)
+		c.peers.setPeer(node, topics)
 	}
 }
 
-// PeersForTopic returns a slice of peers known to be associated with the given topic.
-func (c *Crawler) PeersForTopic(topic string) []*enode.Node {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// PeersForTopic delegates to crawledPeers.
+func (c *Crawler) PeersForTopic(topic string) []*enode.Node { return c.peers.PeersForTopic(topic) }
 
-	peers, ok := c.topicToPeers[topic]
-	if !ok {
-		return nil
-	}
-	var result []*enode.Node
-	for enodeID := range peers {
-		if pNode, ok := c.peerNodes[enodeID]; ok {
-			result = append(result, pNode.node)
-		}
-	}
-	return result
-}
+// RemoveTopic delegates to crawledPeers.
+func (c *Crawler) RemoveTopic(topic string) { c.peers.RemoveTopic(topic) }
 
-// RemoveTopic removes all peer associations for a given topic. This is useful when
-// a beacon node unsubscribes from a topic and no longer needs to track its peers.
-func (c *Crawler) RemoveTopic(topic string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// removePeer helpers moved into crawledPeers
 
-	peers, ok := c.topicToPeers[topic]
-	if !ok {
-		return
-	}
-	delete(c.topicToPeers, topic)
-
-	for enodeID := range peers {
-		pNode, ok := c.peerNodes[enodeID]
-		if !ok {
-			continue
-		}
-		// Remove the topic from the peer's topic list.
-		var newTopics []string
-		for _, t := range pNode.topics {
-			if t != topic {
-				newTopics = append(newTopics, t)
-			}
-		}
-		pNode.topics = newTopics
-
-		// If the peer is no longer in any topics, remove it entirely.
-		if len(pNode.topics) == 0 {
-			c.removePeerUnlocked(enodeID)
-		}
-	}
-}
-
-func (c *Crawler) removePeer(enodeID enode.ID) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.removePeerUnlocked(enodeID)
-}
-
-func (c *Crawler) removePeerUnlocked(enodeID enode.ID) {
-	pNode, ok := c.peerNodes[enodeID]
-	if !ok {
-		return
-	}
-	delete(c.peerIDToEnodeID, pNode.peerID)
-	delete(c.peerNodes, enodeID)
-
-	for _, topic := range pNode.topics {
-		if peers, ok := c.topicToPeers[topic]; ok {
-			delete(peers, enodeID)
-			if len(peers) == 0 {
-				delete(c.topicToPeers, topic)
-			}
-		}
-	}
-}
-
-// RemovePeerByPeerID removes a peer using its libp2p peer.ID.
-func (c *Crawler) RemovePeerByPeerID(pid peer.ID) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	enodeID, ok := c.peerIDToEnodeID[pid]
-
-	if ok {
-		c.removePeerUnlocked(enodeID)
-	}
-}
-
-// addOrUpdatePeer adds a new peer's topic associations to the crawler's cache or
-// updates the existing entry if the new node record has a higher sequence number.
-// It also cleans up the peer's old topic associations if they have changed.
-func (c *Crawler) addOrUpdatePeer(node *enode.Node, newTopics []string) {
-	peerData, _, err := convertToAddrInfo(node)
-	if err != nil || peerData == nil {
-		log.WithError(err).WithField("node", node.ID()).Debug("Failed to convert node to peer address info")
-		return
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if !c.shouldUpdate(node) {
-		return
-	}
-
-	enodeID := node.ID()
-	pNode, exists := c.peerNodes[enodeID]
-
-	// If the peer exists, remove it from any topics it no longer supports.
-	if exists {
-		c.removeOldTopics(pNode)
-	}
-
-	// Add the peer to all its new topics.
-	c.addNewTopics(enodeID, newTopics)
-
-	// Update the peer's node record and topic list.
-	if exists {
-		pNode.node = node
-		pNode.topics = newTopics
-	} else {
-		// Or create a new entry if it's the first time we see it.
-		c.peerNodes[enodeID] = &peerNode{
-			id:     enodeID,
-			node:   node,
-			peerID: peerData.ID,
-			topics: newTopics,
-		}
-		c.peerIDToEnodeID[peerData.ID] = enodeID
-	}
-}
-
-// shouldUpdate checks if the crawler should update a peer's information.
-// It returns true if the peer is new or if the new node record has a higher
-// sequence number than the existing one.
-// This method assumes the crawler's mutex is already locked.
-func (c *Crawler) shouldUpdate(node *enode.Node) bool {
-	enodeID := node.ID()
-	existingPNode, ok := c.peerNodes[enodeID]
-	if !ok {
-		return true // Peer is new.
-	}
-	// only update if new record is newer.
-	return node.Seq() > existingPNode.node.Seq()
-}
-
-// removeOldTopics removes a peer from all topics it participates in.
-// This method assumes the crawler's mutex is already locked.
-func (c *Crawler) removeOldTopics(pNode *peerNode) {
-	for _, oldTopic := range pNode.topics {
-		if peers, ok := c.topicToPeers[oldTopic]; ok {
-			delete(peers, pNode.id)
-			if len(peers) == 0 {
-				delete(c.topicToPeers, oldTopic)
-			}
-		}
-	}
-}
-
-// addNewTopics adds a peer to its new topics in the crawler's cache.
-// This method assumes the crawler's mutex is already locked.
-func (c *Crawler) addNewTopics(enodeID enode.ID, newTopics []string) {
-	for _, topic := range newTopics {
-		if _, ok := c.topicToPeers[topic]; !ok {
-			c.topicToPeers[topic] = make(map[enode.ID]struct{})
-		}
-		c.topicToPeers[topic][enodeID] = struct{}{}
-	}
-}
+// RemovePeerID delegates to crawledPeers
+func (c *Crawler) RemovePeerID(pid peer.ID) { c.peers.RemovePeerID(pid) }
