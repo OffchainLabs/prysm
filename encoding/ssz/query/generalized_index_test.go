@@ -76,9 +76,9 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			provingFields, err := query.ParsePath(tc.path)
+			require.NoError(t, err)
 
 			actualIndex, err := query.GetGeneralizedIndexFromPath(info, provingFields)
-
 			if tc.expectError {
 				require.NotNil(t, err)
 				if tc.errorMessage != "" {
@@ -220,7 +220,7 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			name:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
 			path:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
 			expectError:  true,
-			errorMessage: "len() is not supported for indexed elements (multi-dimensional arrays)",
+			errorMessage: "length calculation error: len() is not supported for multi-dimensional arrays",
 		},
 	}
 
