@@ -90,6 +90,17 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		log.WithField("requested", requestedRootsByColumnSet).Trace("Serving data column sidecars by root")
 	}
 
+	// Extract all requested roots.
+	roots := make([][fieldparams.RootLength]byte, 0, len(requestedColumnIdents))
+	for _, ident := range requestedColumnIdents {
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		roots = append(roots, root)
+	}
+
+	// Filter all available roots in block storage.
+	availableRoots := s.cfg.beaconDB.AvailableBlocks(ctx, roots)
+
+	// Serve each requested data column sidecar.
 	count := 0
 	for _, ident := range requestedColumnIdents {
 		if err := ctx.Err(); err != nil {
@@ -110,6 +121,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		}
 
 		s.rateLimiter.add(stream, int64(len(columns)))
+
+		// Do not serve a blob sidecar if the corresponding block is not available.
+		if !availableRoots[root] {
+			log.Trace("Peer requested blob sidecar by root but corresponding block not found in db")
+			continue
+		}
 
 		// Retrieve the requested sidecars from the store.
 		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(root, columns)

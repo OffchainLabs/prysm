@@ -110,6 +110,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 				{Slot: 10, Index: 1}, {Slot: 10, Index: 2}, {Slot: 10, Index: 3},
 				{Slot: 40, Index: 4}, {Slot: 40, Index: 6},
 				{Slot: 45, Index: 7}, {Slot: 45, Index: 8}, {Slot: 45, Index: 9},
+				{Slot: 46, Index: 10}, // Corresponding block won't be saved in DB
 			},
 		)
 
@@ -158,6 +159,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		root0 := verifiedRODataColumns[0].BlockRoot()
 		root3 := verifiedRODataColumns[3].BlockRoot()
 		root5 := verifiedRODataColumns[5].BlockRoot()
+		root8 := verifiedRODataColumns[8].BlockRoot()
 
 		remoteP2P.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
 			defer wg.Done()
@@ -205,6 +207,10 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			{
 				BlockRoot: root5[:],
 				Columns:   []uint64{7, 8, 9},
+			},
+			{
+				BlockRoot: root8[:],
+				Columns:   []uint64{10},
 			},
 		}
 
