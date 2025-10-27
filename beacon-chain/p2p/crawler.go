@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -33,7 +34,7 @@ type Crawler struct {
 	// Discovery interface for finding peers
 	dv5 Listener
 
-	topicExtractor func(ctx context.Context, node *enode.Node) ([]string, error)
+	topicExtractor gossipsubcrawler.TopicExtractor
 
 	// Reference to the p2p service for peer filtering and scoring
 	service *Service
@@ -73,7 +74,7 @@ func newCrawler(ctx context.Context, dv5 Listener, service *Service, interval ti
 }
 
 // Start begins the periodic crawling of the network.
-func (c *Crawler) Start(topicExtractor func(ctx context.Context, node *enode.Node) ([]string, error)) error {
+func (c *Crawler) Start(topicExtractor gossipsubcrawler.TopicExtractor) error {
 	if topicExtractor == nil {
 		return errors.New("topic extractor cannot be nil")
 	}

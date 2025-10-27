@@ -54,7 +54,7 @@ const (
 type MockCrawler struct{}
 
 // Start does nothing as this is a mock
-func (m *MockCrawler) Start(_ func(context.Context, *enode.Node) ([]string, error)) error {
+func (m *MockCrawler) Start(gossipsubcrawler.TopicExtractor) error {
 	return nil
 }
 
