@@ -15,7 +15,7 @@ import (
 )
 
 var crawlTimeout = 20 * time.Second
-var cleanupInterval = 5 * time.Minute
+var logStatsInterval = 5 * time.Minute
 
 type peerNode struct {
 	id     enode.ID
@@ -122,10 +122,10 @@ func (c *Crawler) run() {
 	}
 }
 
-// logStats logs statistics about topics and peers every 5 minutes
+// logStats logs statistics about topics and peers periodically
 func (c *Crawler) logStats() {
 	defer c.wg.Done()
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(logStatsInterval)
 	defer ticker.Stop()
 
 	for {
@@ -175,9 +175,7 @@ func (c *Crawler) crawl() {
 		}
 
 		if !c.service.filterPeer(node) {
-			c.mu.Lock()
-			c.removePeerUnlocked(node.ID())
-			c.mu.Unlock()
+			c.removePeer(node.ID())
 			continue
 		}
 
@@ -190,9 +188,7 @@ func (c *Crawler) crawl() {
 		if len(topics) == 0 {
 			// If no topics are returned, we don't track the peer.
 			// We should also remove it if it's already tracked.
-			c.mu.Lock()
-			c.removePeerUnlocked(node.ID())
-			c.mu.Unlock()
+			c.removePeer(node.ID())
 			continue
 		}
 		c.addOrUpdatePeer(node, topics)
@@ -248,6 +244,12 @@ func (c *Crawler) RemoveTopic(topic string) {
 			c.removePeerUnlocked(enodeID)
 		}
 	}
+}
+
+func (c *Crawler) removePeer(enodeID enode.ID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.removePeerUnlocked(enodeID)
 }
 
 func (c *Crawler) removePeerUnlocked(enodeID enode.ID) {
