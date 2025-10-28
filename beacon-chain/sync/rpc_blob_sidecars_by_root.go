@@ -113,19 +113,19 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 }
 
 func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot primitives.Slot) error {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	epoch := slots.ToEpoch(slot)
 	blobIdentCount := uint64(len(blobIdents))
 
-	if epoch >= beaconConfig.ElectraForkEpoch {
-		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsElectra {
+	if epoch >= cfg.ElectraForkEpoch {
+		if blobIdentCount > cfg.MaxRequestBlobSidecarsElectra {
 			return types.ErrMaxBlobReqExceeded
 		}
 
 		return nil
 	}
 
-	if blobIdentCount > beaconConfig.MaxRequestBlobSidecars {
+	if blobIdentCount > cfg.MaxRequestBlobSidecars {
 		return types.ErrMaxBlobReqExceeded
 	}
 

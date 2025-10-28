@@ -514,18 +514,18 @@ func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
 //
 //	return [compute_subscribed_subnet(node_id, epoch, index) for index in range(SUBNETS_PER_NODE)]
 func computeSubscribedSubnets(nodeID enode.ID, epoch primitives.Epoch) ([]uint64, error) {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	if flags.Get().SubscribeToAllSubnets {
-		subnets := make([]uint64, 0, beaconConfig.AttestationSubnetCount)
-		for i := range beaconConfig.AttestationSubnetCount {
+		subnets := make([]uint64, 0, cfg.AttestationSubnetCount)
+		for i := range cfg.AttestationSubnetCount {
 			subnets = append(subnets, i)
 		}
 		return subnets, nil
 	}
 
-	subnets := make([]uint64, 0, beaconConfig.SubnetsPerNode)
-	for i := range beaconConfig.SubnetsPerNode {
+	subnets := make([]uint64, 0, cfg.SubnetsPerNode)
+	for i := range cfg.SubnetsPerNode {
 		sub, err := computeSubscribedSubnet(nodeID, epoch, i)
 		if err != nil {
 			return nil, errors.Wrap(err, "compute subscribed subnet")

@@ -1366,16 +1366,16 @@ func TestFetchSidecars(t *testing.T) {
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
-		beaconConfig := params.BeaconConfig()
-		numberOfColumns := beaconConfig.NumberOfColumns
-		samplesPerSlot := beaconConfig.SamplesPerSlot
+		cfg := params.BeaconConfig()
+		numberOfColumns := cfg.NumberOfColumns
+		samplesPerSlot := cfg.SamplesPerSlot
 
 		// Define "now" to be one epoch after genesis time + retention period.
 		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-		secondsPerSlot := beaconConfig.SecondsPerSlot
-		slotsPerEpoch := beaconConfig.SlotsPerEpoch
+		secondsPerSlot := cfg.SecondsPerSlot
+		slotsPerEpoch := cfg.SlotsPerEpoch
 		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
-		retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+		retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
 		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
 		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
 
