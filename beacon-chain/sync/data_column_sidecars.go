@@ -1008,12 +1008,12 @@ func verifyRPCDataColumnSidecars(newVerifier verification.NewDataColumnsVerifier
 }
 
 // computeIndicesByRootByPeer returns a peers->root->indices map only for
-// root and indices given in `indicesByBlockRoot`. It also only selects peers
+// root and indices given in `indicesByRoot`. It also only selects peers
 // for a given root only if its head state is higher than the block slot.
 func computeIndicesByRootByPeer(
 	p2p prysmP2P.P2P,
-	slotByBlockRoot map[[fieldparams.RootLength]byte]primitives.Slot,
-	indicesByBlockRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	peers map[goPeer.ID]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
@@ -1065,10 +1065,10 @@ func computeIndicesByRootByPeer(
 
 	// For each block root and its indices, find suitable peers
 	indicesByRootByPeer := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
-	for blockRoot, indices := range indicesByBlockRoot {
-		blockSlot, ok := slotByBlockRoot[blockRoot]
+	for root, indices := range indicesByRoot {
+		slot, ok := slotByRoot[root]
 		if !ok {
-			return nil, errors.Errorf("slot not found for block root %#x", blockRoot)
+			return nil, errors.Errorf("slot not found for block root %#x", root)
 		}
 
 		for index := range indices {
@@ -1079,7 +1079,7 @@ func computeIndicesByRootByPeer(
 					return nil, errors.Errorf("head slot not found for peer %s", peer)
 				}
 
-				if peerHeadSlot < blockSlot {
+				if peerHeadSlot < slot {
 					continue
 				}
 
@@ -1087,10 +1087,10 @@ func computeIndicesByRootByPeer(
 				if _, exists := indicesByRootByPeer[peer]; !exists {
 					indicesByRootByPeer[peer] = make(map[[fieldparams.RootLength]byte]map[uint64]bool)
 				}
-				if _, exists := indicesByRootByPeer[peer][blockRoot]; !exists {
-					indicesByRootByPeer[peer][blockRoot] = make(map[uint64]bool)
+				if _, exists := indicesByRootByPeer[peer][root]; !exists {
+					indicesByRootByPeer[peer][root] = make(map[uint64]bool)
 				}
-				indicesByRootByPeer[peer][blockRoot][index] = true
+				indicesByRootByPeer[peer][root][index] = true
 			}
 		}
 	}
