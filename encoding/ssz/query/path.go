@@ -61,40 +61,41 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 			return nil, errors.New("invalid path: consecutive dots or trailing dot")
 		}
 
-		var pe PathElement
-		field := elem
+		var pathElement PathElement
+		processingField := elem
 
 		// FindStringSubmatch matches a whole string like "len(field_name)" and its inner expression.
 		// For a path element to be a length query, len(matches) should be 2:
 		// 1. Full match: "len(field_name)"
 		// 2. Inner expression: "field_name"
-		if matches := lengthRegex.FindStringSubmatch(field); len(matches) == 2 {
-			pe.Length = true
-			field = matches[1]
+		if matches := lengthRegex.FindStringSubmatch(processingField); len(matches) == 2 {
+			pathElement.Length = true
+			// Extract the inner expression between len( and ) and continue parsing on that
+			processingField = matches[1]
 		}
 
 		// Detect array indices such as "array[0]"
-		if idx := strings.IndexByte(field, '['); idx != -1 {
+		if idx := strings.IndexByte(processingField, '['); idx != -1 {
 			// extractFieldName: get field name before '['
-			pe.Name = field[:idx]
+			pathElement.Name = processingField[:idx]
 
 			// extractArrayIndices: parse one or more numeric indices inside brackets
-			idxs, err := extractArrayIndices(field[idx:])
+			idxs, err := extractArrayIndices(processingField[idx:])
 			if err != nil {
 				return nil, err
 			}
 
 			// Allow only a single index per element: reject "array[0][1]"
 			if len(idxs) != 1 {
-				return nil, fmt.Errorf("multiple indices not supported in token %s", field)
+				return nil, fmt.Errorf("multiple indices not supported in token %s", processingField)
 			}
 			// Store parsed index
-			pe.Index = &idxs[0]
+			pathElement.Index = &idxs[0]
 		} else {
-			pe.Name = field
+			pathElement.Name = processingField
 		}
 
-		path = append(path, pe)
+		path = append(path, pathElement)
 
 		if dot == -1 {
 			break
