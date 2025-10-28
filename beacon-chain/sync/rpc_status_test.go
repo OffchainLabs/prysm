@@ -445,7 +445,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 		custodyGroupCount     = uint64(4)
 	)
 
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	ctx := t.Context()
 
 	testCases := []struct {
@@ -456,7 +456,7 @@ func TestStatusRPCRequest_RequestSent(t *testing.T) {
 	}{
 		{
 			name:          "before fulu",
-			fuluForkEpoch: beaconConfig.FarFutureEpoch,
+			fuluForkEpoch: cfg.FarFutureEpoch,
 			topic:         "/eth2/beacon_chain/req/status/1/ssz_snappy",
 			streamHandler: func(service *Service, stream network.Stream, genesisState beaconState.BeaconState, beaconRoot, headRoot, finalizedRoot []byte) {
 				out := &ethpb.Status{}

@@ -286,6 +286,7 @@ func (s *Service) updateMetrics() {
 		topicPeerCount.WithLabelValues(formattedTopic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(formattedTopic))))
 	}
 
+	subscribedTopicPeerCount.Reset()
 	for _, topic := range s.cfg.p2p.PubSub().GetTopics() {
 		subscribedTopicPeerCount.WithLabelValues(topic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(topic))))
 	}

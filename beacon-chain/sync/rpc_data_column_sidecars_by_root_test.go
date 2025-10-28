@@ -28,9 +28,9 @@ import (
 
 func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
@@ -43,9 +43,9 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 
 	t.Run("invalid request", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.MaxRequestDataColumnSidecars = 1
-		params.OverrideBeaconConfig(beaconConfig)
+		cfg := params.BeaconConfig()
+		cfg.MaxRequestDataColumnSidecars = 1
+		params.OverrideBeaconConfig(cfg)
 
 		localP2P := p2ptest.NewTestP2P(t)
 		service := &Service{cfg: &config{p2p: localP2P}}
@@ -96,9 +96,9 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		}()
 
 		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.FuluForkEpoch = 1
-		params.OverrideBeaconConfig(beaconConfig)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 1
+		params.OverrideBeaconConfig(cfg)
 
 		localP2P := p2ptest.NewTestP2P(t)
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
