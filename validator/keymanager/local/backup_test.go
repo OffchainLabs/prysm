@@ -15,7 +15,7 @@ func TestLocalKeymanager_ExtractKeystores(t *testing.T) {
 	secretKeysCache = make(map[[fieldparams.BLSPubkeyLength]byte]bls.SecretKey)
 	dr := &Keymanager{}
 	validatingKeys := make([]bls.SecretKey, 10)
-	for i := 0; i < len(validatingKeys); i++ {
+	for i := range validatingKeys {
 		secretKey, err := bls.RandKey()
 		require.NoError(t, err)
 		validatingKeys[i] = secretKey

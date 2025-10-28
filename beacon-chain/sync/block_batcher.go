@@ -100,7 +100,7 @@ func (bb *blockRangeBatcher) next(ctx context.Context, stream libp2pcore.Stream)
 		}
 		rob = append(rob, gb)
 	}
-	for i := 0; i < len(blks); i++ {
+	for i := range blks {
 		rb, err := blocks.NewROBlockWithRoot(blks[i], roots[i])
 		if err != nil {
 			return blockBatch{err: errors.Wrap(err, "Could not initialize ROBlock")}, false

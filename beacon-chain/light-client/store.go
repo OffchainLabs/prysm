@@ -2,6 +2,7 @@ package light_client
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
@@ -202,9 +203,7 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 		return nil, errors.Wrapf(err, "failed to get updates from cache")
 	}
 
-	for period, update := range cacheUpdatesByPeriod {
-		updatesMap[period] = update
-	}
+	maps.Copy(updatesMap, cacheUpdatesByPeriod)
 
 	var updates []interfaces.LightClientUpdate
 

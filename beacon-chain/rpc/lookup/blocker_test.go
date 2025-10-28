@@ -96,7 +96,7 @@ func TestGetBlock(t *testing.T) {
 		},
 		{
 			name:    "non canonical",
-			blockID: []byte(fmt.Sprintf("%d", nextSlot)),
+			blockID: fmt.Appendf(nil, "%d", nextSlot),
 			want:    nil,
 		},
 		{
@@ -761,7 +761,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	t.Run("request non-existent hash", func(t *testing.T) {
 		// Create a fake versioned hash
 		fakeHash := make([]byte, 32)
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			fakeHash[i] = 0xFF
 		}
 
@@ -780,7 +780,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Create two fake versioned hashes
 		fakeHash1 := make([]byte, 32)
 		fakeHash2 := make([]byte, 32)
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			fakeHash1[i] = 0xAA
 			fakeHash2[i] = 0xBB
 		}

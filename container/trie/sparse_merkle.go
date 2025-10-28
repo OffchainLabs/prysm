@@ -82,7 +82,7 @@ func GenerateTrieFromItems(items [][]byte, depth uint64) (*SparseMerkleTrie, err
 		transformedLeaves[i] = arr[:]
 	}
 	layers[0] = transformedLeaves
-	for i := uint64(0); i < depth; i++ {
+	for i := range depth {
 		if len(layers[i])%2 == 1 {
 			layers[i] = append(layers[i], ZeroHashes[i][:])
 		}

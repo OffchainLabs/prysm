@@ -48,7 +48,7 @@ func TestGetRandBlobElements(t *testing.T) {
 	blob := GetRandBlob(seed)
 
 	// Check that each field element in the blob matches what we'd get from GetRandFieldElement
-	for i := 0; i < GoKZG.ScalarsPerBlob; i++ {
+	for i := range GoKZG.ScalarsPerBlob {
 		start := i * GoKZG.SerializedScalarSize
 		end := start + GoKZG.SerializedScalarSize
 

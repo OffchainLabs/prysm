@@ -36,12 +36,10 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	var wg sync.WaitGroup
 	numGoroutines := 10
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numGoroutines {
+		wg.Go(func() {
 			assert.True(t, monitor.IsHealthy())
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -50,12 +48,10 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	monitor.isHealthy = false
 	monitor.Unlock()
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numGoroutines {
+		wg.Go(func() {
 			assert.False(t, monitor.IsHealthy())
-		}()
+		})
 	}
 	wg.Wait()
 }

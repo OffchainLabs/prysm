@@ -170,7 +170,7 @@ func TestAttests_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	attSubmitted := make(chan interface{})
+	attSubmitted := make(chan any)
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, AttSubmitted: attSubmitted}
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -192,7 +192,7 @@ func TestAttests_NextSlot(t *testing.T) {
 func TestProposes_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	blockProposed := make(chan interface{})
+	blockProposed := make(chan any)
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, BlockProposed: blockProposed}
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -216,8 +216,8 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	blockProposed := make(chan interface{})
-	attSubmitted := make(chan interface{})
+	blockProposed := make(chan any)
+	attSubmitted := make(chan any)
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, BlockProposed: blockProposed, AttSubmitted: attSubmitted}
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -274,7 +274,7 @@ func TestKeyReload_NoActiveKey(t *testing.T) {
 func notActive(t *testing.T) [fieldparams.BLSPubkeyLength]byte {
 	var r [fieldparams.BLSPubkeyLength]byte
 	copy(r[:], testutil.ActiveKey[:])
-	for i := 0; i < len(r); i++ {
+	for i := range len(r) {
 		r[i] = bits.Reverse8(r[i])
 	}
 	require.DeepNotEqual(t, r, testutil.ActiveKey)

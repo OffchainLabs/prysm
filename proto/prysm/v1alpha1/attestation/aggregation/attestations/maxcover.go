@@ -27,7 +27,7 @@ func MaxCoverAttestationAggregation(atts []ethpb.Att) ([]ethpb.Att, error) {
 	// In the future this conversion will be redundant, as attestation bitlist will be of a Bitlist64
 	// type, so incoming `atts` parameters can be used as candidates list directly.
 	candidates := make([]*bitfield.Bitlist64, len(atts))
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		var err error
 		candidates[i], err = atts[i].GetAggregationBits().ToBitlist64()
 		if err != nil {
@@ -114,7 +114,7 @@ func MaxCoverAttestationAggregation(atts []ethpb.Att) ([]ethpb.Att, error) {
 // NewMaxCover returns initialized Maximum Coverage problem for attestations aggregation.
 func NewMaxCover(atts []*ethpb.Attestation) *aggregation.MaxCoverProblem {
 	candidates := make([]*aggregation.MaxCoverCandidate, len(atts))
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		candidates[i] = aggregation.NewMaxCoverCandidate(i, &atts[i].AggregationBits)
 	}
 	return &aggregation.MaxCoverProblem{Candidates: candidates}
@@ -126,7 +126,7 @@ func (al attList) aggregate(coverage bitfield.Bitlist) (*ethpb.Attestation, erro
 		return nil, errors.Wrap(ErrInvalidAttestationCount, "cannot aggregate")
 	}
 	signs := make([]bls.Signature, len(al))
-	for i := 0; i < len(al); i++ {
+	for i := range al {
 		sig, err := signatureFromBytes(al[i].GetSignature())
 		if err != nil {
 			return nil, err

@@ -28,7 +28,7 @@ func TestJWTAuthTransport(t *testing.T) {
 		// The format should be `Bearer ${token}`.
 		require.Equal(t, 2, len(splitToken))
 		reqToken = strings.TrimSpace(splitToken[1])
-		token, err := jwt.Parse(reqToken, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(reqToken, func(token *jwt.Token) (any, error) {
 			// We should be doing HMAC signing.
 			_, ok := token.Method.(*jwt.SigningMethodHMAC)
 			require.Equal(t, true, ok)
@@ -70,7 +70,7 @@ func TestJWTWithId(t *testing.T) {
 		// The format should be `Bearer ${token}`.
 		require.Equal(t, 2, len(splitToken))
 		reqToken = strings.TrimSpace(splitToken[1])
-		token, err := jwt.Parse(reqToken, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(reqToken, func(token *jwt.Token) (any, error) {
 			// We should be doing HMAC signing.
 			_, ok := token.Method.(*jwt.SigningMethodHMAC)
 			require.Equal(t, true, ok)
@@ -114,7 +114,7 @@ func TestJWTWithoutId(t *testing.T) {
 		// The format should be `Bearer ${token}`.
 		require.Equal(t, 2, len(splitToken))
 		reqToken = strings.TrimSpace(splitToken[1])
-		token, err := jwt.Parse(reqToken, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(reqToken, func(token *jwt.Token) (any, error) {
 			// We should be doing HMAC signing.
 			_, ok := token.Method.(*jwt.SigningMethodHMAC)
 			require.Equal(t, true, ok)

@@ -156,7 +156,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	var (
 		attForValidation eth.Att // what we'll pass to further validation
 		eventType        feed.EventType
-		eventData        interface{}
+		eventData        any
 	)
 
 	if att.Version() >= version.Electra {

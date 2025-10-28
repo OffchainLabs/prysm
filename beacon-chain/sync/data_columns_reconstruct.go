@@ -21,7 +21,7 @@ import (
 // https:github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#reconstruction-and-cross-seeding
 func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
 	key := fmt.Sprintf("%#x", sidecar.BlockRoot())
-	if _, err, _ := s.reconstructionSingleFlight.Do(key, func() (interface{}, error) {
+	if _, err, _ := s.reconstructionSingleFlight.Do(key, func() (any, error) {
 		var wg sync.WaitGroup
 
 		root := sidecar.BlockRoot()

@@ -312,7 +312,7 @@ func TestCopyBlindedBeaconBlockBodyDeneb(t *testing.T) {
 
 func bytes(length int) []byte {
 	b := make([]byte, length)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		b[i] = uint8(rand.Int31n(255) + 1)
 	}
 	return b
@@ -382,7 +382,7 @@ func genAttestation() *v1alpha1.Attestation {
 
 func genAttestations(num int) []*v1alpha1.Attestation {
 	atts := make([]*v1alpha1.Attestation, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		atts[i] = genAttestation()
 	}
 	return atts
@@ -461,7 +461,7 @@ func genProposerSlashing() *v1alpha1.ProposerSlashing {
 
 func genProposerSlashings(num int) []*v1alpha1.ProposerSlashing {
 	ps := make([]*v1alpha1.ProposerSlashing, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		ps[i] = genProposerSlashing()
 	}
 	return ps
@@ -484,7 +484,7 @@ func genIndexedAttestation() *v1alpha1.IndexedAttestation {
 
 func genAttesterSlashings(num int) []*v1alpha1.AttesterSlashing {
 	as := make([]*v1alpha1.AttesterSlashing, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		as[i] = genAttesterSlashing()
 	}
 	return as
@@ -525,7 +525,7 @@ func genDeposit() *v1alpha1.Deposit {
 
 func genDeposits(num int) []*v1alpha1.Deposit {
 	d := make([]*v1alpha1.Deposit, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		d[i] = genDeposit()
 	}
 	return d
@@ -547,7 +547,7 @@ func genSignedVoluntaryExit() *v1alpha1.SignedVoluntaryExit {
 
 func genSignedVoluntaryExits(num int) []*v1alpha1.SignedVoluntaryExit {
 	sv := make([]*v1alpha1.SignedVoluntaryExit, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		sv[i] = genSignedVoluntaryExit()
 	}
 	return sv
@@ -765,7 +765,7 @@ func genBlindedBeaconBlockBodyDeneb() *v1alpha1.BlindedBeaconBlockBodyDeneb {
 
 func getKZGCommitments(n int) [][]byte {
 	kzgs := make([][]byte, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		kzgs[i] = bytes(48)
 	}
 	return kzgs
@@ -941,7 +941,7 @@ func genWithdrawal() *enginev1.Withdrawal {
 
 func genBLSToExecutionChanges(num int) []*v1alpha1.SignedBLSToExecutionChange {
 	changes := make([]*v1alpha1.SignedBLSToExecutionChange, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		changes[i] = genBLSToExecutionChange()
 	}
 	return changes
@@ -969,7 +969,7 @@ func genAttestationElectra() *v1alpha1.AttestationElectra {
 
 func genAttesterSlashingsElectra(num int) []*v1alpha1.AttesterSlashingElectra {
 	as := make([]*v1alpha1.AttesterSlashingElectra, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		as[i] = genAttesterSlashingElectra()
 	}
 	return as
@@ -992,7 +992,7 @@ func genIndexedAttestationElectra() *v1alpha1.IndexedAttestationElectra {
 
 func genAttestationsElectra(num int) []*v1alpha1.AttestationElectra {
 	atts := make([]*v1alpha1.AttestationElectra, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		atts[i] = genAttestationElectra()
 	}
 	return atts
@@ -1078,7 +1078,7 @@ func genExecutionRequests() *enginev1.ExecutionRequests {
 
 func genDepositRequests(num int) []*enginev1.DepositRequest {
 	drs := make([]*enginev1.DepositRequest, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		drs[i] = genDepositRequest()
 	}
 	return drs
@@ -1096,7 +1096,7 @@ func genDepositRequest() *enginev1.DepositRequest {
 
 func genWithdrawalRequests(num int) []*enginev1.WithdrawalRequest {
 	wrs := make([]*enginev1.WithdrawalRequest, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		wrs[i] = genWithdrawalRequest()
 	}
 	return wrs
@@ -1112,7 +1112,7 @@ func genWithdrawalRequest() *enginev1.WithdrawalRequest {
 
 func genConsolidationRequests(num int) []*enginev1.ConsolidationRequest {
 	crs := make([]*enginev1.ConsolidationRequest, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		crs[i] = genConsolidationRequest()
 	}
 	return crs

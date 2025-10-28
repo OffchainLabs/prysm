@@ -35,7 +35,7 @@ func TestService_decodePubsubMessage(t *testing.T) {
 		name    string
 		topic   string
 		input   *pubsub.Message
-		want    interface{}
+		want    any
 		wantErr error
 	}{
 		{

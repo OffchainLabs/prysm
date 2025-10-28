@@ -140,7 +140,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 				&ethpb.MultipleValidatorStatusRequest{
 					PublicKeys: [][]byte{inactive.pub[:]},
 				},
-			).Return(inactiveResp, nil).Do(func(arg0, arg1 interface{}) {
+			).Return(inactiveResp, nil).Do(func(arg0, arg1 any) {
 				require.NoError(t, km.add(active))
 				km.SimulateAccountChanges([][fieldparams.BLSPubkeyLength]byte{inactive.pub, active.pub})
 			}),
@@ -215,7 +215,7 @@ func TestWaitForActivation_AccountsChanged(t *testing.T) {
 				&ethpb.MultipleValidatorStatusRequest{
 					PublicKeys: [][]byte{inactivePubKey[:]},
 				},
-			).Return(inactiveResp, nil).Do(func(arg0, arg1 interface{}) {
+			).Return(inactiveResp, nil).Do(func(arg0, arg1 any) {
 				err = km.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", 2)
 				require.NoError(t, err)
 				pks, err := km.FetchValidatingPublicKeys(ctx)

@@ -81,7 +81,7 @@ func Test_migrateOptimalAttesterProtectionUp(t *testing.T) {
 					}
 
 					// Verify we have (source epoch, target epoch) pairs for epochs 0 to 50 correctly.
-					for sourceEpoch := uint64(0); sourceEpoch < numEpochs; sourceEpoch++ {
+					for sourceEpoch := range numEpochs {
 						sourceEpochBytes := bytesutil.Uint64ToBytesBigEndian(sourceEpoch)
 						targetEpochBytes := sourceEpochsBucket.Get(sourceEpochBytes)
 						targetEpoch := bytesutil.BytesToUint64BigEndian(targetEpochBytes)

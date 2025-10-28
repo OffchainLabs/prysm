@@ -25,7 +25,7 @@ func (c *blobsTestCase) defaultOldestSlotByRoot(t *testing.T) types.Slot {
 	return oldest
 }
 
-func blobRootRequestFromSidecars(scs []blocks.ROBlob) interface{} {
+func blobRootRequestFromSidecars(scs []blocks.ROBlob) any {
 	req := make(p2pTypes.BlobSidecarsByRootReq, 0)
 	for i := range scs {
 		sc := scs[i]
@@ -34,7 +34,7 @@ func blobRootRequestFromSidecars(scs []blocks.ROBlob) interface{} {
 	return &req
 }
 
-func (c *blobsTestCase) filterExpectedByRoot(t *testing.T, scs []blocks.ROBlob, r interface{}) []*expectedBlobChunk {
+func (c *blobsTestCase) filterExpectedByRoot(t *testing.T, scs []blocks.ROBlob, r any) []*expectedBlobChunk {
 	rp, ok := r.(*p2pTypes.BlobSidecarsByRootReq)
 	if !ok {
 		panic("unexpected request type in filterExpectedByRoot")

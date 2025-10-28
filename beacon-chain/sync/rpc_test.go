@@ -59,7 +59,7 @@ func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	topic := "/testing/foobar/1"
-	handler := func(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 		m, ok := msg.(*ethpb.Fork)
 		if !ok {
 			t.Error("Object is not of type *pb.TestSimpleMessage")
@@ -95,7 +95,7 @@ func TestRPC_ReceivesInvalidMessage(t *testing.T) {
 	}
 
 	topic := "/testing/foobar/1"
-	handler := func(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 		m, ok := msg.(*ethpb.Fork)
 		if !ok {
 			t.Error("Object is not of type *pb.Fork")

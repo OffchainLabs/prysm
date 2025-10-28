@@ -25,7 +25,7 @@ func TestAggregateVerify(t *testing.T) {
 	pubkeys := make([]common.PublicKey, 0, 100)
 	sigs := make([]common.Signature, 0, 100)
 	var msgs [][32]byte
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		msg := [32]byte{'h', 'e', 'l', 'l', 'o', byte(i)}
 		priv, err := RandKey()
 		require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestAggregateVerify_CompressedSignatures(t *testing.T) {
 	sigs := make([]common.Signature, 0, 100)
 	var sigBytes [][]byte
 	var msgs [][32]byte
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		msg := [32]byte{'h', 'e', 'l', 'l', 'o', byte(i)}
 		priv, err := RandKey()
 		require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestFastAggregateVerify(t *testing.T) {
 	pubkeys := make([]common.PublicKey, 0, 100)
 	sigs := make([]common.Signature, 0, 100)
 	msg := [32]byte{'h', 'e', 'l', 'l', 'o'}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		priv, err := RandKey()
 		require.NoError(t, err)
 		pub := priv.PublicKey()
@@ -119,7 +119,7 @@ func TestMultipleSignatureVerification(t *testing.T) {
 	pubkeys := make([]common.PublicKey, 0, 100)
 	sigs := make([][]byte, 0, 100)
 	var msgs [][32]byte
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		msg := [32]byte{'h', 'e', 'l', 'l', 'o', byte(i)}
 		priv, err := RandKey()
 		require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestEth2FastAggregateVerify(t *testing.T) {
 	pubkeys := make([]common.PublicKey, 0, 100)
 	sigs := make([]common.Signature, 0, 100)
 	msg := [32]byte{'h', 'e', 'l', 'l', 'o'}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		priv, err := RandKey()
 		require.NoError(t, err)
 		pub := priv.PublicKey()

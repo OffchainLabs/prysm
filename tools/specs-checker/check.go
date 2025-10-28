@@ -156,7 +156,7 @@ func matchesRefImplementation(defName string, refDefs []string, input string, po
 		inputLines := strings.Split(strings.TrimRight(input, "\n"), "\n")
 
 		matchesPerfectly := true
-		for i := 0; i < len(refDefLines); i++ {
+		for i := range refDefLines {
 			a, b := strings.Trim(refDefLines[i], " "), strings.Trim(inputLines[i], " ")
 			if a != b {
 				matchesPerfectly = false

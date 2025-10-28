@@ -257,7 +257,7 @@ func VerifyIndexedAttestation(ctx context.Context, beaconState state.ReadOnlyBea
 	}
 	indices := indexedAtt.GetAttestingIndices()
 	var pubkeys []bls.PublicKey
-	for i := 0; i < len(indices); i++ {
+	for i := range indices {
 		pubkeyAtIdx := beaconState.PubkeyAtIndex(primitives.ValidatorIndex(indices[i]))
 		pk, err := bls.PublicKeyFromBytes(pubkeyAtIdx[:])
 		if err != nil {

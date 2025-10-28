@@ -74,7 +74,7 @@ type input struct {
 	MapStr  string
 }
 
-func execTmpl(tpl string, input interface{}) *bytes.Buffer {
+func execTmpl(tpl string, input any) *bytes.Buffer {
 	tmpl, err := template.New("template").Parse(tpl)
 	if err != nil {
 		panic(err)

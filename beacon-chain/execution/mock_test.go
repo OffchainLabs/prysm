@@ -15,9 +15,9 @@ import (
 var mockHandlerDefaultName = "__default__"
 
 type jsonError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type jsonrpcMessage struct {
@@ -154,12 +154,12 @@ func TestParseRequest(t *testing.T) {
 			})
 
 			result := make([]*pb.ExecutionPayloadBody, 0)
-			var args []interface{}
+			var args []any
 			if len(c.byteArgs) > 0 {
-				args = []interface{}{c.byteArgs}
+				args = []any{c.byteArgs}
 			}
 			if len(c.hexArgs) > 0 {
-				args = make([]interface{}, len(c.hexArgs))
+				args = make([]any, len(c.hexArgs))
 				for i := range c.hexArgs {
 					args[i] = c.hexArgs[i]
 				}

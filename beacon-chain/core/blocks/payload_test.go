@@ -851,8 +851,7 @@ func BenchmarkBellatrixComplete(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, st.SetLatestExecutionPayloadHeader(h))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := blocks.IsMergeTransitionComplete(st)
 		require.NoError(b, err)
 	}

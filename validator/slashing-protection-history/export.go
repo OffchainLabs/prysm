@@ -139,7 +139,7 @@ func signedAttestationsByPubKey(ctx context.Context, validatorDB db.Database, pu
 		return nil, nil
 	}
 	signedAttestations := make([]*format.SignedAttestation, 0)
-	for i := 0; i < len(history); i++ {
+	for i := range history {
 		att := history[i]
 		// Special edge case due to a bug in Prysm's old slashing protection schema. The bug
 		// manifests itself as the first entry in attester slashing protection history

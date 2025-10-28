@@ -212,7 +212,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.kzgChan = make(chan *kzgVerifier, 100)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
-	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
+	r.slotToPendingBlocks.OnEvicted(func(s string, i any) {
 		if !mutexasserts.RWMutexLocked(&r.pendingQueueLock) {
 			log.Errorf("Mutex is not locked during cache eviction of values")
 			// Continue on to allow elements to be properly removed.

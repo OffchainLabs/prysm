@@ -401,7 +401,7 @@ func fieldsFromYamls(t *testing.T, fps []string) []string {
 	for _, fp := range fps {
 		yamlFile, err := os.ReadFile(fp)
 		require.NoError(t, err)
-		m := make(map[string]interface{})
+		m := make(map[string]any)
 		require.NoError(t, yaml.Unmarshal(yamlFile, &m))
 
 		for k := range m {

@@ -204,7 +204,7 @@ func TestGetSpec(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := structs.GetSpecResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
-	data, ok := resp.Data.(map[string]interface{})
+	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
 	assert.Equal(t, 176, len(data))
 	for k, v := range data {
@@ -583,7 +583,7 @@ func TestGetSpec(t *testing.T) {
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "104", v)
 			case "BLOB_SCHEDULE":
-				blobSchedule, ok := v.([]interface{})
+				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
 			default:
@@ -664,7 +664,7 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := structs.GetSpecResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
-	data, ok := resp.Data.(map[string]interface{})
+	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
 
 	// Verify BLOB_SCHEDULE is present and properly formatted
@@ -673,13 +673,13 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 
 	// Verify it's a slice of maps (actual JSON object, not string)
 	// The JSON unmarshaling converts it to []interface{} with map[string]interface{} entries
-	blobScheduleSlice, ok := blobScheduleValue.([]interface{})
+	blobScheduleSlice, ok := blobScheduleValue.([]any)
 	require.Equal(t, true, ok)
 
 	// Convert to generic interface for easier testing
-	var blobSchedule []map[string]interface{}
+	var blobSchedule []map[string]any
 	for _, entry := range blobScheduleSlice {
-		entryMap, ok := entry.(map[string]interface{})
+		entryMap, ok := entry.(map[string]any)
 		require.Equal(t, true, ok)
 		blobSchedule = append(blobSchedule, entryMap)
 	}
@@ -735,7 +735,7 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := structs.GetSpecResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
-	data, ok := resp.Data.(map[string]interface{})
+	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
 
 	_, exists := data["BLOB_SCHEDULE"]

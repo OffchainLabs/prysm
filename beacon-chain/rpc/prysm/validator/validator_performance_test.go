@@ -425,7 +425,7 @@ func setHeadState(t *testing.T, headState state.BeaconState, publicKeys [][48]by
 	require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch+1))))
 	if headState.Version() < version.Altair {
 		atts := make([]*ethpb.PendingAttestation, 3)
-		for i := 0; i < len(atts); i++ {
+		for i := range atts {
 			atts[i] = &ethpb.PendingAttestation{
 				Data: &ethpb.AttestationData{
 					Target: &ethpb.Checkpoint{Root: make([]byte, 32)},

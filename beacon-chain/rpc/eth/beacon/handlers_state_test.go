@@ -384,7 +384,7 @@ func Test_currentCommitteeIndicesFromState(t *testing.T) {
 	vals := st.Validators()
 	wantedCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	wantedIndices := make([]string, len(wantedCommittee))
-	for i := 0; i < len(wantedCommittee); i++ {
+	for i := range wantedCommittee {
 		wantedIndices[i] = strconv.FormatUint(uint64(i), 10)
 		wantedCommittee[i] = vals[i].PublicKey
 	}
@@ -415,7 +415,7 @@ func Test_nextCommitteeIndicesFromState(t *testing.T) {
 	vals := st.Validators()
 	wantedCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	wantedIndices := make([]string, len(wantedCommittee))
-	for i := 0; i < len(wantedCommittee); i++ {
+	for i := range wantedCommittee {
 		wantedIndices[i] = strconv.FormatUint(uint64(i), 10)
 		wantedCommittee[i] = vals[i].PublicKey
 	}
@@ -445,7 +445,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetCurrentSyncCommittee(&ethpbalpha.SyncCommittee{
@@ -460,10 +460,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 	for i := uint64(0); i < commSize; i += subCommSize {
 		sub := make([]string, 0)
 		start := i
-		end := i + subCommSize
-		if end > commSize {
-			end = commSize
-		}
+		end := min(i+subCommSize, commSize)
 		for j := start; j < end; j++ {
 			sub = append(sub, strconv.FormatUint(j, 10))
 		}
@@ -498,7 +495,7 @@ func TestGetSyncCommittees(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetCurrentSyncCommittee(&ethpbalpha.SyncCommittee{
@@ -661,7 +658,7 @@ func TestGetSyncCommittees_Future(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetNextSyncCommittee(&ethpbalpha.SyncCommittee{

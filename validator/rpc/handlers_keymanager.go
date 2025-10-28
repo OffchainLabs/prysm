@@ -63,7 +63,7 @@ func (s *Server) ListKeystores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	keystoreResponse := make([]*Keystore, len(pubKeys))
-	for i := 0; i < len(pubKeys); i++ {
+	for i := range pubKeys {
 		keystoreResponse[i] = &Keystore{
 			ValidatingPubkey: hexutil.Encode(pubKeys[i][:]),
 		}
@@ -276,7 +276,7 @@ func (s *Server) transformDeletedKeysStatuses(
 		return nil, errors.Wrap(err, "could not get public keys from DB")
 	}
 	if len(pubKeysInDB) > 0 {
-		for i := 0; i < len(pubKeys); i++ {
+		for i := range pubKeys {
 			keyExistsInDB := pubKeysInDB[bytesutil.ToBytes48(pubKeys[i])]
 			if keyExistsInDB && statuses[i].Status == keymanager.StatusNotFound {
 				statuses[i].Status = keymanager.StatusNotActive
@@ -419,7 +419,7 @@ func (s *Server) ListRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	keystoreResponse := make([]*RemoteKey, len(pubKeys))
-	for i := 0; i < len(pubKeys); i++ {
+	for i := range pubKeys {
 		keystoreResponse[i] = &RemoteKey{
 			Pubkey:   hexutil.Encode(pubKeys[i][:]),
 			Url:      s.validatorService.RemoteSignerConfig().BaseEndpoint,

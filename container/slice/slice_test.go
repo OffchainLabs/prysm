@@ -2,7 +2,7 @@ package slice_test
 
 import (
 	"reflect"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -59,9 +59,7 @@ func TestIntersectionUint64(t *testing.T) {
 		setB := append([]uint64{}, tt.setB...)
 		setC := append([]uint64{}, tt.setC...)
 		result := slice.IntersectionUint64(setA, setB, setC)
-		sort.Slice(result, func(i, j int) bool {
-			return result[i] < result[j]
-		})
+		slices.Sort(result)
 		if !reflect.DeepEqual(result, tt.out) {
 			t.Errorf("got %d, want %d", result, tt.out)
 		}
@@ -123,9 +121,7 @@ func TestIntersectionInt64(t *testing.T) {
 		setB := append([]int64{}, tt.setB...)
 		setC := append([]int64{}, tt.setC...)
 		result := slice.IntersectionInt64(setA, setB, setC)
-		sort.Slice(result, func(i, j int) bool {
-			return result[i] < result[j]
-		})
+		slices.Sort(result)
 		if !reflect.DeepEqual(result, tt.out) {
 			t.Errorf("got %d, want %d", result, tt.out)
 		}
@@ -529,9 +525,7 @@ func TestIntersectionSlot(t *testing.T) {
 		setB := append([]primitives.Slot{}, tt.setB...)
 		setC := append([]primitives.Slot{}, tt.setC...)
 		result := slice.IntersectionSlot(setA, setB, setC)
-		sort.Slice(result, func(i, j int) bool {
-			return result[i] < result[j]
-		})
+		slices.Sort(result)
 		if !reflect.DeepEqual(result, tt.out) {
 			t.Errorf("got %d, want %d", result, tt.out)
 		}

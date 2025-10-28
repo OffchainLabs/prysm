@@ -118,7 +118,7 @@ func (s *Service) BlockByTimestamp(ctx context.Context, time uint64) (*types.Hea
 	maxTimeBuffer := searchThreshold * params.BeaconConfig().SecondsPerETH1Block
 	// Terminate if we can't find an acceptable block after
 	// repeated searches.
-	for i := 0; i < repeatedSearches; i++ {
+	for range repeatedSearches {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

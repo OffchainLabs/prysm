@@ -68,7 +68,7 @@ func main() {
 		return
 	}
 
-	for _, check := range strings.Split(*checks, ",") {
+	for check := range strings.SplitSeq(*checks, ",") {
 		c.AddExclusion(strings.TrimSpace(check), e)
 	}
 

@@ -872,7 +872,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 			// a lot happens in the chain service after SetClock is called,
 			// give it a moment before calling internal methods that would typically
 			// only execute after waitFor
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				if !svc.chainIsStarted() {
 					time.Sleep(100 * time.Millisecond)
 				}

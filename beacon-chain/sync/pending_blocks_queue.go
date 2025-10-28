@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -452,9 +452,7 @@ func (s *Service) sortedPendingSlots() []primitives.Slot {
 		slot := cacheKeyToSlot(k)
 		ss = append(ss, slot)
 	}
-	sort.Slice(ss, func(i, j int) bool {
-		return ss[i] < ss[j]
-	})
+	slices.Sort(ss)
 	return ss
 }
 
