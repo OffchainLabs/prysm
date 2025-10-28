@@ -400,12 +400,12 @@ func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 	expectedResponseSidecar, err := blocks.NewRODataColumn(expectedResponseSidecarPb)
 	require.NoError(t, err)
 
-	slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+	roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 		{1}: 1,
 		{3}: 3,
 		{4}: 4,
 		{7}: 7,
-	}
+	})
 
 	slotsWithCommitments := map[primitives.Slot]bool{
 		1: true,
@@ -458,7 +458,7 @@ func TestFetchDataColumnSidecarsFromPeers(t *testing.T) {
 		other.PeerID(): {expectedResponseSidecar},
 	}
 
-	actualResponse := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeer)
+	actualResponse := fetchDataColumnSidecarsFromPeers(params, roBlockByRoot, slotsWithCommitments, indicesByRootByPeer)
 	require.Equal(t, len(expectedResponse), len(actualResponse))
 
 	for peerID := range expectedResponse {
@@ -508,12 +508,12 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			{7}: {1: true, 2: true},
 		}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 			{1}: 1,
 			{3}: 3,
 			{4}: 4,
 			{7}: 7,
-		}
+		})
 
 		slotsWithCommitments := map[primitives.Slot]bool{
 			1: true,
@@ -553,7 +553,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
 		}
 
-		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+		actualResponse, err := sendDataColumnSidecarsRequest(params, roBlockByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
 		require.NoError(t, err)
 		require.DeepEqual(t, expectedResponse, actualResponse[0])
 	})
@@ -565,11 +565,11 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			{7}:                          {1: true, 2: true},
 		}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 			expectedResponse.BlockRoot(): 1,
 			{4}:                          4,
 			{7}:                          7,
-		}
+		})
 
 		slotsWithCommitments := map[primitives.Slot]bool{
 			1: true,
@@ -620,7 +620,7 @@ func TestSendDataColumnSidecarsRequest(t *testing.T) {
 			RateLimiter: leakybucket.NewCollector(1., 1, time.Second, false /* deleteEmptyBuckets */),
 		}
 
-		actualResponse, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
+		actualResponse, err := sendDataColumnSidecarsRequest(params, roBlockByRoot, slotsWithCommitments, other.PeerID(), indicesByRoot)
 		require.NoError(t, err)
 		require.DeepEqual(t, expectedResponse, actualResponse[0])
 	})
@@ -652,13 +652,13 @@ func TestBuildByRangeRequests(t *testing.T) {
 			{3}: {2: true, 3: true},
 		}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 			{1}: 1,
 			{2}: 2,
 			{3}: 3,
-		}
+		})
 
-		actual, err := buildByRangeRequests(slotByRoot, nil, indicesByRoot, nullBatchSize)
+		actual, err := buildByRangeRequests(roBlockByRoot, nil, indicesByRoot, nullBatchSize)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(actual))
 	})
@@ -669,10 +669,10 @@ func TestBuildByRangeRequests(t *testing.T) {
 			{2}: {1: true, 2: true},
 		}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 			{1}: 1,
 			{2}: 3,
-		}
+		})
 
 		slotsWithCommitments := map[primitives.Slot]bool{
 			1: true,
@@ -680,7 +680,7 @@ func TestBuildByRangeRequests(t *testing.T) {
 			3: true,
 		}
 
-		actual, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, nullBatchSize)
+		actual, err := buildByRangeRequests(roBlockByRoot, slotsWithCommitments, indicesByRoot, nullBatchSize)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(actual))
 	})
@@ -695,12 +695,12 @@ func TestBuildByRangeRequests(t *testing.T) {
 			{7}: {1: true, 2: true},
 		}
 
-		slotByRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 			{1}: 1,
 			{3}: 3,
 			{4}: 4,
 			{7}: 7,
-		}
+		})
 
 		slotsWithCommitments := map[primitives.Slot]bool{
 			1: true,
@@ -727,7 +727,7 @@ func TestBuildByRangeRequests(t *testing.T) {
 			},
 		}
 
-		actual, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
+		actual, err := buildByRangeRequests(roBlockByRoot, slotsWithCommitments, indicesByRoot, batchSize)
 		require.NoError(t, err)
 		require.DeepEqual(t, expected, actual)
 	})
@@ -881,12 +881,12 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 		peerIDs = append(peerIDs, peerID)
 	}
 
-	slotByBlockRoot := map[[fieldparams.RootLength]byte]primitives.Slot{
+	roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
 		[fieldparams.RootLength]byte{1}: 8,
 		[fieldparams.RootLength]byte{2}: 10,
 		[fieldparams.RootLength]byte{3}: 9,
 		[fieldparams.RootLength]byte{4}: 50,
-	}
+	})
 
 	indicesByBlockRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
 		[fieldparams.RootLength]byte{1}: {3: true, 4: true, 5: true},
@@ -917,7 +917,7 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 		peerIDsMap[id] = true
 	}
 
-	actual, err := computeIndicesByRootByPeer(p2p, slotByBlockRoot, indicesByBlockRoot, peerIDsMap)
+	actual, err := computeIndicesByRootByPeer(p2p, roBlockByRoot, indicesByBlockRoot, peerIDsMap)
 	require.NoError(t, err)
 	require.Equal(t, len(expected), len(actual))
 
@@ -1022,4 +1022,21 @@ func TestComputeTotalCount(t *testing.T) {
 	const expected = 3
 	actual := computeTotalCount(input)
 	require.Equal(t, expected, actual)
+}
+
+func createRoBlockByRoot(t *testing.T, slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot) map[[fieldparams.RootLength]byte]blocks.ROBlock {
+	roBlockByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, len(slotByRoot))
+	for root, slot := range slotByRoot {
+		signedBeaconBlockPb := util.NewBeaconBlock()
+		signedBeaconBlockPb.Block.Slot = slot
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		roBlock, err := blocks.NewROBlockWithRoot(signedBeaconBlock, root)
+		require.NoError(t, err)
+
+		roBlockByRoot[root] = roBlock
+	}
+
+	return roBlockByRoot
 }

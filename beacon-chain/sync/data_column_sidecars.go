@@ -74,7 +74,7 @@ func FetchDataColumnSidecars(
 	// set as we retrieve them.
 	incompleteRoots := make(map[[fieldparams.RootLength]byte]bool, blockCount)
 	slotsWithCommitments := make(map[primitives.Slot]bool, blockCount)
-	slotByRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, blockCount)
+	roBlockByRoot := make(map[[fieldparams.RootLength]byte]blocks.ROBlock, blockCount)
 	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
 
 	for _, roBlock := range roBlocks {
@@ -93,7 +93,7 @@ func FetchDataColumnSidecars(
 		slot := block.Slot()
 
 		incompleteRoots[root] = true
-		slotByRoot[root] = slot
+		roBlockByRoot[root] = roBlock
 		slotsWithCommitments[slot] = true
 
 		storedIndices := params.Storage.Summary(root).Stored()
@@ -118,7 +118,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request direct sidecars from peers.
-	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, roBlockByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
 	}
@@ -139,7 +139,7 @@ func FetchDataColumnSidecars(
 	}
 
 	// Request all possible indirect sidecars from peers which are neither stored nor in `directSidecarsByRoot`
-	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
+	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, roBlockByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "request all sidecars from peers")
 	}
@@ -229,7 +229,7 @@ func requestSidecarsFromStorage(
 // It returns a map from each root to its successfully retrieved sidecars.
 func requestDirectSidecarsFromPeers(
 	params DataColumnSidecarsParams,
-	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	requestedIndices map[uint64]bool,
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
@@ -266,7 +266,7 @@ func requestDirectSidecarsFromPeers(
 
 	initialMissingCount := computeTotalCount(missingIndicesByRoot)
 
-	indicesByRootByPeer, err := computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+	indicesByRootByPeer, err := computeIndicesByRootByPeer(params.P2P, roBlockByRoot, missingIndicesByRoot, connectedPeers)
 	if err != nil {
 		return nil, errors.Wrap(err, "explore peers")
 	}
@@ -285,7 +285,7 @@ func requestDirectSidecarsFromPeers(
 		}
 
 		// Fetch the sidecars from the chosen peers.
-		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
+		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(params, roBlockByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, roDataColumnsByPeer)
@@ -300,7 +300,7 @@ func requestDirectSidecarsFromPeers(
 		}
 
 		// Compute indices by root by peers with the updated missing indices and connected peers.
-		indicesByRootByPeer, err = computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+		indicesByRootByPeer, err = computeIndicesByRootByPeer(params.P2P, roBlockByRoot, missingIndicesByRoot, connectedPeers)
 		if err != nil {
 			return nil, errors.Wrap(err, "explore peers")
 		}
@@ -323,7 +323,7 @@ func requestDirectSidecarsFromPeers(
 // - all peers are exhausted.
 func requestIndirectSidecarsFromPeers(
 	p DataColumnSidecarsParams,
-	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	slotsWithCommitments map[primitives.Slot]bool,
 	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
@@ -370,7 +370,7 @@ func requestIndirectSidecarsFromPeers(
 	}
 
 	// Compute which peers have which of the missing indices.
-	indicesByRootByPeer, err := computeIndicesByRootByPeer(p.P2P, slotByRoot, indicesToRetrieveByRoot, connectedPeers)
+	indicesByRootByPeer, err := computeIndicesByRootByPeer(p.P2P, roBlockByRoot, indicesToRetrieveByRoot, connectedPeers)
 	if err != nil {
 		return nil, errors.Wrap(err, "explore peers")
 	}
@@ -395,7 +395,7 @@ func requestIndirectSidecarsFromPeers(
 		}
 
 		// Fetch the sidecars from the chosen peers.
-		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(p, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
+		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(p, roBlockByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
 		// Verify the received data column sidecars.
 		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, roDataColumnsByPeer)
@@ -436,7 +436,7 @@ func requestIndirectSidecarsFromPeers(
 		}
 
 		// Compute indices by root by peers with the updated missing indices and connected peers.
-		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, indicesToRetrieveByRoot, connectedPeers)
+		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, roBlockByRoot, indicesToRetrieveByRoot, connectedPeers)
 		if err != nil {
 			return nil, errors.Wrap(err, "explore peers")
 		}
@@ -709,7 +709,7 @@ func updateResults(
 // fetchDataColumnSidecarsFromPeers retrieves data column sidecars from peers.
 func fetchDataColumnSidecarsFromPeers(
 	params DataColumnSidecarsParams,
-	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	slotsWithCommitments map[primitives.Slot]bool,
 	indicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) map[goPeer.ID][]blocks.RODataColumn {
@@ -736,7 +736,7 @@ func fetchDataColumnSidecarsFromPeers(
 				"totalRequestedCount": requestedCount,
 			})
 
-			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
+			roDataColumns, err := sendDataColumnSidecarsRequest(params, roBlockByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
 				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
@@ -755,7 +755,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 func sendDataColumnSidecarsRequest(
 	params DataColumnSidecarsParams,
-	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	slotsWithCommitments map[primitives.Slot]bool,
 	peerID goPeer.ID,
 	indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
@@ -775,7 +775,7 @@ func sendDataColumnSidecarsRequest(
 	})
 
 	// Try to build a by range byRangeRequest first.
-	byRangeRequests, err := buildByRangeRequests(slotByRoot, slotsWithCommitments, indicesByRoot, batchSize)
+	byRangeRequests, err := buildByRangeRequests(roBlockByRoot, slotsWithCommitments, indicesByRoot, batchSize)
 	if err != nil {
 		return nil, errors.Wrap(err, "craft by range request")
 	}
@@ -854,7 +854,7 @@ func sendDataColumnSidecarsRequest(
 // (Missing blocks or blocks without commitments do count as contiguous)
 // If one of this condition is not met, returns nil.
 func buildByRangeRequests(
-	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	slotsWithCommitments map[primitives.Slot]bool,
 	indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	batchSize uint64,
@@ -864,7 +864,7 @@ func buildByRangeRequests(
 	}
 
 	var reference map[uint64]bool
-	slots := make([]primitives.Slot, 0, len(slotByRoot))
+	slots := make([]primitives.Slot, 0, len(roBlockByRoot))
 	for root, indices := range indicesByRoot {
 		if reference == nil {
 			reference = indices
@@ -874,12 +874,12 @@ func buildByRangeRequests(
 			return nil, nil
 		}
 
-		slot, ok := slotByRoot[root]
+		roBlock, ok := roBlockByRoot[root]
 		if !ok {
 			return nil, errors.Errorf("slot not found for block root %#x", root)
 		}
 
-		slots = append(slots, slot)
+		slots = append(slots, roBlock.Block().Slot())
 	}
 
 	slices.Sort(slots)
@@ -1012,7 +1012,7 @@ func verifyRPCDataColumnSidecars(newVerifier verification.NewDataColumnsVerifier
 // for a given root only if its head state is higher than the block slot.
 func computeIndicesByRootByPeer(
 	p2p prysmP2P.P2P,
-	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	peers map[goPeer.ID]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
@@ -1066,7 +1066,7 @@ func computeIndicesByRootByPeer(
 	// For each block root and its indices, find suitable peers
 	indicesByRootByPeer := make(map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool)
 	for root, indices := range indicesByRoot {
-		slot, ok := slotByRoot[root]
+		roBlock, ok := roBlockByRoot[root]
 		if !ok {
 			return nil, errors.Errorf("slot not found for block root %#x", root)
 		}
@@ -1079,7 +1079,7 @@ func computeIndicesByRootByPeer(
 					return nil, errors.Errorf("head slot not found for peer %s", peer)
 				}
 
-				if peerHeadSlot < slot {
+				if peerHeadSlot < roBlock.Block().Slot() {
 					continue
 				}
 
