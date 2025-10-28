@@ -15,8 +15,12 @@ type PathElement struct {
 	Index *uint64
 }
 
+// Path represents the entire path structure for SSZ-QL queries. It consists of multiple PathElements
+// and a flag indicating if the path is querying for length.
 type Path struct {
-	Length   bool
+	// If true, the path is querying for the length of the final element in Elements field
+	Length bool
+	// Sequence of path elements representing the navigation through the SSZ structure
 	Elements []PathElement
 }
 
@@ -56,10 +60,10 @@ func ParsePath(rawPath string) (Path, error) {
 		rawElements = rawElements[1:]
 	}
 
-	var path []PathElement
+	var pathElements []PathElement
 	for _, elem := range rawElements {
 		if elem == "" {
-			return Path{}, errors.New("invalid path: consecutive dots or trailing dot")
+			return Path{}, errors.New("invalid pathElements: consecutive dots or trailing dot")
 		}
 
 		// Processing element string
@@ -86,10 +90,10 @@ func ParsePath(rawPath string) (Path, error) {
 
 		}
 
-		path = append(path, pathElement)
+		pathElements = append(pathElements, pathElement)
 	}
 
-	processedPath.Elements = path
+	processedPath.Elements = pathElements
 	return processedPath, nil
 }
 
