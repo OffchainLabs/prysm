@@ -957,7 +957,7 @@ func verifyDataColumnSidecarsByPeer(
 		roDataColumnSidecars = append(roDataColumnSidecars, columns...)
 	}
 
-	verifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, roDataColumnSidecars)
+	verifiedRoDataColumnSidecars, err := verifyRPCDataColumnSidecars(newVerifier, roDataColumnSidecars)
 	if err == nil {
 		// This is the happy path where all sidecars are verified.
 		return verifiedRoDataColumnSidecars, nil
@@ -967,7 +967,7 @@ func verifyDataColumnSidecarsByPeer(
 	// Reverify peer by peer to identify faulty peer(s), reject all its sidecars, and downscore it.
 	verifiedRoDataColumnSidecars = make([]blocks.VerifiedRODataColumn, 0, count)
 	for peer, columns := range roDataColumnsByPeer {
-		peerVerifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, columns)
+		peerVerifiedRoDataColumnSidecars, err := verifyRPCDataColumnSidecars(newVerifier, columns)
 		if err != nil {
 			// This peer has invalid sidecars.
 			log := log.WithError(err).WithField("peerID", peer)
@@ -982,9 +982,9 @@ func verifyDataColumnSidecarsByPeer(
 	return verifiedRoDataColumnSidecars, nil
 }
 
-// verifyByRootDataColumnSidecars verifies the provided read-only data columns against the
+// verifyRPCDataColumnSidecars verifies the provided read-only data columns against the
 // requirements for data column sidecars received via the by root request.
-func verifyByRootDataColumnSidecars(newVerifier verification.NewDataColumnsVerifier, roDataColumns []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+func verifyRPCDataColumnSidecars(newVerifier verification.NewDataColumnsVerifier, roDataColumns []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	verifier := newVerifier(roDataColumns, verification.RPCDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
