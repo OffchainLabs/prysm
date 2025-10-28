@@ -882,33 +882,33 @@ func TestComputeIndicesByRootByPeer(t *testing.T) {
 	}
 
 	roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
-		[fieldparams.RootLength]byte{1}: 8,
-		[fieldparams.RootLength]byte{2}: 10,
-		[fieldparams.RootLength]byte{3}: 9,
-		[fieldparams.RootLength]byte{4}: 50,
+		{1}: 8,
+		{2}: 10,
+		{3}: 9,
+		{4}: 50,
 	})
 
 	indicesByBlockRoot := map[[fieldparams.RootLength]byte]map[uint64]bool{
-		[fieldparams.RootLength]byte{1}: {3: true, 4: true, 5: true},
-		[fieldparams.RootLength]byte{2}: {1: true, 10: true, 37: true, 80: true},
-		[fieldparams.RootLength]byte{3}: {10: true, 38: true, 39: true, 40: true},
-		[fieldparams.RootLength]byte{4}: {89: true, 108: true, 122: true},
+		{1}: {3: true, 4: true, 5: true},
+		{2}: {1: true, 10: true, 37: true, 80: true},
+		{3}: {10: true, 38: true, 39: true, 40: true},
+		{4}: {89: true, 108: true, 122: true},
 	}
 
 	expected := map[peer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool{
 		peerIDs[0]: {
-			[fieldparams.RootLength]byte{4}: {89: true, 122: true},
+			{4}: {89: true, 122: true},
 		},
 		peerIDs[1]: {
-			[fieldparams.RootLength]byte{2}: {1: true, 37: true},
+			{2}: {1: true, 37: true},
 		},
 		peerIDs[2]: {
-			[fieldparams.RootLength]byte{2}: {37: true},
-			[fieldparams.RootLength]byte{3}: {38: true},
+			{2}: {37: true},
+			{3}: {38: true},
 		},
 		peerIDs[3]: {
-			[fieldparams.RootLength]byte{2}: {10: true},
-			[fieldparams.RootLength]byte{3}: {10: true},
+			{2}: {10: true},
+			{3}: {10: true},
 		},
 	}
 
