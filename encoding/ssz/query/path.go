@@ -64,7 +64,10 @@ func ParsePath(rawPath string) ([]PathElement, error) {
 		var pe PathElement
 		field := elem
 
-		// Check for len() pattern
+		// FindStringSubmatch matches a whole string like "len(field_name)" and its inner expression.
+		// For a path element to be a length query, len(matches) should be 2:
+		// 1. Full match: "len(field_name)"
+		// 2. Inner expression: "field_name"
 		if matches := lengthRegex.FindStringSubmatch(field); len(matches) == 2 {
 			pe.Length = true
 			field = matches[1]
