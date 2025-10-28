@@ -225,3 +225,35 @@ func TestParsePath(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkParsePath(b *testing.B) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"simple_nested_path", "data.target.root"},
+		{"leading_dot", ".data.target.root"},
+		{"len_function_basic", "len(data)"},
+		{"len_with_dotted_path", "len(data.target.root)"},
+		{"len_with_extra_closing_paren", "len(root))"},
+		{"array_index_basic", "arr[42]"},
+		{"array_with_spaces", "arr[  42 ]"},
+		{"array_leading_zeros", "arr[001]"},
+		{"array_max_uint64", "arr[18446744073709551615]"},
+		{"array_overflow_uint64", "arr[18446744073709551616]"},
+		{"double_dots_invalid", "data..target.root"},
+		{"negative_index_invalid", "data.target.root[-1]"},
+		{"empty_len_argument", "len()"},
+		{"array_missing_closing_bracket", "arr[12"},
+		{"array_index_then_suffix", "field[1]suffix"},
+	}
+
+	b.ReportAllocs()
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = query.ParsePath(tt.path)
+			}
+		})
+	}
+}
