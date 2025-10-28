@@ -66,7 +66,8 @@ func ParsePath(rawPath string) (Path, error) {
 		rawElements = strings.Split(rawPath, ".")
 	}
 
-	if rawElements[0] == "" {
+	// Skip leading dot without reallocation
+	if rawPath[0] == '.' {
 		// Remove leading dot if present
 		rawElements = rawElements[1:]
 	}
@@ -81,13 +82,13 @@ func ParsePath(rawPath string) (Path, error) {
 		processingField := elem
 		var pathElement PathElement
 
-		// Default name is the full working string (may be updated below if it contains indices)
-		pathElement.Name = processingField
+		// Detect array indices such as "array[0]"
+		if idx := strings.IndexByte(field, '['); idx != -1 {
+			// extractFieldName: get field name before '['
+			pe.Name = field[:idx]
 
-		if strings.Contains(processingField, "[") {
-			// Split into field and indices, e.g., "array[0][1]" -> name:"array", indices:{0,1}
-			pathElement.Name = extractFieldName(processingField)
-			indices, err := extractArrayIndices(processingField)
+			// extractArrayIndices: parse one or more numeric indices inside brackets
+			idxs, err := extractArrayIndices(field[idx:])
 			if err != nil {
 				return Path{}, err
 			}
@@ -97,8 +98,10 @@ func ParsePath(rawPath string) (Path, error) {
 			if len(indices) != 1 {
 				return Path{}, fmt.Errorf("multiple indices not supported in token %s", processingField)
 			}
-			pathElement.Index = &indices[0]
-
+			// Store parsed index
+			pe.Index = &idxs[0]
+		} else {
+			pe.Name = field
 		}
 
 		pathElements = append(pathElements, pathElement)
@@ -167,22 +170,20 @@ func extractFieldName(name string) string {
 
 // extractArrayIndices returns every bracketed, non-negative index in the name,
 // e.g. "array[0][1]" -> []uint64{0, 1}. Errors if none are found or if any index is invalid.
-func extractArrayIndices(name string) ([]uint64, error) {
-	// Match all bracketed content, then we'll parse as unsigned to catch negatives explicitly
-	matches := arrayIndexRegex.FindAllStringSubmatch(name, -1)
-
+func extractArrayIndices(s string) ([]uint64, error) {
+	matches := arrayIndexRegex.FindAllStringSubmatch(s, -1)
 	if len(matches) == 0 {
 		return nil, errors.New("no array indices found")
 	}
 
-	indices := make([]uint64, 0, len(matches))
-	for _, m := range matches {
-		raw := strings.TrimSpace(m[1])
-		idx, err := strconv.ParseUint(raw, 10, 64)
+	indices := make([]uint64, len(matches))
+	for i, m := range matches {
+		numStr := strings.TrimSpace(m[1])
+		idx, err := strconv.ParseUint(numStr, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid array index: %w", err)
 		}
-		indices = append(indices, idx)
+		indices[i] = idx
 	}
 	return indices, nil
 }
