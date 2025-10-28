@@ -44,7 +44,7 @@ func ParsePath(rawPath string) (Path, error) {
 	// 2. Inner expression: "field_name"
 	if len(matches) == 2 {
 		processedPath.Length = true
-		// If we have o¡found a len() expression, we only want to parse its inner expression.
+		// If we have found a len() expression, we only want to parse its inner expression.
 		rawElements = strings.Split(matches[1], ".")
 	} else {
 		// Normal path parsing
