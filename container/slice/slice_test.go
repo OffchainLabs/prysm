@@ -55,9 +55,9 @@ func TestIntersectionUint64(t *testing.T) {
 		{[]uint64{1, 1, 1}, []uint64{1, 1}, []uint64{1, 2, 3}, []uint64{1}},
 	}
 	for _, tt := range testCases {
-		setA := append([]uint64{}, tt.setA...)
-		setB := append([]uint64{}, tt.setB...)
-		setC := append([]uint64{}, tt.setC...)
+		setA := slices.Clone(tt.setA)
+		setB := slices.Clone(tt.setB)
+		setC := slices.Clone(tt.setC)
 		result := slice.IntersectionUint64(setA, setB, setC)
 		slices.Sort(result)
 		if !reflect.DeepEqual(result, tt.out) {
@@ -117,9 +117,9 @@ func TestIntersectionInt64(t *testing.T) {
 		{[]int64{1, 1, 1}, []int64{1, 1}, []int64{1, 2, 3}, []int64{1}},
 	}
 	for _, tt := range testCases {
-		setA := append([]int64{}, tt.setA...)
-		setB := append([]int64{}, tt.setB...)
-		setC := append([]int64{}, tt.setC...)
+		setA := slices.Clone(tt.setA)
+		setB := slices.Clone(tt.setB)
+		setC := slices.Clone(tt.setC)
 		result := slice.IntersectionInt64(setA, setB, setC)
 		slices.Sort(result)
 		if !reflect.DeepEqual(result, tt.out) {
@@ -521,9 +521,9 @@ func TestIntersectionSlot(t *testing.T) {
 		{[]primitives.Slot{1, 1, 1}, []primitives.Slot{1, 1}, []primitives.Slot{1, 2, 3}, []primitives.Slot{1}},
 	}
 	for _, tt := range testCases {
-		setA := append([]primitives.Slot{}, tt.setA...)
-		setB := append([]primitives.Slot{}, tt.setB...)
-		setC := append([]primitives.Slot{}, tt.setC...)
+		setA := slices.Clone(tt.setA)
+		setB := slices.Clone(tt.setB)
+		setC := slices.Clone(tt.setC)
 		result := slice.IntersectionSlot(setA, setB, setC)
 		slices.Sort(result)
 		if !reflect.DeepEqual(result, tt.out) {
