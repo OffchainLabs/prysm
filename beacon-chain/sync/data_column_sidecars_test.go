@@ -792,7 +792,12 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, nil, roDataColumnsByPeer)
+
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
+			roDataColumnSidecars[0].BlockRoot(): roDataColumnSidecars[0].Slot(),
+		})
+
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roBlockByRoot, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, stop-start, len(actual))
@@ -837,7 +842,12 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, nil, roDataColumnsByPeer)
+
+		roBlockByRoot := createRoBlockByRoot(t, map[[fieldparams.RootLength]byte]primitives.Slot{
+			roDataColumnSidecars[0].BlockRoot(): roDataColumnSidecars[0].Slot(),
+		})
+
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roBlockByRoot, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, middle-start, len(actual))

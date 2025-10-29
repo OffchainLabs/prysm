@@ -47,6 +47,7 @@ var (
 		RequireValidFields,
 		RequireSidecarInclusionProven,
 		RequireSidecarKzgProofVerified,
+		RequireSidecarRootAndSignatureAligned,
 	}
 
 	// SpectestDataColumnSidecarRequirements is used by the forkchoice spectests when verifying data columns used in the on_block tests.
@@ -536,18 +537,18 @@ func (dv *RODataColumnsVerifier) SidecarRootAndSignatureAligned(roBlockByRoot ma
 
 // state retrieves the state of the corresponding root from the cache if possible, else retrieves it from the state by rooter.
 func (dv *RODataColumnsVerifier) state(ctx context.Context, root [fieldparams.RootLength]byte) (state.BeaconState, error) {
-	// If the parent root is already in the cache, return it.
+	// If the root is already in the cache, return it.
 	if st, ok := dv.stateByRoot[root]; ok {
 		return st, nil
 	}
 
-	// Retrieve the parent state from the state by rooter.
+	// Retrieve the state from the state by rooter.
 	st, err := dv.sr.StateByRoot(ctx, root)
 	if err != nil {
 		return nil, errors.Wrap(err, "state by root")
 	}
 
-	// Store the parent state in the cache.
+	// Store the state in the cache.
 	dv.stateByRoot[root] = st
 
 	return st, nil

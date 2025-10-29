@@ -987,13 +987,17 @@ func verifyDataColumnSidecarsByPeer(
 // requirements for data column sidecars received via the by root request.
 func verifyRPCDataColumnSidecars(
 	newVerifier verification.NewDataColumnsVerifier,
-	_ map[[fieldparams.RootLength]byte]blocks.ROBlock,
+	roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	roDataColumns []blocks.RODataColumn,
 ) ([]blocks.VerifiedRODataColumn, error) {
 	verifier := newVerifier(roDataColumns, verification.RPCDataColumnSidecarRequirements)
 
 	if err := verifier.ValidFields(); err != nil {
 		return nil, errors.Wrap(err, "valid fields")
+	}
+
+	if err := verifier.SidecarRootAndSignatureAligned(roBlockByRoot); err != nil {
+		return nil, errors.Wrap(err, "sidecar root and signature aligned")
 	}
 
 	if err := verifier.SidecarInclusionProven(); err != nil {
