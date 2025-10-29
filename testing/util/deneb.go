@@ -203,15 +203,6 @@ func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blo
 	return blks, blobs
 }
 
-func DeterministicRandomness(seed int64) [32]byte {
-	return random.DeterministicRandomness(seed)
-}
-
-// Returns a serialized random field element in big-endian
-func GetRandFieldElement(seed int64) [32]byte {
-	return random.GetRandFieldElement(seed)
-}
-
 // Returns a random blob using the passed seed as entropy
 func GetRandBlob(seed int64) GoKZG.Blob {
 	return random.GetRandBlob(seed)
