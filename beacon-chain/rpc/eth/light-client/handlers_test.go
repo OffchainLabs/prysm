@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	blockchainTest "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -114,7 +115,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 			}
 			request := httptest.NewRequest("GET", "http://foo.com/", nil)
 			request.SetPathValue("block_root", hexutil.Encode(blockRoot[:]))
-			request.Header.Add("Accept", "application/octet-stream")
+			request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -235,7 +236,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				t.Run("single update ssz", func(t *testing.T) {
 					url := fmt.Sprintf("http://foo.com/?count=1&start_period=%d", startPeriod)
 					request := httptest.NewRequest("GET", url, nil)
-					request.Header.Add("Accept", "application/octet-stream")
+					request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 					writer := httptest.NewRecorder()
 					writer.Body = &bytes.Buffer{}
 
@@ -290,7 +291,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				t.Run("multiple updates ssz", func(t *testing.T) {
 					url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
 					request := httptest.NewRequest("GET", url, nil)
-					request.Header.Add("Accept", "application/octet-stream")
+					request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 					writer := httptest.NewRecorder()
 					writer.Body = &bytes.Buffer{}
 
@@ -405,7 +406,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 				t.Run("ssz", func(t *testing.T) {
 					url := fmt.Sprintf("http://foo.com/?count=100&start_period=%d", startPeriod)
 					request := httptest.NewRequest("GET", url, nil)
-					request.Header.Add("Accept", "application/octet-stream")
+					request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 					writer := httptest.NewRecorder()
 					writer.Body = &bytes.Buffer{}
 
@@ -777,7 +778,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 			s.LCStore.SetLastFinalityUpdate(update, false)
 
 			request := httptest.NewRequest("GET", "http://foo.com", nil)
-			request.Header.Add("Accept", "application/octet-stream")
+			request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 			s.GetLightClientFinalityUpdate(writer, request)
@@ -870,7 +871,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 			s.LCStore.SetLastOptimisticUpdate(update, false)
 
 			request := httptest.NewRequest("GET", "http://foo.com", nil)
-			request.Header.Add("Accept", "application/octet-stream")
+			request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 			s.GetLightClientOptimisticUpdate(writer, request)

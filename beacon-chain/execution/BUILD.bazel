@@ -25,6 +25,7 @@ go_library(
         "//testing/spectest:__subpackages__",
     ],
     deps = [
+        "//api:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
@@ -98,6 +99,7 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
+        "//api:go_default_library",
         "//async/event:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",

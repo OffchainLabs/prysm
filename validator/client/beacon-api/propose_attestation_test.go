@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -117,7 +118,7 @@ func TestProposeAttestation(t *testing.T) {
 
 			ctx := t.Context()
 
-			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
+			headers := map[string]string{api.EthConsensusVersionHeader: version.String(test.attestation.Version())}
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),
 				"/eth/v2/beacon/pool/attestations",
@@ -177,7 +178,7 @@ func TestProposeAttestationFallBack(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
+	headers := map[string]string{api.EthConsensusVersionHeader: version.String(attestation.Version())}
 	jsonRestHandler.EXPECT().Post(
 		gomock.Any(),
 		"/eth/v2/beacon/pool/attestations",
@@ -304,7 +305,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 			}
 
 			ctx := t.Context()
-			headers := map[string]string{"Eth-Consensus-Version": version.String(test.attestation.Version())}
+			headers := map[string]string{api.EthConsensusVersionHeader: version.String(test.attestation.Version())}
 			jsonRestHandler.EXPECT().Post(
 				gomock.Any(),
 				"/eth/v2/beacon/pool/attestations",

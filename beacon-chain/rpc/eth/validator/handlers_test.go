@@ -312,7 +312,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 				attDataRoot := hexutil.Encode(reqRoot[:])
 				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=2" + "&committee_index=0"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
-				request.Header.Add("Accept", "application/octet-stream")
+				request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 
 				s.GetAggregateAttestationV2(writer, request)
@@ -349,7 +349,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 				attDataRoot := hexutil.Encode(reqRoot[:])
 				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=1" + "&committee_index=0"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
-				request.Header.Add("Accept", "application/octet-stream")
+				request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 
 				s.GetAggregateAttestationV2(writer, request)
@@ -460,7 +460,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 				attDataRoot := hexutil.Encode(reqRoot[:])
 				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=2" + "&committee_index=0"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
-				request.Header.Add("Accept", "application/octet-stream")
+				request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 
 				s.GetAggregateAttestationV2(writer, request)
@@ -497,7 +497,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 				attDataRoot := hexutil.Encode(reqRoot[:])
 				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=1" + "&committee_index=0"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
-				request.Header.Add("Accept", "application/octet-stream")
+				request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 
 				s.GetAggregateAttestationV2(writer, request)
@@ -533,7 +533,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 				attDataRoot := hexutil.Encode(reqRoot[:])
 				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=4" + "&committee_index=0"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
-				request.Header.Add("Accept", "application/octet-stream")
+				request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 
 				s.GetAggregateAttestationV2(writer, request)
@@ -574,7 +574,7 @@ func TestGetAggregateAttestation(t *testing.T) {
 				attDataRoot := hexutil.Encode(reqRoot[:])
 				url := "http://example.com?attestation_data_root=" + attDataRoot + "&slot=3" + "&committee_index=0"
 				request := httptest.NewRequest(http.MethodGet, url, nil)
-				request.Header.Add("Accept", "application/octet-stream")
+				request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 				writer := httptest.NewRecorder()
 
 				s.GetAggregateAttestationV2(writer, request)
@@ -819,7 +819,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(singleAggregateElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -835,7 +835,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -857,7 +857,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(multipleAggregatesElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -874,7 +874,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(multipleAggregates)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -892,7 +892,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(singleAggregate)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Phase0))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -907,7 +907,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(singleAggregateElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -919,7 +919,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -932,7 +932,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 		})
 		t.Run("no body-pre-electra", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
-			request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Bellatrix))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -948,7 +948,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString("[]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -964,7 +964,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString("[]")
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Altair))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Altair))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -980,7 +980,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(invalidAggregateElectra)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Electra))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Electra))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -995,7 +995,7 @@ func TestSubmitAggregateAndProofs(t *testing.T) {
 			_, err := body.WriteString(invalidAggregate)
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
-			request.Header.Set(api.VersionHeader, version.String(version.Deneb))
+			request.Header.Set(api.EthConsensusVersionHeader, version.String(version.Deneb))
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
 
@@ -1460,7 +1460,7 @@ func TestGetAttestationData(t *testing.T) {
 
 		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
 		request := httptest.NewRequest(http.MethodGet, url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1779,7 +1779,7 @@ func TestGetAttestationData(t *testing.T) {
 
 		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
 		request := httptest.NewRequest(http.MethodGet, url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
@@ -1968,7 +1968,7 @@ func TestGetAttestationData(t *testing.T) {
 
 		url := fmt.Sprintf("http://example.com?slot=%d&committee_index=%d", slot, 0)
 		request := httptest.NewRequest(http.MethodGet, url, nil)
-		request.Header.Add("Accept", "application/octet-stream")
+		request.Header.Add(api.AcceptHeader, api.OctetStreamMediaType)
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 

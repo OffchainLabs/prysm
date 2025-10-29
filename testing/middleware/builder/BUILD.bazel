@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/testing/middleware/builder",
     visibility = ["//visibility:public"],
     deps = [
+        "//api:go_default_library",
         "//api/client/builder:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/signing:go_default_library",

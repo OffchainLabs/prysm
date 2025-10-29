@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
@@ -107,7 +108,7 @@ func TestProposeBeaconBlock_SSZ_Error(t *testing.T) {
 
 				// Expect PostSSZ to be called first with SSZ data
 				headers := map[string]string{
-					"Eth-Consensus-Version": testCase.consensusVersion,
+					api.EthConsensusVersionHeader: testCase.consensusVersion,
 				}
 				jsonRestHandler.EXPECT().PostSSZ(
 					gomock.Any(),
@@ -169,7 +170,7 @@ func TestProposeBeaconBlock_SSZSuccess_NoFallback(t *testing.T) {
 
 			// Expect PostSSZ to be called and succeed
 			headers := map[string]string{
-				"Eth-Consensus-Version": testCase.consensusVersion,
+				api.EthConsensusVersionHeader: testCase.consensusVersion,
 			}
 			jsonRestHandler.EXPECT().PostSSZ(
 				gomock.Any(),
@@ -647,7 +648,7 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 
 			// Expect PostSSZ to be called first and fail with non-406 error
 			sszHeaders := map[string]string{
-				"Eth-Consensus-Version": testCase.consensusVersion,
+				api.EthConsensusVersionHeader: testCase.consensusVersion,
 			}
 			jsonRestHandler.EXPECT().PostSSZ(
 				gomock.Any(),

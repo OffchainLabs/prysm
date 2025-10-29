@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
@@ -38,7 +39,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		req := httptest.NewRequest("POST", "/foo", nil)
 
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, rawResp.StatusCode)
 	})
@@ -88,7 +89,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		defer func() {
 			if err := rawResp.Body.Close(); err != nil {
@@ -153,7 +154,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		defer func() {
 			if err := rawResp.Body.Close(); err != nil {
@@ -218,7 +219,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		defer func() {
 			if err := rawResp.Body.Close(); err != nil {
@@ -280,7 +281,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		defer func() {
 			if err := rawResp.Body.Close(); err != nil {
@@ -342,7 +343,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		defer func() {
 			if err := rawResp.Body.Close(); err != nil {
@@ -404,7 +405,7 @@ func TestServer_GetValidatorPerformance(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(vs.GetPerformance))
 		req := httptest.NewRequest("POST", "/foo", &buf)
 		client := &http.Client{}
-		rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+		rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 		require.NoError(t, err)
 		defer func() {
 			if err := rawResp.Body.Close(); err != nil {

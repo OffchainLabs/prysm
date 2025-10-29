@@ -43,7 +43,7 @@ func (s *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(bootstrap.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(bootstrap.Version()))
 
 	if httputil.RespondWithSsz(req) {
 		ssz, err := bootstrap.MarshalSSZ()
@@ -111,7 +111,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 	}
 
 	if httputil.RespondWithSsz(req) {
-		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 
 		for _, update := range updates {
 			if ctx.Err() != nil {
@@ -174,7 +174,7 @@ func (s *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(update.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(update.Version()))
 	if httputil.RespondWithSsz(req) {
 		data, err := update.MarshalSSZ()
 		if err != nil {
@@ -207,7 +207,7 @@ func (s *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *http
 		return
 	}
 
-	w.Header().Set(api.VersionHeader, version.String(update.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(update.Version()))
 	if httputil.RespondWithSsz(req) {
 		data, err := update.MarshalSSZ()
 		if err != nil {

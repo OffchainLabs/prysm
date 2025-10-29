@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/runtime"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -130,7 +131,7 @@ func TestContentNegotiation(t *testing.T) {
 		}
 
 		// Request response as JSON.
-		req.Header.Add("Accept", "application/json, */*;q=0.5")
+		req.Header.Add(api.AcceptHeader, "application/json, */*;q=0.5")
 		rr = httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
@@ -161,7 +162,7 @@ func TestContentNegotiation(t *testing.T) {
 		}
 
 		// Request response as JSON.
-		req.Header.Add("Accept", "application/json, */*;q=0.5")
+		req.Header.Add(api.AcceptHeader, "application/json, */*;q=0.5")
 		rr = httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 

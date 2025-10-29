@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/internal"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -61,7 +62,7 @@ func TestClient_Sign_HappyPath_Jsontype(t *testing.T) {
 	require.NoError(t, err)
 	// create a new reader with that JSON
 	header := http.Header{}
-	header.Set("Content-Type", "application/json;  charset=UTF-8")
+	header.Set(api.ContentTypeHeader, "application/json;  charset=UTF-8")
 	r := io.NopCloser(bytes.NewReader(jsonBytes))
 	mock := &mockTransport{mockResponse: &http.Response{
 		StatusCode: 200,

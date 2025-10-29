@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/golang-jwt/jwt/v4"
@@ -23,8 +24,8 @@ func TestJWTAuthTransport(t *testing.T) {
 		Transport: authTransport,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqToken := r.Header.Get("Authorization")
-		splitToken := strings.Split(reqToken, "Bearer")
+		reqToken := r.Header.Get(api.AuthorizationHeader)
+		splitToken := strings.Split(reqToken, api.BearerAuthorization)
 		// The format should be `Bearer ${token}`.
 		require.Equal(t, 2, len(splitToken))
 		reqToken = strings.TrimSpace(splitToken[1])
@@ -65,8 +66,8 @@ func TestJWTWithId(t *testing.T) {
 		Transport: authTransport,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqToken := r.Header.Get("Authorization")
-		splitToken := strings.Split(reqToken, "Bearer")
+		reqToken := r.Header.Get(api.AuthorizationHeader)
+		splitToken := strings.Split(reqToken, api.BearerAuthorization)
 		// The format should be `Bearer ${token}`.
 		require.Equal(t, 2, len(splitToken))
 		reqToken = strings.TrimSpace(splitToken[1])
@@ -109,8 +110,8 @@ func TestJWTWithoutId(t *testing.T) {
 		Transport: authTransport,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqToken := r.Header.Get("Authorization")
-		splitToken := strings.Split(reqToken, "Bearer")
+		reqToken := r.Header.Get(api.AuthorizationHeader)
+		splitToken := strings.Split(reqToken, api.BearerAuthorization)
 		// The format should be `Bearer ${token}`.
 		require.Equal(t, 2, len(splitToken))
 		reqToken = strings.TrimSpace(splitToken[1])

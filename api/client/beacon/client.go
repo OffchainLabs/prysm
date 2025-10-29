@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/client"
 	"github.com/OffchainLabs/prysm/v6/api/server"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -273,7 +274,7 @@ func (c *Client) SubmitChangeBLStoExecution(ctx context.Context, request []*stru
 	if err != nil {
 		return errors.Wrap(err, "invalid format, failed to create new POST request object")
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(api.ContentTypeHeader, api.JsonMediaType)
 	resp, err := c.Do(req)
 	if err != nil {
 		return err

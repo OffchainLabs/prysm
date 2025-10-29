@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
@@ -49,7 +50,7 @@ func individualVotesHelper(t *testing.T, request *structs.GetIndividualVotesRequ
 		&buf,
 	)
 	client := &http.Client{}
-	rawResp, err := client.Post(srv.URL, "application/json", req.Body)
+	rawResp, err := client.Post(srv.URL, api.JsonMediaType, req.Body)
 	require.NoError(t, err)
 	defer func() {
 		if err := rawResp.Body.Close(); err != nil {

@@ -32,7 +32,7 @@ func (e *DefaultJsonError) Error() string {
 
 // WriteJson writes the response message in JSON format.
 func WriteJson(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", api.JsonMediaType)
+	w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		log.WithError(err).Error("Could not write response message")
@@ -41,8 +41,8 @@ func WriteJson(w http.ResponseWriter, v any) {
 
 // WriteSsz writes the response message in ssz format
 func WriteSsz(w http.ResponseWriter, respSsz []byte) {
-	w.Header().Set("Content-Length", strconv.Itoa(len(respSsz)))
-	w.Header().Set("Content-Type", api.OctetStreamMediaType)
+	w.Header().Set(api.ContentLengthHeader, strconv.Itoa(len(respSsz)))
+	w.Header().Set(api.ContentTypeHeader, api.OctetStreamMediaType)
 	if _, err := io.Copy(w, io.NopCloser(bytes.NewReader(respSsz))); err != nil {
 		log.WithError(err).Error("Could not write response message")
 	}
@@ -55,8 +55,8 @@ func WriteError(w http.ResponseWriter, errJson HasStatusCode) {
 		log.WithError(err).Error("Could not marshal error message")
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(j)))
-	w.Header().Set("Content-Type", api.JsonMediaType)
+	w.Header().Set(api.ContentLengthHeader, strconv.Itoa(len(j)))
+	w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 	w.WriteHeader(errJson.StatusCode())
 	if _, err := io.Copy(w, io.NopCloser(bytes.NewReader(j))); err != nil {
 		log.WithError(err).Error("Could not write error message")

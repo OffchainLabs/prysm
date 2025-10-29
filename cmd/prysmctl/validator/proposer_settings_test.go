@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/validator/rpc"
@@ -23,8 +24,8 @@ func getValidatorHappyPathTestServer(t *testing.T) *httptest.Server {
 	key2 := "0x844ae9c6184d6edd46351b375f16f541b2d33b0ed0da9be4571b13938588aee840ba606a946f0e8023ae3a4b2a43b4d4"
 	address1 := "0xb698D697092822185bF0311052215d5B5e1F3944"
 	return httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		if r.Method == http.MethodGet {
 			if r.RequestURI == "/eth/v1/keystores" {
 				err := json.NewEncoder(w).Encode(&rpc.ListKeystoresResponse{

@@ -53,7 +53,7 @@ func NewBeaconApiRestHandler(client http.Client, host string) RestHandler {
 func (c *BeaconApiRestHandler) appendAcceptOverride() {
 	if accept := os.Getenv(params.EnvNameOverrideAccept); accept != "" {
 		c.reqOverrides = append(c.reqOverrides, func(req *http.Request) {
-			req.Header.Set("Accept", accept)
+			req.Header.Set(api.AcceptHeader, accept)
 		})
 	}
 }
@@ -76,7 +76,7 @@ func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp in
 	if err != nil {
 		return errors.Wrapf(err, "failed to create request for endpoint %s", url)
 	}
-	req.Header.Set("User-Agent", version.BuildData())
+	req.Header.Set(api.UserAgentHeader, version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -100,13 +100,13 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
 	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
 	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	req.Header.Set("Accept", acceptHeaderString)
+	req.Header.Set(api.AcceptHeader, acceptHeaderString)
 
 	for _, o := range c.reqOverrides {
 		o(req)
 	}
 
-	req.Header.Set("User-Agent", version.BuildData())
+	req.Header.Set(api.UserAgentHeader, version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -116,8 +116,8 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 			return
 		}
 	}()
-	accept := req.Header.Get("Accept")
-	contentType := httpResp.Header.Get("Content-Type")
+	accept := req.Header.Get(api.AcceptHeader)
+	contentType := httpResp.Header.Get(api.ContentTypeHeader)
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
@@ -125,8 +125,8 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 
 	if !apiutil.PrimaryAcceptMatches(accept, contentType) {
 		log.WithFields(logrus.Fields{
-			"Accept":       accept,
-			"Content-Type": contentType,
+			api.AcceptHeader:      accept,
+			api.ContentTypeHeader: contentType,
 		}).Debug("Server responded with non primary accept type")
 	}
 
@@ -165,8 +165,8 @@ func (c *BeaconApiRestHandler) Post(
 	for headerKey, headerValue := range headers {
 		req.Header.Set(headerKey, headerValue)
 	}
-	req.Header.Set("Content-Type", api.JsonMediaType)
-	req.Header.Set("User-Agent", version.BuildData())
+	req.Header.Set(api.ContentTypeHeader, api.JsonMediaType)
+	req.Header.Set(api.UserAgentHeader, version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -200,7 +200,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 	primaryAcceptType := fmt.Sprintf("%s;q=%s", api.OctetStreamMediaType, "0.95")
 	secondaryAcceptType := fmt.Sprintf("%s;q=%s", api.JsonMediaType, "0.9")
 	acceptHeaderString := fmt.Sprintf("%s,%s", primaryAcceptType, secondaryAcceptType)
-	req.Header.Set("Accept", acceptHeaderString)
+	req.Header.Set(api.AcceptHeader, acceptHeaderString)
 
 	// User-supplied headers
 	for headerKey, headerValue := range headers {
@@ -210,8 +210,8 @@ func (c *BeaconApiRestHandler) PostSSZ(
 	for _, o := range c.reqOverrides {
 		o(req)
 	}
-	req.Header.Set("Content-Type", api.OctetStreamMediaType)
-	req.Header.Set("User-Agent", version.BuildData())
+	req.Header.Set(api.ContentTypeHeader, api.OctetStreamMediaType)
+	req.Header.Set(api.UserAgentHeader, version.BuildData())
 	httpResp, err := c.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
@@ -222,8 +222,8 @@ func (c *BeaconApiRestHandler) PostSSZ(
 		}
 	}()
 
-	accept := req.Header.Get("Accept")
-	contentType := httpResp.Header.Get("Content-Type")
+	accept := req.Header.Get(api.AcceptHeader)
+	contentType := httpResp.Header.Get(api.ContentTypeHeader)
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
@@ -231,8 +231,8 @@ func (c *BeaconApiRestHandler) PostSSZ(
 
 	if !apiutil.PrimaryAcceptMatches(accept, contentType) {
 		log.WithFields(logrus.Fields{
-			"Accept":       accept,
-			"Content-Type": contentType,
+			api.AcceptHeader:      accept,
+			api.ContentTypeHeader: contentType,
 		}).Debug("Server responded with non primary accept type")
 	}
 
@@ -255,7 +255,7 @@ func decodeResp(httpResp *http.Response, resp interface{}) error {
 		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)
 	}
 
-	if !strings.Contains(httpResp.Header.Get("Content-Type"), api.JsonMediaType) {
+	if !strings.Contains(httpResp.Header.Get(api.ContentTypeHeader), api.JsonMediaType) {
 		// 2XX codes are a success
 		if strings.HasPrefix(httpResp.Status, "2") {
 			return nil

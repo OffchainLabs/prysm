@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+
+	"github.com/OffchainLabs/prysm/v6/api"
 )
 
 const prefix = "prysm-web-ui"
@@ -25,7 +27,7 @@ var Handler = func(res http.ResponseWriter, req *http.Request) {
 
 	if d, ok := _bindata[p]; ok {
 		m := mime.TypeByExtension(path.Ext(p))
-		res.Header().Add("Content-Type", m)
+		res.Header().Add(api.ContentTypeHeader, m)
 		res.WriteHeader(http.StatusOK)
 		asset, err := d()
 		if err != nil {
@@ -38,7 +40,7 @@ var Handler = func(res http.ResponseWriter, req *http.Request) {
 		// Angular routing expects that routes are rewritten to serve index.html. For example, if
 		// requesting /login, this should serve the single page app index.html.
 		m := mime.TypeByExtension(".html")
-		res.Header().Add("Content-Type", m)
+		res.Header().Add(api.ContentTypeHeader, m)
 		res.WriteHeader(http.StatusOK)
 		asset, err := d()
 		if err != nil {

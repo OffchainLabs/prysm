@@ -11,6 +11,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v6/monitoring/clientstats",
     visibility = ["//visibility:public"],
     deps = [
+        "//api:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_prometheus_client_model//go:go_default_library",
         "@com_github_prometheus_prom2json//:go_default_library",

@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -907,8 +908,8 @@ func TestProposerSettingsLoader(t *testing.T) {
 					content, err := os.ReadFile(tt.args.proposerSettingsFlagValues.url)
 					require.NoError(t, err)
 					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						w.WriteHeader(200)
-						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusOK)
+						w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 						_, err := fmt.Fprintf(w, "%s", content)
 						require.NoError(t, err)
 					}))

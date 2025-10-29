@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
 	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -297,7 +298,7 @@ func Test_isEngineAPICall(t *testing.T) {
 
 func destinationServerSetup(t *testing.T, response interface{}) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()

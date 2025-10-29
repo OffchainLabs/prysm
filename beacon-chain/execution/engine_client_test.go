@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -177,7 +178,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -223,7 +224,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionPayloadCapellaWithValue"].(*pb.GetPayloadV2ResponseJson)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -276,7 +277,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionPayloadDenebWithValue"].(*pb.GetPayloadV3ResponseJson)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -331,7 +332,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionBundleElectra"].(*pb.GetPayloadV4ResponseJson)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -413,7 +414,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionBundleFulu"].(*pb.GetPayloadV5ResponseJson)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -935,7 +936,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionBlock"].(*pb.ExecutionBlock)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -966,7 +967,7 @@ func TestClient_HTTP(t *testing.T) {
 		want, ok := fix["ExecutionBlock"].(*pb.ExecutionBlock)
 		require.Equal(t, true, ok)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -1060,7 +1061,7 @@ func TestReconstructFullBellatrixBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -1163,7 +1164,7 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -1236,7 +1237,7 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -2153,7 +2154,7 @@ func (*testEngineService) NewPayloadV2(
 
 func forkchoiceUpdateSetup(t *testing.T, fcs *pb.ForkchoiceState, att *pb.PayloadAttributes, res *ForkchoiceUpdatedResponse) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2192,7 +2193,7 @@ func forkchoiceUpdateSetup(t *testing.T, fcs *pb.ForkchoiceState, att *pb.Payloa
 
 func forkchoiceUpdateSetupV2(t *testing.T, fcs *pb.ForkchoiceState, att *pb.PayloadAttributesV2, res *ForkchoiceUpdatedResponse) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2231,7 +2232,7 @@ func forkchoiceUpdateSetupV2(t *testing.T, fcs *pb.ForkchoiceState, att *pb.Payl
 
 func newPayloadSetup(t *testing.T, status *pb.PayloadStatus, payload *pb.ExecutionPayload) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2265,7 +2266,7 @@ func newPayloadSetup(t *testing.T, status *pb.PayloadStatus, payload *pb.Executi
 
 func newPayloadV2Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.ExecutionPayloadCapella) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2299,7 +2300,7 @@ func newPayloadV2Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 
 func newPayloadV3Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.ExecutionPayloadDeneb) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2333,7 +2334,7 @@ func newPayloadV3Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 
 func newPayloadV4Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.ExecutionPayloadDeneb, requests *pb.ExecutionRequests) *Service {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2414,7 +2415,7 @@ func TestReconstructBlindedBlockBatch(t *testing.T) {
 func Test_ExchangeCapabilities(t *testing.T) {
 	t.Run("empty response works", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -2446,7 +2447,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 	})
 	t.Run("list of items", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
@@ -2641,7 +2642,7 @@ func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
 
 func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()
@@ -2666,7 +2667,7 @@ func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *http
 
 func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(api.ContentTypeHeader, api.JsonMediaType)
 		defer func() {
 			require.NoError(t, r.Body.Close())
 		}()

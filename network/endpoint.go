@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/network/authorization"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	log "github.com/sirupsen/logrus"
@@ -51,9 +52,9 @@ func (d *AuthorizationData) Equals(other AuthorizationData) bool {
 func (d *AuthorizationData) ToHeaderValue() (string, error) {
 	switch d.Method {
 	case authorization.Basic:
-		return "Basic " + d.Value, nil
+		return fmt.Sprintf("%s %s", api.BasicAuthorization, d.Value), nil
 	case authorization.Bearer:
-		return "Bearer " + d.Value, nil
+		return fmt.Sprintf("%s %s", api.BearerAuthorization, d.Value), nil
 	case authorization.None:
 		return "", nil
 	}
@@ -103,10 +104,10 @@ func HttpEndpoint(eth1Provider string) Endpoint {
 
 // Method returns the authorizationmethod.AuthorizationMethod corresponding with the parameter value.
 func Method(auth string) authorization.Method {
-	if strings.HasPrefix(strings.ToLower(auth), "basic") {
+	if strings.HasPrefix(strings.ToLower(auth), strings.ToLower(api.BasicAuthorization)) {
 		return authorization.Basic
 	}
-	if strings.HasPrefix(strings.ToLower(auth), "bearer") {
+	if strings.HasPrefix(strings.ToLower(auth), strings.ToLower(api.BearerAuthorization)) {
 		return authorization.Bearer
 	}
 	return authorization.None

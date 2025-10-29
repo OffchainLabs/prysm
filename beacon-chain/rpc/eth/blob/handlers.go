@@ -68,7 +68,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 		httputil.WriteSsz(w, sszResp)
 		return
 	}
@@ -91,7 +91,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 	httputil.WriteJson(w, resp)
 }
 
@@ -180,7 +180,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 			copy(sszData[i*sszLen:(i+1)*sszLen], verifiedBlobs[i].Blob)
 		}
 
-		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 		httputil.WriteSsz(w, sszData)
 		return
 	}
@@ -205,7 +205,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 	httputil.WriteJson(w, resp)
 }
 

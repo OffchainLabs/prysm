@@ -129,7 +129,7 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		Finalized:           isFinalized,
 		Data:                jsonBytes,
 	}
-	w.Header().Set(api.VersionHeader, ver)
+	w.Header().Set(api.EthConsensusVersionHeader, ver)
 	httputil.WriteJson(w, resp)
 }
 
@@ -145,7 +145,7 @@ func (s *Server) getBeaconStateSSZV2(ctx context.Context, w http.ResponseWriter,
 		httputil.HandleError(w, "Could not marshal state into SSZ: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(st.Version()))
 	httputil.WriteSsz(w, sszState)
 }
 
@@ -279,7 +279,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 			httputil.HandleError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+		w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 		httputil.WriteSsz(w, sszResp)
 		return
 	}
@@ -302,7 +302,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, blkRoot),
 	}
-	w.Header().Set(api.VersionHeader, version.String(blk.Version()))
+	w.Header().Set(api.EthConsensusVersionHeader, version.String(blk.Version()))
 	httputil.WriteJson(w, resp)
 }
 

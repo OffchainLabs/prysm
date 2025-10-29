@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	builderAPI "github.com/OffchainLabs/prysm/v6/api/client/builder"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -884,9 +885,9 @@ func (p *Builder) sendHttpRequest(req *http.Request, requestBytes []byte) (*http
 	proxyReq.Body = io.NopCloser(bytes.NewBuffer(requestBytes))
 
 	// Required proxy headers for forwarding JSON-RPC requests to the execution client.
-	proxyReq.Header.Set("Host", req.Host)
+	proxyReq.Header.Set(api.HostHeader, req.Host)
 	proxyReq.Header.Set("X-Forwarded-For", req.RemoteAddr)
-	proxyReq.Header.Set("Content-Type", "application/json")
+	proxyReq.Header.Set(api.ContentTypeHeader, api.JsonMediaType)
 
 	client := &http.Client{}
 	if p.cfg.secret != "" {

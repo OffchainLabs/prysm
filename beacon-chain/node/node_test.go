@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
@@ -249,18 +250,18 @@ func TestCORS(t *testing.T) {
 
 			// Create a request and response recorder
 			req := httptest.NewRequest("GET", "http://example.com/some-path", nil)
-			req.Header.Set("Origin", tc.origin)
+			req.Header.Set(api.OriginHeader, tc.origin)
 			rr := httptest.NewRecorder()
 
 			// Serve HTTP
 			handler.ServeHTTP(rr, req)
 
 			// Check the CORS headers based on the expected outcome
-			if tc.expectAllow && rr.Header().Get("Access-Control-Allow-Origin") != tc.origin {
-				t.Errorf("Expected Access-Control-Allow-Origin header to be %v, got %v", tc.origin, rr.Header().Get("Access-Control-Allow-Origin"))
+			if tc.expectAllow && rr.Header().Get(api.AccessControlAllowOriginHeader) != tc.origin {
+				t.Errorf("Expected Access-Control-Allow-Origin header to be %v, got %v", tc.origin, rr.Header().Get(api.AccessControlAllowOriginHeader))
 			}
-			if !tc.expectAllow && rr.Header().Get("Access-Control-Allow-Origin") != "" {
-				t.Errorf("Expected Access-Control-Allow-Origin header to be empty for disallowed origin, got %v", rr.Header().Get("Access-Control-Allow-Origin"))
+			if !tc.expectAllow && rr.Header().Get(api.AccessControlAllowOriginHeader) != "" {
+				t.Errorf("Expected Access-Control-Allow-Origin header to be empty for disallowed origin, got %v", rr.Header().Get(api.AccessControlAllowOriginHeader))
 			}
 		})
 	}

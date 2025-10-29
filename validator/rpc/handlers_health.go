@@ -40,9 +40,9 @@ func (s *Server) StreamBeaconLogs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.web.health.StreamBeaconLogs")
 	defer span.End()
 	// Set up SSE response headers
-	w.Header().Set("Content-Type", api.EventStreamMediaType)
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", api.KeepAlive)
+	w.Header().Set(api.ContentTypeHeader, api.EventStreamMediaType)
+	w.Header().Set(api.CacheControlHeader, api.NoCache)
+	w.Header().Set(api.ConnectionHeader, api.KeepAlive)
 
 	// Flush helper function to ensure data is sent to client
 	flusher, ok := w.(http.Flusher)
@@ -109,9 +109,9 @@ func (s *Server) StreamValidatorLogs(w http.ResponseWriter, r *http.Request) {
 		close(ch)
 	}()
 	// Set up SSE response headers
-	w.Header().Set("Content-Type", api.EventStreamMediaType)
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", api.KeepAlive)
+	w.Header().Set(api.ContentTypeHeader, api.EventStreamMediaType)
+	w.Header().Set(api.CacheControlHeader, api.NoCache)
+	w.Header().Set(api.ConnectionHeader, api.KeepAlive)
 
 	recentLogs := s.logStreamer.GetLastFewLogs()
 	logStrings := make([]string, len(recentLogs))
