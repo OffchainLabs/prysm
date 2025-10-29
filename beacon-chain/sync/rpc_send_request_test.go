@@ -1,11 +1,11 @@
 package sync
 
 import (
-	"slices"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -636,7 +636,7 @@ func TestSeqBlobValid(t *testing.T) {
 	}{
 		{
 			name: "all valid",
-			seq:  slices.Concat(oneBlobs,  twoBlobs),
+			seq:  slices.Concat(oneBlobs, twoBlobs),
 		},
 		{
 			name: "idx out of bounds",
@@ -661,7 +661,7 @@ func TestSeqBlobValid(t *testing.T) {
 		},
 		{
 			name:  "slots not ascending",
-			seq:   slices.Concat(twoBlobs,  oops),
+			seq:   slices.Concat(twoBlobs, oops),
 			err:   errChunkResponseSlotNotAsc,
 			errAt: len(twoBlobs),
 		},

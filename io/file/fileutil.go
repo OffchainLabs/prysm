@@ -1,7 +1,6 @@
 package file
 
 import (
-	"slices"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
