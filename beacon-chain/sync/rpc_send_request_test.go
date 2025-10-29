@@ -12,8 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -80,7 +78,7 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 						}
 						_, err := stream.Write([]byte{0x01})
 						assert.NoError(t, err)
-						msg := p2pTypes.ErrorMessage(processorErr.Error())
+						msg := types.ErrorMessage(processorErr.Error())
 						_, err = p2pProvider.Encoding().EncodeWithMaxLength(stream, &msg)
 						assert.NoError(t, err)
 						return
@@ -323,7 +321,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 		bogusPeer := p2ptest.NewTestP2P(t)
 		p1.Connect(bogusPeer)
 
-		req := &p2pTypes.BeaconBlockByRootsReq{}
+		req := &types.BeaconBlockByRootsReq{}
 		_, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, bogusPeer.PeerID(), req, nil)
 		assert.ErrorContains(t, "protocols not supported", err)
 	})
@@ -334,7 +332,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 				assert.NoError(t, stream.Close())
 			}()
 
-			req := new(p2pTypes.BeaconBlockByRootsReq)
+			req := new(types.BeaconBlockByRootsReq)
 			assert.NoError(t, p2pProvider.Encoding().DecodeWithMaxLength(stream, req))
 			if len(*req) == 0 {
 				return
@@ -351,7 +349,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 							}
 							_, err := stream.Write([]byte{0x01})
 							assert.NoError(t, err)
-							msg := p2pTypes.ErrorMessage(processorErr.Error())
+							msg := types.ErrorMessage(processorErr.Error())
 							_, err = p2pProvider.Encoding().EncodeWithMaxLength(stream, &msg)
 							assert.NoError(t, err)
 							return
@@ -372,7 +370,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 		p1.Connect(p2)
 		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
+		req := &types.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
 		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(blocks))
@@ -385,7 +383,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
 		// No error from block processor.
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
+		req := &types.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
 		blocksFromProcessor := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
 		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
 			blocksFromProcessor = append(blocksFromProcessor, block)
@@ -403,7 +401,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
 		// Send error from block processor.
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
+		req := &types.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1]}
 		errFromProcessor := errors.New("processor error")
 		_, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, func(block interfaces.ReadOnlySignedBeaconBlock) error {
 			return errFromProcessor
@@ -418,7 +416,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 		p2.SetStreamHandler(pcl, knownBlocksProvider(p2, nil))
 
 		// No cap on max roots.
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
+		req := &types.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
 		clock := startup.NewClock(time.Now(), [32]byte{})
 		blocks, err := SendBeaconBlocksByRootRequest(ctx, clock, p1, p2.PeerID(), req, nil)
 		assert.NoError(t, err)
@@ -457,7 +455,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 			return nil
 		}))
 
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
+		req := &types.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
 		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
 		assert.ErrorContains(t, expectedErr.Error(), err)
 		assert.Equal(t, 0, len(blocks))
@@ -477,7 +475,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 			return nil
 		}))
 
-		req := &p2pTypes.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
+		req := &types.BeaconBlockByRootsReq{knownRoots[0], knownRoots[1], knownRoots[2], knownRoots[3]}
 		blocks, err := SendBeaconBlocksByRootRequest(ctx, startup.NewClock(time.Now(), [32]byte{}), p1, p2.PeerID(), req, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(blocks))
@@ -520,7 +518,7 @@ func TestBlobValidatorFromRootReq(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := p2pTypes.BlobSidecarsByRootReq(c.ids)
+			r := types.BlobSidecarsByRootReq(c.ids)
 			vf := blobValidatorFromRootReq(&r)
 			for _, sc := range c.response {
 				err := vf(sc)
@@ -1201,7 +1199,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 	require.NoError(t, err)
 	nilTestCases := []struct {
 		name    string
-		request p2ptypes.DataColumnsByRootIdentifiers
+		request types.DataColumnsByRootIdentifiers
 	}{
 		{
 			name:    "nil request",
@@ -1209,7 +1207,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 		},
 		{
 			name:    "count is 0",
-			request: p2ptypes.DataColumnsByRootIdentifiers{{}, {}},
+			request: types.DataColumnsByRootIdentifiers{{}, {}},
 		},
 	}
 
@@ -1227,7 +1225,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 		cfg.MaxRequestDataColumnSidecars = 4
 		params.OverrideBeaconConfig(cfg)
 
-		request := p2ptypes.DataColumnsByRootIdentifiers{
+		request := types.DataColumnsByRootIdentifiers{
 			{Columns: []uint64{1, 2, 3}},
 			{Columns: []uint64{4, 5, 6}},
 		}
@@ -1324,7 +1322,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 
 			blockRoot1, blockRoot2 := expected[0].BlockRoot(), expected[3].BlockRoot()
 
-			sentRequest := p2ptypes.DataColumnsByRootIdentifiers{
+			sentRequest := types.DataColumnsByRootIdentifiers{
 				{BlockRoot: blockRoot1[:], Columns: []uint64{1, 2, 3}},
 				{BlockRoot: blockRoot2[:], Columns: []uint64{1, 2, 3}},
 			}
@@ -1335,7 +1333,7 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 			p2.SetStreamHandler(protocol, func(stream network.Stream) {
 				wg.Done()
 
-				requestReceived := new(p2ptypes.DataColumnsByRootIdentifiers)
+				requestReceived := new(types.DataColumnsByRootIdentifiers)
 				err := p2.Encoding().DecodeWithMaxLength(stream, requestReceived)
 				assert.NoError(t, err)
 
