@@ -205,6 +205,7 @@ nogo(
         "//tools/analyzers/modernize/mapsloop:go_default_library",
         "//tools/analyzers/modernize/minmax:go_default_library",
         "//tools/analyzers/modernize/omitzero:go_default_library",
+        "//tools/analyzers/modernize/rangeint:go_default_library",
         "//tools/analyzers/nop:go_default_library",
         "//tools/analyzers/nopanic:go_default_library",
         "//tools/analyzers/properpermissions:go_default_library",
