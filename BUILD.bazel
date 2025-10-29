@@ -201,6 +201,7 @@ nogo(
         "//tools/analyzers/modernize/appendclipped:go_default_library",
         "//tools/analyzers/modernize/bloop:go_default_library",
         "//tools/analyzers/modernize/fmtappendf:go_default_library",
+        "//tools/analyzers/modernize/forvar:go_default_library",
         "//tools/analyzers/nop:go_default_library",
         "//tools/analyzers/nopanic:go_default_library",
         "//tools/analyzers/properpermissions:go_default_library",

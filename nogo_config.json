@@ -236,6 +236,11 @@
       "external/.*": "Third party code"
     }
   },
+  "forvar": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
   "nopanic": {
     "exclude_files": {
       "validator/web/site_data.go": "generated code",
