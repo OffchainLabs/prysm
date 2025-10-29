@@ -429,12 +429,12 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 }
 
 func CreatePrintoutOfKeys(keys [][]byte) string {
-	var keysStr string
+	var keysStr strings.Builder
 	for i, k := range keys {
 		if i != 0 {
-			keysStr += "," // Add a comma before each key except the first one
+			keysStr.WriteString(",") // Add a comma before each key except the first one
 		}
-		keysStr += fmt.Sprintf("%#x", bytesutil.Trunc(k))
+		keysStr.WriteString(fmt.Sprintf("%#x", bytesutil.Trunc(k)))
 	}
-	return keysStr
+	return keysStr.String()
 }

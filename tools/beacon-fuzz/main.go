@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"bytes"
 	"flag"
 	"fmt"
@@ -61,11 +62,11 @@ func main() {
 }
 
 func sszBytesToMapStr(ss map[int][]byte) string {
-	dst := ""
+	var dst strings.Builder
 	for i, s := range ss {
-		dst += fmt.Sprintf("%d: \"%x\",", i, s)
+		dst .WriteString(fmt.Sprintf("%d: \"%x\",", i, s))
 	}
-	return dst
+	return dst.String()
 }
 
 type input struct {
