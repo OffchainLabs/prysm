@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"slices"
@@ -139,6 +140,10 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 	// amount of wiggle room to be confident that we'll likely see a by-root director if one exists.
 	entries, err := base.Readdirnames(16)
 	if err != nil {
+		// We can get this error if the directory exists and is empty
+		if errors.Is(err, io.EOF) {
+			return filesystem.LayoutNameByEpoch, nil
+		}
 		return "", errors.Wrap(err, "reading blob storage directory")
 	}
 	for _, entry := range entries {
