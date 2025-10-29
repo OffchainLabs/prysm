@@ -204,6 +204,7 @@ nogo(
         "//tools/analyzers/modernize/forvar:go_default_library",
         "//tools/analyzers/modernize/mapsloop:go_default_library",
         "//tools/analyzers/modernize/minmax:go_default_library",
+        "//tools/analyzers/modernize/newexpr:go_default_library",
         "//tools/analyzers/modernize/omitzero:go_default_library",
         "//tools/analyzers/modernize/rangeint:go_default_library",
         "//tools/analyzers/modernize/reflecttypefor:go_default_library",
