@@ -266,6 +266,11 @@
       "external/.*": "Third party code"
     }
   },
+  "slicescontains": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
   "nopanic": {
     "exclude_files": {
       "validator/web/site_data.go": "generated code",
