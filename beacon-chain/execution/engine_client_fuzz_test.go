@@ -1,5 +1,3 @@
-//go:build go1.18
-
 package execution_test
 
 import (
@@ -249,7 +247,7 @@ func validateBlockConsistency(execBlock *pb.ExecutionBlock, jsonMap map[string]a
 
 	fieldnum := bType.NumField()
 
-	for i := 0; i < fieldnum; i++ {
+	for i := range fieldnum {
 		field := bType.Field(i)
 		fName := field.Tag.Get("json")
 		if field.Name == "Header" {
@@ -282,7 +280,7 @@ func jsonFieldsAreValid(execBlock *pb.ExecutionBlock, jsonMap map[string]any) (b
 
 	fieldnum := bType.NumField()
 
-	for i := 0; i < fieldnum; i++ {
+	for i := range fieldnum {
 		field := bType.Field(i)
 		fName := field.Tag.Get("json")
 		if field.Name == "Header" {

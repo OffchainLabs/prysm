@@ -278,7 +278,7 @@ func TestValidateBlobByRootRequest(t *testing.T) {
 	// Helper function to create blob identifiers
 	createBlobIdents := func(count int) p2pTypes.BlobSidecarsByRootReq {
 		idents := make([]*ethpb.BlobIdentifier, count)
-		for i := 0; i < count; i++ {
+		for i := range count {
 			idents[i] = &ethpb.BlobIdentifier{
 				BlockRoot: make([]byte, 32),
 				Index:     uint64(i),

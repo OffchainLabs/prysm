@@ -95,7 +95,7 @@ func TestToggleMultipleTimes(t *testing.T) {
 	pre := !v.IsSet()
 	for i := range 100 {
 		v.SetTo(false)
-		for j := 0; j < i; j++ {
+		for range i {
 			pre = v.Toggle()
 		}
 
