@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package testing;
+
+import "proto/eth/ext/options.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing;testing";
+
+
+// ===== FIXED-SIZE TEST CONTAINERS =====
+// These containers are designed to test SSZ query functionality with comprehensive coverage
+// of all fixed-size SSZ types according to the SSZ specification.
+
+// FixedNestedContainer - nested container for testing nested field access
+// Tests: nested container navigation, field offset calculations within nested structures
+message FixedNestedContainer {
+  uint64 value1 = 1;  // Test: uint64 basic type, offset calculation in nested context
+  bytes value2 = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];  // Test: fixed-size bytes in nested container
+}
+
+// FixedTestContainer - comprehensive fixed-size container for SSZ query testing
+// Tests: All basic fixed-size SSZ types, nested containers, vectors, offset/length calculations
+// Total size: 565 bytes (4+8+1+32+40+192+160+8+64+56)
+message FixedTestContainer {
+  // Basic integer types - test different integer sizes and their SSZ serialization
+  uint32 field_uint32 = 1;  // Test: uint32 basic type, offset: 0
+  uint64 field_uint64 = 2;  // Test: uint64 basic type, offset: 4
+  
+  // Boolean type - test boolean serialization (1 byte in SSZ)
+  bool field_bool = 3;      // Test: boolean basic type, offset: 12
+  
+  // Fixed-size bytes - test byte array
+  bytes field_bytes32 = 4 [ (ethereum.eth.ext.ssz_size) = "32" ]; // Test: 32-byte array, offset: 13
+  
+  // Nested container - test container nesting and field access
+  FixedNestedContainer nested = 5;  // Test: nested container navigation (8+32=40 bytes), offset: 45
+  
+  // Vector type - test fixed-size array of basic elements  
+  repeated uint64 vector_field = 6 [ (ethereum.eth.ext.ssz_size) = "24" ];  // Test: Vector[24] of uint64 (24*8=192 bytes), offset: 85
+
+  // 2D bytes type - test 2-dimensional byte arrays, common in blockchain state roots (e.g., beacon_state.block_roots)
+  repeated bytes two_dimension_bytes_field = 7 [ (ethereum.eth.ext.ssz_size) = "5,32" ]; // Test: Vector[Bytes32, 5] (32*5=160 bytes), offset: 277
+
+  // Bitvector types - test bitfield serialization
+  bytes bitvector64_field = 8 [
+    (ethereum.eth.ext.ssz_size) = "8",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/go-bitfield.Bitvector64"
+  ]; // Test: Bitvector64 (8 bytes), offset: 437
+
+  bytes bitvector512_field = 9 [
+    (ethereum.eth.ext.ssz_size) = "64",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/go-bitfield.Bitvector512"
+  ]; // Test: Bitvector512 (64 bytes), offset: 445
+  
+  // Additional bytes field - test field ordering and offset calculation
+  bytes trailing_field = 10 [ (ethereum.eth.ext.ssz_size) = "56" ]; // Test: trailing field after vector, offset: 509
+}
+
+// ===== VARIABLE-SIZE TEST CONTAINERS =====
+
+// VariableNestedContainer - nested container for testing nested field access
+// Tests: nested container navigation, field offset calculations within nested structures
+message VariableNestedContainer {
+  uint64 value1 = 1;  
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "100" ];
+  repeated bytes nested_list_field = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "100,50"
+  ];
+}
+
+
+// Mock of AttesterSlashingElectra
+message VariableOuterContainer {
+  VariableNestedContainer inner_1 = 1;
+  VariableNestedContainer inner_2 = 2;
+}
+
+// VariableTestContainer - comprehensive variable-size container for SSZ query testing
+// Tests: Variable-size lists, offsets in variable containers, mixed fixed/variable fields
+message VariableTestContainer {
+  // Fixed-size leading field - test fixed field before variable fields
+  // Acts as a baseline to verify offset calculations start correctly
+  bytes leading_field = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];  // Test: fixed 32-byte field at start, offset: 0
+
+  // Variable-size list of basic type - test list with primitive elements
+  // SSZ uses 4-byte offset pointer, actual data stored after all fixed fields
+  repeated uint64 field_list_uint64 = 2 [ (ethereum.eth.ext.ssz_max) = "2048" ];  // Test: List[uint64, 2048] (max 2048 elements)
+  
+  // Variable-size list of containers - test list with composite elements  
+  // Each container is fixed-size (40 bytes), but list itself is variable
+  repeated FixedNestedContainer field_list_container = 3 [ (ethereum.eth.ext.ssz_max) = "128" ];  // Test: List[FixedNestedContainer, 128]
+
+  // Variable-size list of bytes32 - test list with fixed-size byte arrays
+  // e.g., beacon_state.historical_roots
+  repeated bytes field_list_bytes32 = 4 [ (ethereum.eth.ext.ssz_size) = "?,32", (ethereum.eth.ext.ssz_max) = "100"]; // Test: List[Bytes32, 100]
+
+  // Variable nested container - test nested container access within variable container
+  VariableNestedContainer nested = 5;
+
+  // List of variable-sized containers
+  // e.g., BeaconBlockBody.attester_slashings 
+  repeated VariableOuterContainer variable_container_list = 6 [ (ethereum.eth.ext.ssz_max) = "10" ]; // Test: List[VariableOuterContainer, 10]
+
+  // Bitlist type - test bitlist serialization
+  bytes bitlist_field = 7 [
+    (ethereum.eth.ext.ssz_max) = "2048",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+  ];
+
+  // 2D bytes list - test list of bytelists.
+  // e.g., ExecutionPayload.transactions
+  repeated bytes nested_list_field = 8 [
+    (ethereum.eth.ext.ssz_size) = "?,?",
+    (ethereum.eth.ext.ssz_max) = "100,50"
+  ];
+
+  // Fixed-size trailing field - test fixed field after variable fields
+  // Verifies correct offset calculation after variable-size fields
+  bytes trailing_field = 9 [ (ethereum.eth.ext.ssz_size) = "56" ];  // Test: fixed 56-byte field at end, offset: 32 + 4 + 4 + 4 + 4 + 4 + 4 + 4 = 60
+}

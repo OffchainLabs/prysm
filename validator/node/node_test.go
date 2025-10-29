@@ -308,3 +308,17 @@ func TestWeb3SignerConfig(t *testing.T) {
 		})
 	}
 }
+
+func Test_parseBeaconApiHeaders(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		h := parseBeaconApiHeaders("key1=value1,key1=value2,key2=value3")
+		assert.Equal(t, 2, len(h))
+		assert.DeepEqual(t, []string{"value1", "value2"}, h["key1"])
+		assert.DeepEqual(t, []string{"value3"}, h["key2"])
+	})
+	t.Run("ignores malformed", func(t *testing.T) {
+		h := parseBeaconApiHeaders("key1=value1,key2value2,key3=,=key4")
+		assert.Equal(t, 1, len(h))
+		assert.DeepEqual(t, []string{"value1"}, h["key1"])
+	})
+}

@@ -58,7 +58,6 @@ func TestValid(t *testing.T) {
 
 	t.Run("one invalid column", func(t *testing.T) {
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
-		columns[0].KzgCommitments = [][]byte{}
 		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
 		err := verifier.ValidFields()
@@ -67,6 +66,14 @@ func TestValid(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
+		const maxBlobsPerBlock = 2
+
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: maxBlobsPerBlock}}
+		params.OverrideBeaconConfig(cfg)
+
 		columns := GenerateTestDataColumns(t, [fieldparams.RootLength]byte{}, 1, 1)
 		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
 
