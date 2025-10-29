@@ -162,7 +162,7 @@ func prepareConfigSpec() (map[string]any, error) {
 	data := make(map[string]any)
 	config := *params.BeaconConfig()
 
-	t := reflect.TypeOf(config)
+	t := reflect.TypeFor[params.BeaconChainConfig]()
 	v := reflect.ValueOf(config)
 
 	for i := 0; i < t.NumField(); i++ {

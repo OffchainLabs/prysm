@@ -67,7 +67,7 @@ func TestValidateBlob_InvalidMessageType(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.SignedBeaconBlock]()]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
 	topic = s.addDigestToTopic(topic, digest)
@@ -126,7 +126,7 @@ func TestValidateBlob_AlreadySeenInCache(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, b)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(b)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
 	topic = s.addDigestAndIndexToTopic(topic, digest, 0)
@@ -156,7 +156,7 @@ func TestValidateBlob_InvalidTopicIndex(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
 	topic = s.addDigestAndIndexToTopic(topic, digest, 1)
@@ -271,7 +271,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 			_, err := p.Encoding().EncodeGossip(buf, msg)
 			require.NoError(t, err)
 
-			topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+			topic := p2p.GossipTypeMapping[reflect.TypeFor[*eth.BlobSidecar]()]
 			digest, err := s.currentForkDigest()
 			require.NoError(t, err)
 			topic = s.addDigestAndIndexToTopic(topic, digest, 0)

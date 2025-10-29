@@ -652,7 +652,7 @@ func logGossipParameters(topic string, params *pubsub.TopicScoreParams) {
 
 	fields := make(logrus.Fields, numOfFields)
 	for i := range numOfFields {
-		fields[reflect.TypeOf(params).Elem().Field(i).Name] = rawParams.Field(i).Interface()
+		fields[reflect.TypeFor[pubsub.TopicScoreParams]().Field(i).Name] = rawParams.Field(i).Interface()
 	}
 	log.WithFields(fields).Debugf("Topic Parameters for %s", topic)
 }

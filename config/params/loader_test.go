@@ -421,7 +421,7 @@ func fieldsFromYamls(t *testing.T, fps []string) []string {
 
 func assertYamlFieldsMatch(t *testing.T, name string, fields []string, c1, c2 *params.BeaconChainConfig) {
 	// Ensure all fields from the yaml file exist, were set, and correctly match the expected value.
-	ft1 := reflect.TypeOf(*c1)
+	ft1 := reflect.TypeFor[params.BeaconChainConfig]()
 	for _, field := range fields {
 		var found bool
 		for i := 0; i < ft1.NumField(); i++ {

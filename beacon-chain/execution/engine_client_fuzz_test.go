@@ -243,7 +243,7 @@ func compareHeaders(t *testing.T, jsonBlob []byte) {
 
 func validateBlockConsistency(execBlock *pb.ExecutionBlock, jsonMap map[string]any) error {
 	blockVal := reflect.ValueOf(execBlock).Elem()
-	bType := reflect.TypeOf(execBlock).Elem()
+	bType := reflect.TypeFor[pb.ExecutionBlock]()
 
 	fieldnum := bType.NumField()
 
@@ -276,7 +276,7 @@ func validateBlockConsistency(execBlock *pb.ExecutionBlock, jsonMap map[string]a
 }
 
 func jsonFieldsAreValid(execBlock *pb.ExecutionBlock, jsonMap map[string]any) (bool, error) {
-	bType := reflect.TypeOf(execBlock).Elem()
+	bType := reflect.TypeFor[pb.ExecutionBlock]()
 
 	fieldnum := bType.NumField()
 

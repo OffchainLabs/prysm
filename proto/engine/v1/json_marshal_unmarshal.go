@@ -186,7 +186,7 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 // UnmarshalJSON --
 func (b *PayloadIDBytes) UnmarshalJSON(enc []byte) error {
 	var res [8]byte
-	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(b), enc, res[:]); err != nil {
+	if err := hexutil.UnmarshalFixedJSON(reflect.TypeFor[*PayloadIDBytes](), enc, res[:]); err != nil {
 		return err
 	}
 	*b = res

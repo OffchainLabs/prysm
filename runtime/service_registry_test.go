@@ -63,11 +63,11 @@ func TestRegisterService_Different(t *testing.T) {
 
 	require.Equal(t, 2, len(registry.serviceTypes))
 
-	_, exists := registry.services[reflect.TypeOf(m)]
-	assert.Equal(t, true, exists, "service of type %v not registered", reflect.TypeOf(m))
+	_, exists := registry.services[reflect.TypeFor[*mockService]()]
+	assert.Equal(t, true, exists, "service of type %v not registered", reflect.TypeFor[*mockService]())
 
-	_, exists = registry.services[reflect.TypeOf(s)]
-	assert.Equal(t, true, exists, "service of type %v not registered", reflect.TypeOf(s))
+	_, exists = registry.services[reflect.TypeFor[*secondMockService]()]
+	assert.Equal(t, true, exists, "service of type %v not registered", reflect.TypeFor[*secondMockService]())
 }
 
 func TestFetchService_OK(t *testing.T) {
@@ -104,6 +104,6 @@ func TestServiceStatus_OK(t *testing.T) {
 
 	statuses := registry.Statuses()
 
-	assert.ErrorContains(t, "something bad has happened", statuses[reflect.TypeOf(m)])
-	assert.ErrorContains(t, "woah, horsee", statuses[reflect.TypeOf(s)])
+	assert.ErrorContains(t, "something bad has happened", statuses[reflect.TypeFor[*mockService]()])
+	assert.ErrorContains(t, "woah, horsee", statuses[reflect.TypeFor[*secondMockService]()])
 }

@@ -17,7 +17,7 @@ func TestServer_GetBeaconConfig(t *testing.T) {
 	res, err := bs.GetBeaconConfig(ctx, &emptypb.Empty{})
 	require.NoError(t, err)
 	conf := params.BeaconConfig()
-	confType := reflect.TypeOf(conf).Elem()
+	confType := reflect.TypeFor[params.BeaconChainConfig]()
 	numFields := confType.NumField()
 
 	// Count only exported fields, as unexported fields are not included in the config
