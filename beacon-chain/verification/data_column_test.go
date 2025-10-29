@@ -933,6 +933,77 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 	}
 }
 
+func TestSidecarRootAndSignatureAligned(t *testing.T) {
+	const (
+		columnSlot = 1
+		blobCount  = 1
+	)
+
+	parentRoot := [fieldparams.RootLength]byte{}
+	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
+	firstColumn := columns[0]
+
+	t.Run("unknown block", func(t *testing.T) {
+		verifier := new(Initializer).NewDataColumnsVerifier(columns, RPCDataColumnSidecarRequirements)
+		err := verifier.SidecarRootAndSignatureAligned(nil)
+		require.NotNil(t, err)
+	})
+
+	t.Run("signatures mismatch", func(t *testing.T) {
+		signedBeaconBlockPb := util.NewBeaconBlock()
+		originalSignature := firstColumn.SignedBlockHeader.Signature
+		alteredSignature := make([]byte, len(originalSignature))
+		copy(alteredSignature, originalSignature)
+		alteredSignature[0] ^= 0xFF // Alter the signature
+		signedBeaconBlockPb.Signature = alteredSignature
+
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		roBlock, err := blocks.NewROBlock(signedBeaconBlock)
+		require.NoError(t, err)
+
+		verifier := new(Initializer).NewDataColumnsVerifier(columns, RPCDataColumnSidecarRequirements)
+		err = verifier.SidecarRootAndSignatureAligned(map[[fieldparams.RootLength]byte]blocks.ROBlock{
+			firstColumn.BlockRoot(): roBlock,
+		})
+
+		require.NotNil(t, err)
+	})
+
+	t.Run("roots mismatch", func(t *testing.T) {
+		signedBeaconBlockPb := util.NewBeaconBlock()
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		roBlock, err := blocks.NewROBlock(signedBeaconBlock)
+		require.NoError(t, err)
+
+		verifier := new(Initializer).NewDataColumnsVerifier(columns, RPCDataColumnSidecarRequirements)
+		err = verifier.SidecarRootAndSignatureAligned(map[[fieldparams.RootLength]byte]blocks.ROBlock{
+			firstColumn.BlockRoot(): roBlock,
+		})
+
+		require.NotNil(t, err)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		signedBeaconBlockPb := util.NewBeaconBlock()
+		signedBeaconBlock, err := blocks.NewSignedBeaconBlock(signedBeaconBlockPb)
+		require.NoError(t, err)
+
+		roBlock, err := blocks.NewROBlockWithRoot(signedBeaconBlock, firstColumn.BlockRoot())
+		require.NoError(t, err)
+
+		verifier := new(Initializer).NewDataColumnsVerifier(columns, RPCDataColumnSidecarRequirements)
+		err = verifier.SidecarRootAndSignatureAligned(map[[fieldparams.RootLength]byte]blocks.ROBlock{
+			roBlock.Root(): roBlock,
+		})
+
+		require.NoError(t, err)
+	})
+}
+
 func TestColumnRequirementSatisfaction(t *testing.T) {
 	const (
 		columnSlot = 1

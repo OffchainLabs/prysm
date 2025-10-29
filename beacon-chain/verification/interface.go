@@ -49,6 +49,7 @@ type DataColumnsVerifier interface {
 	SidecarInclusionProven() error
 	SidecarKzgProofVerified() error
 	SidecarProposerExpected(ctx context.Context) error
+	SidecarRootAndSignatureAligned(roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock) error
 }
 
 // NewDataColumnsVerifier is a function signature that can be used to mock a setup where a

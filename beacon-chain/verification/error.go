@@ -69,6 +69,10 @@ var (
 	// errBatchBlockRootMismatch is returned by VerifiedROBlobs in the scenario where the root of the given signed block
 	// does not match the block header in one of the corresponding sidecars.
 	errBatchBlockRootMismatch = errors.Join(ErrBlobInvalid, errors.New("sidecar block header root does not match signed block"))
+
+	// errUnalignedRootAndSignature is returned by VerifiedRODataColumns when none of the provided RO blocks
+	// align with the sidecar block header root and signature.
+	errUnalignedRootAndSignature = errors.Join(ErrBlobInvalid, errors.New("sidecar block header root and signature do not align with any provided ro blocks"))
 )
 
 var (

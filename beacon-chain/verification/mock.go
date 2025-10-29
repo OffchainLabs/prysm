@@ -79,18 +79,19 @@ func (*MockBlobVerifier) SatisfyRequirement(_ Requirement) {}
 // --------------------
 
 type MockDataColumnsVerifier struct {
-	ErrValidFields                  error
-	ErrCorrectSubnet                error
-	ErrNotFromFutureSlot            error
-	ErrSlotAboveFinalized           error
-	ErrSidecarParentSeen            error
-	ErrSidecarParentValid           error
-	ErrValidProposerSignature       error
-	ErrSidecarParentSlotLower       error
-	ErrSidecarDescendsFromFinalized error
-	ErrSidecarInclusionProven       error
-	ErrSidecarKzgProofVerified      error
-	ErrSidecarProposerExpected      error
+	ErrValidFields                    error
+	ErrCorrectSubnet                  error
+	ErrNotFromFutureSlot              error
+	ErrSlotAboveFinalized             error
+	ErrSidecarParentSeen              error
+	ErrSidecarParentValid             error
+	ErrValidProposerSignature         error
+	ErrSidecarParentSlotLower         error
+	ErrSidecarDescendsFromFinalized   error
+	ErrSidecarInclusionProven         error
+	ErrSidecarKzgProofVerified        error
+	ErrSidecarProposerExpected        error
+	ErrSidecarRootAndSignatureAligned error
 }
 
 var _ DataColumnsVerifier = &MockDataColumnsVerifier{}
@@ -147,4 +148,8 @@ func (m *MockDataColumnsVerifier) SidecarKzgProofVerified() error {
 
 func (m *MockDataColumnsVerifier) SidecarProposerExpected(_ context.Context) error {
 	return m.ErrSidecarProposerExpected
+}
+
+func (m *MockDataColumnsVerifier) SidecarRootAndSignatureAligned(_ map[[fieldparams.RootLength]byte]blocks.ROBlock) error {
+	return m.ErrSidecarRootAndSignatureAligned
 }

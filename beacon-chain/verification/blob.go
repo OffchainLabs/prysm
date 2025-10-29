@@ -30,6 +30,7 @@ const (
 	// Data columns specific.
 	RequireValidFields
 	RequireCorrectSubnet
+	RequireSidecarRootAndSignatureAligned
 )
 
 var allBlobSidecarRequirements = []Requirement{

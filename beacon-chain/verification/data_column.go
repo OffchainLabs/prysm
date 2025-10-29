@@ -500,6 +500,40 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	return nil
 }
 
+func (dv *RODataColumnsVerifier) SidecarRootAndSignatureAligned(roBlockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock) (err error) {
+	if ok, err := dv.results.cached(RequireSidecarRootAndSignatureAligned); ok {
+		return err
+	}
+
+	defer dv.recordResult(RequireSidecarRootAndSignatureAligned, &err)
+
+	for _, dataColumn := range dv.dataColumns {
+		// Check if we know the corresponding RO block.
+		root := dataColumn.BlockRoot()
+		roBlock, ok := roBlockByRoot[root]
+		if !ok {
+			return columnErrBuilder(errors.Errorf("no ro block found for data column with root %#x", root))
+		}
+
+		// Check if the signature aligns.
+		sidecarSignature := bytesutil.ToBytes96(dataColumn.SignedBlockHeader.Signature)
+		blockSignature := roBlock.Signature()
+
+		if sidecarSignature != blockSignature {
+			return columnErrBuilder(errUnalignedRootAndSignature)
+		}
+
+		// Check if the root aligns.
+		// Note, this should always be true since we used the root to lookup the RO block.
+		blockRoot := roBlock.Root()
+		if root != blockRoot {
+			return columnErrBuilder(errUnalignedRootAndSignature)
+		}
+	}
+
+	return nil
+}
+
 // state retrieves the state of the corresponding root from the cache if possible, else retrieves it from the state by rooter.
 func (dv *RODataColumnsVerifier) state(ctx context.Context, root [fieldparams.RootLength]byte) (state.BeaconState, error) {
 	// If the parent root is already in the cache, return it.
