@@ -212,6 +212,7 @@ nogo(
         "//tools/analyzers/modernize/slicessort:go_default_library",
         "//tools/analyzers/modernize/stringsbuilder:go_default_library",
         "//tools/analyzers/modernize/stringscutprefix:go_default_library",
+        "//tools/analyzers/modernize/stringsseq:go_default_library",
         "//tools/analyzers/nop:go_default_library",
         "//tools/analyzers/nopanic:go_default_library",
         "//tools/analyzers/properpermissions:go_default_library",
