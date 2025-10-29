@@ -276,6 +276,11 @@
       "external/.*": "Third party code"
     }
   },
+  "stringsbuilder": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
   "stringscutprefix": {
     "exclude_files": {
       "external/.*": "Third party code"

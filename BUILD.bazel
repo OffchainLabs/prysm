@@ -210,6 +210,7 @@ nogo(
         "//tools/analyzers/modernize/slicescontains:go_default_library",
         #"//tools/analyzers/modernize/slicesdelete:go_default_library", # Disabled, see https://go.dev/issue/73686
         "//tools/analyzers/modernize/slicessort:go_default_library",
+        "//tools/analyzers/modernize/stringsbuilder:go_default_library",
         "//tools/analyzers/modernize/stringscutprefix:go_default_library",
         "//tools/analyzers/nop:go_default_library",
         "//tools/analyzers/nopanic:go_default_library",
