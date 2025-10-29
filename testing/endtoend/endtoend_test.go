@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -322,7 +323,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 		return err
 	}
 
-	flags := append([]string{}, r.config.BeaconFlags...)
+	flags := slices.Clone(r.config.BeaconFlags)
 	flags = append(flags, fmt.Sprintf("--checkpoint-sync-url=%s", bnAPI))
 	flags = append(flags, fmt.Sprintf("--genesis-beacon-api-url=%s", bnAPI))
 
