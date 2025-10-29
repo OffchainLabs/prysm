@@ -792,7 +792,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, nil, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, stop-start, len(actual))
@@ -837,7 +837,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		require.NoError(t, err)
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
+		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, nil, roDataColumnsByPeer)
 		require.NoError(t, err)
 
 		require.Equal(t, middle-start, len(actual))
