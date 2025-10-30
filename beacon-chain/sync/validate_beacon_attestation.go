@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -336,13 +337,7 @@ func validateAttestingIndex(
 
 	// _[REJECT]_ The attester is a member of the committee -- i.e.
 	//  `attestation.attester_index in get_beacon_committee(state, attestation.data.slot, index)`.
-	inCommittee := false
-	for _, ix := range committee {
-		if attestingIndex == ix {
-			inCommittee = true
-			break
-		}
-	}
+	inCommittee := slices.Contains(committee, attestingIndex)
 	if !inCommittee {
 		return pubsub.ValidationReject, errors.New("attester is not a member of the committee")
 	}
