@@ -208,16 +208,16 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 # Override golang.org/x/tools to use v0.38.0 instead of v0.30.0
 http_archive(
     name = "org_golang_x_tools",
-    urls = [
-        "https://github.com/golang/tools/archive/refs/tags/v0.38.0.zip",
-    ],
-    sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
-    strip_prefix = "tools-0.38.0",
+    patch_args = ["-p1"],
     patches = [
         "//third_party:org_golang_x_tools-deletegopls.patch",
         "//third_party:org_golang_x_tools-gazelle.patch",
     ],
-    patch_args = ["-p1"],
+    sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
+    strip_prefix = "tools-0.38.0",
+    urls = [
+        "https://github.com/golang/tools/archive/refs/tags/v0.38.0.zip",
+    ],
 )
 
 go_rules_dependencies()
