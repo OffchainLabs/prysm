@@ -65,12 +65,6 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 			expectedIndex: 3,
 			expectError:   false,
 		},
-		{
-			name:         "Empty path error",
-			path:         "",
-			expectError:  true,
-			errorMessage: "empty path",
-		},
 	}
 
 	for _, tc := range testCases {

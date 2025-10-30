@@ -52,7 +52,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path Path) (uint64, error) {
 		currentIndex = currentIndex*nextPowerOfTwo(chunkCount) + fieldPos
 		currentInfo = fieldSsz
 
-		// Check if a path element is a length field
+		// Check for length access: element is the last in the path and requests length
 		if path.Length && index == len(path.Elements)-1 {
 			currentInfo, currentIndex, err = calculateLengthGeneralizedIndex(fieldSsz, element, currentIndex)
 			if err != nil {
