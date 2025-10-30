@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -119,7 +119,7 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 		return explicit, nil
 	}
 
-	dir = path.Clean(dir)
+	dir = filepath.Clean(dir)
 	// nosec: this path is provided by the node operator via flag
 	base, err := os.Open(dir) // #nosec G304
 	if err != nil {
@@ -153,7 +153,7 @@ func blobStoragePath(c *cli.Context) string {
 	blobsPath := c.Path(BlobStoragePathFlag.Name)
 	if blobsPath == "" {
 		// append a "blobs" subdir to the end of the data dir path
-		blobsPath = path.Join(c.String(cmd.DataDirFlag.Name), "blobs")
+		blobsPath = filepath.Join(c.String(cmd.DataDirFlag.Name), "blobs")
 	}
 	return blobsPath
 }
@@ -162,7 +162,7 @@ func dataColumnStoragePath(c *cli.Context) string {
 	dataColumnsPath := c.Path(DataColumnStoragePathFlag.Name)
 	if dataColumnsPath == "" {
 		// append a "data-columns" subdir to the end of the data dir path
-		dataColumnsPath = path.Join(c.String(cmd.DataDirFlag.Name), "data-columns")
+		dataColumnsPath = filepath.Join(c.String(cmd.DataDirFlag.Name), "data-columns")
 	}
 
 	return dataColumnsPath
