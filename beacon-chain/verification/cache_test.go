@@ -21,6 +21,21 @@ func testSignedBlockBlobKeys(t *testing.T, valRoot []byte, slot primitives.Slot,
 	return block, blobs, sks[0], pks[0]
 }
 
+func TestSignatureDataString(t *testing.T) {
+	const expected = "0x0102030000000000000000000000000000000000000000000000000000000000-0x0405060000000000000000000000000000000000000000000000000000000000-0x070809000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000-10-11"
+
+	sigData := signatureData{
+		Root:      [32]byte{1, 2, 3},
+		Parent:    [32]byte{4, 5, 6},
+		Signature: [96]byte{7, 8, 9},
+		Proposer:  10,
+		Slot:      11,
+	}
+
+	actual := sigData.string()
+	require.Equal(t, expected, actual)
+}
+
 func TestVerifySignature(t *testing.T) {
 	valRoot := [32]byte{}
 	_, blobs, _, pk := testSignedBlockBlobKeys(t, valRoot[:], 0, 1)

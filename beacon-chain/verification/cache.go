@@ -50,6 +50,10 @@ type signatureData struct {
 	Slot      primitives.Slot
 }
 
+func (d signatureData) string() string {
+	return fmt.Sprintf("%#x-%#x-%#x-%d-%d", d.Root, d.Parent, d.Signature, d.Proposer, d.Slot)
+}
+
 func (d signatureData) logFields() logrus.Fields {
 	return logrus.Fields{
 		"root":       fmt.Sprintf("%#x", d.Root),
