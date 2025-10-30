@@ -284,6 +284,16 @@ func TestParsePath(t *testing.T) {
 			path:     "",
 			expected: query.Path{},
 		},
+		{
+			name:    "length with leading dot +  empty spaces",
+			path:    "test))((",
+			wantErr: true,
+		},
+		{
+			name:    "length with leading dot +  empty spaces",
+			path:    "array][0][",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -25,7 +25,7 @@ type Path struct {
 }
 
 // Matches an array index expression like [123] or [ foo ] and captures the inner content without the brackets.
-var arrayIndexRegex = regexp.MustCompile(`\[\s*([^\]]+)\s*\]`)
+var arrayIndexRegex = regexp.MustCompile(`\[(\d+)\]`)
 
 // Matches an entire string that’s a len(<expr>) call (whitespace flexible), capturing the inner expression and disallowing any trailing characters.
 var lengthRegex = regexp.MustCompile(`^\s*len\s*\(\s*([^)]+?)\s*\)\s*$`)
@@ -35,7 +35,7 @@ var lengthRegex = regexp.MustCompile(`^\s*len\s*\(\s*([^)]+?)\s*\)\s*$`)
 var validPathChars = regexp.MustCompile(`^[A-Za-z0-9._\[\]\(\)]*$`)
 
 // Invalid patterns: a closing bracket followed directly by a letter or underscore
-var invalid = regexp.MustCompile(`\][^.\[\)]|\).`)
+var invalidBracketPattern = regexp.MustCompile(`\][^.\[\)]|\).`)
 
 // ParsePath parses a raw path string into a slice of PathElements.
 // note: field names are stored in snake case format. rawPath has to be provided in snake case.
@@ -110,39 +110,46 @@ func ParsePath(rawPath string) (Path, error) {
 
 // validateRawPath performs initial validation of the raw path string:
 // 1. Rejects invalid characters (only letters, digits, '.', '[]', and '()' are allowed).
-// 2a. Validates balanced parentheses
-// 2b. Validates balanced brackets.
-// 3. Ensures len() calls are only at the start of the path.
-// 4. Rejects empty len() calls.
-// 5. Rejects invalid patterns like "][a" or "][_" which indicate malformed paths.
+// 2. Validates balanced parentheses
+// 3. Validates balanced brackets.
+// 4. Ensures len() calls are only at the start of the path.
+// 5. Rejects empty len() calls.
+// 6. Rejects invalid patterns like "][a" or "][_" which indicate malformed paths.
 func validateRawPath(rawPath string) error {
 	// 1. Reject any path containing invalid characters (this includes spaces).
 	if !validPathChars.MatchString(rawPath) {
 		return fmt.Errorf("invalid character in path: only letters, digits, '.', '[]' and '()' are allowed")
 	}
 
-	// 2a. Basic validation for balanced parentheses
+	// 2. Basic validation for balanced parentheses: wrongly formatted paths like "test))((" are not rejected in this condition but later.
 	if strings.Count(rawPath, "(") != strings.Count(rawPath, ")") {
 		return fmt.Errorf("unmatched parentheses in path: %s", rawPath)
 	}
 
-	// 2b. Basic validation for balanced brackets
-	if strings.Count(rawPath, "[") != strings.Count(rawPath, "]") {
+	// 3. Basic validation for balanced brackets:
+	// wrongly formatted paths like "array][0][" are rejected by checking bracket counts and format.
+	matches := arrayIndexRegex.FindAllStringSubmatch(rawPath, -1)
+	openBracketsCount := strings.Count(rawPath, "[")
+	closeBracketsCount := strings.Count(rawPath, "]")
+	if openBracketsCount != closeBracketsCount {
 		return fmt.Errorf("unmatched brackets in path: %s", rawPath)
 	}
+	if len(matches) != openBracketsCount || len(matches) != closeBracketsCount {
+		return fmt.Errorf("invalid bracket format in path: %s", rawPath)
+	}
 
-	// 3. Reject len() calls not at the start of the path
+	// 4. Reject len() calls not at the start of the path
 	if strings.Index(rawPath, "len(") > 0 {
 		return fmt.Errorf("len() call must be at the start of the path: %s", rawPath)
 	}
 
-	// 4. Reject empty len() calls
+	// 5. Reject empty len() calls
 	if strings.Contains(rawPath, "len()") {
 		return fmt.Errorf("len() call must not be empty: %s", rawPath)
 	}
 
-	// 5. Reject invalid patterns like "][a" or "][_" which indicate malformed paths
-	if invalid.MatchString(rawPath) {
+	// 6. Reject invalid patterns like "][a" or "][_" which indicate malformed paths
+	if invalidBracketPattern.MatchString(rawPath) {
 		return fmt.Errorf("invalid path format near brackets in path: %s", rawPath)
 	}
 
