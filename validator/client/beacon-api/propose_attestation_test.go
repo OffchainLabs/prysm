@@ -261,13 +261,13 @@ func TestProposeAttestationElectra(t *testing.T) {
 		{
 			name:                     "valid electra",
 			attestation:              attestationElectra,
-			expectedConsensusVersion: version.String(slots.ToForkVersion(primitives.Slot(attestationElectra.GetData().GetSlot()))),
+			expectedConsensusVersion: version.String(slots.ToForkVersion(attestationElectra.GetData().GetSlot())),
 			endpointCall:             1,
 		},
 		{
 			name:                     "valid fulu consensus version",
 			attestation:              attestationFulu,
-			expectedConsensusVersion: version.String(slots.ToForkVersion(primitives.Slot(attestationFulu.GetData().GetSlot()))),
+			expectedConsensusVersion: version.String(slots.ToForkVersion(attestationFulu.GetData().GetSlot())),
 			endpointCall:             1,
 		},
 		{
@@ -311,7 +311,7 @@ func TestProposeAttestationElectra(t *testing.T) {
 			name:        "bad request",
 			attestation: attestationElectra,
 			expectedConsensusVersion: version.String(
-				slots.ToForkVersion(primitives.Slot(attestationElectra.GetData().GetSlot())),
+				slots.ToForkVersion(attestationElectra.GetData().GetSlot()),
 			),
 			expectedErrorMessage: "bad request",
 			endpointError:        errors.New("bad request"),
