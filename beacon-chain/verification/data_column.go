@@ -257,17 +257,25 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 			continue
 		}
 
-		columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
+		// Ensure the expensive signature verification is only performed once for
+		// concurrent requests for the same signature data.
+		if _, err, _ = dv.sg.Do(signatureData.string(), func() (any, error) {
+			columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
 
-		// Retrieve the parent state.
-		parentState, err := dv.parentState(ctx, dataColumn)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent state"))
-		}
+			// Retrieve the parent state.
+			parentState, err := dv.parentState(ctx, dataColumn)
+			if err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "parent state"))
+			}
 
-		// Full verification, which will subsequently be cached for anything sharing the signature cache.
-		if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verify signature"))
+			// Full verification, which will subsequently be cached for anything sharing the signature cache.
+			if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "verify signature"))
+			}
+
+			return nil, nil
+		}); err != nil {
+			return err
 		}
 	}
 
