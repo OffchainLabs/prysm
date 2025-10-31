@@ -478,15 +478,25 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		idx, cached := dv.pc.Proposer(checkpoint, dataColumnSlot)
 
 		if !cached {
-			// Retrieve the parent state.
-			parentState, err := dv.state(ctx, dataColumn.ParentRoot())
-			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "parent state"))
-			}
+			parentRoot := dataColumn.ParentRoot()
+			// Ensure the expensive index computation is only performed once for
+			// concurrent requests for the same signature data.
+			if _, err, _ := dv.sg.Do(fmt.Sprintf("%#x", parentRoot), func() (any, error) {
+				// Retrieve the parent state.
+				parentState, err := dv.state(ctx, parentRoot)
+				if err != nil {
+					return nil, columnErrBuilder(errors.Wrap(err, "parent state"))
+				}
 
-			idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
-			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				// Compute the proposer index.
+				idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
+				if err != nil {
+					return nil, columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				}
+
+				return nil, nil
+			}); err != nil {
+				return err
 			}
 		}
 
