@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1135,10 +1136,8 @@ func (b *BeaconNode) registerLightClientStore() {
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
 	for _, flag := range features.NetworkFlags {
-		for _, name := range flag.Names() {
-			if cliCtx.IsSet(name) {
-				return true
-			}
+		if slices.ContainsFunc(flag.Names(), cliCtx.IsSet) {
+			return true
 		}
 	}
 	return false

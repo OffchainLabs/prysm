@@ -2023,8 +2023,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_libp2p_go_netroute",
         importpath = "github.com/libp2p/go-netroute",
-        sum = "h1:Dejd8cQ47Qx2kRABg6lPwknU7+nBnFRpko45/fFPuZ8=",
-        version = "v0.2.2",
+        sum = "h1:nqPCXHmeNmgTJnktosJ/sIef9hvwYCrsLxXmfNks/oc=",
+        version = "v0.3.0",
     )
     go_repository(
         name = "com_github_libp2p_go_reuseport",

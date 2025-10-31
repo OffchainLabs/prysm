@@ -2,8 +2,10 @@ package storage
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -55,10 +57,8 @@ func layoutFlagUsage() string {
 }
 
 func validateLayoutFlag(_ *cli.Context, v string) error {
-	for _, l := range filesystem.LayoutNames {
-		if v == l {
-			return nil
-		}
+	if slices.Contains(filesystem.LayoutNames, v) {
+		return nil
 	}
 	return errors.Errorf("invalid value '%s' for flag --%s, %s", v, BlobStorageLayout.Name, layoutOptions())
 }
@@ -140,6 +140,10 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 	// amount of wiggle room to be confident that we'll likely see a by-root director if one exists.
 	entries, err := base.Readdirnames(16)
 	if err != nil {
+		// We can get this error if the directory exists and is empty
+		if errors.Is(err, io.EOF) {
+			return filesystem.LayoutNameByEpoch, nil
+		}
 		return "", errors.Wrap(err, "reading blob storage directory")
 	}
 	for _, entry := range entries {
