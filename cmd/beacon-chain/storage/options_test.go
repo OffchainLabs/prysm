@@ -192,6 +192,13 @@ func TestDetectLayout(t *testing.T) {
 			},
 			expectedErr: syscall.ENOTDIR,
 		},
+		{
+			name: "empty blobs dir",
+			setup: func(t *testing.T, dir string) {
+				require.NoError(t, os.MkdirAll(dir, 0o755))
+			},
+			expected: filesystem.LayoutNameByEpoch,
+		},
 	}
 
 	for _, tc := range cases {
