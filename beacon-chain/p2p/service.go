@@ -65,35 +65,36 @@ var (
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
-	started               bool
-	isPreGenesis          bool
-	pingMethod            func(ctx context.Context, id peer.ID) error
-	pingMethodLock        sync.RWMutex
-	cancel                context.CancelFunc
-	cfg                   *Config
-	peers                 *peers.Status
-	addrFilter            *multiaddr.Filters
-	ipLimiter             *leakybucket.Collector
-	privKey               *ecdsa.PrivateKey
-	metaData              metadata.Metadata
-	pubsub                *pubsub.PubSub
-	joinedTopics          map[string]*pubsub.Topic
-	joinedTopicsLock      sync.RWMutex
-	subnetsLock           map[uint64]*sync.RWMutex
-	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
-	initializationLock    sync.Mutex
-	dv5Listener           ListenerRebooter
-	startupErr            error
-	ctx                   context.Context
-	host                  host.Host
-	genesisTime           time.Time
-	genesisValidatorsRoot []byte
-	activeValidatorCount  uint64
-	peerDisconnectionTime *cache.Cache
-	custodyInfo           *custodyInfo
-	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
-	custodyInfoSet        chan struct{}
-	allForkDigests        map[[4]byte]struct{}
+	started                  bool
+	isPreGenesis             bool
+	pingMethod               func(ctx context.Context, id peer.ID) error
+	pingMethodLock           sync.RWMutex
+	cancel                   context.CancelFunc
+	cfg                      *Config
+	peers                    *peers.Status
+	addrFilter               *multiaddr.Filters
+	ipLimiter                *leakybucket.Collector
+	privKey                  *ecdsa.PrivateKey
+	metaData                 metadata.Metadata
+	pubsub                   *pubsub.PubSub
+	joinedTopics             map[string]*pubsub.Topic
+	joinedTopicsLock         sync.RWMutex
+	subnetsLock              map[uint64]*sync.RWMutex
+	subnetsLockLock          sync.Mutex // Lock access to subnetsLock
+	initializationLock       sync.Mutex
+	dv5Listener              ListenerRebooter
+	startupErr               error
+	ctx                      context.Context
+	host                     host.Host
+	genesisTime              time.Time
+	genesisValidatorsRoot    []byte
+	activeValidatorCount     uint64
+	activeValidatorCountLock sync.Mutex
+	peerDisconnectionTime    *cache.Cache
+	custodyInfo              *custodyInfo
+	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
+	custodyInfoSet           chan struct{}
+	allForkDigests           map[[4]byte]struct{}
 }
 
 type custodyInfo struct {
