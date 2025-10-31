@@ -116,11 +116,11 @@ func withSubscribeAllDataSubnets(t *testing.T, fn func()) {
 
 func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.NumberOfCustodyGroups = 128
-	beaconConfig.CustodyRequirement = 4
-	beaconConfig.SamplesPerSlot = 8
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.NumberOfCustodyGroups = 128
+	cfg.CustodyRequirement = 4
+	cfg.SamplesPerSlot = 8
+	params.OverrideBeaconConfig(cfg)
 
 	t.Run("Skip update when actual custody count >= target", func(t *testing.T) {
 		setup := setupCustodyTest(t, false)
@@ -159,7 +159,7 @@ func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 			require.NoError(t, err)
 
 			const expectedSlot = primitives.Slot(100)
-			setup.assertCustodyInfo(t, expectedSlot, beaconConfig.NumberOfCustodyGroups)
+			setup.assertCustodyInfo(t, expectedSlot, cfg.NumberOfCustodyGroups)
 		})
 	})
 }

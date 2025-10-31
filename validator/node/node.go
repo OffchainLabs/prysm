@@ -433,6 +433,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		BeaconNodeGRPCEndpoint:  cliCtx.String(flags.BeaconRPCProviderFlag.Name),
 		BeaconNodeCert:          cliCtx.String(flags.CertFlag.Name),
 		BeaconApiEndpoint:       cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
+		BeaconApiHeaders:        parseBeaconApiHeaders(cliCtx.String(flags.BeaconRESTApiHeaders.Name)),
 		BeaconApiTimeout:        time.Second * 30,
 		Graffiti:                g.ParseHexGraffiti(cliCtx.String(flags.GraffitiFlag.Name)),
 		GraffitiStruct:          graffitiStruct,
@@ -552,6 +553,7 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		GRPCHeaders:            strings.Split(cliCtx.String(flags.GRPCHeadersFlag.Name), ","),
 		BeaconNodeGRPCEndpoint: cliCtx.String(flags.BeaconRPCProviderFlag.Name),
 		BeaconApiEndpoint:      cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
+		BeaconAPIHeaders:       parseBeaconApiHeaders(cliCtx.String(flags.BeaconRESTApiHeaders.Name)),
 		BeaconApiTimeout:       time.Second * 30,
 		BeaconNodeCert:         cliCtx.String(flags.CertFlag.Name),
 		DB:                     c.db,
@@ -635,4 +637,24 @@ func clearDB(ctx context.Context, dataDir string, force bool, isDatabaseMinimal 
 	}
 
 	return nil
+}
+
+func parseBeaconApiHeaders(rawHeaders string) map[string][]string {
+	result := make(map[string][]string)
+	pairs := strings.Split(rawHeaders, ",")
+	for _, pair := range pairs {
+		key, value, found := strings.Cut(pair, "=")
+		if !found {
+			// Skip malformed pairs
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			// Skip malformed pairs
+			continue
+		}
+		result[key] = append(result[key], value)
+	}
+	return result
 }

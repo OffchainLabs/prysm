@@ -971,12 +971,12 @@
     - file: proto/prysm/v1alpha1/light_client.proto
       search: message LightClientHeaderCapella {
   spec: |
-    <spec ssz_object="LightClientHeader" fork="capella" hash="366cbdcd">
+    <spec ssz_object="LightClientHeader" fork="capella" hash="b625e61e">
     class LightClientHeader(Container):
-        # Beacon block header
         beacon: BeaconBlockHeader
-        # Execution payload header corresponding to `beacon.body_root` (from Capella onward)
+        # [New in Capella]
         execution: ExecutionPayloadHeader
+        # [New in Capella]
         execution_branch: ExecutionBranch
     </spec>
 

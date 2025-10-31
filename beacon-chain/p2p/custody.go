@@ -259,11 +259,11 @@ func (s *Service) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 }
 
 func fuluForkSlot() (primitives.Slot, error) {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
-	fuluForkEpoch := beaconConfig.FuluForkEpoch
-	if fuluForkEpoch == beaconConfig.FarFutureEpoch {
-		return beaconConfig.FarFutureSlot, nil
+	fuluForkEpoch := cfg.FuluForkEpoch
+	if fuluForkEpoch == cfg.FarFutureEpoch {
+		return cfg.FarFutureSlot, nil
 	}
 
 	forkFuluSlot, err := slots.EpochStart(fuluForkEpoch)
