@@ -90,10 +90,10 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 // custodyGroupCount computes the custody group count based on the custody requirement,
 // the validators custody requirement, and whether the node is subscribed to all data subnets.
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	if flags.Get().SubscribeAllDataSubnets {
-		return beaconConfig.NumberOfCustodyGroups, nil
+		return cfg.NumberOfCustodyGroups, nil
 	}
 
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
@@ -101,7 +101,7 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
+	return max(cfg.CustodyRequirement, validatorsCustodyRequirement), nil
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the

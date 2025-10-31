@@ -3,10 +3,13 @@ package kv
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -125,6 +128,131 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, initialSlot, slot)
 		require.Equal(t, initialCount, count)
+
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, initialSlot, storedSlot)
+		require.Equal(t, initialCount, storedCount)
+	})
+}
+
+func TestUpdateEarliestAvailableSlot(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("allow decreasing earliest slot (backfill scenario)", func(t *testing.T) {
+		const (
+			initialSlot  = primitives.Slot(300)
+			initialCount = uint64(10)
+			earliestSlot = primitives.Slot(200) // Lower than initial (backfill discovered earlier blocks)
+		)
+
+		db := setupDB(t)
+
+		// Initialize custody info
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Update with a lower slot (should update for backfill)
+		err = db.UpdateEarliestAvailableSlot(ctx, earliestSlot)
+		require.NoError(t, err)
+
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, earliestSlot, storedSlot)
+		require.Equal(t, initialCount, storedCount)
+	})
+
+	t.Run("allow increasing slot within MIN_EPOCHS_FOR_BLOCK_REQUESTS (pruning scenario)", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Calculate the current slot and minimum required slot based on actual current time
+		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+		currentSlot := slots.CurrentSlot(genesisTime)
+		currentEpoch := slots.ToEpoch(currentSlot)
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+		var minRequiredEpoch primitives.Epoch
+		if currentEpoch > minEpochsForBlocks {
+			minRequiredEpoch = currentEpoch - minEpochsForBlocks
+		} else {
+			minRequiredEpoch = 0
+		}
+
+		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+		require.NoError(t, err)
+
+		// Initial setup: set earliest slot well before minRequiredSlot
+		const groupCount = uint64(5)
+		initialSlot := primitives.Slot(1000)
+
+		_, _, err = db.UpdateCustodyInfo(ctx, initialSlot, groupCount)
+		require.NoError(t, err)
+
+		// Try to increase to a slot that's still BEFORE minRequiredSlot (should succeed)
+		validSlot := minRequiredSlot - 100
+
+		err = db.UpdateEarliestAvailableSlot(ctx, validSlot)
+		require.NoError(t, err)
+
+		// Verify the database was updated
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, validSlot, storedSlot)
+		require.Equal(t, groupCount, storedCount)
+	})
+
+	t.Run("prevent increasing slot beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Calculate the current slot and minimum required slot based on actual current time
+		genesisTime := time.Unix(int64(params.BeaconConfig().MinGenesisTime+params.BeaconConfig().GenesisDelay), 0)
+		currentSlot := slots.CurrentSlot(genesisTime)
+		currentEpoch := slots.ToEpoch(currentSlot)
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
+		var minRequiredEpoch primitives.Epoch
+		if currentEpoch > minEpochsForBlocks {
+			minRequiredEpoch = currentEpoch - minEpochsForBlocks
+		} else {
+			minRequiredEpoch = 0
+		}
+
+		minRequiredSlot, err := slots.EpochStart(minRequiredEpoch)
+		require.NoError(t, err)
+
+		// Initial setup: set a valid earliest slot (well before minRequiredSlot)
+		const initialCount = uint64(5)
+		initialSlot := primitives.Slot(1000)
+
+		_, _, err = db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Try to set earliest slot beyond the minimum required slot
+		invalidSlot := minRequiredSlot + 100
+
+		// This should fail
+		err = db.UpdateEarliestAvailableSlot(ctx, invalidSlot)
+		require.ErrorContains(t, "cannot increase earliest available slot", err)
+		require.ErrorContains(t, "exceeds minimum required slot", err)
+
+		// Verify the database wasn't updated
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, initialSlot, storedSlot)
+		require.Equal(t, initialCount, storedCount)
+	})
+
+	t.Run("no change when slot equals current slot", func(t *testing.T) {
+		const (
+			initialSlot  = primitives.Slot(100)
+			initialCount = uint64(5)
+		)
+
+		db := setupDB(t)
+
+		// Initialize custody info
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Update with the same slot
+		err = db.UpdateEarliestAvailableSlot(ctx, initialSlot)
+		require.NoError(t, err)
 
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
 		require.Equal(t, initialSlot, storedSlot)

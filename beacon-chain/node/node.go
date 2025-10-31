@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,6 +178,9 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	}
 	beacon.db = kvdb
 
+	if err := dbClearer.clearGenesis(dataDir); err != nil {
+		return nil, errors.Wrap(err, "could not clear genesis state")
+	}
 	providers := append(beacon.GenesisProviders, kv.NewLegacyGenesisProvider(kvdb))
 	if err := genesis.Initialize(ctx, dataDir, providers...); err != nil {
 		return nil, errors.Wrap(err, "could not initialize genesis state")
@@ -1105,6 +1109,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 		genesis,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
+		b.fetchP2P(),
 		opts...,
 	)
 	if err != nil {
@@ -1131,10 +1136,8 @@ func (b *BeaconNode) registerLightClientStore() {
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
 	for _, flag := range features.NetworkFlags {
-		for _, name := range flag.Names() {
-			if cliCtx.IsSet(name) {
-				return true
-			}
+		if slices.ContainsFunc(flag.Names(), cliCtx.IsSet) {
+			return true
 		}
 	}
 	return false

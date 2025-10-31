@@ -13,7 +13,7 @@ type listInfo struct {
 	// limit is the maximum number of elements in the list.
 	limit uint64
 	// element is the SSZ info of the list's element type.
-	element *sszInfo
+	element *SszInfo
 	// length is the actual number of elements at runtime (0 if not set).
 	length uint64
 	// elementSizes caches each element's byte size for variable-sized type elements
@@ -27,7 +27,7 @@ func (l *listInfo) Limit() uint64 {
 	return l.limit
 }
 
-func (l *listInfo) Element() (*sszInfo, error) {
+func (l *listInfo) Element() (*SszInfo, error) {
 	if l == nil {
 		return nil, errors.New("listInfo is nil")
 	}

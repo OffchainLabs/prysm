@@ -212,7 +212,8 @@ func filterNoop(_ string) bool {
 	return true
 }
 
-func isRootDir(p string) bool {
+// IsBlockRootDir returns true if the path segment looks like a block root directory.
+func IsBlockRootDir(p string) bool {
 	dir := filepath.Base(p)
 	return len(dir) == rootStringLen && strings.HasPrefix(dir, "0x")
 }

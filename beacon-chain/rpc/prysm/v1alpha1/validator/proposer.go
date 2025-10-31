@@ -229,7 +229,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
 
 		// Set sync aggregate. New in Altair.
-		vs.setSyncAggregate(ctx, sBlk)
+		vs.setSyncAggregate(ctx, sBlk, head)
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
@@ -312,14 +312,14 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
+		if errors.Is(err, builderapi.ErrBadGateway) {
+			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
+			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+		}
 	} else if block.Version() >= version.Deneb {
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
-		if errors.Is(err, builderapi.ErrBadGateway) && block.IsBlinded() {
-			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
-			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
-		}
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
 	}
 

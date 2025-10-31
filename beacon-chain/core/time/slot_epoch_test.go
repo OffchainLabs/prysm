@@ -196,7 +196,7 @@ func TestAltairCompatible(t *testing.T) {
 }
 
 func TestCanUpgradeTo(t *testing.T) {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	outerTestCases := []struct {
 		name        string
@@ -205,32 +205,32 @@ func TestCanUpgradeTo(t *testing.T) {
 	}{
 		{
 			name:        "Altair",
-			forkEpoch:   &beaconConfig.AltairForkEpoch,
+			forkEpoch:   &cfg.AltairForkEpoch,
 			upgradeFunc: time.CanUpgradeToAltair,
 		},
 		{
 			name:        "Bellatrix",
-			forkEpoch:   &beaconConfig.BellatrixForkEpoch,
+			forkEpoch:   &cfg.BellatrixForkEpoch,
 			upgradeFunc: time.CanUpgradeToBellatrix,
 		},
 		{
 			name:        "Capella",
-			forkEpoch:   &beaconConfig.CapellaForkEpoch,
+			forkEpoch:   &cfg.CapellaForkEpoch,
 			upgradeFunc: time.CanUpgradeToCapella,
 		},
 		{
 			name:        "Deneb",
-			forkEpoch:   &beaconConfig.DenebForkEpoch,
+			forkEpoch:   &cfg.DenebForkEpoch,
 			upgradeFunc: time.CanUpgradeToDeneb,
 		},
 		{
 			name:        "Electra",
-			forkEpoch:   &beaconConfig.ElectraForkEpoch,
+			forkEpoch:   &cfg.ElectraForkEpoch,
 			upgradeFunc: time.CanUpgradeToElectra,
 		},
 		{
 			name:        "Fulu",
-			forkEpoch:   &beaconConfig.FuluForkEpoch,
+			forkEpoch:   &cfg.FuluForkEpoch,
 			upgradeFunc: time.CanUpgradeToFulu,
 		},
 	}
@@ -238,7 +238,7 @@ func TestCanUpgradeTo(t *testing.T) {
 	for _, otc := range outerTestCases {
 		params.SetupTestConfigCleanup(t)
 		*otc.forkEpoch = 5
-		params.OverrideBeaconConfig(beaconConfig)
+		params.OverrideBeaconConfig(cfg)
 
 		innerTestCases := []struct {
 			name string

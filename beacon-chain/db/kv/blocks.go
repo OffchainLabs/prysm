@@ -336,6 +336,42 @@ func (s *Store) HasBlock(ctx context.Context, blockRoot [32]byte) bool {
 	return exists
 }
 
+// AvailableBlocks returns a set of roots indicating which blocks corresponding to `blockRoots` are available in the storage.
+func (s *Store) AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[[32]byte]bool {
+	_, span := trace.StartSpan(ctx, "BeaconDB.AvailableBlocks")
+	defer span.End()
+
+	count := len(blockRoots)
+	availableRoots := make(map[[32]byte]bool, count)
+
+	// First, check the cache for each block root.
+	notInCacheRoots := make([][32]byte, 0, count)
+	for _, root := range blockRoots {
+		if v, ok := s.blockCache.Get(string(root[:])); v != nil && ok {
+			availableRoots[root] = true
+			continue
+		}
+
+		notInCacheRoots = append(notInCacheRoots, root)
+	}
+
+	// Next, check the database for the remaining block roots.
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blocksBucket)
+		for _, root := range notInCacheRoots {
+			if bkt.Get(root[:]) != nil {
+				availableRoots[root] = true
+			}
+		}
+
+		return nil
+	}); err != nil {
+		panic(err) // lint:nopanic -- View never returns an error.
+	}
+
+	return availableRoots
+}
+
 // BlocksBySlot retrieves a list of beacon blocks and its respective roots by slot.
 func (s *Store) BlocksBySlot(ctx context.Context, slot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.BlocksBySlot")

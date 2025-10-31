@@ -42,6 +42,12 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	case *enginev1.ExecutionBundleFulu:
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
+	case *enginev1.ExecutionPayloadHeader:
+		return WrappedExecutionPayloadHeader(pbStruct)
+	case *enginev1.ExecutionPayloadHeaderCapella:
+		return WrappedExecutionPayloadHeaderCapella(pbStruct)
+	case *enginev1.ExecutionPayloadHeaderDeneb:
+		return WrappedExecutionPayloadHeaderDeneb(pbStruct)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)
 	}

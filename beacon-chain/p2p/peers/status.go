@@ -25,6 +25,7 @@ package peers
 import (
 	"context"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -81,29 +82,31 @@ const (
 type InternetProtocol string
 
 const (
-	TCP  = "tcp"
-	QUIC = "quic"
+	TCP  = InternetProtocol("tcp")
+	QUIC = InternetProtocol("quic")
 )
 
-// Status is the structure holding the peer status information.
-type Status struct {
-	ctx                   context.Context
-	scorers               *scorers.Service
-	store                 *peerdata.Store
-	ipTracker             map[string]uint64
-	rand                  *rand.Rand
-	ipColocationWhitelist []*net.IPNet
-}
+type (
+	// Status is the structure holding the peer status information.
+	Status struct {
+		ctx                   context.Context
+		scorers               *scorers.Service
+		store                 *peerdata.Store
+		ipTracker             map[string]uint64
+		rand                  *rand.Rand
+		ipColocationWhitelist []*net.IPNet
+	}
 
-// StatusConfig represents peer status service params.
-type StatusConfig struct {
-	// PeerLimit specifies maximum amount of concurrent peers that are expected to be connect to the node.
-	PeerLimit int
-	// ScorerParams holds peer scorer configuration params.
-	ScorerParams *scorers.Config
-	// IPColocationWhitelist contains CIDR ranges that are exempt from IP colocation limits.
-	IPColocationWhitelist []*net.IPNet
-}
+	// StatusConfig represents peer status service params.
+	StatusConfig struct {
+		// PeerLimit specifies maximum amount of concurrent peers that are expected to be connect to the node.
+		PeerLimit int
+		// ScorerParams holds peer scorer configuration params.
+		ScorerParams *scorers.Config
+		// IPColocationWhitelist contains CIDR ranges that are exempt from IP colocation limits.
+		IPColocationWhitelist []*net.IPNet
+	}
+)
 
 // NewStatus creates a new status entity.
 func NewStatus(ctx context.Context, config *StatusConfig) *Status {
@@ -304,11 +307,8 @@ func (p *Status) SubscribedToSubnet(index uint64) []peer.ID {
 		connectedStatus := peerData.ConnState == Connecting || peerData.ConnState == Connected
 		if connectedStatus && peerData.MetaData != nil && !peerData.MetaData.IsNil() && peerData.MetaData.AttnetsBitfield() != nil {
 			indices := indicesFromBitfield(peerData.MetaData.AttnetsBitfield())
-			for _, idx := range indices {
-				if idx == index {
-					peers = append(peers, pid)
-					break
-				}
+			if slices.Contains(indices, index) {
+				peers = append(peers, pid)
 			}
 		}
 	}

@@ -11,7 +11,10 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-const bytesPerChunk = 32
+const (
+	BitsPerChunk  = 256
+	BytesPerChunk = 32
+)
 
 // BitlistRoot returns the mix in length of a bitwise Merkleized bitfield.
 func BitlistRoot(bfield bitfield.Bitfield, maxCapacity uint64) ([32]byte, error) {
@@ -54,14 +57,14 @@ func BitwiseMerkleize(chunks [][32]byte, count, limit uint64) ([32]byte, error) 
 }
 
 // PackByChunk a given byte array's final chunk with zeroes if needed.
-func PackByChunk(serializedItems [][]byte) ([][bytesPerChunk]byte, error) {
-	var emptyChunk [bytesPerChunk]byte
+func PackByChunk(serializedItems [][]byte) ([][BytesPerChunk]byte, error) {
+	var emptyChunk [BytesPerChunk]byte
 	// If there are no items, we return an empty chunk.
 	if len(serializedItems) == 0 {
-		return [][bytesPerChunk]byte{emptyChunk}, nil
-	} else if len(serializedItems[0]) == bytesPerChunk {
+		return [][BytesPerChunk]byte{emptyChunk}, nil
+	} else if len(serializedItems[0]) == BytesPerChunk {
 		// If each item has exactly BYTES_PER_CHUNK length, we return the list of serialized items.
-		chunks := make([][bytesPerChunk]byte, 0, len(serializedItems))
+		chunks := make([][BytesPerChunk]byte, 0, len(serializedItems))
 		for _, c := range serializedItems {
 			chunks = append(chunks, bytesutil.ToBytes32(c))
 		}
@@ -75,12 +78,12 @@ func PackByChunk(serializedItems [][]byte) ([][bytesPerChunk]byte, error) {
 	// If all our serialized item slices are length zero, we
 	// exit early.
 	if len(orderedItems) == 0 {
-		return [][bytesPerChunk]byte{emptyChunk}, nil
+		return [][BytesPerChunk]byte{emptyChunk}, nil
 	}
 	numItems := len(orderedItems)
-	var chunks [][bytesPerChunk]byte
-	for i := 0; i < numItems; i += bytesPerChunk {
-		j := i + bytesPerChunk
+	var chunks [][BytesPerChunk]byte
+	for i := 0; i < numItems; i += BytesPerChunk {
+		j := i + BytesPerChunk
 		// We create our upper bound index of the chunk, if it is greater than numItems,
 		// we set it as numItems itself.
 		if j > numItems {
@@ -89,7 +92,7 @@ func PackByChunk(serializedItems [][]byte) ([][bytesPerChunk]byte, error) {
 		// We create chunks from the list of items based on the
 		// indices determined above.
 		// Right-pad the last chunk with zero bytes if it does not
-		// have length bytesPerChunk from the helper.
+		// have length BytesPerChunk from the helper.
 		// The ToBytes32 helper allocates a 32-byte array, before
 		// copying the ordered items in. This ensures that even if
 		// the last chunk is != 32 in length, we will right-pad it with

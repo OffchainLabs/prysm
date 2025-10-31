@@ -224,6 +224,8 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			if len(unseenIndices) > 0 {
+				dataColumnsRecoveredFromELTotal.Inc()
+
 				log.WithFields(logrus.Fields{
 					"root":          fmt.Sprintf("%#x", source.Root()),
 					"slot":          source.Slot(),
