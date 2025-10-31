@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/backfill"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/checkpointsync"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/db"
 	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/p2p"
@@ -26,6 +27,7 @@ func main() {
 }
 
 func init() {
+	prysmctlCommands = append(prysmctlCommands, backfill.Commands...)
 	prysmctlCommands = append(prysmctlCommands, checkpointsync.Commands...)
 	prysmctlCommands = append(prysmctlCommands, db.Commands...)
 	prysmctlCommands = append(prysmctlCommands, p2p.Commands...)

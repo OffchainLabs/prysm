@@ -8,6 +8,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/prysmctl",
     visibility = ["//visibility:private"],
     deps = [
+        "//cmd/prysmctl/backfill:go_default_library",
         "//cmd/prysmctl/checkpointsync:go_default_library",
         "//cmd/prysmctl/db:go_default_library",
         "//cmd/prysmctl/p2p:go_default_library",
