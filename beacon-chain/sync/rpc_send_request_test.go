@@ -889,9 +889,9 @@ func TestErrInvalidFetchedDataDistinction(t *testing.T) {
 
 func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
@@ -923,9 +923,9 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 
 	t.Run("too many columns in request", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.MaxRequestDataColumnSidecars = 0
-		params.OverrideBeaconConfig(beaconConfig)
+		cfg := params.BeaconConfig()
+		cfg.MaxRequestDataColumnSidecars = 0
+		params.OverrideBeaconConfig(cfg)
 
 		request := &ethpb.DataColumnSidecarsByRangeRequest{Count: 1, Columns: []uint64{1, 2, 3}}
 		_, err := SendDataColumnSidecarsByRangeRequest(DataColumnSidecarsParams{Ctx: t.Context()}, "", request)
@@ -1193,9 +1193,9 @@ func TestIsSidecarIndexRequested(t *testing.T) {
 
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
@@ -1223,9 +1223,9 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 
 	t.Run("too many columns in request", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.MaxRequestDataColumnSidecars = 4
-		params.OverrideBeaconConfig(beaconConfig)
+		cfg := params.BeaconConfig()
+		cfg.MaxRequestDataColumnSidecars = 4
+		params.OverrideBeaconConfig(cfg)
 
 		request := p2ptypes.DataColumnsByRootIdentifiers{
 			{Columns: []uint64{1, 2, 3}},

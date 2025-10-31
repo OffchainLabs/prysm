@@ -3302,7 +3302,6 @@ func Test_postBlockProcess_EventSending(t *testing.T) {
 	}
 }
 
-
 func setupLightClientTestRequirements(ctx context.Context, t *testing.T, s *Service, v int, options ...util.LightClientOption) (*util.TestLightClient, *postBlockProcessConfig) {
 	var l *util.TestLightClient
 	switch v {

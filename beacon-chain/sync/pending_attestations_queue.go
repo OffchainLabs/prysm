@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -382,10 +383,8 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 
 	// Skip if the attestation/aggregate from the same validator already exists in
 	// the pending queue.
-	for _, a := range s.blkRootToPendingAtts[root] {
-		if isEqual(a) {
-			return
-		}
+	if slices.ContainsFunc(s.blkRootToPendingAtts[root], isEqual) {
+		return
 	}
 
 	pendingAttCount.Inc()

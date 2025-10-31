@@ -219,6 +219,9 @@ func (s *Service) validateExecutionAndConsensus(
 	eg.Go(func() error {
 		var err error
 		postState, err = s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return invalidBlock{error: err, root: block.Root()}
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to validate consensus state transition function")
 		}

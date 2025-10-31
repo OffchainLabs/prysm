@@ -192,6 +192,13 @@ var (
 		},
 	)
 
+	dataColumnsRecoveredFromELTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "data_columns_recovered_from_el_total",
+			Help: "Count the number of times data columns have been recovered from the execution layer.",
+		},
+	)
+
 	// Data column sidecar validation, beacon metrics specs
 	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_data_column_sidecar_processing_requests_total",
@@ -279,6 +286,7 @@ func (s *Service) updateMetrics() {
 		topicPeerCount.WithLabelValues(formattedTopic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(formattedTopic))))
 	}
 
+	subscribedTopicPeerCount.Reset()
 	for _, topic := range s.cfg.p2p.PubSub().GetTopics() {
 		subscribedTopicPeerCount.WithLabelValues(topic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(topic))))
 	}

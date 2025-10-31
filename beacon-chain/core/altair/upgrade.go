@@ -12,6 +12,46 @@ import (
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 )
 
+// ConvertToAltair converts a Phase 0 beacon state to an Altair beacon state.
+func ConvertToAltair(state state.BeaconState) (state.BeaconState, error) {
+	epoch := time.CurrentEpoch(state)
+
+	numValidators := state.NumValidators()
+	s := &ethpb.BeaconStateAltair{
+		GenesisTime:           uint64(state.GenesisTime().Unix()),
+		GenesisValidatorsRoot: state.GenesisValidatorsRoot(),
+		Slot:                  state.Slot(),
+		Fork: &ethpb.Fork{
+			PreviousVersion: state.Fork().CurrentVersion,
+			CurrentVersion:  params.BeaconConfig().AltairForkVersion,
+			Epoch:           epoch,
+		},
+		LatestBlockHeader:           state.LatestBlockHeader(),
+		BlockRoots:                  state.BlockRoots(),
+		StateRoots:                  state.StateRoots(),
+		HistoricalRoots:             state.HistoricalRoots(),
+		Eth1Data:                    state.Eth1Data(),
+		Eth1DataVotes:               state.Eth1DataVotes(),
+		Eth1DepositIndex:            state.Eth1DepositIndex(),
+		Validators:                  state.Validators(),
+		Balances:                    state.Balances(),
+		RandaoMixes:                 state.RandaoMixes(),
+		Slashings:                   state.Slashings(),
+		PreviousEpochParticipation:  make([]byte, numValidators),
+		CurrentEpochParticipation:   make([]byte, numValidators),
+		JustificationBits:           state.JustificationBits(),
+		PreviousJustifiedCheckpoint: state.PreviousJustifiedCheckpoint(),
+		CurrentJustifiedCheckpoint:  state.CurrentJustifiedCheckpoint(),
+		FinalizedCheckpoint:         state.FinalizedCheckpoint(),
+		InactivityScores:            make([]uint64, numValidators),
+	}
+	newState, err := state_native.InitializeFromProtoUnsafeAltair(s)
+	if err != nil {
+		return nil, err
+	}
+	return newState, nil
+}
+
 // UpgradeToAltair updates input state to return the version Altair state.
 //
 // Spec code:
@@ -64,39 +104,7 @@ import (
 //	post.next_sync_committee = get_next_sync_committee(post)
 //	return post
 func UpgradeToAltair(ctx context.Context, state state.BeaconState) (state.BeaconState, error) {
-	epoch := time.CurrentEpoch(state)
-
-	numValidators := state.NumValidators()
-	s := &ethpb.BeaconStateAltair{
-		GenesisTime:           uint64(state.GenesisTime().Unix()),
-		GenesisValidatorsRoot: state.GenesisValidatorsRoot(),
-		Slot:                  state.Slot(),
-		Fork: &ethpb.Fork{
-			PreviousVersion: state.Fork().CurrentVersion,
-			CurrentVersion:  params.BeaconConfig().AltairForkVersion,
-			Epoch:           epoch,
-		},
-		LatestBlockHeader:           state.LatestBlockHeader(),
-		BlockRoots:                  state.BlockRoots(),
-		StateRoots:                  state.StateRoots(),
-		HistoricalRoots:             state.HistoricalRoots(),
-		Eth1Data:                    state.Eth1Data(),
-		Eth1DataVotes:               state.Eth1DataVotes(),
-		Eth1DepositIndex:            state.Eth1DepositIndex(),
-		Validators:                  state.Validators(),
-		Balances:                    state.Balances(),
-		RandaoMixes:                 state.RandaoMixes(),
-		Slashings:                   state.Slashings(),
-		PreviousEpochParticipation:  make([]byte, numValidators),
-		CurrentEpochParticipation:   make([]byte, numValidators),
-		JustificationBits:           state.JustificationBits(),
-		PreviousJustifiedCheckpoint: state.PreviousJustifiedCheckpoint(),
-		CurrentJustifiedCheckpoint:  state.CurrentJustifiedCheckpoint(),
-		FinalizedCheckpoint:         state.FinalizedCheckpoint(),
-		InactivityScores:            make([]uint64, numValidators),
-	}
-
-	newState, err := state_native.InitializeFromProtoUnsafeAltair(s)
+	newState, err := ConvertToAltair(state)
 	if err != nil {
 		return nil, err
 	}

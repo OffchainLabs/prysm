@@ -1303,9 +1303,24 @@
     - file: crypto/bls/bls.go
       search: func AggregatePublicKeys(
   spec: |
-    <spec fn="eth_aggregate_pubkeys" fork="altair" hash="977edbdb">
+    <spec fn="eth_aggregate_pubkeys" fork="altair" hash="bfb5ddd0">
     def eth_aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
-        return bls.AggregatePKs(pubkeys)
+        """
+        Return the aggregate public key for the public keys in ``pubkeys``.
+
+        Note: the ``+`` operation should be interpreted as elliptic curve point addition, which takes as input
+        elliptic curve points that must be decoded from the input ``BLSPubkey``s.
+        This implementation is for demonstrative purposes only and ignores encoding/decoding concerns.
+        Refer to the BLS signature draft standard for more information.
+        """
+        assert len(pubkeys) > 0
+        # Ensure that the given inputs are valid pubkeys
+        assert all(bls.KeyValidate(pubkey) for pubkey in pubkeys)
+
+        result = copy(pubkeys[0])
+        for pubkey in pubkeys[1:]:
+            result += pubkey
+        return result
     </spec>
 
 - name: eth_fast_aggregate_verify
@@ -4494,12 +4509,12 @@
     - file: beacon-chain/core/helpers/weak_subjectivity.go
       search: func IsWithinWeakSubjectivityPeriod(
   spec: |
-    <spec fn="is_within_weak_subjectivity_period" fork="phase0" hash="f8a94089">
+    <spec fn="is_within_weak_subjectivity_period" fork="phase0" hash="aef08e82">
     def is_within_weak_subjectivity_period(
         store: Store, ws_state: BeaconState, ws_checkpoint: Checkpoint
     ) -> bool:
         # Clients may choose to validate the input state against the input Weak Subjectivity Checkpoint
-        assert ws_state.latest_block_header.state_root == ws_checkpoint.root
+        assert get_block_root(ws_state, ws_checkpoint.epoch) == ws_checkpoint.root
         assert compute_epoch_at_slot(ws_state.slot) == ws_checkpoint.epoch
 
         ws_period = compute_weak_subjectivity_period(ws_state)
@@ -4511,12 +4526,12 @@
 - name: is_within_weak_subjectivity_period#electra
   sources: []
   spec: |
-    <spec fn="is_within_weak_subjectivity_period" fork="electra" hash="c89ae316">
+    <spec fn="is_within_weak_subjectivity_period" fork="electra" hash="d05d230d">
     def is_within_weak_subjectivity_period(
         store: Store, ws_state: BeaconState, ws_checkpoint: Checkpoint
     ) -> bool:
         # Clients may choose to validate the input state against the input Weak Subjectivity Checkpoint
-        assert ws_state.latest_block_header.state_root == ws_checkpoint.root
+        assert get_block_root(ws_state, ws_checkpoint.epoch) == ws_checkpoint.root
         assert compute_epoch_at_slot(ws_state.slot) == ws_checkpoint.epoch
 
         # [Modified in Electra]
@@ -7649,8 +7664,8 @@
 - name: upgrade_lc_bootstrap_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_bootstrap_to_capella" fork="capella" hash="2c8939e7">
-    def upgrade_lc_bootstrap_to_capella(pre: bellatrix.LightClientBootstrap) -> LightClientBootstrap:
+    <spec fn="upgrade_lc_bootstrap_to_capella" fork="capella" hash="d5f1203a">
+    def upgrade_lc_bootstrap_to_capella(pre: altair.LightClientBootstrap) -> LightClientBootstrap:
         return LightClientBootstrap(
             header=upgrade_lc_header_to_capella(pre.header),
             current_sync_committee=pre.current_sync_committee,
@@ -7687,9 +7702,9 @@
 - name: upgrade_lc_finality_update_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_finality_update_to_capella" fork="capella" hash="5315d1df">
+    <spec fn="upgrade_lc_finality_update_to_capella" fork="capella" hash="c314b172">
     def upgrade_lc_finality_update_to_capella(
-        pre: bellatrix.LightClientFinalityUpdate,
+        pre: altair.LightClientFinalityUpdate,
     ) -> LightClientFinalityUpdate:
         return LightClientFinalityUpdate(
             attested_header=upgrade_lc_header_to_capella(pre.attested_header),
@@ -7735,10 +7750,12 @@
 - name: upgrade_lc_header_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_header_to_capella" fork="capella" hash="9eaa5026">
-    def upgrade_lc_header_to_capella(pre: bellatrix.LightClientHeader) -> LightClientHeader:
+    <spec fn="upgrade_lc_header_to_capella" fork="capella" hash="9f7a832d">
+    def upgrade_lc_header_to_capella(pre: altair.LightClientHeader) -> LightClientHeader:
         return LightClientHeader(
             beacon=pre.beacon,
+            execution=ExecutionPayloadHeader(),
+            execution_branch=ExecutionBranch(),
         )
     </spec>
 
@@ -7789,9 +7806,9 @@
 - name: upgrade_lc_optimistic_update_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_optimistic_update_to_capella" fork="capella" hash="488c41c5">
+    <spec fn="upgrade_lc_optimistic_update_to_capella" fork="capella" hash="c4c29295">
     def upgrade_lc_optimistic_update_to_capella(
-        pre: bellatrix.LightClientOptimisticUpdate,
+        pre: altair.LightClientOptimisticUpdate,
     ) -> LightClientOptimisticUpdate:
         return LightClientOptimisticUpdate(
             attested_header=upgrade_lc_header_to_capella(pre.attested_header),
@@ -7831,8 +7848,8 @@
 - name: upgrade_lc_store_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_store_to_capella" fork="capella" hash="a25064df">
-    def upgrade_lc_store_to_capella(pre: bellatrix.LightClientStore) -> LightClientStore:
+    <spec fn="upgrade_lc_store_to_capella" fork="capella" hash="d02773ec">
+    def upgrade_lc_store_to_capella(pre: altair.LightClientStore) -> LightClientStore:
         if pre.best_valid_update is None:
             best_valid_update = None
         else:
@@ -7891,8 +7908,8 @@
 - name: upgrade_lc_update_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_update_to_capella" fork="capella" hash="e7dbaf33">
-    def upgrade_lc_update_to_capella(pre: bellatrix.LightClientUpdate) -> LightClientUpdate:
+    <spec fn="upgrade_lc_update_to_capella" fork="capella" hash="ba863d2f">
+    def upgrade_lc_update_to_capella(pre: altair.LightClientUpdate) -> LightClientUpdate:
         return LightClientUpdate(
             attested_header=upgrade_lc_header_to_capella(pre.attested_header),
             next_sync_committee=pre.next_sync_committee,
@@ -8539,7 +8556,7 @@
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnSidecar(
   spec: |
-    <spec fn="verify_data_column_sidecar" fork="fulu" hash="509c0986">
+    <spec fn="verify_data_column_sidecar" fork="fulu" hash="1517491f">
     def verify_data_column_sidecar(sidecar: DataColumnSidecar) -> bool:
         """
         Verify if the data column sidecar is valid.
@@ -8550,6 +8567,11 @@
 
         # A sidecar for zero blobs is invalid
         if len(sidecar.kzg_commitments) == 0:
+            return False
+
+        # Check that the sidecar respects the blob limit
+        epoch = compute_epoch_at_slot(sidecar.signed_block_header.message.slot)
+        if len(sidecar.kzg_commitments) > get_blob_parameters(epoch).max_blobs_per_block:
             return False
 
         # The column length must be equal to the number of commitments/proofs

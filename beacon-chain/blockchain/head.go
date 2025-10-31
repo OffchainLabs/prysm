@@ -346,13 +346,24 @@ func (s *Service) notifyNewHeadEvent(
 	if err != nil {
 		return errors.Wrap(err, "could not check if node is optimistically synced")
 	}
+
+	parentRoot, err := s.ParentRoot([32]byte(newHeadRoot))
+	if err != nil {
+		return errors.Wrap(err, "could not obtain parent root in forkchoice")
+	}
+	parentSlot, err := s.RecentBlockSlot(parentRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not obtain parent slot in forkchoice")
+	}
+	epochTransition := slots.ToEpoch(newHeadSlot) > slots.ToEpoch(parentSlot)
+
 	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 		Type: statefeed.NewHead,
 		Data: &ethpbv1.EventHead{
 			Slot:                      newHeadSlot,
 			Block:                     newHeadRoot,
 			State:                     newHeadStateRoot,
-			EpochTransition:           slots.IsEpochStart(newHeadSlot),
+			EpochTransition:           epochTransition,
 			PreviousDutyDependentRoot: previousDutyDependentRoot[:],
 			CurrentDutyDependentRoot:  currentDutyDependentRoot[:],
 			ExecutionOptimistic:       isOptimistic,

@@ -6,6 +6,7 @@ go_library(
         "client.go",
         "errors.go",
         "options.go",
+        "transport.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/api/client",
     visibility = ["//visibility:public"],
@@ -14,7 +15,13 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["client_test.go"],
+    srcs = [
+        "client_test.go",
+        "transport_test.go",
+    ],
     embed = [":go_default_library"],
-    deps = ["//testing/require:go_default_library"],
+    deps = [
+        "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
+    ],
 )

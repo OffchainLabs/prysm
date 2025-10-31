@@ -7,17 +7,17 @@ import (
 	"strings"
 )
 
-// sszInfo holds the all necessary data for analyzing SSZ data types.
-type sszInfo struct {
+// SszInfo holds the all necessary data for analyzing SSZ data types.
+type SszInfo struct {
 	// Type of the SSZ structure (Basic, Container, List, etc.).
 	sszType SSZType
 	// Type in Go. Need this for unmarshaling.
 	typ reflect.Type
+	// Original object being analyzed
+	source SSZObject
 
 	// isVariable is true if the struct contains any variable-size fields.
 	isVariable bool
-	// fixedSize is the total size of the struct's fixed part.
-	fixedSize uint64
 
 	// For Container types.
 	containerInfo *containerInfo
@@ -35,118 +35,110 @@ type sszInfo struct {
 	bitvectorInfo *bitvectorInfo
 }
 
-func (info *sszInfo) FixedSize() uint64 {
+func (info *SszInfo) Size() uint64 {
 	if info == nil {
 		return 0
-	}
-	return info.fixedSize
-}
-
-func (info *sszInfo) Size() uint64 {
-	if info == nil {
-		return 0
-	}
-
-	// Easy case: if the type is not variable, we can return the fixed size.
-	if !info.isVariable {
-		return info.fixedSize
 	}
 
 	switch info.sszType {
+	case Uint8:
+		return 1
+	case Uint16:
+		return 2
+	case Uint32:
+		return 4
+	case Uint64:
+		return 8
+	case Boolean:
+		return 1
+	case Container:
+		// Using existing API if the pointer is available.
+		if info.source != nil {
+			return uint64(info.source.SizeSSZ())
+		}
+
+		return 0
+	case Vector:
+		return info.vectorInfo.Size()
 	case List:
 		return info.listInfo.Size()
-
+	case Bitvector:
+		return info.bitvectorInfo.Size()
 	case Bitlist:
 		return info.bitlistInfo.Size()
-
-	case Container:
-		size := info.fixedSize
-		for _, fieldInfo := range info.containerInfo.fields {
-			if !fieldInfo.sszInfo.isVariable {
-				continue
-			}
-
-			// Include offset bytes inside nested lists.
-			if fieldInfo.sszInfo.sszType == List {
-				size += fieldInfo.sszInfo.listInfo.OffsetBytes()
-			}
-
-			size += fieldInfo.sszInfo.Size()
-		}
-		return size
 
 	default:
 		return 0
 	}
 }
 
-func (info *sszInfo) ContainerInfo() (*containerInfo, error) {
+func (info *SszInfo) ContainerInfo() (*containerInfo, error) {
 	if info == nil {
-		return nil, errors.New("sszInfo is nil")
+		return nil, errors.New("SszInfo is nil")
 	}
 
 	if info.sszType != Container {
-		return nil, fmt.Errorf("sszInfo is not a Container type, got %s", info.sszType)
+		return nil, fmt.Errorf("SszInfo is not a Container type, got %s", info.sszType)
 	}
 
 	if info.containerInfo == nil {
-		return nil, errors.New("sszInfo.containerInfo is nil")
+		return nil, errors.New("SszInfo.containerInfo is nil")
 	}
 
 	return info.containerInfo, nil
 }
 
-func (info *sszInfo) ListInfo() (*listInfo, error) {
+func (info *SszInfo) ListInfo() (*listInfo, error) {
 	if info == nil {
-		return nil, errors.New("sszInfo is nil")
+		return nil, errors.New("SszInfo is nil")
 	}
 
 	if info.sszType != List {
-		return nil, fmt.Errorf("sszInfo is not a List type, got %s", info.sszType)
+		return nil, fmt.Errorf("SszInfo is not a List type, got %s", info.sszType)
 	}
 
 	return info.listInfo, nil
 }
 
-func (info *sszInfo) VectorInfo() (*vectorInfo, error) {
+func (info *SszInfo) VectorInfo() (*vectorInfo, error) {
 	if info == nil {
-		return nil, errors.New("sszInfo is nil")
+		return nil, errors.New("SszInfo is nil")
 	}
 
 	if info.sszType != Vector {
-		return nil, fmt.Errorf("sszInfo is not a Vector type, got %s", info.sszType)
+		return nil, fmt.Errorf("SszInfo is not a Vector type, got %s", info.sszType)
 	}
 
 	return info.vectorInfo, nil
 }
 
-func (info *sszInfo) BitlistInfo() (*bitlistInfo, error) {
+func (info *SszInfo) BitlistInfo() (*bitlistInfo, error) {
 	if info == nil {
-		return nil, errors.New("sszInfo is nil")
+		return nil, errors.New("SszInfo is nil")
 	}
 
 	if info.sszType != Bitlist {
-		return nil, fmt.Errorf("sszInfo is not a Bitlist type, got %s", info.sszType)
+		return nil, fmt.Errorf("SszInfo is not a Bitlist type, got %s", info.sszType)
 	}
 
 	return info.bitlistInfo, nil
 }
 
-func (info *sszInfo) BitvectorInfo() (*bitvectorInfo, error) {
+func (info *SszInfo) BitvectorInfo() (*bitvectorInfo, error) {
 	if info == nil {
-		return nil, errors.New("sszInfo is nil")
+		return nil, errors.New("SszInfo is nil")
 	}
 
 	if info.sszType != Bitvector {
-		return nil, fmt.Errorf("sszInfo is not a Bitvector type, got %s", info.sszType)
+		return nil, fmt.Errorf("SszInfo is not a Bitvector type, got %s", info.sszType)
 	}
 
 	return info.bitvectorInfo, nil
 }
 
-// String implements the Stringer interface for sszInfo.
+// String implements the Stringer interface for SszInfo.
 // This follows the notation used in the consensus specs.
-func (info *sszInfo) String() string {
+func (info *SszInfo) String() string {
 	if info == nil {
 		return "<nil>"
 	}
@@ -171,8 +163,8 @@ func (info *sszInfo) String() string {
 	}
 }
 
-// Print returns a string representation of the sszInfo, which is useful for debugging.
-func (info *sszInfo) Print() string {
+// Print returns a string representation of the SszInfo, which is useful for debugging.
+func (info *SszInfo) Print() string {
 	if info == nil {
 		return "<nil>"
 	}
@@ -181,7 +173,7 @@ func (info *sszInfo) Print() string {
 	return builder.String()
 }
 
-func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
+func printRecursive(info *SszInfo, builder *strings.Builder, prefix string) {
 	var sizeDesc string
 	if info.isVariable {
 		sizeDesc = "Variable-size"
@@ -191,7 +183,7 @@ func printRecursive(info *sszInfo, builder *strings.Builder, prefix string) {
 
 	switch info.sszType {
 	case Container:
-		builder.WriteString(fmt.Sprintf("%s (%s / fixed size: %d, total size: %d)\n", info, sizeDesc, info.FixedSize(), info.Size()))
+		builder.WriteString(fmt.Sprintf("%s (%s / size: %d)\n", info, sizeDesc, info.Size()))
 
 		for i, key := range info.containerInfo.order {
 			connector := "├─"
