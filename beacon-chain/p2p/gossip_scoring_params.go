@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net"
 	"reflect"
@@ -112,19 +113,19 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 	case strings.Contains(topic, GossipAggregateAndProofMessage):
 		activeValidators, err := s.retrieveActiveValidators()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to compute active validator count for topic %s: %w", GossipAggregateAndProofMessage, err)
 		}
 		return defaultAggregateTopicParams(activeValidators), nil
 	case strings.Contains(topic, GossipAttestationMessage):
 		activeValidators, err := s.retrieveActiveValidators()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to compute active validator count for topic %s: %w", GossipAttestationMessage, err)
 		}
 		return defaultAggregateSubnetTopicParams(activeValidators), nil
 	case strings.Contains(topic, GossipSyncCommitteeMessage):
 		activeValidators, err := s.retrieveActiveValidators()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to compute active validator count for topic %s: %w", GossipSyncCommitteeMessage, err)
 		}
 		return defaultSyncSubnetTopicParams(activeValidators), nil
 	case strings.Contains(topic, GossipContributionAndProofMessage):
