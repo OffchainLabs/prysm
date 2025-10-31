@@ -1,6 +1,16 @@
 # Gossip validation
 
-**Note:** This design doc currently details some topics of gossip validation. Additional topics about gossip validation will be added in the future. When the document is complete we will remove this note. 
+**Note:** This design doc currently details some topics of gossip validation. Additional topics about gossip validation will be added in the future. When the document is complete we will remove this note.
+
+## Table of Contents
+
+- [State usage in gossip validation](#state-usage-in-gossip-validation)
+  - [Beacon Blocks](#beacon-blocks)
+  - [Head state is often good enough](#head-state-is-often-good-enough)
+  - [Attestations](#attestations)
+  - [Head is good again](#head-is-good-again)
+  - [Other verifications and caches](#other-verifications-and-caches)
+  - [Dropping expensive computations](#dropping-expensive-computations)
 
 ## State usage in gossip validation
 
@@ -78,11 +88,45 @@ Since computing active validator indices, proposer indices, beacon committees, e
 
 In addition, forkchoice keeps an O(1) cache for each block, it gives the corresponding target checkpoint. So a general algorithm to perform verifications for arriving gossip elements is as follows:
 
-1. Does the gossiped element belong to the head state or is it a descendant of the head state? If yes, use the head state.
-2. If the parent of the gossiped element is not head, then is the target the same as the head's target for the current epoch? If yes, use the head state. 
-3. If the targets differ, then get the gossiped element target state. This can be done as follows:
-3.a. If the parent is in the same epoch, then use forkchoice to get the parent's target; this equals the gossiped element's target. Then use the checkpoint state cache to get the state.
-3.b. If the parent is in a different epoch, then take the parent state and advance to the current epoch; that is the gossiped element target state.
+```
+                    Gossiped Element Arrives
+                              |
+                              v
+        ┌──────────────────────────────────────────────────┐
+        │ Is element part of head state or descendant?     │
+        └──────────────────────────────────────────────────┘
+                       /            \
+                     YES             NO
+                      |               |
+                      v               v
+              ┌──────────────────┐  ┌──────────────────────────────────────┐
+              │ Use Head State   │  │ Is target same as head's target for  │
+              │ (possibly        │  │ current epoch?                       │
+              │ advanced to same │  └──────────────────────────────────────┘
+              │ epoch as element)│           /            \
+              └──────────────────┘         YES             NO
+                                            |               |
+                                            v               v
+                                    ┌──────────────┐  ┌────────────────────┐
+                                    │ Use Head     │  │ Targets differ:    │
+                                    │ State        │  │ Get target state   │
+                                    └──────────────┘  └────────────────────┘
+                                                               |
+                                                               v
+                                            ┌──────────────────────────────┐
+                                            │ Is parent in same epoch?     │
+                                            └──────────────────────────────┘
+                                                   /            \
+                                                 YES             NO
+                                                  |               |
+                                                  v               v
+                                    ┌──────────────────────────┐ ┌────────────────────────┐
+                                    │ Use forkchoice to get    │ │ Take parent state and  │
+                                    │ parent's target (equals  │ │ advance to current     │
+                                    │ gossiped element target).│ │ epoch (= target state).│
+                                    │ Use checkpoint cache.    │ │                        │
+                                    └──────────────────────────┘ └────────────────────────┘
+```
 
 ### Dropping expensive computations
 
