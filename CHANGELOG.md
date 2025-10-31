@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v6.1.4](https://github.com/prysmaticlabs/prysm/compare/v6.1.3...v6.1.4) - 2025-10-24
+
+This release includes a bug fix affecting block proposals in rare cases, along with an important update for Windows users running post-Fusaka fork.
+
+### Added
+
+- SSZ-QL: Add endpoints for `BeaconState`/`BeaconBlock`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15888)
+- Add native state diff type and marshalling functions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15250)
+- Update the earliest available slot after pruning operations in  beacon chain database pruner. This ensures the P2P layer accurately knows which historical data is available after pruning, preventing nodes from advertising or attempting to serve data that has been pruned. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15694)
+
+### Fixed
+
+- Correctly advertise (in ENR and beacon API) attestation subnets when using `--subscribe-all-subnets`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15880)
+- `randomPeer`: Return if the context is cancelled when waiting for peers. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15876)
+- Improve error message when the byte count read from disk when reading a data column sidecars is lower than expected. (Mostly, because the file is truncated.). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15881)
+- Delete the genesis state file when --clear-db / --force-clear-db is specified. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15883)
+- Fix sync committee subscription to use subnet indices instead of committee indices. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15885)
+- Fixed metadata extraction on Windows by correctly splitting file paths. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15899)
+- `VerifyDataColumnsSidecarKZGProofs`: Check if sizes match. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15892)
+- Fix recoverStateSummary to persist state summaries in stateSummaryBucket instead of stateBucket (#15896). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15896)
+- `updateCustodyInfoInDB`: Use `NumberOfCustodyGroups` instead of `NumberOfColumns`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15908)
+- Sync committee uses correct state to calculate position. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15905)
+
 ## [v6.1.3](https://github.com/prysmaticlabs/prysm/compare/v6.1.2...v6.1.3) - 2025-10-20
 
 This release has several important beacon API and p2p fixes.

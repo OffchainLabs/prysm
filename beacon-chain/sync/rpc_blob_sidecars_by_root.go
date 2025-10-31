@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -58,6 +59,17 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
+	// Extract all needed roots.
+	roots := make([][fieldparams.RootLength]byte, 0, len(blobIdents))
+	for _, ident := range blobIdents {
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		roots = append(roots, root)
+	}
+
+	// Filter all available roots in block storage.
+	availableRoots := s.cfg.beaconDB.AvailableBlocks(ctx, roots)
+
+	// Serve each requested blob sidecar.
 	for i := range blobIdents {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
@@ -69,7 +81,15 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 			<-ticker.C
 		}
 		s.rateLimiter.add(stream, 1)
+
 		root, idx := bytesutil.ToBytes32(blobIdents[i].BlockRoot), blobIdents[i].Index
+
+		// Do not serve a blob sidecar if the corresponding block is not available.
+		if !availableRoots[root] {
+			log.Trace("Peer requested blob sidecar by root but corresponding block not found in db")
+			continue
+		}
+
 		sc, err := s.cfg.blobStorage.Get(root, idx)
 		if err != nil {
 			log := log.WithFields(logrus.Fields{

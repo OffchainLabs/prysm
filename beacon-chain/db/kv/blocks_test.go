@@ -656,6 +656,44 @@ func TestStore_BlocksCRUD_NoCache(t *testing.T) {
 	}
 }
 
+func TestAvailableBlocks(t *testing.T) {
+	ctx := t.Context()
+	db := setupDB(t)
+
+	b0, b1, b2 := util.NewBeaconBlock(), util.NewBeaconBlock(), util.NewBeaconBlock()
+	b0.Block.Slot, b1.Block.Slot, b2.Block.Slot = 10, 20, 30
+
+	sb0, err := blocks.NewSignedBeaconBlock(b0)
+	require.NoError(t, err)
+	r0, err := b0.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Save b0 but remove it from cache.
+	err = db.SaveBlock(ctx, sb0)
+	require.NoError(t, err)
+	db.blockCache.Del(string(r0[:]))
+
+	// b1 is not saved at all.
+	r1, err := b1.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Save b2 in cache and DB.
+	sb2, err := blocks.NewSignedBeaconBlock(b2)
+	require.NoError(t, err)
+	r2, err := b2.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, sb2))
+	require.NoError(t, err)
+
+	expected := map[[32]byte]bool{r0: true, r2: true}
+	actual := db.AvailableBlocks(ctx, [][32]byte{r0, r1, r2})
+
+	require.Equal(t, len(expected), len(actual))
+	for i := range expected {
+		require.Equal(t, true, actual[i])
+	}
+}
+
 func TestStore_Blocks_FiltersCorrectly(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
