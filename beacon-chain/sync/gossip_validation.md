@@ -43,7 +43,7 @@ How can we validate that the proposer index was indeed supposed to propose durin
 
 So when is the head state good enough to validate the proposer index in the above case? The situation is slightly different pre-Fulu than post-Fulu with the proposer lookahead, but essentially what we need to verify, is that there couldn't have been different shufflings when considering the post-state of `Y` and the post-state of `D` when advanced to the current slot.
 
-Let `S = 32 E + k` be `Z`'s slot, with `0 <= k < 32` so that `E` is `Z`'s epoch. The proposer shuffling for `Z` was determined at slot `32 (E - 1)`. Let `X` be the latest ancestor of `Z` with slot less or equal to `32 (E - 1)`. If `X` is an ancestor of `C` or `C` itself, then the shuffling on the `Z` branch will be the same as on the `Y` branch for slot `S`. This for example is forced to happen if all `Z`, `Y` and `D` are in the same epoch `E`.
+Let `S` be `Z`'s slot and `E` be its epoch. The proposer shuffling for `Z` was determined at slot `32 (E - 1)`. Let `X` be the latest ancestor of `Z` with slot less or equal to `32 (E - 1)`. If `X` is an ancestor of `C` or `C` itself, then the shuffling on the `Z` branch will be the same as on the `Y` branch for slot `S`. This for example is forced to happen if all `Z`, `Y` and `D` are in the same epoch `E`.
 
 This takes care of the shuffling. However, the actual computation for the proposer index requires also the active validator indices, and this slice is determined at the latest epoch transition into `Z`'s epoch. 
 
