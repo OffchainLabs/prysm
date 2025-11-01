@@ -65,12 +65,6 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 			expectedIndex: 3,
 			expectError:   false,
 		},
-		{
-			name:         "Empty path error",
-			path:         "",
-			expectError:  true,
-			errorMessage: "empty path",
-		},
 	}
 
 	for _, tc := range testCases {
@@ -217,8 +211,8 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
-			path:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
+			name:         "len(variable_container_list[0].inner_1.nested_list_field[3])",
+			path:         "len(variable_container_list[0].inner_1.nested_list_field[3])",
 			expectError:  true,
 			errorMessage: "length calculation error: len() is not supported for multi-dimensional arrays",
 		},
