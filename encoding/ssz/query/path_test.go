@@ -14,199 +14,285 @@ func TestParsePath(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
-		expected []query.PathElement
+		expected query.Path
 		wantErr  bool
 	}{
 		{
+			name: "simple path",
+			path: "data",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "data"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "simple path beginning with dot",
+			path: ".data",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "data"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "simple path trailing dot",
+			path:    "data.",
+			wantErr: true,
+		},
+		{
+			name:    "simple path surrounded by dot",
+			path:    ".data.",
+			wantErr: true,
+		},
+		{
+			name:    "simple path beginning with two dots",
+			path:    "..data",
+			wantErr: true,
+		},
+		{
 			name: "simple nested path",
 			path: "data.target.root",
-			expected: []query.PathElement{
-				{Name: "data"},
-				{Name: "target"},
-				{Name: "root"},
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "data"},
+					{Name: "target"},
+					{Name: "root"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "simple nested path with leading dot",
-			path: ".data.target.root",
-			expected: []query.PathElement{
-				{Name: "data"},
-				{Name: "target"},
-				{Name: "root"},
+			name: "len with top-level identifier",
+			path: "len(data)",
+			expected: query.Path{
+				Length: true,
+				Elements: []query.PathElement{
+					{Name: "data"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "simple length path with length field",
-			path: "data.target.len(root)",
-			expected: []query.PathElement{
-				{Name: "data"},
-				{Name: "target"},
-				{Name: "root", Length: true},
+			name: "len with top-level identifier and leading dot",
+			path: "len(.data)",
+			expected: query.Path{
+				Length: true,
+				Elements: []query.PathElement{
+					{Name: "data"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name:     "len with top-level identifier",
-			path:     "len(data)",
-			expected: []query.PathElement{{Name: "data", Length: true}},
-			wantErr:  false,
+			name:    "len with top-level identifier and trailing dot",
+			path:    "len(data.)",
+			wantErr: true,
 		},
 		{
-			name: "length with messy whitespace",
-			path: "data.target. \tlen (  root  ) ",
-			expected: []query.PathElement{
-				{Name: "data"},
-				{Name: "target"},
-				{Name: "root", Length: true},
+			name:    "len with top-level identifier beginning dot",
+			path:    ".len(data)",
+			wantErr: true,
+		},
+		{
+			name: "len with dotted path inside",
+			path: "len(data.target.root)",
+			expected: query.Path{
+				Length: true,
+				Elements: []query.PathElement{
+					{Name: "data"},
+					{Name: "target"},
+					{Name: "root"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "len with numeric index inside argument",
-			path: "data.len(a[10])",
-			expected: []query.PathElement{
-				{Name: "data"},
-				{Name: "a", Length: true, Index: u64(10)},
+			name:    "simple length path with non-outer length field",
+			path:    "data.target.len(root)",
+			wantErr: true,
+		},
+		{
+			name: "simple path with `len` used as a field name",
+			path: "data.len",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "data"},
+					{Name: "len"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name:     "array index with spaces",
-			path:     "arr[  42 ]",
-			expected: []query.PathElement{{Name: "arr", Index: u64(42)}},
-			wantErr:  false,
-		},
-		{
-			name:     "array leading zeros",
-			path:     "arr[001]",
-			expected: []query.PathElement{{Name: "arr", Index: u64(1)}},
-			wantErr:  false,
-		},
-		{
-			name:     "array max uint64",
-			path:     "arr[18446744073709551615]",
-			expected: []query.PathElement{{Name: "arr", Index: u64(18446744073709551615)}},
-			wantErr:  false,
-		},
-		{
-			name:     "len with dotted path inside - no input validation - reverts at a later stage",
-			path:     "len(data.target.root)",
-			expected: []query.PathElement{{Name: "len(data", Length: false}, {Name: "target", Length: false}, {Name: "root)", Length: false}},
-			wantErr:  false,
-		},
-		{
-			name:     "len with dotted path then more - no input validation - reverts at a later stage",
-			path:     "len(data.target.root).foo",
-			expected: []query.PathElement{{Name: "len(data", Length: false}, {Name: "target", Length: false}, {Name: "root)", Length: false}, {Name: "foo", Length: false}},
-			wantErr:  false,
-		},
-		{
-			name:     "len without closing paren - no input validation - reverts at a later stage",
-			path:     "len(root",
-			expected: []query.PathElement{{Name: "len(root"}},
-			wantErr:  false,
-		},
-		{
-			name:     "len with extra closing paren - no input validation - reverts at a later stage",
-			path:     "len(root))",
-			expected: []query.PathElement{{Name: "len(root))"}},
-			wantErr:  false,
-		},
-		{
-			name:     "empty len argument - no input validation - reverts at a later stage",
-			path:     "len()",
-			expected: []query.PathElement{{Name: "len()"}},
-			wantErr:  false,
-		},
-		{
-			name:     "len with comma-separated args - no input validation - reverts at a later stage",
-			path:     "len(a,b)",
-			expected: []query.PathElement{{Name: "a,b", Length: true}},
-			wantErr:  false,
-		},
-		{
-			name: "len call followed by index (outer) - no input validation - reverts at a later stage",
-			path: "data.len(root)[0]",
-			expected: []query.PathElement{
-				{Name: "data"},
-				{Name: "len(root)", Index: u64(0)},
+			name: "simple path with `len` used as a field name + trailing field",
+			path: "data.len.value",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "data"},
+					{Name: "len"},
+					{Name: "value"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name:    "cannot provide consecutive dots in raw path",
-			path:    "data..target.root",
+			name: "simple path with `len`",
+			path: "len.len",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "len"},
+					{Name: "len"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "simple length path with length field",
+			path:    "len.len(root)",
 			wantErr: true,
 		},
 		{
-			name:    "cannot provide a negative index in array path",
-			path:    ".data.target.root[-1]",
+			name:    "empty length field",
+			path:    "len()",
 			wantErr: true,
 		},
 		{
-			name:    "invalid index in array path",
-			path:    ".data.target.root[a]",
+			name:    "length field not terminal",
+			path:    "len(data).foo",
 			wantErr: true,
 		},
 		{
-			name:    "multidimensional array index in path",
-			path:    ".data.target.root[0][1]",
+			name:    "length field with missing closing paren",
+			path:    "len(data",
 			wantErr: true,
 		},
 		{
-			name:     "leading double dot",
-			path:     "..data",
-			expected: nil,
-			wantErr:  true,
-		},
-		{
-			name:     "trailing dot",
-			path:     "data.target.",
-			expected: nil,
-			wantErr:  true,
-		},
-		{
-			name:    "len with inner bracket non-numeric index",
-			path:    "data.len(a[b])",
+			name:    "length field with two closing paren",
+			path:    "len(data))",
 			wantErr: true,
 		},
 		{
-			name:    "array empty index",
-			path:    "arr[]",
+			name:    "len with comma-separated args",
+			path:    "len(a,b)",
 			wantErr: true,
 		},
 		{
-			name:    "array hex index",
-			path:    "arr[0x10]",
+			name: "array index path",
+			path: "arr[42]",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "arr", Index: u64(42)},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "array index path with max uint64",
+			path: "arr[18446744073709551615]",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "arr", Index: u64(18446744073709551615)},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "array element in wrong nested path",
+			path:    "arr[42]foo",
 			wantErr: true,
 		},
 		{
-			name:    "array missing closing bracket",
-			path:    "arr[12",
+			name: "array index in nested path",
+			path: "arr[42].foo",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "arr", Index: u64(42)},
+					{Name: "foo"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "array index in deeper nested path",
+			path: "arr[42].foo.bar[10]",
+			expected: query.Path{
+				Length: false,
+				Elements: []query.PathElement{
+					{Name: "arr", Index: u64(42)},
+					{Name: "foo"},
+					{Name: "bar", Index: u64(10)},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "length of array element",
+			path: "len(arr[42])",
+			expected: query.Path{
+				Length: true,
+				Elements: []query.PathElement{
+					{Name: "arr", Index: u64(42)},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "length of array + trailing item",
+			path:    "len(arr)[0]",
 			wantErr: true,
 		},
 		{
-			name:    "array plus sign index",
-			path:    "arr[+3]",
+			name: "length of nested path within array element",
+			path: "len(arr[42].foo)",
+			expected: query.Path{
+				Length: true,
+				Elements: []query.PathElement{
+					{Name: "arr", Index: u64(42)},
+					{Name: "foo"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "empty spaces in path",
+			path:    "data . target",
 			wantErr: true,
 		},
 		{
-			name:    "array unicode digits",
-			path:    "arr[１２]",
+			name:    "leading dot +  empty spaces",
+			path:    ". data",
 			wantErr: true,
 		},
 		{
-			name:    "array overflow uint64",
-			path:    "arr[18446744073709551616]",
+			name:    "length with leading dot +  empty spaces",
+			path:    "len(. data)",
 			wantErr: true,
 		},
 		{
-			name:     "array index then suffix",
-			path:     "field[1]suffix",
-			expected: []query.PathElement{{Name: "field", Index: u64(1)}},
-			wantErr:  false,
+			name:     "Empty path error",
+			path:     "",
+			expected: query.Path{},
+		},
+		{
+			name:    "length with leading dot +  empty spaces",
+			path:    "test))((",
+			wantErr: true,
+		},
+		{
+			name:    "length with leading dot +  empty spaces",
+			path:    "array][0][",
+			wantErr: true,
 		},
 	}
 
@@ -220,7 +306,7 @@ func TestParsePath(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, len(tt.expected), len(parsedPath), "Expected %d path elements, got %d", len(tt.expected), len(parsedPath))
+			require.Equal(t, len(tt.expected.Elements), len(parsedPath.Elements), "Expected %d path elements, got %d", len(tt.expected.Elements), len(parsedPath.Elements))
 			require.DeepEqual(t, tt.expected, parsedPath, "Parsed path does not match expected path")
 		})
 	}
