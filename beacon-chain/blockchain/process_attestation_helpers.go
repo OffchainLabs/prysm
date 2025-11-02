@@ -16,6 +16,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // The caller of this function must have a lock on forkchoice.
@@ -32,6 +33,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		if err != nil {
 			return nil
 		}
+		log.Info("Got head state read only")
 		return st
 	}
 	slot, err := slots.EpochStart(c.Epoch)
@@ -48,6 +50,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		return nil
 	}
 	if cachedState != nil && !cachedState.IsNil() {
+		log.Info("Got cached state from check point")
 		return cachedState
 	}
 	st, err := s.HeadState(ctx)
@@ -61,6 +64,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err := s.checkpointStateCache.AddCheckpointState(c, st); err != nil {
 		log.WithError(err).Error("Could not save checkpoint state to cache")
 	}
+	log.Info("Got head state and processed head state to slot ", slot)
 	return st
 }
 
@@ -82,6 +86,7 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 		return nil, errors.Wrap(err, "could not get cached checkpoint state")
 	}
 	if cachedState != nil && !cachedState.IsNil() {
+		log.Info("Got state (non canonical) check point cache")
 		return cachedState, nil
 	}
 	// Try the next slot cache for the early epoch calls, this should mostly have been covered already
@@ -101,6 +106,7 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 		if err := s.checkpointStateCache.AddCheckpointState(c, cachedState); err != nil {
 			return nil, errors.Wrap(err, "could not save checkpoint state to cache")
 		}
+		log.Info("Got state next slot cache and processed to slot ", slot)
 		return cachedState, nil
 	}
 
@@ -135,6 +141,9 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 	if err := s.checkpointStateCache.AddCheckpointState(c, baseState); err != nil {
 		return nil, errors.Wrap(err, "could not save checkpoint state to cache")
 	}
+
+	log.Info("Got state state gen by root and processed to slot ", slot)
+
 	return baseState, nil
 }
 
