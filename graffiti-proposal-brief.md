@@ -161,26 +161,26 @@ Shows all components (new + edited) and their interactions:
 │  └─────────────────────────────────────────────────┘          │
 │                                                               │
 │  ┌─────────────────────────────────────────────────┐          │
-│  │  Background Refresh Goroutine [NEW]             │          │
-│  │  - Ticker: Every 2 epochs (~13 min)             │          │
-│  │  - Calls: cache.Get() to pre-warm              │ ← ─ ─ ┐   │
-│  │  - Ensures cache always fresh for block prod    │      │   │
-│  └─────────────────────────────────────────────────┘      │   │
-│                                                           │   │
-│  ┌─────────────────────────────────────────────────┐      │   │
-│  │  Config Params [EDITED]                         │      │   │
-│  │  - EngineVersionCacheMaxAge = 6 epochs          │      │   │
-│  │  - EngineVersionRefreshInterval = 2 epochs      │      │   │
-│  └─────────────────────────────────────────────────┘      │   │
-│                                                           │   │
-└─────────────────────────┬─────────────────────────────────┘   │
-                          │                                     │
-                          │ JSON-RPC                            │
-                          │ engine_getClientVersionV1           │
-                          ↓                                     │
-                 ┌────────────────┐                             │
-                 │ Execution      │                             │
-                 │ Client (Geth)  │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ - ─ ┘
+│  │  Background Refresh Goroutine [NEW]             │ ┐        │
+│  │  - Ticker: Every 2 epochs (~13 min)             │ │        │
+│  │  - Calls: cache.Get() to pre-warm               │ │ Async  │
+│  │  - Ensures cache always fresh for block prod    │ │ Refresh│
+│  └─────────────────────────────────────────────────┘ │        │
+│                                                      ↓        │
+│  ┌─────────────────────────────────────────────────┐          │
+│  │  Config Params [EDITED]                         │          │
+│  │  - EngineVersionCacheMaxAge = 6 epochs          │          │
+│  │  - EngineVersionRefreshInterval = 2 epochs      │          │
+│  └─────────────────────────────────────────────────┘          │
+│                                                               │
+└─────────────────────────┬─────────────────────────────────────┘
+                          │
+                          │ JSON-RPC
+                          │ engine_getClientVersionV1
+                          ↓
+                 ┌────────────────┐
+                 │ Execution      │ ← Background refresh periodically
+                 │ Client (Geth)  │   fetches version via same path
                  └────────────────┘
                    Returns: {"code":"GE", "commit":"0x168d..."}
 ```
@@ -217,42 +217,7 @@ Shows all components (new + edited) and their interactions:
 - ✅ **No runtime git operations** (works in containers, uses build-time ldflags)
 - ✅ **Best-effort Engine API** (5s timeout, graceful fallback if unavailable)
 
-## Performance
-
-| Metric | Impact |
-|--------|--------|
-| Block production latency | **+0ms** (cache-warmed reads only) |
-| Memory | <1KB |
-| Network | ~1 RPC call per 13 minutes |
-| CPU | Negligible |
-
-**How**: Background goroutine pre-warms cache every 2 epochs. Block production just reads from cache (synchronous, instant).
-
-## Backward Compatibility
-
-✅ **100% Backward Compatible**
-- Existing user graffiti continues to work unchanged
-- No breaking changes to APIs, configs, or flags
-- New behavior only when user hasn't set graffiti
-
-## Risks & Mitigations
-
-| Risk | Mitigation |
-|------|------------|
-| EL doesn't support API | Fall back to default graffiti (same as current) |
-| Multiplexer (multiple ELs) | Detect >1 version, use default (can't attribute) |
-| Malformed EL response | Input validation, fall back on error |
-| Cache poisoning | Low risk (authenticated EL connection) |
-
-## Implementation
-
-**Scope**: ~1,500 lines of code
-- 8 new files (types, cache, service, tests)
-- 10 modified files (integration points)
-
-**Timeline**: 15-20 days (1 developer)
-
-**Files Changed**:
+**Files to be Changed**:
 ```
 NEW:
 - beacon-chain/execution/types/execution_data.go
@@ -268,19 +233,7 @@ MODIFIED:
 - config/params/config.go (cache TTL)
 ```
 
-## Alternatives Considered
-
-| Alternative | Why Rejected |
-|-------------|--------------|
-| Synchronous RPC during block production | ❌ Adds 50-100ms latency (unacceptable) |
-| Append to user graffiti | ❌ Violates user expectations |
-| Separate block field | ❌ Requires consensus change (out of scope) |
-| VC-side implementation | ❌ Breaks process boundary, fails in split deployments |
-
 ## Open Questions
 
 1. **Cache timing**: Uses mainnet values (6 epochs, 2 epochs) for all networks. Add env var overrides for testing?
-2. **Unknown client codes**: Log warning but use them (forward compatibility)?
-3. **Missing EL commit**: Use "0000" placeholder or fall back to default?
-
-**Recommendations**: (1) Hidden env vars for testing, (2) Log + use, (3) Placeholder "0000"
+2. **Missing EL commit**: Use "0000" placeholder or fall back to default?
