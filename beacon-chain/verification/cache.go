@@ -3,7 +3,6 @@ package verification
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -52,7 +51,7 @@ type signatureData struct {
 }
 
 func (d signatureData) concat() string {
-	return string(d.Root[:]) + string(d.Parent[:]) + string(d.Signature[:]) + strconv.Itoa(int(d.Proposer)) + strconv.Itoa(int(d.Slot))
+	return string(d.Root[:]) + string(d.Signature[:])
 }
 
 func (d signatureData) logFields() logrus.Fields {
