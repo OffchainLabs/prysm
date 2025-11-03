@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -14,7 +15,6 @@ import (
 	aggtesting "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/testing"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 

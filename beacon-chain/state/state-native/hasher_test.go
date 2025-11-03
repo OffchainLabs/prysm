@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -13,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestComputeFieldRootsWithHasher_Phase0(t *testing.T) {

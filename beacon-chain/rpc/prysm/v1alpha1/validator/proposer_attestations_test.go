@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
@@ -21,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestProposer_ProposerAtts_committeeAwareSort(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
@@ -16,7 +17,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // FillRootsNaturalOpt is meant to be used as an option when calling NewBeaconState.

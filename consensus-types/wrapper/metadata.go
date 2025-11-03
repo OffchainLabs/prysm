@@ -1,10 +1,10 @@
 package wrapper
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -71,7 +71,7 @@ message BeaconState {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
@@ -84,7 +84,7 @@ message PendingAttestation {
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "2048",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+        "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
   AttestationData data = 2;
   // The difference of when attestation gets created and get included on chain.
@@ -236,7 +236,7 @@ message BeaconStateAltair {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
@@ -317,7 +317,7 @@ message BeaconStateBellatrix {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
@@ -390,7 +390,7 @@ message BeaconStateCapella {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
@@ -472,7 +472,7 @@ message BeaconStateDeneb {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
@@ -554,7 +554,7 @@ message BeaconStateElectra {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;
@@ -665,7 +665,7 @@ message BeaconStateFulu {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;

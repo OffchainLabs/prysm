@@ -10,9 +10,9 @@ import (
 	reflect "reflect"
 	sync "sync"
 
+	github_com_prysmaticlabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
 	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
-	github_com_prysmaticlabs_go_bitfield "github.com/prysmaticlabs/go-bitfield"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -210,7 +210,7 @@ type SyncCommitteeContribution struct {
 	Slot              github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
 	BlockRoot         []byte                                                           `protobuf:"bytes,2,opt,name=block_root,json=blockRoot,proto3" json:"block_root,omitempty" ssz-size:"32"`
 	SubcommitteeIndex uint64                                                           `protobuf:"varint,3,opt,name=subcommittee_index,json=subcommitteeIndex,proto3" json:"subcommittee_index,omitempty"`
-	AggregationBits   github_com_prysmaticlabs_go_bitfield.Bitvector128                `protobuf:"bytes,4,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector128" ssz-size:"16"`
+	AggregationBits   github_com_prysmaticlabs_go_bitfield.Bitvector128                `protobuf:"bytes,4,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector128" ssz-size:"16"`
 	Signature         []byte                                                           `protobuf:"bytes,5,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache

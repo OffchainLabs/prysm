@@ -3,6 +3,7 @@ package altair_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
@@ -12,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestTranslateParticipation(t *testing.T) {

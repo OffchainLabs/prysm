@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
@@ -26,7 +27,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func setupValidProposerSlashing(t *testing.T) (*ethpb.ProposerSlashing, state.BeaconState) {

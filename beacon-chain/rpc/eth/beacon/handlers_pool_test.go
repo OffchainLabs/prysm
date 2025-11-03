@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
@@ -42,7 +43,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestListAttestations(t *testing.T) {

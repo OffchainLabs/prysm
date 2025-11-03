@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -24,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 

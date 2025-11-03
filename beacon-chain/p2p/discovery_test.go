@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -41,7 +42,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

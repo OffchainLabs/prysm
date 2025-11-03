@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -20,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestProcessAggregatedAttestation_OverlappingBits(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -24,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 

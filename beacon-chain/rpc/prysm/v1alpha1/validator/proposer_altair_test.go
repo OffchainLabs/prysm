@@ -3,6 +3,7 @@ package validator
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	chainmock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
@@ -16,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestProposer_GetSyncAggregate_OK(t *testing.T) {

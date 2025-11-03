@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -12,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // Beaconfuzz discovered an off by one issue where an attestation could be produced which would pass

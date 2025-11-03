@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/minio/sha256-simd"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const (
