@@ -128,8 +128,6 @@ func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock, current pri
 }
 
 // verifyAndSave calls Save on the column store if the columns pass verification.
-// TODO: we could potentially clear columns from the cache as soon as the pass verification,
-// which would enable memory to be freed up sooner.
 func (s *LazilyPersistentStoreColumn) verifyAndSave(columns []blocks.RODataColumn) error {
 	verified, err := s.verifyColumns(columns)
 	if err != nil {

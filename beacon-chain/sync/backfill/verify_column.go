@@ -29,9 +29,6 @@ type rootKey *[32]byte
 var errColumnVerification = errors.New("column verification failed")
 var errBisectInconsistent = errors.New("state of bisector inconsistent with columns to bisect")
 
-// TODO: write a method that iterates through the failed columns in the bisector and
-// enables the retry code to retry all the failed columns.
-
 func (c *columnBisector) addPeerColumns(pid peer.ID, columns ...blocks.RODataColumn) {
 	pk := c.peerIdKey(pid)
 	for _, col := range columns {

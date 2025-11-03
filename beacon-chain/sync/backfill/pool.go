@@ -195,7 +195,6 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		busy[pid] = true
 		b.peer = pid
 		b.nextReqCols = cols
-		// TODO: these metrics are all messed up
 		backfillBatchTimeWaiting.Observe(float64(time.Since(b.scheduled).Milliseconds()))
 		p.toWorkers <- b
 		p.updateEarliest(b.begin)

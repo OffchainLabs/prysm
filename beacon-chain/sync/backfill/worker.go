@@ -132,13 +132,6 @@ func resetRetryableColumns(b batch) batch {
 
 func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	current := w.cfg.clock.CurrentSlot()
-	// TODO: refactor all the blob and column setup stuff.
-	// we know the slot when we first set up the batch, so we should be able to determine if we need the blob setup bits at all
-	// before we fetch the blocks. Same goes for the column dependencies.
-	blobRetentionStart, err := sync.BlobRPCMinValidSlot(current)
-	if err != nil {
-		return b.withRetryableError(errors.Wrap(err, "configuration issue, could not compute minimum blob retention slot"))
-	}
 	b.blockPid = b.peer
 	start := time.Now()
 	results, err := sync.SendBeaconBlocksByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blockPid, b.blockRequest(), blockValidationMetrics)
@@ -172,6 +165,12 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
 	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Debug("Backfill batch block bytes downloaded")
+	b.blocks = vb
+
+	blobRetentionStart, err := sync.BlobRPCMinValidSlot(current)
+	if err != nil {
+		return b.withRetryableError(errors.Wrap(err, "configuration issue, could not compute minimum blob retention slot"))
+	}
 	bscfg := &blobSyncConfig{retentionStart: blobRetentionStart, nbv: w.cfg.newVB, store: w.cfg.blobStore}
 	bs, err := newBlobSync(current, vb, bscfg)
 	if err != nil {
@@ -181,7 +180,6 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
-	b.blocks = vb
 	b.blobs = bs
 	b.columns = cs
 	return b.transitionToNext()
@@ -227,14 +225,12 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 		Tor:    w.cfg.clock,
 		P2P:    w.p2p,
 		CtxMap: w.cfg.ctxMap,
-		// TODO: for now downscoring is handled inside backfill, because DownscorePeerOnRPCFault implements
-		// harsh peer scoring logic. If this is changed to true, shouldDownscore() should no longer downscore
-		// for sync.ErrInvalidFetchedData (which would be double penalty).
+		// DownscorePeerOnRPCFault is very aggressive and is only used for fetching origin blobs during startup.
 		DownscorePeerOnRPCFault: false,
-		// TODO: the upstream definition of SendDataColumnSidecarsByRangeRequest requires this params type
-		// which has several ambiguously optional fields. The sidecar request functions should be refactored
-		// to use a more explicit set of parameters. RateLimiter, Storage and NewVerifier are not used inside
-		// SendDataColumnSidecarsByRangeRequest, so for now they are left commented out.
+		// SendDataColumnSidecarsByRangeRequest uses the DataColumnSidecarsParams param struct to cover
+		// multiple different use cases. Some of them have different required fields. The following fields are
+		// not used in the methods that backfill invokes. SendDataColumnSidecarsByRangeRequest should be refactored
+		// to only require the minimum set of parameters.
 		//RateLimiter *leakybucket.Collector
 		//Storage:     w.cfg.cfs,
 		//NewVerifier: vr.validate,

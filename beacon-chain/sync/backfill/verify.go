@@ -95,8 +95,8 @@ func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
 	}
 	v, err := sigSet.Verify()
 	if err != nil {
-		// TODO: we break the blst signature inheritance because there isn't a checkable
-		// base error, so we reverse wrap it to make it checkable.
+		// The blst wrapper does not give us checkable errors, so we "reverse wrap"
+		// the error string to make it checkable for shouldDownscore.
 		return nil, errors.Wrap(errInvalidSignatureData, err.Error())
 	}
 	if !v {
