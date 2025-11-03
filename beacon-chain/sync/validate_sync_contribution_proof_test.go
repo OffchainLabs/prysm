@@ -38,7 +38,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func TestService_ValidateSyncContributionAndProof(t *testing.T) {

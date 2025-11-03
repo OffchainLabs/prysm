@@ -43,7 +43,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

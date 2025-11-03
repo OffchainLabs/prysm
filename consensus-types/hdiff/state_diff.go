@@ -24,7 +24,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )

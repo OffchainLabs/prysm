@@ -5,7 +5,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
 )
 

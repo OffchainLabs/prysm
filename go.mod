@@ -5,6 +5,7 @@ go 1.25.1
 require (
 	github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20240516070431-7828990cad7d
 	github.com/MariusVanDerWijden/tx-fuzz v1.4.0
+	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
 	github.com/aristanetworks/goarista v0.0.0-20200805130819-fd197cf57d96
 	github.com/bazelbuild/rules_go v0.23.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
@@ -60,7 +61,6 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/prom2json v1.3.0
 	github.com/prysmaticlabs/fastssz v0.0.0-20241008181541-518c4ce73516
-	github.com/prysmaticlabs/go-bitfield v0.0.0-20240328144219-a1caa50c3a1e
 	github.com/prysmaticlabs/prombbolt v0.0.0-20210126082820-9b7adba6db7c
 	github.com/prysmaticlabs/protoc-gen-go-cast v0.0.0-20230228205207-28762a7b9294
 	github.com/r3labs/sse/v2 v2.10.0

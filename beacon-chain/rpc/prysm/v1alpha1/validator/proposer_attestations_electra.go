@@ -7,7 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 // computeOnChainAggregate constructs a final aggregate form a list of network aggregates with equal attestation data.

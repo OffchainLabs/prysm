@@ -3,7 +3,7 @@
 package eth
 
 import (
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func NewSyncCommitteeAggregationBits() bitfield.Bitvector128 {

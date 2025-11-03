@@ -29,7 +29,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"

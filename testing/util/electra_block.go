@@ -21,7 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 // GenerateFullBlockElectra generates a fully valid Electra block with the requested parameters.

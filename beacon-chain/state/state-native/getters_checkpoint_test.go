@@ -6,7 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	testtmpl "github.com/OffchainLabs/prysm/v6/beacon-chain/state/testing"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func TestBeaconState_PreviousJustifiedCheckpointNil_Phase0(t *testing.T) {

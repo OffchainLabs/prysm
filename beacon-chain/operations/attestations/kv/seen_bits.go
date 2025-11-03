@@ -5,7 +5,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func (c *AttCaches) insertSeenBit(att ethpb.Att) error {

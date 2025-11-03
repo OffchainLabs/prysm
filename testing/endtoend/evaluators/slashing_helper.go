@@ -12,7 +12,7 @@ import (
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

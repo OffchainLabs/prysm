@@ -23,7 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 var (

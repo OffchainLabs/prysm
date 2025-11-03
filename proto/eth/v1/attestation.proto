@@ -31,7 +31,7 @@ message Attestation {
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "2048",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+        "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 
   AttestationData data = 2;

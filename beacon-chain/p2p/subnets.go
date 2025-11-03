@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 

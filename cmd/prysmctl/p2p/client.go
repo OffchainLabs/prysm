@@ -31,7 +31,7 @@ import (
 	libp2ptcp "github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

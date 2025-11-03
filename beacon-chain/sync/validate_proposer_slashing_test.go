@@ -26,7 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func setupValidProposerSlashing(t *testing.T) (*ethpb.ProposerSlashing, state.BeaconState) {

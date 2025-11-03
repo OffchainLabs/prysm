@@ -4,7 +4,7 @@ package aggregation
 import (
 	"errors"
 
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 

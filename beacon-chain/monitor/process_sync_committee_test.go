@@ -7,7 +7,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

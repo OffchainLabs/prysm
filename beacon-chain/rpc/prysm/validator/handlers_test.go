@@ -37,7 +37,7 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func addDefaultReplayerBuilder(s *Server, h stategen.HistoryAccessor) {

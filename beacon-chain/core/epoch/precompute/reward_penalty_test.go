@@ -16,7 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {

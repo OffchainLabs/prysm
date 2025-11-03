@@ -13,7 +13,7 @@ import (
 	attaggregation "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 // This prepares fork choice attestations by running batchForkChoiceAtts

@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 // ErrInvalidMaxCoverProblem is returned when Maximum Coverage problem was initialized incorrectly.

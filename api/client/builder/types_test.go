@@ -22,7 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func ezDecode(t *testing.T, s string) []byte {

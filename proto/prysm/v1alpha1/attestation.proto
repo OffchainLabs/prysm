@@ -57,7 +57,7 @@ message Attestation {
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "2048",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+        "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 
   AttestationData data = 2;
@@ -139,7 +139,7 @@ message AttestationElectra {
   bytes aggregation_bits = 1 [
     (ethereum.eth.ext.ssz_max) = "max_attesting_indices.size",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitlist"
+        "github.com/OffchainLabs/go-bitfield.Bitlist"
   ];
 
   AttestationData data = 2;

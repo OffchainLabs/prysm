@@ -37,7 +37,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

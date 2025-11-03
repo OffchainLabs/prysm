@@ -18,7 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func TestComputeCommittee_WithoutCache(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 // metaDataHandler reads the incoming metadata RPC request from the peer.

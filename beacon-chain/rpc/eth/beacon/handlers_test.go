@@ -44,7 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/mock/gomock"

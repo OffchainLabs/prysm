@@ -22,7 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/d4l3k/messagediff.v1"

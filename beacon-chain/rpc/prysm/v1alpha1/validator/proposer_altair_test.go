@@ -16,7 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func TestProposer_GetSyncAggregate_OK(t *testing.T) {

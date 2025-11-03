@@ -13,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	c "github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func TestKV_Aggregated_AggregateUnaggregatedAttestations(t *testing.T) {

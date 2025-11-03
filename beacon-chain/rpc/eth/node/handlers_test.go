@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 type dummyIdentity enode.ID
