@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -27,6 +28,20 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if !s.cfg.ForkChoiceStore.IsCanonical([32]byte(c.Root)) {
 		return nil
 	}
+	// Only use head state if the head state is compatible with the target checkpoint.
+	headRoot, err := s.HeadRoot(ctx)
+	if err != nil {
+		return nil
+	}
+	headTarget, err := s.cfg.ForkChoiceStore.TargetRootForEpoch([32]byte(headRoot), c.Epoch)
+	if err != nil {
+		return nil
+	}
+	if !bytes.Equal(c.Root, headTarget[:]) {
+		return nil
+	}
+
+	// If the head state alone is enough, we can return it directly read only.
 	if c.Epoch == headEpoch {
 		st, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
@@ -34,11 +49,13 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		}
 		return st
 	}
+	// Otherwise we need to advance the head state to the start of the target epoch.
+	// This point can only be reached if c.Root == headRoot and c.Epoch > headEpoch.
 	slot, err := slots.EpochStart(c.Epoch)
 	if err != nil {
 		return nil
 	}
-	// Try if we have already set the checkpoint cache
+	// Try if we have already set the checkpoint cache. This will be tried again if we fail here but the check is cheap anyway.
 	epochKey := strconv.FormatUint(uint64(c.Epoch), 10 /* base 10 */)
 	lock := async.NewMultilock(string(c.Root) + epochKey)
 	lock.Lock()
@@ -50,6 +67,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if cachedState != nil && !cachedState.IsNil() {
 		return cachedState
 	}
+	// If we haven't advanced yet then process the slots from head state.
 	st, err := s.HeadState(ctx)
 	if err != nil {
 		return nil
