@@ -19,22 +19,71 @@ These flags have nothing to do with verbosity.
 
 ### Per-Package Verbosity
 We currently have a flag `--verbosity <trace|debug|info|warn|error>` which sets the default verbosity for all logs.
-We will introduce a new config flag `--log-config <file_path>` which overrides the default verbosity for the packages defined in the config file.
+We will introduce a new config flag `--log-vmodule value` which overrides the default verbosity for the packages mentioned here.
 
-An example of a verbosity config file:
-``` 
-[log.conf]
+An example of the flag use:
+`--log-vmodule beacon-chain/db/kv=5,beacon-chain/p2p=4`
 
-- blockchain: debug
-- p2p: info
-- light-client: error
-```
-
-Any package not mentioned in the config file will take the verbosity of the provided `--verbosity` flag, or if not provided, the default `info` value.
+Any package not mentioned will take the verbosity of the provided `--verbosity` flag, or if not provided, the default `info` value.
 
 This flag has nothing to do with visibility.
 
 
 ### Prerequisite
-Since this uses the package prefix names as identifiers, it won't work unless every package defines their own prefix correctly and uses it.
-So as a prerequisite we would need to make sure every package has that set up.
+We need to define a `doc.go` file for every package that we care about<sup>1</sup>.
+The file should include a declaration of the `log` variable with a field `package` set to 
+the full path of the package inside prysm.
+
+For example package `kv` will have this `doc.go` file:
+
+```go
+// Package kv handles the key value db of prysm
+//We can add package descriptions here, which is encouraged.
+//
+package kv
+
+import "github.com/sirupsen/logrus"
+
+var log = logrus.WithField("package", "beacon-chain/db/kv")
+```
+This way we can filter logs based on the paths provided by the user.
+
+**1:**
+
+We can have a script that generates the `doc.go` file for every package.
+We also can enforce this rule on the GitHub actions checks.
+But we might not need EVERY package to have this. 
+For example `testing/` or `tools/` are probably not needed. 
+Here is the list of number of packages per top level folder in the project:
+- api – 14
+- async – 3
+- beacon-chain – 112
+- cache – 2
+- cmd – 30
+- config – 6
+- consensus-types – 13
+- container – 7
+- contracts – 2
+- crypto – 11
+- encoding – 6
+- genesis – 2
+- io – 4
+- math – 1
+- monitoring – 7
+- network – 3
+- proto – 17
+- runtime – 11
+- testing – 84
+- time – 4
+- tools – 50
+- validator – 37
+
+The point is, that we can exclude some of these paths from the rule.
+
+**Open Question:** how to handle packages that do not emit a log (yet)? should we define the log variable as `_`?
+
+### Improvements
+We can also offer additional features here:
+
+- We can let the users know that they can skip writing `beacon-chain` or `validator` in their path. We can just try for those paths as well, since most logs come from these packages.
+- We can allow pattern matchings, so users can have more freedom of expressing what packages they want to mention.
