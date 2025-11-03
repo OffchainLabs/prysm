@@ -197,6 +197,11 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
+	// disableLastEpochTargets is a flag to disable processing of attestations for old blocks.
+	disableLastEpochTargets = &cli.BoolFlag{
+		Name:  "disable-last-epoch-targets",
+		Usage: "Disables processing of last epoch targets.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -257,6 +262,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
+	disableLastEpochTargets,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
