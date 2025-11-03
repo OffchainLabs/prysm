@@ -122,9 +122,8 @@ func ProcessInactivityScores(
 		}
 
 		if !helpers.IsInInactivityLeak(prevEpoch, finalizedEpoch) {
-			score := min(
-				// Prevents underflow below 0.
-				recoveryRate, v.InactivityScore)
+			// Prevents underflow below 0.
+			score := min(recoveryRate, v.InactivityScore)
 			v.InactivityScore -= score
 		}
 		inactivityScores[i] = v.InactivityScore
