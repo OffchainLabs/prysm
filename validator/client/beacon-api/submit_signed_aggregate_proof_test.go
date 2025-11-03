@@ -3,12 +3,10 @@ package beacon_api
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -78,50 +76,6 @@ func TestSubmitSignedAggregateSelectionProof_BadRequest(t *testing.T) {
 		SignedAggregateAndProof: signedAggregateAndProof,
 	})
 	assert.ErrorContains(t, "bad request", err)
-}
-
-func TestSubmitSignedAggregateSelectionProof_Fallback(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	signedAggregateAndProof := generateSignedAggregateAndProofJson()
-	marshalledSignedAggregateSignedAndProof, err := json.Marshal([]*structs.SignedAggregateAttestationAndProof{jsonifySignedAggregateAndProof(signedAggregateAndProof)})
-	require.NoError(t, err)
-
-	ctx := t.Context()
-
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	headers := map[string]string{"Eth-Consensus-Version": version.String(signedAggregateAndProof.Message.Version())}
-	jsonRestHandler.EXPECT().Post(
-		gomock.Any(),
-		"/eth/v2/validator/aggregate_and_proofs",
-		headers,
-		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
-		nil,
-	).Return(
-		&httputil.DefaultJsonError{
-			Code: http.StatusNotFound,
-		},
-	).Times(1)
-	jsonRestHandler.EXPECT().Post(
-		gomock.Any(),
-		"/eth/v1/validator/aggregate_and_proofs",
-		nil,
-		bytes.NewBuffer(marshalledSignedAggregateSignedAndProof),
-		nil,
-	).Return(
-		nil,
-	).Times(1)
-
-	attestationDataRoot, err := signedAggregateAndProof.Message.Aggregate.Data.HashTreeRoot()
-	require.NoError(t, err)
-
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	resp, err := validatorClient.submitSignedAggregateSelectionProof(ctx, &ethpb.SignedAggregateSubmitRequest{
-		SignedAggregateAndProof: signedAggregateAndProof,
-	})
-	require.NoError(t, err)
-	assert.DeepEqual(t, attestationDataRoot[:], resp.AttestationDataRoot)
 }
 
 func TestSubmitSignedAggregateSelectionProofElectra_Valid(t *testing.T) {

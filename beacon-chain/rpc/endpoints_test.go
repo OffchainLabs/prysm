@@ -97,7 +97,6 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},
 		"/eth/v1/validator/attestation_data":               {http.MethodGet},
 		"/eth/v2/validator/aggregate_attestation":          {http.MethodGet},
-		"/eth/v1/validator/aggregate_and_proofs":           {http.MethodPost},
 		"/eth/v2/validator/aggregate_and_proofs":           {http.MethodPost},
 		"/eth/v1/validator/beacon_committee_subscriptions": {http.MethodPost},
 		"/eth/v1/validator/sync_committee_subscriptions":   {http.MethodPost},
