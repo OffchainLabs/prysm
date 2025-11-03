@@ -294,21 +294,6 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		consensusItem, err := contribution.ToConsensus()
-		if err != nil {
-			httputil.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem); rpcError != nil {
-			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-			return
-		}
-	}
-}
-
 // SubmitAggregateAndProofsV2 verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
 func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofsV2")
