@@ -214,7 +214,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "beacon_data_column_sidecar_gossip_verification_milliseconds",
 			Help:    "Captures the time taken to verify data column sidecars.",
-			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
+			Buckets: []float64{2, 5, 10, 25, 50, 75, 100, 250, 500, 1000, 2000},
 		},
 	)
 
