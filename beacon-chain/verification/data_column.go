@@ -259,7 +259,7 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 
 		// Ensure the expensive signature verification is only performed once for
 		// concurrent requests for the same signature data.
-		if _, err, _ = dv.sg.Do(signatureData.string(), func() (any, error) {
+		if _, err, _ = dv.sg.Do(signatureData.concat(), func() (any, error) {
 			columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
 
 			// Retrieve the parent state.
