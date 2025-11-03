@@ -239,9 +239,10 @@ func (f *ForkChoice) IsViableForCheckpoint(cp *forkchoicetypes.Checkpoint) (bool
 	if node.slot == epochStart {
 		return true, nil
 	}
+	// Allow any node from the checkpoint epoch - 1 to be viable.
 	nodeEpoch := slots.ToEpoch(node.slot)
-	if nodeEpoch >= cp.Epoch {
-		return false, nil
+	if nodeEpoch == cp.Epoch-1 {
+		return true, nil
 	}
 	for _, child := range node.children {
 		if child.slot > epochStart {

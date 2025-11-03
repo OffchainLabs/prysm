@@ -132,6 +132,7 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 	}
 
 	// Fallback to state regeneration.
+	log.Debug(fmt.Sprintf("Regenerating attestation pre-state for epoch %d root %#x", c.Epoch, c.Root))
 	baseState, err := s.cfg.StateGen.StateByRoot(ctx, bytesutil.ToBytes32(c.Root))
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get pre state for epoch %d", c.Epoch)
