@@ -45,7 +45,10 @@ message ExecutionPayloadBid {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
   ];
-  uint64 value = 8;
+  uint64 value = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
   bytes blob_kzg_commitments_root = 9 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
