@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
@@ -66,7 +68,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationReject, errWrongMessage
 	}
 	if err := helpers.ValidateNilAttestation(att); err != nil {
-		return pubsub.ValidationReject, err
+		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	data := att.GetData()
@@ -83,7 +85,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		return pubsub.ValidationIgnore, err
 	}
 	if err := helpers.ValidateSlotTargetEpoch(data); err != nil {
-		return pubsub.ValidationReject, err
+		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	committeeIndex := att.GetCommitteeIndex()
@@ -105,15 +107,19 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 			s.hasBadBlock(bytesutil.ToBytes32(data.Target.Root)) ||
 			s.hasBadBlock(bytesutil.ToBytes32(data.Source.Root)) {
 			attBadBlockCount.Inc()
-			return pubsub.ValidationReject, errors.New("attestation data references bad block root")
+			return pubsub.ValidationReject, wrapAttestationError(errors.New("attestation data references bad block root"), att)
 		}
 	}
 
 	// Verify the block being voted and the processed state is in beaconDB and the block has passed validation if it's in the beaconDB.
 	blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot)
 	if !s.hasBlockAndState(ctx, blockRoot) {
+		// Block not yet available - save attestation to pending queue for later processing
+		// when the block arrives. Return ValidationIgnore so gossip doesn't potentially penalize the peer.
 		s.savePendingAtt(att)
+		return pubsub.ValidationIgnore, nil
 	}
+	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
 	if !s.cfg.chain.InForkchoice(blockRoot) {
 		tracing.AnnotateError(span, blockchain.ErrRootNotInForkchoice(blockRoot))
 		return pubsub.ValidationIgnore, blockchain.ErrRootNotInForkchoice(blockRoot)
@@ -121,7 +127,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
 		tracing.AnnotateError(span, err)
 		attBadLmdConsistencyCount.Inc()
-		return pubsub.ValidationReject, err
+		return pubsub.ValidationReject, wrapAttestationError(err, att)
 	}
 
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
@@ -132,7 +138,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	validationRes, err := s.validateUnaggregatedAttTopic(ctx, att, preState, *msg.Topic)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, err
+		return validationRes, wrapAttestationError(err, att)
 	}
 
 	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, committeeIndex)
@@ -143,7 +149,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	validationRes, err = validateAttesterData(ctx, att, committee)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, err
+		return validationRes, wrapAttestationError(err, att)
 	}
 
 	// Consolidated handling of Electra SingleAttestation vs Phase0 unaggregated attestation
@@ -178,7 +184,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 
 	validationRes, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
 	if validationRes != pubsub.ValidationAccept {
-		return validationRes, err
+		return validationRes, wrapAttestationError(err, att)
 	}
 
 	if s.slasherEnabled {
@@ -274,8 +280,8 @@ func (s *Service) validateCommitteeIndexAndCount(
 	} else {
 		ci = a.GetCommitteeIndex()
 	}
-	if uint64(ci) > count {
-		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d > %d", ci, count)
+	if uint64(ci) >= count {
+		return 0, 0, pubsub.ValidationReject, fmt.Errorf("committee index %d >= %d", ci, count)
 	}
 	return ci, valCount, pubsub.ValidationAccept, nil
 }
@@ -332,15 +338,9 @@ func validateAttestingIndex(
 
 	// _[REJECT]_ The attester is a member of the committee -- i.e.
 	//  `attestation.attester_index in get_beacon_committee(state, attestation.data.slot, index)`.
-	inCommittee := false
-	for _, ix := range committee {
-		if attestingIndex == ix {
-			inCommittee = true
-			break
-		}
-	}
+	inCommittee := slices.Contains(committee, attestingIndex)
 	if !inCommittee {
-		return pubsub.ValidationReject, errors.New("attester is not a member of the committee")
+		return pubsub.ValidationReject, errors.Errorf("attester %d is not a member of the committee", attestingIndex)
 	}
 
 	return pubsub.ValidationAccept, nil
@@ -392,4 +392,25 @@ func (s *Service) hasBlockAndState(ctx context.Context, blockRoot [32]byte) bool
 	hasStateSummary := s.cfg.beaconDB.HasStateSummary(ctx, blockRoot)
 	hasState := hasStateSummary || s.cfg.beaconDB.HasState(ctx, blockRoot)
 	return hasState && s.cfg.chain.HasBlock(ctx, blockRoot)
+}
+
+func wrapAttestationError(err error, att eth.Att) error {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	committeeIndex := att.GetCommitteeIndex()
+
+	attData := att.GetData()
+	slot := attData.Slot
+	slotInEpoch := slot % slotsPerEpoch
+	oldCommitteeIndex := attData.CommitteeIndex
+	blockRoot := fmt.Sprintf("%#x", attData.BeaconBlockRoot)
+	sourceRoot := fmt.Sprintf("%#x", attData.Source.Root)
+	sourceEpoch := attData.Source.Epoch
+	targetEpoch := attData.Target.Epoch
+	targetRoot := fmt.Sprintf("%#x", attData.Target.Root)
+
+	return errors.Wrapf(
+		err,
+		"attSlot: %d, attSlotInEpoch: %d, attOldCommitteeIndex: %d, attCommitteeIndex: %d, attBlockRoot: %s, attSource: {root: %s, epoch: %d}, attTarget: {root: %s, epoch: %d}",
+		slot, slotInEpoch, oldCommitteeIndex, committeeIndex, blockRoot, sourceRoot, sourceEpoch, targetRoot, targetEpoch,
+	)
 }

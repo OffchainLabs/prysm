@@ -132,6 +132,6 @@ func recoverStateSummary(ctx context.Context, tx *bolt.Tx, root []byte) error {
 	if err != nil {
 		return err
 	}
-	summaryBucket := tx.Bucket(stateBucket)
+	summaryBucket := tx.Bucket(stateSummaryBucket)
 	return summaryBucket.Put(root, summaryEnc)
 }

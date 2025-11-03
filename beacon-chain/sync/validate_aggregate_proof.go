@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
@@ -290,11 +291,8 @@ func (s *Service) validateIndexInCommittee(ctx context.Context, a ethpb.Att, val
 	}
 
 	var withinCommittee bool
-	for _, i := range committee {
-		if validatorIndex == i {
-			withinCommittee = true
-			break
-		}
+	if slices.Contains(committee, validatorIndex) {
+		withinCommittee = true
 	}
 	if !withinCommittee {
 		return pubsub.ValidationReject, fmt.Errorf("validator index %d is not within the committee: %v",

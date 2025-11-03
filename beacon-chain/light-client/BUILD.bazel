@@ -6,6 +6,7 @@ go_library(
         "cache.go",
         "helpers.go",
         "lightclient.go",
+        "log.go",
         "store.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client",

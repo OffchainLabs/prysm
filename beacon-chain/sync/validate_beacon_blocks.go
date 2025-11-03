@@ -294,6 +294,9 @@ func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOn
 	}
 
 	if err := blocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+		if errors.Is(err, blocks.ErrInvalidSignature) {
+			s.setBadBlock(ctx, blockRoot)
+		}
 		return nil, err
 	}
 	// In the event the block is more than an epoch ahead from its

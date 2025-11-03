@@ -162,6 +162,9 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
+		st, blk, err = prepareForkchoiceState(t.Context(), 1, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), 1, bState, newHeadStateRoot[:], newHeadRoot[:]))
 		events := notifier.ReceivedEvents()
 		require.Equal(t, 1, len(events))
@@ -196,6 +199,9 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 
 		newHeadStateRoot := [32]byte{2}
 		newHeadRoot := [32]byte{3}
+		st, blk, err = prepareForkchoiceState(t.Context(), 0, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
 		err = srv.notifyNewHeadEvent(t.Context(), epoch2Start, bState, newHeadStateRoot[:], newHeadRoot[:])
 		require.NoError(t, err)
 		events := notifier.ReceivedEvents()
@@ -209,6 +215,37 @@ func Test_notifyNewHeadEvent(t *testing.T) {
 			State:                     newHeadStateRoot[:],
 			EpochTransition:           true,
 			PreviousDutyDependentRoot: make([]byte, 32),
+			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
+		}
+		require.DeepSSZEqual(t, wanted, eventHead)
+	})
+	t.Run("epoch transition", func(t *testing.T) {
+		bState, _ := util.DeterministicGenesisState(t, 10)
+		srv := testServiceWithDB(t)
+		srv.SetGenesisTime(time.Now())
+		notifier := srv.cfg.StateNotifier.(*mock.MockStateNotifier)
+		srv.originBlockRoot = [32]byte{1}
+		st, blk, err := prepareForkchoiceState(t.Context(), 0, [32]byte{}, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadStateRoot := [32]byte{2}
+		newHeadRoot := [32]byte{3}
+		st, blk, err = prepareForkchoiceState(t.Context(), 32, newHeadRoot, [32]byte{}, [32]byte{}, &ethpb.Checkpoint{}, &ethpb.Checkpoint{})
+		require.NoError(t, err)
+		require.NoError(t, srv.cfg.ForkChoiceStore.InsertNode(t.Context(), st, blk))
+		newHeadSlot := params.BeaconConfig().SlotsPerEpoch
+		require.NoError(t, srv.notifyNewHeadEvent(t.Context(), newHeadSlot, bState, newHeadStateRoot[:], newHeadRoot[:]))
+		events := notifier.ReceivedEvents()
+		require.Equal(t, 1, len(events))
+
+		eventHead, ok := events[0].Data.(*ethpbv1.EventHead)
+		require.Equal(t, true, ok)
+		wanted := &ethpbv1.EventHead{
+			Slot:                      newHeadSlot,
+			Block:                     newHeadRoot[:],
+			State:                     newHeadStateRoot[:],
+			EpochTransition:           true,
+			PreviousDutyDependentRoot: params.BeaconConfig().ZeroHash[:],
 			CurrentDutyDependentRoot:  srv.originBlockRoot[:],
 		}
 		require.DeepSSZEqual(t, wanted, eventHead)

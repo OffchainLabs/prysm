@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -20,12 +21,12 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBeaconBlock) {
+func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBeaconBlock, headState state.BeaconState) {
 	if blk.Version() < version.Altair {
 		return
 	}
 
-	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blk.Block().Slot()), blk.Block().ParentRoot())
+	syncAggregate, err := vs.getSyncAggregate(ctx, slots.PrevSlot(blk.Block().Slot()), blk.Block().ParentRoot(), headState)
 	if err != nil {
 		log.WithError(err).Error("Could not get sync aggregate")
 		emptySig := [96]byte{0xC0}
@@ -47,7 +48,7 @@ func (vs *Server) setSyncAggregate(ctx context.Context, blk interfaces.SignedBea
 
 // getSyncAggregate retrieves the sync contributions from the pool to construct the sync aggregate object.
 // The contributions are filtered based on matching of the input root and slot then profitability.
-func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, root [32]byte) (*ethpb.SyncAggregate, error) {
+func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, root [32]byte, headState state.BeaconState) (*ethpb.SyncAggregate, error) {
 	_, span := trace.StartSpan(ctx, "ProposerServer.getSyncAggregate")
 	defer span.End()
 
@@ -62,7 +63,7 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	// Contributions have to match the input root
 	proposerContributions := proposerSyncContributions(poolContributions).filterByBlockRoot(root)
 
-	aggregatedContributions, err := vs.aggregatedSyncCommitteeMessages(ctx, slot, root, poolContributions)
+	aggregatedContributions, err := vs.aggregatedSyncCommitteeMessages(ctx, slot, root, poolContributions, headState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get aggregated sync committee messages")
 	}
@@ -123,6 +124,7 @@ func (vs *Server) aggregatedSyncCommitteeMessages(
 	slot primitives.Slot,
 	root [32]byte,
 	poolContributions []*ethpb.SyncCommitteeContribution,
+	st state.BeaconState,
 ) ([]*ethpb.SyncCommitteeContribution, error) {
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / subcommitteeCount
@@ -146,10 +148,7 @@ func (vs *Server) aggregatedSyncCommitteeMessages(
 			messageSigs = append(messageSigs, msg.Signature)
 		}
 	}
-	st, err := vs.HeadFetcher.HeadState(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get head state")
-	}
+
 	positions, err := helpers.CurrentPeriodPositions(st, messageIndices)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sync committee positions")
