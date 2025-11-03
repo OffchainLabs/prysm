@@ -14,13 +14,13 @@ const listBaseIndex = 2
 // 1. The sszInfo of the root object, to be able to navigate the SSZ structure
 // 2. The path to the field (e.g., "field_a.field_b[3].field_c")
 // It walks the path step by step, updating the generalized index at each step.
-func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, error) {
+func GetGeneralizedIndexFromPath(info *SszInfo, path Path) (uint64, error) {
 	if info == nil {
 		return 0, errors.New("SszInfo is nil")
 	}
 
 	// If path is empty, no generalized index can be computed.
-	if len(path) == 0 {
+	if len(path.Elements) == 0 {
 		return 0, errors.New("cannot compute generalized index for an empty path")
 	}
 
@@ -28,7 +28,7 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 	currentIndex := uint64(1)
 	currentInfo := info
 
-	for _, pathElement := range path {
+	for index, pathElement := range path.Elements {
 		element := pathElement
 
 		// Check that we are in a container to access fields
@@ -52,8 +52,8 @@ func GetGeneralizedIndexFromPath(info *SszInfo, path []PathElement) (uint64, err
 		currentIndex = currentIndex*nextPowerOfTwo(chunkCount) + fieldPos
 		currentInfo = fieldSsz
 
-		// Check if a path element is a length field
-		if element.Length {
+		// Check for length access: element is the last in the path and requests length
+		if path.Length && index == len(path.Elements)-1 {
 			currentInfo, currentIndex, err = calculateLengthGeneralizedIndex(fieldSsz, element, currentIndex)
 			if err != nil {
 				return 0, fmt.Errorf("length calculation error: %w", err)
