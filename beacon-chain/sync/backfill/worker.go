@@ -15,6 +15,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var errInvalidBatchState = errors.New("invalid batch state")
+
 type peerDownscorer func(peer.ID, string, error)
 
 type workerCfg struct {
@@ -97,8 +99,9 @@ func (w *p2pWorker) run(ctx context.Context) {
 				b.blocks = nil
 				b = w.handleBlocks(ctx, b)
 			default:
-				log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Debug("batch in unhandled state")
-				panic("unhandled batch state") // lint:nopanic -- TODO: this panic is temporary / for debugging.
+				// A batch in an unknown state represents an implementation error,
+				// so we treat it as a fatal error meaning the worker pool should shut down.
+				b = b.withFatalError(errors.Wrap(errInvalidBatchState, b.state.String()))
 			}
 			w.done <- b
 		case <-ctx.Done():

@@ -121,6 +121,9 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			// This ticker exists to periodically break out of the channel select
 			// to retry failed assignments.
 		case b := <-p.fromWorkers:
+			if b.state == batchErrFatal {
+				p.shutdown(b.err)
+			}
 			pid := b.peer
 			delete(busy, pid)
 			if b.workComplete() {
@@ -171,6 +174,10 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	}
 
 	for i, b := range todo {
+		if b.state == batchErrFatal {
+			// Fatal error detected in batch, shut down the pool.
+			return nil, b.err
+		}
 		if b.state == batchErrRetryable {
 			// Columns can fail in a partial fashion, so we nee to reset
 			// components that track peer interactions for multiple columns

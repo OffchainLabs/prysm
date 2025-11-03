@@ -40,6 +40,8 @@ func (s batchState) String() string {
 		return "sync_blobs"
 	case batchSyncColumns:
 		return "sync_columns"
+	case batchErrFatal:
+		return "error_fatal"
 	default:
 		return "unknown"
 	}
@@ -50,6 +52,7 @@ const (
 	batchInit
 	batchSequenced
 	batchErrRetryable
+	batchErrFatal // if this is received in the main loop, the worker pool will be shut down.
 	batchSyncBlobs
 	batchSyncColumns
 	batchImportable
@@ -187,6 +190,12 @@ func (b batch) withRetryableError(err error) batch {
 	log.WithFields(b.logFields()).WithError(err).Warn("Could not proceed with batch processing due to error")
 	b.err = err
 	return b.withState(batchErrRetryable)
+}
+
+func (b batch) withFatalError(err error) batch {
+	log.WithFields(b.logFields()).WithError(err).Error("Fatal batch processing error")
+	b.err = err
+	return b.withState(batchErrFatal)
 }
 
 func (b batch) validatingColumnRequest(cb *columnBisector) *validatingColumnRequest {
