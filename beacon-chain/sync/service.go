@@ -182,6 +182,7 @@ type Service struct {
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
+	gossipsubController              *GossipsubController
 }
 
 // NewService initializes new regular sync service.
@@ -198,6 +199,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen: rand.NewGenerator(),
 	}
+	r.gossipsubController = NewGossipsubController(ctx, r)
 
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
@@ -326,6 +328,10 @@ func (s *Service) Stop() error {
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
+
+	// Stop the gossipsub controller.
+	s.gossipsubController.Stop()
+
 	return nil
 }
 
@@ -405,7 +411,10 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the fork watcher.
-	go s.p2pHandlerControlLoop()
+	go s.p2pRPCHandlerControlLoop()
+
+	// Start the gossipsub controller.
+	go s.gossipsubController.Start()
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

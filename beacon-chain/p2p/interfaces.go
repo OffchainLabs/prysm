@@ -35,6 +35,7 @@ type (
 		PeersProvider
 		MetadataProvider
 		CustodyManager
+		SubnetFilter
 	}
 
 	// Accessor provides access to the Broadcaster, PeerManager and CustodyManager interfaces.
@@ -128,5 +129,12 @@ type (
 		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 		UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 		CustodyGroupCountFromPeer(peer.ID) uint64
+	}
+
+	// SubnetFilter provides methods for extracting subnet information from a peer's ENR records.
+	SubnetFilter interface {
+		AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error)
+		SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error)
+		DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error)
 	}
 )
