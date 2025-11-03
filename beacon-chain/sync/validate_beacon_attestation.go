@@ -27,6 +27,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Validation
@@ -295,7 +296,19 @@ func validateAttesterData(
 		if !ok {
 			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, a)
 		}
-		return validateAttestingIndex(ctx, singleAtt.AttesterIndex, committee)
+		status, err := validateAttestingIndex(ctx, singleAtt.AttesterIndex, committee)
+		if status == pubsub.ValidationReject {
+			log.WithFields(logrus.Fields{
+				"targetRoot": fmt.Sprintf("%#x", a.GetData().Target.Root),
+				"targetEpoch": a.GetData().Target.Epoch,
+				"sourceRoot": fmt.Sprintf("%#x", a.GetData().Source.Root),
+				"sourceEpoch": a.GetData().Source.Epoch,
+				"blockRoot": fmt.Sprintf("%#x", a.GetData().BeaconBlockRoot),
+				"slot": fmt.Sprintf("%#x", a.GetData().Slot),
+			}).Info("Bad attestation")
+		}
+
+		return status, err
 	}
 
 	// Verify number of aggregation bits matches the committee size.
@@ -341,7 +354,6 @@ func validateAttestingIndex(
 	if !inCommittee {
 		return pubsub.ValidationReject, errors.New("attester is not a member of the committee")
 	}
-
 	return pubsub.ValidationAccept, nil
 }
 
