@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -218,18 +219,28 @@ func TestService_BroadcastAttestation(t *testing.T) {
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	const port = uint(2000)
 
+	// Create a shared DB for all services to avoid duplicate metrics registration
+	db := testDB.SetupDB(t)
+
 	// Setup bootnode.
-	cfg := &Config{PingInterval: testPingInterval}
+	cfg := &Config{
+		PingInterval: testPingInterval,
+		DB:           db,
+	}
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
+	custodyInfoSet := make(chan struct{})
+	close(custodyInfoSet) // Close immediately since custodyInfo is already set
 	s := &Service{
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        custodyInfoSet,
+		ctx:                   t.Context(),
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -245,6 +256,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
 		PingInterval:         testPingInterval,
+		DB:                   db,
 	}
 	// Setup 2 different hosts
 	for i := uint(1); i <= 2; i++ {
@@ -254,11 +266,15 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		if len(listeners) > 0 {
 			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
 		}
+		custodyInfoSet := make(chan struct{})
+		close(custodyInfoSet) // Close immediately since custodyInfo is already set
 		s := &Service{
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
 			custodyInfo:           &custodyInfo{},
+			custodyInfoSet:        custodyInfoSet,
+			ctx:                   t.Context(),
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
