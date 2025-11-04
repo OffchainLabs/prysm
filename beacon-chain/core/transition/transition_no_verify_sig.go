@@ -8,7 +8,9 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -374,15 +376,25 @@ func ProcessBlockForStateRoot(
 }
 
 // This calls altair block operations.
-func altairOperations(
-	ctx context.Context,
-	st state.BeaconState,
-	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator)
+func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	var err error
+
+	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
+	// exitInfo is only needed for voluntary exits pre Electra.
+	hasExits := st.Version() < version.Electra && len(beaconBlock.Body().VoluntaryExits()) > 0
+	exitInfo := &validators.ExitInfo{}
+	if hasSlashings || hasExits {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = v.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
+			return nil, errors.Wrap(err, "could not update total active balance cache")
+		}
+	}
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair proposer slashing")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process altair attester slashing")
 	}
@@ -393,7 +405,7 @@ func altairOperations(
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(err, "could not process altair deposit")
 	}
-	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits())
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process voluntary exits")
 	}
@@ -401,15 +413,23 @@ func altairOperations(
 }
 
 // This calls phase 0 block operations.
-func phase0Operations(
-	ctx context.Context,
-	st state.BeaconState,
-	beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
-	st, err := b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), v.SlashValidator)
+func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+	var err error
+	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
+	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
+	var exitInfo *v.ExitInfo
+	if hasSlashings || hasExits {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = v.ExitInformation(st)
+		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
+			return nil, errors.Wrap(err, "could not update total active balance cache")
+		}
+	}
+	st, err = b.ProcessProposerSlashings(ctx, st, beaconBlock.Body().ProposerSlashings(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block proposer slashings")
 	}
-	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), v.SlashValidator)
+	st, err = b.ProcessAttesterSlashings(ctx, st, beaconBlock.Body().AttesterSlashings(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not process block attester slashings")
 	}
@@ -420,5 +440,9 @@ func phase0Operations(
 	if _, err := altair.ProcessDeposits(ctx, st, beaconBlock.Body().Deposits()); err != nil {
 		return nil, errors.Wrap(err, "could not process deposits")
 	}
-	return b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits())
+	st, err = b.ProcessVoluntaryExits(ctx, st, beaconBlock.Body().VoluntaryExits(), exitInfo)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not process voluntary exits")
+	}
+	return st, nil
 }

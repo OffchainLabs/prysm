@@ -24,8 +24,15 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
+	"AGGREGATE_DUE_BPS",
+	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
+	"ATTESTATION_DUE_BPS",
+	"ATTESTATION_DUE_BPS_GLOAS",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
+	"CELLS_PER_EXT_BLOB",
+	"CONTRIBUTION_DUE_BPS",
+	"CONTRIBUTION_DUE_BPS_GLOAS",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
@@ -36,17 +43,31 @@ var placeholderFields = []string{
 	"EIP7732_FORK_VERSION",
 	"EIP7805_FORK_EPOCH",
 	"EIP7805_FORK_VERSION",
+	"EIP7928_FORK_EPOCH",
+	"EIP7928_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
+	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
+	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
+	"GLOAS_FORK_EPOCH",
+	"GLOAS_FORK_VERSION",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
+	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
+	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
+	"PAYLOAD_ATTESTATION_DUE_BPS",
 	"PROPOSER_INCLUSION_LIST_CUTOFF",
+	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
+	"PROPOSER_REORG_CUTOFF_BPS",
 	"PROPOSER_SCORE_BOOST_EIP7732",
 	"PROPOSER_SELECTION_GAP",
+	"SLOT_DURATION_MS",
+	"SYNC_MESSAGE_DUE_BPS_GLOAS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
+	"VIEW_FREEZE_CUTOFF_BPS",
 	"VIEW_FREEZE_DEADLINE",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
 	"WHISK_FORK_EPOCH",
@@ -80,6 +101,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.HysteresisQuotient, actual.HysteresisQuotient, "%s: HysteresisQuotient", name)
 	assert.Equal(t, expected.HysteresisDownwardMultiplier, actual.HysteresisDownwardMultiplier, "%s: HysteresisDownwardMultiplier", name)
 	assert.Equal(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier, "%s: HysteresisUpwardMultiplier", name)
+	assert.Equal(t, expected.SyncMessageDueBPS, actual.SyncMessageDueBPS, "%s: SyncMessageDueBPS", name)
 
 	// Validator params.
 	assert.Equal(t, expected.Eth1FollowDistance, actual.Eth1FollowDistance, "%s: Eth1FollowDistance", name)
@@ -370,6 +392,7 @@ func presetsFilePath(t *testing.T, config string) []string {
 		path.Join(fPath, "presets", config, "capella.yaml"),
 		path.Join(fPath, "presets", config, "deneb.yaml"),
 		path.Join(fPath, "presets", config, "electra.yaml"),
+		path.Join(fPath, "presets", config, "fulu.yaml"),
 	}
 }
 

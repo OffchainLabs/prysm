@@ -7,13 +7,15 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
@@ -123,6 +125,13 @@ func (c *blobsTestCase) runTestBlobSidecarsByRoot(t *testing.T) {
 	if c.streamReader == nil {
 		c.streamReader = defaultExpectedRequirer
 	}
+	if c.clock == nil {
+		de := params.BeaconConfig().DenebForkEpoch
+		denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
+		ce := de + denebBuffer
+		cs := util.SlotAtEpoch(t, ce)
+		c.clock = startup.NewClock(genesis.Time(), genesis.ValidatorsRoot(), startup.WithSlotAsNow(cs))
+	}
 	c.run(t)
 }
 
@@ -181,18 +190,20 @@ func readChunkEncodedBlobsAsStreamReader(t *testing.T, s *Service, expect []*exp
 }
 
 func TestBlobsByRootValidation(t *testing.T) {
-	cfg := params.BeaconConfig()
-	repositionFutureEpochs(cfg)
-	undo, err := params.SetActiveWithUndo(cfg)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, undo())
-	}()
-	capellaSlot, err := slots.EpochStart(params.BeaconConfig().CapellaForkEpoch)
-	require.NoError(t, err)
-	dmc, clock := defaultMockChain(t)
+	params.SetupTestConfigCleanup(t)
+	repositionFutureEpochs(params.BeaconConfig())
+
+	de := params.BeaconConfig().DenebForkEpoch
+	denebBuffer := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest + 1000
+	ce := de + denebBuffer
+	cs := util.SlotAtEpoch(t, ce)
+	clock := startup.NewClock(genesis.Time(), genesis.ValidatorsRoot(), startup.WithSlotAsNow(cs))
+
+	dmc := defaultMockChain(t, ce)
+	capellaSlot := util.SlotAtEpoch(t, params.BeaconConfig().CapellaForkEpoch)
 	dmc.Slot = &capellaSlot
 	dmc.FinalizedCheckPoint = &ethpb.Checkpoint{Epoch: params.BeaconConfig().CapellaForkEpoch}
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(params.BeaconConfig().DenebForkEpoch)
 	cases := []*blobsTestCase{
 		{
 			name:    "block before minimum_request_epoch",
@@ -222,7 +233,7 @@ func TestBlobsByRootValidation(t *testing.T) {
 			name:    "block with all indices missing between 2 full blocks",
 			nblocks: 3,
 			missing: map[int]bool{1: true},
-			total:   func(i int) *int { return &i }(2 * int(params.BeaconConfig().MaxBlobsPerBlock(0))),
+			total:   func(i int) *int { return &i }(2 * int(maxBlobs)),
 		},
 		{
 			name:    "exceeds req max",
@@ -232,6 +243,7 @@ func TestBlobsByRootValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			c.clock = clock
 			c.runTestBlobSidecarsByRoot(t)
 		})
 	}

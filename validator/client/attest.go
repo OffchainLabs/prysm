@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -22,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 
@@ -71,9 +71,15 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
+	committeeIndex := duty.CommitteeIndex
+	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+	if postElectra {
+		committeeIndex = 0
+	}
+
 	req := &ethpb.AttestationDataRequest{
 		Slot:           slot,
-		CommitteeIndex: duty.CommitteeIndex,
+		CommitteeIndex: committeeIndex,
 	}
 	data, err := v.validatorClient.AttestationData(ctx, req)
 	if err != nil {
@@ -94,8 +100,6 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		tracing.AnnotateError(span, err)
 		return
 	}
-
-	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
 
 	var indexedAtt ethpb.IndexedAtt
 	if postElectra {

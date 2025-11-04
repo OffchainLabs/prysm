@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -29,13 +30,13 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 	const minimumPeerCount = 1
 
 	// Get our actual custody group count.
-	actualCustodyGrounpCount, err := s.cfg.p2p.CustodyGroupCount()
+	actualCustodyGrounpCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return errors.Wrap(err, "p2p custody group count")
 	}
 
 	// Get our target custody group count.
-	targetCustodyGroupCount, err := s.custodyGroupCount()
+	targetCustodyGroupCount, err := s.custodyGroupCount(s.ctx)
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
 	}
@@ -88,11 +89,11 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 
 // custodyGroupCount computes the custody group count based on the custody requirement,
 // the validators custody requirement, and whether the node is subscribed to all data subnets.
-func (s *Service) custodyGroupCount() (uint64, error) {
-	beaconConfig := params.BeaconConfig()
+func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
+	cfg := params.BeaconConfig()
 
 	if flags.Get().SubscribeAllDataSubnets {
-		return beaconConfig.NumberOfCustodyGroups, nil
+		return cfg.NumberOfCustodyGroups, nil
 	}
 
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
@@ -100,12 +101,15 @@ func (s *Service) custodyGroupCount() (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
+	return max(cfg.CustodyRequirement, validatorsCustodyRequirement), nil
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the
 // finalized state and the tracked validators.
 func (s *Service) validatorsCustodyRequirement() (uint64, error) {
+	if s.trackedValidatorsCache == nil {
+		return 0, nil
+	}
 	// Get the indices of the tracked validators.
 	indices := s.trackedValidatorsCache.Indices()
 

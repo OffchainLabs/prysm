@@ -30,10 +30,11 @@ import (
 )
 
 const (
-	getExecHeaderPath          = "/eth/v1/builder/header/{{.Slot}}/{{.ParentHash}}/{{.Pubkey}}"
-	getStatus                  = "/eth/v1/builder/status"
-	postBlindedBeaconBlockPath = "/eth/v1/builder/blinded_blocks"
-	postRegisterValidatorPath  = "/eth/v1/builder/validators"
+	getExecHeaderPath            = "/eth/v1/builder/header/{{.Slot}}/{{.ParentHash}}/{{.Pubkey}}"
+	getStatus                    = "/eth/v1/builder/status"
+	postBlindedBeaconBlockPath   = "/eth/v1/builder/blinded_blocks"
+	postBlindedBeaconBlockV2Path = "/eth/v2/builder/blinded_blocks"
+	postRegisterValidatorPath    = "/eth/v1/builder/validators"
 )
 
 var (
@@ -512,7 +513,7 @@ func (c *Client) SubmitBlindedBlockPostFulu(ctx context.Context, sb interfaces.R
 	}
 
 	// Post the blinded block - the response should only contain a status code (no payload)
-	_, _, err = c.do(ctx, http.MethodPost, postBlindedBeaconBlockPath, bytes.NewBuffer(body), http.StatusAccepted, postOpts)
+	_, _, err = c.do(ctx, http.MethodPost, postBlindedBeaconBlockV2Path, bytes.NewBuffer(body), http.StatusAccepted, postOpts)
 	if err != nil {
 		return errors.Wrap(err, "error posting the blinded block to the builder api post-Fulu")
 	}
@@ -725,6 +726,12 @@ func unexpectedStatusErr(response *http.Response, expected int) error {
 			return errors.Wrap(jsonErr, "unable to read response body")
 		}
 		return errors.Wrap(ErrNotOK, errMessage.Message)
+	case http.StatusBadGateway:
+		log.WithError(ErrBadGateway).Debug(msg)
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return errors.Wrap(ErrBadGateway, errMessage.Message)
 	default:
 		log.WithError(ErrNotOK).Debug(msg)
 		return errors.Wrap(ErrNotOK, fmt.Sprintf("unsupported error code: %d", response.StatusCode))

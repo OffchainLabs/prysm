@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -43,7 +44,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -1049,9 +1049,8 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 		s.SubmitSyncCommitteeSubscription(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 		subnets, _, _, _ := cache.SyncSubnetIDs.GetSyncCommitteeSubnets(pubkeys[1], 0)
-		require.Equal(t, 2, len(subnets))
+		require.Equal(t, 1, len(subnets))
 		assert.Equal(t, uint64(0), subnets[0])
-		assert.Equal(t, uint64(2), subnets[1])
 	})
 	t.Run("multiple", func(t *testing.T) {
 		cache.SyncSubnetIDs.EmptyAllCaches()
@@ -1070,7 +1069,7 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 		assert.Equal(t, uint64(0), subnets[0])
 		subnets, _, _, _ = cache.SyncSubnetIDs.GetSyncCommitteeSubnets(pubkeys[1], 0)
 		require.Equal(t, 1, len(subnets))
-		assert.Equal(t, uint64(2), subnets[0])
+		assert.Equal(t, uint64(0), subnets[0])
 	})
 	t.Run("no body", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -2117,6 +2116,27 @@ func TestProduceSyncCommitteeContribution(t *testing.T) {
 		server.ProduceSyncCommitteeContribution(writer, request)
 		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 	})
+	t.Run("invalid subcommittee_index", func(t *testing.T) {
+		url := "http://example.com?slot=1&subcommittee_index=10&beacon_block_root=0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
+		request := httptest.NewRequest(http.MethodGet, url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		// Use non-optimistic server for this test
+		server := Server{
+			CoreService: &core.Service{
+				HeadFetcher: &mockChain.ChainService{
+					SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+				},
+			},
+			SyncCommitteePool:     syncCommitteePool,
+			OptimisticModeFetcher: &mockChain.ChainService{}, // Optimistic: false by default
+		}
+
+		server.ProduceSyncCommitteeContribution(writer, request)
+		assert.Equal(t, http.StatusBadRequest, writer.Code)
+		require.ErrorContains(t, "Subcommittee index needs to be between 0 and 3, 10 is outside of this range.", errors.New(writer.Body.String()))
+	})
 }
 
 func TestServer_RegisterValidator(t *testing.T) {
@@ -2643,78 +2663,6 @@ func TestGetProposerDuties(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusServiceUnavailable, e.Code)
 	})
-}
-
-func TestGetProposerDuties_FuluState(t *testing.T) {
-	helpers.ClearCache()
-
-	// Create a Fulu state with slot 0 (before epoch 1 start slot which is 32)
-	fuluState, err := util.NewBeaconStateFulu()
-	require.NoError(t, err)
-	require.NoError(t, fuluState.SetSlot(0)) // Set to slot 0
-
-	// Create some validators for the test
-	depChainStart := params.BeaconConfig().MinGenesisActiveValidatorCount
-	deposits, _, err := util.DeterministicDepositsAndKeys(depChainStart)
-	require.NoError(t, err)
-
-	validators := make([]*ethpbalpha.Validator, len(deposits))
-	for i, deposit := range deposits {
-		validators[i] = &ethpbalpha.Validator{
-			PublicKey:             deposit.Data.PublicKey,
-			ActivationEpoch:       0,
-			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
-			WithdrawalCredentials: make([]byte, 32),
-		}
-	}
-	require.NoError(t, fuluState.SetValidators(validators))
-
-	// Set up block roots
-	genesis := util.NewBeaconBlock()
-	genesisRoot, err := genesis.Block.HashTreeRoot()
-	require.NoError(t, err)
-	roots := make([][]byte, fieldparams.BlockRootsLength)
-	roots[0] = genesisRoot[:]
-	require.NoError(t, fuluState.SetBlockRoots(roots))
-
-	chainSlot := primitives.Slot(0)
-	chain := &mockChain.ChainService{
-		State: fuluState, Root: genesisRoot[:], Slot: &chainSlot,
-	}
-
-	db := dbutil.SetupDB(t)
-	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
-
-	s := &Server{
-		Stater:                 &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: fuluState}},
-		HeadFetcher:            chain,
-		TimeFetcher:            chain,
-		OptimisticModeFetcher:  chain,
-		SyncChecker:            &mockSync.Sync{IsSyncing: false},
-		PayloadIDCache:         cache.NewPayloadIDCache(),
-		TrackedValidatorsCache: cache.NewTrackedValidatorsCache(),
-		BeaconDB:               db,
-	}
-
-	// Request epoch 1 duties, which should require advancing from slot 0 to slot 32
-	// But for Fulu state, this advancement should be skipped
-	request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
-	request.SetPathValue("epoch", "1")
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
-
-	s.GetProposerDuties(writer, request)
-	assert.Equal(t, http.StatusOK, writer.Code)
-
-	// Verify the state was not advanced - it should still be at slot 0
-	// This is the key assertion for the regression test
-	assert.Equal(t, primitives.Slot(0), fuluState.Slot(), "Fulu state should not have been advanced")
-
-	resp := &structs.GetProposerDutiesResponse{}
-	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-
-	// Should still return proposer duties despite not advancing the state
-	assert.Equal(t, true, len(resp.Data) > 0, "Should return proposer duties even without state advancement")
 }
 
 func TestGetSyncCommitteeDuties(t *testing.T) {

@@ -84,8 +84,8 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	// Handle validator ejections.
 	for _, idx := range eligibleForEjection {
 		var err error
-		// exitQueueEpoch and churn arguments are not used in electra.
-		st, _, err = validators.InitiateValidatorExit(ctx, st, idx, 0 /*exitQueueEpoch*/, 0 /*churn*/)
+		// exit info is not used in electra
+		st, err = validators.InitiateValidatorExit(ctx, st, idx, &validators.ExitInfo{})
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return fmt.Errorf("failed to initiate validator exit at index %d: %w", idx, err)
 		}

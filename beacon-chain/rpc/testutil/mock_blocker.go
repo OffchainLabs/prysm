@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -13,10 +14,13 @@ import (
 
 // MockBlocker is a fake implementation of lookup.Blocker.
 type MockBlocker struct {
-	BlockToReturn interfaces.ReadOnlySignedBeaconBlock
-	ErrorToReturn error
-	SlotBlockMap  map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock
-	RootBlockMap  map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	BlockToReturn            interfaces.ReadOnlySignedBeaconBlock
+	ErrorToReturn            error
+	SlotBlockMap             map[primitives.Slot]interfaces.ReadOnlySignedBeaconBlock
+	RootBlockMap             map[[32]byte]interfaces.ReadOnlySignedBeaconBlock
+	DataColumnsFunc          func(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
+	DataColumnsToReturn      []blocks.VerifiedRODataColumn
+	DataColumnsErrorToReturn *core.RpcError
 }
 
 // Block --
@@ -36,6 +40,20 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 }
 
 // Blobs --
-func (*MockBlocker) Blobs(_ context.Context, _ string, _ []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (*MockBlocker) Blobs(_ context.Context, _ string, _ ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	return nil, &core.RpcError{}
+}
+
+// DataColumns --
+func (m *MockBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+	if m.DataColumnsFunc != nil {
+		return m.DataColumnsFunc(ctx, id, indices)
+	}
+	if m.DataColumnsErrorToReturn != nil {
+		return nil, m.DataColumnsErrorToReturn
+	}
+	if m.DataColumnsToReturn != nil {
+		return m.DataColumnsToReturn, nil
+	}
 	return nil, &core.RpcError{}
 }

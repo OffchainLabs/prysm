@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -19,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestProcessSyncCommittee_PerfectParticipation(t *testing.T) {
@@ -53,9 +53,19 @@ func TestProcessSyncCommittee_PerfectParticipation(t *testing.T) {
 		SyncCommitteeSignature: aggregatedSig,
 	}
 
+	// Verify that ProcessSyncAggregateNoVerifySig and ProcessSyncAggregate have the same outcome.
+	beaconStateNoVerifySig := beaconState.Copy()
+	beaconStateNoVerifySig, rewardNoVerifySig, err := altair.ProcessSyncAggregateNoVerifySig(t.Context(), beaconStateNoVerifySig, syncAggregate)
+	require.NoError(t, err)
+	sszNoVerifySig, err := beaconStateNoVerifySig.MarshalSSZ()
+	require.NoError(t, err)
 	var reward uint64
 	beaconState, reward, err = altair.ProcessSyncAggregate(t.Context(), beaconState, syncAggregate)
 	require.NoError(t, err)
+	ssz, err := beaconState.MarshalSSZ()
+	require.NoError(t, err)
+	assert.DeepEqual(t, sszNoVerifySig, ssz, "States resulting from ProcessSyncAggregateNoVerifySig and ProcessSyncAggregate are not equal")
+	assert.Equal(t, rewardNoVerifySig, reward, "Rewards resulting from ProcessSyncAggregateNoVerifySig and ProcessSyncAggregate are not equal")
 	assert.Equal(t, uint64(72192), reward)
 
 	// Use a non-sync committee index to compare profitability.

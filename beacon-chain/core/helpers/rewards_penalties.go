@@ -79,12 +79,17 @@ func TotalActiveBalance(s state.ReadOnlyBeaconState) (uint64, error) {
 	}
 
 	// Spec defines `EffectiveBalanceIncrement` as min to avoid divisions by zero.
-	total = mathutil.Max(params.BeaconConfig().EffectiveBalanceIncrement, total)
+	total = max(params.BeaconConfig().EffectiveBalanceIncrement, total)
 	if err := balanceCache.AddTotalEffectiveBalance(s, total); err != nil {
 		return 0, err
 	}
 
 	return total, nil
+}
+
+// UpdateTotalActiveBalanceCache updates the cache with the given total active balance.
+func UpdateTotalActiveBalanceCache(s state.BeaconState, total uint64) error {
+	return balanceCache.AddTotalEffectiveBalance(s, total)
 }
 
 // IncreaseBalance increases validator with the given 'index' balance by 'delta' in Gwei.

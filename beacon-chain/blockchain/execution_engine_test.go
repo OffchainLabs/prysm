@@ -481,33 +481,12 @@ func Test_NotifyNewPayload(t *testing.T) {
 	phase0State, _ := util.DeterministicGenesisState(t, 1)
 	altairState, _ := util.DeterministicGenesisStateAltair(t, 1)
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
-	a := &ethpb.SignedBeaconBlockAltair{
-		Block: &ethpb.BeaconBlockAltair{
-			Body: &ethpb.BeaconBlockBodyAltair{},
-		},
-	}
+	a := util.NewBeaconBlockAltair()
 	altairBlk, err := consensusblocks.NewSignedBeaconBlock(a)
 	require.NoError(t, err)
-	blk := &ethpb.SignedBeaconBlockBellatrix{
-		Block: &ethpb.BeaconBlockBellatrix{
-			Slot: 1,
-			Body: &ethpb.BeaconBlockBodyBellatrix{
-				ExecutionPayload: &v1.ExecutionPayload{
-					BlockNumber:   1,
-					ParentHash:    make([]byte, fieldparams.RootLength),
-					FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-					StateRoot:     make([]byte, fieldparams.RootLength),
-					ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-					LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-					PrevRandao:    make([]byte, fieldparams.RootLength),
-					ExtraData:     make([]byte, 0),
-					BaseFeePerGas: make([]byte, fieldparams.RootLength),
-					BlockHash:     make([]byte, fieldparams.RootLength),
-					Transactions:  make([][]byte, 0),
-				},
-			},
-		},
-	}
+	blk := util.NewBeaconBlockBellatrix()
+	blk.Block.Slot = 1
+	blk.Block.Body.ExecutionPayload.BlockNumber = 1
 	bellatrixBlk, err := consensusblocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(blk))
 	require.NoError(t, err)
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
@@ -545,12 +524,6 @@ func Test_NotifyNewPayload(t *testing.T) {
 			isValidPayload: true,
 		},
 		{
-			name:           "nil beacon block",
-			postState:      bellatrixState,
-			errString:      "signed beacon block can't be nil",
-			isValidPayload: false,
-		},
-		{
 			name:           "new payload with optimistic block",
 			postState:      bellatrixState,
 			blk:            bellatrixBlk,
@@ -576,15 +549,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "altair pre state, happy case",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -595,24 +561,7 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "not at merge transition",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash:    make([]byte, fieldparams.RootLength),
-								FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-								StateRoot:     make([]byte, fieldparams.RootLength),
-								ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-								LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-								PrevRandao:    make([]byte, fieldparams.RootLength),
-								ExtraData:     make([]byte, 0),
-								BaseFeePerGas: make([]byte, fieldparams.RootLength),
-								BlockHash:     make([]byte, fieldparams.RootLength),
-								Transactions:  make([][]byte, 0),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -623,15 +572,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "happy case",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -642,15 +584,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "undefined error from ee",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -662,15 +597,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "invalid block hash error from ee",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -701,7 +629,9 @@ func Test_NotifyNewPayload(t *testing.T) {
 			require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 			postVersion, postHeader, err := getStateVersionAndPayload(tt.postState)
 			require.NoError(t, err)
-			isValidPayload, err := service.notifyNewPayload(ctx, postVersion, postHeader, tt.blk)
+			rob, err := consensusblocks.NewROBlock(tt.blk)
+			require.NoError(t, err)
+			isValidPayload, err := service.notifyNewPayload(ctx, postVersion, postHeader, rob)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 				if tt.invalidBlock {
@@ -725,16 +655,11 @@ func Test_NotifyNewPayload_SetOptimisticToValid(t *testing.T) {
 	ctx := tr.ctx
 
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
-	blk := &ethpb.SignedBeaconBlockBellatrix{
-		Block: &ethpb.BeaconBlockBellatrix{
-			Body: &ethpb.BeaconBlockBodyBellatrix{
-				ExecutionPayload: &v1.ExecutionPayload{
-					ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-				},
-			},
-		},
-	}
+	blk := util.NewBeaconBlockBellatrix()
+	blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 	bellatrixBlk, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	rob, err := consensusblocks.NewROBlock(bellatrixBlk)
 	require.NoError(t, err)
 	e := &mockExecution.EngineClient{BlockByHashMap: map[[32]byte]*v1.ExecutionBlock{}}
 	e.BlockByHashMap[[32]byte{'a'}] = &v1.ExecutionBlock{
@@ -752,7 +677,7 @@ func Test_NotifyNewPayload_SetOptimisticToValid(t *testing.T) {
 	service.cfg.ExecutionEngineCaller = e
 	postVersion, postHeader, err := getStateVersionAndPayload(bellatrixState)
 	require.NoError(t, err)
-	validated, err := service.notifyNewPayload(ctx, postVersion, postHeader, bellatrixBlk)
+	validated, err := service.notifyNewPayload(ctx, postVersion, postHeader, rob)
 	require.NoError(t, err)
 	require.Equal(t, true, validated)
 }

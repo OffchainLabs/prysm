@@ -14,7 +14,10 @@ const BytesPerBlob = ckzg4844.BytesPerBlob
 type Blob [BytesPerBlob]byte
 
 // BytesPerCell is the number of bytes in a single cell.
-const BytesPerCell = ckzg4844.BytesPerCell
+const (
+	BytesPerCell  = ckzg4844.BytesPerCell
+	BytesPerProof = ckzg4844.BytesPerProof
+)
 
 // Cell represents a chunk of an encoded Blob.
 type Cell [BytesPerCell]byte
@@ -23,7 +26,7 @@ type Cell [BytesPerCell]byte
 type Commitment [48]byte
 
 // Proof represents a KZG proof that attests to the validity of a Blob or parts of it.
-type Proof [48]byte
+type Proof [BytesPerProof]byte
 
 // Bytes48 is a 48-byte array.
 type Bytes48 = ckzg4844.Bytes48
@@ -102,11 +105,11 @@ func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, c
 	for i := range cells {
 		ckzgCells[i] = ckzg4844.Cell(cells[i])
 	}
-
 	return ckzg4844.VerifyCellKZGProofBatch(commitmentsBytes, cellIndices, ckzgCells, proofsBytes)
 }
 
 // RecoverCellsAndKZGProofs recovers the complete cells and KZG proofs from a given set of cell indices and partial cells.
+// Note: `len(cellIndices)` must be equal to `len(partialCells)` and `cellIndices` must be sorted in ascending order.
 func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) (CellsAndProofs, error) {
 	// Convert `Cell` type to `ckzg4844.Cell`
 	ckzgPartialCells := make([]ckzg4844.Cell, len(partialCells))

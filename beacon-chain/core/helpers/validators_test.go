@@ -1161,6 +1161,10 @@ func TestValidatorMaxEffectiveBalance(t *testing.T) {
 }
 
 func TestBeaconProposerIndexAtSlotFulu(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
 	lookahead := make([]uint64, 64)
 	lookahead[0] = 15
 	lookahead[1] = 16
@@ -1180,8 +1184,4 @@ func TestBeaconProposerIndexAtSlotFulu(t *testing.T) {
 	idx, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 130)
 	require.NoError(t, err)
 	require.Equal(t, primitives.ValidatorIndex(42), idx)
-	_, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 95)
-	require.ErrorContains(t, "slot 95 is not in the current epoch 3 or the next epoch", err)
-	_, err = helpers.BeaconProposerIndexAtSlot(t.Context(), st, 160)
-	require.ErrorContains(t, "slot 160 is not in the current epoch 3 or the next epoch", err)
 }

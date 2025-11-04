@@ -2,6 +2,7 @@ package verification
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
@@ -256,17 +257,25 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 			continue
 		}
 
-		columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
+		// Ensure the expensive signature verification is only performed once for
+		// concurrent requests for the same signature data.
+		if _, err, _ = dv.sg.Do(signatureData.concat(), func() (any, error) {
+			columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
 
-		// Retrieve the parent state.
-		parentState, err := dv.parentState(ctx, dataColumn)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent state"))
-		}
+			// Retrieve the parent state.
+			parentState, err := dv.state(ctx, dataColumn.ParentRoot())
+			if err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "parent state"))
+			}
 
-		// Full verification, which will subsequently be cached for anything sharing the signature cache.
-		if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verify signature"))
+			// Full verification, which will subsequently be cached for anything sharing the signature cache.
+			if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "verify signature"))
+			}
+
+			return nil, nil
+		}); err != nil {
+			return err
 		}
 	}
 
@@ -469,15 +478,25 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		idx, cached := dv.pc.Proposer(checkpoint, dataColumnSlot)
 
 		if !cached {
-			// Retrieve the parent state.
-			parentState, err := dv.parentState(ctx, dataColumn)
-			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "parent state"))
-			}
+			parentRoot := dataColumn.ParentRoot()
+			// Ensure the expensive index computation is only performed once for
+			// concurrent requests for the same signature data.
+			if _, err, _ := dv.sg.Do(fmt.Sprintf("%#x", parentRoot), func() (any, error) {
+				// Retrieve the parent state.
+				parentState, err := dv.state(ctx, parentRoot)
+				if err != nil {
+					return nil, columnErrBuilder(errors.Wrap(err, "parent state"))
+				}
 
-			idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
-			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				// Compute the proposer index.
+				idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
+				if err != nil {
+					return nil, columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				}
+
+				return nil, nil
+			}); err != nil {
+				return err
 			}
 		}
 
@@ -489,23 +508,21 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	return nil
 }
 
-// parentState retrieves the parent state of the data column from the cache if possible, else retrieves it from the state by rooter.
-func (dv *RODataColumnsVerifier) parentState(ctx context.Context, dataColumn blocks.RODataColumn) (state.BeaconState, error) {
-	parentRoot := dataColumn.ParentRoot()
-
+// state retrieves the state of the corresponding root from the cache if possible, else retrieves it from the state by rooter.
+func (dv *RODataColumnsVerifier) state(ctx context.Context, root [fieldparams.RootLength]byte) (state.BeaconState, error) {
 	// If the parent root is already in the cache, return it.
-	if st, ok := dv.stateByRoot[parentRoot]; ok {
+	if st, ok := dv.stateByRoot[root]; ok {
 		return st, nil
 	}
 
 	// Retrieve the parent state from the state by rooter.
-	st, err := dv.sr.StateByRoot(ctx, parentRoot)
+	st, err := dv.sr.StateByRoot(ctx, root)
 	if err != nil {
 		return nil, errors.Wrap(err, "state by root")
 	}
 
 	// Store the parent state in the cache.
-	dv.stateByRoot[parentRoot] = st
+	dv.stateByRoot[root] = st
 
 	return st, nil
 }
@@ -524,24 +541,39 @@ func columnErrBuilder(baseErr error) error {
 	return errors.Wrap(baseErr, errColumnsInvalid.Error())
 }
 
-func inclusionProofKey(c blocks.RODataColumn) ([160]byte, error) {
-	var key [160]byte
-	if len(c.KzgCommitmentsInclusionProof) != 4 {
+// incluseionProofKey computes a unique key based on the KZG commitments,
+// the KZG commitments inclusion proof, and the signed block header root.
+func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
+	const (
+		commsIncProofLen       = 4
+		commsIncProofByteCount = commsIncProofLen * 32
+	)
+
+	if len(c.KzgCommitmentsInclusionProof) != commsIncProofLen {
 		// This should be already enforced by ssz unmarshaling; still check so we don't panic on array bounds.
-		return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
+		return [32]byte{}, columnErrBuilder(ErrSidecarInclusionProofInvalid)
 	}
 
+	commsByteCount := len(c.KzgCommitments) * fieldparams.KzgCommitmentSize
+	unhashedKey := make([]byte, 0, commsIncProofByteCount+fieldparams.RootLength+commsByteCount)
+
+	// Include the commitments inclusion proof in the key.
+	for _, proof := range c.KzgCommitmentsInclusionProof {
+		unhashedKey = append(unhashedKey, proof...)
+	}
+
+	// Include the block root in the key.
 	root, err := c.SignedBlockHeader.HashTreeRoot()
 	if err != nil {
-		return [160]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
+		return [32]byte{}, columnErrBuilder(errors.Wrap(err, "hash tree root"))
 	}
 
-	for i := range c.KzgCommitmentsInclusionProof {
-		if copy(key[32*i:32*i+32], c.KzgCommitmentsInclusionProof[i]) != 32 {
-			return key, columnErrBuilder(ErrSidecarInclusionProofInvalid)
-		}
+	unhashedKey = append(unhashedKey, root[:]...)
+
+	// Include the commitments in the key.
+	for _, commitment := range c.KzgCommitments {
+		unhashedKey = append(unhashedKey, commitment...)
 	}
 
-	copy(key[128:], root[:])
-	return key, nil
+	return sha256.Sum256(unhashedKey), nil
 }

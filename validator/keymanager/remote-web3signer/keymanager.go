@@ -20,7 +20,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/io/file"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/accounts/petnames"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/internal"
@@ -400,16 +400,14 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 	if !bytesutil.IsValidRoot(genesisValidatorsRoot) {
 		return nil, fmt.Errorf("invalid genesis validators root length, genesis root: %v", genesisValidatorsRoot)
 	}
+	ver := slots.ToForkVersion(request.SigningSlot)
 	switch request.Object.(type) {
 	case *validatorpb.SignRequest_Block:
 		return handleBlock(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_AttestationData:
 		return handleAttestationData(ctx, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_AggregateAttestationAndProof:
-		// TODO: update to V2 sometime after release
-		return handleAggregateAttestationAndProof(ctx, validator, request, genesisValidatorsRoot)
-	case *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
-		return handleAggregateAttestationAndProofV2(ctx, version.Electra, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_AggregateAttestationAndProof, *validatorpb.SignRequest_AggregateAttestationAndProofElectra:
+		return handleAggregateAttestationAndProofV2(ctx, ver, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_Slot:
 		return handleAggregationSlot(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlockAltair:
@@ -430,6 +428,11 @@ func getSignRequestJson(ctx context.Context, validator *validator.Validate, requ
 		return handleBlockElectra(ctx, validator, request, genesisValidatorsRoot)
 	case *validatorpb.SignRequest_BlindedBlockElectra:
 		return handleBlindedBlockElectra(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlockFulu:
+		return handleBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+	case *validatorpb.SignRequest_BlindedBlockFulu:
+		return handleBlindedBlockFulu(ctx, validator, request, genesisValidatorsRoot)
+
 	// We do not support "DEPOSIT" type.
 	/*
 		case *validatorpb.:
@@ -476,18 +479,6 @@ func handleAttestationData(ctx context.Context, validator *validator.Validate, r
 	}
 	attestationSignRequestsTotal.Inc()
 	return json.Marshal(attestationSignRequest)
-}
-
-func handleAggregateAttestationAndProof(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
-	aggregateAndProofSignRequest, err := types.GetAggregateAndProofSignRequest(request, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	if err = validator.StructCtx(ctx, aggregateAndProofSignRequest); err != nil {
-		return nil, err
-	}
-	aggregateAndProofSignRequestsTotal.Inc()
-	return json.Marshal(aggregateAndProofSignRequest)
 }
 
 func handleAggregateAttestationAndProofV2(ctx context.Context, fork int, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
@@ -620,6 +611,30 @@ func handleBlindedBlockElectra(ctx context.Context, validator *validator.Validat
 	}
 	remoteBlockSignRequestsTotal.WithLabelValues("electra", "true").Inc()
 	return json.Marshal(blindedBlockv2ElectraSignRequest)
+}
+
+func handleBlockFulu(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blockv2FuluSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blockv2FuluSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "false").Inc()
+	return json.Marshal(blockv2FuluSignRequest)
+}
+
+func handleBlindedBlockFulu(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {
+	blindedBlockv2FuluSignRequest, err := types.GetBlockV2BlindedSignRequest(request, genesisValidatorsRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err = validator.StructCtx(ctx, blindedBlockv2FuluSignRequest); err != nil {
+		return nil, err
+	}
+	remoteBlockSignRequestsTotal.WithLabelValues("fulu", "true").Inc()
+	return json.Marshal(blindedBlockv2FuluSignRequest)
 }
 
 func handleRandaoReveal(ctx context.Context, validator *validator.Validate, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) ([]byte, error) {

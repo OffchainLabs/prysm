@@ -3,12 +3,12 @@ package sync
 import (
 	"bytes"
 	"context"
-	"math"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -20,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -30,224 +29,338 @@ import (
 // DataColumnSidecarsParams stores the common parameters needed to
 // fetch data column sidecars from peers.
 type DataColumnSidecarsParams struct {
-	Ctx         context.Context                     // Context
-	Tor         blockchain.TemporalOracle           // Temporal oracle, useful to get the current slot
-	P2P         prysmP2P.P2P                        // P2P network interface
-	RateLimiter *leakybucket.Collector              // Rate limiter for outgoing requests
-	CtxMap      ContextByteVersions                 // Context map, useful to know if a message is mapped to the correct fork
-	Storage     filesystem.DataColumnStorageReader  // Data columns storage
-	NewVerifier verification.NewDataColumnsVerifier // Data columns verifier to check to conformity of incoming data column sidecars
+	Ctx                     context.Context                     // Context
+	Tor                     blockchain.TemporalOracle           // Temporal oracle, useful to get the current slot
+	P2P                     prysmP2P.P2P                        // P2P network interface
+	RateLimiter             *leakybucket.Collector              // Rate limiter for outgoing requests
+	CtxMap                  ContextByteVersions                 // Context map, useful to know if a message is mapped to the correct fork
+	Storage                 filesystem.DataColumnStorageReader  // Data columns storage
+	NewVerifier             verification.NewDataColumnsVerifier // Data columns verifier to check to conformity of incoming data column sidecars
+	DownscorePeerOnRPCFault bool                                // Downscore a peer if it commits an RPC fault. Not responding sidecars at all is considered as a fault.
 }
 
-// FetchDataColumnSidecars retrieves data column sidecars from storage and peers for the given
-// blocks and requested data column indices. It employs a multi-step strategy:
+// FetchDataColumnSidecars retrieves data column sidecars for the given blocks and indices
+// using a series of fallback strategies.
 //
-//  1. Direct retrieval: If all requested columns are available in storage, they are
-//     retrieved directly without reconstruction.
-//  2. Reconstruction-based retrieval: If some requested columns are missing but sufficient
-//     stored columns exist (at least the minimum required for reconstruction), the function
-//     reconstructs all columns and extracts the requested indices.
-//  3. Peer retrieval: If storage and reconstruction fail, missing columns are requested
-//     from connected peers that are expected to custody the required data.
+// For each block in `roBlocks` that has commitments, the function attempts to obtain
+// all sidecars corresponding to the indices listed in `requestedIndices`.
 //
-// The function returns a map of block roots to their corresponding verified read-only data
-// columns. It returns an error if data column storage is unavailable, if storage/reconstruction
-// operations fail unexpectedly, or if not all requested columns could be retrieved from peers.
+// The function returns:
+//   - A map from block root to the sidecars successfully retrieved.
+//   - A set of block roots for which not all requested sidecars could be retrieved.
+//
+// Retrieval strategy (proceeds to the next step only if not all requested sidecars
+// were successfully obtained at the current step):
+//  1. Attempt to load the requested sidecars from storage, reconstructing them from
+//     other available sidecars in storage if necessary.
+//  2. Request any missing sidecars from peers. If some are still missing, attempt to
+//     reconstruct them using both stored sidecars and those retrieved from peers.
+//  3. Request all remaining possible sidecars from peers that are not already in storage
+//     or retrieved in step 2. Stop once either all requested sidecars are retrieved,
+//     or enough sidecars are available (from storage, step 2, and step 3) to reconstruct
+//     the requested ones.
 func FetchDataColumnSidecars(
 	params DataColumnSidecarsParams,
 	roBlocks []blocks.ROBlock,
-	indicesMap map[uint64]bool,
-) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	if len(roBlocks) == 0 || len(indicesMap) == 0 {
-		return nil, nil
+	requestedIndices map[uint64]bool,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	if len(roBlocks) == 0 || len(requestedIndices) == 0 {
+		return nil, nil, nil
 	}
 
-	indices := sortedSliceFromMap(indicesMap)
-	slotsWithCommitments := make(map[primitives.Slot]bool)
-	indicesByRootToQuery := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
-	indicesByRootStored := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
-	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	blockCount := len(roBlocks)
+
+	// We first consider all requested roots as incomplete, and remove roots from this
+	// set as we retrieve them.
+	incompleteRoots := make(map[[fieldparams.RootLength]byte]bool, blockCount)
+	slotsWithCommitments := make(map[primitives.Slot]bool, blockCount)
+	slotByRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, blockCount)
+	storedIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, blockCount)
 
 	for _, roBlock := range roBlocks {
-		// Filter out blocks without commitments.
 		block := roBlock.Block()
+
 		commitments, err := block.Body().BlobKzgCommitments()
 		if err != nil {
-			return nil, errors.Wrapf(err, "get blob kzg commitments for block root %#x", roBlock.Root())
+			return nil, nil, errors.Wrapf(err, "get blob kzg commitments for block root %#x", roBlock.Root())
 		}
+
 		if len(commitments) == 0 {
 			continue
 		}
 
-		slotsWithCommitments[block.Slot()] = true
 		root := roBlock.Root()
+		slot := block.Slot()
 
-		// Step 1: Get the requested sidecars for this root if available in storage
-		requestedColumns, err := tryGetDirectColumns(params.Storage, root, indices)
-		if err != nil {
-			return nil, errors.Wrapf(err, "try get direct columns for root %#x", root)
-		}
-		if requestedColumns != nil {
-			result[root] = requestedColumns
-			continue
-		}
+		incompleteRoots[root] = true
+		slotByRoot[root] = slot
+		slotsWithCommitments[slot] = true
 
-		// Step 2: If step 1 failed, reconstruct the requested sidecars from what is available in storage
-		requestedColumns, err = tryGetReconstructedColumns(params.Storage, root, indices)
-		if err != nil {
-			return nil, errors.Wrapf(err, "try get reconstructed columns for root %#x", root)
-		}
-		if requestedColumns != nil {
-			result[root] = requestedColumns
-			continue
-		}
-
-		// Step 3a: If steps 1 and 2 failed, keep track of the sidecars that need to be queried from peers
-		//          and those that are already stored.
-		indicesToQueryMap, indicesStoredMap := categorizeIndices(params.Storage, root, indices)
-
-		if len(indicesToQueryMap) > 0 {
-			indicesByRootToQuery[root] = indicesToQueryMap
-		}
-		if len(indicesStoredMap) > 0 {
-			indicesByRootStored[root] = indicesStoredMap
+		storedIndices := params.Storage.Summary(root).Stored()
+		if len(storedIndices) > 0 {
+			storedIndicesByRoot[root] = storedIndices
 		}
 	}
 
-	// Early return if no sidecars need to be queried from peers.
-	if len(indicesByRootToQuery) == 0 {
-		return result, nil
-	}
+	initialMissingRootCount := len(incompleteRoots)
 
-	// Step 3b: Request missing sidecars from peers.
-	start, count := time.Now(), computeTotalCount(indicesByRootToQuery)
-	fromPeersResult, err := tryRequestingColumnsFromPeers(params, roBlocks, slotsWithCommitments, indicesByRootToQuery)
+	// Request sidecars from storage (by reconstructing them from other available sidecars if needed).
+	result, err := requestSidecarsFromStorage(params.Storage, storedIndicesByRoot, requestedIndices, incompleteRoots)
 	if err != nil {
-		return nil, errors.Wrap(err, "request from peers")
+		return nil, nil, errors.Wrap(err, "request sidecars from storage")
 	}
 
-	log.WithFields(logrus.Fields{"duration": time.Since(start), "count": count}).Debug("Requested data column sidecars from peers")
+	log := log.WithField("initialMissingRootCount", initialMissingRootCount)
 
-	for root, verifiedSidecars := range fromPeersResult {
-		result[root] = append(result[root], verifiedSidecars...)
+	if len(incompleteRoots) == 0 {
+		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage")
+		return result, nil, nil
 	}
 
-	// Step 3c: Load the stored sidecars.
-	for root, indicesStored := range indicesByRootStored {
-		requestedColumns, err := tryGetDirectColumns(params.Storage, root, sortedSliceFromMap(indicesStored))
-		if err != nil {
-			return nil, errors.Wrapf(err, "try get direct columns for root %#x", root)
+	// Request direct sidecars from peers.
+	directSidecarsByRoot, err := requestDirectSidecarsFromPeers(params, slotByRoot, requestedIndices, slotsWithCommitments, storedIndicesByRoot, incompleteRoots)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "request direct sidecars from peers")
+	}
+
+	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
+	mergedSidecarsByRoot, err := mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, directSidecarsByRoot)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
+	}
+
+	for root, sidecars := range mergedSidecarsByRoot {
+		result[root] = sidecars
+	}
+
+	if len(incompleteRoots) == 0 {
+		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers")
+		return result, nil, nil
+	}
+
+	// Request all possible indirect sidecars from peers which are neither stored nor in `directSidecarsByRoot`
+	indirectSidecarsByRoot, err := requestIndirectSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, storedIndicesByRoot, directSidecarsByRoot, requestedIndices, incompleteRoots)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "request all sidecars from peers")
+	}
+
+	// Merge sidecars in storage and those received from peers. Reconstruct if needed.
+	mergedSidecarsByRoot, err = mergeAvailableSidecars(params.Storage, requestedIndices, storedIndicesByRoot, incompleteRoots, indirectSidecarsByRoot)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
+	}
+
+	for root, sidecars := range mergedSidecarsByRoot {
+		result[root] = sidecars
+	}
+
+	if len(incompleteRoots) == 0 {
+		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers using rescue mode")
+		return result, nil, nil
+	}
+
+	// For remaining incomplete roots, assemble what is available.
+	incompleteSidecarsByRoot, missingByRoot, err := assembleAvailableSidecars(params.Storage, requestedIndices, incompleteRoots, directSidecarsByRoot)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "assemble available sidecars for incomplete roots")
+	}
+
+	for root, sidecars := range incompleteSidecarsByRoot {
+		result[root] = sidecars
+	}
+
+	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
+	return result, missingByRoot, nil
+}
+
+// requestSidecarsFromStorage attempts to retrieve data column sidecars for each block root in `roots`
+// and for all indices specified in `requestedIndices`.
+//
+// If not all requested sidecars can be obtained for a given root, that root is excluded from the result.
+// It returns a map from each root to its successfully retrieved sidecars.
+//
+// WARNING: This function mutates `roots` by removing entries for which all requested sidecars
+// were successfully retrieved.
+func requestSidecarsFromStorage(
+	storage filesystem.DataColumnStorageReader,
+	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	requestedIndicesMap map[uint64]bool,
+	roots map[[fieldparams.RootLength]byte]bool,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	requestedIndices := helpers.SortedSliceFromMap(requestedIndicesMap)
+
+	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
+
+	for root := range roots {
+		storedIndices := storedIndicesByRoot[root]
+
+		// Check if all requested indices are stored.
+		allAvailable := true
+		for index := range requestedIndicesMap {
+			if !storedIndices[index] {
+				allAvailable = false
+				break
+			}
 		}
 
-		result[root] = append(result[root], requestedColumns...)
+		// Skip if not all requested indices are stored.
+		if !allAvailable {
+			continue
+		}
+
+		// All requested indices are stored, retrieve them.
+		verifiedRoSidecars, err := storage.Get(root, requestedIndices)
+		if err != nil {
+			return nil, errors.Wrapf(err, "storage get for block root %#x", root)
+		}
+
+		result[root] = verifiedRoSidecars
+		delete(roots, root)
 	}
 
 	return result, nil
 }
 
-// tryGetDirectColumns attempts to retrieve all requested columns directly from storage
-// if they are all available. Returns the columns if successful, and nil if at least one
-// requested sidecar is not available in the storage.
-func tryGetDirectColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
-	// Check if all requested indices are present in cache
-	storedIndices := storage.Summary(blockRoot).Stored()
-	allRequestedPresent := true
-	for _, requestedIndex := range indices {
-		if !storedIndices[requestedIndex] {
-			allRequestedPresent = false
-			break
-		}
-	}
-
-	if !allRequestedPresent {
-		return nil, nil
-	}
-
-	// All requested data is present, retrieve directly from DB
-	requestedColumns, err := storage.Get(blockRoot, indices)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get data columns for block root %#x", blockRoot)
-	}
-
-	return requestedColumns, nil
-}
-
-// tryGetReconstructedColumns attempts to retrieve columns using reconstruction
-// if sufficient columns are available. Returns the columns if successful, nil and nil if insufficient columns,
-// or nil and error if an error occurs.
-func tryGetReconstructedColumns(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) ([]blocks.VerifiedRODataColumn, error) {
-	// Check if we have enough columns for reconstruction
-	summary := storage.Summary(blockRoot)
-	if summary.Count() < peerdas.MinimumColumnCountToReconstruct() {
-		return nil, nil
-	}
-
-	// Retrieve all stored columns for reconstruction
-	allStoredColumns, err := storage.Get(blockRoot, nil)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get all stored columns for reconstruction for block root %#x", blockRoot)
-	}
-
-	// Attempt reconstruction
-	reconstructedColumns, err := peerdas.ReconstructDataColumnSidecars(allStoredColumns)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to reconstruct data columns for block root %#x", blockRoot)
-	}
-
-	// Health check: ensure we have the expected number of columns
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	if uint64(len(reconstructedColumns)) != numberOfColumns {
-		return nil, errors.Errorf("reconstructed %d columns but expected %d for block root %#x", len(reconstructedColumns), numberOfColumns, blockRoot)
-	}
-
-	// Extract only the requested indices from reconstructed data using direct indexing
-	requestedColumns := make([]blocks.VerifiedRODataColumn, 0, len(indices))
-	for _, requestedIndex := range indices {
-		if requestedIndex >= numberOfColumns {
-			return nil, errors.Errorf("requested column index %d exceeds maximum %d for block root %#x", requestedIndex, numberOfColumns-1, blockRoot)
-		}
-		requestedColumns = append(requestedColumns, reconstructedColumns[requestedIndex])
-	}
-
-	return requestedColumns, nil
-}
-
-// categorizeIndices separates indices into those that need to be queried from peers
-// and those that are already stored.
-func categorizeIndices(storage filesystem.DataColumnStorageReader, blockRoot [fieldparams.RootLength]byte, indices []uint64) (map[uint64]bool, map[uint64]bool) {
-	indicesToQuery := make(map[uint64]bool, len(indices))
-	indicesStored := make(map[uint64]bool, len(indices))
-
-	allStoredIndices := storage.Summary(blockRoot).Stored()
-	for _, index := range indices {
-		if allStoredIndices[index] {
-			indicesStored[index] = true
-			continue
-		}
-		indicesToQuery[index] = true
-	}
-
-	return indicesToQuery, indicesStored
-}
-
-// tryRequestingColumnsFromPeers attempts to request missing data column sidecars from connected peers.
-// It explores the connected peers to find those that are expected to custody the requested columns
-// and returns only when all requested columns are either retrieved or have been tried to be retrieved
-// by all possible peers.
-// Returns a map of block roots to their verified read-only data column sidecars and a map of block roots.
-// Returns an error if at least one requested column could not be retrieved.
-// WARNING: This function alters `missingIndicesByRoot`. The caller should NOT use it after running this function.
-func tryRequestingColumnsFromPeers(
-	p DataColumnSidecarsParams,
-	roBlocks []blocks.ROBlock,
+// requestDirectSidecarsFromPeers tries to fetch missing data column sidecars from connected peers.
+// It searches through the available peers to identify those responsible for the requested columns,
+// and returns only after all columns have either been successfully retrieved or all candidate peers
+// have been exhausted.
+//
+// It returns a map from each root to its successfully retrieved sidecars.
+func requestDirectSidecarsFromPeers(
+	params DataColumnSidecarsParams,
+	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	requestedIndices map[uint64]bool,
 	slotsWithCommitments map[primitives.Slot]bool,
-	missingIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	incompleteRoots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	start := time.Now()
+
 	// Create a new random source for peer selection.
 	randomSource := rand.NewGenerator()
 
-	// Compute slots by block root.
-	slotByRoot := computeSlotByBlockRoot(roBlocks)
+	// Determine all sidecars each peers are expected to custody.
+	connectedPeersSlice := params.P2P.Peers().Connected()
+	connectedPeers := make(map[goPeer.ID]bool, len(connectedPeersSlice))
+	for _, peer := range connectedPeersSlice {
+		connectedPeers[peer] = true
+	}
+
+	// Compute missing indices by root, excluding those already in storage.
+	missingIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(incompleteRoots))
+	for root := range incompleteRoots {
+		storedIndices := storedIndicesByRoot[root]
+
+		missingIndices := make(map[uint64]bool, len(requestedIndices))
+		for index := range requestedIndices {
+			if !storedIndices[index] {
+				missingIndices[index] = true
+			}
+		}
+
+		if len(missingIndices) > 0 {
+			missingIndicesByRoot[root] = missingIndices
+		}
+	}
+
+	initialMissingCount := computeTotalCount(missingIndicesByRoot)
+
+	indicesByRootByPeer, err := computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+	if err != nil {
+		return nil, errors.Wrap(err, "explore peers")
+	}
+
+	verifiedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	for len(missingIndicesByRoot) > 0 && len(indicesByRootByPeer) > 0 {
+		// Select peers to query the missing sidecars from.
+		indicesByRootByPeerToQuery, err := selectPeers(params, randomSource, len(missingIndicesByRoot), indicesByRootByPeer)
+		if err != nil {
+			return nil, errors.Wrap(err, "select peers")
+		}
+
+		// Remove selected peers from the maps.
+		for peer := range indicesByRootByPeerToQuery {
+			delete(connectedPeers, peer)
+		}
+
+		// Fetch the sidecars from the chosen peers.
+		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
+
+		// Verify the received data column sidecars.
+		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, roDataColumnsByPeer)
+		if err != nil {
+			return nil, errors.Wrap(err, "verify data columns sidecars by peer")
+		}
+
+		// Remove the verified sidecars from the missing indices map and compute the new verified columns by root.
+		localVerifiedColumnsByRoot := updateResults(verifiedRoDataColumnSidecars, missingIndicesByRoot)
+		for root, verifiedRoDataColumns := range localVerifiedColumnsByRoot {
+			verifiedColumnsByRoot[root] = append(verifiedColumnsByRoot[root], verifiedRoDataColumns...)
+		}
+
+		// Compute indices by root by peers with the updated missing indices and connected peers.
+		indicesByRootByPeer, err = computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+		if err != nil {
+			return nil, errors.Wrap(err, "explore peers")
+		}
+	}
+
+	log.WithFields(logrus.Fields{
+		"duration":            time.Since(start),
+		"initialMissingCount": initialMissingCount,
+		"finalMissingCount":   computeTotalCount(missingIndicesByRoot),
+	}).Debug("Requested direct data column sidecars from peers")
+
+	return verifiedColumnsByRoot, nil
+}
+
+// requestIndirectSidecarsFromPeers requests, for all roots in `missingIndicesbyRootOrig`,
+// for all possible peers, taking into account sidecars available in `inputs` and in the storage,
+// all possible sidecars until either, for each root:
+// - all indices in `indices` are available, or
+// - enough sidecars are available to trigger a reconstruction, or
+// - all peers are exhausted.
+func requestIndirectSidecarsFromPeers(
+	p DataColumnSidecarsParams,
+	slotByRoot map[[fieldparams.RootLength]byte]primitives.Slot,
+	slotsWithCommitments map[primitives.Slot]bool,
+	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
+	requestedIndices map[uint64]bool,
+	roots map[[fieldparams.RootLength]byte]bool,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	start := time.Now()
+
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+
+	// Create a new random source for peer selection.
+	randomSource := rand.NewGenerator()
+
+	// For each root compute all possible data column sidecar indices excluding
+	// those already stored or already available.
+	indicesToRetrieveByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool)
+	for root := range roots {
+		alreadyAvailableIndices := make(map[uint64]bool, len(alreadyAvailableByRoot[root]))
+		for _, sidecar := range alreadyAvailableByRoot[root] {
+			alreadyAvailableIndices[sidecar.Index] = true
+		}
+
+		storedIndices := storedIndicesByRoot[root]
+		indicesToRetrieve := make(map[uint64]bool, numberOfColumns)
+		for index := range numberOfColumns {
+			if !(storedIndices[index] || alreadyAvailableIndices[index]) {
+				indicesToRetrieve[index] = true
+			}
+		}
+
+		if len(indicesToRetrieve) > 0 {
+			indicesToRetrieveByRoot[root] = indicesToRetrieve
+		}
+	}
+
+	initialToRetrieveRootCount := len(indicesToRetrieveByRoot)
 
 	// Determine all sidecars each peers are expected to custody.
 	connectedPeersSlice := p.P2P.Peers().Connected()
@@ -256,15 +369,22 @@ func tryRequestingColumnsFromPeers(
 		connectedPeers[peer] = true
 	}
 
-	indicesByRootByPeer, err := computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+	// Compute which peers have which of the missing indices.
+	indicesByRootByPeer, err := computeIndicesByRootByPeer(p.P2P, slotByRoot, indicesToRetrieveByRoot, connectedPeers)
 	if err != nil {
 		return nil, errors.Wrap(err, "explore peers")
 	}
 
-	verifiedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
-	for len(missingIndicesByRoot) > 0 && len(indicesByRootByPeer) > 0 {
+	// Already add into results all sidecars present in `alreadyAvailableByRoot`.
+	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
+	for root := range roots {
+		alreadyAvailable := alreadyAvailableByRoot[root]
+		result[root] = append(result[root], alreadyAvailable...)
+	}
+
+	for len(indicesToRetrieveByRoot) > 0 && len(indicesByRootByPeer) > 0 {
 		// Select peers to query the missing sidecars from.
-		indicesByRootByPeerToQuery, err := selectPeers(p, randomSource, len(missingIndicesByRoot), indicesByRootByPeer)
+		indicesByRootByPeerToQuery, err := selectPeers(p, randomSource, len(indicesToRetrieveByRoot), indicesByRootByPeer)
 		if err != nil {
 			return nil, errors.Wrap(err, "select peers")
 		}
@@ -283,25 +403,214 @@ func tryRequestingColumnsFromPeers(
 			return nil, errors.Wrap(err, "verify data columns sidecars by peer")
 		}
 
-		// Remove the verified sidecars from the missing indices map and compute the new verified columns by root.
-		newMissingIndicesByRoot, localVerifiedColumnsByRoot := updateResults(verifiedRoDataColumnSidecars, missingIndicesByRoot)
-		missingIndicesByRoot = newMissingIndicesByRoot
+		// Add to results all verified sidecars.
+		localVerifiedColumnsByRoot := updateResults(verifiedRoDataColumnSidecars, indicesToRetrieveByRoot)
 		for root, verifiedRoDataColumns := range localVerifiedColumnsByRoot {
-			verifiedColumnsByRoot[root] = append(verifiedColumnsByRoot[root], verifiedRoDataColumns...)
+			result[root] = append(result[root], verifiedRoDataColumns...)
+		}
+
+		// Unlabel a root as to retrieve if enough sidecars are retrieved to enable a reconstruction,
+		// or if all requested sidecars are now available for this root.
+		for root, indicesToRetrieve := range indicesToRetrieveByRoot {
+			storedIndices := storedIndicesByRoot[root]
+			storedCount := uint64(len(storedIndices))
+			resultCount := uint64(len(result[root]))
+
+			if storedCount+resultCount >= minimumColumnCountToReconstruct {
+				delete(indicesToRetrieveByRoot, root)
+				continue
+			}
+
+			allRequestedIndicesAvailable := true
+			for index := range requestedIndices {
+				if indicesToRetrieve[index] {
+					// Still need this index.
+					allRequestedIndicesAvailable = false
+					break
+				}
+			}
+
+			if allRequestedIndicesAvailable {
+				delete(indicesToRetrieveByRoot, root)
+			}
 		}
 
 		// Compute indices by root by peers with the updated missing indices and connected peers.
-		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
+		indicesByRootByPeer, err = computeIndicesByRootByPeer(p.P2P, slotByRoot, indicesToRetrieveByRoot, connectedPeers)
 		if err != nil {
 			return nil, errors.Wrap(err, "explore peers")
 		}
 	}
 
-	if len(missingIndicesByRoot) > 0 {
-		return nil, errors.New("not all requested data column sidecars were retrieved from peers")
+	log.WithFields(logrus.Fields{
+		"duration":                   time.Since(start),
+		"initialToRetrieveRootCount": initialToRetrieveRootCount,
+		"finalToRetrieveRootCount":   len(indicesToRetrieveByRoot),
+	}).Debug("Requested all data column sidecars from peers")
+
+	return result, nil
+}
+
+// mergeAvailableSidecars retrieves missing data column sidecars by combining
+// what is available in storage with the sidecars provided in `alreadyAvailableByRoot`,
+// reconstructing them when necessary.
+//
+// The function works in two modes depending on sidecar availability:
+//   - If all requested sidecars are already available (no reconstruction needed),
+//     it simply returns them directly from storage and inputs.
+//   - If storage + inputs together provide enough sidecars to reconstruct all requested ones,
+//     it reconstructs and returns the requested sidecars.
+//
+// If a root cannot yield all requested sidecars, that root is omitted from the result.
+//
+// Note: It is assumed that no sidecar in `alreadyAvailableByRoot` is already present in storage.
+//
+// WARNING: This function mutates `roots`, removing any block roots
+// for which all requested sidecars were successfully retrieved.
+func mergeAvailableSidecars(
+	storage filesystem.DataColumnStorageReader,
+	requestedIndices map[uint64]bool,
+	storedIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+	roots map[[fieldparams.RootLength]byte]bool,
+	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
+	minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+
+	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
+	for root := range roots {
+		storedIndices := storedIndicesByRoot[root]
+		alreadyAvailable := alreadyAvailableByRoot[root]
+
+		// Compute already available indices.
+		alreadyAvailableIndices := make(map[uint64]bool, len(alreadyAvailable))
+		for _, sidecar := range alreadyAvailable {
+			alreadyAvailableIndices[sidecar.Index] = true
+		}
+
+		// Check if reconstruction is needed.
+		isReconstructionNeeded := false
+		for index := range requestedIndices {
+			if !(storedIndices[index] || alreadyAvailableIndices[index]) {
+				isReconstructionNeeded = true
+				break
+			}
+		}
+
+		// Check if reconstruction is possible.
+		storedCount := uint64(len(storedIndices))
+		alreadyAvailableCount := uint64(len(alreadyAvailableIndices))
+		isReconstructionPossible := storedCount+alreadyAvailableCount >= minimumColumnsCountToReconstruct
+
+		// Skip if the reconstruction is needed and not possible.
+		if isReconstructionNeeded && !isReconstructionPossible {
+			continue
+		}
+
+		// Reconstruct if reconstruction is needed and possible.
+		if isReconstructionNeeded && isReconstructionPossible {
+			// Load all we have in the store.
+			stored, err := storage.Get(root, nil)
+			if err != nil {
+				return nil, errors.Wrapf(err, "storage get for root %#x", root)
+			}
+
+			allAvailable := make([]blocks.VerifiedRODataColumn, 0, storedCount+alreadyAvailableCount)
+			allAvailable = append(allAvailable, stored...)
+			allAvailable = append(allAvailable, alreadyAvailable...)
+
+			// Attempt reconstruction.
+			reconstructedSidecars, err := peerdas.ReconstructDataColumnSidecars(allAvailable)
+			if err != nil {
+				return nil, errors.Wrapf(err, "reconstruct data column sidecars for root %#x", root)
+			}
+
+			// Select only sidecars we need.
+			for _, sidecar := range reconstructedSidecars {
+				if requestedIndices[sidecar.Index] {
+					result[root] = append(result[root], sidecar)
+				}
+			}
+
+			delete(roots, root)
+			continue
+		}
+
+		// Reconstruction is not needed, simply assemble what is available in storage and already available.
+		allAvailable, err := assembleAvailableSidecarsForRoot(storage, alreadyAvailableByRoot, root, requestedIndices)
+		if err != nil {
+			return nil, errors.Wrap(err, "assemble available sidecars")
+		}
+
+		result[root] = allAvailable
+		delete(roots, root)
 	}
 
-	return verifiedColumnsByRoot, nil
+	return result, nil
+}
+
+// assembleAvailableSidecars assembles all sidecars available in storage
+// and in `alreadyAvailableByRoot` corresponding to `roots`.
+// It also returns all missing indices by root.
+func assembleAvailableSidecars(
+	storage filesystem.DataColumnStorageReader,
+	requestedIndices map[uint64]bool,
+	roots map[[fieldparams.RootLength]byte]bool,
+	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
+) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	// Assemble results.
+	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
+	for root := range roots {
+		allAvailable, err := assembleAvailableSidecarsForRoot(storage, alreadyAvailableByRoot, root, requestedIndices)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "assemble sidecars for root")
+		}
+
+		if len(allAvailable) > 0 {
+			result[root] = allAvailable
+		}
+	}
+
+	// Compute still missing sidecars.
+	missingByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(roots))
+	for root := range roots {
+		missing := make(map[uint64]bool, len(requestedIndices))
+		for index := range requestedIndices {
+			missing[index] = true
+		}
+
+		allAvailable := result[root]
+		for _, sidecar := range allAvailable {
+			delete(missing, sidecar.Index)
+		}
+
+		if len(missing) > 0 {
+			missingByRoot[root] = missing
+		}
+	}
+
+	return result, missingByRoot, nil
+}
+
+// assembleAvailableSidecarsForRoot assembles all sidecars available in storage
+// and in `alreadyAvailableByRoot` corresponding to `root` and `indices`.
+func assembleAvailableSidecarsForRoot(
+	storage filesystem.DataColumnStorageReader,
+	alreadyAvailableByRoot map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn,
+	root [fieldparams.RootLength]byte,
+	indices map[uint64]bool,
+) ([]blocks.VerifiedRODataColumn, error) {
+	stored, err := storage.Get(root, helpers.SortedSliceFromMap(indices))
+	if err != nil {
+		return nil, errors.Wrapf(err, "storage get for root %#x", root)
+	}
+
+	alreadyAvailable := alreadyAvailableByRoot[root]
+
+	allAvailable := make([]blocks.VerifiedRODataColumn, 0, len(stored)+len(alreadyAvailable))
+	allAvailable = append(allAvailable, stored...)
+	allAvailable = append(allAvailable, alreadyAvailable...)
+
+	return allAvailable, nil
 }
 
 // selectPeers selects peers to query the sidecars.
@@ -314,7 +623,7 @@ func selectPeers(
 	count int,
 	origIndicesByRootByPeer map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
-	const randomPeerTimeout = 30 * time.Second
+	const randomPeerTimeout = 2 * time.Minute
 
 	// Select peers to query the missing sidecars from.
 	indicesByRootByPeer := copyIndicesByRootByPeer(origIndicesByRootByPeer)
@@ -371,12 +680,13 @@ func selectPeers(
 }
 
 // updateResults updates the missing indices and verified sidecars maps based on the newly verified sidecars.
+// WARNING: This function alters `missingIndicesByRoot` by removing verified sidecars.
+// After running this function, the user can check the content of the (modified) `missingIndicesByRoot` map
+// to check if some sidecars are still missing.
 func updateResults(
 	verifiedSidecars []blocks.VerifiedRODataColumn,
-	origMissingIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
-) (map[[fieldparams.RootLength]byte]map[uint64]bool, map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn) {
-	// Copy the original map to avoid modifying it directly.
-	missingIndicesByRoot := copyIndicesByRoot(origMissingIndicesByRoot)
+	missingIndicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
+) map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn {
 	verifiedSidecarsByRoot := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn)
 	for _, verifiedSidecar := range verifiedSidecars {
 		blockRoot := verifiedSidecar.BlockRoot()
@@ -393,7 +703,7 @@ func updateResults(
 		}
 	}
 
-	return missingIndicesByRoot, verifiedSidecarsByRoot
+	return verifiedSidecarsByRoot
 }
 
 // fetchDataColumnSidecarsFromPeers retrieves data column sidecars from peers.
@@ -428,7 +738,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
-				log.WithError(err).Warning("Failed to send data column sidecars request")
+				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
 			}
 
@@ -492,12 +802,26 @@ func sendDataColumnSidecarsRequest(
 			roDataColumns = append(roDataColumns, localRoDataColumns...)
 		}
 
-		log.WithFields(logrus.Fields{
-			"respondedSidecars": len(roDataColumns),
-			"requests":          len(byRangeRequests),
-			"type":              "byRange",
-			"duration":          time.Since(start),
-		}).Debug("Received data column sidecars")
+		if logrus.GetLevel() >= logrus.DebugLevel {
+			prettyByRangeRequests := make([]map[string]any, 0, len(byRangeRequests))
+			for _, request := range byRangeRequests {
+				prettyRequest := map[string]any{
+					"startSlot": request.StartSlot,
+					"count":     request.Count,
+					"columns":   helpers.PrettySlice(request.Columns),
+				}
+
+				prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
+			}
+
+			log.WithFields(logrus.Fields{
+				"respondedSidecars": len(roDataColumns),
+				"requestCount":      len(byRangeRequests),
+				"type":              "byRange",
+				"duration":          time.Since(start),
+				"requests":          prettyByRangeRequests,
+			}).Debug("Received data column sidecars")
+		}
 
 		return roDataColumns, nil
 	}
@@ -573,7 +897,7 @@ func buildByRangeRequests(
 		}
 	}
 
-	columns := sortedSliceFromMap(reference)
+	columns := helpers.SortedSliceFromMap(reference)
 	startSlot, endSlot := slots[0], slots[len(slots)-1]
 	totalCount := uint64(endSlot - startSlot + 1)
 
@@ -596,15 +920,15 @@ func buildByRangeRequests(
 func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool) p2ptypes.DataColumnsByRootIdentifiers {
 	identifiers := make(p2ptypes.DataColumnsByRootIdentifiers, 0, len(indicesByRoot))
 	for root, indices := range indicesByRoot {
-		identifier := &eth.DataColumnsByRootIdentifier{
+		identifier := &ethpb.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
-			Columns:   sortedSliceFromMap(indices),
+			Columns:   helpers.SortedSliceFromMap(indices),
 		}
 		identifiers = append(identifiers, identifier)
 	}
 
 	// Sort identifiers to have a deterministic output.
-	slices.SortFunc(identifiers, func(left, right *eth.DataColumnsByRootIdentifier) int {
+	slices.SortFunc(identifiers, func(left, right *ethpb.DataColumnsByRootIdentifier) int {
 		if cmp := bytes.Compare(left.BlockRoot, right.BlockRoot); cmp != 0 {
 			return cmp
 		}
@@ -692,21 +1016,26 @@ func computeIndicesByRootByPeer(
 	indicesByBlockRoot map[[fieldparams.RootLength]byte]map[uint64]bool,
 	peers map[goPeer.ID]bool,
 ) (map[goPeer.ID]map[[fieldparams.RootLength]byte]map[uint64]bool, error) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
 	// First, compute custody columns for all peers
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
 	for peer := range peers {
+		log := log.WithField("peerID", peer)
+
 		// Computes the custody columns for each peer
 		nodeID, err := prysmP2P.ConvertPeerIDToNodeID(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "convert peer ID to node ID for peer %s", peer)
+			log.WithError(err).Debug("Failed to convert peer ID to node ID")
+			continue
 		}
 
 		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
-
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrapf(err, "peerdas info for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer DAS info")
+			continue
 		}
 
 		for column := range dasInfo.CustodyColumns {
@@ -719,14 +1048,19 @@ func computeIndicesByRootByPeer(
 		// Compute the head slot for each peer
 		peerChainState, err := p2p.Peers().ChainState(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "get chain state for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer chain state")
+			continue
 		}
 
 		if peerChainState == nil {
-			return nil, errors.Errorf("chain state is nil for peer %s", peer)
+			log.Debug("Peer chain state is nil")
+			continue
 		}
 
-		headSlotByPeer[peer] = peerChainState.HeadSlot
+		// Our view of the head slot of a peer is not updated in real time.
+		// We add an epoch to take into account the fact the real head slot of the peer
+		// is higher than our view of it.
+		headSlotByPeer[peer] = peerChainState.HeadSlot + slotsPerEpoch
 	}
 
 	// For each block root and its indices, find suitable peers
@@ -783,26 +1117,26 @@ func randomPeer(
 	for ctx.Err() == nil {
 		nonRateLimitedPeers := make([]goPeer.ID, 0, len(indicesByRootByPeer))
 		for peer := range indicesByRootByPeer {
-			remaining := int64(math.MaxInt64)
-			if rateLimiter != nil {
-				remaining = rateLimiter.Remaining(peer.String())
-			}
-			if remaining >= int64(count) {
+			if rateLimiter == nil || rateLimiter.Remaining(peer.String()) >= int64(count) {
 				nonRateLimitedPeers = append(nonRateLimitedPeers, peer)
 			}
 		}
 
-		if len(nonRateLimitedPeers) == 0 {
-			log.WithFields(logrus.Fields{
-				"peerCount": peerCount,
-				"delay":     waitPeriod,
-			}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
-			time.Sleep(waitPeriod)
-			continue
+		if len(nonRateLimitedPeers) > 0 {
+			slices.Sort(nonRateLimitedPeers)
+			randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
+			return nonRateLimitedPeers[randomIndex], nil
 		}
 
-		randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
-		return nonRateLimitedPeers[randomIndex], nil
+		log.WithFields(logrus.Fields{
+			"peerCount": peerCount,
+			"delay":     waitPeriod,
+		}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
+
+		select {
+		case <-time.After(waitPeriod):
+		case <-ctx.Done():
+		}
 	}
 
 	return "", ctx.Err()
@@ -846,26 +1180,6 @@ func compareIndices(left, right map[uint64]bool) bool {
 	}
 
 	return true
-}
-
-// sortedSliceFromMap converts a map[uint64]bool to a sorted slice of keys.
-func sortedSliceFromMap(m map[uint64]bool) []uint64 {
-	result := make([]uint64, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-
-	slices.Sort(result)
-	return result
-}
-
-// computeSlotByBlockRoot maps each block root to its corresponding slot.
-func computeSlotByBlockRoot(roBlocks []blocks.ROBlock) map[[fieldparams.RootLength]byte]primitives.Slot {
-	slotByBlockRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, len(roBlocks))
-	for _, roBlock := range roBlocks {
-		slotByBlockRoot[roBlock.Root()] = roBlock.Block().Slot()
-	}
-	return slotByBlockRoot
 }
 
 // computeTotalCount calculates the total count of indices across all roots.

@@ -257,6 +257,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Light client
 	MinSyncCommitteeParticipants: 1,
 	MaxRequestLightClientUpdates: 128,
+	SyncMessageDueBPS:            3333,
 
 	// Bellatrix
 	TerminalBlockHashActivationEpoch: 18446744073709551615,
@@ -320,8 +321,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaxCellsInExtendedMatrix:              768,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
-	DeprecatedMaxBlobsPerBlockFulu:        12,
-
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

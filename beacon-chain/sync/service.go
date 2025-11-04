@@ -17,10 +17,10 @@ import (
 	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
@@ -50,6 +50,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/trailofbits/go-mutexasserts"
+	"golang.org/x/sync/singleflight"
 )
 
 var _ runtime.Service = (*Service)(nil)
@@ -164,20 +165,23 @@ type Service struct {
 	syncContributionBitsOverlapLock  sync.RWMutex
 	syncContributionBitsOverlapCache *lru.Cache
 	signatureChan                    chan *signatureVerifier
+	kzgChan                          chan *kzgVerifier
 	clockWaiter                      startup.ClockWaiter
 	initialSyncComplete              chan struct{}
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
+	columnSidecarsExecSingleFlight   singleflight.Group
+	reconstructionSingleFlight       singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
-	reconstructionLock               sync.Mutex
 	reconstructionRandGen            *rand.Rand
 	trackedValidatorsCache           *cache.TrackedValidatorsCache
 	ctxMap                           ContextByteVersions
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
-	registeredNetworkEntry           params.NetworkScheduleEntry
+	digestActions                    perDigestSet
+	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
 
 // NewService initializes new regular sync service.
@@ -202,6 +206,10 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
+	// Initialize KZG channel with fixed buffer size of 100.
+	// This buffer size is designed to handle burst traffic of data column gossip messages:
+	// - Data columns arrive less frequently than attestations (default batchVerifierLimit=1000)
+	r.kzgChan = make(chan *kzgVerifier, 100)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
@@ -254,7 +262,8 @@ func (s *Service) Start() {
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
-	go s.startTasksPostInitialSync()
+	go s.kzgVerifierRoutine()
+	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
@@ -265,7 +274,6 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
-	s.runPendingAttsQueue()
 	s.maintainPeerStatuses()
 
 	if params.FuluEnabled() {
@@ -369,10 +377,13 @@ func (s *Service) waitForChainStart() {
 	}
 	s.ctxMap = ctxMap
 
-	// Register respective rpc handlers at state initialized event.
-	err = s.registerRPCHandlers()
-	if err != nil {
-		log.WithError(err).Error("Could not register rpc handlers")
+	// We need to register RPC handlers ASAP so that we can handle incoming status message
+	// requests from peers.
+	nse := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	if err := s.registerRPCHandlers(nse); err != nil {
+		// If we fail here, we won't be able to peer with anyone because we can't handle their status messages.
+		log.WithError(err).Error("Failed to register RPC handlers")
+		// TODO: need ability to bubble the error up to the top of the node init tree and exit safely.
 		return
 	}
 
@@ -384,32 +395,17 @@ func (s *Service) waitForChainStart() {
 	s.markForChainStart()
 }
 
-func (s *Service) startTasksPostInitialSync() {
+func (s *Service) startDiscoveryAndSubscriptions() {
 	// Wait for the chain to start.
 	s.waitForChainStart()
 
-	select {
-	case <-s.initialSyncComplete:
-		// Compute the current epoch.
-		currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
-		currentEpoch := slots.ToEpoch(currentSlot)
-
-		// Compute the current fork forkDigest.
-		forkDigest, err := s.currentForkDigest()
-		if err != nil {
-			log.WithError(err).Error("Could not retrieve current fork digest")
-			return
-		}
-
-		// Register respective pubsub handlers at state synced event.
-		s.registerSubscribers(currentEpoch, forkDigest)
-
-		// Start the fork watcher.
-		go s.forkWatcher()
-
-	case <-s.ctx.Done():
-		log.Debug("Context closed, exiting goroutine")
+	if s.ctx.Err() != nil {
+		log.Debug("Context closed, exiting StartDiscoveryAndSubscription")
+		return
 	}
+
+	// Start the fork watcher.
+	go s.p2pHandlerControlLoop()
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {
@@ -445,6 +441,15 @@ func (s *Service) pruneDataColumnCache() {
 
 func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
+}
+
+func (s *Service) waitForInitialSync(ctx context.Context) error {
+	select {
+	case <-s.initialSyncComplete:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Checker defines a struct which can verify whether a node is currently

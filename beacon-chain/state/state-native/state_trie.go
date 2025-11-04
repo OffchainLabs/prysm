@@ -650,6 +650,11 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	for i, v := range st.ProposerLookahead {
 		proposerLookahead[i] = primitives.ValidatorIndex(v)
 	}
+	// Proposer lookahead must be exactly 2 * SLOTS_PER_EPOCH in length. We fill in with zeroes instead of erroring out here
+	for i := len(proposerLookahead); i < 2*fieldparams.SlotsPerEpoch; i++ {
+		proposerLookahead = append(proposerLookahead, 0)
+	}
+
 	fieldCount := params.BeaconConfig().BeaconStateFuluFieldCount
 	b := &BeaconState{
 		version:                           version.Fulu,

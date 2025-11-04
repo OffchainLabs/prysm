@@ -44,11 +44,27 @@ func (b *BeaconState) ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (prim
 		return 0, err
 	}
 
+	return b.exitEpochAndUpdateChurn(primitives.Gwei(activeBal), exitBalance)
+}
+
+// ExitEpochAndUpdateChurnForTotalBal has the same functionality as ExitEpochAndUpdateChurn,
+// the only difference being how total active balance is obtained. In ExitEpochAndUpdateChurn
+// it is calculated inside the function and in ExitEpochAndUpdateChurnForTotalBal it's a
+// function argument.
+func (b *BeaconState) ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error) {
+	if b.version < version.Electra {
+		return 0, errNotSupported("ExitEpochAndUpdateChurnForTotalBal", b.version)
+	}
+
+	return b.exitEpochAndUpdateChurn(totalActiveBalance, exitBalance)
+}
+
+func (b *BeaconState) exitEpochAndUpdateChurn(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
 	earliestExitEpoch := max(b.earliestExitEpoch, helpers.ActivationExitEpoch(slots.ToEpoch(b.slot)))
-	perEpochChurn := helpers.ActivationExitChurnLimit(primitives.Gwei(activeBal)) // Guaranteed to be non-zero.
+	perEpochChurn := helpers.ActivationExitChurnLimit(totalActiveBalance) // Guaranteed to be non-zero.
 
 	// New epoch for exits
 	var exitBalanceToConsume primitives.Gwei
@@ -74,4 +90,34 @@ func (b *BeaconState) ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (prim
 	b.markFieldAsDirty(types.EarliestExitEpoch)
 
 	return b.earliestExitEpoch, nil
+}
+
+// SetExitBalanceToConsume sets the exit balance to consume. This method mutates the state.
+func (b *BeaconState) SetExitBalanceToConsume(exitBalanceToConsume primitives.Gwei) error {
+	if b.version < version.Electra {
+		return errNotSupported("SetExitBalanceToConsume", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.exitBalanceToConsume = exitBalanceToConsume
+	b.markFieldAsDirty(types.ExitBalanceToConsume)
+
+	return nil
+}
+
+// SetEarliestExitEpoch sets the earliest exit epoch. This method mutates the state.
+func (b *BeaconState) SetEarliestExitEpoch(earliestExitEpoch primitives.Epoch) error {
+	if b.version < version.Electra {
+		return errNotSupported("SetEarliestExitEpoch", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.earliestExitEpoch = earliestExitEpoch
+	b.markFieldAsDirty(types.EarliestExitEpoch)
+
+	return nil
 }

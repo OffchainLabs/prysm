@@ -3,9 +3,9 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -30,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 
@@ -73,7 +72,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 	}
-	defer s.sendStateFeedOnBlock(cfg)
+
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
 
@@ -94,6 +93,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
+
+	defer s.sendStateFeedOnBlock(cfg) // only send event after successful insertion
 	start := time.Now()
 	cfg.headRoot, err = s.cfg.ForkChoiceStore.Head(ctx)
 	if err != nil {
@@ -159,7 +160,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 
 	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.CurrentJustifiedCheckpoint(), preState.FinalizedCheckpoint()); err != nil {
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.FinalizedCheckpoint(), preState.CurrentJustifiedCheckpoint()); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
@@ -247,7 +248,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
-		pendingNodes[len(blks)-i-1] = args
+		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)
 			return err
@@ -284,13 +285,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if err := s.cfg.StateGen.SaveState(ctx, lastBR, preState); err != nil {
 		return err
 	}
-	// Insert all nodes but the last one to forkchoice
+	// Insert all nodes to forkchoice
 	if err := s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes); err != nil {
 		return errors.Wrap(err, "could not insert batch to forkchoice")
-	}
-	// Insert the last block to forkchoice
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastB); err != nil {
-		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	// Set their optimistic status
 	if isValidPayload {
@@ -664,14 +661,14 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+	roBlock consensusblocks.ROBlock,
 ) error {
-	block := signedBlock.Block()
+	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
 
+	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
 		return s.areDataColumnsAvailable(ctx, root, block)
@@ -691,8 +688,6 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
-
 	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
@@ -719,13 +714,14 @@ func (s *Service) areDataColumnsAvailable(
 	nodeID := s.cfg.P2P.NodeID()
 
 	// Get the custody group sampling size for the node.
-	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount(ctx)
 	if err != nil {
 		return errors.Wrap(err, "custody group count")
 	}
 
 	// Compute the sampling size.
 	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 	samplingSize := max(samplesPerSlot, custodyGroupCount)
 
 	// Get the peer info for the node.
@@ -751,14 +747,14 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	missing, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "missing data columns")
 	}
 
 	// If there are no missing indices, all data column sidecars are available.
 	// This is the happy path.
-	if len(missingMap) == 0 {
+	if len(missing) == 0 {
 		return nil
 	}
 
@@ -775,33 +771,17 @@ func (s *Service) areDataColumnsAvailable(
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		timer := time.AfterFunc(time.Until(nextSlot), func() {
-			missingMapCount := uint64(len(missingMap))
+			missingCount := uint64(len(missing))
 
-			if missingMapCount == 0 {
+			if missingCount == 0 {
 				return
-			}
-
-			var (
-				expected interface{} = "all"
-				missing  interface{} = "all"
-			)
-
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			colMapCount := uint64(len(peerInfo.CustodyColumns))
-
-			if colMapCount < numberOfColumns {
-				expected = uint64MapToSortedSlice(peerInfo.CustodyColumns)
-			}
-
-			if missingMapCount < numberOfColumns {
-				missing = uint64MapToSortedSlice(missingMap)
 			}
 
 			log.WithFields(logrus.Fields{
 				"slot":            block.Slot(),
 				"root":            fmt.Sprintf("%#x", root),
-				"columnsExpected": expected,
-				"columnsWaiting":  missing,
+				"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+				"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
 			}).Warning("Data columns still missing at slot end")
 		})
 		defer timer.Stop()
@@ -817,7 +797,7 @@ func (s *Service) areDataColumnsAvailable(
 
 			for _, index := range idents.Indices {
 				// This is a data column we are expecting.
-				if _, ok := missingMap[index]; ok {
+				if _, ok := missing[index]; ok {
 					storedDataColumnsCount++
 				}
 
@@ -828,10 +808,10 @@ func (s *Service) areDataColumnsAvailable(
 				}
 
 				// Remove the index from the missing map.
-				delete(missingMap, index)
+				delete(missing, index)
 
 				// Return if there is no more missing data columns.
-				if len(missingMap) == 0 {
+				if len(missing) == 0 {
 					return nil
 				}
 			}
@@ -839,10 +819,10 @@ func (s *Service) areDataColumnsAvailable(
 		case <-ctx.Done():
 			var missingIndices interface{} = "all"
 			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			missingIndicesCount := uint64(len(missingMap))
+			missingIndicesCount := uint64(len(missing))
 
 			if missingIndicesCount < numberOfColumns {
-				missingIndices = uint64MapToSortedSlice(missingMap)
+				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
 			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
@@ -924,16 +904,6 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x", block.Slot(), root)
 		}
 	}
-}
-
-// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
-func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
-	output := make([]uint64, 0, len(input))
-	for idx := range input {
-		output = append(output, idx)
-	}
-	slices.Sort[[]uint64](output)
-	return output
 }
 
 // lateBlockTasks  is called 4 seconds into the slot and performs tasks

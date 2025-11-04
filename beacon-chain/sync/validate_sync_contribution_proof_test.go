@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
@@ -38,7 +39,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestService_ValidateSyncContributionAndProof(t *testing.T) {
@@ -856,7 +856,7 @@ func TestService_ValidateSyncContributionAndProof(t *testing.T) {
 			svc, clock = tt.setupSvc(svc, tt.args.msg)
 			require.NoError(t, cw.SetClock(clock))
 			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen)
-
+			markInitSyncComplete(t, svc)
 			go svc.Start()
 			marshalledObj, err := tt.args.msg.MarshalSSZ()
 			assert.NoError(t, err)

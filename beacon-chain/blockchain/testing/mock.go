@@ -472,6 +472,36 @@ func (s *ChainService) HasBlock(ctx context.Context, rt [32]byte) bool {
 	return s.InitSyncBlockRoots[rt]
 }
 
+func (s *ChainService) AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[[32]byte]bool {
+	if s.DB == nil {
+		return nil
+	}
+
+	count := len(blockRoots)
+	availableRoots := make(map[[32]byte]bool, count)
+	notInDBRoots := make([][32]byte, 0, count)
+	for _, root := range blockRoots {
+		if s.DB.HasBlock(ctx, root) {
+			availableRoots[root] = true
+			continue
+		}
+
+		notInDBRoots = append(notInDBRoots, root)
+	}
+
+	if s.InitSyncBlockRoots == nil {
+		return availableRoots
+	}
+
+	for _, root := range notInDBRoots {
+		if s.InitSyncBlockRoots[root] {
+			availableRoots[root] = true
+		}
+	}
+
+	return availableRoots
+}
+
 // RecentBlockSlot mocks the same method in the chain service.
 func (s *ChainService) RecentBlockSlot([32]byte) (primitives.Slot, error) {
 	return s.BlockSlot, nil
@@ -723,7 +753,8 @@ func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
 }
 
 // ReceiveDataColumns implements the same method in chain service
-func (*ChainService) ReceiveDataColumns(_ []blocks.VerifiedRODataColumn) error {
+func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) error {
+	c.DataColumns = append(c.DataColumns, dcs...)
 	return nil
 }
 

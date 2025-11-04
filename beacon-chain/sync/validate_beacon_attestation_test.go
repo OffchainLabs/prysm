@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -25,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
@@ -610,4 +610,42 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			require.Equal(t, err != nil, true, "Should error because no bits set is invalid")
 		})
 	})
+}
+
+func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
+	ctx := t.Context()
+
+	// Create a minimal state with a known number of validators.
+	validators := uint64(64)
+	bs, _ := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, bs.SetSlot(1))
+
+	s := &Service{}
+
+	// Build a minimal Phase0 attestation (unaggregated path).
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			Slot:           1,
+			CommitteeIndex: 0,
+		},
+	}
+
+	// First call to obtain the active validator count used to derive committees per slot.
+	_, valCount, res, err := s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	count := helpers.SlotCommitteeCount(valCount)
+
+	// committee_index == count - 1 should be accepted.
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count - 1)
+	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	// committee_index == count should be rejected (out of range).
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count)
+	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.ErrorContains(t, "committee index", err)
+	require.Equal(t, pubsub.ValidationReject, res)
 }

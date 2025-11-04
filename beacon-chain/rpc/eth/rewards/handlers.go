@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -151,7 +152,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, proposerReward, err := altair.ProcessSyncAggregate(r.Context(), st, sa)
+	_, proposerReward, err := altair.ProcessSyncAggregateNoVerifySig(r.Context(), st, sa)
 	if err != nil {
 		httputil.HandleError(w, "Could not get sync aggregate rewards: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -208,8 +209,13 @@ func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.
 		httputil.HandleError(w, "Attestation rewards are not supported for Phase 0", http.StatusNotFound)
 		return nil, false
 	}
-	currentEpoch := uint64(slots.ToEpoch(s.TimeFetcher.CurrentSlot()))
-	if requestedEpoch+1 >= currentEpoch {
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	bufferedEpoch, err := primitives.Epoch(requestedEpoch).SafeAdd(1)
+	if err != nil {
+		httputil.HandleError(w, "Could not increment epoch: "+err.Error(), http.StatusNotFound)
+		return nil, false
+	}
+	if bufferedEpoch >= currentEpoch {
 		httputil.HandleError(w,
 			"Attestation rewards are available after two epoch transitions to ensure all attestations have a chance of inclusion",
 			http.StatusNotFound)
@@ -388,12 +394,9 @@ func syncRewardsVals(
 	scIndices := make([]primitives.ValidatorIndex, 0, len(allScIndices))
 	scVals := make([]*precompute.Validator, 0, len(allScIndices))
 	for _, valIdx := range valIndices {
-		for _, scIdx := range allScIndices {
-			if valIdx == scIdx {
-				scVals = append(scVals, allVals[valIdx])
-				scIndices = append(scIndices, valIdx)
-				break
-			}
+		if slices.Contains(allScIndices, valIdx) {
+			scVals = append(scVals, allVals[valIdx])
+			scIndices = append(scIndices, valIdx)
 		}
 	}
 

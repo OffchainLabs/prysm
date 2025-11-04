@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
@@ -24,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -223,8 +224,14 @@ func (s *Service) findPeersWithSubnets(
 		// Skip nodes that are not subscribed to any of the defective subnets.
 		nodeSubnets, err := filter(node)
 		if err != nil {
-			return nil, errors.Wrap(err, "filter node")
+			log.WithError(err).WithFields(logrus.Fields{
+				"nodeID":      node.ID(),
+				"topicFormat": topicFormat,
+			}).Debug("Could not get needed subnets from peer")
+
+			continue
 		}
+
 		if len(nodeSubnets) == 0 {
 			continue
 		}
@@ -507,17 +514,26 @@ func initializePersistentSubnets(id enode.ID, epoch primitives.Epoch) error {
 //
 //	return [compute_subscribed_subnet(node_id, epoch, index) for index in range(SUBNETS_PER_NODE)]
 func computeSubscribedSubnets(nodeID enode.ID, epoch primitives.Epoch) ([]uint64, error) {
-	subnetsPerNode := params.BeaconConfig().SubnetsPerNode
-	subs := make([]uint64, 0, subnetsPerNode)
+	cfg := params.BeaconConfig()
 
-	for i := uint64(0); i < subnetsPerNode; i++ {
+	if flags.Get().SubscribeToAllSubnets {
+		subnets := make([]uint64, 0, cfg.AttestationSubnetCount)
+		for i := range cfg.AttestationSubnetCount {
+			subnets = append(subnets, i)
+		}
+		return subnets, nil
+	}
+
+	subnets := make([]uint64, 0, cfg.SubnetsPerNode)
+	for i := range cfg.SubnetsPerNode {
 		sub, err := computeSubscribedSubnet(nodeID, epoch, i)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "compute subscribed subnet")
 		}
-		subs = append(subs, sub)
+		subnets = append(subnets, sub)
 	}
-	return subs, nil
+
+	return subnets, nil
 }
 
 //	Spec pseudocode definition:

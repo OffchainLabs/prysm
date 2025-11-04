@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -29,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
@@ -94,9 +94,11 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	assert.ErrorContains(t, wanted, err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
-	att.Data.CommitteeIndex = 10000
+	// Test the edge case where committee index equals count (should be rejected)
+	// With 64 validators and minimal config, count = 2, so valid indices are 0 and 1
+	att.Data.CommitteeIndex = 2
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
-	require.ErrorContains(t, "committee index 10000 > 2", err)
+	require.ErrorContains(t, "committee index 2 >= 2", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 }
 

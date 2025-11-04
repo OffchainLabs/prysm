@@ -32,7 +32,7 @@ func Test_startupHeadRoot(t *testing.T) {
 		})
 		defer resetCfg()
 		require.Equal(t, service.startupHeadRoot(), gr)
-		require.LogsContain(t, hook, "Could not get head block root, starting with finalized block as head")
+		require.LogsContain(t, hook, "Could not get head block root, starting with justified block as head")
 	})
 
 	st, _ := util.DeterministicGenesisState(t, 64)
@@ -124,5 +124,5 @@ func Test_setupForkchoiceTree_Head(t *testing.T) {
 	require.NotEqual(t, fRoot, root)
 	require.Equal(t, root, service.startupHeadRoot())
 	require.NoError(t, service.setupForkchoiceTree(st))
-	require.Equal(t, 2, service.cfg.ForkChoiceStore.NodeCount())
+	require.Equal(t, 3, service.cfg.ForkChoiceStore.NodeCount())
 }

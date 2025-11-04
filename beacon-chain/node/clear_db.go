@@ -2,11 +2,13 @@ package node
 
 import (
 	"context"
+	"os"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/slasherkv"
 	"github.com/OffchainLabs/prysm/v6/cmd"
+	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -34,6 +36,22 @@ func (c *dbClearer) clearKV(ctx context.Context, db *kv.Store) (*kv.Store, error
 		return nil, errors.Wrap(err, "could not clear database")
 	}
 	return kv.NewKVStore(ctx, db.DatabasePath())
+}
+
+func (c *dbClearer) clearGenesis(dir string) error {
+	if !c.shouldProceed() {
+		return nil
+	}
+
+	gfile, err := genesis.FindStateFile(dir)
+	if err != nil {
+		return nil
+	}
+
+	if err := os.Remove(gfile.FilePath()); err != nil {
+		return errors.Wrapf(err, "genesis state file not removed: %s", gfile.FilePath())
+	}
+	return nil
 }
 
 func (c *dbClearer) clearBlobs(bs *filesystem.BlobStorage) error {

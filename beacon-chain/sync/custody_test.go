@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
@@ -55,9 +54,9 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 
 	if withChain {
 		const headSlot = primitives.Slot(100)
-		block, err := blocks.NewSignedBeaconBlock(&eth.SignedBeaconBlock{
-			Block: &eth.BeaconBlock{
-				Body: &eth.BeaconBlockBody{},
+		block, err := blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlock{
+			Block: &ethpb.BeaconBlock{
+				Body: &ethpb.BeaconBlockBody{},
 				Slot: headSlot,
 			},
 		})
@@ -90,11 +89,13 @@ func setupCustodyTest(t *testing.T, withChain bool) *testSetup {
 }
 
 func (ts *testSetup) assertCustodyInfo(t *testing.T, expectedSlot primitives.Slot, expectedCount uint64) {
-	p2pEarliestSlot, err := ts.p2pService.EarliestAvailableSlot()
+	ctx := t.Context()
+
+	p2pEarliestSlot, err := ts.p2pService.EarliestAvailableSlot(ctx)
 	require.NoError(t, err)
 	require.Equal(t, expectedSlot, p2pEarliestSlot)
 
-	p2pCustodyCount, err := ts.p2pService.CustodyGroupCount()
+	p2pCustodyCount, err := ts.p2pService.CustodyGroupCount(ctx)
 	require.NoError(t, err)
 	require.Equal(t, expectedCount, p2pCustodyCount)
 
@@ -115,11 +116,11 @@ func withSubscribeAllDataSubnets(t *testing.T, fn func()) {
 
 func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.NumberOfCustodyGroups = 128
-	beaconConfig.CustodyRequirement = 4
-	beaconConfig.SamplesPerSlot = 8
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.NumberOfCustodyGroups = 128
+	cfg.CustodyRequirement = 4
+	cfg.SamplesPerSlot = 8
+	params.OverrideBeaconConfig(cfg)
 
 	t.Run("Skip update when actual custody count >= target", func(t *testing.T) {
 		setup := setupCustodyTest(t, false)
@@ -158,7 +159,7 @@ func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 			require.NoError(t, err)
 
 			const expectedSlot = primitives.Slot(100)
-			setup.assertCustodyInfo(t, expectedSlot, beaconConfig.NumberOfCustodyGroups)
+			setup.assertCustodyInfo(t, expectedSlot, cfg.NumberOfCustodyGroups)
 		})
 	})
 }
@@ -170,13 +171,15 @@ func TestCustodyGroupCount(t *testing.T) {
 	config.CustodyRequirement = 3
 	params.OverrideBeaconConfig(config)
 
+	ctx := t.Context()
+
 	t.Run("SubscribeAllDataSubnets enabled returns NumberOfCustodyGroups", func(t *testing.T) {
 		withSubscribeAllDataSubnets(t, func() {
 			service := &Service{
 				ctx: context.Background(),
 			}
 
-			result, err := service.custodyGroupCount()
+			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
 			require.Equal(t, config.NumberOfCustodyGroups, result)
 		})
@@ -188,7 +191,7 @@ func TestCustodyGroupCount(t *testing.T) {
 			trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
 		}
 
-		result, err := service.custodyGroupCount()
+		result, err := service.custodyGroupCount(ctx)
 		require.NoError(t, err)
 		require.Equal(t, config.CustodyRequirement, result)
 	})

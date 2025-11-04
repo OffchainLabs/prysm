@@ -18,38 +18,46 @@ import (
 )
 
 func TestVerifyDataColumnSidecar(t *testing.T) {
-	t.Run("index too large", func(t *testing.T) {
-		roSidecar := createTestSidecar(t, 1_000_000, nil, nil, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrIndexTooLarge)
-	})
+	testCases := []struct {
+		name             string
+		index            uint64
+		blobCount        int
+		commitmentCount  int
+		proofCount       int
+		maxBlobsPerBlock uint64
+		expectedError    error
+	}{
+		{name: "index too large", index: 1_000_000, expectedError: peerdas.ErrIndexTooLarge},
+		{name: "no commitments", expectedError: peerdas.ErrNoKzgCommitments},
+		{name: "too many commitments", blobCount: 10, commitmentCount: 10, proofCount: 10, maxBlobsPerBlock: 2, expectedError: peerdas.ErrTooManyCommitments},
+		{name: "commitments size mismatch", commitmentCount: 1, maxBlobsPerBlock: 1, expectedError: peerdas.ErrMismatchLength},
+		{name: "proofs size mismatch", blobCount: 1, commitmentCount: 1, maxBlobsPerBlock: 1, expectedError: peerdas.ErrMismatchLength},
+		{name: "nominal", blobCount: 1, commitmentCount: 1, proofCount: 1, maxBlobsPerBlock: 1, expectedError: nil},
+	}
 
-	t.Run("no commitments", func(t *testing.T) {
-		roSidecar := createTestSidecar(t, 0, nil, nil, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrNoKzgCommitments)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig()
+			cfg.FuluForkEpoch = 0
+			cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: tc.maxBlobsPerBlock}}
+			params.OverrideBeaconConfig(cfg)
 
-	t.Run("KZG commitments size mismatch", func(t *testing.T) {
-		kzgCommitments := make([][]byte, 1)
-		roSidecar := createTestSidecar(t, 0, nil, kzgCommitments, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
-	})
+			column := make([][]byte, tc.blobCount)
+			kzgCommitments := make([][]byte, tc.commitmentCount)
+			kzgProof := make([][]byte, tc.proofCount)
 
-	t.Run("KZG proofs size mismatch", func(t *testing.T) {
-		column, kzgCommitments := make([][]byte, 1), make([][]byte, 1)
-		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, nil)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
-	})
+			roSidecar := createTestSidecar(t, tc.index, column, kzgCommitments, kzgProof)
+			err := peerdas.VerifyDataColumnSidecar(roSidecar)
 
-	t.Run("nominal", func(t *testing.T) {
-		column, kzgCommitments, kzgProofs := make([][]byte, 1), make([][]byte, 1), make([][]byte, 1)
-		roSidecar := createTestSidecar(t, 0, column, kzgCommitments, kzgProofs)
-		err := peerdas.VerifyDataColumnSidecar(roSidecar)
-		require.NoError(t, err)
-	})
+			if tc.expectedError != nil {
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
@@ -60,20 +68,25 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
+	t.Run("size mismatch", func(t *testing.T) {
+		sidecars := generateRandomSidecars(t, seed, blobCount)
+		sidecars[0].Column[0] = sidecars[0].Column[0][:len(sidecars[0].Column[0])-1] // Remove one byte to create size mismatch
+
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
+		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
+	})
+
 	t.Run("invalid proof", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
 		sidecars[0].Column[0][0]++ // It is OK to overflow
-		roDataColumnSidecars := generateRODataColumnSidecars(t, sidecars)
 
-		err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.ErrorIs(t, err, peerdas.ErrInvalidKZGProof)
 	})
 
 	t.Run("nominal", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
-		roDataColumnSidecars := generateRODataColumnSidecars(t, sidecars)
-
-		err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
 		require.NoError(t, err)
 	})
 }
@@ -256,9 +269,8 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_SameCommitments_NoBatch(b *testin
 	for i := range int64(b.N) {
 		// Generate new random sidecars to ensure the KZG backend does not cache anything.
 		sidecars := generateRandomSidecars(b, i, blobCount)
-		roDataColumnSidecars := generateRODataColumnSidecars(b, sidecars)
 
-		for _, sidecar := range roDataColumnSidecars {
+		for _, sidecar := range sidecars {
 			sidecars := []blocks.RODataColumn{sidecar}
 			b.StartTimer()
 			err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
@@ -282,7 +294,7 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 			b.ResetTimer()
 
 			for j := range int64(b.N) {
-				allSidecars := make([]*ethpb.DataColumnSidecar, 0, numberOfColumns)
+				allSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
 				for k := int64(0); k < numberOfColumns; k += columnsCount {
 					// Use different seeds to generate different blobs/commitments
 					seed := int64(b.N*i) + numberOfColumns*j + blobCount*k
@@ -292,10 +304,8 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.
 					allSidecars = append(allSidecars, sidecars[k:k+columnsCount]...)
 				}
 
-				roDataColumnSidecars := generateRODataColumnSidecars(b, allSidecars)
-
 				b.StartTimer()
-				err := peerdas.VerifyDataColumnsSidecarKZGProofs(roDataColumnSidecars)
+				err := peerdas.VerifyDataColumnsSidecarKZGProofs(allSidecars)
 				b.StopTimer()
 				require.NoError(b, err)
 			}
@@ -323,8 +333,7 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch4(b *testing
 		for j := range int64(batchCount) {
 			// Use different seeds to generate different blobs/commitments
 			sidecars := generateRandomSidecars(b, int64(batchCount)*i+j*blobCount, blobCount)
-			roDataColumnSidecars := generateRODataColumnSidecars(b, sidecars[:columnsCount])
-			allSidecars = append(allSidecars, roDataColumnSidecars)
+			allSidecars = append(allSidecars, sidecars)
 		}
 
 		for _, sidecars := range allSidecars {
@@ -358,7 +367,7 @@ func createTestSidecar(t *testing.T, index uint64, column, kzgCommitments, kzgPr
 	return roSidecar
 }
 
-func generateRandomSidecars(t testing.TB, seed, blobCount int64) []*ethpb.DataColumnSidecar {
+func generateRandomSidecars(t testing.TB, seed, blobCount int64) []blocks.RODataColumn {
 	dbBlock := util.NewBeaconBlockDeneb()
 
 	commitments := make([][]byte, 0, blobCount)
@@ -379,20 +388,10 @@ func generateRandomSidecars(t testing.TB, seed, blobCount int64) []*ethpb.DataCo
 	require.NoError(t, err)
 
 	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	sidecars, err := peerdas.DataColumnSidecars(sBlock, cellsAndProofs)
+	rob, err := blocks.NewROBlock(sBlock)
+	require.NoError(t, err)
+	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	return sidecars
-}
-
-func generateRODataColumnSidecars(t testing.TB, sidecars []*ethpb.DataColumnSidecar) []blocks.RODataColumn {
-	roDataColumnSidecars := make([]blocks.RODataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		roCol, err := blocks.NewRODataColumn(sidecar)
-		require.NoError(t, err)
-
-		roDataColumnSidecars = append(roDataColumnSidecars, roCol)
-	}
-
-	return roDataColumnSidecars
 }

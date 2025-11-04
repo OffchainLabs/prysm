@@ -39,7 +39,6 @@ go_library(
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//encoding/ssz:go_default_library",
-        "//math:go_default_library",
         "//monitoring/tracing/trace:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

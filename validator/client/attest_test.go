@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/async/event"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -22,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -101,6 +101,99 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Could not submit attestation to beacon node")
 		})
+	}
+}
+
+func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
+	tests := []struct {
+		name                   string
+		electraForkEpoch       uint64
+		attestationSlot        primitives.Slot
+		assignedCommitteeIndex primitives.CommitteeIndex
+		expectedCommitteeIndex primitives.CommitteeIndex
+		isPostElectra          bool
+	}{
+		{
+			name:                   "Pre-Electra uses assigned committee index",
+			electraForkEpoch:       10,
+			attestationSlot:        300,
+			assignedCommitteeIndex: 5,
+			expectedCommitteeIndex: 5,
+			isPostElectra:          false,
+		},
+		{
+			name:                   "Post-Electra uses committee index 0",
+			electraForkEpoch:       1,
+			attestationSlot:        32,
+			assignedCommitteeIndex: 5,
+			expectedCommitteeIndex: 0,
+			isPostElectra:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+			t.Run(fmt.Sprintf("%s (SlashingProtectionMinimal:%v)", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig().Copy()
+				cfg.ElectraForkEpoch = primitives.Epoch(tt.electraForkEpoch)
+				params.OverrideBeaconConfig(cfg)
+
+				validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+				defer finish()
+				validatorIndex := primitives.ValidatorIndex(7)
+				committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
+				var pubKey [fieldparams.BLSPubkeyLength]byte
+				copy(pubKey[:], validatorKey.PublicKey().Marshal())
+				validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:       validatorKey.PublicKey().Marshal(),
+						CommitteeIndex:  tt.assignedCommitteeIndex,
+						CommitteeLength: uint64(len(committee)),
+						ValidatorIndex:  validatorIndex,
+					},
+				}}
+
+				var capturedRequest *ethpb.AttestationDataRequest
+				// Capture the actual request to verify committee index
+				m.validatorClient.EXPECT().AttestationData(
+					gomock.Any(), // ctx
+					gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+				).Do(func(_ context.Context, req *ethpb.AttestationDataRequest) {
+					capturedRequest = req
+				}).Return(&ethpb.AttestationData{
+					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				}, nil)
+
+				m.validatorClient.EXPECT().DomainData(
+					gomock.Any(), // ctx
+					gomock.Any(), // epoch
+				).Times(2).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+				if tt.isPostElectra {
+					m.validatorClient.EXPECT().ProposeAttestationElectra(
+						gomock.Any(), // ctx
+						gomock.AssignableToTypeOf(&ethpb.SingleAttestation{}),
+					).Return(&ethpb.AttestResponse{}, nil)
+				} else {
+					m.validatorClient.EXPECT().ProposeAttestation(
+						gomock.Any(), // ctx
+						gomock.AssignableToTypeOf(&ethpb.Attestation{}),
+					).Return(&ethpb.AttestResponse{}, nil)
+				}
+
+				validator.SubmitAttestation(t.Context(), tt.attestationSlot, pubKey)
+
+				// Verify the committee index in the request
+				require.NotNil(t, capturedRequest, "AttestationDataRequest should have been called")
+				assert.Equal(t, tt.expectedCommitteeIndex, capturedRequest.CommitteeIndex,
+					"Committee index mismatch: expected %d, got %d", tt.expectedCommitteeIndex, capturedRequest.CommitteeIndex)
+				assert.Equal(t, tt.attestationSlot, capturedRequest.Slot,
+					"Slot should match the provided slot")
+			})
+		}
 	}
 }
 

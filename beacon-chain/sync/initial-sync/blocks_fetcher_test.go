@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
@@ -910,6 +911,55 @@ func TestBlocksFetcher_requestBlocksFromPeerReturningInvalidBlocks(t *testing.T)
 	}
 }
 
+func TestBlocksFetcher_requestBlocksDownscoreOnInvalidData(t *testing.T) {
+	p1 := p2ptest.NewTestP2P(t)
+	p2 := p2ptest.NewTestP2P(t)
+	p1.Connect(p2)
+
+	topic := p2p.RPCBlocksByRangeTopicV1
+	protocol := libp2pcore.ProtocolID(topic + p1.Encoding().ProtocolSuffix())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
+		p2p:   p1,
+		chain: &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}},
+	})
+	fetcher.rateLimiter = leakybucket.NewCollector(0.000001, 640, 1*time.Second, false)
+
+	// Set up handler that returns blocks in wrong order (will trigger ErrInvalidFetchedData)
+	p2.BHost.SetStreamHandler(protocol, func(stream network.Stream) {
+		blk := util.NewBeaconBlock()
+		blk.Block.Slot = 163
+		tor := startup.NewClock(time.Now(), [32]byte{})
+		wsb, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+
+		blk = util.NewBeaconBlock()
+		blk.Block.Slot = 162
+		wsb, err = blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		assert.NoError(t, beaconsync.WriteBlockChunk(stream, tor, p1.Encoding(), wsb))
+		assert.NoError(t, stream.Close())
+	})
+
+	// Verify the peer has no bad responses before the request
+	scoreBeforeRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+	require.ErrorIs(t, err, peerdata.ErrPeerUnknown)
+	assert.Equal(t, -1, scoreBeforeRequest)
+
+	// Use fetchBlocksFromPeer which includes the downscoring logic
+	_, _, err = fetcher.fetchBlocksFromPeer(ctx, 100, 64, []peer.ID{p2.PeerID()})
+	assert.ErrorContains(t, errNoPeersAvailable.Error(), err)
+
+	// Verify the peer was downscored
+	scoreAfterRequest, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, scoreAfterRequest)
+}
+
 func TestTimeToWait(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -967,13 +1017,13 @@ func TestBlobRangeForBlocks(t *testing.T) {
 	for i := range blks {
 		sbbs[i] = blks[i]
 	}
-	retentionStart := primitives.Slot(5)
+	retentionStart := blks[len(blks)/2].Block().Slot()
 	bwb, err := sortedBlockWithVerifiedBlobSlice(sbbs)
 	require.NoError(t, err)
 	bounds := countCommitments(bwb, retentionStart).blobRange(nil)
 	require.Equal(t, retentionStart, bounds.low)
-	higher := primitives.Slot(len(blks) + 1)
-	bounds = countCommitments(bwb, higher).blobRange(nil)
+	maxBlkSlot := blks[len(blks)-1].Block().Slot()
+	bounds = countCommitments(bwb, maxBlkSlot+1).blobRange(nil)
 	var nilBounds *blobRange
 	require.Equal(t, nilBounds, bounds)
 
@@ -1004,17 +1054,17 @@ func TestBlobRequest(t *testing.T) {
 	}
 	bwb, err := sortedBlockWithVerifiedBlobSlice(sbbs)
 	require.NoError(t, err)
-	maxBlkSlot := primitives.Slot(len(blks) - 1)
 
-	tooHigh := primitives.Slot(len(blks) + 1)
+	maxBlkSlot := blks[len(blks)-1].Block().Slot()
+	tooHigh := maxBlkSlot + 1
 	req = countCommitments(bwb, tooHigh).blobRange(nil).Request()
 	require.Equal(t, nilReq, req)
 
 	req = countCommitments(bwb, maxBlkSlot).blobRange(nil).Request()
-	require.Equal(t, uint64(1), req.Count)
 	require.Equal(t, maxBlkSlot, req.StartSlot)
+	require.Equal(t, uint64(1), req.Count)
 
-	halfway := primitives.Slot(5)
+	halfway := blks[len(blks)/2].Block().Slot()
 	req = countCommitments(bwb, halfway).blobRange(nil).Request()
 	require.Equal(t, halfway, req.StartSlot)
 	// adding 1 to include the halfway slot itself
@@ -1053,6 +1103,12 @@ func TestCountCommitments(t *testing.T) {
 }
 
 func TestCommitmentCountList(t *testing.T) {
+	de := params.BeaconConfig().DenebForkEpoch
+	ds := util.SlotAtEpoch(t, de)
+	denebRel := func(s primitives.Slot) primitives.Slot {
+		return ds + s
+	}
+	maxBlobs := params.BeaconConfig().MaxBlobsPerBlock(ds)
 	cases := []struct {
 		name     string
 		cc       commitmentCountList
@@ -1069,20 +1125,20 @@ func TestCommitmentCountList(t *testing.T) {
 		{
 			name: "nil bss, single slot",
 			cc: []commitmentCount{
-				{slot: 11235, count: 1},
+				{slot: denebRel(11235), count: 1},
 			},
-			expected: &blobRange{low: 11235, high: 11235},
-			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: 11235, Count: 1},
+			expected: &blobRange{low: denebRel(11235), high: denebRel(11235)},
+			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: denebRel(11235), Count: 1},
 		},
 		{
 			name: "nil bss, sparse slots",
 			cc: []commitmentCount{
-				{slot: 11235, count: 1},
-				{slot: 11240, count: params.BeaconConfig().MaxBlobsPerBlock(0)},
-				{slot: 11250, count: 3},
+				{slot: denebRel(11235), count: 1},
+				{slot: denebRel(11240), count: maxBlobs},
+				{slot: denebRel(11250), count: 3},
 			},
-			expected: &blobRange{low: 11235, high: 11250},
-			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: 11235, Count: 16},
+			expected: &blobRange{low: denebRel(11235), high: denebRel(11250)},
+			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: denebRel(11235), Count: 16},
 		},
 		{
 			name: "AllAvailable in middle, some avail low, none high",
@@ -1091,15 +1147,15 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("1")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, de, onDisk)
 			},
 			cc: []commitmentCount{
-				{slot: 0, count: 3, root: bytesutil.ToBytes32([]byte("0"))},
-				{slot: 5, count: params.BeaconConfig().MaxBlobsPerBlock(0), root: bytesutil.ToBytes32([]byte("1"))},
-				{slot: 15, count: 3},
+				{slot: denebRel(0), count: 3, root: bytesutil.ToBytes32([]byte("0"))},
+				{slot: denebRel(5), count: maxBlobs, root: bytesutil.ToBytes32([]byte("1"))},
+				{slot: denebRel(15), count: 3},
 			},
-			expected: &blobRange{low: 0, high: 15},
-			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: 0, Count: 16},
+			expected: &blobRange{low: denebRel(0), high: denebRel(15)},
+			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: denebRel(0), Count: 16},
 		},
 		{
 			name: "AllAvailable at high and low",
@@ -1108,15 +1164,15 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, de, onDisk)
 			},
 			cc: []commitmentCount{
-				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
-				{slot: 5, count: 3},
-				{slot: 15, count: params.BeaconConfig().MaxBlobsPerBlock(0), root: bytesutil.ToBytes32([]byte("2"))},
+				{slot: denebRel(0), count: 2, root: bytesutil.ToBytes32([]byte("0"))},
+				{slot: denebRel(5), count: 3},
+				{slot: denebRel(15), count: maxBlobs, root: bytesutil.ToBytes32([]byte("2"))},
 			},
-			expected: &blobRange{low: 5, high: 5},
-			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: 5, Count: 1},
+			expected: &blobRange{low: denebRel(5), high: denebRel(5)},
+			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: denebRel(5), Count: 1},
 		},
 		{
 			name: "AllAvailable at high and low, adjacent range in middle",
@@ -1125,16 +1181,16 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("0")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, de, onDisk)
 			},
 			cc: []commitmentCount{
-				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
-				{slot: 5, count: 3},
-				{slot: 6, count: 3},
-				{slot: 15, count: params.BeaconConfig().MaxBlobsPerBlock(0), root: bytesutil.ToBytes32([]byte("2"))},
+				{slot: denebRel(0), count: 2, root: bytesutil.ToBytes32([]byte("0"))},
+				{slot: denebRel(5), count: 3},
+				{slot: denebRel(6), count: 3},
+				{slot: denebRel(15), count: maxBlobs, root: bytesutil.ToBytes32([]byte("2"))},
 			},
-			expected: &blobRange{low: 5, high: 6},
-			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: 5, Count: 2},
+			expected: &blobRange{low: denebRel(5), high: denebRel(6)},
+			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: denebRel(5), Count: 2},
 		},
 		{
 			name: "AllAvailable at high and low, range in middle",
@@ -1144,16 +1200,16 @@ func TestCommitmentCountList(t *testing.T) {
 					bytesutil.ToBytes32([]byte("1")): {0, 1},
 					bytesutil.ToBytes32([]byte("2")): {0, 1, 2, 3, 4, 5},
 				}
-				return filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+				return filesystem.NewMockBlobStorageSummarizer(t, de, onDisk)
 			},
 			cc: []commitmentCount{
-				{slot: 0, count: 2, root: bytesutil.ToBytes32([]byte("0"))},
-				{slot: 5, count: 3, root: bytesutil.ToBytes32([]byte("1"))},
-				{slot: 10, count: 3},
-				{slot: 15, count: params.BeaconConfig().MaxBlobsPerBlock(0), root: bytesutil.ToBytes32([]byte("2"))},
+				{slot: denebRel(0), count: 2, root: bytesutil.ToBytes32([]byte("0"))},
+				{slot: denebRel(5), count: 3, root: bytesutil.ToBytes32([]byte("1"))},
+				{slot: denebRel(10), count: 3},
+				{slot: denebRel(15), count: maxBlobs, root: bytesutil.ToBytes32([]byte("2"))},
 			},
-			expected: &blobRange{low: 5, high: 10},
-			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: 5, Count: 6},
+			expected: &blobRange{low: denebRel(5), high: denebRel(10)},
+			request:  &ethpb.BlobSidecarsByRangeRequest{StartSlot: denebRel(5), Count: 6},
 		},
 	}
 	for _, c := range cases {
@@ -1168,8 +1224,8 @@ func TestCommitmentCountList(t *testing.T) {
 				require.IsNil(t, br.Request())
 			} else {
 				req := br.Request()
-				require.DeepEqual(t, req.StartSlot, c.request.StartSlot)
-				require.DeepEqual(t, req.Count, c.request.Count)
+				require.Equal(t, req.StartSlot, c.request.StartSlot)
+				require.Equal(t, req.Count, c.request.Count)
 			}
 		})
 	}
@@ -1249,7 +1305,7 @@ func TestVerifyAndPopulateBlobs(t *testing.T) {
 			r1: {0, 1},
 			r7: {0, 1, 2, 3, 4, 5},
 		}
-		bss := filesystem.NewMockBlobStorageSummarizer(t, onDisk)
+		bss := filesystem.NewMockBlobStorageSummarizer(t, params.BeaconConfig().DenebForkEpoch, onDisk)
 		err := verifyAndPopulateBlobs(bwb, blobs, testReqFromResp(bwb), bss)
 		require.NoError(t, err)
 		require.Equal(t, 6, len(bwb[i1].Blobs))
@@ -1299,14 +1355,6 @@ func TestBlockFetcher_HasSufficientBandwidth(t *testing.T) {
 	assert.Equal(t, 2, len(receivedPeers))
 }
 
-func TestSortedSliceFromMap(t *testing.T) {
-	m := map[uint64]bool{1: true, 3: true, 2: true, 4: true}
-	expected := []uint64{1, 2, 3, 4}
-
-	actual := sortedSliceFromMap(m)
-	require.DeepSSZEqual(t, expected, actual)
-}
-
 func TestFetchSidecars(t *testing.T) {
 	ctx := t.Context()
 	t.Run("No blocks", func(t *testing.T) {
@@ -1318,22 +1366,27 @@ func TestFetchSidecars(t *testing.T) {
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
-		beaconConfig := params.BeaconConfig()
-		numberOfColumns := beaconConfig.NumberOfColumns
-		samplesPerSlot := beaconConfig.SamplesPerSlot
+		cfg := params.BeaconConfig()
+		numberOfColumns := cfg.NumberOfColumns
+		samplesPerSlot := cfg.SamplesPerSlot
 
 		// Define "now" to be one epoch after genesis time + retention period.
 		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-		secondsPerSlot := beaconConfig.SecondsPerSlot
-		slotsPerEpoch := beaconConfig.SlotsPerEpoch
+		secondsPerSlot := cfg.SecondsPerSlot
+		slotsPerEpoch := cfg.SlotsPerEpoch
 		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
-		retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+		retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
 		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
 		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
 
 		genesisValidatorRoot := [fieldparams.RootLength]byte{}
 		nower := func() time.Time { return now }
 		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
 
 		// Define a Deneb block with blobs out of retention period.
 		denebBlock := util.NewBeaconBlockDeneb()
@@ -1343,33 +1396,52 @@ func TestFetchSidecars(t *testing.T) {
 		roDebebBlock, err := blocks.NewROBlock(signedDenebBlock)
 		require.NoError(t, err)
 
-		// Define a Fulu block with blobs in the retention period.
-		fuluBlock := util.NewBeaconBlockFulu()
-		fuluBlock.Block.Slot = slotsPerEpoch                                                            // Within retention period.
-		fuluBlock.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
-		signedFuluBlock, err := blocks.NewSignedBeaconBlock(fuluBlock)
+		// Define a Fulu block with blobs before the retention period.
+		fuluBlock1 := util.NewBeaconBlockFulu()
+		fuluBlock1.Block.Slot = slotsPerEpoch.Sub(1)                                                     // Before the retention period.
+		fuluBlock1.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock1, err := blocks.NewSignedBeaconBlock(fuluBlock1)
 		require.NoError(t, err)
-		roFuluBlock, err := blocks.NewROBlock(signedFuluBlock)
-		require.NoError(t, err)
-
-		bodyRoot, err := fuluBlock.Block.Body.HashTreeRoot()
+		roFuluBlock1, err := blocks.NewROBlock(signedFuluBlock1)
 		require.NoError(t, err)
 
-		// Create and save data column sidecars for this fulu block in the database.
-		params := make([]util.DataColumnParam, 0, numberOfColumns)
+		bodyRootFulu1, err := fuluBlock1.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for fulu block 2 in the database.
+		paramsFulu1 := make([]util.DataColumnParam, 0, numberOfColumns)
 		for i := range numberOfColumns {
-			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRoot[:]}
-			params = append(params, param)
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRootFulu1[:]}
+			paramsFulu1 = append(paramsFulu1, param)
 		}
-		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+		_, verifiedRoDataColumnSidecarsFulu1 := util.CreateTestVerifiedRoDataColumnSidecars(t, paramsFulu1)
 
-		// Create a data columns storage.
-		dir := t.TempDir()
-		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		// Save the data column sidecars for block fulu 1 to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu1)
 		require.NoError(t, err)
 
-		// Save the data column sidecars to the storage.
-		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
+		// Define a Fulu block with blobs in the retention period.
+		fuluBlock2 := util.NewBeaconBlockFulu()
+		fuluBlock2.Block.Slot = slotsPerEpoch                                                            // Within retention period.
+		fuluBlock2.Block.Body.BlobKzgCommitments = [][]byte{make([]byte, fieldparams.KzgCommitmentSize)} // Dummy commitment.
+		signedFuluBlock2, err := blocks.NewSignedBeaconBlock(fuluBlock2)
+		require.NoError(t, err)
+		roFuluBlock2, err := blocks.NewROBlock(signedFuluBlock2)
+		require.NoError(t, err)
+
+		bodyRootFulu2, err := fuluBlock2.Block.Body.HashTreeRoot()
+		require.NoError(t, err)
+
+		// Create and save data column sidecars for fulu block 2 in the database.
+		paramsFulu2 := make([]util.DataColumnParam, 0, numberOfColumns)
+		for i := range numberOfColumns {
+			param := util.DataColumnParam{Index: i, Slot: slotsPerEpoch, BodyRoot: bodyRootFulu2[:]}
+			paramsFulu2 = append(paramsFulu2, param)
+		}
+		_, verifiedRoDataColumnSidecarsFulu2 := util.CreateTestVerifiedRoDataColumnSidecars(t, paramsFulu2)
+
+		// Save the data column sidecars for block fulu 2 to the storage.
+		err = dataColumnStorage.Save(verifiedRoDataColumnSidecarsFulu2)
 		require.NoError(t, err)
 
 		// Create a blocks fetcher.
@@ -1382,7 +1454,8 @@ func TestFetchSidecars(t *testing.T) {
 		// Fetch sidecars.
 		blocksWithSidecars := []blocks.BlockWithROSidecars{
 			{Block: roDebebBlock},
-			{Block: roFuluBlock},
+			{Block: roFuluBlock1},
+			{Block: roFuluBlock2},
 		}
 		pid, err := fetcher.fetchSidecars(ctx, "", nil, blocksWithSidecars)
 		require.NoError(t, err)
@@ -1392,12 +1465,15 @@ func TestFetchSidecars(t *testing.T) {
 		require.Equal(t, 0, len(blocksWithSidecars[0].Blobs))
 		require.Equal(t, 0, len(blocksWithSidecars[0].Columns))
 		require.Equal(t, 0, len(blocksWithSidecars[1].Blobs))
+		require.Equal(t, 0, len(blocksWithSidecars[1].Columns))
+		require.Equal(t, 0, len(blocksWithSidecars[2].Blobs))
 
 		// We don't check the content of the columns here. The extensive test is done
 		// in TestFetchDataColumnsSidecars.
-		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[1].Columns)))
+		require.Equal(t, samplesPerSlot, uint64(len(blocksWithSidecars[2].Columns)))
 	})
 }
+
 func TestFirstFuluIndex(t *testing.T) {
 	bellatrix := util.NewBeaconBlockBellatrix()
 	signedBellatrix, err := blocks.NewSignedBeaconBlock(bellatrix)

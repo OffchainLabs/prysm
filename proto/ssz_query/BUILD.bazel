@@ -1,0 +1,57 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("//tools:ssz.bzl", "SSZ_DEPS", "ssz_gen_marshal")
+
+# gazelle:ignore
+
+proto_library(
+    name = "proto",
+    srcs = ["response.proto"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/eth/ext:proto",
+    ],
+)
+
+go_proto_library(
+    name = "go_proto",
+    compilers = [
+        "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query",
+    proto = ":proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/eth/ext:go_default_library",
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
+        "@org_golang_google_protobuf//runtime/protoimpl:go_default_library",
+    ],
+)
+
+# SSZ generation for proto messages
+ssz_gen_marshal(
+    name = "ssz_generated",
+    out = "response.ssz.go",
+    go_proto = ":go_proto",
+    objs = [
+        "SSZQueryProof",
+        "SSZQueryResponse",
+        "SSZQueryResponseWithProof",
+    ],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        ":ssz_generated",  # keep
+    ],
+    embed = [":go_proto"],
+    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query",
+    visibility = ["//visibility:public"],
+    deps = SSZ_DEPS + [
+        "//proto/eth/ext:go_default_library",
+        "@com_github_golang_protobuf//proto:go_default_library",
+    ],
+)

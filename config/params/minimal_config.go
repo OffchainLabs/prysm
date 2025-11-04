@@ -104,14 +104,13 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.MinEpochsForBlockRequests = 272
 
 	// New Deneb params
-	minimalConfig.MaxBlobCommitmentsPerBlock = 32
-	minimalConfig.KzgCommitmentInclusionProofDepth = 10
+	minimalConfig.MaxBlobCommitmentsPerBlock = 4096
+	minimalConfig.KzgCommitmentInclusionProofDepth = 17
 
 	// New Electra params
 	minimalConfig.MinPerEpochChurnLimitElectra = 64000000000
 	minimalConfig.MaxPerEpochActivationExitChurnLimit = 128000000000
 	minimalConfig.PendingConsolidationsLimit = 64
-	minimalConfig.MaxPartialWithdrawalsPerPayload = 1
 	minimalConfig.PendingPartialWithdrawalsLimit = 64
 	minimalConfig.MaxPendingPartialsPerWithdrawalsSweep = 2
 	minimalConfig.PendingDepositsLimit = 134217728

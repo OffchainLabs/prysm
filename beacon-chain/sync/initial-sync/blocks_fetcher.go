@@ -3,12 +3,12 @@ package initialsync
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
@@ -384,7 +384,7 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 	}
 
 	// Compute the columns to request.
-	custodyGroupCount, err := f.p2p.CustodyGroupCount()
+	custodyGroupCount, err := f.p2p.CustodyGroupCount(ctx)
 	if err != nil {
 		return blobsPid, errors.Wrap(err, "custody group count")
 	}
@@ -395,6 +395,25 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		return blobsPid, errors.Wrap(err, "custody info")
 	}
 
+	currentSlot := f.clock.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
+	for _, blockWithSidecars := range postFulu {
+		blockSlot := blockWithSidecars.Block.Block().Slot()
+		blockEpoch := slots.ToEpoch(blockSlot)
+
+		if params.WithinDAPeriod(blockEpoch, currentEpoch) {
+			roBlocks = append(roBlocks, blockWithSidecars.Block)
+		}
+	}
+
+	// Return early if there are no blocks that need data column sidecars.
+	if len(roBlocks) == 0 {
+		return blobsPid, nil
+	}
+
+	// Some blocks neesd data column sidecars, fetch them.
 	params := prysmsync.DataColumnSidecarsParams{
 		Ctx:         ctx,
 		Tor:         f.clock,
@@ -405,14 +424,17 @@ func (f *blocksFetcher) fetchSidecars(ctx context.Context, pid peer.ID, peers []
 		NewVerifier: f.cv,
 	}
 
-	roBlocks := make([]blocks.ROBlock, 0, len(postFulu))
-	for _, block := range postFulu {
-		roBlocks = append(roBlocks, block.Block)
-	}
-
-	verifiedRoDataColumnsByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
+	verifiedRoDataColumnsByRoot, missingIndicesByRoot, err := prysmsync.FetchDataColumnSidecars(params, roBlocks, info.CustodyColumns)
 	if err != nil {
 		return "", errors.Wrap(err, "fetch data column sidecars")
+	}
+
+	if len(missingIndicesByRoot) > 0 {
+		prettyMissingIndicesByRoot := make(map[string]string, len(missingIndicesByRoot))
+		for root, indices := range missingIndicesByRoot {
+			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
+		}
+		return "", errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}
 
 	// Populate the response.
@@ -450,7 +472,15 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 	for _, p := range peers {
 		blocks, err := f.requestBlocks(ctx, req, p)
 		if err != nil {
-			log.WithField("peer", p).WithError(err).Debug("Could not request blocks by range from peer")
+			log.WithFields(logrus.Fields{
+				"peer":      p,
+				"startSlot": req.StartSlot,
+				"count":     req.Count,
+				"step":      req.Step,
+			}).WithError(err).Debug("Could not request blocks by range from peer")
+			if errors.Is(err, prysmsync.ErrInvalidFetchedData) {
+				f.downscorePeer(p, err)
+			}
 			continue
 		}
 		f.p2p.Peers().Scorers().BlockProviderScorer().Touch(p)
@@ -697,17 +727,6 @@ func (f *blocksFetcher) fetchBlobsFromPeer(ctx context.Context, bwb []blocks.Blo
 	return "", errNoPeersAvailable
 }
 
-// sortedSliceFromMap returns a sorted slice of keys from a map.
-func sortedSliceFromMap(m map[uint64]bool) []uint64 {
-	result := make([]uint64, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-
-	slices.Sort(result)
-	return result
-}
-
 // requestBlocks is a wrapper for handling BeaconBlocksByRangeRequest requests/streams.
 func (f *blocksFetcher) requestBlocks(
 	ctx context.Context,
@@ -869,6 +888,12 @@ func dedupPeers(peers []peer.ID) []peer.ID {
 		peerExists[peers[i]] = true
 	}
 	return newPeerList
+}
+
+// downscorePeer increments the bad responses score for the peer and logs the event.
+func (f *blocksFetcher) downscorePeer(peerID peer.ID, reason error) {
+	newScore := f.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
 // findFirstFuluIndex returns the index of the first block with a version >= Fulu.

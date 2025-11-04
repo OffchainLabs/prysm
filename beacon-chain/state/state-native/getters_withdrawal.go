@@ -160,7 +160,7 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 	}
 
 	validatorsLen := b.validatorsLen()
-	bound := mathutil.Min(uint64(validatorsLen), params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep)
+	bound := min(uint64(validatorsLen), params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep)
 	for i := uint64(0); i < bound; i++ {
 		val, err := b.validatorAtIndexReadOnly(validatorIndex)
 		if err != nil {

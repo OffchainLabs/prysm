@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
@@ -92,11 +93,15 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.
 // If so, requests them and saves them to the storage.
 func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock) error {
+	if len(blks) == 0 {
+		return nil
+	}
+
 	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
 
-	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount()
+	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
-		return errors.Wrap(err, "fetch custody group count from peer")
+		return errors.Wrap(err, "custody group count")
 	}
 
 	samplingSize := max(custodyGroupCount, samplesPerSlot)
@@ -115,9 +120,17 @@ func (s *Service) requestAndSaveMissingDataColumnSidecars(blks []blocks.ROBlock)
 		NewVerifier: s.newColumnsVerifier,
 	}
 
-	sidecarsByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)
+	sidecarsByRoot, missingIndicesByRoot, err := FetchDataColumnSidecars(params, blks, info.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "fetch data column sidecars")
+	}
+
+	if len(missingIndicesByRoot) > 0 {
+		prettyMissingIndicesByRoot := make(map[string]string, len(missingIndicesByRoot))
+		for root, indices := range missingIndicesByRoot {
+			prettyMissingIndicesByRoot[fmt.Sprintf("%#x", root)] = helpers.SortedPrettySliceFromMap(indices)
+		}
+		return errors.Errorf("some sidecars are still missing after fetch: %v", prettyMissingIndicesByRoot)
 	}
 
 	// Save the sidecars to the storage.

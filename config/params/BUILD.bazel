@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "basis_points.go",
         "config.go",
         "config_utils_develop.go",  # keep
         "config_utils_prod.go",
@@ -67,7 +68,6 @@ go_test(
         "testdata/e2e_config.yaml",
         "@consensus_spec//:spec_data",
         "@consensus_spec_tests//:test_data",
-        "@eth2_networks//:configs",
         "@holesky_testnet//:configs",
         "@hoodi_testnet//:configs",
         "@mainnet//:configs",
@@ -82,6 +82,7 @@ go_test(
         "//genesis:go_default_library",
         "//io/file:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//runtime/version:go_default_library",
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",

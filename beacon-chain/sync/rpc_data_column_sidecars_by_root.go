@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
@@ -33,7 +34,6 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 	defer span.End()
 
 	batchSize := flags.Get().DataColumnBatchLimit
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Check if the message type is the one expected.
 	ref, ok := msg.(types.DataColumnsByRootIdentifiers)
@@ -56,38 +56,13 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrap(err, "validate data columns by root request")
 	}
 
-	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
-	for _, columnIdent := range requestedColumnIdents {
-		var root [fieldparams.RootLength]byte
-		copy(root[:], columnIdent.BlockRoot)
-		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Columns...)
-	}
-
-	// Sort by column index for each root.
-	for _, columns := range requestedColumnsByRoot {
-		slices.Sort(columns)
-	}
-
-	// Format nice logs.
-	requestedColumnsByRootLog := make(map[string]interface{})
-	for root, columns := range requestedColumnsByRoot {
-		rootStr := fmt.Sprintf("%#x", root)
-		requestedColumnsByRootLog[rootStr] = "all"
-		if uint64(len(columns)) != numberOfColumns {
-			requestedColumnsByRootLog[rootStr] = columns
-		}
-	}
-
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
 	minReqSlot, err := dataColumnsRPCMinValidSlot(s.cfg.clock.CurrentSlot())
 	if err != nil {
 		return errors.Wrapf(err, "data columns RPC min valid slot")
 	}
 
-	log := log.WithFields(logrus.Fields{
-		"peer":    remotePeer,
-		"columns": requestedColumnsByRootLog,
-	})
+	log := log.WithField("peer", remotePeer)
 
 	defer closeStream(stream, log)
 
@@ -96,8 +71,36 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		ticker = time.NewTicker(tickerDelay)
 	}
 
-	log.Debug("Serving data column sidecar by root request")
+	if log.Logger.Level >= logrus.TraceLevel {
+		requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
+		for _, ident := range requestedColumnIdents {
+			root := bytesutil.ToBytes32(ident.BlockRoot)
+			requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], ident.Columns...)
+		}
 
+		// We optimistially assume the peer requests the same set of columns for all roots,
+		// pre-sizing the map accordingly.
+		requestedRootsByColumnSet := make(map[string][]string, 1)
+		for root, columns := range requestedColumnsByRoot {
+			slices.Sort(columns)
+			prettyColumns := helpers.PrettySlice(columns)
+			requestedRootsByColumnSet[prettyColumns] = append(requestedRootsByColumnSet[prettyColumns], fmt.Sprintf("%#x", root))
+		}
+
+		log.WithField("requested", requestedRootsByColumnSet).Trace("Serving data column sidecars by root")
+	}
+
+	// Extract all requested roots.
+	roots := make([][fieldparams.RootLength]byte, 0, len(requestedColumnIdents))
+	for _, ident := range requestedColumnIdents {
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		roots = append(roots, root)
+	}
+
+	// Filter all available roots in block storage.
+	availableRoots := s.cfg.beaconDB.AvailableBlocks(ctx, roots)
+
+	// Serve each requested data column sidecar.
 	count := 0
 	for _, ident := range requestedColumnIdents {
 		if err := ctx.Err(); err != nil {
@@ -118,6 +121,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		}
 
 		s.rateLimiter.add(stream, int64(len(columns)))
+
+		// Do not serve a blob sidecar if the corresponding block is not available.
+		if !availableRoots[root] {
+			log.Trace("Peer requested blob sidecar by root but corresponding block not found in db")
+			continue
+		}
 
 		// Retrieve the requested sidecars from the store.
 		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(root, columns)
@@ -165,9 +174,9 @@ func dataColumnsRPCMinValidSlot(currentSlot primitives.Slot) (primitives.Slot, e
 		return primitives.Slot(math.MaxUint64), nil
 	}
 
-	beaconConfig := params.BeaconConfig()
-	minReqEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
-	minStartEpoch := beaconConfig.FuluForkEpoch
+	cfg := params.BeaconConfig()
+	minReqEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
+	minStartEpoch := cfg.FuluForkEpoch
 
 	currEpoch := slots.ToEpoch(currentSlot)
 	if currEpoch > minReqEpochs && currEpoch-minReqEpochs > minStartEpoch {

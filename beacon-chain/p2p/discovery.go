@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -24,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 
@@ -79,7 +79,7 @@ func (quicProtocol) ENRKey() string { return quickProtocolEnrKey }
 func newListener(listenerCreator func() (*discover.UDPv5, error)) (*listenerWrapper, error) {
 	rawListener, err := listenerCreator()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create new listener")
+		return nil, errors.Wrap(err, "create new listener")
 	}
 	return &listenerWrapper{
 		listener:        rawListener,
@@ -253,7 +253,7 @@ func (s *Service) RefreshPersistentSubnets() {
 			return
 		}
 
-		custodyGroupCount, err = s.CustodyGroupCount()
+		custodyGroupCount, err = s.CustodyGroupCount(s.ctx)
 		if err != nil {
 			log.WithError(err).Error("Could not retrieve custody group count")
 			return
@@ -536,7 +536,7 @@ func (s *Service) createListener(
 		int(s.cfg.QUICPort),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create local node")
+		return nil, errors.Wrap(err, "create local node")
 	}
 
 	bootNodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddrs))
@@ -604,7 +604,7 @@ func (s *Service) createLocalNode(
 	localNode = initializeSyncCommSubnets(localNode)
 
 	if params.FuluEnabled() {
-		custodyGroupCount, err := s.CustodyGroupCount()
+		custodyGroupCount, err := s.CustodyGroupCount(s.ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not retrieve custody group count")
 		}
@@ -652,7 +652,7 @@ func (s *Service) startDiscoveryV5(
 	}
 	wrappedListener, err := newListener(createListener)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not create listener")
+		return nil, errors.Wrap(err, "create listener")
 	}
 	record := wrappedListener.Self()
 
@@ -684,7 +684,7 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 
 	peerData, multiAddrs, err := convertToAddrInfo(node)
 	if err != nil {
-		log.WithError(err).Debug("Could not convert to peer data")
+		log.WithError(err).WithField("node", node.String()).Debug("Could not convert to peer data")
 		return false
 	}
 
@@ -851,7 +851,7 @@ func convertToMultiAddr(nodes []*enode.Node) []ma.Multiaddr {
 func convertToAddrInfo(node *enode.Node) (*peer.AddrInfo, []ma.Multiaddr, error) {
 	multiAddrs, err := retrieveMultiAddrsFromNode(node)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "retrieve multiaddrs from node")
 	}
 
 	if len(multiAddrs) == 0 {

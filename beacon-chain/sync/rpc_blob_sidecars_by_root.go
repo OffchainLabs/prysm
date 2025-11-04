@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -49,7 +50,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	batchSize := flags.Get().BlobBatchLimit
 	var ticker *time.Ticker
 	if len(blobIdents) > batchSize {
-		ticker = time.NewTicker(time.Second)
+		ticker = time.NewTicker(blobRpcThrottleInterval)
 	}
 
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
@@ -58,6 +59,17 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
+	// Extract all needed roots.
+	roots := make([][fieldparams.RootLength]byte, 0, len(blobIdents))
+	for _, ident := range blobIdents {
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		roots = append(roots, root)
+	}
+
+	// Filter all available roots in block storage.
+	availableRoots := s.cfg.beaconDB.AvailableBlocks(ctx, roots)
+
+	// Serve each requested blob sidecar.
 	for i := range blobIdents {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
@@ -69,20 +81,32 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 			<-ticker.C
 		}
 		s.rateLimiter.add(stream, 1)
+
 		root, idx := bytesutil.ToBytes32(blobIdents[i].BlockRoot), blobIdents[i].Index
+
+		// Do not serve a blob sidecar if the corresponding block is not available.
+		if !availableRoots[root] {
+			log.Trace("Peer requested blob sidecar by root but corresponding block not found in db")
+			continue
+		}
+
 		sc, err := s.cfg.blobStorage.Get(root, idx)
 		if err != nil {
+			log := log.WithFields(logrus.Fields{
+				"root":  fmt.Sprintf("%#x", root),
+				"index": idx,
+				"peer":  remotePeer.String(),
+			})
+
 			if db.IsNotFound(err) {
-				log.WithError(err).WithFields(logrus.Fields{
-					"root":  fmt.Sprintf("%#x", root),
-					"index": idx,
-					"peer":  remotePeer.String(),
-				}).Debugf("Peer requested blob sidecar by root not found in db")
+				log.Trace("Peer requested blob sidecar by root not found in db")
 				continue
 			}
-			log.WithError(err).Errorf("unexpected db error retrieving BlobSidecar, root=%x, index=%d", root, idx)
+
+			log.Error("Unexpected DB error retrieving blob sidecar from storage")
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
-			return err
+
+			return errors.Wrap(err, "get blob sidecar by root")
 		}
 
 		// If any root in the request content references a block earlier than minimum_request_epoch,
@@ -109,19 +133,19 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 }
 
 func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot primitives.Slot) error {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	epoch := slots.ToEpoch(slot)
 	blobIdentCount := uint64(len(blobIdents))
 
-	if epoch >= beaconConfig.ElectraForkEpoch {
-		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsElectra {
+	if epoch >= cfg.ElectraForkEpoch {
+		if blobIdentCount > cfg.MaxRequestBlobSidecarsElectra {
 			return types.ErrMaxBlobReqExceeded
 		}
 
 		return nil
 	}
 
-	if blobIdentCount > beaconConfig.MaxRequestBlobSidecars {
+	if blobIdentCount > cfg.MaxRequestBlobSidecars {
 		return types.ErrMaxBlobReqExceeded
 	}
 

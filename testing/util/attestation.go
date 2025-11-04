@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -19,7 +20,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -207,7 +207,7 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 		)
 	}
 
-	attsPerCommittee := math.Max(float64(numToGen/committeesPerSlot), 1)
+	attsPerCommittee := max(float64(numToGen/committeesPerSlot), 1)
 	if math.Trunc(attsPerCommittee) != attsPerCommittee {
 		return nil, fmt.Errorf(
 			"requested attestations %d must be easily divisible by committees in slot %d, calculated %f",

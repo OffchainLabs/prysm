@@ -320,6 +320,6 @@ func IsProto(item interface{}) bool {
 		return ok
 	}
 	elemTyp := typ.Elem()
-	modelType := reflect.TypeOf((*proto.Message)(nil)).Elem()
+	modelType := reflect.TypeFor[proto.Message]()
 	return elemTyp.Implements(modelType)
 }

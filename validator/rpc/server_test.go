@@ -58,5 +58,4 @@ func TestServer_InitializeRoutes(t *testing.T) {
 			}
 		}
 	}
-
 }

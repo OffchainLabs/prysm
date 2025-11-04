@@ -26,13 +26,13 @@ const (
 	SyncCommitteeAggregationBytesLength   = 1                 // SyncCommitteeAggregationBytesLength defines the sync committee aggregate bytes.
 	SyncAggregateSyncCommitteeBytesLength = 4                 // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
 	MaxWithdrawalsPerPayload              = 4                 // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
-	MaxBlobCommitmentsPerBlock            = 32                // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
-	LogMaxBlobCommitments                 = 5                 // Log_2 of MaxBlobCommitmentsPerBlock
+	MaxBlobCommitmentsPerBlock            = 4096              // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
+	LogMaxBlobCommitments                 = 12                // Log_2 of MaxBlobCommitmentsPerBlock
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
 	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
-	KzgCommitmentInclusionProofDepth      = 10                // Merkle proof depth for blob_kzg_commitments list item
+	KzgCommitmentInclusionProofDepth      = 17                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
 	SyncCommitteeBranchDepthElectra       = 6                 // SyncCommitteeBranchDepthElectra defines the number of leaves in a merkle proof of a sync committee.

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v6/api/server"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
@@ -35,24 +36,6 @@ import (
 )
 
 var errOptimisticMode = errors.New("the node is currently optimistic and cannot serve validators")
-
-// AggregateBroadcastFailedError represents an error scenario where
-// broadcasting an aggregate selection proof failed.
-type AggregateBroadcastFailedError struct {
-	err error
-}
-
-// NewAggregateBroadcastFailedError creates a new error instance.
-func NewAggregateBroadcastFailedError(err error) AggregateBroadcastFailedError {
-	return AggregateBroadcastFailedError{
-		err: err,
-	}
-}
-
-// Error returns the underlying error message.
-func (e *AggregateBroadcastFailedError) Error() string {
-	return fmt.Sprintf("could not broadcast signed aggregated attestation: %s", e.err.Error())
-}
 
 // ComputeValidatorPerformance reports the validator's latest balance along with other important metrics on
 // rewards and penalties throughout its lifecycle in the beacon chain.
@@ -360,7 +343,8 @@ func (s *Service) SubmitSignedContributionAndProof(
 	// Wait for p2p broadcast to complete and return the first error (if any)
 	err := errs.Wait()
 	if err != nil {
-		return &RpcError{Err: err, Reason: Internal}
+		log.WithError(err).Debug("Could not broadcast signed contribution and proof")
+		return &RpcError{Err: server.NewBroadcastFailedError("SignedContributionAndProof", err), Reason: Internal}
 	}
 
 	s.OperationNotifier.OperationFeed().Send(&feed.Event{
@@ -411,7 +395,8 @@ func (s *Service) SubmitSignedAggregateSelectionProof(
 	}
 
 	if err := s.Broadcaster.Broadcast(ctx, agg); err != nil {
-		return &RpcError{Err: &AggregateBroadcastFailedError{err: err}, Reason: Internal}
+		log.WithError(err).Debug("Could not broadcast signed aggregate att and proof")
+		return &RpcError{Err: server.NewBroadcastFailedError("SignedAggregateAttAndProof", err), Reason: Internal}
 	}
 
 	if logrus.GetLevel() >= logrus.DebugLevel {

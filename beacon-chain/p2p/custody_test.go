@@ -4,10 +4,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
@@ -19,58 +21,37 @@ import (
 )
 
 func TestEarliestAvailableSlot(t *testing.T) {
-	t.Run("No custody info available", func(t *testing.T) {
-		service := &Service{
-			custodyInfo: nil,
-		}
+	const expected primitives.Slot = 100
 
-		_, err := service.EarliestAvailableSlot()
+	service := &Service{
+		custodyInfoSet: make(chan struct{}),
+		custodyInfo: &custodyInfo{
+			earliestAvailableSlot: expected,
+		},
+	}
 
-		require.NotNil(t, err)
-	})
+	close(service.custodyInfoSet)
+	slot, err := service.EarliestAvailableSlot(t.Context())
 
-	t.Run("Valid custody info", func(t *testing.T) {
-		const expected primitives.Slot = 100
-
-		service := &Service{
-			custodyInfo: &custodyInfo{
-				earliestAvailableSlot: expected,
-			},
-		}
-
-		slot, err := service.EarliestAvailableSlot()
-
-		require.NoError(t, err)
-		require.Equal(t, expected, slot)
-	})
+	require.NoError(t, err)
+	require.Equal(t, expected, slot)
 }
 
 func TestCustodyGroupCount(t *testing.T) {
-	t.Run("No custody info available", func(t *testing.T) {
-		service := &Service{
-			custodyInfo: nil,
-		}
+	const expected uint64 = 5
 
-		_, err := service.CustodyGroupCount()
+	service := &Service{
+		custodyInfoSet: make(chan struct{}),
+		custodyInfo: &custodyInfo{
+			groupCount: expected,
+		},
+	}
 
-		require.NotNil(t, err)
-		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
-	})
+	close(service.custodyInfoSet)
+	count, err := service.CustodyGroupCount(t.Context())
 
-	t.Run("Valid custody info", func(t *testing.T) {
-		const expected uint64 = 5
-
-		service := &Service{
-			custodyInfo: &custodyInfo{
-				groupCount: expected,
-			},
-		}
-
-		count, err := service.CustodyGroupCount()
-
-		require.NoError(t, err)
-		require.Equal(t, expected, count)
-	})
+	require.NoError(t, err)
+	require.Equal(t, expected, count)
 }
 
 func TestUpdateCustodyInfo(t *testing.T) {
@@ -162,7 +143,8 @@ func TestUpdateCustodyInfo(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			service := &Service{
-				custodyInfo: tc.initialCustodyInfo,
+				custodyInfoSet: make(chan struct{}),
+				custodyInfo:    tc.initialCustodyInfo,
 			}
 
 			slot, groupCount, err := service.UpdateCustodyInfo(tc.inputSlot, tc.inputGroupCount)
@@ -184,6 +166,148 @@ func TestUpdateCustodyInfo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateEarliestAvailableSlot(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0 // Enable Fulu from epoch 0
+	params.OverrideBeaconConfig(config)
+
+	t.Run("Valid update", func(t *testing.T) {
+		const (
+			initialSlot primitives.Slot = 50
+			newSlot     primitives.Slot = 100
+			groupCount  uint64          = 5
+		)
+
+		// Set up a scenario where we're far enough in the chain that increasing to newSlot is valid
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks + 100 // Well beyond MIN_EPOCHS_FOR_BLOCK_REQUESTS
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		service := &Service{
+			// Set genesis time in the past so currentSlot is the "current" slot
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: initialSlot,
+				groupCount:            groupCount,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(newSlot)
+
+		require.NoError(t, err)
+		require.Equal(t, newSlot, service.custodyInfo.earliestAvailableSlot)
+		require.Equal(t, groupCount, service.custodyInfo.groupCount) // Should preserve group count
+	})
+
+	t.Run("Earlier slot - allowed for backfill", func(t *testing.T) {
+		const initialSlot primitives.Slot = 100
+		const earlierSlot primitives.Slot = 50
+
+		service := &Service{
+			genesisTime: time.Now(),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: initialSlot,
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(earlierSlot)
+
+		require.NoError(t, err)
+		require.Equal(t, earlierSlot, service.custodyInfo.earliestAvailableSlot) // Should decrease for backfill
+	})
+
+	t.Run("Prevent increase within MIN_EPOCHS_FOR_BLOCK_REQUESTS - late in chain", func(t *testing.T) {
+		// Set current time far enough in the future to have a meaningful MIN_EPOCHS_FOR_BLOCK_REQUESTS period
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks + 100 // Well beyond the minimum
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		// Calculate the minimum allowed epoch
+		minRequiredEpoch := currentEpoch - minEpochsForBlocks
+		minRequiredSlot := primitives.Slot(minRequiredEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		// Try to set earliest slot to a value within the MIN_EPOCHS_FOR_BLOCK_REQUESTS period (should fail)
+		attemptedSlot := minRequiredSlot + 1000 // Within the mandatory retention period
+
+		service := &Service{
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: minRequiredSlot - 100, // Current value is before the min required
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+
+		require.NotNil(t, err)
+		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
+	})
+
+	t.Run("Prevent increase at epoch boundary - slot precision matters", func(t *testing.T) {
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks + 976 // Current epoch
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		minRequiredEpoch := currentEpoch - minEpochsForBlocks                                                              // = 976
+		storedEarliestSlot := primitives.Slot(minRequiredEpoch)*primitives.Slot(params.BeaconConfig().SlotsPerEpoch) - 232 // Before minRequired
+
+		// Try to set earliest to slot 8 of the minRequiredEpoch (should fail with slot comparison)
+		attemptedSlot := primitives.Slot(minRequiredEpoch)*primitives.Slot(params.BeaconConfig().SlotsPerEpoch) + 8
+
+		service := &Service{
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: storedEarliestSlot,
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+
+		require.NotNil(t, err, "Should prevent increasing earliest slot beyond the minimum required SLOT (not just epoch)")
+		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
+	})
+
+	t.Run("Prevent increase within MIN_EPOCHS_FOR_BLOCK_REQUESTS - early in chain", func(t *testing.T) {
+		minEpochsForBlocks := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+		currentEpoch := minEpochsForBlocks - 10 // Early in chain, BEFORE we have MIN_EPOCHS_FOR_BLOCK_REQUESTS of history
+		currentSlot := primitives.Slot(currentEpoch) * primitives.Slot(params.BeaconConfig().SlotsPerEpoch)
+
+		// Current earliest slot is at slot 100
+		currentEarliestSlot := primitives.Slot(100)
+
+		// Try to increase earliest slot to slot 1000 (which would be within the mandatory window from currentSlot)
+		attemptedSlot := primitives.Slot(1000)
+
+		service := &Service{
+			genesisTime: time.Now().Add(-time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+			custodyInfo: &custodyInfo{
+				earliestAvailableSlot: currentEarliestSlot,
+				groupCount:            5,
+			},
+		}
+
+		err := service.UpdateEarliestAvailableSlot(attemptedSlot)
+
+		require.NotNil(t, err, "Should prevent increasing earliest slot within the mandatory retention window, even early in chain")
+		require.Equal(t, true, strings.Contains(err.Error(), "cannot increase earliest available slot"))
+	})
+
+	t.Run("Nil custody info - should return error", func(t *testing.T) {
+		service := &Service{
+			genesisTime: time.Now(),
+			custodyInfo: nil, // No custody info set
+		}
+
+		err := service.UpdateEarliestAvailableSlot(100)
+
+		require.NotNil(t, err)
+		require.Equal(t, true, strings.Contains(err.Error(), "no custody info available"))
+	})
 }
 
 func TestCustodyGroupCountFromPeer(t *testing.T) {
@@ -269,6 +393,7 @@ func TestCustodyGroupCountFromPeer(t *testing.T) {
 			service := &Service{
 				peers:    peers,
 				metaData: tc.metadata,
+				host:     testp2p.NewTestP2P(t).Host(),
 			}
 
 			// Retrieve the custody count from the remote peer.
@@ -329,6 +454,7 @@ func TestCustodyGroupCountFromPeerENR(t *testing.T) {
 
 			service := &Service{
 				peers: peers,
+				host:  testp2p.NewTestP2P(t).Host(),
 			}
 
 			actual := service.custodyGroupCountFromPeerENR(pid)

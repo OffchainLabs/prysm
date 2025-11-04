@@ -290,3 +290,14 @@ type GetProposerLookaheadResponse struct {
 	Finalized           bool     `json:"finalized"`
 	Data                []string `json:"data"` // validator indexes
 }
+
+type GetBlobsResponse struct {
+	ExecutionOptimistic bool     `json:"execution_optimistic"`
+	Finalized           bool     `json:"finalized"`
+	Data                []string `json:"data"` //blobs
+}
+
+type SSZQueryRequest struct {
+	Query        string `json:"query"`
+	IncludeProof bool   `json:"include_proof,omitempty"`
+}

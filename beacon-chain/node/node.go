@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
@@ -34,6 +34,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
+	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/monitor"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
@@ -60,7 +61,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
 	"github.com/OffchainLabs/prysm/v6/runtime"
@@ -178,6 +178,9 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	}
 	beacon.db = kvdb
 
+	if err := dbClearer.clearGenesis(dataDir); err != nil {
+		return nil, errors.Wrap(err, "could not clear genesis state")
+	}
 	providers := append(beacon.GenesisProviders, kv.NewLegacyGenesisProvider(kvdb))
 	if err := genesis.Initialize(ctx, dataDir, providers...); err != nil {
 		return nil, errors.Wrap(err, "could not initialize genesis state")
@@ -253,10 +256,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	// their initialization.
 	beacon.finalizedStateAtStartUp = nil
 
-	if features.Get().EnableLightClient {
-		beacon.lcStore = lightclient.NewLightClientStore(beacon.db, beacon.fetchP2P(), beacon.StateFeed())
-	}
-
 	return beacon, nil
 }
 
@@ -318,6 +317,7 @@ func startBaseServices(cliCtx *cli.Context, beacon *BeaconNode, depositAddress s
 	}
 
 	beacon.BlobStorage.WarmCache()
+	beacon.DataColumnStorage.WarmCache()
 
 	log.Debugln("Starting Slashing DB")
 	if err := beacon.startSlasherDB(cliCtx, clearer); err != nil {
@@ -346,6 +346,11 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 	log.Debugln("Registering P2P Service")
 	if err := beacon.registerP2P(cliCtx); err != nil {
 		return errors.Wrap(err, "could not register P2P service")
+	}
+
+	if features.Get().EnableLightClient {
+		log.Debugln("Registering Light Client Store")
+		beacon.registerLightClientStore()
 	}
 
 	log.Debugln("Registering Backfill Service")
@@ -596,22 +601,7 @@ func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBl
 		return err
 	}
 
-	r := bytesutil.ToBytes32(cp.Root)
-	// Consider edge case where finalized root are zeros instead of genesis root hash.
-	if r == params.BeaconConfig().ZeroHash {
-		genesisBlock, err := b.db.GenesisBlock(ctx)
-		if err != nil {
-			return err
-		}
-		if genesisBlock != nil && !genesisBlock.IsNil() {
-			r, err = genesisBlock.Block().HashTreeRoot()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	b.finalizedStateAtStartUp, err = sg.StateByRoot(ctx, r)
+	b.finalizedStateAtStartUp, err = sg.StateByRoot(ctx, [32]byte(cp.Root))
 	if err != nil {
 		return err
 	}
@@ -620,35 +610,55 @@ func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBl
 	return nil
 }
 
+func parseIPNetStrings(ipWhitelist []string) ([]*net.IPNet, error) {
+	ipNets := make([]*net.IPNet, 0, len(ipWhitelist))
+	for _, cidr := range ipWhitelist {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			log.WithError(err).WithField("cidr", cidr).Error("Invalid CIDR in IP colocation whitelist")
+			return nil, err
+		}
+		ipNets = append(ipNets, ipNet)
+		log.WithField("cidr", cidr).Info("Added IP to colocation whitelist")
+	}
+	return ipNets, nil
+}
+
 func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 	bootstrapNodeAddrs, dataDir, err := registration.P2PPreregistration(cliCtx)
 	if err != nil {
 		return errors.Wrapf(err, "could not register p2p service")
 	}
 
+	colocationWhitelist, err := parseIPNetStrings(slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PColocationWhitelist.Name)))
+	if err != nil {
+		return fmt.Errorf("failed to register p2p service: %w", err)
+	}
+
 	svc, err := p2p.NewService(b.ctx, &p2p.Config{
-		NoDiscovery:          cliCtx.Bool(cmd.NoDiscovery.Name),
-		StaticPeers:          slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.StaticPeers.Name)),
-		Discv5BootStrapAddrs: p2p.ParseBootStrapAddrs(bootstrapNodeAddrs),
-		RelayNodeAddr:        cliCtx.String(cmd.RelayNode.Name),
-		DataDir:              dataDir,
-		DiscoveryDir:         filepath.Join(dataDir, "discovery"),
-		LocalIP:              cliCtx.String(cmd.P2PIP.Name),
-		HostAddress:          cliCtx.String(cmd.P2PHost.Name),
-		HostDNS:              cliCtx.String(cmd.P2PHostDNS.Name),
-		PrivateKey:           cliCtx.String(cmd.P2PPrivKey.Name),
-		StaticPeerID:         cliCtx.Bool(cmd.P2PStaticID.Name),
-		QUICPort:             cliCtx.Uint(cmd.P2PQUICPort.Name),
-		TCPPort:              cliCtx.Uint(cmd.P2PTCPPort.Name),
-		UDPPort:              cliCtx.Uint(cmd.P2PUDPPort.Name),
-		MaxPeers:             cliCtx.Uint(cmd.P2PMaxPeers.Name),
-		QueueSize:            cliCtx.Uint(cmd.PubsubQueueSize.Name),
-		AllowListCIDR:        cliCtx.String(cmd.P2PAllowList.Name),
-		DenyListCIDR:         slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PDenyList.Name)),
-		EnableUPnP:           cliCtx.Bool(cmd.EnableUPnPFlag.Name),
-		StateNotifier:        b,
-		DB:                   b.db,
-		ClockWaiter:          b.clockWaiter,
+		NoDiscovery:           cliCtx.Bool(cmd.NoDiscovery.Name),
+		StaticPeers:           slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.StaticPeers.Name)),
+		Discv5BootStrapAddrs:  p2p.ParseBootStrapAddrs(bootstrapNodeAddrs),
+		RelayNodeAddr:         cliCtx.String(cmd.RelayNode.Name),
+		DataDir:               dataDir,
+		DiscoveryDir:          filepath.Join(dataDir, "discovery"),
+		LocalIP:               cliCtx.String(cmd.P2PIP.Name),
+		HostAddress:           cliCtx.String(cmd.P2PHost.Name),
+		HostDNS:               cliCtx.String(cmd.P2PHostDNS.Name),
+		PrivateKey:            cliCtx.String(cmd.P2PPrivKey.Name),
+		StaticPeerID:          cliCtx.Bool(cmd.P2PStaticID.Name),
+		QUICPort:              cliCtx.Uint(cmd.P2PQUICPort.Name),
+		TCPPort:               cliCtx.Uint(cmd.P2PTCPPort.Name),
+		UDPPort:               cliCtx.Uint(cmd.P2PUDPPort.Name),
+		MaxPeers:              cliCtx.Uint(cmd.P2PMaxPeers.Name),
+		QueueSize:             cliCtx.Uint(cmd.PubsubQueueSize.Name),
+		AllowListCIDR:         cliCtx.String(cmd.P2PAllowList.Name),
+		DenyListCIDR:          slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PDenyList.Name)),
+		IPColocationWhitelist: colocationWhitelist,
+		EnableUPnP:            cliCtx.Bool(cmd.EnableUPnPFlag.Name),
+		StateNotifier:         b,
+		DB:                    b.db,
+		ClockWaiter:           b.clockWaiter,
 	})
 	if err != nil {
 		return err
@@ -940,6 +950,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		FinalizationFetcher:       chainService,
 		BlockReceiver:             chainService,
 		BlobReceiver:              chainService,
+		DataColumnReceiver:        chainService,
 		AttestationReceiver:       chainService,
 		GenesisTimeFetcher:        chainService,
 		GenesisFetcher:            chainService,
@@ -1098,6 +1109,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 		genesis,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
+		b.fetchP2P(),
 		opts...,
 	)
 	if err != nil {
@@ -1117,12 +1129,15 @@ func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.
 	return b.services.RegisterService(bf)
 }
 
+func (b *BeaconNode) registerLightClientStore() {
+	lcs := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
+	b.lcStore = lcs
+}
+
 func hasNetworkFlag(cliCtx *cli.Context) bool {
 	for _, flag := range features.NetworkFlags {
-		for _, name := range flag.Names() {
-			if cliCtx.IsSet(name) {
-				return true
-			}
+		if slices.ContainsFunc(flag.Names(), cliCtx.IsSet) {
+			return true
 		}
 	}
 	return false

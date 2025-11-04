@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -65,55 +66,55 @@ func GetAggregationSlotSignRequest(request *validatorpb.SignRequest, genesisVali
 	}, nil
 }
 
-// GetAggregateAndProofSignRequest maps the request for signing type AGGREGATE_AND_PROOF.
-func GetAggregateAndProofSignRequest(request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*AggregateAndProofSignRequest, error) {
-	aggregateAttestationAndProof, ok := request.Object.(*validatorpb.SignRequest_AggregateAttestationAndProof)
-	if !ok {
-		return nil, errors.New("failed to cast request object to aggregate attestation and proof")
-	}
-	if aggregateAttestationAndProof == nil {
-		return nil, errors.New("invalid sign request: AggregateAndProof is nil")
-	}
-	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
-	if err != nil {
-		return nil, err
-	}
-	aggregateAndProof, err := MapAggregateAndProof(aggregateAttestationAndProof.AggregateAttestationAndProof)
-	if err != nil {
-		return nil, err
-	}
-	return &AggregateAndProofSignRequest{
-		Type:              "AGGREGATE_AND_PROOF",
-		ForkInfo:          fork,
-		SigningRoot:       request.SigningRoot,
-		AggregateAndProof: aggregateAndProof,
-	}, nil
-}
-
 // GetAggregateAndProofV2SignRequest maps the request for signing type AGGREGATE_AND_PROOF_V2 on Electra changes.
 func GetAggregateAndProofV2SignRequest(v int, request *validatorpb.SignRequest, genesisValidatorsRoot []byte) (*AggregateAndProofV2SignRequest, error) {
-	aggregateAttestationAndProof, ok := request.Object.(*validatorpb.SignRequest_AggregateAttestationAndProofElectra)
-	if !ok {
-		return nil, errors.New("failed to cast request object to aggregate attestation and proof")
-	}
-	if aggregateAttestationAndProof == nil {
-		return nil, errors.New("invalid sign request: AggregateAndProof is nil")
-	}
 	fork, err := MapForkInfo(request.SigningSlot, genesisValidatorsRoot)
 	if err != nil {
 		return nil, err
 	}
-	aggregateAndProof, err := MapAggregateAndProofElectra(aggregateAttestationAndProof.AggregateAttestationAndProofElectra)
-	if err != nil {
-		return nil, err
+
+	var aggregateAndProofJSON []byte
+	if v < version.Electra {
+		aggregateAttestationAndProof, ok := request.Object.(*validatorpb.SignRequest_AggregateAttestationAndProof)
+		if !ok {
+			return nil, errors.New("failed to cast request object to aggregate attestation and proof")
+		}
+		if aggregateAttestationAndProof == nil {
+			return nil, errors.New("invalid sign request: AggregateAndProof is nil")
+		}
+		aggregateAndProof, err := MapAggregateAndProof(aggregateAttestationAndProof.AggregateAttestationAndProof)
+		if err != nil {
+			return nil, err
+		}
+		aggregateAndProofJSON, err = json.Marshal(aggregateAndProof)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		aggregateAttestationAndProof, ok := request.Object.(*validatorpb.SignRequest_AggregateAttestationAndProofElectra)
+		if !ok {
+			return nil, errors.New("failed to cast request object to aggregate attestation and proof Electra")
+		}
+		if aggregateAttestationAndProof == nil {
+			return nil, errors.New("invalid sign request: AggregateAndProof is nil")
+		}
+		aggregateAndProof, err := MapAggregateAndProofElectra(aggregateAttestationAndProof.AggregateAttestationAndProofElectra)
+		if err != nil {
+			return nil, err
+		}
+		aggregateAndProofJSON, err = json.Marshal(aggregateAndProof)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return &AggregateAndProofV2SignRequest{
 		Type:        "AGGREGATE_AND_PROOF_V2",
 		ForkInfo:    fork,
 		SigningRoot: request.SigningRoot,
 		AggregateAndProof: &AggregateAndProofV2{
 			Version: strings.ToUpper(version.String(v)),
-			Data:    aggregateAndProof,
+			Data:    aggregateAndProofJSON,
 		},
 	}, nil
 }
@@ -419,6 +420,34 @@ func GetBlockV2BlindedSignRequest(request *validatorpb.SignRequest, genesisValid
 			return nil, errors.New("invalid sign request: blinded electra block is nil")
 		}
 		beaconBlock, err := blocks.NewBeaconBlock(blindedBlockElectra.BlindedBlockElectra)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
+	case *validatorpb.SignRequest_BlockFulu:
+		version = "FULU"
+		block, ok := request.Object.(*validatorpb.SignRequest_BlockFulu)
+		if !ok {
+			return nil, errors.New("failed to cast request object to fulu block")
+		}
+		if block == nil {
+			return nil, errors.New("invalid sign request: fulu block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(block.BlockFulu)
+		if err != nil {
+			return nil, err
+		}
+		b = beaconBlock
+	case *validatorpb.SignRequest_BlindedBlockFulu:
+		version = "FULU"
+		blindedBlock, ok := request.Object.(*validatorpb.SignRequest_BlindedBlockFulu)
+		if !ok {
+			return nil, errors.New("failed to cast request object to blinded fulu block")
+		}
+		if blindedBlock == nil {
+			return nil, errors.New("invalid sign request: blinded fulu block is nil")
+		}
+		beaconBlock, err := blocks.NewBeaconBlock(blindedBlock.BlindedBlockFulu)
 		if err != nil {
 			return nil, err
 		}

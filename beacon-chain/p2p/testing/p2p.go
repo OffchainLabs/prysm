@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -50,6 +51,7 @@ const (
 
 // TestP2P represents a p2p implementation that can be used for testing.
 type TestP2P struct {
+	mu                    sync.Mutex
 	t                     *testing.T
 	BHost                 host.Host
 	EnodeID               enode.ID
@@ -63,6 +65,7 @@ type TestP2P struct {
 	custodyInfoMut        sync.RWMutex // protects custodyGroupCount and earliestAvailableSlot
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
+	enr                   *enr.Record
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -103,6 +106,7 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 		pubsub:       ps,
 		joinedTopics: map[string]*pubsub.Topic{},
 		peers:        peerStatuses,
+		enr:          new(enr.Record),
 	}
 }
 
@@ -229,7 +233,7 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumnSidecar([fieldparams.RootLength]byte, uint64, *ethpb.DataColumnSidecar) error {
+func (p *TestP2P) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }
@@ -241,6 +245,8 @@ func (p *TestP2P) SetStreamHandler(topic string, handler network.StreamHandler) 
 
 // JoinTopic will join PubSub topic, if not already joined.
 func (p *TestP2P) JoinTopic(topic string, opts ...pubsub.TopicOpt) (*pubsub.Topic, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if _, ok := p.joinedTopics[topic]; !ok {
 		joinedTopic, err := p.pubsub.Join(topic, opts...)
 		if err != nil {
@@ -310,8 +316,8 @@ func (p *TestP2P) Host() host.Host {
 }
 
 // ENR returns the enr of the local peer.
-func (*TestP2P) ENR() *enr.Record {
-	return new(enr.Record)
+func (p *TestP2P) ENR() *enr.Record {
+	return p.enr
 }
 
 // NodeID returns the node id of the local peer.
@@ -467,7 +473,7 @@ func (*TestP2P) InterceptUpgraded(network.Conn) (allow bool, reason control.Disc
 }
 
 // EarliestAvailableSlot .
-func (s *TestP2P) EarliestAvailableSlot() (primitives.Slot, error) {
+func (s *TestP2P) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
 	s.custodyInfoMut.RLock()
 	defer s.custodyInfoMut.RUnlock()
 
@@ -475,7 +481,7 @@ func (s *TestP2P) EarliestAvailableSlot() (primitives.Slot, error) {
 }
 
 // CustodyGroupCount .
-func (s *TestP2P) CustodyGroupCount() (uint64, error) {
+func (s *TestP2P) CustodyGroupCount(context.Context) (uint64, error) {
 	s.custodyInfoMut.RLock()
 	defer s.custodyInfoMut.RUnlock()
 
@@ -493,8 +499,48 @@ func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }
 
-// CustodyGroupCountFromPeer .
+// UpdateEarliestAvailableSlot .
+func (s *TestP2P) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
+
+	s.earliestAvailableSlot = earliestAvailableSlot
+	return nil
+}
+
+// CustodyGroupCountFromPeer retrieves custody group count from a peer.
+// It first tries to get the custody group count from the peer's metadata,
+// then falls back to the ENR value if the metadata is not available, then
+// falls back to the minimum number of custody groups an honest node should custodiy
+// and serve samples from if ENR is not available.
 func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
+	// Try to get the custody group count from the peer's metadata.
+	metadata, err := s.peers.Metadata(pid)
+	if err != nil {
+		// On error, default to the ENR value.
+		return s.custodyGroupCountFromPeerENR(pid)
+	}
+
+	// If the metadata is nil, default to the ENR value.
+	if metadata == nil {
+		return s.custodyGroupCountFromPeerENR(pid)
+	}
+
+	// Get the custody subnets count from the metadata.
+	custodyCount := metadata.CustodyGroupCount()
+
+	// If the custody count is null, default to the ENR value.
+	if custodyCount == 0 {
+		return s.custodyGroupCountFromPeerENR(pid)
+	}
+
+	return custodyCount
+}
+
+// custodyGroupCountFromPeerENR retrieves the custody count from the peer's ENR.
+// If the ENR is not available, it defaults to the minimum number of custody groups
+// an honest node custodies and serves samples from.
+func (s *TestP2P) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 	// By default, we assume the peer custodies the minimum number of groups.
 	custodyRequirement := params.BeaconConfig().CustodyRequirement
 
@@ -504,7 +550,7 @@ func (s *TestP2P) CustodyGroupCountFromPeer(pid peer.ID) uint64 {
 		return custodyRequirement
 	}
 
-	// Retrieve the custody subnets count from the ENR.
+	// Retrieve the custody group count from the ENR.
 	custodyGroupCount, err := peerdas.CustodyGroupCountFromRecord(record)
 	if err != nil {
 		return custodyRequirement

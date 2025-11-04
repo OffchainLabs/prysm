@@ -1,0 +1,589 @@
+- name: BASE_REWARDS_PER_EPOCH
+  sources:
+    - file: config/params/config.go
+      search: BaseRewardsPerEpoch\s+.*yaml:"BASE_REWARDS_PER_EPOCH"
+      regex: true
+  spec: |
+    <spec constant_var="BASE_REWARDS_PER_EPOCH" fork="phase0" hash="395f7528">
+    BASE_REWARDS_PER_EPOCH: uint64 = 4
+    </spec>
+
+- name: BASIS_POINTS
+  sources: []
+  spec: |
+    <spec constant_var="BASIS_POINTS" fork="phase0" hash="cb0c8561">
+    BASIS_POINTS: uint64 = 10000
+    </spec>
+
+- name: BLS_MODULUS
+  sources: []
+  spec: |
+    <spec constant_var="BLS_MODULUS" fork="deneb" hash="dfa6ff32">
+    BLS_MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    </spec>
+
+- name: BLS_WITHDRAWAL_PREFIX
+  sources:
+    - file: config/params/config.go
+      search: BLSWithdrawalPrefixByte\s+.*yaml:"BLS_WITHDRAWAL_PREFIX"
+      regex: true
+  spec: |
+    <spec constant_var="BLS_WITHDRAWAL_PREFIX" fork="phase0" hash="4153ae92">
+    BLS_WITHDRAWAL_PREFIX: Bytes1 = '0x00'
+    </spec>
+
+- name: BYTES_PER_COMMITMENT
+  sources: []
+  spec: |
+    <spec constant_var="BYTES_PER_COMMITMENT" fork="deneb" hash="c46710b5">
+    BYTES_PER_COMMITMENT: uint64 = 48
+    </spec>
+
+- name: BYTES_PER_FIELD_ELEMENT
+  sources: []
+  spec: |
+    <spec constant_var="BYTES_PER_FIELD_ELEMENT" fork="deneb" hash="4563f0ce">
+    BYTES_PER_FIELD_ELEMENT: uint64 = 32
+    </spec>
+
+- name: BYTES_PER_PROOF
+  sources: []
+  spec: |
+    <spec constant_var="BYTES_PER_PROOF" fork="deneb" hash="7fec794e">
+    BYTES_PER_PROOF: uint64 = 48
+    </spec>
+
+- name: COMPOUNDING_WITHDRAWAL_PREFIX
+  sources:
+    - file: config/params/config.go
+      search: CompoundingWithdrawalPrefixByte\s+.*yaml:"COMPOUNDING_WITHDRAWAL_PREFIX"
+      regex: true
+  spec: |
+    <spec constant_var="COMPOUNDING_WITHDRAWAL_PREFIX" fork="electra" hash="e52fdfea">
+    COMPOUNDING_WITHDRAWAL_PREFIX: Bytes1 = '0x02'
+    </spec>
+
+- name: CONSOLIDATION_REQUEST_TYPE
+  sources:
+    - file: proto/engine/v1/electra.go
+      search: ConsolidationRequestType\s*$
+      regex: true
+  spec: |
+    <spec constant_var="CONSOLIDATION_REQUEST_TYPE" fork="electra" hash="4d01eb44">
+    CONSOLIDATION_REQUEST_TYPE: Bytes1 = '0x02'
+    </spec>
+
+- name: DEPOSIT_CONTRACT_TREE_DEPTH
+  sources:
+    - file: config/params/config.go
+      search: DepositContractTreeDepth\s+.*yaml:"DEPOSIT_CONTRACT_TREE_DEPTH"
+      regex: true
+  spec: |
+    <spec constant_var="DEPOSIT_CONTRACT_TREE_DEPTH" fork="phase0" hash="5763e551">
+    DEPOSIT_CONTRACT_TREE_DEPTH: uint64 = 2**5
+    </spec>
+
+- name: DEPOSIT_REQUEST_TYPE
+  sources:
+    - file: proto/engine/v1/electra.go
+      search: DepositRequestType\s*=\s*iota
+      regex: true
+  spec: |
+    <spec constant_var="DEPOSIT_REQUEST_TYPE" fork="electra" hash="54ca462e">
+    DEPOSIT_REQUEST_TYPE: Bytes1 = '0x00'
+    </spec>
+
+- name: DOMAIN_AGGREGATE_AND_PROOF
+  sources:
+    - file: config/params/config.go
+      search: DomainAggregateAndProof\s+.*yaml:"DOMAIN_AGGREGATE_AND_PROOF"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_AGGREGATE_AND_PROOF" fork="phase0" hash="9f7a43fb">
+    DOMAIN_AGGREGATE_AND_PROOF: DomainType = '0x06000000'
+    </spec>
+
+- name: DOMAIN_APPLICATION_MASK
+  sources:
+    - file: config/params/config.go
+      search: DomainApplicationMask\s+.*yaml:"DOMAIN_APPLICATION_MASK"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_APPLICATION_MASK" fork="phase0" hash="82d95c51">
+    DOMAIN_APPLICATION_MASK: DomainType = '0x00000001'
+    </spec>
+
+- name: DOMAIN_BEACON_ATTESTER
+  sources:
+    - file: config/params/config.go
+      search: DomainBeaconAttester\s+.*yaml:"DOMAIN_BEACON_ATTESTER"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_BEACON_ATTESTER" fork="phase0" hash="511529c3">
+    DOMAIN_BEACON_ATTESTER: DomainType = '0x01000000'
+    </spec>
+
+- name: DOMAIN_BEACON_PROPOSER
+  sources:
+    - file: config/params/config.go
+      search: DomainBeaconProposer\s+.*yaml:"DOMAIN_BEACON_PROPOSER"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_BEACON_PROPOSER" fork="phase0" hash="c6ec551e">
+    DOMAIN_BEACON_PROPOSER: DomainType = '0x00000000'
+    </spec>
+
+- name: DOMAIN_BLS_TO_EXECUTION_CHANGE
+  sources:
+    - file: config/params/config.go
+      search: DomainBLSToExecutionChange\s+.*yaml:"DOMAIN_BLS_TO_EXECUTION_CHANGE"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_BLS_TO_EXECUTION_CHANGE" fork="capella" hash="08a623ec">
+    DOMAIN_BLS_TO_EXECUTION_CHANGE: DomainType = '0x0A000000'
+    </spec>
+
+- name: DOMAIN_CONTRIBUTION_AND_PROOF
+  sources:
+    - file: config/params/config.go
+      search: DomainContributionAndProof\s+.*yaml:"DOMAIN_CONTRIBUTION_AND_PROOF"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_CONTRIBUTION_AND_PROOF" fork="altair" hash="67dcb5cb">
+    DOMAIN_CONTRIBUTION_AND_PROOF: DomainType = '0x09000000'
+    </spec>
+
+- name: DOMAIN_DEPOSIT
+  sources:
+    - file: config/params/config.go
+      search: DomainDeposit\s+.*yaml:"DOMAIN_DEPOSIT"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_DEPOSIT" fork="phase0" hash="eab99f9f">
+    DOMAIN_DEPOSIT: DomainType = '0x03000000'
+    </spec>
+
+- name: DOMAIN_RANDAO
+  sources:
+    - file: config/params/config.go
+      search: DomainRandao\s+.*yaml:"DOMAIN_RANDAO"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_RANDAO" fork="phase0" hash="1bf33286">
+    DOMAIN_RANDAO: DomainType = '0x02000000'
+    </spec>
+
+- name: DOMAIN_SELECTION_PROOF
+  sources:
+    - file: config/params/config.go
+      search: DomainSelectionProof\s+.*yaml:"DOMAIN_SELECTION_PROOF"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_SELECTION_PROOF" fork="phase0" hash="5443c8b0">
+    DOMAIN_SELECTION_PROOF: DomainType = '0x05000000'
+    </spec>
+
+- name: DOMAIN_SYNC_COMMITTEE
+  sources:
+    - file: config/params/config.go
+      search: DomainSyncCommittee\s+.*yaml:"DOMAIN_SYNC_COMMITTEE"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_SYNC_COMMITTEE" fork="altair" hash="26073f5d">
+    DOMAIN_SYNC_COMMITTEE: DomainType = '0x07000000'
+    </spec>
+
+- name: DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF
+  sources:
+    - file: config/params/config.go
+      search: DomainSyncCommitteeSelectionProof\s+.*yaml:"DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF" fork="altair" hash="f7e4d78c">
+    DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF: DomainType = '0x08000000'
+    </spec>
+
+- name: DOMAIN_VOLUNTARY_EXIT
+  sources:
+    - file: config/params/config.go
+      search: DomainVoluntaryExit\s+.*yaml:"DOMAIN_VOLUNTARY_EXIT"
+      regex: true
+  spec: |
+    <spec constant_var="DOMAIN_VOLUNTARY_EXIT" fork="phase0" hash="6abf51b5">
+    DOMAIN_VOLUNTARY_EXIT: DomainType = '0x04000000'
+    </spec>
+
+- name: ENDIANNESS
+  sources: []
+  spec: |
+    <spec constant_var="ENDIANNESS" fork="phase0" hash="76922bbc">
+    ENDIANNESS = 'little'
+    </spec>
+
+- name: ETH1_ADDRESS_WITHDRAWAL_PREFIX
+  sources:
+    - file: config/params/config.go
+      search: ETH1AddressWithdrawalPrefixByte\s+.*yaml:"ETH1_ADDRESS_WITHDRAWAL_PREFIX"
+      regex: true
+  spec: |
+    <spec constant_var="ETH1_ADDRESS_WITHDRAWAL_PREFIX" fork="phase0" hash="faffaf83">
+    ETH1_ADDRESS_WITHDRAWAL_PREFIX: Bytes1 = '0x01'
+    </spec>
+
+- name: ETH_TO_GWEI
+  sources:
+    - file: config/params/config.go
+      search: GweiPerEth\s+uint64
+      regex: true
+  spec: |
+    <spec constant_var="ETH_TO_GWEI" fork="phase0" hash="37392e73">
+    ETH_TO_GWEI: uint64 = 10**9
+    </spec>
+
+- name: FAR_FUTURE_EPOCH
+  sources:
+    - file: config/params/config.go
+      search: FarFutureEpoch\s+.*yaml:"FAR_FUTURE_EPOCH"
+      regex: true
+  spec: |
+    <spec constant_var="FAR_FUTURE_EPOCH" fork="phase0" hash="b11f052e">
+    FAR_FUTURE_EPOCH: Epoch = 2**64 - 1
+    </spec>
+
+- name: FIAT_SHAMIR_PROTOCOL_DOMAIN
+  sources: []
+  spec: |
+    <spec constant_var="FIAT_SHAMIR_PROTOCOL_DOMAIN" fork="deneb" hash="b1198e8c">
+    FIAT_SHAMIR_PROTOCOL_DOMAIN = b'FSBLOBVERIFY_V1_'
+    </spec>
+
+- name: FULL_EXIT_REQUEST_AMOUNT
+  sources:
+    - file: config/params/config.go
+      search: FullExitRequestAmount\s+.*yaml:"FULL_EXIT_REQUEST_AMOUNT"
+      regex: true
+  spec: |
+    <spec constant_var="FULL_EXIT_REQUEST_AMOUNT" fork="electra" hash="4f49380e">
+    FULL_EXIT_REQUEST_AMOUNT: uint64 = 0
+    </spec>
+
+- name: G1_POINT_AT_INFINITY
+  sources: []
+  spec: |
+    <spec constant_var="G1_POINT_AT_INFINITY" fork="deneb" hash="974ad898">
+    G1_POINT_AT_INFINITY: Bytes48 = b'\xc0' + b'\x00' * 47
+    </spec>
+
+- name: G2_POINT_AT_INFINITY
+  sources:
+    - file: crypto/bls/common/constants.go
+      search: InfiniteSignature\s*=
+      regex: true
+  spec: |
+    <spec constant_var="G2_POINT_AT_INFINITY" fork="altair" hash="55ddc9fd">
+    G2_POINT_AT_INFINITY: BLSSignature = b'\xc0' + b'\x00' * 95
+    </spec>
+
+- name: GENESIS_EPOCH
+  sources:
+    - file: config/params/config.go
+      search: GenesisEpoch\s+.*yaml:"GENESIS_EPOCH"
+      regex: true
+  spec: |
+    <spec constant_var="GENESIS_EPOCH" fork="phase0" hash="56876077">
+    GENESIS_EPOCH: Epoch = 0
+    </spec>
+
+- name: GENESIS_SLOT
+  sources:
+    - file: config/params/config.go
+      search: GenesisSlot\s+.*yaml:"GENESIS_SLOT"
+      regex: true
+  spec: |
+    <spec constant_var="GENESIS_SLOT" fork="phase0" hash="2d6f8884">
+    GENESIS_SLOT: Slot = 0
+    </spec>
+
+- name: INTERVALS_PER_SLOT
+  sources:
+    - file: config/params/config.go
+      search: IntervalsPerSlot\s+.*yaml:"INTERVALS_PER_SLOT"
+      regex: true
+  spec: |
+    <spec constant_var="INTERVALS_PER_SLOT" fork="phase0" hash="3352e419">
+    INTERVALS_PER_SLOT: uint64 = 3
+    </spec>
+
+- name: JUSTIFICATION_BITS_LENGTH
+  sources:
+    - file: config/params/config.go
+      search: JustificationBitsLength\s+.*yaml:"JUSTIFICATION_BITS_LENGTH"
+      regex: true
+  spec: |
+    <spec constant_var="JUSTIFICATION_BITS_LENGTH" fork="phase0" hash="e7ec73ea">
+    JUSTIFICATION_BITS_LENGTH: uint64 = 4
+    </spec>
+
+- name: KZG_ENDIANNESS
+  sources: []
+  spec: |
+    <spec constant_var="KZG_ENDIANNESS" fork="deneb" hash="b67e714d">
+    KZG_ENDIANNESS = 'big'
+    </spec>
+
+- name: KZG_SETUP_G2_LENGTH
+  sources: []
+  spec: |
+    <spec constant_var="KZG_SETUP_G2_LENGTH" fork="deneb" hash="6cb8d5fd">
+    KZG_SETUP_G2_LENGTH = 65
+    </spec>
+
+- name: KZG_SETUP_G2_MONOMIAL
+  sources: []
+  spec: |
+    <spec constant_var="KZG_SETUP_G2_MONOMIAL" fork="deneb" hash="4e0f802f">
+    KZG_SETUP_G2_MONOMIAL: Vector[G2Point, KZG_SETUP_G2_LENGTH] = ['0x93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8', '0xb5bfd7dd8cdeb128843bc287230af38926187075cbfbefa81009a2ce615ac53d2914e5870cb452d2afaaab24f3499f72185cbfee53492714734429b7b38608e23926c911cceceac9a36851477ba4c60b087041de621000edc98edada20c1def2', '0xb5337ba0ce5d37224290916e268e2060e5c14f3f9fc9e1ec3af5a958e7a0303122500ce18f1a4640bf66525bd10e763501fe986d86649d8d45143c08c3209db3411802c226e9fe9a55716ac4a0c14f9dcef9e70b2bb309553880dc5025eab3cc', '0xb3c1dcdc1f62046c786f0b82242ef283e7ed8f5626f72542aa2c7a40f14d9094dd1ebdbd7457ffdcdac45fd7da7e16c51200b06d791e5e43e257e45efdf0bd5b06cd2333beca2a3a84354eb48662d83aef5ecf4e67658c851c10b13d8d87c874', '0x954d91c7688983382609fca9e211e461f488a5971fd4e40d7e2892037268eacdfd495cfa0a7ed6eb0eb11ac3ae6f651716757e7526abe1e06c64649d80996fd3105c20c4c94bc2b22d97045356fe9d791f21ea6428ac48db6f9e68e30d875280', '0x88a6b6bb26c51cf9812260795523973bb90ce80f6820b6c9048ab366f0fb96e48437a7f7cb62aedf64b11eb4dfefebb0147608793133d32003cb1f2dc47b13b5ff45f1bb1b2408ea45770a08dbfaec60961acb8119c47b139a13b8641e2c9487', '0x85cd7be9728bd925d12f47fb04b32d9fad7cab88788b559f053e69ca18e463113ecc8bbb6dbfb024835f901b3a957d3108d6770fb26d4c8be0a9a619f6e3a4bf15cbfd48e61593490885f6cee30e4300c5f9cf5e1c08e60a2d5b023ee94fcad0', '0x80477dba360f04399821a48ca388c0fa81102dd15687fea792ee8c1114e00d1bc4839ad37ac58900a118d863723acfbe08126ea883be87f50e4eabe3b5e72f5d9e041db8d9b186409fd4df4a7dde38c0e0a3b1ae29b098e5697e7f110b6b27e4', '0xb7a6aec08715a9f8672a2b8c367e407be37e59514ac19dd4f0942a68007bba3923df22da48702c63c0d6b3efd3c2d04e0fe042d8b5a54d562f9f33afc4865dcbcc16e99029e25925580e87920c399e710d438ac1ce3a6dc9b0d76c064a01f6f7', '0xac1b001edcea02c8258aeffbf9203114c1c874ad88dae1184fadd7d94cd09053649efd0ca413400e6e9b5fa4eac33261000af88b6bd0d2abf877a4f0355d2fb4d6007adb181695201c5432e50b850b51b3969f893bddf82126c5a71b042b7686', '0x90043fda4de53fb364fab2c04be5296c215599105ecff0c12e4917c549257125775c29f2507124d15f56e30447f367db0596c33237242c02d83dfd058735f1e3c1ff99069af55773b6d51d32a68bf75763f59ec4ee7267932ae426522b8aaab6', '0xa8660ce853e9dc08271bf882e29cd53397d63b739584dda5263da4c7cc1878d0cf6f3e403557885f557e184700575fee016ee8542dec22c97befe1d10f414d22e84560741cdb3e74c30dda9b42eeaaf53e27822de2ee06e24e912bf764a9a533', '0x8fe3921a96d0d065e8aa8fce9aa42c8e1461ca0470688c137be89396dd05103606dab6cdd2a4591efd6addf72026c12e065da7be276dee27a7e30afa2bd81c18f1516e7f068f324d0bad9570b95f6bd02c727cd2343e26db0887c3e4e26dceda', '0x8ae1ad97dcb9c192c9a3933541b40447d1dc4eebf380151440bbaae1e120cc5cdf1bcea55180b128d8e180e3af623815191d063cc0d7a47d55fb7687b9d87040bf7bc1a7546b07c61db5ccf1841372d7c2fe4a5431ffff829f3c2eb590b0b710', '0x8c2fa96870a88150f7876c931e2d3cc2adeaaaf5c73ef5fa1cf9dfa0991ae4819f9321af7e916e5057d87338e630a2f21242c29d76963cf26035b548d2a63d8ad7bd6efefa01c1df502cbdfdfe0334fb21ceb9f686887440f713bf17a89b8081', '0xb9aa98e2f02bb616e22ee5dd74c7d1049321ac9214d093a738159850a1dbcc7138cb8d26ce09d8296368fd5b291d74fa17ac7cc1b80840fdd4ee35e111501e3fa8485b508baecda7c1ab7bd703872b7d64a2a40b3210b6a70e8a6ffe0e5127e3', '0x9292db67f8771cdc86854a3f614a73805bf3012b48f1541e704ea4015d2b6b9c9aaed36419769c87c49f9e3165f03edb159c23b3a49c4390951f78e1d9b0ad997129b17cdb57ea1a6638794c0cca7d239f229e589c5ae4f9fe6979f7f8cba1d7', '0x91cd9e86550f230d128664f7312591fee6a84c34f5fc7aed557bcf986a409a6de722c4330453a305f06911d2728626e611acfdf81284f77f60a3a1595053a9479964fd713117e27c0222cc679674b03bc8001501aaf9b506196c56de29429b46', '0xa9516b73f605cc31b89c68b7675dc451e6364595243d235339437f556cf22d745d4250c1376182273be2d99e02c10eee047410a43eff634d051aeb784e76cb3605d8e079b9eb6ad1957dfdf77e1cd32ce4a573c9dfcc207ca65af6eb187f6c3d', '0xa9667271f7d191935cc8ad59ef3ec50229945faea85bfdfb0d582090f524436b348aaa0183b16a6231c00332fdac2826125b8c857a2ed9ec66821cfe02b3a2279be2412441bc2e369b255eb98614e4be8490799c4df22f18d47d24ec70bba5f7', '0xa4371144d2aa44d70d3cb9789096d3aa411149a6f800cb46f506461ee8363c8724667974252f28aea61b6030c05930ac039c1ee64bb4bd56532a685cae182bf2ab935eee34718cffcb46cae214c77aaca11dbb1320faf23c47247db1da04d8dc', '0x89a7eb441892260b7e81168c386899cd84ffc4a2c5cad2eae0d1ab9e8b5524662e6f660fe3f8bfe4c92f60b060811bc605b14c5631d16709266886d7885a5eb5930097127ec6fb2ebbaf2df65909cf48f253b3d5e22ae48d3e9a2fd2b01f447e', '0x9648c42ca97665b5eccb49580d8532df05eb5a68db07f391a2340769b55119eaf4c52fe4f650c09250fa78a76c3a1e271799b8333cc2628e3d4b4a6a3e03da1f771ecf6516dd63236574a7864ff07e319a6f11f153406280d63af9e2b5713283', '0x9663bf6dd446ea7a90658ee458578d4196dc0b175ef7fcfa75f44d41670850774c2e46c5a6be132a2c072a3c0180a24f0305d1acac49d2d79878e5cda80c57feda3d01a6af12e78b5874e2a4b3717f11c97503b41a4474e2e95b179113726199', '0xb212aeb4814e0915b432711b317923ed2b09e076aaf558c3ae8ef83f9e15a83f9ea3f47805b2750ab9e8106cb4dc6ad003522c84b03dc02829978a097899c773f6fb31f7fe6b8f2d836d96580f216fec20158f1590c3e0d7850622e15194db05', '0x925f005059bf07e9ceccbe66c711b048e236ade775720d0fe479aebe6e23e8af281225ad18e62458dc1b03b42ad4ca290d4aa176260604a7aad0d9791337006fbdebe23746f8060d42876f45e4c83c3643931392fde1cd13ff8bddf8111ef974', '0x9553edb22b4330c568e156a59ef03b26f5c326424f830fe3e8c0b602f08c124730ffc40bc745bec1a22417adb22a1a960243a10565c2be3066bfdb841d1cd14c624cd06e0008f4beb83f972ce6182a303bee3fcbcabc6cfe48ec5ae4b7941bfc', '0x935f5a404f0a78bdcce709899eda0631169b366a669e9b58eacbbd86d7b5016d044b8dfc59ce7ed8de743ae16c2343b50e2f925e88ba6319e33c3fc76b314043abad7813677b4615c8a97eb83cc79de4fedf6ccbcfa4d4cbf759a5a84e4d9742', '0xa5b014ab936eb4be113204490e8b61cd38d71da0dec7215125bcd131bf3ab22d0a32ce645bca93e7b3637cf0c2db3d6601a0ddd330dc46f9fae82abe864ffc12d656c88eb50c20782e5bb6f75d18760666f43943abb644b881639083e122f557', '0x935b7298ae52862fa22bf03bfc1795b34c70b181679ae27de08a9f5b4b884f824ef1b276b7600efa0d2f1d79e4a470d51692fd565c5cf8343dd80e5d3336968fc21c09ba9348590f6206d4424eb229e767547daefa98bc3aa9f421158dee3f2a', '0x9830f92446e708a8f6b091cc3c38b653505414f8b6507504010a96ffda3bcf763d5331eb749301e2a1437f00e2415efb01b799ad4c03f4b02de077569626255ac1165f96ea408915d4cf7955047620da573e5c439671d1fa5c833fb11de7afe6', '0x840dcc44f673fff3e387af2bb41e89640f2a70bcd2b92544876daa92143f67c7512faf5f90a04b7191de01f3e2b1bde00622a20dc62ca23bbbfaa6ad220613deff43908382642d4d6a86999f662efd64b1df448b68c847cfa87630a3ffd2ec76', '0x92950c895ed54f7f876b2fda17ecc9c41b7accfbdd42c210cc5b475e0737a7279f558148531b5c916e310604a1de25a80940c94fe5389ae5d6a5e9c371be67bceea1877f5401725a6595bcf77ece60905151b6dfcb68b75ed2e708c73632f4fd', '0x8010246bf8e94c25fd029b346b5fbadb404ef6f44a58fd9dd75acf62433d8cc6db66974f139a76e0c26dddc1f329a88214dbb63276516cf325c7869e855d07e0852d622c332ac55609ba1ec9258c45746a2aeb1af0800141ee011da80af175d4', '0xb0f1bad257ebd187bdc3f37b23f33c6a5d6a8e1f2de586080d6ada19087b0e2bf23b79c1b6da1ee82271323f5bdf3e1b018586b54a5b92ab6a1a16bb3315190a3584a05e6c37d5ca1e05d702b9869e27f513472bcdd00f4d0502a107773097da', '0x9636d24f1ede773ce919f309448dd7ce023f424afd6b4b69cb98c2a988d849a283646dc3e469879daa1b1edae91ae41f009887518e7eb5578f88469321117303cd3ac2d7aee4d9cb5f82ab9ae3458e796dfe7c24284b05815acfcaa270ff22e2', '0xb373feb5d7012fd60578d7d00834c5c81df2a23d42794fed91aa9535a4771fde0341c4da882261785e0caca40bf83405143085e7f17e55b64f6c5c809680c20b050409bf3702c574769127c854d27388b144b05624a0e24a1cbcc4d08467005b', '0xb15680648949ce69f82526e9b67d9b55ce5c537dc6ab7f3089091a9a19a6b90df7656794f6edc87fb387d21573ffc847062623685931c2790a508cbc8c6b231dd2c34f4d37d4706237b1407673605a604bcf6a50cc0b1a2db20485e22b02c17e', '0x8817e46672d40c8f748081567b038a3165f87994788ec77ee8daea8587f5540df3422f9e120e94339be67f186f50952504cb44f61e30a5241f1827e501b2de53c4c64473bcc79ab887dd277f282fbfe47997a930dd140ac08b03efac88d81075', '0xa6e4ef6c1d1098f95aae119905f87eb49b909d17f9c41bcfe51127aa25fee20782ea884a7fdf7d5e9c245b5a5b32230b07e0dbf7c6743bf52ee20e2acc0b269422bd6cf3c07115df4aa85b11b2c16630a07c974492d9cdd0ec325a3fabd95044', '0x8634aa7c3d00e7f17150009698ce440d8e1b0f13042b624a722ace68ead870c3d2212fbee549a2c190e384d7d6ac37ce14ab962c299ea1218ef1b1489c98906c91323b94c587f1d205a6edd5e9d05b42d591c26494a6f6a029a2aadb5f8b6f67', '0x821a58092900bdb73decf48e13e7a5012a3f88b06288a97b855ef51306406e7d867d613d9ec738ebacfa6db344b677d21509d93f3b55c2ebf3a2f2a6356f875150554c6fff52e62e3e46f7859be971bf7dd9d5b3e1d799749c8a97c2e04325df', '0x8dba356577a3a388f782e90edb1a7f3619759f4de314ad5d95c7cc6e197211446819c4955f99c5fc67f79450d2934e3c09adefc91b724887e005c5190362245eec48ce117d0a94d6fa6db12eda4ba8dde608fbbd0051f54dcf3bb057adfb2493', '0xa32a690dc95c23ed9fb46443d9b7d4c2e27053a7fcc216d2b0020a8cf279729c46114d2cda5772fd60a97016a07d6c5a0a7eb085a18307d34194596f5b541cdf01b2ceb31d62d6b55515acfd2b9eec92b27d082fbc4dc59fc63b551eccdb8468', '0xa040f7f4be67eaf0a1d658a3175d65df21a7dbde99bfa893469b9b43b9d150fc2e333148b1cb88cfd0447d88fa1a501d126987e9fdccb2852ecf1ba907c2ca3d6f97b055e354a9789854a64ecc8c2e928382cf09dda9abde42bbdf92280cdd96', '0x864baff97fa60164f91f334e0c9be00a152a416556b462f96d7c43b59fe1ebaff42f0471d0bf264976f8aa6431176eb905bd875024cf4f76c13a70bede51dc3e47e10b9d5652d30d2663b3af3f08d5d11b9709a0321aba371d2ef13174dcfcaf', '0x95a46f32c994133ecc22db49bad2c36a281d6b574c83cfee6680b8c8100466ca034b815cfaedfbf54f4e75188e661df901abd089524e1e0eb0bf48d48caa9dd97482d2e8c1253e7e8ac250a32fd066d5b5cb08a8641bdd64ecfa48289dca83a3', '0xa2cce2be4d12144138cb91066e0cd0542c80b478bf467867ebef9ddaf3bd64e918294043500bf5a9f45ee089a8d6ace917108d9ce9e4f41e7e860cbce19ac52e791db3b6dde1c4b0367377b581f999f340e1d6814d724edc94cb07f9c4730774', '0xb145f203eee1ac0a1a1731113ffa7a8b0b694ef2312dabc4d431660f5e0645ef5838e3e624cfe1228cfa248d48b5760501f93e6ab13d3159fc241427116c4b90359599a4cb0a86d0bb9190aa7fabff482c812db966fd2ce0a1b48cb8ac8b3bca', '0xadabe5d215c608696e03861cbd5f7401869c756b3a5aadc55f41745ad9478145d44393fec8bb6dfc4ad9236dc62b9ada0f7ca57fe2bae1b71565dbf9536d33a68b8e2090b233422313cc96afc7f1f7e0907dc7787806671541d6de8ce47c4cd0', '0xae7845fa6b06db53201c1080e01e629781817f421f28956589c6df3091ec33754f8a4bd4647a6bb1c141ac22731e3c1014865d13f3ed538dcb0f7b7576435133d9d03be655f8fbb4c9f7d83e06d1210aedd45128c2b0c9bab45a9ddde1c862a5', '0x9159eaa826a24adfa7adf6e8d2832120ebb6eccbeb3d0459ffdc338548813a2d239d22b26451fda98cc0c204d8e1ac69150b5498e0be3045300e789bcb4e210d5cd431da4bdd915a21f407ea296c20c96608ded0b70d07188e96e6c1a7b9b86b', '0xa9fc6281e2d54b46458ef564ffaed6944bff71e389d0acc11fa35d3fcd8e10c1066e0dde5b9b6516f691bb478e81c6b20865281104dcb640e29dc116daae2e884f1fe6730d639dbe0e19a532be4fb337bf52ae8408446deb393d224eee7cfa50', '0x84291a42f991bfb36358eedead3699d9176a38f6f63757742fdbb7f631f2c70178b1aedef4912fed7b6cf27e88ddc7eb0e2a6aa4b999f3eb4b662b93f386c8d78e9ac9929e21f4c5e63b12991fcde93aa64a735b75b535e730ff8dd2abb16e04', '0xa1b7fcacae181495d91765dfddf26581e8e39421579c9cbd0dd27a40ea4c54af3444a36bf85a11dda2114246eaddbdd619397424bb1eb41b5a15004b902a590ede5742cd850cf312555be24d2df8becf48f5afba5a8cd087cb7be0a521728386', '0x92feaaf540dbd84719a4889a87cdd125b7e995a6782911931fef26da9afcfbe6f86aaf5328fe1f77631491ce6239c5470f44c7791506c6ef1626803a5794e76d2be0af92f7052c29ac6264b7b9b51f267ad820afc6f881460521428496c6a5f1', '0xa525c925bfae1b89320a5054acc1fa11820f73d0cf28d273092b305467b2831fab53b6daf75fb926f332782d50e2522a19edcd85be5eb72f1497193c952d8cd0bcc5d43b39363b206eae4cb1e61668bde28a3fb2fc1e0d3d113f6dfadb799717', '0x98752bb6f5a44213f40eda6aa4ff124057c1b13b6529ab42fe575b9afa66e59b9c0ed563fb20dff62130c436c3e905ee17dd8433ba02c445b1d67182ab6504a90bbe12c26a754bbf734665c622f76c62fe2e11dd43ce04fd2b91a8463679058b', '0xa9aa9a84729f7c44219ff9e00e651e50ddea3735ef2a73fdf8ed8cd271961d8ed7af5cd724b713a89a097a3fe65a3c0202f69458a8b4c157c62a85668b12fc0d3957774bc9b35f86c184dd03bfefd5c325da717d74192cc9751c2073fe9d170e', '0xb221c1fd335a4362eff504cd95145f122bf93ea02ae162a3fb39c75583fc13a932d26050e164da97cff3e91f9a7f6ff80302c19dd1916f24acf6b93b62f36e9665a8785413b0c7d930c7f1668549910f849bca319b00e59dd01e5dec8d2edacc', '0xa71e2b1e0b16d754b848f05eda90f67bedab37709550171551050c94efba0bfc282f72aeaaa1f0330041461f5e6aa4d11537237e955e1609a469d38ed17f5c2a35a1752f546db89bfeff9eab78ec944266f1cb94c1db3334ab48df716ce408ef', '0xb990ae72768779ba0b2e66df4dd29b3dbd00f901c23b2b4a53419226ef9232acedeb498b0d0687c463e3f1eead58b20b09efcefa566fbfdfe1c6e48d32367936142d0a734143e5e63cdf86be7457723535b787a9cfcfa32fe1d61ad5a2617220', '0x8d27e7fbff77d5b9b9bbc864d5231fecf817238a6433db668d5a62a2c1ee1e5694fdd90c3293c06cc0cb15f7cbeab44d0d42be632cb9ff41fc3f6628b4b62897797d7b56126d65b694dcf3e298e3561ac8813fbd7296593ced33850426df42db', '0xa92039a08b5502d5b211a7744099c9f93fa8c90cedcb1d05e92f01886219dd464eb5fb0337496ad96ed09c987da4e5f019035c5b01cc09b2a18b8a8dd419bc5895388a07e26958f6bd26751929c25f89b8eb4a299d822e2d26fec9ef350e0d3c', '0x92dcc5a1c8c3e1b28b1524e3dd6dbecd63017c9201da9dbe077f1b82adc08c50169f56fc7b5a3b28ec6b89254de3e2fd12838a761053437883c3e01ba616670cea843754548ef84bcc397de2369adcca2ab54cd73c55dc68d87aec3fc2fe4f10']
+    </spec>
+
+- name: MAX_CONCURRENT_REQUESTS
+  sources: []
+  spec: |
+    <spec constant_var="MAX_CONCURRENT_REQUESTS" fork="phase0" hash="f5ff241b">
+    MAX_CONCURRENT_REQUESTS = 2
+    </spec>
+
+- name: MAX_REQUEST_LIGHT_CLIENT_UPDATES
+  sources:
+    - file: config/params/config.go
+      search: MaxRequestLightClientUpdates\s+.*yaml:"MAX_REQUEST_LIGHT_CLIENT_UPDATES"
+      regex: true
+  spec: |
+    <spec constant_var="MAX_REQUEST_LIGHT_CLIENT_UPDATES" fork="altair" hash="aa7e3917">
+    MAX_REQUEST_LIGHT_CLIENT_UPDATES = 2**7
+    </spec>
+
+- name: NODE_ID_BITS
+  sources:
+    - file: config/params/config.go
+      search: NodeIdBits\s+.*yaml:"NODE_ID_BITS"
+      regex: true
+  spec: |
+    <spec constant_var="NODE_ID_BITS" fork="phase0" hash="57dab5f1">
+    NODE_ID_BITS = 256
+    </spec>
+
+- name: PARTICIPATION_FLAG_WEIGHTS
+  sources: []
+  spec: |
+    <spec constant_var="PARTICIPATION_FLAG_WEIGHTS" fork="altair" hash="0068cac2">
+    PARTICIPATION_FLAG_WEIGHTS = [TIMELY_SOURCE_WEIGHT, TIMELY_TARGET_WEIGHT, TIMELY_HEAD_WEIGHT]
+    </spec>
+
+- name: PRIMITIVE_ROOT_OF_UNITY
+  sources: []
+  spec: |
+    <spec constant_var="PRIMITIVE_ROOT_OF_UNITY" fork="deneb" hash="004e6753">
+    PRIMITIVE_ROOT_OF_UNITY = 7
+    </spec>
+
+- name: PROPOSER_WEIGHT
+  sources:
+    - file: config/params/config.go
+      search: ProposerWeight\s+.*yaml:"PROPOSER_WEIGHT"
+      regex: true
+  spec: |
+    <spec constant_var="PROPOSER_WEIGHT" fork="altair" hash="4dcb6f6c">
+    PROPOSER_WEIGHT: uint64 = 8
+    </spec>
+
+- name: RANDOM_CHALLENGE_KZG_BATCH_DOMAIN
+  sources: []
+  spec: |
+    <spec constant_var="RANDOM_CHALLENGE_KZG_BATCH_DOMAIN" fork="deneb" hash="a994f6c6">
+    RANDOM_CHALLENGE_KZG_BATCH_DOMAIN = b'RCKZGBATCH___V1_'
+    </spec>
+
+- name: RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN
+  sources: []
+  spec: |
+    <spec constant_var="RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN" fork="fulu" hash="907a9534">
+    RANDOM_CHALLENGE_KZG_CELL_BATCH_DOMAIN = b'RCKZGCBATCH__V1_'
+    </spec>
+
+- name: SAFETY_DECAY
+  sources:
+    - file: config/params/config.go
+      search: SafetyDecay\s+uint64
+      regex: true
+  spec: |
+    <spec constant_var="SAFETY_DECAY" fork="phase0" hash="298e03fe">
+    SAFETY_DECAY: uint64 = 10
+    </spec>
+
+- name: SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY
+  sources: []
+  spec: |
+    <spec constant_var="SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY" fork="bellatrix" hash="87b7dd5b">
+    SAFE_SLOTS_TO_IMPORT_OPTIMISTICALLY = 128
+    </spec>
+
+- name: SYNC_COMMITTEE_SUBNET_COUNT
+  sources:
+    - file: config/params/config.go
+      search: SyncCommitteeSubnetCount\s+.*yaml:"SYNC_COMMITTEE_SUBNET_COUNT"
+      regex: true
+  spec: |
+    <spec constant_var="SYNC_COMMITTEE_SUBNET_COUNT" fork="altair" hash="58794943">
+    SYNC_COMMITTEE_SUBNET_COUNT = 4
+    </spec>
+
+- name: SYNC_REWARD_WEIGHT
+  sources:
+    - file: config/params/config.go
+      search: SyncRewardWeight\s+.*yaml:"SYNC_REWARD_WEIGHT"
+      regex: true
+  spec: |
+    <spec constant_var="SYNC_REWARD_WEIGHT" fork="altair" hash="ea70c5e0">
+    SYNC_REWARD_WEIGHT: uint64 = 2
+    </spec>
+
+- name: TARGET_AGGREGATORS_PER_COMMITTEE
+  sources:
+    - file: config/params/config.go
+      search: TargetAggregatorsPerCommittee\s+.*yaml:"TARGET_AGGREGATORS_PER_COMMITTEE"
+      regex: true
+  spec: |
+    <spec constant_var="TARGET_AGGREGATORS_PER_COMMITTEE" fork="phase0" hash="3a65ef1c">
+    TARGET_AGGREGATORS_PER_COMMITTEE = 2**4
+    </spec>
+
+- name: TARGET_AGGREGATORS_PER_SYNC_SUBCOMMITTEE
+  sources:
+    - file: config/params/config.go
+      search: TargetAggregatorsPerSyncSubcommittee\s+.*yaml:"TARGET_AGGREGATORS_PER_SYNC_SUBCOMMITTEE"
+      regex: true
+  spec: |
+    <spec constant_var="TARGET_AGGREGATORS_PER_SYNC_SUBCOMMITTEE" fork="altair" hash="af3f6c9e">
+    TARGET_AGGREGATORS_PER_SYNC_SUBCOMMITTEE = 2**4
+    </spec>
+
+- name: TIMELY_HEAD_FLAG_INDEX
+  sources:
+    - file: config/params/config.go
+      search: TimelyHeadFlagIndex\s+.*yaml:"TIMELY_HEAD_FLAG_INDEX"
+      regex: true
+  spec: |
+    <spec constant_var="TIMELY_HEAD_FLAG_INDEX" fork="altair" hash="a01306fb">
+    TIMELY_HEAD_FLAG_INDEX = 2
+    </spec>
+
+- name: TIMELY_HEAD_WEIGHT
+  sources:
+    - file: config/params/config.go
+      search: TimelyHeadWeight\s+.*yaml:"TIMELY_HEAD_WEIGHT"
+      regex: true
+  spec: |
+    <spec constant_var="TIMELY_HEAD_WEIGHT" fork="altair" hash="d6f53c91">
+    TIMELY_HEAD_WEIGHT: uint64 = 14
+    </spec>
+
+- name: TIMELY_SOURCE_FLAG_INDEX
+  sources:
+    - file: config/params/config.go
+      search: TimelySourceFlagIndex\s+.*yaml:"TIMELY_SOURCE_FLAG_INDEX"
+      regex: true
+  spec: |
+    <spec constant_var="TIMELY_SOURCE_FLAG_INDEX" fork="altair" hash="57f25239">
+    TIMELY_SOURCE_FLAG_INDEX = 0
+    </spec>
+
+- name: TIMELY_SOURCE_WEIGHT
+  sources:
+    - file: config/params/config.go
+      search: TimelySourceWeight\s+.*yaml:"TIMELY_SOURCE_WEIGHT"
+      regex: true
+  spec: |
+    <spec constant_var="TIMELY_SOURCE_WEIGHT" fork="altair" hash="9cf6e565">
+    TIMELY_SOURCE_WEIGHT: uint64 = 14
+    </spec>
+
+- name: TIMELY_TARGET_FLAG_INDEX
+  sources:
+    - file: config/params/config.go
+      search: TimelyTargetFlagIndex\s+.*yaml:"TIMELY_TARGET_FLAG_INDEX"
+      regex: true
+  spec: |
+    <spec constant_var="TIMELY_TARGET_FLAG_INDEX" fork="altair" hash="32530e5a">
+    TIMELY_TARGET_FLAG_INDEX = 1
+    </spec>
+
+- name: TIMELY_TARGET_WEIGHT
+  sources:
+    - file: config/params/config.go
+      search: TimelyTargetWeight\s+.*yaml:"TIMELY_TARGET_WEIGHT"
+      regex: true
+  spec: |
+    <spec constant_var="TIMELY_TARGET_WEIGHT" fork="altair" hash="5413dfe8">
+    TIMELY_TARGET_WEIGHT: uint64 = 26
+    </spec>
+
+- name: UINT256_MAX
+  sources: []
+  spec: |
+    <spec constant_var="UINT256_MAX" fork="fulu" hash="57a47f45">
+    UINT256_MAX: uint256 = 2**256 - 1
+    </spec>
+
+- name: UINT64_MAX
+  sources: []
+  spec: |
+    <spec constant_var="UINT64_MAX" fork="phase0" hash="0efe6bd6">
+    UINT64_MAX: uint64 = 2**64 - 1
+    </spec>
+
+- name: UINT64_MAX_SQRT
+  sources: []
+  spec: |
+    <spec constant_var="UINT64_MAX_SQRT" fork="phase0" hash="28d7e92a">
+    UINT64_MAX_SQRT: uint64 = 4294967295
+    </spec>
+
+- name: UNSET_DEPOSIT_REQUESTS_START_INDEX
+  sources:
+    - file: config/params/config.go
+      search: UnsetDepositRequestsStartIndex\s+.*yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX"
+      regex: true
+  spec: |
+    <spec constant_var="UNSET_DEPOSIT_REQUESTS_START_INDEX" fork="electra" hash="5eb703dc">
+    UNSET_DEPOSIT_REQUESTS_START_INDEX: uint64 = 2**64 - 1
+    </spec>
+
+- name: VERSIONED_HASH_VERSION_KZG
+  sources:
+    - file: consensus-types/primitives/kzg.go
+      search: blobCommitmentVersionKZG\s+uint8\s+=\s+0x01
+      regex: true
+  spec: |
+    <spec constant_var="VERSIONED_HASH_VERSION_KZG" fork="deneb" hash="fc402ca2">
+    VERSIONED_HASH_VERSION_KZG: Bytes1 = '0x01'
+    </spec>
+
+- name: WEIGHT_DENOMINATOR
+  sources:
+    - file: config/params/config.go
+      search: WeightDenominator\s+.*yaml:"WEIGHT_DENOMINATOR"
+      regex: true
+  spec: |
+    <spec constant_var="WEIGHT_DENOMINATOR" fork="altair" hash="0d498a82">
+    WEIGHT_DENOMINATOR: uint64 = 64
+    </spec>
+
+- name: WITHDRAWAL_REQUEST_TYPE
+  sources:
+    - file: proto/engine/v1/electra.go
+      search: WithdrawalRequestType\s*$
+      regex: true
+  spec: |
+    <spec constant_var="WITHDRAWAL_REQUEST_TYPE" fork="electra" hash="e8e70397">
+    WITHDRAWAL_REQUEST_TYPE: Bytes1 = '0x01'
+    </spec>

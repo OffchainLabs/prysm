@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -93,7 +92,7 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	blockCopy, err := block.Copy()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "block copy")
 	}
 
 	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
@@ -104,17 +103,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "new ro block with root")
 	}
 
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "validator execution and consensus")
 	}
 
-	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
+	daWaitedTime, err := s.handleDA(ctx, avs, roblock)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "handle da")
 	}
 
 	// Defragment the state before continuing block processing.
@@ -135,10 +134,10 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err := s.postBlockProcess(args); err != nil {
 		err := errors.Wrap(err, "could not process block")
 		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrap(err, "post block process")
 	}
 	if err := s.updateCheckpoints(ctx, currentCheckpoints, preState, postState, blockRoot); err != nil {
-		return err
+		return errors.Wrap(err, "update checkpoints")
 	}
 	// If slasher is configured, forward the attestations in the block via an event feed for processing.
 	if s.slasherEnabled {
@@ -152,12 +151,12 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "check save hot state db")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
 	if err := s.handleCaches(); err != nil {
-		return err
+		return errors.Wrap(err, "handle caches")
 	}
 	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
 	return nil
@@ -220,6 +219,9 @@ func (s *Service) validateExecutionAndConsensus(
 	eg.Go(func() error {
 		var err error
 		postState, err = s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return invalidBlock{error: err, root: block.Root()}
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to validate consensus state transition function")
 		}
@@ -240,37 +242,19 @@ func (s *Service) validateExecutionAndConsensus(
 	return postState, isValidPayload, nil
 }
 
-func (s *Service) handleDA(
-	ctx context.Context,
-	block interfaces.SignedBeaconBlock,
-	blockRoot [fieldparams.RootLength]byte,
-	avs das.AvailabilityStore,
-) (elapsed time.Duration, err error) {
-	defer func(start time.Time) {
-		elapsed = time.Since(start)
-
-		if err == nil {
-			dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
-		}
-	}(time.Now())
-
-	if avs == nil {
-		if err = s.isDataAvailable(ctx, blockRoot, block); err != nil {
-			return
-		}
-
-		return
+func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityStore, block blocks.ROBlock) (time.Duration, error) {
+	var err error
+	start := time.Now()
+	if avs != nil {
+		err = avs.IsDataAvailable(ctx, s.CurrentSlot(), block)
+	} else {
+		err = s.isDataAvailable(ctx, block)
 	}
-
-	var rob blocks.ROBlock
-	rob, err = blocks.NewROBlockWithRoot(block, blockRoot)
-	if err != nil {
-		return
+	elapsed := time.Since(start)
+	if err == nil {
+		dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
 	}
-
-	err = avs.IsDataAvailable(ctx, s.CurrentSlot(), rob)
-
-	return
+	return elapsed, err
 }
 
 func (s *Service) reportPostBlockProcessing(
@@ -320,11 +304,26 @@ func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedSta
 	if features.Get().EnableLightClient {
 		// Save a light client bootstrap for the finalized checkpoint
 		go func() {
-			err := s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root)
+			st, err := s.cfg.StateGen.StateByRoot(ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not retrieve state for finalized root to save light client bootstrap")
+				return
+			}
+			err = s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root, st)
 			if err != nil {
 				log.WithError(err).Error("Could not save light client bootstrap by block root")
 			} else {
 				log.Debugf("Saved light client bootstrap for finalized root %#x", finalized.Root)
+			}
+		}()
+
+		// Clean up the light client store caches
+		go func() {
+			err := s.lcStore.MigrateToCold(s.ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not migrate light client store to cold storage")
+			} else {
+				log.Debugf("Migrated light client store to cold storage for finalized root %#x", finalized.Root)
 			}
 		}()
 	}
@@ -589,17 +588,17 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySignedBeaconBlock, preState state.BeaconState) {
 	// Feed the indexed attestation to slasher if enabled. This action
 	// is done in the background to avoid adding more load to this critical code path.
-	ctx := context.TODO()
+	ctx := s.ctx
 	for _, att := range signed.Block().Body().Attestations() {
 		committees, err := helpers.AttestationCommitteesFromState(ctx, preState, att)
 		if err != nil {
 			log.WithError(err).Error("Could not get attestation committees")
-			return
+			continue
 		}
 		indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committees...)
 		if err != nil {
 			log.WithError(err).Error("Could not convert to indexed attestation")
-			return
+			continue
 		}
 		s.cfg.SlasherAttestationsFeed.Send(&types.WrappedIndexedAtt{IndexedAtt: indexedAtt})
 	}

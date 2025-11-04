@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -41,7 +42,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -281,8 +281,12 @@ func TestCreateLocalNode(t *testing.T) {
 				genesisTime:           time.Now(),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 				cfg:                   tt.cfg,
+				ctx:                   t.Context(),
 				custodyInfo:           &custodyInfo{groupCount: custodyRequirement},
+				custodyInfoSet:        make(chan struct{}),
 			}
+
+			close(service.custodyInfoSet)
 
 			localNode, err := service.createLocalNode(privKey, address, udpPort, tcpPort, quicPort)
 			if tt.expectedError {
@@ -912,8 +916,12 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+				ctx:                   t.Context(),
+				custodyInfoSet:        make(chan struct{}),
 				custodyInfo:           &custodyInfo{groupCount: custodyGroupCount},
 			}
+
+			close(service.custodyInfoSet)
 
 			// Set the listener and the metadata.
 			createListener := func() (*discover.UDPv5, error) {
@@ -969,7 +977,7 @@ func TestFindPeers_NodeDeduplication(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create LocalNodes and manipulate sequence numbers
 	localNode1 := createTestNodeWithID(t, "node1")
@@ -1193,8 +1201,6 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
-
 	// Create LocalNode with same ID but different sequences
 	localNode1 := createTestNodeWithID(t, "testnode")
 	node1_seq1 := localNode1.Node() // Get current node
@@ -1213,7 +1219,7 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 			MaxPeers: 30,
 		},
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		peers: peers.NewStatus(ctx, &peers.StatusConfig{
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			PeerLimit:    30,
 			ScorerParams: &scorers.Config{},
 		}),
@@ -1243,7 +1249,7 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 	service.dv5Listener = testp2p.NewMockListener(localNode, iter)
 
 	// Run findPeers - node1_seq1 gets processed first, then callback marks peer bad, then node1_seq2 fails
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 
 	result, err := service.findPeers(ctxWithTimeout, 3)

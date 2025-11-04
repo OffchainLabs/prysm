@@ -180,6 +180,13 @@ var (
 			"192.168.0.0/16 would deny connections from peers on your local network only. The " +
 			"default is to accept all connections.",
 	}
+	// P2PColocationWhitelist defines a list of CIDR addresses to exempt from IP colocation restrictions.
+	P2PColocationWhitelist = &cli.StringSliceFlag{
+		Name: "p2p-colocation-whitelist",
+		Usage: "CIDR addresses to exempt from gossip sub IP colocation restrictions. " +
+			"Can be specified multiple times. Example: " +
+			"192.168.1.1/32 would exempt that specific IP from colocation restrictions.",
+	}
 	PubsubQueueSize = &cli.IntFlag{
 		Name:  "pubsub-queue-size",
 		Usage: "The size of the pubsub validation and outbound queue for the node.",
