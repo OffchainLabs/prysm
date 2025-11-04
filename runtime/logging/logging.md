@@ -7,7 +7,6 @@ The goal of this work is to give more control over the logging system to the use
 
 We try to tackle these limitations, by providing a simple, optional mechanism to the user.
 
-
 ### Per-Package Visibility
 We will offer two new config flags:
 
