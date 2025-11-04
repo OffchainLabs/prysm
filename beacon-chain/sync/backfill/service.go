@@ -41,6 +41,7 @@ type Service struct {
 	complete       chan struct{}
 	workerCfg      *workerCfg
 	fuluStart      primitives.Slot
+	denebStart     primitives.Slot
 }
 
 var _ runtime.Service = (*Service)(nil)
@@ -131,16 +132,17 @@ func WithMinimumSlot(s primitives.Slot) ServiceOption {
 // the service won't begin its runloop until Start() is called.
 func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, dcStore *filesystem.DataColumnStorage, cw startup.ClockWaiter, p p2p.P2P, pa PeerAssigner, opts ...ServiceOption) (*Service, error) {
 	s := &Service{
-		ctx:       ctx,
-		store:     su,
-		blobStore: bStore,
-		dcStore:   dcStore,
-		cw:        cw,
-		ms:        minimumBackfillSlot,
-		p2p:       p,
-		pa:        pa,
-		complete:  make(chan struct{}),
-		fuluStart: slots.SafeEpochStartOrMax(params.BeaconConfig().FuluForkEpoch),
+		ctx:        ctx,
+		store:      su,
+		blobStore:  bStore,
+		dcStore:    dcStore,
+		cw:         cw,
+		ms:         minimumBackfillSlot,
+		p2p:        p,
+		pa:         pa,
+		complete:   make(chan struct{}),
+		fuluStart:  slots.SafeEpochStartOrMax(params.BeaconConfig().FuluForkEpoch),
+		denebStart: slots.SafeEpochStartOrMax(params.BeaconConfig().DenebForkEpoch),
 	}
 	s.batchImporter = s.defaultBatchImporter
 	for _, o := range opts {
@@ -186,8 +188,7 @@ func (s *Service) importBatches(ctx context.Context) {
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
 			log.WithError(err).WithFields(ib.logFields()).Debug("Backfill batch failed to import")
-			s.downscorePeer(ib.blockPid, "backfillBatchImportError", err)
-			s.batchSeq.update(ib.withState(batchErrRetryable))
+			s.batchSeq.update(ib.withError(err))
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
 		}
@@ -213,7 +214,11 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
-	return su.fillBack(ctx, current, b.blocks, newMultiStore(s.fuluStart, b))
+	store, err := newCheckMultiplexer(s.fuluStart, s.denebStart, b)
+	if err != nil {
+		return status, errors.Wrap(err, "could not initialize multi-store for backfill batch import")
+	}
+	return su.fillBack(ctx, current, b.blocks, store)
 }
 
 func (s *Service) scheduleTodos() {

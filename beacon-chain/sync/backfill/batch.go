@@ -198,6 +198,13 @@ func (b batch) withFatalError(err error) batch {
 	return b.withState(batchErrFatal)
 }
 
+func (b batch) withError(err error) batch {
+	if isRetryable(err) {
+		return b.withRetryableError(err)
+	}
+	return b.withFatalError(err)
+}
+
 func (b batch) validatingColumnRequest(cb *columnBisector) *validatingColumnRequest {
 	req := b.columns.request(b.nextReqCols)
 	if req == nil {

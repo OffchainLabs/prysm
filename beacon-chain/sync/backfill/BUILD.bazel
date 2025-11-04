@@ -7,6 +7,7 @@ go_library(
         "batcher.go",
         "blobs.go",
         "columns.go",
+        "error.go",
         "fulu_transition.go",
         "log.go",
         "metrics.go",
