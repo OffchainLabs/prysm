@@ -222,7 +222,7 @@ var (
 	DataColumnBatchLimitBurstFactor = &cli.IntFlag{
 		Name:  "data-column-batch-limit-burst-factor",
 		Usage: "The factor by which data column batch limit may increase on burst.",
-		Value: 2,
+		Value: 4,
 	}
 	// DisableDebugRPCEndpoints disables the debug Beacon API namespace.
 	DisableDebugRPCEndpoints = &cli.BoolFlag{
