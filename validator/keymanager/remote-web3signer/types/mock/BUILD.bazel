@@ -16,6 +16,6 @@ go_library(
         "//testing/util:go_default_library",
         "//validator/keymanager/remote-web3signer/types:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
-        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_offchainlabs_go_bitfield//:go_default_library",
     ],
 )

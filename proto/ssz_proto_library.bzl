@@ -44,7 +44,7 @@ mainnet = {
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
-    "ptc.type": "github.com/prysmaticlabs/go-bitfield.Bitvector512",
+    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
     "execution_payload_availability.size": "1024",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
     "builder_pending_payments.size": "64",  # Gloas: vector length (2 * SLOTS_PER_EPOCH)

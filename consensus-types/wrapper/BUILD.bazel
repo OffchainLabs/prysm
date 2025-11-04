@@ -9,7 +9,7 @@ go_library(
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
         "//runtime/version:go_default_library",
-        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_offchainlabs_go_bitfield//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

@@ -242,7 +242,7 @@ message BeaconStateGloas {
   bytes justification_bits = 8001 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   Checkpoint previous_justified_checkpoint = 8002;
   Checkpoint current_justified_checkpoint = 8003;

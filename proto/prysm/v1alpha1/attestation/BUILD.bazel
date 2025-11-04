@@ -16,8 +16,8 @@ go_library(
         "//monitoring/tracing/trace:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
+        "@com_github_offchainlabs_go_bitfield//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )
 
@@ -36,6 +36,6 @@ go_test(
         "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
-        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_offchainlabs_go_bitfield//:go_default_library",
     ],
 )

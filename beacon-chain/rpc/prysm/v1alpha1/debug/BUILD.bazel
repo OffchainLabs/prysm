@@ -59,6 +59,6 @@ go_test(
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "@com_github_golang_protobuf//ptypes/empty",
-        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_offchainlabs_go_bitfield//:go_default_library",
     ],
 )

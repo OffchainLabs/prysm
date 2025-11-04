@@ -104,7 +104,7 @@ go_test(
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_google_gofuzz//:go_default_library",
         "@com_github_hashicorp_golang_lru//:go_default_library",
-        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_offchainlabs_go_bitfield//:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
