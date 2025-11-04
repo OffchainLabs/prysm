@@ -19,8 +19,9 @@ GE      168d      PM      63af       = "GE168dPM63af"
 ```
 
 - **EL_CODE**: 2-letter code (GE=Geth, NM=Nethermind, BU=Besu, RH=Reth, EG=Erigon)
+- **EL_COMMIT**: First 4 hex chars of execution client's git commit (from `engine_getClientVersionV1` JSON-RPC response)
 - **CL_CODE**: PM (Prysm)
-- **Commits**: First 4 hex chars of git commit
+- **CL_COMMIT**: First 4 hex chars of Prysm's git commit (from build-time ldflags via `version.GetCommitPrefix()`)
 
 ### Priority Order
 ```
@@ -28,19 +29,44 @@ GE      168d      PM      63af       = "GE168dPM63af"
    ↓
 2. Auto-generated "GE168dPM63af"                              ← New feature
    ↓
-3. Default "Prysm/v5.1.0"                                     ← Fallback
+3. Default "Prysm/v6.1.0"                                     ← Fallback
 ```
 
 **Key principle**: User control preserved. No opt-out flag needed.
 
 ### Examples
 
-| Configuration | Result |
-|--------------|---------|
-| No graffiti | `GE168dPM63af` ✨ **NEW** |
-| `--graffiti "🚀"` | `🚀` (unchanged) |
-| Proposer settings | Custom graffiti (unchanged) |
-| Old Geth (no API) | `Prysm/v5.1.0` (graceful fallback) |
+| Configuration | Result                             |
+|--------------|------------------------------------|
+| No graffiti | `GE168dPM63af` ✨ **NEW**           |
+| `--graffiti "🚀"` | `🚀` (unchanged)                   |
+| Proposer settings | Custom graffiti (unchanged)        |
+| Old Geth (no API) | `Prysm/v6.1.0` (graceful fallback) |
+
+## Key Concepts
+
+### Where Commit Hashes Come From
+The graffiti combines version info from **two different sources**:
+
+| Component | Source | How Retrieved |
+|-----------|--------|---------------|
+| **EL Code + Commit** | Execution client (Geth/etc) | Runtime JSON-RPC call: `engine_getClientVersionV1` returns `{"code":"GE", "commit":"0x168d..."}` |
+| **CL Code + Commit** | Prysm binary | Build-time: Bazel injects git commit via ldflags → `version.GetCommitPrefix()` returns "63af" |
+
+### Component Relationships
+```
+Blockchain Service (contains and delegates)
+    │
+    ├─► EngineVersionCache (caches EL version, TTL = 6 epochs)
+    │
+    └─► Graffiti Service (resolution logic)
+            │
+            ├─► Uses: EngineClient (makes JSON-RPC calls)
+            └─► Uses: EngineVersionCache (avoids repeated calls)
+
+Pattern: Blockchain Service implements GraffitiResolver interface,
+         delegates actual work to Graffiti Service
+```
 
 ## Architecture Overview
 
@@ -102,19 +128,20 @@ GE      168d      PM      63af       = "GE168dPM63af"
 
 ### Edited Components
 
-| Component | What Changes | Why |
-|-----------|--------------|-----|
+| Component | What Changes                                                                                                  | Why |
+|-----------|---------------------------------------------------------------------------------------------------------------|-----|
 | **Blockchain Service** | Implement GraffitiResolver interface, initialize cache + graffiti service on startup, spawn refresh goroutine | Central place to manage lifecycle of new components and provide resolution logic |
-| **RPC Validator Server** | Add `GraffitiResolver` field, call it in `GetBeaconBlock()` | Integration point where VC graffiti meets BN resolution logic |
-| **Engine Client** | Add `GetClientVersion()` interface method and implementation | Extends existing engine API client with new standardized method |
-| **Config Params** | Add cache TTL variables (6 epochs, 2 epochs) computed at init | Configuration for cache timing based on beacon chain slot duration |
-| **Node Initialization** | Wire graffiti resolver through RPC config | Connects blockchain service to RPC layer |
+| **RPC Validator Server** | Add `GraffitiResolver` field, call it (ResolveGraffiti()) in `GetBeaconBlock()`                               | Integration point where VC graffiti meets BN resolution logic |
+| **Engine Client** | Add `GetClientVersion()` interface method and implementation                                                  | Extends existing engine API client with new standardized method |
+| **Config Params** | Add cache TTL variables (6 epochs, 2 epochs) computed at init                                                 | Configuration for cache timing based on beacon chain slot duration |
+| **Node Initialization** | Wire graffiti resolver through RPC config                    | Connects blockchain service to RPC layer via dependency injection |
 
 **Critical Design Choices**:
 - ✅ **All logic on beacon node** (VC unchanged, correct process boundary)
-- ✅ **Cache with background refresh** (zero latency on block production)
-- ✅ **No runtime git operations** (works in containers, uses build-time ldflags)
-- ✅ **Best-effort Engine API** (5s timeout, graceful fallback if unavailable)
+- ✅ **Cache with background refresh** (zero latency on block production - pre-warms every 2 epochs)
+- ✅ **No runtime git operations** (works in containers - Prysm commit hash injected via Bazel ldflags at compile time)
+- ✅ **Best-effort Engine API** (5s timeout, graceful fallback to "Prysm/vX.X.X" if EL doesn't support `engine_getClientVersionV1`)
+- ✅ **Interface-based delegation** (RPC depends on `blockchain.GraffitiResolver` interface, not concrete implementation)
 
 ### Component Flow (Detailed)
 
@@ -227,7 +254,7 @@ NEW:
 - runtime/version/version.go (helpers)
 - Tests + metrics
 
-MODIFIED:
+MODIFY:
 - beacon-chain/blockchain/service.go (init cache + service)
 - beacon-chain/execution/engine_client.go (new RPC method)
 - beacon-chain/rpc/.../proposer.go (call resolver)
