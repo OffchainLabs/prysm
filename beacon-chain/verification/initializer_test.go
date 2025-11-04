@@ -18,7 +18,7 @@ func TestInitializerWaiter(t *testing.T) {
 	cs := startup.NewClockSynchronizer()
 	require.NoError(t, cs.SetClock(c))
 
-	w := NewInitializerWaiter(cs, &mockForkchoicer{}, &mockStateByRooter{})
+	w := NewInitializerWaiter(cs, &mockForkchoicer{}, &mockStateByRooter{}, &mockHeadStateProvider{})
 	ini, err := w.WaitForInitializer(ctx)
 	require.NoError(t, err)
 	csc, ok := ini.shared.sc.(*sigCache)

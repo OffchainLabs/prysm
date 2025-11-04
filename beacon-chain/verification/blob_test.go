@@ -11,6 +11,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -626,6 +627,45 @@ func (sbr *mockStateByRooter) StateByRoot(ctx context.Context, root [32]byte) (s
 
 var _ StateByRooter = &mockStateByRooter{}
 
+type mockHeadStateProvider struct {
+	headRoot          []byte
+	headSlot          primitives.Slot
+	headState         state.BeaconState
+	headStateReadOnly state.ReadOnlyBeaconState
+}
+
+func (m *mockHeadStateProvider) HeadRoot(_ context.Context) ([]byte, error) {
+	if m.headRoot != nil {
+		return m.headRoot, nil
+	}
+	root := make([]byte, 32)
+	root[0] = 0xff
+	return root, nil
+}
+
+func (m *mockHeadStateProvider) HeadSlot() primitives.Slot {
+	if m.headSlot == 0 {
+		return 1000
+	}
+	return m.headSlot
+}
+
+func (m *mockHeadStateProvider) HeadState(_ context.Context) (state.BeaconState, error) {
+	if m.headState == nil {
+		return nil, errors.New("head state not available")
+	}
+	return m.headState, nil
+}
+
+func (m *mockHeadStateProvider) HeadStateReadOnly(_ context.Context) (state.ReadOnlyBeaconState, error) {
+	if m.headStateReadOnly == nil {
+		return nil, errors.New("head state read only not available")
+	}
+	return m.headStateReadOnly, nil
+}
+
+var _ HeadStateProvider = &mockHeadStateProvider{}
+
 func sbrErrorIfCalled(t *testing.T) sbrfunc {
 	return func(_ context.Context, _ [32]byte) (state.BeaconState, error) {
 		t.Error("StateByRoot should not have been called")
@@ -643,15 +683,56 @@ func sbrNotFound(t *testing.T, expectedRoot [32]byte) *mockStateByRooter {
 }
 
 func sbrForValOverride(idx primitives.ValidatorIndex, val *ethpb.Validator) *mockStateByRooter {
+	return sbrForValOverrideWithT(nil, idx, val)
+}
+
+func sbrForValOverrideWithT(t testing.TB, idx primitives.ValidatorIndex, val *ethpb.Validator) *mockStateByRooter {
 	return &mockStateByRooter{sbr: func(_ context.Context, root [32]byte) (state.BeaconState, error) {
-		return &validxStateOverride{vals: map[primitives.ValidatorIndex]*ethpb.Validator{
-			idx: val,
-		}}, nil
+		// Use a real deterministic state so that helpers.BeaconProposerIndexAtSlot works correctly
+		numValidators := uint64(idx + 1)
+		if numValidators < 64 {
+			numValidators = 64
+		}
+
+		var st state.BeaconState
+		var err error
+		if t != nil {
+			st, _ = util.DeterministicGenesisStateFulu(t, numValidators)
+		} else {
+			// Fallback for blob tests that don't need the full state
+			return &validxStateOverride{
+				slot: 0,
+				vals: map[primitives.ValidatorIndex]*ethpb.Validator{
+					idx: val,
+				},
+			}, nil
+		}
+
+		// Override the specific validator if provided
+		if val != nil {
+			vals := st.Validators()
+			if idx < primitives.ValidatorIndex(len(vals)) {
+				vals[idx] = val
+				// Ensure the validator is active
+				if vals[idx].ActivationEpoch > 0 {
+					vals[idx].ActivationEpoch = 0
+				}
+				if vals[idx].ExitEpoch == 0 || vals[idx].ExitEpoch < params.BeaconConfig().FarFutureEpoch {
+					vals[idx].ExitEpoch = params.BeaconConfig().FarFutureEpoch
+				}
+				if vals[idx].EffectiveBalance == 0 {
+					vals[idx].EffectiveBalance = params.BeaconConfig().MaxEffectiveBalance
+				}
+				_ = st.SetValidators(vals)
+			}
+		}
+		return st, err
 	}}
 }
 
 type validxStateOverride struct {
 	state.BeaconState
+	slot primitives.Slot
 	vals map[primitives.ValidatorIndex]*ethpb.Validator
 }
 
@@ -663,6 +744,105 @@ func (v *validxStateOverride) ValidatorAtIndex(idx primitives.ValidatorIndex) (*
 		return nil, fmt.Errorf("validxStateOverride does not know index %d", idx)
 	}
 	return val, nil
+}
+
+func (v *validxStateOverride) Slot() primitives.Slot {
+	return v.slot
+}
+
+func (v *validxStateOverride) Version() int {
+	// Return Fulu version (6) as default for tests
+	return 6
+}
+
+func (v *validxStateOverride) Validators() []*ethpb.Validator {
+	// Return all validators in the map as a slice
+	maxIdx := primitives.ValidatorIndex(0)
+	for idx := range v.vals {
+		if idx > maxIdx {
+			maxIdx = idx
+		}
+	}
+	// Ensure we have at least 64 validators for a valid beacon state
+	numValidators := maxIdx + 1
+	if numValidators < 64 {
+		numValidators = 64
+	}
+	validators := make([]*ethpb.Validator, numValidators)
+	for i := range validators {
+		if val, ok := v.vals[primitives.ValidatorIndex(i)]; ok {
+			validators[i] = val
+		} else {
+			// Default validator for indices we don't care about
+			validators[i] = &ethpb.Validator{
+				ActivationEpoch:  0,
+				ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
+				EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
+			}
+		}
+	}
+	return validators
+}
+
+func (v *validxStateOverride) RandaoMixAtIndex(idx uint64) ([]byte, error) {
+	// Return a zero mix for simplicity in tests
+	return make([]byte, 32), nil
+}
+
+func (v *validxStateOverride) NumValidators() int {
+	return len(v.Validators())
+}
+
+func (v *validxStateOverride) ValidatorAtIndexReadOnly(idx primitives.ValidatorIndex) (state.ReadOnlyValidator, error) {
+	validators := v.Validators()
+	if idx >= primitives.ValidatorIndex(len(validators)) {
+		return nil, fmt.Errorf("validator index %d out of range", idx)
+	}
+	return state_native.NewValidator(validators[idx])
+}
+
+func (v *validxStateOverride) IsNil() bool {
+	return false
+}
+
+func (v *validxStateOverride) LatestBlockHeader() *ethpb.BeaconBlockHeader {
+	// Return a minimal block header for tests
+	return &ethpb.BeaconBlockHeader{
+		Slot:          v.slot,
+		ProposerIndex: 0,
+		ParentRoot:    make([]byte, 32),
+		StateRoot:     make([]byte, 32),
+		BodyRoot:      make([]byte, 32),
+	}
+}
+
+func (v *validxStateOverride) HashTreeRoot(ctx context.Context) ([32]byte, error) {
+	// Return a zero hash for tests
+	return [32]byte{}, nil
+}
+
+func (v *validxStateOverride) UpdateStateRootAtIndex(idx uint64, stateRoot [32]byte) error {
+	// No-op for mock - we don't track state roots
+	return nil
+}
+
+func (v *validxStateOverride) SetLatestBlockHeader(val *ethpb.BeaconBlockHeader) error {
+	// No-op for mock - we don't track block headers
+	return nil
+}
+
+func (v *validxStateOverride) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyValidator) error) error {
+	validators := v.Validators()
+	for i, val := range validators {
+		rov, err := state_native.NewValidator(val)
+		if err != nil {
+			return err
+		}
+		if err := f(i, rov); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type mockProposerCache struct {

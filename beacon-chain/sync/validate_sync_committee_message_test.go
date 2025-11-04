@@ -411,7 +411,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 			svc, tt.args.topic, clock = tt.setupSvc(svc, tt.args.msg, tt.args.topic)
 			markInitSyncComplete(t, svc)
 			require.NoError(t, cw.SetClock(clock))
-			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen)
+			svc.verifierWaiter = verification.NewInitializerWaiter(cw, chainService.ForkChoiceStore, svc.cfg.stateGen, chainService)
 			go svc.Start()
 
 			marshalledObj, err := tt.args.msg.MarshalSSZ()

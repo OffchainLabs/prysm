@@ -124,6 +124,7 @@ type BeaconNode struct {
 	DataColumnStorage        *filesystem.DataColumnStorage
 	DataColumnStorageOptions []filesystem.DataColumnStorageOption
 	verifyInitWaiter         *verification.InitializerWaiter
+	lhsp                     *verification.LazyHeadStateProvider
 	syncChecker              *initialsync.SyncChecker
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
@@ -230,8 +231,9 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not start modules")
 	}
 
+	beacon.lhsp = &verification.LazyHeadStateProvider{}
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen)
+		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
@@ -749,6 +751,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 	if err != nil {
 		return errors.Wrap(err, "could not register blockchain service")
 	}
+	b.lhsp.HeadStateProvider = blockchainService
 	return b.services.RegisterService(blockchainService)
 }
 

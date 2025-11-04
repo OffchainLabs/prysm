@@ -154,7 +154,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 	require.NoError(t, err)
 
-	waiter := verification.NewInitializerWaiter(gs, nil, nil)
+	waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 	initializer, err := waiter.WaitForInitializer(t.Context())
 	require.NoError(t, err)
 
@@ -787,7 +787,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
@@ -832,7 +832,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 

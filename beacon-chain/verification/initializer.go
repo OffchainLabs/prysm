@@ -33,6 +33,16 @@ type StateByRooter interface {
 	StateByRoot(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 }
 
+// HeadStateProvider describes a type that can provide access to the current head state and related methods.
+// This interface matches blockchain.HeadFetcher but is defined here to avoid import cycles
+// (blockchain package imports verification package).
+type HeadStateProvider interface {
+	HeadRoot(ctx context.Context) ([]byte, error)
+	HeadSlot() primitives.Slot
+	HeadState(ctx context.Context) (state.BeaconState, error)
+	HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error)
+}
+
 // sharedResources provides access to resources that are required by different verification types.
 // for example, sidecar verification and block verification share the block signature verification cache.
 type sharedResources struct {
@@ -41,6 +51,7 @@ type sharedResources struct {
 	sc    signatureCache
 	pc    proposerCache
 	sr    StateByRooter
+	hsp   HeadStateProvider
 	ic    *inclusionProofCache
 	sg    singleflight.Group
 }
@@ -96,14 +107,15 @@ func WithForkLookup(fl forkLookup) InitializerOption {
 }
 
 // NewInitializerWaiter creates an InitializerWaiter which can be used to obtain an Initializer once async dependencies are ready.
-func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRooter, opts ...InitializerOption) *InitializerWaiter {
+func NewInitializerWaiter(cw startup.ClockWaiter, fc Forkchoicer, sr StateByRooter, hsp HeadStateProvider, opts ...InitializerOption) *InitializerWaiter {
 	pc := newPropCache()
 	// signature cache is initialized in WaitForInitializer, since we need the genesis validators root, which can be obtained from startup.Clock.
 	shared := &sharedResources{
-		fc: fc,
-		pc: pc,
-		sr: sr,
-		ic: newInclusionProofCache(defaultInclusionProofCacheSize),
+		fc:  fc,
+		pc:  pc,
+		sr:  sr,
+		hsp: hsp,
+		ic:  newInclusionProofCache(defaultInclusionProofCacheSize),
 	}
 	iw := &InitializerWaiter{cw: cw, ini: &Initializer{shared: shared}}
 	for _, o := range opts {

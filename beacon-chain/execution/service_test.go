@@ -29,6 +29,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -99,7 +100,7 @@ func TestStart_OK(t *testing.T) {
 	c := startup.NewClockSynchronizer()
 	require.NoError(t, c.SetClock(startup.NewClock(time.Unix(0, 0), [32]byte{})))
 	waiter := verification.NewInitializerWaiter(
-		c, forkchoice.NewROForkChoice(nil), nil)
+		c, forkchoice.NewROForkChoice(nil), nil, &chainMock.ChainService{})
 
 	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),

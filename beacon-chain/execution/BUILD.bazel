@@ -100,6 +100,7 @@ go_test(
     deps = [
         "//async/event:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
+        "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",
