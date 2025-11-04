@@ -10,9 +10,9 @@ import (
 	reflect "reflect"
 	sync "sync"
 
+	github_com_prysmaticlabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
 	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
-	github_com_prysmaticlabs_go_bitfield "github.com/prysmaticlabs/go-bitfield"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/descriptorpb"
@@ -308,7 +308,7 @@ func (x *ENRForkID) GetNextForkEpoch() github_com_OffchainLabs_prysm_v6_consensu
 type MetaDataV0 struct {
 	state         protoimpl.MessageState                           `protogen:"open.v1"`
 	SeqNumber     uint64                                           `protobuf:"varint,1,opt,name=seq_number,json=seqNumber,proto3" json:"seq_number,omitempty"`
-	Attnets       github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,2,opt,name=attnets,proto3" json:"attnets,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector64" ssz-size:"8"`
+	Attnets       github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,2,opt,name=attnets,proto3" json:"attnets,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector64" ssz-size:"8"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -360,8 +360,8 @@ func (x *MetaDataV0) GetAttnets() github_com_prysmaticlabs_go_bitfield.Bitvector
 type MetaDataV1 struct {
 	state         protoimpl.MessageState                           `protogen:"open.v1"`
 	SeqNumber     uint64                                           `protobuf:"varint,1,opt,name=seq_number,json=seqNumber,proto3" json:"seq_number,omitempty"`
-	Attnets       github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,2,opt,name=attnets,proto3" json:"attnets,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector64" ssz-size:"8"`
-	Syncnets      github_com_prysmaticlabs_go_bitfield.Bitvector4  `protobuf:"bytes,3,opt,name=syncnets,proto3" json:"syncnets,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector4" ssz-size:"1"`
+	Attnets       github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,2,opt,name=attnets,proto3" json:"attnets,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector64" ssz-size:"8"`
+	Syncnets      github_com_prysmaticlabs_go_bitfield.Bitvector4  `protobuf:"bytes,3,opt,name=syncnets,proto3" json:"syncnets,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector4" ssz-size:"1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -420,8 +420,8 @@ func (x *MetaDataV1) GetSyncnets() github_com_prysmaticlabs_go_bitfield.Bitvecto
 type MetaDataV2 struct {
 	state             protoimpl.MessageState                           `protogen:"open.v1"`
 	SeqNumber         uint64                                           `protobuf:"varint,1,opt,name=seq_number,json=seqNumber,proto3" json:"seq_number,omitempty"`
-	Attnets           github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,2,opt,name=attnets,proto3" json:"attnets,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector64" ssz-size:"8"`
-	Syncnets          github_com_prysmaticlabs_go_bitfield.Bitvector4  `protobuf:"bytes,3,opt,name=syncnets,proto3" json:"syncnets,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector4" ssz-size:"1"`
+	Attnets           github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,2,opt,name=attnets,proto3" json:"attnets,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector64" ssz-size:"8"`
+	Syncnets          github_com_prysmaticlabs_go_bitfield.Bitvector4  `protobuf:"bytes,3,opt,name=syncnets,proto3" json:"syncnets,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector4" ssz-size:"1"`
 	CustodyGroupCount uint64                                           `protobuf:"varint,4,opt,name=custody_group_count,json=custodyGroupCount,proto3" json:"custody_group_count,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache

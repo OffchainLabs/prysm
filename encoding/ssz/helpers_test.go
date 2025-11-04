@@ -3,10 +3,10 @@ package ssz_test
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const merkleizingListLimitError = "merkleizing list that is too large, over limit"

@@ -75,7 +75,7 @@ message MetaDataV0 {
   bytes attnets = 2 [
     (ethereum.eth.ext.ssz_size) = "8",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector64"
+        "github.com/OffchainLabs/go-bitfield.Bitvector64"
   ];
 }
 
@@ -93,12 +93,12 @@ message MetaDataV1 {
   bytes attnets = 2 [
     (ethereum.eth.ext.ssz_size) = "8",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector64"
+        "github.com/OffchainLabs/go-bitfield.Bitvector64"
   ];
   bytes syncnets = 3 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
 }
 
@@ -117,12 +117,12 @@ message MetaDataV2 {
   bytes attnets = 2 [
     (ethereum.eth.ext.ssz_size) = "8",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector64"
+        "github.com/OffchainLabs/go-bitfield.Bitvector64"
   ];
   bytes syncnets = 3 [
     (ethereum.eth.ext.ssz_size) = "1",
     (ethereum.eth.ext.cast_type) =
-        "github.com/prysmaticlabs/go-bitfield.Bitvector4"
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
   ];
   uint64 custody_group_count = 4;
 }
