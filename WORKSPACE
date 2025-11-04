@@ -260,9 +260,9 @@ load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
-        "general": "",
-        "minimal": "",
-        "mainnet": "",
+        "general": "sha256-54hTaUNF9nLg+hRr3oHoq0yjZpW3MNiiUUuCQu6Rajk=",
+        "minimal": "sha256-1JHIGg3gVMjvcGYRHR5cwdDgOvX47oR/MWp6gyAeZfA=",
+        "mainnet": "sha256-292h3W2Ffts0YExgDTyxYe9Os7R0bZIXuAaMO8P6kl4=",
     },
     version = consensus_spec_version,
 )
