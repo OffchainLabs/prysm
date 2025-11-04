@@ -3,6 +3,7 @@ package sync
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -23,7 +24,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
 )
 

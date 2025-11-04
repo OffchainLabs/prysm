@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
@@ -23,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
@@ -524,12 +524,12 @@ func TestSubnetComputation(t *testing.T) {
 	require.NoError(t, err)
 
 	localNode := enode.NewLocalNode(db, convertedKey)
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	t.Run("standard", func(t *testing.T) {
 		retrievedSubnets, err := computeSubscribedSubnets(localNode.ID(), 1000)
 		require.NoError(t, err)
-		require.Equal(t, beaconConfig.SubnetsPerNode, uint64(len(retrievedSubnets)))
+		require.Equal(t, cfg.SubnetsPerNode, uint64(len(retrievedSubnets)))
 		require.Equal(t, retrievedSubnets[0]+1, retrievedSubnets[1])
 	})
 
@@ -541,8 +541,8 @@ func TestSubnetComputation(t *testing.T) {
 
 		retrievedSubnets, err := computeSubscribedSubnets(localNode.ID(), 1000)
 		require.NoError(t, err)
-		require.Equal(t, beaconConfig.AttestationSubnetCount, uint64(len(retrievedSubnets)))
-		for i := range beaconConfig.AttestationSubnetCount {
+		require.Equal(t, cfg.AttestationSubnetCount, uint64(len(retrievedSubnets)))
+		for i := range cfg.AttestationSubnetCount {
 			require.Equal(t, i, retrievedSubnets[i])
 		}
 	})

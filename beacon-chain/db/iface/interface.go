@@ -28,6 +28,7 @@ type ReadOnlyDatabase interface {
 	BlocksBySlot(ctx context.Context, slot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, error)
 	BlockRootsBySlot(ctx context.Context, slot primitives.Slot) (bool, [][32]byte, error)
 	HasBlock(ctx context.Context, blockRoot [32]byte) bool
+	AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[[32]byte]bool
 	GenesisBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	GenesisBlockRoot(ctx context.Context) ([32]byte, error)
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool

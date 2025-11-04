@@ -253,7 +253,7 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.6.0-beta.1"
+consensus_spec_version = "v1.6.0-beta.2"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
@@ -278,7 +278,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-yrq3tdwPS8Ri+ueeLAHssIT3ssMrX7zvHiJ8Xf9GVYs=",
+    integrity = "sha256-MForEP9dTe0z3ZkTHjX4H6waSkSTghf3gQHPwrSCCro=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )

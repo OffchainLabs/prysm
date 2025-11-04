@@ -31,9 +31,9 @@ import (
 
 func TestDataColumnSidecarsByRangeRPCHandler(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
 	ctx := context.Background()
 	t.Run("wrong message type", func(t *testing.T) {

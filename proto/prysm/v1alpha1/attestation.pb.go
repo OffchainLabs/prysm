@@ -10,9 +10,9 @@ import (
 	reflect "reflect"
 	sync "sync"
 
+	github_com_prysmaticlabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
 	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
-	github_com_prysmaticlabs_go_bitfield "github.com/prysmaticlabs/go-bitfield"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -138,7 +138,7 @@ func (x *AggregateAttestationAndProof) GetSelectionProof() []byte {
 
 type Attestation struct {
 	state           protoimpl.MessageState                       `protogen:"open.v1"`
-	AggregationBits github_com_prysmaticlabs_go_bitfield.Bitlist `protobuf:"bytes,1,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitlist" ssz-max:"2048"`
+	AggregationBits github_com_prysmaticlabs_go_bitfield.Bitlist `protobuf:"bytes,1,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitlist" ssz-max:"2048"`
 	Data            *AttestationData                             `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Signature       []byte                                       `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
 	unknownFields   protoimpl.UnknownFields
@@ -438,10 +438,10 @@ func (x *AggregateAttestationAndProofElectra) GetSelectionProof() []byte {
 
 type AttestationElectra struct {
 	state           protoimpl.MessageState                           `protogen:"open.v1"`
-	AggregationBits github_com_prysmaticlabs_go_bitfield.Bitlist     `protobuf:"bytes,1,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitlist" ssz-max:"131072"`
+	AggregationBits github_com_prysmaticlabs_go_bitfield.Bitlist     `protobuf:"bytes,1,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitlist" ssz-max:"131072"`
 	Data            *AttestationData                                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Signature       []byte                                           `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
-	CommitteeBits   github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,4,opt,name=committee_bits,json=committeeBits,proto3" json:"committee_bits,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector64" ssz-size:"8"`
+	CommitteeBits   github_com_prysmaticlabs_go_bitfield.Bitvector64 `protobuf:"bytes,4,opt,name=committee_bits,json=committeeBits,proto3" json:"committee_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector64" ssz-size:"8"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }

@@ -257,17 +257,25 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 			continue
 		}
 
-		columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
+		// Ensure the expensive signature verification is only performed once for
+		// concurrent requests for the same signature data.
+		if _, err, _ = dv.sg.Do(signatureData.concat(), func() (any, error) {
+			columnVerificationProposerSignatureCache.WithLabelValues("miss").Inc()
 
-		// Retrieve the parent state.
-		parentState, err := dv.parentState(ctx, dataColumn)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "parent state"))
-		}
+			// Retrieve the parent state.
+			parentState, err := dv.state(ctx, dataColumn.ParentRoot())
+			if err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "parent state"))
+			}
 
-		// Full verification, which will subsequently be cached for anything sharing the signature cache.
-		if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verify signature"))
+			// Full verification, which will subsequently be cached for anything sharing the signature cache.
+			if err = dv.sc.VerifySignature(signatureData, parentState); err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "verify signature"))
+			}
+
+			return nil, nil
+		}); err != nil {
+			return err
 		}
 	}
 
@@ -470,15 +478,25 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 		idx, cached := dv.pc.Proposer(checkpoint, dataColumnSlot)
 
 		if !cached {
-			// Retrieve the parent state.
-			parentState, err := dv.parentState(ctx, dataColumn)
-			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "parent state"))
-			}
+			parentRoot := dataColumn.ParentRoot()
+			// Ensure the expensive index computation is only performed once for
+			// concurrent requests for the same signature data.
+			if _, err, _ := dv.sg.Do(fmt.Sprintf("%#x", parentRoot), func() (any, error) {
+				// Retrieve the parent state.
+				parentState, err := dv.state(ctx, parentRoot)
+				if err != nil {
+					return nil, columnErrBuilder(errors.Wrap(err, "parent state"))
+				}
 
-			idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
-			if err != nil {
-				return columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				// Compute the proposer index.
+				idx, err = dv.pc.ComputeProposer(ctx, parentRoot, dataColumnSlot, parentState)
+				if err != nil {
+					return nil, columnErrBuilder(errors.Wrap(err, "compute proposer"))
+				}
+
+				return nil, nil
+			}); err != nil {
+				return err
 			}
 		}
 
@@ -490,23 +508,21 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	return nil
 }
 
-// parentState retrieves the parent state of the data column from the cache if possible, else retrieves it from the state by rooter.
-func (dv *RODataColumnsVerifier) parentState(ctx context.Context, dataColumn blocks.RODataColumn) (state.BeaconState, error) {
-	parentRoot := dataColumn.ParentRoot()
-
+// state retrieves the state of the corresponding root from the cache if possible, else retrieves it from the state by rooter.
+func (dv *RODataColumnsVerifier) state(ctx context.Context, root [fieldparams.RootLength]byte) (state.BeaconState, error) {
 	// If the parent root is already in the cache, return it.
-	if st, ok := dv.stateByRoot[parentRoot]; ok {
+	if st, ok := dv.stateByRoot[root]; ok {
 		return st, nil
 	}
 
 	// Retrieve the parent state from the state by rooter.
-	st, err := dv.sr.StateByRoot(ctx, parentRoot)
+	st, err := dv.sr.StateByRoot(ctx, root)
 	if err != nil {
 		return nil, errors.Wrap(err, "state by root")
 	}
 
 	// Store the parent state in the cache.
-	dv.stateByRoot[parentRoot] = st
+	dv.stateByRoot[root] = st
 
 	return st, nil
 }

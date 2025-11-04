@@ -3,12 +3,12 @@ package testing
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func VerifyBeaconStateJustificationBitsNil(t *testing.T, factory getState) {

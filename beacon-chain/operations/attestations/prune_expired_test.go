@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/async"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -13,11 +14,12 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestPruneExpired_Ticker(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	// Need timeout longer than the offset (secondsPerSlot - 1) + some buffer
+	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot+5) * time.Second
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 
 	s, err := NewService(ctx, &Config{

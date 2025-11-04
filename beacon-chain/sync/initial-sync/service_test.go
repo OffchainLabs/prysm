@@ -530,12 +530,12 @@ func TestOriginOutsideRetention(t *testing.T) {
 func TestFetchOriginSidecars(t *testing.T) {
 	ctx := t.Context()
 
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-	secondsPerSlot := beaconConfig.SecondsPerSlot
-	slotsPerEpoch := beaconConfig.SlotsPerEpoch
+	secondsPerSlot := cfg.SecondsPerSlot
+	slotsPerEpoch := cfg.SlotsPerEpoch
 	secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
-	retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+	retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
 
 	genesisValidatorRoot := [fieldparams.RootLength]byte{}
 

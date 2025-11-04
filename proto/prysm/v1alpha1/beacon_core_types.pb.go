@@ -10,9 +10,9 @@ import (
 	reflect "reflect"
 	sync "sync"
 
+	github_com_prysmaticlabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
 	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
-	github_com_prysmaticlabs_go_bitfield "github.com/prysmaticlabs/go-bitfield"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -534,7 +534,7 @@ func (x *IndexedAttestationElectra) GetSignature() []byte {
 
 type SyncAggregate struct {
 	state                  protoimpl.MessageState                            `protogen:"open.v1"`
-	SyncCommitteeBits      github_com_prysmaticlabs_go_bitfield.Bitvector512 `protobuf:"bytes,1,opt,name=sync_committee_bits,json=syncCommitteeBits,proto3" json:"sync_committee_bits,omitempty" cast-type:"github.com/prysmaticlabs/go-bitfield.Bitvector512" ssz-size:"64"`
+	SyncCommitteeBits      github_com_prysmaticlabs_go_bitfield.Bitvector512 `protobuf:"bytes,1,opt,name=sync_committee_bits,json=syncCommitteeBits,proto3" json:"sync_committee_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitvector512" ssz-size:"64"`
 	SyncCommitteeSignature []byte                                            `protobuf:"bytes,2,opt,name=sync_committee_signature,json=syncCommitteeSignature,proto3" json:"sync_committee_signature,omitempty" ssz-size:"96"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache

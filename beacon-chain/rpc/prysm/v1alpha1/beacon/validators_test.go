@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
@@ -37,7 +38,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

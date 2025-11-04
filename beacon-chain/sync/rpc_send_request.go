@@ -465,8 +465,8 @@ func SendDataColumnSidecarsByRangeRequest(
 		return nil, nil
 	}
 
-	beaconConfig := params.BeaconConfig()
-	numberOfColumns := beaconConfig.NumberOfColumns
+	cfg := params.BeaconConfig()
+	numberOfColumns := cfg.NumberOfColumns
 	maxRequestDataColumnSidecars := params.BeaconConfig().MaxRequestDataColumnSidecars
 
 	// Check if we do not request too many sidecars.

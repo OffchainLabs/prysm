@@ -4,12 +4,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types/mock"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestMapAggregateAndProof(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -64,35 +65,36 @@ var (
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
-	started               bool
-	isPreGenesis          bool
-	pingMethod            func(ctx context.Context, id peer.ID) error
-	pingMethodLock        sync.RWMutex
-	cancel                context.CancelFunc
-	cfg                   *Config
-	peers                 *peers.Status
-	addrFilter            *multiaddr.Filters
-	ipLimiter             *leakybucket.Collector
-	privKey               *ecdsa.PrivateKey
-	metaData              metadata.Metadata
-	pubsub                *pubsub.PubSub
-	joinedTopics          map[string]*pubsub.Topic
-	joinedTopicsLock      sync.RWMutex
-	subnetsLock           map[uint64]*sync.RWMutex
-	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
-	initializationLock    sync.Mutex
-	dv5Listener           ListenerRebooter
-	startupErr            error
-	ctx                   context.Context
-	host                  host.Host
-	genesisTime           time.Time
-	genesisValidatorsRoot []byte
-	activeValidatorCount  uint64
-	peerDisconnectionTime *cache.Cache
-	custodyInfo           *custodyInfo
-	custodyInfoLock       sync.RWMutex // Lock access to custodyInfo
-	custodyInfoSet        chan struct{}
-	allForkDigests        map[[4]byte]struct{}
+	started                  bool
+	isPreGenesis             bool
+	pingMethod               func(ctx context.Context, id peer.ID) error
+	pingMethodLock           sync.RWMutex
+	cancel                   context.CancelFunc
+	cfg                      *Config
+	peers                    *peers.Status
+	addrFilter               *multiaddr.Filters
+	ipLimiter                *leakybucket.Collector
+	privKey                  *ecdsa.PrivateKey
+	metaData                 metadata.Metadata
+	pubsub                   *pubsub.PubSub
+	joinedTopics             map[string]*pubsub.Topic
+	joinedTopicsLock         sync.RWMutex
+	subnetsLock              map[uint64]*sync.RWMutex
+	subnetsLockLock          sync.Mutex // Lock access to subnetsLock
+	initializationLock       sync.Mutex
+	dv5Listener              ListenerRebooter
+	startupErr               error
+	ctx                      context.Context
+	host                     host.Host
+	genesisTime              time.Time
+	genesisValidatorsRoot    []byte
+	activeValidatorCount     uint64
+	activeValidatorCountLock sync.Mutex
+	peerDisconnectionTime    *cache.Cache
+	custodyInfo              *custodyInfo
+	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
+	custodyInfoSet           chan struct{}
+	allForkDigests           map[[4]byte]struct{}
 }
 
 type custodyInfo struct {
@@ -106,11 +108,15 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
 
-	cfg = validateConfig(cfg)
+	validateConfig(cfg)
+
 	privKey, err := privKey(cfg)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to generate p2p private key")
 	}
+
+	p2pMaxPeers.Set(float64(cfg.MaxPeers))
+	minimumPeersPerSubnet.Set(float64(flags.Get().MinimumPeersPerSubnet))
 
 	metaData, err := metaDataFromDB(ctx, cfg.DB)
 	if err != nil {
