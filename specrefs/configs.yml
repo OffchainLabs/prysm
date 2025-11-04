@@ -110,14 +110,14 @@
   spec: |
     <spec config_var="BLOB_SCHEDULE" fork="fulu" hash="07879110">
     BLOB_SCHEDULE: tuple[frozendict[str, Any], ...] = (
-          frozendict({
+        frozendict({
             "EPOCH": 412672,
             "MAX_BLOBS_PER_BLOCK": 15,
-          }),
-          frozendict({
+        }),
+        frozendict({
             "EPOCH": 419072,
             "MAX_BLOBS_PER_BLOCK": 21,
-          }),
+        }),
     )
     </spec>
 
