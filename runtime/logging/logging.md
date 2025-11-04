@@ -27,7 +27,6 @@ Any package not mentioned will take the verbosity of the provided `--verbosity` 
 
 This flag has nothing to do with visibility.
 
-
 ### Prerequisite
 We need to define a `doc.go` file for every package that we care about<sup>1</sup>.
 The file should include a declaration of the `log` variable with a field `package` set to 
