@@ -12,7 +12,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
@@ -84,8 +83,7 @@ func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *e
 // In this case, the function returns an error.
 func (s *Service) FindAndDialPeersWithSubnets(
 	ctx context.Context,
-	topicFormat string,
-	digest [fieldparams.VersionLength]byte,
+	fullTopicForSubnet func(uint64) string,
 	minimumPeersPerSubnet int,
 	subnets map[uint64]bool,
 ) error {
@@ -103,7 +101,7 @@ func (s *Service) FindAndDialPeersWithSubnets(
 		maxConcurrentDials = flags.Get().MaxConcurrentDials
 	}
 
-	defectiveSubnets := s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
+	defectiveSubnets := s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
 	for len(defectiveSubnets) > 0 {
 		// Stop the search/dialing loop if the context is canceled.
 		if err := ctx.Err(); err != nil {
@@ -114,7 +112,7 @@ func (s *Service) FindAndDialPeersWithSubnets(
 			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
 			defer cancel()
 
-			peersToDial, err := s.findPeersWithSubnets(ctx, topicFormat, digest, minimumPeersPerSubnet, defectiveSubnets)
+			peersToDial, err := s.findPeersWithSubnets(ctx, fullTopicForSubnet, minimumPeersPerSubnet, defectiveSubnets)
 			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 				return nil, errors.Wrap(err, "find peers with subnets")
 			}
@@ -129,7 +127,7 @@ func (s *Service) FindAndDialPeersWithSubnets(
 		// Dial new peers in batches.
 		s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
 
-		defectiveSubnets = s.defectiveSubnets(topicFormat, digest, minimumPeersPerSubnet, subnets)
+		defectiveSubnets = s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
 	}
 
 	return nil
@@ -158,8 +156,7 @@ func updateDefectiveSubnets(
 // It returns new peers found during the search.
 func (s *Service) findPeersWithSubnets(
 	ctx context.Context,
-	topicFormat string,
-	digest [fieldparams.VersionLength]byte,
+	fullTopicForSubnet func(uint64) string,
 	minimumPeersPerSubnet int,
 	defectiveSubnetsOrigin map[uint64]int,
 ) ([]*enode.Node, error) {
@@ -181,7 +178,13 @@ func (s *Service) findPeersWithSubnets(
 	}()
 
 	// Retrieve the filter function that will be used to filter nodes based on the defective subnets.
-	filter, err := s.nodeFilter(topicFormat, defectiveSubnets)
+	// Use any subnet's full topic to infer the family type from the topic string.
+	var sampleTopic string
+	for k := range defectiveSubnets {
+		sampleTopic = fullTopicForSubnet(k)
+		break
+	}
+	filter, err := s.nodeFilter(sampleTopic, defectiveSubnets)
 	if err != nil {
 		return nil, errors.Wrap(err, "node filter")
 	}
@@ -225,8 +228,8 @@ func (s *Service) findPeersWithSubnets(
 		nodeSubnets, err := filter(node)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
-				"nodeID":      node.ID(),
-				"topicFormat": topicFormat,
+				"nodeID": node.ID(),
+				"topic":  sampleTopic,
 			}).Debug("Could not get needed subnets from peer")
 
 			continue
@@ -241,7 +244,7 @@ func (s *Service) findPeersWithSubnets(
 		nodeByNodeID[node.ID()] = node
 
 		updateDefectiveSubnets(nodeSubnets, defectiveSubnets)
-		filter, err = s.nodeFilter(topicFormat, defectiveSubnets)
+		filter, err = s.nodeFilter(sampleTopic, defectiveSubnets)
 		if err != nil {
 			return nil, errors.Wrap(err, "node filter")
 		}
@@ -258,14 +261,13 @@ func (s *Service) findPeersWithSubnets(
 
 // defectiveSubnets returns a map of subnets that have fewer than the minimum peer count.
 func (s *Service) defectiveSubnets(
-	topicFormat string,
-	digest [fieldparams.VersionLength]byte,
+	fullTopicForSubnet func(uint64) string,
 	minimumPeersPerSubnet int,
 	subnets map[uint64]bool,
 ) map[uint64]int {
 	missingCountPerSubnet := make(map[uint64]int, len(subnets))
 	for subnet := range subnets {
-		topic := fmt.Sprintf(topicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
+		topic := fullTopicForSubnet(subnet)
 		peers := s.pubsub.ListPeers(topic)
 		peerCount := len(peers)
 		if peerCount < minimumPeersPerSubnet {

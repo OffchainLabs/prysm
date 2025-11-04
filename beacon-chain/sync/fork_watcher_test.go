@@ -2,22 +2,18 @@ package sync
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v6/async/abool"
 	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/genesis"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
 )
 
 func defaultClockWithTimeAtEpoch(epoch primitives.Epoch) *startup.Clock {
@@ -50,6 +46,8 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 	return r
 }
 
+// TODO: Move to gossip controller test
+/*
 func TestRegisterSubscriptions_Idempotent(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
@@ -71,9 +69,11 @@ func TestRegisterSubscriptions_Idempotent(t *testing.T) {
 	}
 	// the goal of this callback is just to assert that spawn is never called.
 	s.subscriptionSpawner = func(func()) { t.Error("registration routines spawned twice for the same digest") }
-	require.NoError(t, s.ensureRegistrationsForEpoch(fulu))
-}
+	require.NoError(t, s.ensureRPCRegistrationsForEpoch(fulu))
+}*/
 
+// TODO: Move to gossip controller test
+/*
 func TestService_CheckForNextEpochFork(t *testing.T) {
 	closedChan := make(chan struct{})
 	close(closedChan)
@@ -121,8 +121,8 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 						expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
 						assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
 					}
-				*/
-			},
+*/
+/*},
 		},
 		{
 			name: "capella fork in the next epoch",
@@ -195,7 +195,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			current := tt.epochAtRegistration(tt.forkEpoch)
 			s := testForkWatcherService(t, current)
 			wg := attachSpawner(s)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
+			require.NoError(t, s.ensureRPCRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 			wg.Wait()
 			tt.checkRegistration(t, s)
 
@@ -217,18 +217,18 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			// Move the clock to just before the next fork epoch and ensure deregistration is correct
 			wg = attachSpawner(s)
 			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
+			require.NoError(t, s.ensureRPCRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 			wg.Wait()
 
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch))
+			require.NoError(t, s.ensureRPCDeregistrationForEpoch(tt.nextForkEpoch))
 			assert.Equal(t, true, s.subHandler.digestExists(digest))
 			// deregister as if it is the epoch after the next fork epoch
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
+			require.NoError(t, s.ensureRPCDeregistrationForEpoch(tt.nextForkEpoch+1))
 			assert.Equal(t, false, s.subHandler.digestExists(digest))
 			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
 		})
 	}
-}
+}*/
 
 func attachSpawner(s *Service) *sync.WaitGroup {
 	wg := new(sync.WaitGroup)

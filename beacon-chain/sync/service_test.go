@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
@@ -67,8 +69,9 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 		chainStarted: abool.New(),
 		clockWaiter:  gs,
 	}
+	r.gossipsubController = NewGossipsubController(context.Background(), &r)
 
-	topic := "/eth2/%x/beacon_block"
+	topicFmt := "/eth2/%x/beacon_block"
 	go r.startDiscoveryAndSubscriptions()
 	time.Sleep(100 * time.Millisecond)
 
@@ -82,7 +85,10 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 	msg := util.NewBeaconBlock()
 	msg.Block.ParentRoot = util.Random32Bytes(t)
 	msg.Signature = sk.Sign([]byte("data")).Marshal()
-	p2p.ReceivePubSub(topic, msg)
+	// Build full topic using current fork digest
+	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
+	fullTopic := fmt.Sprintf(topicFmt, nse.ForkDigest) + p2p.Encoding().ProtocolSuffix()
+	p2p.ReceivePubSub(fullTopic, msg)
 	// wait for chainstart to be sent
 	time.Sleep(400 * time.Millisecond)
 	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
@@ -137,6 +143,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
+	r.gossipsubController = NewGossipsubController(context.Background(), &r)
 	r.initCaches()
 
 	var vr [32]byte
@@ -169,14 +176,16 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 	// Save block into DB so that validateBeaconBlockPubSub() process gets short cut.
 	util.SaveBlock(t, ctx, r.cfg.beaconDB, msg)
 
-	topic := "/eth2/%x/beacon_block"
-	p2p.ReceivePubSub(topic, msg)
+	topicFmt := "/eth2/%x/beacon_block"
+	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
+	fullTopic := fmt.Sprintf(topicFmt, nse.ForkDigest) + p2p.Encoding().ProtocolSuffix()
+	p2p.ReceivePubSub(fullTopic, msg)
 	assert.Equal(t, 0, len(blockChan), "block was received by sync service despite not being fully synced")
 
 	close(r.initialSyncComplete)
 	<-syncCompleteCh
 
-	p2p.ReceivePubSub(topic, msg)
+	p2p.ReceivePubSub(fullTopic, msg)
 
 	select {
 	case <-blockChan:
@@ -206,6 +215,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
+	r.gossipsubController = NewGossipsubController(context.Background(), &r)
 	markInitSyncComplete(t, &r)
 
 	go r.startDiscoveryAndSubscriptions()
@@ -265,6 +275,7 @@ func TestService_Stop_SendsGoodbyeMessages(t *testing.T) {
 		cancel:      cancel,
 		rateLimiter: newRateLimiter(p1),
 	}
+	r.gossipsubController = NewGossipsubController(ctx, r)
 
 	// Initialize context map for RPC
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)
@@ -343,6 +354,7 @@ func TestService_Stop_TimeoutHandling(t *testing.T) {
 		cancel:      cancel,
 		rateLimiter: newRateLimiter(p1),
 	}
+	r.gossipsubController = NewGossipsubController(ctx, r)
 
 	// Initialize context map for RPC
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)
@@ -404,6 +416,7 @@ func TestService_Stop_ConcurrentGoodbyeMessages(t *testing.T) {
 		cancel:      cancel,
 		rateLimiter: newRateLimiter(p1),
 	}
+	r.gossipsubController = NewGossipsubController(ctx, r)
 
 	// Initialize context map for RPC
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)

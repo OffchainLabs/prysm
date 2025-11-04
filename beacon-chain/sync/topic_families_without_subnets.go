@@ -36,7 +36,7 @@ func (b *BlockTopicFamily) GetFullTopicString() string {
 }
 
 func (b *BlockTopicFamily) Subscribe() {
-	b.syncService.subscribe(b)
+	b.syncService.subscribe(b.GetFullTopicString(), b.Validator(), b.Handler())
 }
 
 func (b *BlockTopicFamily) Unsubscribe() {
@@ -72,7 +72,7 @@ func (a *AggregateAndProofTopicFamily) GetFullTopicString() string {
 }
 
 func (a *AggregateAndProofTopicFamily) Subscribe() {
-	a.syncService.subscribe(a)
+	a.syncService.subscribe(a.GetFullTopicString(), a.Validator(), a.Handler())
 }
 
 func (a *AggregateAndProofTopicFamily) Unsubscribe() {
@@ -108,7 +108,7 @@ func (v *VoluntaryExitTopicFamily) GetFullTopicString() string {
 }
 
 func (v *VoluntaryExitTopicFamily) Subscribe() {
-	v.syncService.subscribe(v)
+	v.syncService.subscribe(v.GetFullTopicString(), v.Validator(), v.Handler())
 }
 
 func (v *VoluntaryExitTopicFamily) Unsubscribe() {
@@ -144,7 +144,7 @@ func (p *ProposerSlashingTopicFamily) GetFullTopicString() string {
 }
 
 func (p *ProposerSlashingTopicFamily) Subscribe() {
-	p.syncService.subscribe(p)
+	p.syncService.subscribe(p.GetFullTopicString(), p.Validator(), p.Handler())
 }
 
 func (p *ProposerSlashingTopicFamily) Unsubscribe() {
@@ -181,7 +181,7 @@ func (a *AttesterSlashingTopicFamily) GetFullTopicString() string {
 
 // TODO: Do we really need to spawn go-routines here ?
 func (a *AttesterSlashingTopicFamily) Subscribe() {
-	a.syncService.subscribe(a)
+	a.syncService.subscribe(a.GetFullTopicString(), a.Validator(), a.Handler())
 }
 
 func (a *AttesterSlashingTopicFamily) Unsubscribe() {
@@ -215,7 +215,7 @@ func (sc *SyncContributionAndProofTopicFamily) GetFullTopicString() string {
 }
 
 func (sc *SyncContributionAndProofTopicFamily) Subscribe() {
-	sc.syncService.subscribe(sc)
+	sc.syncService.subscribe(sc.GetFullTopicString(), sc.Validator(), sc.Handler())
 }
 
 func (sc *SyncContributionAndProofTopicFamily) Unsubscribe() {
@@ -251,7 +251,7 @@ func (l *LightClientOptimisticUpdateTopicFamily) GetFullTopicString() string {
 }
 
 func (l *LightClientOptimisticUpdateTopicFamily) Subscribe() {
-	l.syncService.subscribe(l)
+	l.syncService.subscribe(l.GetFullTopicString(), l.Validator(), l.Handler())
 }
 
 func (l *LightClientOptimisticUpdateTopicFamily) Unsubscribe() {
@@ -287,7 +287,7 @@ func (l *LightClientFinalityUpdateTopicFamily) GetFullTopicString() string {
 }
 
 func (l *LightClientFinalityUpdateTopicFamily) Subscribe() {
-	l.syncService.subscribe(l)
+	l.syncService.subscribe(l.GetFullTopicString(), l.Validator(), l.Handler())
 }
 func (l *LightClientFinalityUpdateTopicFamily) Unsubscribe() {
 	l.syncService.unSubscribeFromTopic(l.GetFullTopicString())
@@ -322,7 +322,7 @@ func (b *BlsToExecutionChangeTopicFamily) GetFullTopicString() string {
 }
 
 func (b *BlsToExecutionChangeTopicFamily) Subscribe() {
-	b.syncService.subscribe(b)
+	b.syncService.subscribe(b.GetFullTopicString(), b.Validator(), b.Handler())
 }
 
 func (b *BlsToExecutionChangeTopicFamily) Unsubscribe() {

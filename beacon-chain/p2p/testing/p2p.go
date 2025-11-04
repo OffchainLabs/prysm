@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -183,11 +182,7 @@ func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	if _, err := p.Encoding().EncodeGossip(buf, castedMsg); err != nil {
 		p.t.Fatalf("Failed to encode message: %v", err)
 	}
-	digest, err := p.ForkDigest()
-	if err != nil {
-		p.t.Fatal(err)
-	}
-	topicHandle, err := ps.Join(fmt.Sprintf(topic, digest) + p.Encoding().ProtocolSuffix())
+	topicHandle, err := ps.Join(topic)
 	if err != nil {
 		p.t.Fatal(err)
 	}
@@ -420,7 +415,7 @@ func (p *TestP2P) Peers() *peers.Status {
 }
 
 // FindAndDialPeersWithSubnets mocks the p2p func.
-func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
+func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
 	return nil
 }
 

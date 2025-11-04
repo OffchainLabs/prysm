@@ -168,16 +168,19 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	}()
 
 	subnets := map[uint64]bool{1: true, 2: true, 3: true}
-	defectiveSubnets := service.defectiveSubnets(AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	builder := func(idx uint64) string {
+		return fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, idx) + service.Encoding().ProtocolSuffix()
+	}
+	defectiveSubnets := service.defectiveSubnets(builder, minimumPeersPerSubnet, subnets)
 	require.Equal(t, subnetCount, len(defectiveSubnets))
 
 	ctxWithTimeOut, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	err = service.FindAndDialPeersWithSubnets(ctxWithTimeOut, AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	err = service.FindAndDialPeersWithSubnets(ctxWithTimeOut, builder, minimumPeersPerSubnet, subnets)
 	require.NoError(t, err)
 
-	defectiveSubnets = service.defectiveSubnets(AttestationSubnetTopicFormat, bootNodeForkDigest, minimumPeersPerSubnet, subnets)
+	defectiveSubnets = service.defectiveSubnets(builder, minimumPeersPerSubnet, subnets)
 	require.Equal(t, 0, len(defectiveSubnets))
 }
 
@@ -762,10 +765,12 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
 
+			builder := func(idx uint64) string {
+				return fmt.Sprintf(AttestationSubnetTopicFormat, digest, idx) + s.Encoding().ProtocolSuffix()
+			}
 			result, err := s.findPeersWithSubnets(
 				ctxWithTimeout,
-				AttestationSubnetTopicFormat,
-				digest,
+				builder,
 				1,
 				tt.defectiveSubnets,
 			)
@@ -982,10 +987,12 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
 
+			builder := func(idx uint64) string {
+				return fmt.Sprintf(AttestationSubnetTopicFormat, digest, idx) + s.Encoding().ProtocolSuffix()
+			}
 			result, err := s.findPeersWithSubnets(
 				ctxWithTimeout,
-				AttestationSubnetTopicFormat,
-				digest,
+				builder,
 				1,
 				tt.defectiveSubnets,
 			)
@@ -1105,10 +1112,12 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
+	builder := func(idx uint64) string {
+		return fmt.Sprintf(AttestationSubnetTopicFormat, digest, idx) + service.Encoding().ProtocolSuffix()
+	}
 	result, err := service.findPeersWithSubnets(
 		ctxWithTimeout,
-		AttestationSubnetTopicFormat,
-		digest,
+		builder,
 		1,
 		map[uint64]int{1: 2}, // Need 2 peers for subnet 1
 	)

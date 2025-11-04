@@ -44,6 +44,10 @@ func NewGossipsubController(ctx context.Context, s *Service) *GossipsubControlle
 
 func (g *GossipsubController) Start() {
 	currentEpoch := g.syncService.cfg.clock.CurrentEpoch()
+	if err := g.syncService.waitForInitialSync(g.ctx); err != nil {
+		log.WithError(err).Debug("Context cancelled while waiting for initial sync, not starting GossipsubController")
+		return
+	}
 
 	g.updateActiveTopicFamilies(currentEpoch)
 	g.wg.Go(func() { g.controlLoop() })

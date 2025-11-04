@@ -38,53 +38,27 @@ const pubsubMessageTimeout = 30 * time.Second
 
 var errInvalidDigest = errors.New("invalid digest")
 
-// subscribeParameters holds the parameters that are needed to construct a set of subscriptions topics for a given
-// set of gossipsub subnets.
-type subscribeParameters struct {
-	topicFormat string
-	validate    wrappedVal
-	handle      subHandler
-	nse         params.NetworkScheduleEntry
-	// getSubnetsToJoin is a function that returns all subnets the node should join.
-	getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool
-	// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
-	// but for which no subscriptions are needed.
-	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
-}
-
-// shortTopic is a less verbose version of topic strings used for logging.
-func (p subscribeParameters) shortTopic() string {
-	short := p.topicFormat
-	fmtLen := len(short)
-	if fmtLen >= 3 && short[fmtLen-3:] == "_%d" {
-		short = short[:fmtLen-3]
-	}
-	return fmt.Sprintf(short, p.nse.ForkDigest)
-}
-
-func (p subscribeParameters) logFields() logrus.Fields {
+func familyLogFields(tf GossipsubTopicFamilyWithDynamicSubnets) logrus.Fields {
+	nse := tf.NetworkScheduleEntry()
 	return logrus.Fields{
-		"topic": p.shortTopic(),
+		"topicFamily": fmt.Sprintf("%T", tf),
+		"digest":      nse.ForkDigest,
+		"forkEpoch":   nse.Epoch,
 	}
 }
 
-// fullTopic is the fully qualified topic string, given to gossipsub.
-func (p subscribeParameters) fullTopic(subnet uint64, suffix string) string {
-	return fmt.Sprintf(p.topicFormat, p.nse.ForkDigest, subnet) + suffix
-}
-
-// subnetTracker keeps track of which subnets we are subscribed to, out of the set of
-// possible subnets described by a `subscribeParameters`.
+// subnetTracker keeps track of which subnets we are subscribed to for a given
+// dynamic topic family (attestations, sync-committee, data-column, etc.).
 type subnetTracker struct {
-	subscribeParameters
+	family        GossipsubTopicFamilyWithDynamicSubnets
 	mu            sync.RWMutex
 	subscriptions map[uint64]*pubsub.Subscription
 }
 
-func newSubnetTracker(p subscribeParameters) *subnetTracker {
+func newSubnetTracker(tf GossipsubTopicFamilyWithDynamicSubnets) *subnetTracker {
 	return &subnetTracker{
-		subscribeParameters: p,
-		subscriptions:       make(map[uint64]*pubsub.Subscription),
+		family:        tf,
+		subscriptions: make(map[uint64]*pubsub.Subscription),
 	}
 }
 
@@ -181,50 +155,12 @@ func (s *Service) activeSyncSubnetIndices(currentSlot primitives.Slot) map[uint6
 	return mapFromSlice(subscriptions)
 }
 
-// spawn allows the Service to use a custom function for launching goroutines.
-// This is useful in tests where we can set spawner to a sync.WaitGroup and
-// wait for the spawned goroutines to finish.
-func (s *Service) spawn(f func()) {
-	if s.subscriptionSpawner != nil {
-		s.subscriptionSpawner(f)
-	} else {
-		go f()
-	}
-}
-
 func (s *Service) subscriptionRequestExpired(nse params.NetworkScheduleEntry) bool {
 	next := params.NextNetworkScheduleEntry(nse.Epoch)
 	return next.Epoch != nse.Epoch && s.cfg.clock.CurrentEpoch() > next.Epoch
 }
 
-func (s *Service) subscribeLogFields(topic string, nse params.NetworkScheduleEntry) logrus.Fields {
-	return logrus.Fields{
-		"topic":        topic,
-		"digest":       nse.ForkDigest,
-		"forkEpoch":    nse.Epoch,
-		"currentEpoch": s.cfg.clock.CurrentEpoch(),
-	}
-}
-
-// subscribe to a given topic with a given validator and subscription handler.
-// The base protobuf message is used to initialize new messages for decoding.
-func (s *Service) subscribe(tf GossipsubTopicFamilyWithoutDynamicSubnets) {
-	topic := tf.GetFullTopicString()
-	nse := tf.NetworkScheduleEntry()
-	if err := s.waitForInitialSync(s.ctx); err != nil {
-		log.WithFields(s.subscribeLogFields(topic, nse)).WithError(err).Debug("Context cancelled while waiting for initial sync, not subscribing to topic")
-		return
-	}
-	// Check if this subscribe request is still valid - we may have crossed another fork epoch while waiting for initial sync.
-	if s.subscriptionRequestExpired(nse) {
-		// If we are already past the next fork epoch, do not subscribe to this topic.
-		log.WithFields(s.subscribeLogFields(topic, nse)).Debug("Not subscribing to topic as we are already past the next fork epoch")
-		return
-	}
-	s.subscribeWithBase(topic, tf.Validator(), tf.Handler())
-}
-
-func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle subHandler) *pubsub.Subscription {
+func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandler) *pubsub.Subscription {
 	log := log.WithField("topic", topic)
 
 	// Do not resubscribe already seen subscriptions.
@@ -387,36 +323,38 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool) {
 	for _, subnet := range t.unwanted(wantedSubnets) {
 		t.cancelSubscription(subnet)
-		s.unSubscribeFromTopic(t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix()))
+		s.unSubscribeFromTopic(t.family.GetFullTopicString(subnet))
 	}
 }
 
-// subscribeWithParameters subscribes to a list of subnets.
-func (s *Service) subscribeWithParameters(p subscribeParameters) {
+// subscribeToDynamicSubnetFamily subscribes to a list of subnets.
+func (s *Service) subscribeToDynamicSubnetFamily(tf GossipsubTopicFamilyWithDynamicSubnets) *subnetTracker {
+	tracker := newSubnetTracker(tf)
+	go s.subscribeToSubnets(tf, tracker)
+	return tracker
+}
+
+func (s *Service) subscribeToSubnets(tf GossipsubTopicFamilyWithDynamicSubnets, tracker *subnetTracker) {
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
-	tracker := newSubnetTracker(p)
 	go s.ensurePeers(ctx, tracker)
-	go s.logMinimumPeersPerSubnet(ctx, p)
+	go s.logMinimumPeersPerSubnet(ctx, tf)
 
-	if err := s.waitForInitialSync(ctx); err != nil {
-		log.WithFields(p.logFields()).WithError(err).Debug("Could not subscribe to subnets as initial sync failed")
-		return
-	}
 	s.trySubscribeSubnets(tracker)
+
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 	for {
 		select {
 		case <-slotTicker.C():
 			// Check if this subscribe request is still valid - we may have crossed another fork epoch while waiting for initial sync.
-			if s.subscriptionRequestExpired(p.nse) {
+			if s.subscriptionRequestExpired(tf.NetworkScheduleEntry()) {
 				// If we are already past the next fork epoch, do not subscribe to this topic.
 				log.WithFields(logrus.Fields{
-					"topic":        p.shortTopic(),
-					"digest":       p.nse.ForkDigest,
-					"epoch":        p.nse.Epoch,
+					"topicFamily":  fmt.Sprintf("%T", tf),
+					"digest":       tf.NetworkScheduleEntry().ForkDigest,
+					"epoch":        tf.NetworkScheduleEntry().Epoch,
 					"currentEpoch": s.cfg.clock.CurrentEpoch(),
 				}).Debug("Exiting topic subnet subscription loop")
 				return
@@ -431,12 +369,11 @@ func (s *Service) subscribeWithParameters(p subscribeParameters) {
 // trySubscribeSubnets attempts to subscribe to any missing subnets that we should be subscribed to.
 // Only if initial sync is complete.
 func (s *Service) trySubscribeSubnets(t *subnetTracker) {
-	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
+	subnetsToJoin := t.family.GetSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
 	for _, subnet := range t.missing(subnetsToJoin) {
-		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
-		topic := t.fullTopic(subnet, "")
-		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
+		topic := t.family.GetFullTopicString(subnet)
+		t.track(subnet, s.subscribe(topic, t.family.Validator(), t.family.Handler()))
 	}
 }
 
@@ -459,17 +396,18 @@ func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
 func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker) {
 	timeout := (time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) - 100*time.Millisecond
 	minPeers := flags.Get().MinimumPeersPerSubnet
-	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.getSubnetsToJoin, tracker.getSubnetsRequiringPeers)
+	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.family)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, tracker.topicFormat, tracker.nse.ForkDigest, minPeers, neededSubnets)
+	builder := func(idx uint64) string { return tracker.family.GetFullTopicString(idx) }
+	err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, builder, minPeers, neededSubnets)
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-		log.WithFields(tracker.logFields()).WithError(err).Debug("Could not find peers with subnets")
+		log.WithFields(familyLogFields(tracker.family)).WithError(err).Debug("Could not find peers with subnets")
 	}
 }
 
-func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParameters) {
-	logFields := p.logFields()
+func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, tf GossipsubTopicFamilyWithDynamicSubnets) {
+	logFields := familyLogFields(tf)
 	minimumPeersPerSubnet := flags.Get().MinimumPeersPerSubnet
 	// Warn the user if we are not subscribed to enough peers in the subnets.
 	log := log.WithField("minimum", minimumPeersPerSubnet)
@@ -480,12 +418,12 @@ func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParam
 		select {
 		case <-logTicker.C:
 			currentSlot := s.cfg.clock.CurrentSlot()
-			subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, p.getSubnetsToJoin, p.getSubnetsRequiringPeers)
+			subnetsToFindPeersIndex := computeAllNeededSubnets(currentSlot, tf)
 
 			isSubnetWithMissingPeers := false
 			// Find new peers for wanted subnets if needed.
 			for index := range subnetsToFindPeersIndex {
-				topic := fmt.Sprintf(p.topicFormat, p.nse.ForkDigest, index)
+				topic := tf.GetFullTopicString(index)
 
 				// Check if we have enough peers in the subnet. Skip if we do.
 				if count := s.connectedPeersCount(topic); count < minimumPeersPerSubnet {
@@ -521,9 +459,8 @@ func (s *Service) unSubscribeFromTopic(topic string) {
 }
 
 // connectedPeersCount counts how many peer for a given topic are connected to the node.
-func (s *Service) connectedPeersCount(subnetTopic string) int {
-	topic := subnetTopic + s.cfg.p2p.Encoding().ProtocolSuffix()
-	peersWithSubnet := s.cfg.p2p.PubSub().ListPeers(topic)
+func (s *Service) connectedPeersCount(fullTopic string) int {
+	peersWithSubnet := s.cfg.p2p.PubSub().ListPeers(fullTopic)
 	return len(peersWithSubnet)
 }
 
@@ -673,17 +610,13 @@ func isDigestValid(digest [4]byte, clock *startup.Clock) (bool, error) {
 // and the subnets for which we want to find peers.
 func computeAllNeededSubnets(
 	currentSlot primitives.Slot,
-	getSubnetsToJoin func(currentSlot primitives.Slot) map[uint64]bool,
-	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool,
+	dtf GossipsubTopicFamilyWithDynamicSubnets,
 ) map[uint64]bool {
 	// Retrieve the subnets we want to join.
-	subnetsToJoin := getSubnetsToJoin(currentSlot)
+	subnetsToJoin := dtf.GetSubnetsToJoin(currentSlot)
 
 	// Retrieve the subnets we want to find peers into.
-	subnetsRequiringPeers := make(map[uint64]bool)
-	if getSubnetsRequiringPeers != nil {
-		subnetsRequiringPeers = getSubnetsRequiringPeers(currentSlot)
-	}
+	subnetsRequiringPeers := dtf.GetSubnetsForBroadcast(currentSlot)
 
 	// Combine the two maps to get all needed subnets.
 	neededSubnets := make(map[uint64]bool, len(subnetsToJoin)+len(subnetsRequiringPeers))

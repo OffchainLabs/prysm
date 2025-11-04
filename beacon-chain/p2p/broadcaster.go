@@ -131,7 +131,8 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 			s.subnetLocker(subnet).Lock()
 			defer s.subnetLocker(subnet).Unlock()
 
-			if err := s.FindAndDialPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			builder := func(idx uint64) string { return attestationToTopic(idx, forkDigest) + s.Encoding().ProtocolSuffix() }
+			if err := s.FindAndDialPeersWithSubnets(ctx, builder, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -187,7 +188,8 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			if err := s.FindAndDialPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			builder := func(idx uint64) string { return syncCommitteeToTopic(idx, forkDigest) + s.Encoding().ProtocolSuffix() }
+			if err := s.FindAndDialPeersWithSubnets(ctx, builder, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -252,7 +254,8 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-			if err := s.FindAndDialPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			builder := func(idx uint64) string { return blobSubnetToTopic(idx, forkDigest) + s.Encoding().ProtocolSuffix() }
+			if err := s.FindAndDialPeersWithSubnets(ctx, builder, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -392,7 +395,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			wrappedSubIdx := subnet + dataColumnSubnetVal
 
 			// Find peers if needed.
-			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+			builder := func(idx uint64) string {
+				return dataColumnSubnetToTopic(idx, forkDigest) + s.Encoding().ProtocolSuffix()
+			}
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, builder, subnet); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot find peers if needed")
 				return
@@ -487,8 +493,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 func (s *Service) findPeersIfNeeded(
 	ctx context.Context,
 	wrappedSubIdx uint64,
-	topicFormat string,
-	forkDigest [fieldparams.VersionLength]byte,
+	fullTopicForSubnet func(uint64) string,
 	subnet uint64,
 ) error {
 	// Sending a data column sidecar to only one peer is not ideal,
@@ -497,7 +502,7 @@ func (s *Service) findPeersIfNeeded(
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
 
 	// No peers found, attempt to find peers with this subnet.
-	if err := s.FindAndDialPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+	if err := s.FindAndDialPeersWithSubnets(ctx, fullTopicForSubnet, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
 		return errors.Wrap(err, "find peers with subnet")
 	}
 

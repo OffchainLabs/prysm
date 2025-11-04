@@ -5,7 +5,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -35,7 +34,6 @@ type (
 		PeersProvider
 		MetadataProvider
 		CustodyManager
-		SubnetFilter
 	}
 
 	// Accessor provides access to the Broadcaster, PeerManager and CustodyManager interfaces.
@@ -102,7 +100,7 @@ type (
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
-		FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error
+		FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
 	}
 
@@ -129,12 +127,5 @@ type (
 		UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 		UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error
 		CustodyGroupCountFromPeer(peer.ID) uint64
-	}
-
-	// SubnetFilter provides methods for extracting subnet information from a peer's ENR records.
-	SubnetFilter interface {
-		AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error)
-		SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error)
-		DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error)
 	}
 )

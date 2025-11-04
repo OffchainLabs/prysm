@@ -39,7 +39,7 @@ func (b *BlobTopicFamily) GetFullTopicString() string {
 }
 
 func (b *BlobTopicFamily) Subscribe() {
-	b.syncService.subscribe(b)
+	b.syncService.subscribe(b.GetFullTopicString(), b.Validator(), b.Handler())
 }
 
 func (b *BlobTopicFamily) Unsubscribe() {
