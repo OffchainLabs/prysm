@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"golang.org/x/sync/singleflight"
 )
 
 // Forkchoicer represents the forkchoice methods that the verifiers need.
@@ -41,6 +42,7 @@ type sharedResources struct {
 	pc    proposerCache
 	sr    StateByRooter
 	ic    *inclusionProofCache
+	sg    singleflight.Group
 }
 
 // Initializer is used to create different Verifiers.

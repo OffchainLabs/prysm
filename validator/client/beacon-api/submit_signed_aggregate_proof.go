@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -54,7 +55,9 @@ func (c *beaconApiValidatorClient) submitSignedAggregateSelectionProofElectra(ct
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal SignedAggregateAttestationAndProofElectra")
 	}
-	headers := map[string]string{"Eth-Consensus-Version": version.String(in.SignedAggregateAndProof.Version())}
+	dataSlot := in.SignedAggregateAndProof.Message.Aggregate.Data.Slot
+	consensusVersion := version.String(slots.ToForkVersion(dataSlot))
+	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
 	if err = c.jsonRestHandler.Post(ctx, "/eth/v2/validator/aggregate_and_proofs", headers, bytes.NewBuffer(body), nil); err != nil {
 		return nil, err
 	}

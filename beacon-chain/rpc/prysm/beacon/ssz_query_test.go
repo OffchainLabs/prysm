@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/api"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
@@ -24,7 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestQueryBeaconState(t *testing.T) {

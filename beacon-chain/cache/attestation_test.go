@@ -3,6 +3,7 @@ package cache
 import (
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls/blst"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
@@ -10,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestAdd(t *testing.T) {
