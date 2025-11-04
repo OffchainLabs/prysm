@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
@@ -24,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pquic "github.com/libp2p/go-libp2p/p2p/transport/quic"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestMetaDataRPCHandler_ReceivesMetadata(t *testing.T) {

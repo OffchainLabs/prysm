@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	aggtesting "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/testing"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func BenchmarkProposerAtts_sortByProfitability(b *testing.B) {

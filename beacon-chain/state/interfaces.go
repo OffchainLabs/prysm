@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -15,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // BeaconState has read and write access to beacon state methods.

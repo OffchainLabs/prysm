@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -22,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func ezDecode(t *testing.T, s string) []byte {

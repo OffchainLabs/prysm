@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/config/features"
@@ -22,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 
