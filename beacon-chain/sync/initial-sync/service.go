@@ -73,6 +73,7 @@ type Service struct {
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	ctxMap                 sync.ContextByteVersions
 	genesisTime            time.Time
+	toggler                *sync.ServiceToggler
 }
 
 // Option is a functional option for the initial-sync Service.
@@ -91,6 +92,14 @@ func WithVerifierWaiter(viw *verification.InitializerWaiter) Option {
 func WithSyncChecker(checker *SyncChecker) Option {
 	return func(service *Service) {
 		checker.Svc = service
+	}
+}
+
+// WithServiceToggle sets the ServiceToggler, which is used to coordinate
+// with backfill, so that only one service runs at a time.
+func WithServiceToggle(toggler *sync.ServiceToggler) Option {
+	return func(s *Service) {
+		s.toggler = toggler
 	}
 }
 
@@ -160,22 +169,25 @@ func (s *Service) Start() {
 		log.Debug("Exiting Initial Sync Service")
 		return
 	}
+
+	if err := s.beginSync(); err != nil {
+		log.WithError(err).Error("Failed to get acquire sync toggle lock")
+		return
+	}
+	defer s.completeSync()
 	s.genesisTime = gt
 	// Exit entering round-robin sync if we require 0 peers to sync.
 	if flags.Get().MinimumSyncPeers == 0 {
-		s.markSynced()
 		log.WithField("genesisTime", s.genesisTime).Info("Due to number of peers required for sync being set at 0, entering regular sync immediately.")
 		return
 	}
 	if s.genesisTime.After(prysmTime.Now()) {
-		s.markSynced()
 		log.WithField("genesisTime", s.genesisTime).Info("Genesis time has not arrived - not syncing")
 		return
 	}
 	currentSlot := clock.CurrentSlot()
 	if slots.ToEpoch(currentSlot) == 0 {
 		log.WithField("genesisTime", s.genesisTime).Info("Chain started within the last epoch - not syncing")
-		s.markSynced()
 		return
 	}
 	s.chainStarted.Set()
@@ -184,7 +196,6 @@ func (s *Service) Start() {
 	// Are we already in sync, or close to it?
 	if slots.ToEpoch(s.cfg.Chain.HeadSlot()) == slots.ToEpoch(currentSlot) {
 		log.Info("Already synced to the current chain head")
-		s.markSynced()
 		return
 	}
 
@@ -205,7 +216,18 @@ func (s *Service) Start() {
 		panic(err) // lint:nopanic -- Unexpected error. This should probably be surfaced with a returned error.
 	}
 	log.WithField("slot", s.cfg.Chain.HeadSlot()).Info("Synced up to")
-	s.markSynced()
+}
+
+func (s *Service) beginSync() error {
+	s.synced.UnSet()
+	return s.toggler.Acquire(s.ctx, sync.ToggleGroupRangeSync)
+}
+
+// completeSync marks node as synced and notifies feed listeners.
+func (s *Service) completeSync() {
+	s.toggler.Release(sync.ToggleGroupRangeSync)
+	s.synced.Set()
+	close(s.cfg.InitialSyncComplete)
 }
 
 // fetchOriginSidecars fetches origin sidecars
@@ -290,8 +312,10 @@ func (s *Service) Resync() error {
 	}
 
 	// Set it to false since we are syncing again.
-	s.synced.UnSet()
-	defer func() { s.synced.Set() }() // Reset it at the end of the method.
+	if err := s.beginSync(); err != nil {
+		return errors.Wrap(err, "begin sync")
+	}
+	defer func() { s.completeSync() }() // Reset it at the end of the method.
 
 	_, err = s.waitForMinimumPeers()
 	if err != nil {
@@ -324,12 +348,6 @@ func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
 		}).Info("Waiting for enough suitable peers before syncing")
 		time.Sleep(handshakePollingInterval)
 	}
-}
-
-// markSynced marks node as synced and notifies feed listeners.
-func (s *Service) markSynced() {
-	s.synced.Set()
-	close(s.cfg.InitialSyncComplete)
 }
 
 func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2ptypes.BlobSidecarsByRootReq, error) {
