@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -579,5 +580,5 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 }
 
 func concatRootSlot(root [fieldparams.RootLength]byte, slot primitives.Slot) string {
-	return string(root[:]) + fmt.Sprintf("%d", slot)
+	return string(root[:]) + strconv.Itoa(int(slot))
 }
