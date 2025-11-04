@@ -92,7 +92,7 @@ func ExpandSingleEndpointIfFile(ctx *cli.Context, flag *cli.StringFlag) error {
 	case strings.HasPrefix(web3endpoint, "ws://"):
 	case strings.HasPrefix(web3endpoint, "wss://"):
 	default:
-		web3endpoint, err := file.ExpandPath(ctx.String(flag.Name))
+		web3endpoint, err := file.ExpandPath(web3endpoint)
 		if err != nil {
 			return errors.Wrapf(err, "could not expand path for %s", ctx.String(flag.Name))
 		}
