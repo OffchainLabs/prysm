@@ -41,7 +41,7 @@ func NewBuilder(t testing.TB, initialState state.BeaconState, initialBlock inter
 	getFork := func(targetEpoch primitives.Epoch) (*ethpb.Fork, error) {
 		return initialState.Fork(), nil
 	}
-	bvw := verification.NewInitializerWaiter(cw, fc, sg, verification.WithForkLookup(getFork))
+	bvw := verification.NewInitializerWaiter(cw, fc, sg, service, verification.WithForkLookup(getFork))
 	return &Builder{
 		service:  service,
 		execMock: execMock,

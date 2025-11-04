@@ -230,8 +230,19 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not start modules")
 	}
 
+	// Create a lazy head state provider that will fetch the blockchain service when needed.
+	// This is necessary because the blockchain service is registered after this initialization.
+	headStateGetter := func() (verification.HeadStateProvider, error) {
+		var chainService *blockchain.Service
+		if err := beacon.services.FetchService(&chainService); err != nil {
+			return nil, err
+		}
+		return chainService, nil
+	}
+	lazyHeadState := verification.NewLazyHeadStateProvider(headStateGetter)
+
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen)
+		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, lazyHeadState)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,

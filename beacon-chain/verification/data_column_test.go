@@ -1,7 +1,6 @@
 package verification
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -329,7 +327,7 @@ func TestValidProposerSignature(t *testing.T) {
 			svcbError:       nil,
 			vscbShouldError: false,
 			vscbError:       nil,
-			stateByRooter:   sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			stateByRooter:   sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
 			isError:         false,
 		},
 		{
@@ -347,7 +345,7 @@ func TestValidProposerSignature(t *testing.T) {
 			svcbError:       nil,
 			vscbShouldError: false,
 			vscbError:       errors.New("signature, not so good!"),
-			stateByRooter:   sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			stateByRooter:   sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
 			isError:         true,
 		},
 	}
@@ -377,8 +375,12 @@ func TestValidProposerSignature(t *testing.T) {
 
 			initializer := Initializer{
 				shared: &sharedResources{
-					sc: signatureCache,
-					sr: tc.stateByRooter,
+					sc:  signatureCache,
+					sr:  tc.stateByRooter,
+					hsp: &mockHeadStateProvider{},
+					fc: &mockForkchoicer{
+						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+					},
 				},
 			}
 
@@ -796,17 +798,6 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 	firstColumn := columns[0]
 
-	newColumns := GenerateTestDataColumns(t, parentRoot, 2*params.BeaconConfig().SlotsPerEpoch, blobCount)
-	firstNewColumn := newColumns[0]
-
-	validator := &ethpb.Validator{}
-
-	commonComputeProposerCB := func(_ context.Context, root [fieldparams.RootLength]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-		require.Equal(t, firstColumn.ParentRoot(), root)
-		require.Equal(t, firstColumn.Slot(), slot)
-		return firstColumn.ProposerIndex(), nil
-	}
-
 	testCases := []struct {
 		name          string
 		stateByRooter StateByRooter
@@ -838,66 +829,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ProposerCB: pcReturnsNotFound(),
 			},
 			columns: columns,
-			error:   "state by root",
-		},
-		{
-			name:          "Not cached, proposer matches",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB:        pcReturnsNotFound(),
-				ComputeProposerCB: commonComputeProposerCB,
-			},
-			columns: columns,
-		},
-		{
-			name:          "Not cached, proposer matches",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB:        pcReturnsNotFound(),
-				ComputeProposerCB: commonComputeProposerCB,
-			},
-			columns: columns,
-		},
-		{
-			name:          "Not cached, proposer matches for next epoch",
-			stateByRooter: sbrForValOverride(firstNewColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-					require.Equal(t, firstNewColumn.ParentRoot(), root)
-					require.Equal(t, firstNewColumn.Slot(), slot)
-					return firstColumn.ProposerIndex(), nil
-				},
-			},
-			columns: newColumns,
-		},
-		{
-			name:          "Not cached, proposer does not match",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-					require.Equal(t, firstColumn.ParentRoot(), root)
-					require.Equal(t, firstColumn.Slot(), slot)
-					return firstColumn.ProposerIndex() + 1, nil
-				},
-			},
-			columns: columns,
-			error:   errSidecarUnexpectedProposer.Error(),
-		},
-		{
-			name:          "Not cached, ComputeProposer fails",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-					require.Equal(t, firstColumn.ParentRoot(), root)
-					require.Equal(t, firstColumn.Slot(), slot)
-					return 0, errors.New("ComputeProposer failed")
-				},
-			},
-			columns: columns,
-			error:   "compute proposer",
+			error:   "verifying state",
 		},
 	}
 
@@ -905,8 +837,9 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			initializer := Initializer{
 				shared: &sharedResources{
-					sr: tc.stateByRooter,
-					pc: tc.proposerCache,
+					sr:  tc.stateByRooter,
+					pc:  tc.proposerCache,
+					hsp: &mockHeadStateProvider{},
 					fc: &mockForkchoicer{
 						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
 					},

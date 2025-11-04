@@ -174,7 +174,7 @@ func TestService_InitStartStop(t *testing.T) {
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
 			})
-			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
+			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
 			time.Sleep(500 * time.Millisecond)
 			assert.NotNil(t, s)
 			if tt.setGenesis != nil {
@@ -217,7 +217,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 			genesisChan:  make(chan time.Time),
 		}
-		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil)
+		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil, nil)
 		return s, cs
 	}
 
@@ -786,7 +786,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
