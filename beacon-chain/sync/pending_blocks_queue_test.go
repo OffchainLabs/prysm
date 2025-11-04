@@ -43,15 +43,16 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 	db := dbtest.SetupDB(t)
 
 	p1 := p2ptest.NewTestP2P(t)
+	mockChain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 0,
+		},
+	}
 	r := &Service{
 		cfg: &config{
 			p2p:      p1,
 			beaconDB: db,
-			chain: &mock.ChainService{
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 0,
-				},
-			},
+			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
@@ -64,6 +65,12 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
 	b0Root, err := b0.Block.HashTreeRoot()
 	require.NoError(t, err)
+
+	// Setup head state for blockVerifyingState logic
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	mockChain.Root = b0Root[:]
+	mockChain.State = st
 	b3 := util.NewBeaconBlock()
 	b3.Block.Slot = 3
 	b3.Block.ParentRoot = b0Root[:]
@@ -115,16 +122,17 @@ func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
 	db := dbtest.SetupDB(t)
 
 	p1 := p2ptest.NewTestP2P(t)
+	mockChain := &mock.ChainService{
+		Optimistic: true,
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 0,
+		},
+	}
 	r := &Service{
 		cfg: &config{
 			p2p:      p1,
 			beaconDB: db,
-			chain: &mock.ChainService{
-				Optimistic: true,
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 0,
-				},
-			},
+			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
@@ -137,6 +145,12 @@ func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
 	b0Root, err := b0.Block.HashTreeRoot()
 	require.NoError(t, err)
+
+	// Setup head state for blockVerifyingState logic
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	mockChain.Root = b0Root[:]
+	mockChain.State = st
 	b3 := util.NewBeaconBlock()
 	b3.Block.Slot = 3
 	b3.Block.ParentRoot = b0Root[:]
@@ -189,16 +203,17 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 
 	p1 := p2ptest.NewTestP2P(t)
 	fcs := doublylinkedtree.New()
+	mockChain := &mock.ChainService{
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 0,
+		},
+		ReceiveBlockMockErr: execution.ErrHTTPTimeout,
+	}
 	r := &Service{
 		cfg: &config{
 			p2p:      p1,
 			beaconDB: db,
-			chain: &mock.ChainService{
-				FinalizedCheckPoint: &ethpb.Checkpoint{
-					Epoch: 0,
-				},
-				ReceiveBlockMockErr: execution.ErrHTTPTimeout,
-			},
+			chain:    mockChain,
 			clock:    startup.NewClock(time.Unix(0, 0), [32]byte{}),
 			stateGen: stategen.New(db, fcs),
 		},
@@ -211,6 +226,12 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
 	b0Root, err := b0.Block.HashTreeRoot()
 	require.NoError(t, err)
+
+	// Setup head state for blockVerifyingState logic
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	mockChain.Root = b0Root[:]
+	mockChain.State = st
 	b3 := util.NewBeaconBlock()
 	b3.Block.Slot = 3
 	b3.Block.ParentRoot = b0Root[:]
