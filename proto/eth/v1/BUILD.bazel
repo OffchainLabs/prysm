@@ -76,7 +76,7 @@ go_proto_library(
         "//proto/engine/v1:go_default_library",
         "//proto/eth/ext:go_default_library",
         "@com_github_golang_protobuf//proto:go_default_library",
-        "@com_github_offchainlabs_go_bitfield//:go_default_library",  # keep
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",  # keep
         "@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
         "@io_bazel_rules_go//proto/wkt:timestamp_go_proto",
         "@org_golang_google_protobuf//types/descriptorpb:go_default_library",

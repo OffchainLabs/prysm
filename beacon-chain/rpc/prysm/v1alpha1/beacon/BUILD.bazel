@@ -108,7 +108,7 @@ go_test(
         "//testing/util:go_default_library",
         "//time:go_default_library",
         "//time/slots:go_default_library",
-        "@com_github_offchainlabs_go_bitfield//:go_default_library",
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@in_gopkg_d4l3k_messagediff_v1//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
         "@org_golang_google_protobuf//types/known/emptypb:go_default_library",

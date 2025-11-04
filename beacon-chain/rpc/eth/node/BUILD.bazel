@@ -64,6 +64,6 @@ go_test(
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_libp2p_go_libp2p//p2p/host/peerstore/test:go_default_library",
         "@com_github_multiformats_go_multiaddr//:go_default_library",
-        "@com_github_offchainlabs_go_bitfield//:go_default_library",
+        "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )
