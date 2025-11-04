@@ -55,6 +55,10 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		totalRequested += len(ident.Columns)
 	}
 
+	if err := s.rateLimiter.validateRequest(stream, uint64(totalRequested)); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
+
 	// Penalize peers that send invalid requests.
 	if err := validateDataColumnsByRootRequest(totalRequested); err != nil {
 		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")

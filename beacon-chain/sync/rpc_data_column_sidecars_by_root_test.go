@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"io"
 	"math"
 	"sync"
@@ -12,10 +11,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -36,7 +35,10 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
-	ctx := context.Background()
+	ctx := t.Context()
+
+	protocolID := protocol.ID(p2p.RPCDataColumnSidecarsByRootTopicV1) + "/" + encoder.ProtocolSuffixSSZSnappy
+
 	t.Run("wrong message type", func(t *testing.T) {
 		service := &Service{}
 		err := service.dataColumnSidecarByRootRPCHandler(t.Context(), nil, nil)
@@ -50,9 +52,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		localP2P := p2ptest.NewTestP2P(t)
-		service := &Service{cfg: &config{p2p: localP2P}}
-
-		protocolID := protocol.ID(p2p.RPCDataColumnSidecarsByRootTopicV1)
+		service := &Service{cfg: &config{p2p: localP2P}, rateLimiter: newRateLimiter(localP2P)}
 		remoteP2P := p2ptest.NewTestP2P(t)
 
 		var wg sync.WaitGroup
@@ -83,12 +83,6 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		resetFlags := flags.Get()
-		gFlags := new(flags.GlobalFlags)
-		gFlags.DataColumnBatchLimit = 2
-		flags.Init(gFlags)
-		defer flags.Init(resetFlags)
-
 		// Setting the ticker to 0 will cause the ticker to panic.
 		// Setting it to the minimum value instead.
 		refTickerDelay := tickerDelay
@@ -151,7 +145,6 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			rateLimiter: newRateLimiter(localP2P),
 		}
 
-		protocolID := protocol.ID(p2p.RPCDataColumnSidecarsByRootTopicV1)
 		remoteP2P := p2ptest.NewTestP2P(t)
 
 		var wg sync.WaitGroup
