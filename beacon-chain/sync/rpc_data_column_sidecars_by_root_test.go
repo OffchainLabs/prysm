@@ -226,68 +226,22 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 }
 
 func TestValidateDataColumnsByRootRequest(t *testing.T) {
+	const max = 10
+
 	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	maxCols := uint64(10) // Set a small value for testing
-	config.MaxRequestDataColumnSidecars = maxCols
-	params.OverrideBeaconConfig(config)
+	cfg := params.BeaconConfig()
+	cfg.MaxRequestDataColumnSidecars = max
+	params.OverrideBeaconConfig(cfg)
 
-	tests := []struct {
-		name        string
-		colIdents   types.DataColumnsByRootIdentifiers
-		expectedErr error
-	}{
-		{
-			name: "Invalid request - multiple identifiers exceed max",
-			colIdents: types.DataColumnsByRootIdentifiers{
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2+1),
-				},
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2+1),
-				},
-			},
-			expectedErr: types.ErrMaxDataColumnReqExceeded,
-		},
-		{
-			name: "Valid request - less than max",
-			colIdents: types.DataColumnsByRootIdentifiers{
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols-1),
-				},
-			},
-			expectedErr: nil,
-		},
-		{
-			name: "Valid request - multiple identifiers sum to max",
-			colIdents: types.DataColumnsByRootIdentifiers{
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2),
-				},
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2),
-				},
-			},
-			expectedErr: nil,
-		},
-	}
+	t.Run("invalid", func(t *testing.T) {
+		err := validateDataColumnsByRootRequest(max + 1)
+		require.ErrorIs(t, err, types.ErrMaxDataColumnReqExceeded)
+	})
 
-	// Run tests
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateDataColumnsByRootRequest(tt.colIdents)
-			if tt.expectedErr == nil {
-				require.NoError(t, err)
-			} else {
-				require.ErrorIs(t, err, tt.expectedErr)
-			}
-		})
-	}
+	t.Run("valid", func(t *testing.T) {
+		err := validateDataColumnsByRootRequest(max)
+		require.NoError(t, err)
+	})
 }
 
 func TestDataColumnsRPCMinValidSlot(t *testing.T) {
