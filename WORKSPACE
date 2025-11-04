@@ -327,9 +327,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-NZr/gsQK9rBHRnznlPBiNzJpK8MPMrfUa3f+QYqn1+g=",
-    strip_prefix = "mainnet-978f1794eada6f85bee76e4d2d5959a5fb8e0cc5",
-    url = "https://github.com/eth-clients/mainnet/archive/978f1794eada6f85bee76e4d2d5959a5fb8e0cc5.tar.gz",
+    integrity = "sha256-+mqMXyboedVw8Yp0v+U9GDz98QoC1SZET8mjaKPX+AI=",
+    strip_prefix = "mainnet-980aee8893a2291d473c38f63797d5bc370fa381",
+    url = "https://github.com/eth-clients/mainnet/archive/980aee8893a2291d473c38f63797d5bc370fa381.tar.gz",
 )
 
 http_archive(

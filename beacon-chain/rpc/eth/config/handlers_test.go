@@ -571,7 +571,7 @@ func TestGetSpec(t *testing.T) {
 				// BLOB_SCHEDULE should be an empty slice when no schedule is defined
 				blobSchedule, ok := v.([]interface{})
 				assert.Equal(t, true, ok)
-				assert.Equal(t, 0, len(blobSchedule))
+				assert.Equal(t, 2, len(blobSchedule))
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
