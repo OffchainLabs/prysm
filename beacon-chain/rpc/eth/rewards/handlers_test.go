@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -746,6 +747,18 @@ func TestAttestationRewards(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusNotFound, e.Code)
 		assert.Equal(t, "Attestation rewards are available after two epoch transitions to ensure all attestations have a chance of inclusion", e.Message)
+	})
+	t.Run("epoch overflow", func(t *testing.T) {
+		url := "http://only.the.epoch.number.at.the.end.is.important/" + strconv.FormatUint(math.MaxUint64, 10)
+		request := httptest.NewRequest("POST", url, nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.AttestationRewards(writer, request)
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusNotFound, e.Code)
 	})
 }
 
