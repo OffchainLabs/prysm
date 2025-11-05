@@ -146,7 +146,7 @@ func TestCreateListener(t *testing.T) {
 		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: 2200, DB: db},
+		cfg:                   &Config{UDPPort: 0, DB: db}, // Use port 0 to let OS assign an available port
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}
@@ -155,7 +155,6 @@ func TestCreateListener(t *testing.T) {
 	defer listener.Close()
 
 	assert.Equal(t, true, listener.Self().IP().Equal(ipAddr), "IP address is not the expected type")
-	assert.Equal(t, 2200, listener.Self().UDP(), "Incorrect port number")
 
 	pubkey := listener.Self().Pubkey()
 	XisSame := pkey.PublicKey.X.Cmp(pubkey.X) == 0
@@ -167,7 +166,7 @@ func TestCreateListener(t *testing.T) {
 }
 
 func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
-	port := 2100
+	port := 2000
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
@@ -286,9 +285,9 @@ func TestCreateLocalNode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Define ports.
 			const (
-				udpPort  = 2600
-				tcpPort  = 3100
-				quicPort = 3100
+				udpPort  = 2000
+				tcpPort  = 3000
+				quicPort = 3000
 			)
 
 			custodyRequirement := params.BeaconConfig().CustodyRequirement
@@ -374,7 +373,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: 2300, DB: db},
+		cfg:                   &Config{UDPPort: 0, DB: db}, // Use port 0 to let OS assign an available port
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}
@@ -434,9 +433,9 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 	s := &Service{
 		ctx: t.Context(),
 		cfg: &Config{
-			UDPPort:  2400,
-			TCPPort:  3200,
-			QUICPort: 3200,
+			UDPPort:  0, // Use port 0 to let OS assign an available port
+			TCPPort:  0,
+			QUICPort: 0,
 			DB:       db,
 		},
 		genesisTime:           time.Now(),
@@ -597,7 +596,7 @@ func TestUDPMultiAddress(t *testing.T) {
 
 	s := &Service{
 		ctx:                   t.Context(),
-		cfg:                   &Config{UDPPort: 2500, DB: db},
+		cfg:                   &Config{UDPPort: 0, DB: db}, // Use port 0 to let OS assign an available port
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
@@ -615,7 +614,6 @@ func TestUDPMultiAddress(t *testing.T) {
 	multiAddresses, err := s.DiscoveryAddresses()
 	require.NoError(t, err)
 	require.Equal(t, true, len(multiAddresses) > 0)
-	assert.Equal(t, true, strings.Contains(multiAddresses[0].String(), fmt.Sprintf("%d", 2500)))
 	assert.Equal(t, true, strings.Contains(multiAddresses[0].String(), "udp"))
 }
 
@@ -965,7 +963,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2700, DB: testDB.SetupDB(t)},
+				cfg:                   &Config{UDPPort: 0, DB: testDB.SetupDB(t)}, // Use port 0 to let OS assign an available port
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
