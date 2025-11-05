@@ -63,9 +63,9 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
-		UDPPort:     2000,
-		TCPPort:     3000,
-		QUICPort:    3000,
+		UDPPort:     2800,
+		TCPPort:     3300,
+		QUICPort:    3300,
 		ClockWaiter: cs,
 		DB:          testDB.SetupDB(t),
 	}
@@ -111,9 +111,9 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
-		UDPPort:       2000,
-		TCPPort:       3000,
-		QUICPort:      3000,
+		UDPPort:       2900,
+		TCPPort:       3400,
+		QUICPort:      3400,
 		StateNotifier: &mock.MockStateNotifier{},
 		NoDiscovery:   true, // <-- no s.dv5Listener is created
 		ClockWaiter:   cs,
@@ -147,7 +147,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 
 func TestListenForNewNodes(t *testing.T) {
 	const (
-		port              = uint(2000)
+		port              = uint(3000)
 		testPollingPeriod = 1 * time.Second
 		peerCount         = 5
 	)
