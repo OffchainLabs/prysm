@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	prysmTime "github.com/OffchainLabs/prysm/v6/time"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -566,12 +568,18 @@ func (s *Service) initPOWService() {
 				if genHash != [32]byte{} {
 					genHeader, err := s.HeaderByHash(ctx, genHash)
 					if err != nil {
-						err = errors.Wrapf(err, "HeaderByHash, hash=%#x", genHash)
-						s.retryExecutionClientConnection(ctx, err)
-						errorLogger(err, "Unable to retrieve proof-of-stake genesis block data")
-						continue
+						wrapErr := errors.Wrapf(err, "HeaderByHash, hash=%#x", genHash)
+						if !errors.Is(err, ethereum.NotFound) ||
+							!strings.Contains(err.Error(), "pruned history unavailable") {
+							s.retryExecutionClientConnection(ctx, wrapErr)
+							errorLogger(wrapErr, "Unable to retrieve proof-of-stake genesis block data")
+							continue
+						}
+						log.WithError(wrapErr).Warn("Could not retrieve PoS genesis block data; the block may be pruned. Setting genesis block to 0.")
+						genBlock = 0
+					} else {
+						genBlock = genHeader.Number.Uint64()
 					}
-					genBlock = genHeader.Number.Uint64()
 				}
 				s.chainStartData.GenesisBlock = genBlock
 				if err := s.savePowchainData(ctx); err != nil {
