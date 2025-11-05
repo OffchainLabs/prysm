@@ -73,7 +73,9 @@ func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 			Epoch: 0,
 			Root:  make([]byte, 32),
 		},
-		DB: db,
+		DB:    db,
+		State: beaconState,
+		Root:  bRoot[:],
 	}
 	r := &Service{
 		cfg: &config{
@@ -137,7 +139,9 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 			Epoch: 0,
 			Root:  make([]byte, 32),
 		},
-		DB: db,
+		DB:    db,
+		State: beaconState,
+		Root:  bRoot[:],
 	}
 	r := &Service{
 		cfg: &config{
