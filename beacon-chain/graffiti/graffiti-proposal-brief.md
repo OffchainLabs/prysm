@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Add automatic EL+CL version info to block graffiti following [ethereum/execution-apis#517](https://github.com/ethereum/execution-apis/pull/517). Format: `GE168dPM63af` (Geth + Prysm). User graffiti always takes precedence.
+Add automatic EL+CL version info to block graffiti following [ethereum/execution-apis#517](https://github.com/ethereum/execution-apis/pull/517). Format: `GE168dPR63af` (Geth + Prysm). User graffiti always takes precedence.
 
 ## Problem
 
@@ -15,19 +15,19 @@ Add automatic EL+CL version info to block graffiti following [ethereum/execution
 ### Format
 ```
 <EL_CODE><EL_COMMIT><CL_CODE><CL_COMMIT>
-GE      168d      PM      63af       = "GE168dPM63af"
+GE      168d      PR      63af       = "GE168dPR63af"
 ```
 
 - **EL_CODE**: 2-letter code (GE=Geth, NM=Nethermind, BU=Besu, RH=Reth, EG=Erigon)
 - **EL_COMMIT**: First 4 hex chars of execution client's git commit (from `engine_getClientVersionV1` JSON-RPC response)
-- **CL_CODE**: PM (Prysm)
+- **CL_CODE**: PR (Prysm)
 - **CL_COMMIT**: First 4 hex chars of Prysm's git commit (from build-time ldflags via `version.GetCommitPrefix()`)
 
 ### Priority Order
 ```
 1. User graffiti (VC flag, proposer settings, graffiti file)  ← Always wins
    ↓
-2. Auto-generated "GE168dPM63af"                              ← New feature
+2. Auto-generated "GE168dPR63af"                              ← New feature
    ↓
 3. Default "Prysm/v6.1.0"                                     ← Fallback
 ```
@@ -38,7 +38,7 @@ GE      168d      PM      63af       = "GE168dPM63af"
 
 | Configuration | Result                             |
 |--------------|------------------------------------|
-| No graffiti | `GE168dPM63af` ✨ **NEW**           |
+| No graffiti | `GE168dPR63af` ✨ **NEW**           |
 | `--graffiti "🚀"` | `🚀` (unchanged)                   |
 | Proposer settings | Custom graffiti (unchanged)        |
 | Old Geth (no API) | `Prysm/v6.1.0` (graceful fallback) |
