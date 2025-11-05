@@ -583,6 +583,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
+	r.gossipsubController = NewGossipsubController(ctx, &r)
 	markInitSyncComplete(t, &r)
 	// Empty cache at the end of the test.
 	defer cache.SubnetIDs.EmptyAllCaches()
