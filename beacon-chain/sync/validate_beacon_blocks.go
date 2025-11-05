@@ -263,6 +263,9 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.ReadOn
 	if err != nil {
 		return err
 	}
+	if verifyingState == nil {
+		return errors.New("could not get verifying state")
+	}
 
 	if err = s.validateBellatrixBeaconBlock(ctx, verifyingState, blk.Block()); err != nil {
 		if errors.Is(err, ErrOptimisticParent) {
