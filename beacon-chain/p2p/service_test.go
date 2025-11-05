@@ -59,10 +59,6 @@ func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 
 func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	hook := logTest.NewGlobal()
 
 	cs := startup.NewClockSynchronizer()
