@@ -54,6 +54,7 @@ var AllNodesHaveSameHead = e2etypes.Evaluator{
 }
 
 func healthzCheck(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	
 	count := len(conns)
 	for i := 0; i < count; i++ {
 		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
