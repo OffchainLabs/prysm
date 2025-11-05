@@ -374,7 +374,7 @@ func TestFillForkChoiceMissingBlocks_FinalizedSibling(t *testing.T) {
 
 	err = service.fillInForkChoiceMissingBlocks(
 		t.Context(), wsb, beaconState.FinalizedCheckpoint(), beaconState.CurrentJustifiedCheckpoint())
-	require.Equal(t, ErrNotDescendantOfFinalized.Error(), err.Error())
+	require.Equal(t, ErrRootNotInForkchoice(bytesutil.ToBytes32(roots[8])), err.Error())
 }
 
 func TestFillForkChoiceMissingBlocks_ErrorCases(t *testing.T) {

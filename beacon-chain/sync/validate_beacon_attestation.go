@@ -121,8 +121,8 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	}
 	// Block exists - verify it's in forkchoice (i.e., it's a descendant of the finalized checkpoint)
 	if !s.cfg.chain.InForkchoice(blockRoot) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
+		tracing.AnnotateError(span, blockchain.ErrRootNotInForkchoice(blockRoot))
+		return pubsub.ValidationIgnore, blockchain.ErrRootNotInForkchoice(blockRoot)
 	}
 	if err = s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
 		tracing.AnnotateError(span, err)

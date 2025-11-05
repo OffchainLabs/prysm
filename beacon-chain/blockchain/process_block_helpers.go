@@ -401,7 +401,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		return nil
 	}
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
-		return ErrNotDescendantOfFinalized
+		return ErrRootNotInForkchoice(root)
 	}
 	slices.Reverse(pendingNodes)
 	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
