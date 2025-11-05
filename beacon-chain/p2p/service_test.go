@@ -77,6 +77,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	require.NoError(t, err)
 	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	s.custodyInfo = &custodyInfo{}
+	close(s.custodyInfoSet)
 	exitRoutine := make(chan bool)
 	go func() {
 		s.Start()
