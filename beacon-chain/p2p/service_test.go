@@ -58,11 +58,6 @@ func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 }
 
 func TestService_Start_OnlyStartsOnce(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	hook := logTest.NewGlobal()
 
 	cs := startup.NewClockSynchronizer()
@@ -282,11 +277,6 @@ func TestListenForNewNodes(t *testing.T) {
 }
 
 func TestPeer_Disconnect(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	h1, _, _ := createHost(t, 5000)
 	defer func() {
 		if err := h1.Close(); err != nil {
