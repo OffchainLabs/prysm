@@ -92,6 +92,10 @@ type testDynamicFamily struct {
 	subnetsForCast func(primitives.Slot) map[uint64]bool
 }
 
+func (t *testDynamicFamily) Name() string {
+	return "TestDynamicFamily"
+}
+
 func (t *testDynamicFamily) Validator() wrappedVal {
 	return t.validator
 }

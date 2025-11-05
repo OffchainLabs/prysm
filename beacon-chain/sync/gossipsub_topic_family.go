@@ -34,6 +34,7 @@ func (b *baseGossipsubTopicFamily) NetworkScheduleEntry() params.NetworkSchedule
 }
 
 type GossipsubTopicFamily interface {
+	Name() string
 	Validator() wrappedVal
 	Handler() subHandler
 	NetworkScheduleEntry() params.NetworkScheduleEntry

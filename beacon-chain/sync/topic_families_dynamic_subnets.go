@@ -63,6 +63,10 @@ func NewAttestationTopicFamily(s *Service, nse params.NetworkScheduleEntry) *Att
 	return attestationTopicFamily
 }
 
+func (a *AttestationTopicFamily) Name() string {
+	return "AttestationTopicFamily"
+}
+
 // Validator returns the validator function for attestation subnets.
 func (a *AttestationTopicFamily) Validator() wrappedVal {
 	return a.syncService.validateCommitteeIndexBeaconAttestation
@@ -121,6 +125,10 @@ func NewSyncCommitteeTopicFamily(s *Service, nse params.NetworkScheduleEntry) *S
 	}
 }
 
+func (s *SyncCommitteeTopicFamily) Name() string {
+	return "SyncCommitteeTopicFamily"
+}
+
 // Validator returns the validator function for sync committee subnets.
 func (s *SyncCommitteeTopicFamily) Validator() wrappedVal {
 	return s.syncService.validateSyncCommitteeMessage
@@ -177,6 +185,10 @@ func NewDataColumnTopicFamily(s *Service, nse params.NetworkScheduleEntry) *Data
 			},
 		},
 	}
+}
+
+func (d *DataColumnTopicFamily) Name() string {
+	return "DataColumnTopicFamily"
 }
 
 // Validator returns the validator function for data column subnets.

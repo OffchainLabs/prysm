@@ -23,6 +23,10 @@ func NewBlockTopicFamily(s *Service, nse params.NetworkScheduleEntry) *BlockTopi
 	}
 }
 
+func (b *BlockTopicFamily) Name() string {
+	return "BlockTopicFamily"
+}
+
 func (b *BlockTopicFamily) Validator() wrappedVal {
 	return b.syncService.validateBeaconBlockPubSub
 }
@@ -57,6 +61,10 @@ func NewAggregateAndProofTopicFamily(s *Service, nse params.NetworkScheduleEntry
 			nse:            nse,
 			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
 	}
+}
+
+func (a *AggregateAndProofTopicFamily) Name() string {
+	return "AggregateAndProofTopicFamily"
 }
 
 func (a *AggregateAndProofTopicFamily) Validator() wrappedVal {
@@ -95,6 +103,10 @@ func NewVoluntaryExitTopicFamily(s *Service, nse params.NetworkScheduleEntry) *V
 	}
 }
 
+func (v *VoluntaryExitTopicFamily) Name() string {
+	return "VoluntaryExitTopicFamily"
+}
+
 func (v *VoluntaryExitTopicFamily) Validator() wrappedVal {
 	return v.syncService.validateVoluntaryExit
 }
@@ -129,6 +141,10 @@ func NewProposerSlashingTopicFamily(s *Service, nse params.NetworkScheduleEntry)
 			nse:            nse,
 			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
 	}
+}
+
+func (p *ProposerSlashingTopicFamily) Name() string {
+	return "ProposerSlashingTopicFamily"
 }
 
 func (p *ProposerSlashingTopicFamily) Validator() wrappedVal {
@@ -167,6 +183,10 @@ func NewAttesterSlashingTopicFamily(s *Service, nse params.NetworkScheduleEntry)
 	}
 }
 
+func (a *AttesterSlashingTopicFamily) Name() string {
+	return "AttesterSlashingTopicFamily"
+}
+
 func (a *AttesterSlashingTopicFamily) Validator() wrappedVal {
 	return a.syncService.validateAttesterSlashing
 }
@@ -200,6 +220,10 @@ func NewSyncContributionAndProofTopicFamily(s *Service, nse params.NetworkSchedu
 			nse:            nse,
 			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
 	}
+}
+
+func (sc *SyncContributionAndProofTopicFamily) Name() string {
+	return "SyncContributionAndProofTopicFamily"
 }
 
 func (sc *SyncContributionAndProofTopicFamily) Validator() wrappedVal {
@@ -238,6 +262,10 @@ func NewLightClientOptimisticUpdateTopicFamily(s *Service, nse params.NetworkSch
 	}
 }
 
+func (l *LightClientOptimisticUpdateTopicFamily) Name() string {
+	return "LightClientOptimisticUpdateTopicFamily"
+}
+
 func (l *LightClientOptimisticUpdateTopicFamily) Validator() wrappedVal {
 	return l.syncService.validateLightClientOptimisticUpdate
 }
@@ -274,6 +302,10 @@ func NewLightClientFinalityUpdateTopicFamily(s *Service, nse params.NetworkSched
 	}
 }
 
+func (l *LightClientFinalityUpdateTopicFamily) Name() string {
+	return "LightClientFinalityUpdateTopicFamily"
+}
+
 func (l *LightClientFinalityUpdateTopicFamily) Validator() wrappedVal {
 	return l.syncService.validateLightClientFinalityUpdate
 }
@@ -307,6 +339,10 @@ func NewBlsToExecutionChangeTopicFamily(s *Service, nse params.NetworkScheduleEn
 			nse:            nse,
 			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
 	}
+}
+
+func (b *BlsToExecutionChangeTopicFamily) Name() string {
+	return "BlsToExecutionChangeTopicFamily"
 }
 
 func (b *BlsToExecutionChangeTopicFamily) Validator() wrappedVal {

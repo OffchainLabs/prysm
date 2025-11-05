@@ -26,6 +26,10 @@ func NewBlobTopicFamily(s *Service, nse params.NetworkScheduleEntry, subnetIndex
 	}
 }
 
+func (b *BlobTopicFamily) Name() string {
+	return fmt.Sprintf("BlobTopicFamily-%d", b.subnetIndex)
+}
+
 func (b *BlobTopicFamily) Validator() wrappedVal {
 	return b.syncService.validateBlob
 }
