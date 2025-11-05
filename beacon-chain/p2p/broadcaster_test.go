@@ -727,18 +727,26 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	// Create a host.
 	_, pkey, ipAddr := createHost(t, port)
 
+	// Create a shared DB for the service
+	db := testDB.SetupDB(t)
+
+	// Create and close the custody info channel immediately since custodyInfo is already set
+	custodyInfoSet := make(chan struct{})
+	close(custodyInfoSet)
+
 	service := &Service{
 		ctx:                   ctx,
 		host:                  p1.BHost,
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
+		cfg:                   &Config{DB: db},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
 		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        custodyInfoSet,
 	}
 
 	// Create a listener.
