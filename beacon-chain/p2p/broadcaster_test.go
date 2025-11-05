@@ -219,35 +219,23 @@ func TestService_BroadcastAttestation(t *testing.T) {
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
+	config.FuluForkEpoch = params.BeaconConfig().FarFutureEpoch
 	params.OverrideBeaconConfig(config)
-
-	const port = uint(7000) // Use unique high port to avoid conflicts
-
-	// Setup DB for Fulu
-	db := testDB.SetupDB(t)
+	const port = uint(2000)
 
 	// Setup bootnode.
-	cfg := &Config{
-		PingInterval: testPingInterval,
-		DB:           db,
-	}
+	cfg := &Config{PingInterval: testPingInterval}
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
-
 	s := &Service{
-		ctx:                   t.Context(),
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
-		custodyInfoSet:        make(chan struct{}),
+		custodyInfo:           &custodyInfo{},
 	}
-	// Initialize custody info with mock values for Fulu
-	_, _, err := s.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
-	require.NoError(t, err)
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
@@ -262,7 +250,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
 		PingInterval:         testPingInterval,
-		DB:                   db,
 	}
 	// Setup 2 different hosts
 	for i := uint(1); i <= 2; i++ {
@@ -272,18 +259,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		if len(listeners) > 0 {
 			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
 		}
-
 		s := &Service{
-			ctx:                   t.Context(),
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
-			custodyInfoSet:        make(chan struct{}),
+			custodyInfo:           &custodyInfo{},
 		}
-		// Initialize custody info with mock values for Fulu
-		_, _, err := s.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
-		require.NoError(t, err)
-
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
 		if i == 2 {
@@ -325,7 +306,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		pubsub.WithStrictSignatureVerification(false),
 	)
 	require.NoError(t, err)
-
 	p := &Service{
 		host:                  hosts[0],
 		ctx:                   t.Context(),
@@ -340,11 +320,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
-		custodyInfoSet: make(chan struct{}),
 	}
-	// Initialize custody info with mock values for Fulu
-	_, _, err = p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
-	require.NoError(t, err)
 
 	p2 := &Service{
 		host:                  hosts[1],
@@ -360,11 +336,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
-		custodyInfoSet: make(chan struct{}),
 	}
-	// Initialize custody info with mock values for Fulu
-	_, _, err = p2.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
-	require.NoError(t, err)
 	go p.listenForNewNodes()
 	go p2.listenForNewNodes()
 
