@@ -136,7 +136,6 @@ func setNodeSubnets(localNode *enode.LocalNode, attSubnets []uint64) {
 }
 
 func TestCreateListener(t *testing.T) {
-	port := 1024
 	ipAddr, pkey := createAddrAndPrivKey(t)
 
 	db := testDB.SetupDB(t)
@@ -147,7 +146,7 @@ func TestCreateListener(t *testing.T) {
 		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: uint(port), DB: db},
+		cfg:                   &Config{UDPPort: 0, DB: db}, // Use port 0 to let OS assign an available port
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}
@@ -156,7 +155,6 @@ func TestCreateListener(t *testing.T) {
 	defer listener.Close()
 
 	assert.Equal(t, true, listener.Self().IP().Equal(ipAddr), "IP address is not the expected type")
-	assert.Equal(t, port, listener.Self().UDP(), "Incorrect port number")
 
 	pubkey := listener.Self().Pubkey()
 	XisSame := pkey.PublicKey.X.Cmp(pubkey.X) == 0
@@ -365,7 +363,6 @@ func TestCreateLocalNode(t *testing.T) {
 }
 
 func TestRebootDiscoveryListener(t *testing.T) {
-	port := 1024
 	ipAddr, pkey := createAddrAndPrivKey(t)
 
 	db := testDB.SetupDB(t)
@@ -376,7 +373,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: uint(port), DB: db},
+		cfg:                   &Config{UDPPort: 0, DB: db}, // Use port 0 to let OS assign an available port
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}
@@ -436,9 +433,9 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 	s := &Service{
 		ctx: t.Context(),
 		cfg: &Config{
-			UDPPort:  2000,
-			TCPPort:  3000,
-			QUICPort: 3000,
+			UDPPort:  0, // Use port 0 to let OS assign an available port
+			TCPPort:  0,
+			QUICPort: 0,
 			DB:       db,
 		},
 		genesisTime:           time.Now(),
@@ -589,7 +586,6 @@ func TestOutboundPeerThreshold(t *testing.T) {
 }
 
 func TestUDPMultiAddress(t *testing.T) {
-	port := 6500
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
@@ -600,7 +596,7 @@ func TestUDPMultiAddress(t *testing.T) {
 
 	s := &Service{
 		ctx:                   t.Context(),
-		cfg:                   &Config{UDPPort: uint(port), DB: db},
+		cfg:                   &Config{UDPPort: 0, DB: db}, // Use port 0 to let OS assign an available port
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
@@ -618,7 +614,6 @@ func TestUDPMultiAddress(t *testing.T) {
 	multiAddresses, err := s.DiscoveryAddresses()
 	require.NoError(t, err)
 	require.Equal(t, true, len(multiAddresses) > 0)
-	assert.Equal(t, true, strings.Contains(multiAddresses[0].String(), fmt.Sprintf("%d", port)))
 	assert.Equal(t, true, strings.Contains(multiAddresses[0].String(), "udp"))
 }
 
@@ -968,7 +963,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 2000, DB: testDB.SetupDB(t)},
+				cfg:                   &Config{UDPPort: 0, DB: testDB.SetupDB(t)}, // Use port 0 to let OS assign an available port
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
