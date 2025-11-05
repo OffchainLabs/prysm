@@ -194,6 +194,22 @@ ssz_fulu_objs = [
     "SignedBlindedBeaconBlockFulu",
 ]
 
+ssz_gloas_objs = [
+    "BuilderPendingPayment",
+    "BuilderPendingWithdrawal",
+    "DataColumnSidecarGloas",
+    "ExecutionPayloadEnvelope",
+    "PayloadAttestation",
+    "PayloadAttestationData",
+    "PayloadAttestationMessage",
+    "ExecutionPayloadBid",
+    "SignedExecutionPayloadBid",
+    "SignedExecutionPayloadEnvelope",
+    "BeaconBlockGloas",
+    "SignedBeaconBlockGloas",
+    "BeaconStateGloas",
+]
+
 ssz_gen_marshal(
     name = "ssz_generated_phase0",
     out = "phase0.ssz.go",
@@ -285,6 +301,19 @@ ssz_gen_marshal(
 )
 
 ssz_gen_marshal(
+    name = "ssz_generated_gloas",
+    out = "gloas.ssz.go",
+    exclude_objs = ssz_phase0_objs + ssz_altair_objs + ssz_bellatrix_objs + ssz_capella_objs + ssz_deneb_objs + ssz_electra_objs + ssz_fulu_objs,
+    go_proto = ":go_proto",
+    includes = [
+        "//consensus-types/primitives:go_default_library",
+        "//math:go_default_library",
+        "//proto/engine/v1:go_default_library",
+    ],
+    objs = ssz_gloas_objs,
+)
+
+ssz_gen_marshal(
     name = "ssz_generated_non_core",
     out = "non-core.ssz.go",
     go_proto = ":go_proto",
@@ -352,6 +381,7 @@ go_library(
         ":ssz_generated_deneb",  # keep
         ":ssz_generated_electra",  # keep
         ":ssz_generated_fulu",  # keep
+        ":ssz_generated_gloas",  # keep
         ":ssz_generated_non_core",  # keep
         ":ssz_generated_phase0",  # keep
     ],
@@ -396,6 +426,7 @@ ssz_proto_files(
         "beacon_state.proto",
         "blobs.proto",
         "data_columns.proto",
+        "gloas.proto",
         "light_client.proto",
         "sync_committee.proto",
         "withdrawals.proto",

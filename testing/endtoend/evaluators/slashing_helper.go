@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -12,7 +13,6 @@ import (
 	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 

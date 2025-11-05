@@ -285,4 +285,3 @@ func genState(t *testing.T, valCount, avgBalance uint64) state.BeaconState {
 
 	return beaconState
 }
-

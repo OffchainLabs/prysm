@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"slices"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/capella"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
@@ -24,7 +25,6 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
