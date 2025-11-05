@@ -700,11 +700,6 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 }
 
 func TestService_BroadcastDataColumn(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	const (
 		port        = 2000
 		columnIndex = 12

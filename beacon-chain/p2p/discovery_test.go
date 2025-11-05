@@ -136,11 +136,6 @@ func setNodeSubnets(localNode *enode.LocalNode, attSubnets []uint64) {
 }
 
 func TestCreateListener(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	ipAddr, pkey := createAddrAndPrivKey(t)
 
 	db := testDB.SetupDB(t)
@@ -172,11 +167,6 @@ func TestCreateListener(t *testing.T) {
 }
 
 func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)

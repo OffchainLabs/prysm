@@ -157,11 +157,6 @@ func TestListenForNewNodes(t *testing.T) {
 		peerCount         = 5
 	)
 
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	db := testDB.SetupDB(t)
 
 	// Setup bootnode.
