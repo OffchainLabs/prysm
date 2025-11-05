@@ -44,38 +44,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Deprecated: use GetAggregateAttestationV2 instead
-// GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
-func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestation")
-	defer span.End()
-
-	_, attDataRoot, ok := shared.HexFromQuery(w, r, "attestation_data_root", fieldparams.RootLength, true)
-	if !ok {
-		return
-	}
-	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
-	if !ok {
-		return
-	}
-
-	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, 0)
-	if agg == nil {
-		return
-	}
-	typedAgg, ok := agg.(*ethpbalpha.Attestation)
-	if !ok {
-		httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
-		return
-	}
-	data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	httputil.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
-}
-
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestationV2")
@@ -323,58 +291,6 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 		}
 		httputil.WriteError(w, failuresErr)
 		return
-	}
-}
-
-// Deprecated: use SubmitAggregateAndProofsV2 instead
-// SubmitAggregateAndProofs verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
-func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofs")
-	defer span.End()
-
-	var req structs.SubmitAggregateAndProofsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
-	broadcastFailed := false
-	for _, item := range req.Data {
-		var signedAggregate structs.SignedAggregateAttestationAndProof
-		err := json.Unmarshal(item, &signedAggregate)
-		if err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		consensusItem, err := signedAggregate.ToConsensus()
-		if err != nil {
-			httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
-		if rpcError != nil {
-			var broadcastFailedErr *server.BroadcastFailedError
-			ok := errors.As(rpcError.Err, &broadcastFailedErr)
-			if ok {
-				broadcastFailed = true
-			} else {
-				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-				return
-			}
-		}
-	}
-
-	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/beacon"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/blob"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/builder"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/config"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/debug"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/events"
@@ -90,7 +89,6 @@ func (s *Service) endpoints(
 ) []endpoint {
 	endpoints := make([]endpoint, 0)
 	endpoints = append(endpoints, s.rewardsEndpoints(blocker, stater, rewardFetcher)...)
-	endpoints = append(endpoints, s.builderEndpoints(stater)...)
 	endpoints = append(endpoints, s.blobEndpoints(blocker)...)
 	endpoints = append(endpoints, s.validatorEndpoints(validatorServer, stater, coreService, rewardFetcher)...)
 	endpoints = append(endpoints, s.nodeEndpoints()...)
@@ -156,29 +154,6 @@ func (s *Service) rewardsEndpoints(blocker lookup.Blocker, stater lookup.Stater,
 			},
 			handler: server.SyncCommitteeRewards,
 			methods: []string{http.MethodPost},
-		},
-	}
-}
-
-func (s *Service) builderEndpoints(stater lookup.Stater) []endpoint {
-	server := &builder.Server{
-		FinalizationFetcher:   s.cfg.FinalizationFetcher,
-		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
-		Stater:                stater,
-	}
-
-	const namespace = "builder"
-	return []endpoint{
-		{
-			// Deprecated: use SSE from /eth/v1/events for `Payload Attributes` instead
-			template: "/eth/v1/builder/states/{state_id}/expected_withdrawals",
-			name:     namespace + ".ExpectedWithdrawals",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.ExpectedWithdrawals,
-			methods: []string{http.MethodGet},
 		},
 	}
 }
@@ -249,17 +224,6 @@ func (s *Service) validatorEndpoints(
 	const namespace = "validator"
 	return []endpoint{
 		{
-			// Deprecated: use /eth/v2/validator/aggregate_attestation instead
-			template: "/eth/v1/validator/aggregate_attestation",
-			name:     namespace + ".GetAggregateAttestation",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetAggregateAttestation,
-			methods: []string{http.MethodGet},
-		},
-		{
 			template: "/eth/v2/validator/aggregate_attestation",
 			name:     namespace + ".GetAggregateAttestationV2",
 			middleware: []middleware.Middleware{
@@ -278,18 +242,6 @@ func (s *Service) validatorEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.SubmitContributionAndProofs,
-			methods: []string{http.MethodPost},
-		},
-		{
-			// Deprecated: use /eth/v2/validator/aggregate_and_proofs instead
-			template: "/eth/v1/validator/aggregate_and_proofs",
-			name:     namespace + ".SubmitAggregateAndProofs",
-			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.SubmitAggregateAndProofs,
 			methods: []string{http.MethodPost},
 		},
 		{
@@ -619,30 +571,6 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
-			// Deprecated: use /eth/v2/beacon/blocks instead
-			template: "/eth/v1/beacon/blocks",
-			name:     namespace + ".PublishBlock",
-			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.PublishBlock,
-			methods: []string{http.MethodPost},
-		},
-		{
-			// Deprecated: use /eth/v2/beacon/blinded_blocks instead
-			template: "/eth/v1/beacon/blinded_blocks",
-			name:     namespace + ".PublishBlindedBlock",
-			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.PublishBlindedBlock,
-			methods: []string{http.MethodPost},
-		},
-		{
 			template: "/eth/v2/beacon/blocks",
 			name:     namespace + ".PublishBlockV2",
 			middleware: []middleware.Middleware{
@@ -672,17 +600,6 @@ func (s *Service) beaconEndpoints(
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.GetBlockV2,
-			methods: []string{http.MethodGet},
-		},
-		{
-			// Deprecated: use /eth/v2/beacon/blocks/{block_id}/attestations instead
-			template: "/eth/v1/beacon/blocks/{block_id}/attestations",
-			name:     namespace + ".GetBlockAttestations",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetBlockAttestations,
 			methods: []string{http.MethodGet},
 		},
 		{
@@ -716,17 +633,6 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodGet},
 		},
 		{
-			// Deprecated: use /eth/v2/beacon/pool/attestations instead
-			template: "/eth/v1/beacon/pool/attestations",
-			name:     namespace + ".ListAttestations",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.ListAttestations,
-			methods: []string{http.MethodGet},
-		},
-		{
 			template: "/eth/v2/beacon/pool/attestations",
 			name:     namespace + ".ListAttestationsV2",
 			middleware: []middleware.Middleware{
@@ -735,17 +641,6 @@ func (s *Service) beaconEndpoints(
 			},
 			handler: server.ListAttestationsV2,
 			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/beacon/pool/attestations",
-			name:     namespace + ".SubmitAttestations",
-			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.SubmitAttestations,
-			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v2/beacon/pool/attestations",
@@ -812,17 +707,6 @@ func (s *Service) beaconEndpoints(
 			methods: []string{http.MethodPost},
 		},
 		{
-			// Deprecated: use /eth/v2/beacon/pool/attester_slashings instead
-			template: "/eth/v1/beacon/pool/attester_slashings",
-			name:     namespace + ".GetAttesterSlashings",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetAttesterSlashings,
-			methods: []string{http.MethodGet},
-		},
-		{
 			template: "/eth/v2/beacon/pool/attester_slashings",
 			name:     namespace + ".GetAttesterSlashingsV2",
 			middleware: []middleware.Middleware{
@@ -831,17 +715,6 @@ func (s *Service) beaconEndpoints(
 			},
 			handler: server.GetAttesterSlashingsV2,
 			methods: []string{http.MethodGet},
-		},
-		{
-			template: "/eth/v1/beacon/pool/attester_slashings",
-			name:     namespace + ".SubmitAttesterSlashings",
-			middleware: []middleware.Middleware{
-				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.SubmitAttesterSlashings,
-			methods: []string{http.MethodPost},
 		},
 		{
 			template: "/eth/v2/beacon/pool/attester_slashings",
@@ -956,17 +829,6 @@ func (s *Service) beaconEndpoints(
 			},
 			handler: server.GetValidatorIdentities,
 			methods: []string{http.MethodPost},
-		},
-		{
-			// Deprecated: no longer needed post Electra
-			template: "/eth/v1/beacon/deposit_snapshot",
-			name:     namespace + ".GetDepositSnapshot",
-			middleware: []middleware.Middleware{
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
-				middleware.AcceptEncodingHeaderHandler(),
-			},
-			handler: server.GetDepositSnapshot,
-			methods: []string{http.MethodGet},
 		},
 		{
 			template: "/eth/v1/beacon/states/{state_id}/pending_deposits",

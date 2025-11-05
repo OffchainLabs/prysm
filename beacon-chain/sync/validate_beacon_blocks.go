@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -103,10 +104,6 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			}
 			s.cfg.slasherBlockHeadersFeed.Send(blockHeader)
 		}()
-	}
-
-	if err := validateDenebBeaconBlock(blk.Block()); err != nil {
-		return pubsub.ValidationReject, err
 	}
 
 	// Verify the block is the first block received for the proposer for the slot.
@@ -262,12 +259,15 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.ReadOn
 		return err
 	}
 
-	parentState, err := s.validatePhase0Block(ctx, blk, blockRoot)
+	verifyingState, err := s.validatePhase0Block(ctx, blk, blockRoot)
 	if err != nil {
 		return err
 	}
+	if verifyingState == nil {
+		return errors.New("could not get verifying state")
+	}
 
-	if err = s.validateBellatrixBeaconBlock(ctx, parentState, blk.Block()); err != nil {
+	if err = s.validateBellatrixBeaconBlock(ctx, verifyingState, blk.Block()); err != nil {
 		if errors.Is(err, ErrOptimisticParent) {
 			return err
 		}
@@ -282,31 +282,25 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.ReadOn
 // - Checks that the parent is in our forkchoice tree.
 // - Validates that the proposer signature is valid.
 // - Validates that the proposer index is valid.
-func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) (state.BeaconState, error) {
+// Returns a state that has compatible Randao Mix and active validator indices as the block's parent state advanced to the block's slot.
+// This state can be used for further block validations.
+func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) (state.ReadOnlyBeaconState, error) {
 	if !s.cfg.chain.InForkchoice(blk.Block().ParentRoot()) {
 		s.setBadBlock(ctx, blockRoot)
 		return nil, blockchain.ErrNotDescendantOfFinalized
 	}
 
-	parentState, err := s.cfg.stateGen.StateByRoot(ctx, blk.Block().ParentRoot())
+	verifyingState, err := s.blockVerifyingState(ctx, blk)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := blocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+	if err := blocks.VerifyBlockSignatureUsingCurrentFork(verifyingState, blk, blockRoot); err != nil {
 		if errors.Is(err, blocks.ErrInvalidSignature) {
 			s.setBadBlock(ctx, blockRoot)
 		}
 		return nil, err
 	}
-	// In the event the block is more than an epoch ahead from its
-	// parent state, we have to advance the state forward.
-	parentRoot := blk.Block().ParentRoot()
-	parentState, err = transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blk.Block().Slot())
-	if err != nil {
-		return nil, err
-	}
-	idx, err := helpers.BeaconProposerIndex(ctx, parentState)
+	idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, blk.Block().Slot())
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +308,59 @@ func (s *Service) validatePhase0Block(ctx context.Context, blk interfaces.ReadOn
 		s.setBadBlock(ctx, blockRoot)
 		return nil, errors.New("incorrect proposer index")
 	}
-	return parentState, nil
+	return verifyingState, nil
+}
+
+// blockVerifyingState returns the appropriate state to verify the signature and proposer index of the given block.
+// The returned state is guaranteed to be at the same epoch as the block's epoch, and have the same randao mix and active validator indices as the
+// block's parent state advanced to the block's slot.
+func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (state.ReadOnlyBeaconState, error) {
+	headRoot, err := s.cfg.chain.HeadRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	parentRoot := blk.Block().ParentRoot()
+	blockSlot := blk.Block().Slot()
+	blockEpoch := slots.ToEpoch(blockSlot)
+	headSlot := s.cfg.chain.HeadSlot()
+	headEpoch := slots.ToEpoch(headSlot)
+	// Use head if it's the parent
+	if bytes.Equal(parentRoot[:], headRoot) {
+		// If they are in the same epoch, then we can return the head state directly
+		if blockEpoch == headEpoch {
+			return s.cfg.chain.HeadStateReadOnly(ctx)
+		}
+		// Otherwise, we need to process the head state to the block's slot
+		headState, err := s.cfg.chain.HeadState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
+	}
+	// If head and block are in the same epoch and head is compatible with the parent's target, then use head
+	if blockEpoch == headEpoch {
+		headTarget, err := s.cfg.chain.TargetRootForEpoch([32]byte(headRoot), blockEpoch)
+		if err != nil {
+			return nil, err
+		}
+		parentTarget, err := s.cfg.chain.TargetRootForEpoch([32]byte(parentRoot), blockEpoch)
+		if err != nil {
+			return nil, err
+		}
+		if bytes.Equal(headTarget[:], parentTarget[:]) {
+			return s.cfg.chain.HeadStateReadOnly(ctx)
+		}
+	}
+	// Otherwise retrieve the the parent state and advance it to the block's slot
+	parentState, err := s.cfg.stateGen.StateByRoot(ctx, parentRoot)
+	if err != nil {
+		return nil, err
+	}
+	parentEpoch := slots.ToEpoch(parentState.Slot())
+	if blockEpoch == parentEpoch {
+		return parentState, nil
+	}
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], blockSlot)
 }
 
 func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
@@ -336,6 +382,8 @@ func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
 }
 
 // validateBellatrixBeaconBlock validates the block for the Bellatrix fork.
+// The verifying state is used only to check if the chain is execution enabled.
+//
 // spec code:
 //
 //	If the execution is enabled for the block -- i.e. is_execution_enabled(state, block.body) then validate the following:
@@ -348,14 +396,14 @@ func validateDenebBeaconBlock(blk interfaces.ReadOnlyBeaconBlock) error {
 //	   otherwise:
 //	      [IGNORE] The block's parent (defined by block.parent_root) passes all validation (including execution
 //	       node verification of the block.body.execution_payload).
-func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState state.BeaconState, blk interfaces.ReadOnlyBeaconBlock) error {
+func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, verifyingState state.ReadOnlyBeaconState, blk interfaces.ReadOnlyBeaconBlock) error {
 	// Error if block and state are not the same version
-	if parentState.Version() != blk.Version() {
+	if verifyingState.Version() != blk.Version() {
 		return errors.New("block and state are not the same version")
 	}
 
 	body := blk.Body()
-	executionEnabled, err := blocks.IsExecutionEnabled(parentState, body)
+	executionEnabled, err := blocks.IsExecutionEnabled(verifyingState, body)
 	if err != nil {
 		return err
 	}
@@ -363,7 +411,7 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState 
 		return nil
 	}
 
-	t, err := slots.StartTime(parentState.GenesisTime(), blk.Slot())
+	t, err := slots.StartTime(verifyingState.GenesisTime(), blk.Slot())
 	if err != nil {
 		return err
 	}
