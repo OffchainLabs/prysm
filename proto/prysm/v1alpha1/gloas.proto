@@ -1,0 +1,423 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/electra.proto";
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/withdrawals.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
+import "proto/prysm/v1alpha1/eip_7251.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
+
+// =============================================================================
+// Gloas Fork Specification
+// =============================================================================
+// This file implements the Gloas fork of the Ethereum consensus specification
+// Reference: https://github.com/ethereum/consensus-specs/blob/master/specs/gloas/beacon-chain.md
+
+
+// ExecutionPayloadBid represents an execution payload bid in the Gloas fork.
+//
+// Spec:
+// class ExecutionPayloadBid(Container):
+//     parent_block_hash: Hash32
+//     parent_block_root: Root
+//     block_hash: Hash32
+//     fee_recipient: ExecutionAddress
+//     gas_limit: uint64
+//     builder_index: ValidatorIndex
+//     slot: Slot
+//     value: Gwei
+//     blob_kzg_commitments_root: Root
+message ExecutionPayloadBid {
+  bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 4 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 gas_limit = 5;
+  uint64 builder_index = 6 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/"
+      "consensus-types/primitives.ValidatorIndex" ];
+  uint64 slot = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  uint64 value = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
+  bytes blob_kzg_commitments_root = 9 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// SignedExecutionPayloadBid wraps an execution payload bid with a signature.
+//
+// Spec:
+// class SignedExecutionPayloadBid(Container):
+//     message: ExecutionPayloadBid
+//     signature: BLSSignature
+message SignedExecutionPayloadBid {
+  ExecutionPayloadBid message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// PayloadAttestationData contains the core data for Payload Timeliness Committee (PTC) attestations.
+//
+// Spec:
+// class PayloadAttestationData(Container):
+//     beacon_block_root: Root
+//     slot: Slot
+//     payload_present: boolean
+//     blob_data_available: boolean
+message PayloadAttestationData {
+  bytes beacon_block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  bool payload_present = 3;
+  bool blob_data_available = 4;
+}
+
+// PayloadAttestation represents an aggregated attestation from the Payload Timeliness Committee (PTC).
+//
+// Spec:
+// class PayloadAttestation(Container):
+//     aggregation_bits: Bitvector[PTC_SIZE]
+//     data: PayloadAttestationData
+//     signature: BLSSignature
+message PayloadAttestation {
+  bytes aggregation_bits = 1 [
+    (ethereum.eth.ext.ssz_size) = "ptc.size",
+    (ethereum.eth.ext.cast_type) = "ptc.type"
+  ];
+  PayloadAttestationData data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// PayloadAttestationMessage represents an individual payload attestation message.
+//
+// Spec:
+// class PayloadAttestationMessage(Container):
+//     validator_index: ValidatorIndex
+//     data: PayloadAttestationData
+//     signature: BLSSignature
+message PayloadAttestationMessage {
+  uint64 validator_index = 1
+  [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/consensus-types/"
+      "primitives.ValidatorIndex" ];
+  PayloadAttestationData data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BeaconBlockGloas represents a beacon block in the Gloas fork.
+// The block structure remains the same but contains a modified BeaconBlockBodyGloas.
+message BeaconBlockGloas {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/"
+      "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BeaconBlockBodyGloas body = 5;
+}
+
+// BeaconBlockBodyGloas represents the body of a beacon block in the Gloas fork.
+// New fields: signed_execution_payload_bid and payload_attestations
+// Removed fields: execution_payload, blob_kzg_commitments, execution_requests
+//
+// Spec:
+// class BeaconBlockBody(Container):
+//     randao_reveal: BLSSignature
+//     eth1_data: Eth1Data
+//     graffiti: Bytes32
+//     proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
+//     attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS_ELECTRA]
+//     attestations: List[Attestation, MAX_ATTESTATIONS_ELECTRA]
+//     deposits: List[Deposit, MAX_DEPOSITS]
+//     voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+//     sync_aggregate: SyncAggregate
+//     bls_to_execution_changes: List[SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES]
+//     signed_execution_payload_bid: SignedExecutionPayloadBid
+//     payload_attestations: List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS]
+message BeaconBlockBodyGloas {
+  bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "96" ];
+  Eth1Data eth1_data = 2;
+  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashing proposer_slashings = 4
+  [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated AttesterSlashingElectra attester_slashings = 5
+  [ (ethereum.eth.ext.ssz_max) = "1" ];
+  repeated AttestationElectra attestations = 6
+  [ (ethereum.eth.ext.ssz_max) = "8" ];
+  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated SignedVoluntaryExit voluntary_exits = 8
+  [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SyncAggregate sync_aggregate = 9;
+  repeated SignedBLSToExecutionChange bls_to_execution_changes = 10
+  [ (ethereum.eth.ext.ssz_max) = "16" ];
+
+  // New in Gloas
+  SignedExecutionPayloadBid signed_execution_payload_bid = 11;
+  repeated PayloadAttestation payload_attestations = 12
+  [ (ethereum.eth.ext.ssz_max) = "payload_attestation.size" ];
+}
+
+// SignedBeaconBlockGloas represents a signed beacon block in the Gloas fork.
+//
+// Spec:
+// Standard SignedBeaconBlock structure with BeaconBlockGloas
+message SignedBeaconBlockGloas {
+  BeaconBlockGloas block = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+// BeaconStateGloas represents the beacon state in the Gloas fork.
+//
+// Spec:
+// class BeaconState(Container):
+//     [All previous fields from earlier forks]
+//     # Replaced existing latest execution header position
+//     latest_execution_payload_bid: ExecutionPayloadBid
+//     # New fields in Gloas:EIP7732
+//     execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
+//     builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
+//     builder_pending_withdrawals: List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
+//     latest_block_hash: Hash32
+//     latest_withdrawals_root: Root
+message BeaconStateGloas {
+  // Versioning [1001-2000]
+  uint64 genesis_time = 1001;
+  bytes genesis_validators_root = 1002 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 1003 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  Fork fork = 1004;
+
+  // History [2001-3000]
+  BeaconBlockHeader latest_block_header = 2001;
+  repeated bytes block_roots = 2002
+  [ (ethereum.eth.ext.ssz_size) = "block_roots.size" ];
+  repeated bytes state_roots = 2003
+  [ (ethereum.eth.ext.ssz_size) = "state_roots.size" ];
+  repeated bytes historical_roots = 2004 [
+    (ethereum.eth.ext.ssz_size) = "?,32",
+    (ethereum.eth.ext.ssz_max) = "16777216"
+  ];
+
+  // Eth1 [3001-4000]
+  Eth1Data eth1_data = 3001;
+  repeated Eth1Data eth1_data_votes = 3002
+  [ (ethereum.eth.ext.ssz_max) = "eth1_data_votes.size" ];
+  uint64 eth1_deposit_index = 3003;
+
+  // Registry [4001-5000]
+  repeated Validator validators = 4001
+  [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  repeated uint64 balances = 4002
+  [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+
+  // Randomness [5001-6000]
+  repeated bytes randao_mixes = 5001
+  [ (ethereum.eth.ext.ssz_size) = "randao_mixes.size" ];
+
+  // Slashings [6001-7000]
+  repeated uint64 slashings = 6001
+  [ (ethereum.eth.ext.ssz_size) = "slashings.size" ];
+
+  // Participation [7001-8000]
+  bytes previous_epoch_participation = 7001
+  [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  bytes current_epoch_participation = 7002
+  [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+
+  // Finality [8001-9000]
+  bytes justification_bits = 8001 [
+    (ethereum.eth.ext.ssz_size) = "1",
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/go-bitfield.Bitvector4"
+  ];
+  Checkpoint previous_justified_checkpoint = 8002;
+  Checkpoint current_justified_checkpoint = 8003;
+  Checkpoint finalized_checkpoint = 8004;
+
+  // Fields introduced in Altair fork [9001-10000]
+  repeated uint64 inactivity_scores = 9001
+  [ (ethereum.eth.ext.ssz_max) = "1099511627776" ];
+  SyncCommittee current_sync_committee = 9002;
+  SyncCommittee next_sync_committee = 9003;
+
+  // Note: latest_execution_payload_header replaced with ExecutionPayloadBid in Gloas
+  ExecutionPayloadBid latest_execution_payload_bid = 10001;
+
+  // Fields introduced in Capella fork [11001-12000]
+  uint64 next_withdrawal_index = 11001;
+  uint64 next_withdrawal_validator_index = 11002
+  [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/consensus-types/"
+      "primitives.ValidatorIndex" ];
+  repeated HistoricalSummary historical_summaries = 11003
+  [ (ethereum.eth.ext.ssz_max) = "16777216" ];
+
+  // Fields introduced in Electra fork [12001-13000]
+  uint64 deposit_requests_start_index = 12001;
+  uint64 deposit_balance_to_consume = 12002 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
+  uint64 exit_balance_to_consume = 12003 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
+  uint64 earliest_exit_epoch = 12004 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+  uint64 consolidation_balance_to_consume = 12005 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
+  uint64 earliest_consolidation_epoch = 12006 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+  repeated PendingDeposit pending_deposits = 12007
+  [ (ethereum.eth.ext.ssz_max) = "pending_deposits_limit" ];
+  repeated PendingPartialWithdrawal pending_partial_withdrawals = 12008
+  [ (ethereum.eth.ext.ssz_max) = "pending_partial_withdrawals_limit" ];
+  repeated PendingConsolidation pending_consolidations = 12009
+  [ (ethereum.eth.ext.ssz_max) = "pending_consolidations_limit" ];
+
+  // Fields introduced in Fulu fork [13001-14000]
+  repeated uint64 proposer_lookahead = 13001
+  [ (ethereum.eth.ext.ssz_size) = "proposer_lookahead_size" ];
+
+  // Fields introduced in Gloas fork [14001-15000]
+  bytes execution_payload_availability = 14001 [
+    (ethereum.eth.ext.ssz_size) = "execution_payload_availability.size"
+  ];
+  repeated BuilderPendingPayment builder_pending_payments = 14002 [(ethereum.eth.ext.ssz_size) = "builder_pending_payments.size"];
+  repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14003 [(ethereum.eth.ext.ssz_max) = "1048576"];
+  bytes latest_block_hash = 14004 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes latest_withdrawals_root = 14005 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// BuilderPendingPayment represents a pending payment to a builder.
+//
+// Spec:
+// class BuilderPendingPayment(Container):
+//     weight: Gwei
+//     withdrawal: BuilderPendingWithdrawal
+message BuilderPendingPayment {
+  uint64 weight = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
+  BuilderPendingWithdrawal withdrawal = 2;
+}
+
+// BuilderPendingWithdrawal represents a pending withdrawal for a builder.
+//
+// Spec:
+// class BuilderPendingWithdrawal(Container):
+//     fee_recipient: ExecutionAddress
+//     amount: Gwei
+//     builder_index: ValidatorIndex
+//     withdrawable_epoch: Epoch
+message BuilderPendingWithdrawal {
+  bytes fee_recipient = 1 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 amount = 2 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"
+  ];
+  uint64 builder_index = 3
+  [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/consensus-types/"
+      "primitives.ValidatorIndex" ];
+  uint64 withdrawable_epoch = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+  ];
+}
+
+// DataColumnSidecarGloas represents a data column sidecar in the Gloas fork.
+// Note: signed_block_header and kzg_commitments_inclusion_proof fields have been removed in Gloas.
+//
+// Spec:
+// class DataColumnSidecar(Container):
+//     index: ColumnIndex
+//     column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+//     kzg_commitents: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+//     kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+//     slot: Slot
+//     beacon_block_root: Root
+message DataColumnSidecarGloas {
+  uint64 index = 1;
+  repeated bytes column = 2 [
+    (ethereum.eth.ext.ssz_size) = "?,bytes_per_cell.size",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  repeated bytes kzg_commitments = 3 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  repeated bytes kzg_proofs = 4 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  uint64 slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  bytes beacon_block_root = 6 [(ethereum.eth.ext.ssz_size) = "32"];
+}
+
+// ExecutionPayloadEnvelope wraps an execution payload with builder index.
+// This is used in the Gloas fork to associate execution payloads with their builders
+// and provide additional context needed for payload processing.
+//
+// Spec:
+// class ExecutionPayloadEnvelope(Container):
+//     payload: ExecutionPayload
+//     execution_requests: ExecutionRequests
+//     builder_index: ValidatorIndex
+//     beacon_block_root: Root
+//     slot: Slot
+//     blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+//     state_root: Root
+message ExecutionPayloadEnvelope {
+  ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
+  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v6/"
+      "consensus-types/primitives.ValidatorIndex" ];
+  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+  ];
+  repeated bytes blob_kzg_commitments = 6 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// SignedExecutionPayloadEnvelope wraps an execution payload envelope with a signature.
+// The signature is provided by the builder who created the execution payload.
+//
+// Spec:
+// class SignedExecutionPayloadEnvelope(Container):
+//     message: ExecutionPayloadEnvelope
+//     signature: BLSSignature
+message SignedExecutionPayloadEnvelope {
+  ExecutionPayloadEnvelope message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
