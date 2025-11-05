@@ -239,11 +239,6 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 }
 
 func TestCreateLocalNode(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	testCases := []struct {
 		name          string
 		cfg           *Config
@@ -358,11 +353,6 @@ func TestCreateLocalNode(t *testing.T) {
 }
 
 func TestRebootDiscoveryListener(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	ipAddr, pkey := createAddrAndPrivKey(t)
 
 	db := testDB.SetupDB(t)
@@ -402,11 +392,6 @@ func TestRebootDiscoveryListener(t *testing.T) {
 }
 
 func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	addr := net.ParseIP("invalidIP")
 	_, pkey := createAddrAndPrivKey(t)
 
@@ -428,11 +413,6 @@ func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 }
 
 func TestMultiAddrConversion_OK(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	hook := logTest.NewGlobal()
 	ipAddr, pkey := createAddrAndPrivKey(t)
 
@@ -513,11 +493,6 @@ func TestStaticPeering_PeersAreAdded(t *testing.T) {
 }
 
 func TestHostIsResolved(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	host := "dns.google"
 	ips := map[string]bool{
 		"8.8.8.8":              true,
@@ -601,11 +576,6 @@ func TestOutboundPeerThreshold(t *testing.T) {
 }
 
 func TestUDPMultiAddress(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	config.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(config)
-
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
