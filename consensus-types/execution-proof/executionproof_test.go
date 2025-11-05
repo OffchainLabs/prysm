@@ -1,0 +1,92 @@
+package executionproof
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
+// TestExecutionProofTooLarge translates test_execution_proof_too_large.
+func TestExecutionProofTooLarge(t *testing.T) {
+	subnetId, _ := NewExecutionProofSubnetId(0)
+	// Use common.Hash{} for the zero value
+	blockHash := common.Hash{}
+	blockRoot := common.Hash{}
+	proofData := make([]byte, MAX_PROOF_DATA_BYTES+1)
+
+	_, err := NewExecutionProof(subnetId, blockHash, blockRoot, proofData)
+
+	if err == nil {
+		t.Fatal("Expected an error for proof data being too large, but got nil")
+	}
+
+	if !strings.Contains(err.Error(), "Proof data too large") {
+		t.Errorf("Expected error message to contain 'Proof data too large', but got: %s", err.Error())
+	}
+}
+
+// TestExecutionProofMaxSize translates test_execution_proof_max_size.
+func TestExecutionProofMaxSize(t *testing.T) {
+	subnetId, _ := NewExecutionProofSubnetId(0)
+	// Use common.Hash{} for the zero value
+	blockHash := common.Hash{}
+	blockRoot := common.Hash{}
+	proofData := make([]byte, MAX_PROOF_DATA_BYTES)
+
+	proof, err := NewExecutionProof(subnetId, blockHash, blockRoot, proofData)
+
+	if err != nil {
+		t.Fatalf("Expected no error for proof data at max size, but got: %v", err)
+	}
+
+	if proof == nil {
+		t.Fatal("Expected proof to be non-nil, but got nil")
+	}
+
+	if proof.ProofDataSize() != MAX_PROOF_DATA_BYTES {
+		t.Errorf("Expected proof data size to be %d, but got %d", MAX_PROOF_DATA_BYTES, proof.ProofDataSize())
+	}
+}
+
+// TestExecutionProofMethods checks the helper methods.
+func TestExecutionProofMethods(t *testing.T) {
+	subnetId0, _ := NewExecutionProofSubnetId(0)
+	subnetId1, _ := NewExecutionProofSubnetId(1)
+	// Use common.Hash{} for the zero value
+	blockHash0 := common.Hash{}
+	var blockHash1 common.Hash
+	blockHash1[0] = 0x01 // Set a non-zero value
+
+	proof, err := NewExecutionProof(subnetId0, blockHash0, common.Hash{}, []byte{1, 2, 3})
+	if err != nil {
+		t.Fatalf("Failed to create proof: %v", err)
+	}
+
+	// Test ProofDataSize
+	if proof.ProofDataSize() != 3 {
+		t.Errorf("Expected ProofDataSize 3, got %d", proof.ProofDataSize())
+	}
+
+	// Test ProofDataSlice
+	if !bytes.Equal(proof.ProofDataSlice(), []byte{1, 2, 3}) {
+		t.Errorf("Expected ProofDataSlice [1, 2, 3], got %v", proof.ProofDataSlice())
+	}
+
+	// Test IsForBlock (note: passing pointer to hash)
+	if !proof.IsForBlock(&blockHash0) {
+		t.Error("IsForBlock returned false for correct hash")
+	}
+	if proof.IsForBlock(&blockHash1) {
+		t.Error("IsForBlock returned true for incorrect hash")
+	}
+
+	// Test IsFromSubnet
+	if !proof.IsFromSubnet(subnetId0) {
+		t.Error("IsFromSubnet returned false for correct subnet")
+	}
+	if proof.IsFromSubnet(subnetId1) {
+		t.Error("IsFromSubnet returned true for incorrect subnet")
+	}
+}
