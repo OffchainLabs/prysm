@@ -224,25 +224,30 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	const port = uint(7000) // Use unique high port to avoid conflicts
 
+	// Setup DB for Fulu
+	db := testDB.SetupDB(t)
+
 	// Setup bootnode.
-	cfg := &Config{PingInterval: testPingInterval}
+	cfg := &Config{
+		PingInterval: testPingInterval,
+		DB:           db,
+	}
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
 
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
 		ctx:                   t.Context(),
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
-		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
+		custodyInfoSet:        make(chan struct{}),
 	}
+	// Initialize custody info with mock values for Fulu
+	_, _, err := s.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+	require.NoError(t, err)
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
@@ -253,7 +258,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	var listeners []*listenerWrapper
 	var hosts []host.Host
 	// setup other nodes.
-	db := testDB.SetupDB(t)
 	cfg = &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
@@ -269,17 +273,17 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
 		}
 
-		peerCustodyInfoSet := make(chan struct{})
-		close(peerCustodyInfoSet)
-
 		s := &Service{
 			ctx:                   t.Context(),
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
-			custodyInfo:           &custodyInfo{},
-			custodyInfoSet:        peerCustodyInfoSet,
+			custodyInfoSet:        make(chan struct{}),
 		}
+		// Initialize custody info with mock values for Fulu
+		_, _, err := s.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+		require.NoError(t, err)
+
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
 		if i == 2 {
@@ -322,12 +326,6 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create custody info for the main Services
-	custodyInfoSet1 := make(chan struct{})
-	close(custodyInfoSet1)
-	custodyInfoSet2 := make(chan struct{})
-	close(custodyInfoSet2)
-
 	p := &Service{
 		host:                  hosts[0],
 		ctx:                   t.Context(),
@@ -342,9 +340,11 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
-		custodyInfo:    &custodyInfo{},
-		custodyInfoSet: custodyInfoSet1,
+		custodyInfoSet: make(chan struct{}),
 	}
+	// Initialize custody info with mock values for Fulu
+	_, _, err = p.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+	require.NoError(t, err)
 
 	p2 := &Service{
 		host:                  hosts[1],
@@ -360,9 +360,11 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
-		custodyInfo:    &custodyInfo{},
-		custodyInfoSet: custodyInfoSet2,
+		custodyInfoSet: make(chan struct{}),
 	}
+	// Initialize custody info with mock values for Fulu
+	_, _, err = p2.UpdateCustodyInfo(0, params.BeaconConfig().CustodyRequirement)
+	require.NoError(t, err)
 	go p.listenForNewNodes()
 	go p2.listenForNewNodes()
 
