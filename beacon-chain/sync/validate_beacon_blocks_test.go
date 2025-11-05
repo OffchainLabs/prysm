@@ -1543,7 +1543,10 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),
-		}}
+		},
+		State: beaconState,
+		Root:  bRoot[:],
+	}
 	r := &Service{
 		cfg: &config{
 			beaconDB:      db,
