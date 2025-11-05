@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -18,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestComputeCommittee_WithoutCache(t *testing.T) {

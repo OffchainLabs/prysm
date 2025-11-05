@@ -209,8 +209,13 @@ func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.
 		httputil.HandleError(w, "Attestation rewards are not supported for Phase 0", http.StatusNotFound)
 		return nil, false
 	}
-	currentEpoch := uint64(slots.ToEpoch(s.TimeFetcher.CurrentSlot()))
-	if requestedEpoch+1 >= currentEpoch {
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	bufferedEpoch, err := primitives.Epoch(requestedEpoch).SafeAdd(1)
+	if err != nil {
+		httputil.HandleError(w, "Could not increment epoch: "+err.Error(), http.StatusNotFound)
+		return nil, false
+	}
+	if bufferedEpoch >= currentEpoch {
 		httputil.HandleError(w,
 			"Attestation rewards are available after two epoch transitions to ensure all attestations have a chance of inclusion",
 			http.StatusNotFound)

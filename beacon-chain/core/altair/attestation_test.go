@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
@@ -22,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	gofuzz "github.com/google/gofuzz"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestProcessAttestations_InclusionDelayFailure(t *testing.T) {

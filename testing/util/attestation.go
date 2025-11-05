@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
@@ -19,7 +20,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
 	log "github.com/sirupsen/logrus"
 )
 

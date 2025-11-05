@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/OffchainLabs/go-bitfield"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -14,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"io"
 	"math"
 	"sync"
@@ -12,10 +11,10 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -36,7 +35,10 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
-	ctx := context.Background()
+	ctx := t.Context()
+
+	protocolID := protocol.ID(p2p.RPCDataColumnSidecarsByRootTopicV1) + "/" + encoder.ProtocolSuffixSSZSnappy
+
 	t.Run("wrong message type", func(t *testing.T) {
 		service := &Service{}
 		err := service.dataColumnSidecarByRootRPCHandler(t.Context(), nil, nil)
@@ -50,9 +52,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 		params.OverrideBeaconConfig(cfg)
 
 		localP2P := p2ptest.NewTestP2P(t)
-		service := &Service{cfg: &config{p2p: localP2P}}
-
-		protocolID := protocol.ID(p2p.RPCDataColumnSidecarsByRootTopicV1)
+		service := &Service{cfg: &config{p2p: localP2P}, rateLimiter: newRateLimiter(localP2P)}
 		remoteP2P := p2ptest.NewTestP2P(t)
 
 		var wg sync.WaitGroup
@@ -83,12 +83,6 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 	})
 
 	t.Run("nominal", func(t *testing.T) {
-		resetFlags := flags.Get()
-		gFlags := new(flags.GlobalFlags)
-		gFlags.DataColumnBatchLimit = 2
-		flags.Init(gFlags)
-		defer flags.Init(resetFlags)
-
 		// Setting the ticker to 0 will cause the ticker to panic.
 		// Setting it to the minimum value instead.
 		refTickerDelay := tickerDelay
@@ -151,7 +145,6 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			rateLimiter: newRateLimiter(localP2P),
 		}
 
-		protocolID := protocol.ID(p2p.RPCDataColumnSidecarsByRootTopicV1)
 		remoteP2P := p2ptest.NewTestP2P(t)
 
 		var wg sync.WaitGroup
@@ -226,68 +219,22 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 }
 
 func TestValidateDataColumnsByRootRequest(t *testing.T) {
+	const max = 10
+
 	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
-	maxCols := uint64(10) // Set a small value for testing
-	config.MaxRequestDataColumnSidecars = maxCols
-	params.OverrideBeaconConfig(config)
+	cfg := params.BeaconConfig()
+	cfg.MaxRequestDataColumnSidecars = max
+	params.OverrideBeaconConfig(cfg)
 
-	tests := []struct {
-		name        string
-		colIdents   types.DataColumnsByRootIdentifiers
-		expectedErr error
-	}{
-		{
-			name: "Invalid request - multiple identifiers exceed max",
-			colIdents: types.DataColumnsByRootIdentifiers{
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2+1),
-				},
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2+1),
-				},
-			},
-			expectedErr: types.ErrMaxDataColumnReqExceeded,
-		},
-		{
-			name: "Valid request - less than max",
-			colIdents: types.DataColumnsByRootIdentifiers{
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols-1),
-				},
-			},
-			expectedErr: nil,
-		},
-		{
-			name: "Valid request - multiple identifiers sum to max",
-			colIdents: types.DataColumnsByRootIdentifiers{
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2),
-				},
-				{
-					BlockRoot: make([]byte, fieldparams.RootLength),
-					Columns:   make([]uint64, maxCols/2),
-				},
-			},
-			expectedErr: nil,
-		},
-	}
+	t.Run("invalid", func(t *testing.T) {
+		err := validateDataColumnsByRootRequest(max + 1)
+		require.ErrorIs(t, err, types.ErrMaxDataColumnReqExceeded)
+	})
 
-	// Run tests
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateDataColumnsByRootRequest(tt.colIdents)
-			if tt.expectedErr == nil {
-				require.NoError(t, err)
-			} else {
-				require.ErrorIs(t, err, tt.expectedErr)
-			}
-		})
-	}
+	t.Run("valid", func(t *testing.T) {
+		err := validateDataColumnsByRootRequest(max)
+		require.NoError(t, err)
+	})
 }
 
 func TestDataColumnsRPCMinValidSlot(t *testing.T) {

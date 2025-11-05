@@ -976,3 +976,13 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 	_, err = verifier.VerifiedRODataColumns()
 	require.NoError(t, err)
 }
+
+func TestConcatRootSlot(t *testing.T) {
+	root := [fieldparams.RootLength]byte{1, 2, 3}
+	const slot = primitives.Slot(3210)
+
+	const expected = "\x01\x02\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x003210"
+
+	actual := concatRootSlot(root, slot)
+	require.Equal(t, expected, actual)
+}

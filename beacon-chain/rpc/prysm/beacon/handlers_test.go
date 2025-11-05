@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
@@ -33,7 +34,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func individualVotesHelper(t *testing.T, request *structs.GetIndividualVotesRequest, s *Server) (string, *structs.GetIndividualVotesResponse) {

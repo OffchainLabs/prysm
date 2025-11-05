@@ -1,9 +1,9 @@
 package metadata
 
 import (
+	"github.com/OffchainLabs/go-bitfield"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // Metadata returns the interface of a p2p metadata type.

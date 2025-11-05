@@ -4,11 +4,11 @@ import (
 	"math"
 	"testing"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query/testutil"
 	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestSize(t *testing.T) {
