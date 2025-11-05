@@ -433,6 +433,14 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testin
 	util.SaveBlock(t, t.Context(), r.cfg.beaconDB, b0)
 	b0Root, err := b0.Block.HashTreeRoot()
 	require.NoError(t, err)
+
+	// Setup head state for blockVerifyingState logic
+	st, err := util.NewBeaconState()
+	require.NoError(t, err)
+	mockChain := r.cfg.chain.(*mock.ChainService)
+	mockChain.Root = b0Root[:]
+	mockChain.State = st
+
 	b1 := util.NewBeaconBlock()
 	b1.Block.Slot = 1
 	b1.Block.ParentRoot = b0Root[:]
