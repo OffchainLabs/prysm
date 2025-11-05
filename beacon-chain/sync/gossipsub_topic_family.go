@@ -60,82 +60,85 @@ type topicFamilyEntry struct {
 	factory           func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily
 }
 
-var topicFamilySchedule = []topicFamilyEntry{
-	// Genesis topic families
-	{
-		activationEpoch: params.BeaconConfig().GenesisEpoch,
-		factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-			return []GossipsubTopicFamily{
-				NewBlockTopicFamily(s, nse),
-				NewAggregateAndProofTopicFamily(s, nse),
-				NewVoluntaryExitTopicFamily(s, nse),
-				NewProposerSlashingTopicFamily(s, nse),
-				NewAttesterSlashingTopicFamily(s, nse),
-				NewAttestationTopicFamily(s, nse),
-			}
+func topicFamilySchedule() []topicFamilyEntry {
+	cfg := params.BeaconConfig()
+	return []topicFamilyEntry{
+		// Genesis topic families
+		{
+			activationEpoch: cfg.GenesisEpoch,
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+				return []GossipsubTopicFamily{
+					NewBlockTopicFamily(s, nse),
+					NewAggregateAndProofTopicFamily(s, nse),
+					NewVoluntaryExitTopicFamily(s, nse),
+					NewProposerSlashingTopicFamily(s, nse),
+					NewAttesterSlashingTopicFamily(s, nse),
+					NewAttestationTopicFamily(s, nse),
+				}
+			},
 		},
-	},
-	// Altair topic families
-	{
-		activationEpoch: params.BeaconConfig().AltairForkEpoch,
-		factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-			families := []GossipsubTopicFamily{
-				NewSyncContributionAndProofTopicFamily(s, nse),
-				NewSyncCommitteeTopicFamily(s, nse),
-			}
-			if features.Get().EnableLightClient {
-				families = append(families,
-					NewLightClientOptimisticUpdateTopicFamily(s, nse),
-					NewLightClientFinalityUpdateTopicFamily(s, nse),
-				)
-			}
-			return families
+		// Altair topic families
+		{
+			activationEpoch: cfg.AltairForkEpoch,
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+				families := []GossipsubTopicFamily{
+					NewSyncContributionAndProofTopicFamily(s, nse),
+					NewSyncCommitteeTopicFamily(s, nse),
+				}
+				if features.Get().EnableLightClient {
+					families = append(families,
+						NewLightClientOptimisticUpdateTopicFamily(s, nse),
+						NewLightClientFinalityUpdateTopicFamily(s, nse),
+					)
+				}
+				return families
+			},
 		},
-	},
-	// Capella topic families
-	{
-		activationEpoch: params.BeaconConfig().CapellaForkEpoch,
-		factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-			return []GossipsubTopicFamily{NewBlsToExecutionChangeTopicFamily(s, nse)}
+		// Capella topic families
+		{
+			activationEpoch: cfg.CapellaForkEpoch,
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+				return []GossipsubTopicFamily{NewBlsToExecutionChangeTopicFamily(s, nse)}
+			},
 		},
-	},
-	// Blob topic families (static per-subnet) in Deneb and Electra forks (removed in Fulu)
-	{
-		activationEpoch:   params.BeaconConfig().DenebForkEpoch,
-		deactivationEpoch: func() *primitives.Epoch { e := params.BeaconConfig().ElectraForkEpoch; return &e }(),
-		factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-			count := params.BeaconConfig().BlobsidecarSubnetCount
-			families := make([]GossipsubTopicFamily, 0, count)
-			for i := uint64(0); i < count; i++ {
-				families = append(families, NewBlobTopicFamily(s, nse, i))
-			}
-			return families
+		// Blob topic families (static per-subnet) in Deneb and Electra forks (removed in Fulu)
+		{
+			activationEpoch:   cfg.DenebForkEpoch,
+			deactivationEpoch: func() *primitives.Epoch { e := cfg.ElectraForkEpoch; return &e }(),
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+				count := cfg.BlobsidecarSubnetCount
+				families := make([]GossipsubTopicFamily, 0, count)
+				for i := uint64(0); i < count; i++ {
+					families = append(families, NewBlobTopicFamily(s, nse, i))
+				}
+				return families
+			},
 		},
-	},
-	{
-		activationEpoch:   params.BeaconConfig().ElectraForkEpoch,
-		deactivationEpoch: func() *primitives.Epoch { e := params.BeaconConfig().FuluForkEpoch; return &e }(),
-		factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-			count := params.BeaconConfig().BlobsidecarSubnetCountElectra
-			families := make([]GossipsubTopicFamily, 0, count)
-			for i := uint64(0); i < count; i++ {
-				families = append(families, NewBlobTopicFamily(s, nse, i))
-			}
-			return families
+		{
+			activationEpoch:   cfg.ElectraForkEpoch,
+			deactivationEpoch: func() *primitives.Epoch { e := cfg.FuluForkEpoch; return &e }(),
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+				count := cfg.BlobsidecarSubnetCountElectra
+				families := make([]GossipsubTopicFamily, 0, count)
+				for i := uint64(0); i < count; i++ {
+					families = append(families, NewBlobTopicFamily(s, nse, i))
+				}
+				return families
+			},
 		},
-	},
-	// Fulu data column topic family
-	{
-		activationEpoch: params.BeaconConfig().FuluForkEpoch,
-		factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-			return []GossipsubTopicFamily{NewDataColumnTopicFamily(s, nse)}
+		// Fulu data column topic family
+		{
+			activationEpoch: cfg.FuluForkEpoch,
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+				return []GossipsubTopicFamily{NewDataColumnTopicFamily(s, nse)}
+			},
 		},
-	},
+	}
 }
 
 func TopicFamiliesForEpoch(epoch primitives.Epoch, s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 	var activeFamilies []GossipsubTopicFamily
-	for _, entry := range topicFamilySchedule {
+	for _, entry := range topicFamilySchedule() {
 		if epoch < entry.activationEpoch {
 			continue
 		}
