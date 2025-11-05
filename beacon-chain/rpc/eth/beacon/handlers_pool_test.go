@@ -1774,12 +1774,20 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
 
-			// Unmarshal resp.Data into a slice of slashings
-			var slashings []*structs.AttesterSlashingElectra
-			require.NoError(t, json.Unmarshal(resp.Data, &slashings))
-			require.NotNil(t, slashings)
-			require.Equal(t, 0, len(slashings))
-		})
+		s.GetAttesterSlashingsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetAttesterSlashingsResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.NotNil(t, resp)
+		require.NotNil(t, resp.Data)
+		assert.Equal(t, "electra", resp.Version)
+
+		// Unmarshal resp.Data into a slice of slashings
+		var slashings []*structs.AttesterSlashingElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &slashings))
+		require.NotNil(t, slashings)
+		require.Equal(t, 0, len(slashings))
+
 		t.Run("Post-Fulu", func(t *testing.T) {
 			t.Run("post-fulu-ok", func(t *testing.T) {
 				bs, err := util.NewBeaconStateElectra()
