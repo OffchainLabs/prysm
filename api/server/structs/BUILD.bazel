@@ -13,7 +13,6 @@ go_library(
         "conversions_state.go",
         "endpoints_beacon.go",
         "endpoints_blob.go",
-        "endpoints_builder.go",
         "endpoints_config.go",
         "endpoints_debug.go",
         "endpoints_events.go",
