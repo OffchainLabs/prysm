@@ -770,10 +770,8 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
 	require.NoError(t, err)
 
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
 	mockChain.Root = bRoot[:]
-	mockChain.State = st
+	mockChain.State = beaconState
 
 	b1 := util.NewBeaconBlock()
 	b1.Block.ParentRoot = bRoot[:]
@@ -848,10 +846,8 @@ func TestService_ProcessBadPendingBlocks(t *testing.T) {
 	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
 	require.NoError(t, err)
 
-	st, err := util.NewBeaconState()
-	require.NoError(t, err)
 	mockChain.Root = bRoot[:]
-	mockChain.State = st
+	mockChain.State = beaconState
 
 	b1 := util.NewBeaconBlock()
 	b1.Block.ParentRoot = bRoot[:]
