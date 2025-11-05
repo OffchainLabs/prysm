@@ -59,6 +59,10 @@ func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 
 func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	hook := logTest.NewGlobal()
 
 	cs := startup.NewClockSynchronizer()
@@ -147,12 +151,16 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 
 func TestListenForNewNodes(t *testing.T) {
 	const (
-		port              = uint(0) // Use 0 to let OS assign an available port
+		bootPort          = uint(2200) // Use specific port for bootnode ENR
 		testPollingPeriod = 1 * time.Second
 		peerCount         = 5
 	)
 
 	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	db := testDB.SetupDB(t)
 
 	// Setup bootnode.
@@ -160,7 +168,7 @@ func TestListenForNewNodes(t *testing.T) {
 		StateNotifier:        &mock.MockStateNotifier{},
 		PingInterval:         testPingInterval,
 		DisableLivenessCheck: true,
-		UDPPort:              port,
+		UDPPort:              bootPort,
 		DB:                   db,
 	}
 
@@ -199,18 +207,19 @@ func TestListenForNewNodes(t *testing.T) {
 	hosts := make([]host.Host, 0, peerCount)
 
 	for i := uint(1); i <= peerCount; i++ {
+		peerPort := bootPort + i
 		cfg = &Config{
 			Discv5BootStrapAddrs: []string{bootNode.String()},
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
 			MaxPeers:             peerCount,
 			ClockWaiter:          cs,
-			UDPPort:              port + i,
-			TCPPort:              port + i,
+			UDPPort:              peerPort,
+			TCPPort:              peerPort,
 			DB:                   db,
 		}
 
-		h, pkey, ipAddr := createHost(t, port+i)
+		h, pkey, ipAddr := createHost(t, peerPort)
 
 		s := &Service{
 			cfg:                   cfg,
@@ -271,6 +280,10 @@ func TestListenForNewNodes(t *testing.T) {
 
 func TestPeer_Disconnect(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	h1, _, _ := createHost(t, 5000)
 	defer func() {
 		if err := h1.Close(); err != nil {

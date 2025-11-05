@@ -217,6 +217,11 @@ func TestService_BroadcastAttestation(t *testing.T) {
 }
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	const port = uint(7000) // Use unique high port to avoid conflicts
 
 	// Setup bootnode.
@@ -226,11 +231,17 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
+
+	custodyInfoSet := make(chan struct{})
+	close(custodyInfoSet)
+
 	s := &Service{
+		ctx:                   t.Context(),
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        custodyInfoSet,
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -242,10 +253,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	var listeners []*listenerWrapper
 	var hosts []host.Host
 	// setup other nodes.
+	db := testDB.SetupDB(t)
 	cfg = &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
 		PingInterval:         testPingInterval,
+		DB:                   db,
 	}
 	// Setup 2 different hosts
 	for i := uint(1); i <= 2; i++ {
@@ -255,11 +268,17 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		if len(listeners) > 0 {
 			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
 		}
+
+		peerCustodyInfoSet := make(chan struct{})
+		close(peerCustodyInfoSet)
+
 		s := &Service{
+			ctx:                   t.Context(),
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
 			custodyInfo:           &custodyInfo{},
+			custodyInfoSet:        peerCustodyInfoSet,
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
@@ -694,6 +713,11 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 }
 
 func TestService_BroadcastDataColumn(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(config)
+
 	const (
 		port        = 2000
 		columnIndex = 12
