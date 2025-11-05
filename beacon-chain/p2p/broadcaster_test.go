@@ -217,7 +217,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 }
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
-	const port = uint(2000)
+	const port = uint(7000) // Use unique high port to avoid conflicts
 
 	// Create a shared DB for all services to avoid duplicate metrics registration
 	db := testDB.SetupDB(t)
@@ -317,6 +317,13 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		pubsub.WithStrictSignatureVerification(false),
 	)
 	require.NoError(t, err)
+
+	// Create custody info for the main Services
+	custodyInfoSet1 := make(chan struct{})
+	close(custodyInfoSet1)
+	custodyInfoSet2 := make(chan struct{})
+	close(custodyInfoSet2)
+
 	p := &Service{
 		host:                  hosts[0],
 		ctx:                   t.Context(),
@@ -331,6 +338,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
+		custodyInfo:    &custodyInfo{},
+		custodyInfoSet: custodyInfoSet1,
 	}
 
 	p2 := &Service{
@@ -347,6 +356,8 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
 			ScorerParams: &scorers.Config{},
 		}),
+		custodyInfo:    &custodyInfo{},
+		custodyInfoSet: custodyInfoSet2,
 	}
 	go p.listenForNewNodes()
 	go p2.listenForNewNodes()
