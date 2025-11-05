@@ -300,6 +300,7 @@ func TestListAttestationsV2(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 0
+		config.FuluForkEpoch = config.FarFutureEpoch
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{State: bs}
@@ -478,12 +479,13 @@ func TestListAttestationsV2(t *testing.T) {
 				CommitteeBits: cb2,
 				Signature:     bytesutil.PadTo([]byte("signature4"), 96),
 			}
-			bs, err := util.NewBeaconStateElectra()
+			bs, err := util.NewBeaconStateFulu()
 			require.NoError(t, err)
 
 			params.SetupTestConfigCleanup(t)
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
+			config.FuluForkEpoch = 0
 			params.OverrideBeaconConfig(config)
 
 			chainService := &blockchainmock.ChainService{State: bs}
@@ -1649,6 +1651,7 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 100
+		config.FuluForkEpoch = config.FarFutureEpoch
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{State: bs}
@@ -1789,8 +1792,14 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 
 		t.Run("Post-Fulu", func(t *testing.T) {
 			t.Run("post-fulu-ok", func(t *testing.T) {
-				bs, err := util.NewBeaconStateElectra()
+				bs, err := util.NewBeaconStateFulu()
 				require.NoError(t, err)
+
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig()
+				config.ElectraForkEpoch = 0
+				config.FuluForkEpoch = 0
+				params.OverrideBeaconConfig(config)
 
 				chainService := &blockchainmock.ChainService{State: bs}
 
@@ -1822,8 +1831,14 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 				require.DeepEqual(t, slashingPostElectra, ss[0])
 			})
 			t.Run("no-slashings", func(t *testing.T) {
-				bs, err := util.NewBeaconStateElectra()
+				bs, err := util.NewBeaconStateFulu()
 				require.NoError(t, err)
+
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig()
+				config.ElectraForkEpoch = 0
+				config.FuluForkEpoch = 0
+				params.OverrideBeaconConfig(config)
 
 				chainService := &blockchainmock.ChainService{State: bs}
 				s := &Server{
