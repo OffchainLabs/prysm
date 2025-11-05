@@ -92,7 +92,6 @@ type Flags struct {
 	// Feature related flags (alignment forced in the end)
 	ForceHead        string                // ForceHead forces the head block to be a specific block root, the last head block, or the last finalized block.
 	BlacklistedRoots map[[32]byte]struct{} // BlacklistedRoots is a list of roots that are blacklisted from processing.
-
 }
 
 var featureConfig *Flags
