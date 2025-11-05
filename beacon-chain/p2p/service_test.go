@@ -180,10 +180,13 @@ func TestListenForNewNodes(t *testing.T) {
 
 	s := &Service{
 		cfg:                   cfg,
+		ctx:                   t.Context(),
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: gvr[:],
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        make(chan struct{}),
 	}
+	close(s.custodyInfoSet)
 
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -224,10 +227,13 @@ func TestListenForNewNodes(t *testing.T) {
 
 		s := &Service{
 			cfg:                   cfg,
+			ctx:                   t.Context(),
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: gvr[:],
 			custodyInfo:           &custodyInfo{},
+			custodyInfoSet:        make(chan struct{}),
 		}
+		close(s.custodyInfoSet)
 
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		require.NoError(t, err, "Could not start discovery for node")
@@ -257,6 +263,7 @@ func TestListenForNewNodes(t *testing.T) {
 	s, err = NewService(t.Context(), cfg)
 	require.NoError(t, err)
 	s.custodyInfo = &custodyInfo{}
+	close(s.custodyInfoSet)
 
 	go s.Start()
 
