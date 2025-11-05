@@ -68,8 +68,7 @@ func TestTopicFamiliesForEpoch(t *testing.T) {
 		"BlobTopicFamily-5",
 	}
 
-	electraBlobFamilies := denebBlobFamilies
-	electraBlobFamilies = append(denebBlobFamilies, "BlobTopicFamily-6", "BlobTopicFamily-7")
+	electraBlobFamilies := append(append([]string{}, denebBlobFamilies...), "BlobTopicFamily-6", "BlobTopicFamily-7")
 
 	fuluFamilies := []string{
 		"DataColumnTopicFamily",
