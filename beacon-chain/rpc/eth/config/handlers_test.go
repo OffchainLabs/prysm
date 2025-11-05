@@ -568,7 +568,6 @@ func TestGetSpec(t *testing.T) {
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "104", v)
 			case "BLOB_SCHEDULE":
-				// BLOB_SCHEDULE should be an empty slice when no schedule is defined
 				blobSchedule, ok := v.([]interface{})
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
