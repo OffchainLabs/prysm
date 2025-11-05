@@ -214,11 +214,8 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
-	store, err := newCheckMultiplexer(s.fuluStart, s.denebStart, b)
-	if err != nil {
-		return status, errors.Wrap(err, "could not initialize multi-store for backfill batch import")
-	}
-	return su.fillBack(ctx, current, b.blocks, store)
+	checker := newCheckMultiplexer(s.fuluStart, s.denebStart, b)
+	return su.fillBack(ctx, current, b.blocks, checker)
 }
 
 func (s *Service) scheduleTodos() {

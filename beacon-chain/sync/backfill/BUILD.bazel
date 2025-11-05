@@ -58,6 +58,7 @@ go_test(
         "batch_test.go",
         "batcher_test.go",
         "blobs_test.go",
+        "fulu_transition_test.go",
         "pool_test.go",
         "service_test.go",
         "status_test.go",
