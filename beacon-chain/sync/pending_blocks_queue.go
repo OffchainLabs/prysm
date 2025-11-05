@@ -432,10 +432,10 @@ func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte
 	for i := len(roots) - 1; i >= 0; i-- {
 		r := roots[i]
 		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
-			roots = append(roots[:i], roots[i+1:]...)
 			continue
 		}
 
+		roots = append(roots[:i], roots[i+1:]...)
 		log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
 	}
 	return roots
