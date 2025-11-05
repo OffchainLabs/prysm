@@ -37,6 +37,11 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	}
 
 	blobIdents := *ref
+
+	if err := s.rateLimiter.validateRequest(stream, uint64(len(blobIdents))); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
+
 	cs := s.cfg.clock.CurrentSlot()
 	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
@@ -44,6 +49,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}
+
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
 	sort.Sort(blobIdents)
 
