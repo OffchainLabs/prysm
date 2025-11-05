@@ -86,7 +86,7 @@ func IsExecutionBlock(body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
 // def is_execution_enabled(state: BeaconState, body: ReadOnlyBeaconBlockBody) -> bool:
 //
 //	return is_merge_block(state, body) or is_merge_complete(state)
-func IsExecutionEnabled(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
+func IsExecutionEnabled(st state.ReadOnlyBeaconState, body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
 	if st == nil || body == nil {
 		return false, errors.New("nil state or block body")
 	}

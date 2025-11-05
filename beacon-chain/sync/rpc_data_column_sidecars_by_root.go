@@ -49,8 +49,18 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	SetRPCStreamDeadlines(stream)
 
+	// Count the total number of requested data column sidecars.
+	totalRequested := 0
+	for _, ident := range requestedColumnIdents {
+		totalRequested += len(ident.Columns)
+	}
+
+	if err := s.rateLimiter.validateRequest(stream, uint64(totalRequested)); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
+
 	// Penalize peers that send invalid requests.
-	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
+	if err := validateDataColumnsByRootRequest(totalRequested); err != nil {
 		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
@@ -154,13 +164,8 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 }
 
 // validateDataColumnsByRootRequest checks if the request for data column sidecars is valid.
-func validateDataColumnsByRootRequest(colIdents types.DataColumnsByRootIdentifiers) error {
-	total := uint64(0)
-	for _, id := range colIdents {
-		total += uint64(len(id.Columns))
-	}
-
-	if total > params.BeaconConfig().MaxRequestDataColumnSidecars {
+func validateDataColumnsByRootRequest(count int) error {
+	if uint64(count) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}
 

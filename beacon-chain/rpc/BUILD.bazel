@@ -33,7 +33,6 @@ go_library(
         "//beacon-chain/rpc/core:go_default_library",
         "//beacon-chain/rpc/eth/beacon:go_default_library",
         "//beacon-chain/rpc/eth/blob:go_default_library",
-        "//beacon-chain/rpc/eth/builder:go_default_library",
         "//beacon-chain/rpc/eth/config:go_default_library",
         "//beacon-chain/rpc/eth/debug:go_default_library",
         "//beacon-chain/rpc/eth/events:go_default_library",

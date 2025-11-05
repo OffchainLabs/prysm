@@ -73,7 +73,9 @@ func TestValidateBeaconBlockPubSub_InvalidSignature(t *testing.T) {
 			Epoch: 0,
 			Root:  make([]byte, 32),
 		},
-		DB: db,
+		DB:    db,
+		State: beaconState,
+		Root:  bRoot[:],
 	}
 	r := &Service{
 		cfg: &config{
@@ -137,7 +139,9 @@ func TestValidateBeaconBlockPubSub_InvalidSignature_MarksBlockAsBad(t *testing.T
 			Epoch: 0,
 			Root:  make([]byte, 32),
 		},
-		DB: db,
+		DB:    db,
+		State: beaconState,
+		Root:  bRoot[:],
 	}
 	r := &Service{
 		cfg: &config{
@@ -1301,7 +1305,10 @@ func TestValidateBeaconBlockPubSub_ValidExecutionPayload(t *testing.T) {
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),
-		}}
+		},
+		State: beaconState,
+		Root:  bRoot[:],
+	}
 	r := &Service{
 		cfg: &config{
 			beaconDB:      db,
@@ -1536,7 +1543,10 @@ func Test_validateBeaconBlockProcessingWhenParentIsOptimistic(t *testing.T) {
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: 0,
 			Root:  make([]byte, 32),
-		}}
+		},
+		State: beaconState,
+		Root:  bRoot[:],
+	}
 	r := &Service{
 		cfg: &config{
 			beaconDB:      db,
@@ -1813,4 +1823,89 @@ func TestDetectAndBroadcastEquivocation(t *testing.T) {
 		err = r.detectAndBroadcastEquivocation(ctx, signedNewBlock)
 		require.ErrorIs(t, err, ErrSlashingSignatureFailure)
 	})
+}
+
+func TestBlockVerifyingState_SameEpochAsParent(t *testing.T) {
+	ctx := t.Context()
+	db := dbtest.SetupDB(t)
+
+	// Create a genesis state
+	beaconState, _ := util.DeterministicGenesisState(t, 100)
+
+	// Create parent block at slot 1
+	parentBlock := util.NewBeaconBlock()
+	parentBlock.Block.Slot = 1
+	util.SaveBlock(t, ctx, db, parentBlock)
+	parentRoot, err := parentBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Save parent state at slot 1 (epoch 0)
+	parentState := beaconState.Copy()
+	require.NoError(t, parentState.SetSlot(1))
+	require.NoError(t, db.SaveState(ctx, parentState, parentRoot))
+	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: parentRoot[:]}))
+
+	// Create a different head block at a later epoch
+	headBlock := util.NewBeaconBlock()
+	headBlock.Block.Slot = 40                 // Different epoch (epoch 1)
+	headBlock.Block.ParentRoot = parentRoot[:] // Head descends from parent
+	util.SaveBlock(t, ctx, db, headBlock)
+	headRoot, err := headBlock.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	headState := beaconState.Copy()
+	require.NoError(t, headState.SetSlot(40))
+	require.NoError(t, db.SaveState(ctx, headState, headRoot))
+
+	// Create a block at slot 2 (same epoch 0 as parent)
+	block := util.NewBeaconBlock()
+	block.Block.Slot = 2
+	block.Block.ParentRoot = parentRoot[:]
+	signedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+
+	forkchoiceStore := doublylinkedtree.New()
+	stateGen := stategen.New(db, forkchoiceStore)
+
+	// Insert parent block into forkchoice
+	signedParentBlock, err := blocks.NewSignedBeaconBlock(parentBlock)
+	require.NoError(t, err)
+	roParentBlock, err := blocks.NewROBlockWithRoot(signedParentBlock, parentRoot)
+	require.NoError(t, err)
+	require.NoError(t, forkchoiceStore.InsertNode(ctx, parentState, roParentBlock))
+
+	// Insert head block into forkchoice
+	signedHeadBlock, err := blocks.NewSignedBeaconBlock(headBlock)
+	require.NoError(t, err)
+	roHeadBlock, err := blocks.NewROBlockWithRoot(signedHeadBlock, headRoot)
+	require.NoError(t, err)
+	require.NoError(t, forkchoiceStore.InsertNode(ctx, headState, roHeadBlock))
+
+	chainService := &mock.ChainService{
+		DB:    db,
+		Root:  headRoot[:], // Head is different from parent
+		State: headState,   // Set head state so HeadSlot() returns correct value
+		FinalizedCheckPoint: &ethpb.Checkpoint{
+			Epoch: 0,
+			Root:  parentRoot[:],
+		},
+		ForkChoiceStore: forkchoiceStore,
+	}
+
+	r := &Service{
+		cfg: &config{
+			beaconDB: db,
+			chain:    chainService,
+			stateGen: stateGen,
+		},
+	}
+
+	// Call blockVerifyingState - should return parent state without processing
+	result, err := r.blockVerifyingState(ctx, signedBlock)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Verify that the returned state is at slot 1 (parent state slot)
+	// This confirms that the branch at line 361 was taken (returning parentState directly)
+	assert.Equal(t, primitives.Slot(1), result.Slot())
 }
