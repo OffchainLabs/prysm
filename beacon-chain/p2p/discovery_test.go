@@ -138,18 +138,11 @@ func setNodeSubnets(localNode *enode.LocalNode, attSubnets []uint64) {
 func TestCreateListener(t *testing.T) {
 	port := 1024
 	ipAddr, pkey := createAddrAndPrivKey(t)
-
-	db := testDB.SetupDB(t)
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: uint(port), DB: db},
+		cfg:                   &Config{UDPPort: uint(port)},
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 	listener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -172,18 +165,11 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
-
-	db := testDB.SetupDB(t)
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx:                   t.Context(),
-		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true, DB: db},
+		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -203,20 +189,13 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 			UDPPort:              uint(port),
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
-			DB:                   db,
 		}
 		ipAddr, pkey := createAddrAndPrivKey(t)
-
-		custodyInfoSetLoop := make(chan struct{})
-		close(custodyInfoSetLoop)
-
 		s = &Service{
-			ctx:                   t.Context(),
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
 			custodyInfo:           &custodyInfo{},
-			custodyInfoSet:        custodyInfoSetLoop,
 		}
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		assert.NoError(t, err, "Could not start discovery for node")
@@ -367,18 +346,11 @@ func TestCreateLocalNode(t *testing.T) {
 func TestRebootDiscoveryListener(t *testing.T) {
 	port := 1024
 	ipAddr, pkey := createAddrAndPrivKey(t)
-
-	db := testDB.SetupDB(t)
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: uint(port), DB: db},
+		cfg:                   &Config{UDPPort: uint(port)},
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 
 	createListener := func() (*discover.UDPv5, error) {
@@ -407,17 +379,11 @@ func TestRebootDiscoveryListener(t *testing.T) {
 func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 	addr := net.ParseIP("invalidIP")
 	_, pkey := createAddrAndPrivKey(t)
-
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		cfg:                   &Config{},
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 	node, err := s.createLocalNode(pkey, addr, 0, 0, 0)
 	require.NoError(t, err)
@@ -428,23 +394,15 @@ func TestMultiAddrsConversion_InvalidIPAddr(t *testing.T) {
 func TestMultiAddrConversion_OK(t *testing.T) {
 	hook := logTest.NewGlobal()
 	ipAddr, pkey := createAddrAndPrivKey(t)
-
-	db := testDB.SetupDB(t)
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx: t.Context(),
 		cfg: &Config{
 			UDPPort:  2000,
 			TCPPort:  3000,
 			QUICPort: 3000,
-			DB:       db,
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 	listener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -514,20 +472,13 @@ func TestHostIsResolved(t *testing.T) {
 		"2001:4860:4860::8844": true,
 	}
 
-	db := testDB.SetupDB(t)
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx: t.Context(),
 		cfg: &Config{
 			HostDNS: host,
-			DB:      db,
 		},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 	ip, key := createAddrAndPrivKey(t)
 	list, err := s.createListener(ip, key)
@@ -593,18 +544,11 @@ func TestUDPMultiAddress(t *testing.T) {
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
-
-	db := testDB.SetupDB(t)
-	custodyInfoSet := make(chan struct{})
-	close(custodyInfoSet)
-
 	s := &Service{
-		ctx:                   t.Context(),
-		cfg:                   &Config{UDPPort: uint(port), DB: db},
+		cfg:                   &Config{UDPPort: uint(port)},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
-		custodyInfoSet:        custodyInfoSet,
 	}
 
 	createListener := func() (*discover.UDPv5, error) {
