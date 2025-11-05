@@ -167,6 +167,7 @@ func TestCreateListener(t *testing.T) {
 }
 
 func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
+	port := 2100
 	ipAddr, pkey := createAddrAndPrivKey(t)
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
@@ -177,7 +178,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 
 	s := &Service{
 		ctx:                   t.Context(),
-		cfg:                   &Config{UDPPort: 6000, PingInterval: testPingInterval, DisableLivenessCheck: true, DB: db}, // Use high port to reduce conflicts
+		cfg:                   &Config{UDPPort: uint(port), PingInterval: testPingInterval, DisableLivenessCheck: true, DB: db},
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
@@ -195,7 +196,7 @@ func TestStartDiscV5_DiscoverAllPeers(t *testing.T) {
 
 	var listeners []*listenerWrapper
 	for i := 1; i <= 5; i++ {
-		port := 6000 + i // Use unique high ports for peer discovery
+		port = 3000 + i
 		cfg := &Config{
 			Discv5BootStrapAddrs: []string{bootNode.String()},
 			UDPPort:              uint(port),
@@ -283,11 +284,11 @@ func TestCreateLocalNode(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			// Define ports. Use unique ports since this test validates ENR content.
+			// Define ports.
 			const (
-				udpPort  = 3100
-				tcpPort  = 3101
-				quicPort = 3102
+				udpPort  = 2600
+				tcpPort  = 3100
+				quicPort = 3100
 			)
 
 			custodyRequirement := params.BeaconConfig().CustodyRequirement
@@ -373,7 +374,7 @@ func TestRebootDiscoveryListener(t *testing.T) {
 		ctx:                   t.Context(),
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		cfg:                   &Config{UDPPort: 0, DB: db}, // Use 0 to let OS assign an available port
+		cfg:                   &Config{UDPPort: 2300, DB: db},
 		custodyInfo:           &custodyInfo{},
 		custodyInfoSet:        custodyInfoSet,
 	}
@@ -433,9 +434,9 @@ func TestMultiAddrConversion_OK(t *testing.T) {
 	s := &Service{
 		ctx: t.Context(),
 		cfg: &Config{
-			UDPPort:  0, // Use 0 to let OS assign an available port
-			TCPPort:  0,
-			QUICPort: 0,
+			UDPPort:  2400,
+			TCPPort:  3200,
+			QUICPort: 3200,
 			DB:       db,
 		},
 		genesisTime:           time.Now(),
@@ -964,7 +965,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 					actualPingCount++
 					return nil
 				},
-				cfg:                   &Config{UDPPort: 0, DB: testDB.SetupDB(t)}, // Use 0 to let OS assign an available port
+				cfg:                   &Config{UDPPort: 2700, DB: testDB.SetupDB(t)},
 				peers:                 p2p.Peers(),
 				genesisTime:           time.Now().Add(-time.Duration(tc.epochSinceGenesis*secondsPerEpoch) * time.Second),
 				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
