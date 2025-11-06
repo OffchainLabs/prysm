@@ -124,6 +124,7 @@ type BeaconNode struct {
 	DataColumnStorage        *filesystem.DataColumnStorage
 	DataColumnStorageOptions []filesystem.DataColumnStorageOption
 	verifyInitWaiter         *verification.InitializerWaiter
+	lhsp                     *verification.LazyHeadStateProvider
 	syncChecker              *initialsync.SyncChecker
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
@@ -230,19 +231,9 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not start modules")
 	}
 
-	// Create a lazy head state provider that will fetch the blockchain service when needed.
-	// This is necessary because the blockchain service is registered after this initialization.
-	headStateGetter := func() (verification.HeadStateProvider, error) {
-		var chainService *blockchain.Service
-		if err := beacon.services.FetchService(&chainService); err != nil {
-			return nil, err
-		}
-		return chainService, nil
-	}
-	lazyHeadState := verification.NewLazyHeadStateProvider(headStateGetter)
-
+	beacon.lhsp = verification.NewLazyHeadStateProvider()
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, lazyHeadState)
+		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
@@ -760,6 +751,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 	if err != nil {
 		return errors.Wrap(err, "could not register blockchain service")
 	}
+	b.lhsp.SetProvider(blockchainService)
 	return b.services.RegisterService(blockchainService)
 }
 

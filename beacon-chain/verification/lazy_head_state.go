@@ -2,62 +2,69 @@ package verification
 
 import (
 	"context"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/pkg/errors"
 )
 
-// HeadStateGetter is a function type that retrieves a HeadStateProvider.
-// This allows for lazy initialization of the head state provider.
-type HeadStateGetter func() (HeadStateProvider, error)
+var errLazyProviderNotSet = errors.New("lazy head state provider not set")
 
-// LazyHeadStateProvider wraps a HeadStateGetter to provide lazy access to head state methods.
-// This is useful when the underlying head state provider (e.g., blockchain service) is not
-// available at construction time but will be available when methods are called.
 type LazyHeadStateProvider struct {
-	getter HeadStateGetter
+	mu       sync.RWMutex
+	provider HeadStateProvider
+}
+
+func NewLazyHeadStateProvider() *LazyHeadStateProvider {
+	return &LazyHeadStateProvider{}
+}
+
+// HeadRoot delegates to the underlying provider's HeadRoot method.
+func (p *LazyHeadStateProvider) HeadRoot(ctx context.Context) ([]byte, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.provider == nil {
+		return nil, nil
+	}
+	return p.provider.HeadRoot(ctx)
+}
+
+// HeadSlot delegates to the underlying provider's HeadSlot method.
+func (p *LazyHeadStateProvider) HeadSlot() primitives.Slot {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.provider == nil {
+		return 0
+	}
+	return p.provider.HeadSlot()
+}
+
+// HeadState delegates to the underlying provider's HeadState method.
+func (p *LazyHeadStateProvider) HeadState(ctx context.Context) (state.BeaconState, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.provider == nil {
+		return nil, errLazyProviderNotSet
+	}
+	return p.provider.HeadState(ctx)
+}
+
+// HeadStateReadOnly delegates to the underlying provider's HeadStateReadOnly method.
+func (p *LazyHeadStateProvider) HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.provider == nil {
+		return nil, errLazyProviderNotSet
+	}
+	return p.provider.HeadStateReadOnly(ctx)
+}
+
+// SetProvider sets the HeadStateProvider to be used by the SimplerLazyHeadStateProvider.
+func (p *LazyHeadStateProvider) SetProvider(provider HeadStateProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.provider = provider
 }
 
 var _ HeadStateProvider = &LazyHeadStateProvider{}
-
-// NewLazyHeadStateProvider creates a new LazyHeadStateProvider that uses the provided
-// getter function to lazily retrieve the underlying HeadStateProvider.
-func NewLazyHeadStateProvider(getter HeadStateGetter) *LazyHeadStateProvider {
-	return &LazyHeadStateProvider{getter: getter}
-}
-
-// HeadRoot delegates to the underlying head state provider's HeadRoot method.
-func (l *LazyHeadStateProvider) HeadRoot(ctx context.Context) ([]byte, error) {
-	hsp, err := l.getter()
-	if err != nil {
-		return nil, err
-	}
-	return hsp.HeadRoot(ctx)
-}
-
-// HeadSlot delegates to the underlying head state provider's HeadSlot method.
-func (l *LazyHeadStateProvider) HeadSlot() primitives.Slot {
-	hsp, err := l.getter()
-	if err != nil {
-		return 0
-	}
-	return hsp.HeadSlot()
-}
-
-// HeadState delegates to the underlying head state provider's HeadState method.
-func (l *LazyHeadStateProvider) HeadState(ctx context.Context) (state.BeaconState, error) {
-	hsp, err := l.getter()
-	if err != nil {
-		return nil, err
-	}
-	return hsp.HeadState(ctx)
-}
-
-// HeadStateReadOnly delegates to the underlying head state provider's HeadStateReadOnly method.
-func (l *LazyHeadStateProvider) HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error) {
-	hsp, err := l.getter()
-	if err != nil {
-		return nil, err
-	}
-	return hsp.HeadStateReadOnly(ctx)
-}
