@@ -300,7 +300,6 @@ func TestListAttestationsV2(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 0
-		config.FuluForkEpoch = config.FarFutureEpoch
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{State: bs}
@@ -361,7 +360,6 @@ func TestListAttestationsV2(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
-			config.FuluForkEpoch = config.FarFutureEpoch
 			params.OverrideBeaconConfig(config)
 
 			s.ListAttestationsV2(writer, request)
@@ -681,7 +679,6 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
 			config := params.BeaconConfig()
 			config.ElectraForkEpoch = 0
-			config.FuluForkEpoch = config.FarFutureEpoch
 			params.OverrideBeaconConfig(config)
 
 			var body bytes.Buffer
@@ -1651,7 +1648,6 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 100
-		config.FuluForkEpoch = config.FarFutureEpoch
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{State: bs}
@@ -1691,7 +1687,6 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 100
-		config.FuluForkEpoch = config.FarFutureEpoch
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{State: bs}
@@ -1762,7 +1757,6 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
 		config.ElectraForkEpoch = 100
-		config.FuluForkEpoch = config.FarFutureEpoch
 		params.OverrideBeaconConfig(config)
 
 		chainService := &blockchainmock.ChainService{State: bs}
