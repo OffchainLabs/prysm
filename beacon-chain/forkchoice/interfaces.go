@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 // BalancesByRooter is a handler to obtain the effective balances of the state

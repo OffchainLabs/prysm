@@ -11,7 +11,7 @@ go_library(
         "validator.go",
         "verification.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",

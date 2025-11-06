@@ -1,4 +1,4 @@
-module github.com/OffchainLabs/prysm/v6
+module github.com/OffchainLabs/prysm/v7
 
 go 1.25.1
 
