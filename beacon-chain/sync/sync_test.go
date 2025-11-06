@@ -20,7 +20,7 @@ func TestMain(m *testing.M) {
 		BlobBatchLimit:                  32,
 		BlobBatchLimitBurstFactor:       2,
 		DataColumnBatchLimit:            4096,
-		DataColumnBatchLimitBurstFactor: 2,
+		DataColumnBatchLimitBurstFactor: 4,
 	})
 	defer func() {
 		flags.Init(resetFlags)

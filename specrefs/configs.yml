@@ -108,8 +108,16 @@
       search: BlobSchedule\s+\[]BlobScheduleEntry
       regex: true
   spec: |
-    <spec config_var="BLOB_SCHEDULE" fork="fulu" hash="f3f1064a">
+    <spec config_var="BLOB_SCHEDULE" fork="fulu" hash="07879110">
     BLOB_SCHEDULE: tuple[frozendict[str, Any], ...] = (
+        frozendict({
+            "EPOCH": 412672,
+            "MAX_BLOBS_PER_BLOCK": 15,
+        }),
+        frozendict({
+            "EPOCH": 419072,
+            "MAX_BLOBS_PER_BLOCK": 21,
+        }),
     )
     </spec>
 
@@ -266,8 +274,8 @@
       search: FuluForkEpoch\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="FULU_FORK_EPOCH" fork="fulu" hash="673334be">
-    FULU_FORK_EPOCH: Epoch = 18446744073709551615
+    <spec config_var="FULU_FORK_EPOCH" fork="fulu" hash="af10fa3c">
+    FULU_FORK_EPOCH: Epoch = 411392
     </spec>
 
 - name: FULU_FORK_VERSION

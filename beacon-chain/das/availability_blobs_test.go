@@ -51,16 +51,20 @@ func Test_commitmentsToCheck(t *testing.T) {
 			name: "commitments within da",
 			block: func(t *testing.T) blocks.ROBlock {
 				d := util.NewBeaconBlockFulu()
-				d.Block.Body.BlobKzgCommitments = commits[:maxBlobs]
 				d.Block.Slot = fulu + 100
+				mb := params.GetNetworkScheduleEntry(slots.ToEpoch(d.Block.Slot)).MaxBlobsPerBlock
+				d.Block.Body.BlobKzgCommitments = commits[:mb]
 				sb, err := blocks.NewSignedBeaconBlock(d)
 				require.NoError(t, err)
 				rb, err := blocks.NewROBlock(sb)
 				require.NoError(t, err)
 				return rb
 			},
-			commits: commits[:maxBlobs],
-			slot:    fulu + 100,
+			commits: func() [][]byte {
+				mb := params.GetNetworkScheduleEntry(slots.ToEpoch(fulu + 100)).MaxBlobsPerBlock
+				return commits[:mb]
+			}(),
+			slot: fulu + 100,
 		},
 		{
 			name: "commitments outside da",

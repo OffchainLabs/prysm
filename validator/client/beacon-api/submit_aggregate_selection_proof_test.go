@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/api/server/structs"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
@@ -185,129 +183,6 @@ func TestSubmitAggregateSelectionProof(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSubmitAggregateSelectionProofFallBack(t *testing.T) {
-	const (
-		pubkeyStr                      = "0x8000091c2ae64ee414a54c1cc1fc67dec663408bc636cb86756e0200e41a75c8f86603f104f02c856983d2783116be13"
-		syncingEndpoint                = "/eth/v1/node/syncing"
-		attestationDataEndpoint        = "/eth/v1/validator/attestation_data"
-		aggregateAttestationEndpoint   = "/eth/v1/validator/aggregate_attestation"
-		aggregateAttestationV2Endpoint = "/eth/v2/validator/aggregate_attestation"
-		validatorIndex                 = primitives.ValidatorIndex(55293)
-		slotSignature                  = "0x8776a37d6802c4797d113169c5fcfda50e68a32058eb6356a6f00d06d7da64c841a00c7c38b9b94a204751eca53707bd03523ce4797827d9bacff116a6e776a20bbccff4b683bf5201b610797ed0502557a58a65c8395f8a1649b976c3112d15"
-		slot                           = primitives.Slot(123)
-		committeeIndex                 = primitives.CommitteeIndex(1)
-		committeesAtSlot               = uint64(1)
-	)
-
-	attestationDataResponse := generateValidAttestation(uint64(slot), uint64(committeeIndex))
-	attestationDataProto, err := attestationDataResponse.Data.ToConsensus()
-	require.NoError(t, err)
-	attestationDataRootBytes, err := attestationDataProto.HashTreeRoot()
-	require.NoError(t, err)
-
-	aggregateAttestation := &ethpb.Attestation{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
-		Data:            attestationDataProto,
-		Signature:       testhelpers.FillByteSlice(96, 82),
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	ctx := t.Context()
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-
-	// Call node syncing endpoint to check if head is optimistic.
-	jsonRestHandler.EXPECT().Get(
-		gomock.Any(),
-		syncingEndpoint,
-		&structs.SyncStatusResponse{},
-	).SetArg(
-		2,
-		structs.SyncStatusResponse{
-			Data: &structs.SyncStatusResponseData{
-				IsOptimistic: false,
-			},
-		},
-	).Return(
-		nil,
-	).Times(1)
-
-	// Call attestation data to get attestation data root to query aggregate attestation.
-	jsonRestHandler.EXPECT().Get(
-		gomock.Any(),
-		fmt.Sprintf("%s?committee_index=%d&slot=%d", attestationDataEndpoint, committeeIndex, slot),
-		&structs.GetAttestationDataResponse{},
-	).SetArg(
-		2,
-		attestationDataResponse,
-	).Return(
-		nil,
-	).Times(1)
-
-	attestationJSON, err := json.Marshal(jsonifyAttestation(aggregateAttestation))
-	require.NoError(t, err)
-
-	// Call attestation data to get attestation data root to query aggregate attestation.
-	jsonRestHandler.EXPECT().Get(
-		gomock.Any(),
-		fmt.Sprintf("%s?attestation_data_root=%s&committee_index=%d&slot=%d", aggregateAttestationV2Endpoint, hexutil.Encode(attestationDataRootBytes[:]), committeeIndex, slot),
-		&structs.AggregateAttestationResponse{},
-	).Return(
-		&httputil.DefaultJsonError{
-			Code: http.StatusNotFound,
-		},
-	).Times(1)
-
-	// Call attestation data to get attestation data root to query aggregate attestation.
-	jsonRestHandler.EXPECT().Get(
-		gomock.Any(),
-		fmt.Sprintf("%s?attestation_data_root=%s&slot=%d", aggregateAttestationEndpoint, hexutil.Encode(attestationDataRootBytes[:]), slot),
-		&structs.AggregateAttestationResponse{},
-	).SetArg(
-		2,
-		structs.AggregateAttestationResponse{
-			Data: attestationJSON,
-		},
-	).Return(
-		nil,
-	).Times(1)
-
-	pubkey, err := hexutil.Decode(pubkeyStr)
-	require.NoError(t, err)
-
-	slotSignatureBytes, err := hexutil.Decode(slotSignature)
-	require.NoError(t, err)
-
-	expectedResponse := &ethpb.AggregateSelectionResponse{
-		AggregateAndProof: &ethpb.AggregateAttestationAndProof{
-			AggregatorIndex: primitives.ValidatorIndex(55293),
-			Aggregate:       aggregateAttestation,
-			SelectionProof:  slotSignatureBytes,
-		},
-	}
-
-	validatorClient := &beaconApiValidatorClient{
-		jsonRestHandler: jsonRestHandler,
-		stateValidatorsProvider: beaconApiStateValidatorsProvider{
-			jsonRestHandler: jsonRestHandler,
-		},
-		dutiesProvider: beaconApiDutiesProvider{
-			jsonRestHandler: jsonRestHandler,
-		},
-	}
-
-	actualResponse, err := validatorClient.submitAggregateSelectionProof(ctx, &ethpb.AggregateSelectionRequest{
-		Slot:           slot,
-		CommitteeIndex: committeeIndex,
-		PublicKey:      pubkey,
-		SlotSignature:  slotSignatureBytes,
-	}, validatorIndex, committeesAtSlot)
-
-	require.NoError(t, err)
-	assert.DeepEqual(t, expectedResponse, actualResponse)
-
 }
 
 func TestSubmitAggregateSelectionProofElectra(t *testing.T) {

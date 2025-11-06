@@ -35,20 +35,14 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/states/{state_id}/proposer_lookahead":          {http.MethodGet},
 		"/eth/v1/beacon/headers":                                       {http.MethodGet},
 		"/eth/v1/beacon/headers/{block_id}":                            {http.MethodGet},
-		"/eth/v1/beacon/blinded_blocks":                                {http.MethodPost},
 		"/eth/v2/beacon/blinded_blocks":                                {http.MethodPost},
-		"/eth/v1/beacon/blocks":                                        {http.MethodPost},
 		"/eth/v2/beacon/blocks":                                        {http.MethodPost},
 		"/eth/v2/beacon/blocks/{block_id}":                             {http.MethodGet},
 		"/eth/v1/beacon/blocks/{block_id}/root":                        {http.MethodGet},
-		"/eth/v1/beacon/blocks/{block_id}/attestations":                {http.MethodGet},
 		"/eth/v2/beacon/blocks/{block_id}/attestations":                {http.MethodGet},
 		"/eth/v1/beacon/blob_sidecars/{block_id}":                      {http.MethodGet},
-		"/eth/v1/beacon/deposit_snapshot":                              {http.MethodGet},
 		"/eth/v1/beacon/blinded_blocks/{block_id}":                     {http.MethodGet},
-		"/eth/v1/beacon/pool/attestations":                             {http.MethodGet, http.MethodPost},
 		"/eth/v2/beacon/pool/attestations":                             {http.MethodGet, http.MethodPost},
-		"/eth/v1/beacon/pool/attester_slashings":                       {http.MethodGet, http.MethodPost},
 		"/eth/v2/beacon/pool/attester_slashings":                       {http.MethodGet, http.MethodPost},
 		"/eth/v1/beacon/pool/proposer_slashings":                       {http.MethodGet, http.MethodPost},
 		"/eth/v1/beacon/pool/sync_committees":                          {http.MethodPost},
@@ -62,10 +56,6 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/beacon/light_client/updates":                {http.MethodGet},
 		"/eth/v1/beacon/light_client/finality_update":        {http.MethodGet},
 		"/eth/v1/beacon/light_client/optimistic_update":      {http.MethodGet},
-	}
-
-	builderRoutes := map[string][]string{
-		"/eth/v1/builder/states/{state_id}/expected_withdrawals": {http.MethodGet},
 	}
 
 	blobRoutes := map[string][]string{
@@ -106,9 +96,7 @@ func Test_endpoints(t *testing.T) {
 		"/eth/v1/validator/duties/sync/{epoch}":            {http.MethodPost},
 		"/eth/v3/validator/blocks/{slot}":                  {http.MethodGet},
 		"/eth/v1/validator/attestation_data":               {http.MethodGet},
-		"/eth/v1/validator/aggregate_attestation":          {http.MethodGet},
 		"/eth/v2/validator/aggregate_attestation":          {http.MethodGet},
-		"/eth/v1/validator/aggregate_and_proofs":           {http.MethodPost},
 		"/eth/v2/validator/aggregate_and_proofs":           {http.MethodPost},
 		"/eth/v1/validator/beacon_committee_subscriptions": {http.MethodPost},
 		"/eth/v1/validator/sync_committee_subscriptions":   {http.MethodPost},
@@ -182,7 +170,7 @@ func Test_endpoints(t *testing.T) {
 			}
 			expectedRoutes := make(map[string][]string)
 			for _, m := range []map[string][]string{
-				beaconRoutes, builderRoutes, configRoutes, debugRoutes, eventsRoutes,
+				beaconRoutes, configRoutes, debugRoutes, eventsRoutes,
 				nodeRoutes, validatorRoutes, rewardsRoutes, blobRoutes,
 				prysmValidatorRoutes, prysmNodeRoutes, prysmBeaconRoutes,
 			} {

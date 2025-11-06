@@ -1492,20 +1492,6 @@ func sszBytesToUint256String(b []byte) (string, error) {
 	return bi.String(), nil
 }
 
-func DepositSnapshotFromConsensus(ds *eth.DepositSnapshot) *DepositSnapshot {
-	finalized := make([]string, 0, len(ds.Finalized))
-	for _, f := range ds.Finalized {
-		finalized = append(finalized, hexutil.Encode(f))
-	}
-	return &DepositSnapshot{
-		Finalized:            finalized,
-		DepositRoot:          hexutil.Encode(ds.DepositRoot),
-		DepositCount:         fmt.Sprintf("%d", ds.DepositCount),
-		ExecutionBlockHash:   hexutil.Encode(ds.ExecutionHash),
-		ExecutionBlockHeight: fmt.Sprintf("%d", ds.ExecutionDepth),
-	}
-}
-
 func PendingDepositsFromConsensus(ds []*eth.PendingDeposit) []*PendingDeposit {
 	deposits := make([]*PendingDeposit, len(ds))
 	for i, d := range ds {
