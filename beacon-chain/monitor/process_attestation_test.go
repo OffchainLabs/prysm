@@ -245,3 +245,34 @@ func TestProcessAttestations(t *testing.T) {
 	require.LogsContain(t, hook, wanted2)
 
 }
+
+func TestProcessIncludedAttestation_Bellatrix(t *testing.T) {
+	hook := logTest.NewGlobal()
+	s := setupService(t)
+	state, _ := util.DeterministicGenesisStateBellatrix(t, 256)
+	require.NoError(t, state.SetSlot(2))
+	require.NoError(t, state.SetCurrentParticipationBits(bytes.Repeat([]byte{0xff}, 13)))
+
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			Slot:            1,
+			CommitteeIndex:  0,
+			BeaconBlockRoot: bytesutil.PadTo([]byte("hello-world"), 32),
+			Source: &ethpb.Checkpoint{
+				Epoch: 0,
+				Root:  bytesutil.PadTo([]byte("hello-world"), 32),
+			},
+			Target: &ethpb.Checkpoint{
+				Epoch: 1,
+				Root:  bytesutil.PadTo([]byte("hello-world"), 32),
+			},
+		},
+		AggregationBits: bitfield.Bitlist{0b11, 0b1},
+	}
+
+	s.processIncludedAttestation(t.Context(), state, att)
+	wanted1 := "\"Attestation included\" balanceChange=0 correctHead=true correctSource=true correctTarget=true head=0x68656c6c6f2d inclusionSlot=2 newBalance=32000000000 prefix=monitor slot=1 source=0x68656c6c6f2d target=0x68656c6c6f2d validatorIndex=2"
+	wanted2 := "\"Attestation included\" balanceChange=100000000 correctHead=true correctSource=true correctTarget=true head=0x68656c6c6f2d inclusionSlot=2 newBalance=32000000000 prefix=monitor slot=1 source=0x68656c6c6f2d target=0x68656c6c6f2d validatorIndex=12"
+	require.LogsContain(t, hook, wanted1)
+	require.LogsContain(t, hook, wanted2)
+}
