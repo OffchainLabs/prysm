@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/validator/rpc"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/validator/rpc"
 	"github.com/pkg/errors"
 )
 

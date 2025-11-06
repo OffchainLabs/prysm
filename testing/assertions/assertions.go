@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	"github.com/d4l3k/messagediff"
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus/hooks/test"

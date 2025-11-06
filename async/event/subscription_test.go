@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 var errInts = errors.New("error in subscribeInts")

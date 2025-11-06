@@ -5,8 +5,8 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/OffchainLabs/prysm/v6/build/bazel"
-	"github.com/OffchainLabs/prysm/v6/tools/analyzers/logcapitalization"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
+	"github.com/OffchainLabs/prysm/v7/tools/analyzers/logcapitalization"
 )
 
 func init() {

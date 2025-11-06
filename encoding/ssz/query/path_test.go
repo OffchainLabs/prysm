@@ -3,8 +3,8 @@ package query_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 // Helper to get pointer to uint64
