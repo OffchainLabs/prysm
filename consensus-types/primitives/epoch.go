@@ -3,7 +3,7 @@ package primitives
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v7/math"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
 

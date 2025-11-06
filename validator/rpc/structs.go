@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 

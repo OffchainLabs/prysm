@@ -3,11 +3,11 @@ package transition_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestTrailingSlotState_RoundTrip(t *testing.T) {

@@ -1,8 +1,8 @@
 package doublylinkedtree
 
 import (
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // LastRoot returns the last canonical block root in the given epoch

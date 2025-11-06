@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/types/mock"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/types"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/types/mock"
 )
 
 func TestMapAggregateAndProof(t *testing.T) {

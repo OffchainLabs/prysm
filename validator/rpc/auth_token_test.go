@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang-jwt/jwt/v4"
 	logTest "github.com/sirupsen/logrus/hooks/test"

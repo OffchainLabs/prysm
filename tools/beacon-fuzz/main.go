@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"text/template"
 
-	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v7/io/file"
 )
 
 var (

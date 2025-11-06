@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 

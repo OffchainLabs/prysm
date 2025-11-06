@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/io/prompt"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/io/prompt"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"

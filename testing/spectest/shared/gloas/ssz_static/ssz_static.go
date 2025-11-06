@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	common "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/ssz_static"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
 

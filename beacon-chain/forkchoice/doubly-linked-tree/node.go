@@ -5,10 +5,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 

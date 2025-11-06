@@ -3,7 +3,7 @@ package customtypes
 import (
 	"fmt"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
 
