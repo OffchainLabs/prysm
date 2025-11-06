@@ -481,7 +481,7 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 			parentRoot := dataColumn.ParentRoot()
 			// Ensure the expensive index computation is only performed once for
 			// concurrent requests for the same signature data.
-			if _, err, _ := dv.sg.Do(concatRootSlot(parentRoot, dataColumnSlot), func() (any, error) {
+			idxAny, err, _ := dv.sg.Do(concatRootSlot(parentRoot, dataColumnSlot), func() (any, error) {
 				// Retrieve the parent state.
 				parentState, err := dv.state(ctx, parentRoot)
 				if err != nil {
@@ -494,9 +494,15 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 					return nil, columnErrBuilder(errors.Wrap(err, "compute proposer"))
 				}
 
-				return nil, nil
-			}); err != nil {
+				return idx, nil
+			})
+			if err != nil {
 				return err
+			}
+
+			var ok bool
+			if idx, ok = idxAny.(primitives.ValidatorIndex); !ok {
+				return columnErrBuilder(errors.New("type assertion to ValidatorIndex failed"))
 			}
 		}
 

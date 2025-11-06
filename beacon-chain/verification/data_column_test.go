@@ -3,6 +3,7 @@ package verification
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -807,6 +808,8 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		return firstColumn.ProposerIndex(), nil
 	}
 
+	ctx := t.Context()
+
 	testCases := []struct {
 		name          string
 		stateByRooter StateByRooter
@@ -914,20 +917,31 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipDataColumnSidecarRequirements)
-			err := verifier.SidecarProposerExpected(t.Context())
+			var wg sync.WaitGroup
+
+			var err1, err2 error
+			wg.Go(func() {
+				err1 = verifier.SidecarProposerExpected(ctx)
+			})
+			wg.Go(func() {
+				err2 = verifier.SidecarProposerExpected(ctx)
+			})
+			wg.Wait()
 
 			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
 
 			if len(tc.error) > 0 {
-				require.ErrorContains(t, tc.error, err)
+				require.ErrorContains(t, tc.error, err1)
+				require.ErrorContains(t, tc.error, err2)
 				require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
 				return
 			}
 
-			require.NoError(t, err)
+			require.NoError(t, err1)
+			require.NoError(t, err2)
 			require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
 
-			err = verifier.SidecarProposerExpected(t.Context())
+			err := verifier.SidecarProposerExpected(ctx)
 			require.NoError(t, err)
 		})
 	}
