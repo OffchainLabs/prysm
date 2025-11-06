@@ -232,6 +232,7 @@ type blobsContext struct {
 	commitments  [][]byte
 	indices      []int
 	fuluForkSlot primitives.Slot
+	postFulu     bool
 }
 
 // resolveBlobsContext extracts common blob retrieval logic including block resolution,
@@ -324,6 +325,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 		}
 	}
 
+	isPostFulu := false
 	// Create ROBlock with root for post-Fulu blocks
 	var roBlockWithRoot blocks.ROBlock
 	if roBlock.Slot() >= fuluForkSlot {
@@ -331,6 +333,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
 		}
+		isPostFulu = true
 	}
 
 	return &blobsContext{
@@ -339,6 +342,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 		commitments:  commitments,
 		indices:      indices,
 		fuluForkSlot: fuluForkSlot,
+		postFulu:     isPostFulu,
 	}, nil
 }
 
@@ -351,7 +355,6 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 //   - "justified"
 //   - <slot>
 //   - <hex encoded block root with '0x' prefix>
-//   - <block root>
 func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
 	if rpcErr != nil {
@@ -364,7 +367,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	}
 
 	// Check if this is a post-Fulu block (uses data columns)
-	if bctx.roBlock.Root() != [32]byte{} {
+	if bctx.postFulu {
 		return p.blobSidecarsFromStoredDataColumns(bctx.roBlock, bctx.indices)
 	}
 
@@ -381,7 +384,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 //   - "justified"
 //   - <slot>
 //   - <hex encoded block root with '0x' prefix>
-//   - <block root>
 func (p *BeaconDbBlocker) BlobsData(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError) {
 	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
 	if rpcErr != nil {
@@ -394,7 +396,7 @@ func (p *BeaconDbBlocker) BlobsData(ctx context.Context, id string, opts ...opti
 	}
 
 	// Check if this is a post-Fulu block (uses data columns)
-	if bctx.roBlock.Root() != [32]byte{} {
+	if bctx.postFulu {
 		return p.blobsDataFromStoredDataColumns(bctx.root, bctx.indices, len(bctx.commitments))
 	}
 
