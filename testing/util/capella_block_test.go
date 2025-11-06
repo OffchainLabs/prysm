@@ -3,12 +3,12 @@ package util
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestGenerateBLSToExecutionChange(t *testing.T) {

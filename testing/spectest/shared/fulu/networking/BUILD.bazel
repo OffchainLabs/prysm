@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = ["custody_groups.go"],
-    importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/fulu/networking",
+    importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/fulu/networking",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/peerdas:go_default_library",

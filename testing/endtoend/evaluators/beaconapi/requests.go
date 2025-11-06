@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 
@@ -136,7 +136,7 @@ var getRequests = map[string]endpoint{
 		v2PathTemplate,
 		withSanityCheckOnly()),
 	"/beacon/pool/attester_slashings": newMetadata[structs.GetAttesterSlashingsResponse](
-		v1PathTemplate,
+		v2PathTemplate,
 		withSanityCheckOnly()),
 	"/beacon/pool/proposer_slashings": newMetadata[structs.GetProposerSlashingsResponse](
 		v1PathTemplate,
@@ -147,12 +147,6 @@ var getRequests = map[string]endpoint{
 	"/beacon/pool/bls_to_execution_changes": newMetadata[structs.BLSToExecutionChangesPoolResponse](
 		v1PathTemplate,
 		withSanityCheckOnly()),
-	"/builder/states/{param1}/expected_withdrawals": newMetadata[structs.ExpectedWithdrawalsResponse](
-		v1PathTemplate,
-		withStart(params.CapellaE2EForkEpoch),
-		withParams(func(_ primitives.Epoch) []string {
-			return []string{"head"}
-		})),
 	"/config/fork_schedule": newMetadata[structs.GetForkScheduleResponse](
 		v1PathTemplate,
 		withCustomEval(func(p interface{}, lh interface{}) error {
@@ -208,7 +202,7 @@ var getRequests = map[string]endpoint{
 		withCustomEval(func(p interface{}, _ interface{}) error {
 			pResp, ok := p.(*structs.GetVersionResponse)
 			if !ok {
-				return fmt.Errorf(msgWrongJSON, &structs.ListAttestationsResponse{}, p)
+				return fmt.Errorf(msgWrongJSON, &structs.GetVersionResponse{}, p)
 			}
 			if pResp.Data == nil {
 				return errEmptyPrysmData

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/host"

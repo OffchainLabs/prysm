@@ -3,7 +3,7 @@ package slasherkv
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 // setupDB instantiates and returns a Store instance.

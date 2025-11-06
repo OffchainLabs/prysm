@@ -11,9 +11,9 @@ import (
 	sync "sync"
 
 	github_com_OffchainLabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v7_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -29,7 +29,7 @@ type BeaconState struct {
 	state                       protoimpl.MessageState                                           `protogen:"open.v1"`
 	GenesisTime                 uint64                                                           `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot       []byte                                                           `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                        github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                        github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                        *Fork                                                            `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader           *BeaconBlockHeader                                               `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                  [][]byte                                                         `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -96,11 +96,11 @@ func (x *BeaconState) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconState) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconState) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconState) GetFork() *Fork {
@@ -233,8 +233,8 @@ type PendingAttestation struct {
 	state           protoimpl.MessageState                                                     `protogen:"open.v1"`
 	AggregationBits github_com_OffchainLabs_go_bitfield.Bitlist                                `protobuf:"bytes,1,opt,name=aggregation_bits,json=aggregationBits,proto3" json:"aggregation_bits,omitempty" cast-type:"github.com/OffchainLabs/go-bitfield.Bitlist" ssz-max:"2048"`
 	Data            *AttestationData                                                           `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	InclusionDelay  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,3,opt,name=inclusion_delay,json=inclusionDelay,proto3" json:"inclusion_delay,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
-	ProposerIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,4,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	InclusionDelay  github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,3,opt,name=inclusion_delay,json=inclusionDelay,proto3" json:"inclusion_delay,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	ProposerIndex   github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,4,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -283,18 +283,18 @@ func (x *PendingAttestation) GetData() *AttestationData {
 	return nil
 }
 
-func (x *PendingAttestation) GetInclusionDelay() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *PendingAttestation) GetInclusionDelay() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.InclusionDelay
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
-func (x *PendingAttestation) GetProposerIndex() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex {
+func (x *PendingAttestation) GetProposerIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
 	if x != nil {
 		return x.ProposerIndex
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(0)
 }
 
 type HistoricalBatch struct {
@@ -351,7 +351,7 @@ func (x *HistoricalBatch) GetStateRoots() [][]byte {
 
 type StateSummary struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
-	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Root          []byte                                                           `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -387,11 +387,11 @@ func (*StateSummary) Descriptor() ([]byte, []int) {
 	return file_proto_prysm_v1alpha1_beacon_state_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *StateSummary) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *StateSummary) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *StateSummary) GetRoot() []byte {
@@ -705,7 +705,7 @@ type BeaconStateAltair struct {
 	state                       protoimpl.MessageState                                           `protogen:"open.v1"`
 	GenesisTime                 uint64                                                           `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot       []byte                                                           `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                        github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                        github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                        *Fork                                                            `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader           *BeaconBlockHeader                                               `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                  [][]byte                                                         `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -775,11 +775,11 @@ func (x *BeaconStateAltair) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconStateAltair) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconStateAltair) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconStateAltair) GetFork() *Fork {
@@ -931,7 +931,7 @@ func (x *BeaconStateAltair) GetNextSyncCommittee() *SyncCommittee {
 
 type SyncAggregatorSelectionData struct {
 	state             protoimpl.MessageState                                           `protogen:"open.v1"`
-	Slot              github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot              github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	SubcommitteeIndex uint64                                                           `protobuf:"varint,2,opt,name=subcommittee_index,json=subcommitteeIndex,proto3" json:"subcommittee_index,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -967,11 +967,11 @@ func (*SyncAggregatorSelectionData) Descriptor() ([]byte, []int) {
 	return file_proto_prysm_v1alpha1_beacon_state_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *SyncAggregatorSelectionData) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *SyncAggregatorSelectionData) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *SyncAggregatorSelectionData) GetSubcommitteeIndex() uint64 {
@@ -985,7 +985,7 @@ type BeaconStateBellatrix struct {
 	state                        protoimpl.MessageState                                           `protogen:"open.v1"`
 	GenesisTime                  uint64                                                           `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot        []byte                                                           `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                         github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                         github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                         *Fork                                                            `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader            *BeaconBlockHeader                                               `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                   [][]byte                                                         `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -1056,11 +1056,11 @@ func (x *BeaconStateBellatrix) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconStateBellatrix) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconStateBellatrix) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconStateBellatrix) GetFork() *Fork {
@@ -1221,7 +1221,7 @@ type BeaconStateCapella struct {
 	state                        protoimpl.MessageState                                                     `protogen:"open.v1"`
 	GenesisTime                  uint64                                                                     `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot        []byte                                                                     `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                         github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                         github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                         *Fork                                                                      `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader            *BeaconBlockHeader                                                         `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                   [][]byte                                                                   `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -1245,7 +1245,7 @@ type BeaconStateCapella struct {
 	NextSyncCommittee            *SyncCommittee                                                             `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
 	LatestExecutionPayloadHeader *v1.ExecutionPayloadHeaderCapella                                          `protobuf:"bytes,10001,opt,name=latest_execution_payload_header,json=latestExecutionPayloadHeader,proto3" json:"latest_execution_payload_header,omitempty"`
 	NextWithdrawalIndex          uint64                                                                     `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
-	NextWithdrawalValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	NextWithdrawalValidatorIndex github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	HistoricalSummaries          []*HistoricalSummary                                                       `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
@@ -1295,11 +1295,11 @@ func (x *BeaconStateCapella) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconStateCapella) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconStateCapella) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconStateCapella) GetFork() *Fork {
@@ -1463,11 +1463,11 @@ func (x *BeaconStateCapella) GetNextWithdrawalIndex() uint64 {
 	return 0
 }
 
-func (x *BeaconStateCapella) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex {
+func (x *BeaconStateCapella) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
 	if x != nil {
 		return x.NextWithdrawalValidatorIndex
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(0)
 }
 
 func (x *BeaconStateCapella) GetHistoricalSummaries() []*HistoricalSummary {
@@ -1481,7 +1481,7 @@ type BeaconStateDeneb struct {
 	state                        protoimpl.MessageState                                                     `protogen:"open.v1"`
 	GenesisTime                  uint64                                                                     `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot        []byte                                                                     `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                         github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                         github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                         *Fork                                                                      `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader            *BeaconBlockHeader                                                         `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                   [][]byte                                                                   `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -1505,7 +1505,7 @@ type BeaconStateDeneb struct {
 	NextSyncCommittee            *SyncCommittee                                                             `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
 	LatestExecutionPayloadHeader *v1.ExecutionPayloadHeaderDeneb                                            `protobuf:"bytes,10001,opt,name=latest_execution_payload_header,json=latestExecutionPayloadHeader,proto3" json:"latest_execution_payload_header,omitempty"`
 	NextWithdrawalIndex          uint64                                                                     `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
-	NextWithdrawalValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	NextWithdrawalValidatorIndex github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	HistoricalSummaries          []*HistoricalSummary                                                       `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
@@ -1555,11 +1555,11 @@ func (x *BeaconStateDeneb) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconStateDeneb) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconStateDeneb) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconStateDeneb) GetFork() *Fork {
@@ -1723,11 +1723,11 @@ func (x *BeaconStateDeneb) GetNextWithdrawalIndex() uint64 {
 	return 0
 }
 
-func (x *BeaconStateDeneb) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex {
+func (x *BeaconStateDeneb) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
 	if x != nil {
 		return x.NextWithdrawalValidatorIndex
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(0)
 }
 
 func (x *BeaconStateDeneb) GetHistoricalSummaries() []*HistoricalSummary {
@@ -1741,7 +1741,7 @@ type BeaconStateElectra struct {
 	state                         protoimpl.MessageState                                                     `protogen:"open.v1"`
 	GenesisTime                   uint64                                                                     `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot         []byte                                                                     `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                          *Fork                                                                      `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader             *BeaconBlockHeader                                                         `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                    [][]byte                                                                   `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -1765,14 +1765,14 @@ type BeaconStateElectra struct {
 	NextSyncCommittee             *SyncCommittee                                                             `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
 	LatestExecutionPayloadHeader  *v1.ExecutionPayloadHeaderDeneb                                            `protobuf:"bytes,10001,opt,name=latest_execution_payload_header,json=latestExecutionPayloadHeader,proto3" json:"latest_execution_payload_header,omitempty"`
 	NextWithdrawalIndex           uint64                                                                     `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
-	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	HistoricalSummaries           []*HistoricalSummary                                                       `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
 	DepositRequestsStartIndex     uint64                                                                     `protobuf:"varint,12001,opt,name=deposit_requests_start_index,json=depositRequestsStartIndex,proto3" json:"deposit_requests_start_index,omitempty"`
-	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	EarliestExitEpoch             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestExitEpoch             github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	PendingDeposits               []*PendingDeposit                                                          `protobuf:"bytes,12007,rep,name=pending_deposits,json=pendingDeposits,proto3" json:"pending_deposits,omitempty" ssz-max:"134217728"`
 	PendingPartialWithdrawals     []*PendingPartialWithdrawal                                                `protobuf:"bytes,12008,rep,name=pending_partial_withdrawals,json=pendingPartialWithdrawals,proto3" json:"pending_partial_withdrawals,omitempty" ssz-max:"134217728"`
 	PendingConsolidations         []*PendingConsolidation                                                    `protobuf:"bytes,12009,rep,name=pending_consolidations,json=pendingConsolidations,proto3" json:"pending_consolidations,omitempty" ssz-max:"262144"`
@@ -1824,11 +1824,11 @@ func (x *BeaconStateElectra) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconStateElectra) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconStateElectra) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconStateElectra) GetFork() *Fork {
@@ -1992,11 +1992,11 @@ func (x *BeaconStateElectra) GetNextWithdrawalIndex() uint64 {
 	return 0
 }
 
-func (x *BeaconStateElectra) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex {
+func (x *BeaconStateElectra) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
 	if x != nil {
 		return x.NextWithdrawalValidatorIndex
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(0)
 }
 
 func (x *BeaconStateElectra) GetHistoricalSummaries() []*HistoricalSummary {
@@ -2013,39 +2013,39 @@ func (x *BeaconStateElectra) GetDepositRequestsStartIndex() uint64 {
 	return 0
 }
 
-func (x *BeaconStateElectra) GetDepositBalanceToConsume() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei {
+func (x *BeaconStateElectra) GetDepositBalanceToConsume() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
 	if x != nil {
 		return x.DepositBalanceToConsume
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(0)
 }
 
-func (x *BeaconStateElectra) GetExitBalanceToConsume() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei {
+func (x *BeaconStateElectra) GetExitBalanceToConsume() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
 	if x != nil {
 		return x.ExitBalanceToConsume
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(0)
 }
 
-func (x *BeaconStateElectra) GetEarliestExitEpoch() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch {
+func (x *BeaconStateElectra) GetEarliestExitEpoch() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch {
 	if x != nil {
 		return x.EarliestExitEpoch
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(0)
 }
 
-func (x *BeaconStateElectra) GetConsolidationBalanceToConsume() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei {
+func (x *BeaconStateElectra) GetConsolidationBalanceToConsume() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
 	if x != nil {
 		return x.ConsolidationBalanceToConsume
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(0)
 }
 
-func (x *BeaconStateElectra) GetEarliestConsolidationEpoch() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch {
+func (x *BeaconStateElectra) GetEarliestConsolidationEpoch() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch {
 	if x != nil {
 		return x.EarliestConsolidationEpoch
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(0)
 }
 
 func (x *BeaconStateElectra) GetPendingDeposits() []*PendingDeposit {
@@ -2073,7 +2073,7 @@ type BeaconStateFulu struct {
 	state                         protoimpl.MessageState                                                     `protogen:"open.v1"`
 	GenesisTime                   uint64                                                                     `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot         []byte                                                                     `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                          *Fork                                                                      `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader             *BeaconBlockHeader                                                         `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                    [][]byte                                                                   `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -2097,14 +2097,14 @@ type BeaconStateFulu struct {
 	NextSyncCommittee             *SyncCommittee                                                             `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
 	LatestExecutionPayloadHeader  *v1.ExecutionPayloadHeaderDeneb                                            `protobuf:"bytes,10001,opt,name=latest_execution_payload_header,json=latestExecutionPayloadHeader,proto3" json:"latest_execution_payload_header,omitempty"`
 	NextWithdrawalIndex           uint64                                                                     `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
-	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	HistoricalSummaries           []*HistoricalSummary                                                       `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
 	DepositRequestsStartIndex     uint64                                                                     `protobuf:"varint,12001,opt,name=deposit_requests_start_index,json=depositRequestsStartIndex,proto3" json:"deposit_requests_start_index,omitempty"`
-	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	EarliestExitEpoch             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestExitEpoch             github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	PendingDeposits               []*PendingDeposit                                                          `protobuf:"bytes,12007,rep,name=pending_deposits,json=pendingDeposits,proto3" json:"pending_deposits,omitempty" ssz-max:"134217728"`
 	PendingPartialWithdrawals     []*PendingPartialWithdrawal                                                `protobuf:"bytes,12008,rep,name=pending_partial_withdrawals,json=pendingPartialWithdrawals,proto3" json:"pending_partial_withdrawals,omitempty" ssz-max:"134217728"`
 	PendingConsolidations         []*PendingConsolidation                                                    `protobuf:"bytes,12009,rep,name=pending_consolidations,json=pendingConsolidations,proto3" json:"pending_consolidations,omitempty" ssz-max:"262144"`
@@ -2157,11 +2157,11 @@ func (x *BeaconStateFulu) GetGenesisValidatorsRoot() []byte {
 	return nil
 }
 
-func (x *BeaconStateFulu) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot {
+func (x *BeaconStateFulu) GetSlot() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.Slot
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(0)
 }
 
 func (x *BeaconStateFulu) GetFork() *Fork {
@@ -2325,11 +2325,11 @@ func (x *BeaconStateFulu) GetNextWithdrawalIndex() uint64 {
 	return 0
 }
 
-func (x *BeaconStateFulu) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex {
+func (x *BeaconStateFulu) GetNextWithdrawalValidatorIndex() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex {
 	if x != nil {
 		return x.NextWithdrawalValidatorIndex
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(0)
 }
 
 func (x *BeaconStateFulu) GetHistoricalSummaries() []*HistoricalSummary {
@@ -2346,39 +2346,39 @@ func (x *BeaconStateFulu) GetDepositRequestsStartIndex() uint64 {
 	return 0
 }
 
-func (x *BeaconStateFulu) GetDepositBalanceToConsume() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei {
+func (x *BeaconStateFulu) GetDepositBalanceToConsume() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
 	if x != nil {
 		return x.DepositBalanceToConsume
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(0)
 }
 
-func (x *BeaconStateFulu) GetExitBalanceToConsume() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei {
+func (x *BeaconStateFulu) GetExitBalanceToConsume() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
 	if x != nil {
 		return x.ExitBalanceToConsume
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(0)
 }
 
-func (x *BeaconStateFulu) GetEarliestExitEpoch() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch {
+func (x *BeaconStateFulu) GetEarliestExitEpoch() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch {
 	if x != nil {
 		return x.EarliestExitEpoch
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(0)
 }
 
-func (x *BeaconStateFulu) GetConsolidationBalanceToConsume() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei {
+func (x *BeaconStateFulu) GetConsolidationBalanceToConsume() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei {
 	if x != nil {
 		return x.ConsolidationBalanceToConsume
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(0)
 }
 
-func (x *BeaconStateFulu) GetEarliestConsolidationEpoch() github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch {
+func (x *BeaconStateFulu) GetEarliestConsolidationEpoch() github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch {
 	if x != nil {
 		return x.EarliestConsolidationEpoch
 	}
-	return github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch(0)
+	return github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(0)
 }
 
 func (x *BeaconStateFulu) GetPendingDeposits() []*PendingDeposit {
@@ -2438,7 +2438,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x73, 0x52, 0x6f, 0x6f, 0x74, 0x12, 0x59, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0xeb, 0x07,
 	0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
 	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62,
-	0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65,
+	0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65,
 	0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69,
 	0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74,
 	0x12, 0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b, 0x18, 0xec, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32,
@@ -2540,14 +2540,14 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x6d, 0x0a, 0x0f, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x73, 0x69, 0x6f, 0x6e, 0x5f, 0x64, 0x65, 0x6c,
 	0x61, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69,
 	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69,
-	0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63,
+	0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63,
 	0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70,
 	0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x0e,
 	0x69, 0x6e, 0x63, 0x6c, 0x75, 0x73, 0x69, 0x6f, 0x6e, 0x44, 0x65, 0x6c, 0x61, 0x79, 0x12, 0x75,
 	0x0a, 0x0e, 0x70, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65, 0x72, 0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78,
 	0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x42, 0x4e, 0x82, 0xb5, 0x18, 0x4a, 0x67, 0x69, 0x74, 0x68,
 	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c,
-	0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e,
+	0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e,
 	0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69,
 	0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f,
 	0x72, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x52, 0x0d, 0x70, 0x72, 0x6f, 0x70, 0x6f, 0x73, 0x65, 0x72,
@@ -2562,7 +2562,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x6d, 0x61, 0x72, 0x79, 0x12, 0x58, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01,
 	0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
 	0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f,
-	0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73,
+	0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73,
 	0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69,
 	0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x12,
 	0x0a, 0x04, 0x72, 0x6f, 0x6f, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x72, 0x6f,
@@ -2620,7 +2620,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x72, 0x73, 0x52, 0x6f, 0x6f, 0x74, 0x12, 0x59, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0xeb,
 	0x07, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75,
 	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61,
-	0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73,
+	0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73,
 	0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d,
 	0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f,
 	0x74, 0x12, 0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b, 0x18, 0xec, 0x07, 0x20, 0x01, 0x28, 0x0b,
@@ -2724,7 +2724,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5,
 	0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66,
 	0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f,
-	0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
+	0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
 	0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c,
 	0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x2d, 0x0a, 0x12, 0x73, 0x75, 0x62, 0x63,
 	0x6f, 0x6d, 0x6d, 0x69, 0x74, 0x74, 0x65, 0x65, 0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0x02,
@@ -2740,7 +2740,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x73, 0x52, 0x6f, 0x6f, 0x74, 0x12, 0x59, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0xeb, 0x07,
 	0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
 	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62,
-	0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65,
+	0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65,
 	0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69,
 	0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74,
 	0x12, 0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b, 0x18, 0xec, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32,
@@ -2857,7 +2857,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0xeb, 0x07, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5,
 	0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66,
 	0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f,
-	0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
+	0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
 	0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c,
 	0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b,
 	0x18, 0xec, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65,
@@ -2971,7 +2971,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x74, 0x6f, 0x72, 0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0xfa, 0x55, 0x20, 0x01, 0x28, 0x04,
 	0x42, 0x4e, 0x82, 0xb5, 0x18, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
 	0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72,
-	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
+	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
 	0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65,
 	0x73, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x64, 0x65, 0x78,
 	0x52, 0x1c, 0x6e, 0x65, 0x78, 0x74, 0x57, 0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61, 0x6c,
@@ -2993,7 +2993,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x52, 0x6f, 0x6f, 0x74, 0x12, 0x59, 0x0a, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x18, 0xeb, 0x07, 0x20,
 	0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e,
 	0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73,
-	0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e,
+	0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e,
 	0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74,
 	0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12,
 	0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b, 0x18, 0xec, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b,
@@ -3107,7 +3107,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0xfa,
 	0x55, 0x20, 0x01, 0x28, 0x04, 0x42, 0x4e, 0x82, 0xb5, 0x18, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75,
 	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61,
-	0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73,
+	0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73,
 	0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d,
 	0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72,
 	0x49, 0x6e, 0x64, 0x65, 0x78, 0x52, 0x1c, 0x6e, 0x65, 0x78, 0x74, 0x57, 0x69, 0x74, 0x68, 0x64,
@@ -3129,7 +3129,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x52, 0x6f, 0x6f, 0x74, 0x12, 0x59, 0x0a, 0x04, 0x73,
 	0x6c, 0x6f, 0x74, 0x18, 0xeb, 0x07, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18, 0x40,
 	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68,
-	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36,
+	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37,
 	0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73,
 	0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f, 0x74,
 	0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b, 0x18, 0xec,
@@ -3244,7 +3244,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0xfa, 0x55, 0x20, 0x01, 0x28, 0x04, 0x42, 0x4e, 0x82, 0xb5,
 	0x18, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66,
 	0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f,
-	0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
+	0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
 	0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x56, 0x61,
 	0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x52, 0x1c, 0x6e, 0x65,
 	0x78, 0x74, 0x57, 0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61, 0x6c, 0x56, 0x61, 0x6c, 0x69,
@@ -3264,7 +3264,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x18, 0xe2, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44,
 	0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f,
 	0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73,
-	0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74,
+	0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74,
 	0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e,
 	0x47, 0x77, 0x65, 0x69, 0x52, 0x17, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x42, 0x61, 0x6c,
 	0x61, 0x6e, 0x63, 0x65, 0x54, 0x6f, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x12, 0x7c, 0x0a,
@@ -3272,14 +3272,14 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x5f, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x18, 0xe3, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42,
 	0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
 	0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79,
-	0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d,
+	0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d,
 	0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73,
 	0x2e, 0x47, 0x77, 0x65, 0x69, 0x52, 0x14, 0x65, 0x78, 0x69, 0x74, 0x42, 0x61, 0x6c, 0x61, 0x6e,
 	0x63, 0x65, 0x54, 0x6f, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x12, 0x76, 0x0a, 0x13, 0x65,
 	0x61, 0x72, 0x6c, 0x69, 0x65, 0x73, 0x74, 0x5f, 0x65, 0x78, 0x69, 0x74, 0x5f, 0x65, 0x70, 0x6f,
 	0x63, 0x68, 0x18, 0xe4, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42, 0x45, 0x82, 0xb5, 0x18, 0x41, 0x67,
 	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61,
-	0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f,
+	0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f,
 	0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f,
 	0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x45, 0x70, 0x6f, 0x63, 0x68,
 	0x52, 0x11, 0x65, 0x61, 0x72, 0x6c, 0x69, 0x65, 0x73, 0x74, 0x45, 0x78, 0x69, 0x74, 0x45, 0x70,
@@ -3288,7 +3288,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x5f, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x18, 0xe5, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42,
 	0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
 	0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79,
-	0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d,
+	0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d,
 	0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73,
 	0x2e, 0x47, 0x77, 0x65, 0x69, 0x52, 0x1d, 0x63, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61,
 	0x74, 0x69, 0x6f, 0x6e, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x54, 0x6f, 0x43, 0x6f, 0x6e,
@@ -3297,7 +3297,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x65, 0x70, 0x6f, 0x63, 0x68, 0x18, 0xe6, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42, 0x45, 0x82, 0xb5,
 	0x18, 0x41, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66,
 	0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f,
-	0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
+	0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70,
 	0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x45, 0x70,
 	0x6f, 0x63, 0x68, 0x52, 0x1a, 0x65, 0x61, 0x72, 0x6c, 0x69, 0x65, 0x73, 0x74, 0x43, 0x6f, 0x6e,
 	0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x70, 0x6f, 0x63, 0x68, 0x12,
@@ -3333,7 +3333,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x73, 0x6c, 0x6f, 0x74, 0x18, 0xeb, 0x07, 0x20, 0x01, 0x28, 0x04, 0x42, 0x44, 0x82, 0xb5, 0x18,
 	0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63,
 	0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76,
-	0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65,
+	0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65,
 	0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x53, 0x6c, 0x6f,
 	0x74, 0x52, 0x04, 0x73, 0x6c, 0x6f, 0x74, 0x12, 0x30, 0x0a, 0x04, 0x66, 0x6f, 0x72, 0x6b, 0x18,
 	0xec, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75,
@@ -3447,7 +3447,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0xfa, 0x55, 0x20, 0x01, 0x28, 0x04, 0x42, 0x4e, 0x82,
 	0xb5, 0x18, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66,
 	0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d,
-	0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79,
+	0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79,
 	0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x56,
 	0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x52, 0x1c, 0x6e,
 	0x65, 0x78, 0x74, 0x57, 0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61, 0x6c, 0x56, 0x61, 0x6c,
@@ -3467,7 +3467,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x5f, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x18, 0xe2, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42,
 	0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
 	0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79,
-	0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d,
+	0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d,
 	0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73,
 	0x2e, 0x47, 0x77, 0x65, 0x69, 0x52, 0x17, 0x64, 0x65, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x42, 0x61,
 	0x6c, 0x61, 0x6e, 0x63, 0x65, 0x54, 0x6f, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x12, 0x7c,
@@ -3475,14 +3475,14 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x6f, 0x5f, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x18, 0xe3, 0x5d, 0x20, 0x01, 0x28, 0x04,
 	0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
 	0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72,
-	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
+	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
 	0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65,
 	0x73, 0x2e, 0x47, 0x77, 0x65, 0x69, 0x52, 0x14, 0x65, 0x78, 0x69, 0x74, 0x42, 0x61, 0x6c, 0x61,
 	0x6e, 0x63, 0x65, 0x54, 0x6f, 0x43, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x12, 0x76, 0x0a, 0x13,
 	0x65, 0x61, 0x72, 0x6c, 0x69, 0x65, 0x73, 0x74, 0x5f, 0x65, 0x78, 0x69, 0x74, 0x5f, 0x65, 0x70,
 	0x6f, 0x63, 0x68, 0x18, 0xe4, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42, 0x45, 0x82, 0xb5, 0x18, 0x41,
 	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68,
-	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36,
+	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37,
 	0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79, 0x70, 0x65, 0x73,
 	0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x45, 0x70, 0x6f, 0x63,
 	0x68, 0x52, 0x11, 0x65, 0x61, 0x72, 0x6c, 0x69, 0x65, 0x73, 0x74, 0x45, 0x78, 0x69, 0x74, 0x45,
@@ -3491,7 +3491,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x6f, 0x5f, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x18, 0xe5, 0x5d, 0x20, 0x01, 0x28, 0x04,
 	0x42, 0x44, 0x82, 0xb5, 0x18, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
 	0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72,
-	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
+	0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73,
 	0x2d, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65,
 	0x73, 0x2e, 0x47, 0x77, 0x65, 0x69, 0x52, 0x1d, 0x63, 0x6f, 0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64,
 	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x42, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x54, 0x6f, 0x43, 0x6f,
@@ -3500,7 +3500,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x5f, 0x65, 0x70, 0x6f, 0x63, 0x68, 0x18, 0xe6, 0x5d, 0x20, 0x01, 0x28, 0x04, 0x42, 0x45, 0x82,
 	0xb5, 0x18, 0x41, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66,
 	0x66, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d,
-	0x2f, 0x76, 0x36, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79,
+	0x2f, 0x76, 0x37, 0x2f, 0x63, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x2d, 0x74, 0x79,
 	0x70, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x69, 0x6d, 0x69, 0x74, 0x69, 0x76, 0x65, 0x73, 0x2e, 0x45,
 	0x70, 0x6f, 0x63, 0x68, 0x52, 0x1a, 0x65, 0x61, 0x72, 0x6c, 0x69, 0x65, 0x73, 0x74, 0x43, 0x6f,
 	0x6e, 0x73, 0x6f, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x70, 0x6f, 0x63, 0x68,
@@ -3533,7 +3533,7 @@ var file_proto_prysm_v1alpha1_beacon_state_proto_rawDesc = []byte{
 	0x68, 0x2e, 0x76, 0x31, 0x61, 0x6c, 0x70, 0x68, 0x61, 0x31, 0x42, 0x10, 0x42, 0x65, 0x61, 0x63,
 	0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x39,
 	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x4f, 0x66, 0x66, 0x63, 0x68,
-	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x36,
+	0x61, 0x69, 0x6e, 0x4c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x37,
 	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x31, 0x61,
 	0x6c, 0x70, 0x68, 0x61, 0x31, 0x3b, 0x65, 0x74, 0x68, 0xaa, 0x02, 0x15, 0x45, 0x74, 0x68, 0x65,
 	0x72, 0x65, 0x75, 0x6d, 0x2e, 0x45, 0x74, 0x68, 0x2e, 0x56, 0x31, 0x41, 0x6c, 0x70, 0x68, 0x61,

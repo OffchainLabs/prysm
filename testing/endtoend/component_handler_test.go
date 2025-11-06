@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components/eth1"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/components"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/components/eth1"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -135,10 +135,6 @@ func (c *componentHandler) setup() {
 		return nil
 	})
 	c.eth1Nodes = eth1Nodes
-
-	if config.TestCheckpointSync {
-		appendDebugEndpoints(config)
-	}
 
 	var builders *components.BuilderSet
 	var proxies *eth1.ProxySet
@@ -289,11 +285,4 @@ func PIDsFromMultiComponentRunner(runner e2etypes.MultipleComponentRunners) []in
 		}
 	}
 	return pids
-}
-
-func appendDebugEndpoints(cfg *e2etypes.E2EConfig) {
-	debug := []string{
-		"--enable-debug-rpc-endpoints",
-	}
-	cfg.BeaconFlags = append(cfg.BeaconFlags, debug...)
 }

@@ -3,8 +3,8 @@ package state_native
 import (
 	"testing"
 
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestBeaconState_PreviousEpochAttestations(t *testing.T) {

@@ -3,8 +3,8 @@ package fdlimits_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/runtime/fdlimits"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/runtime/fdlimits"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	gethLimit "github.com/ethereum/go-ethereum/common/fdlimit"
 )
 

@@ -3,8 +3,8 @@ package blocks
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestComputeBlockBodyFieldRoots_Phase0(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer/internal"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer/internal"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 )
