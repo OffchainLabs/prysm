@@ -181,7 +181,6 @@ type Service struct {
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
-	subscriptionSpawner              func(func()) // see Service.spawn for details
 	gossipsubController              *GossipsubController
 }
 

@@ -179,6 +179,7 @@ go_test(
         "decode_pubsub_test.go",
         "error_test.go",
         "fork_watcher_test.go",
+        "gossipsub_controller_test.go",
         "gossipsub_topic_family_test.go",
         "kzg_batch_verifier_test.go",
         "once_test.go",

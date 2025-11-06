@@ -17,7 +17,7 @@ type topicFamilyKey struct {
 }
 
 func topicFamilyKeyFrom(tf GossipsubTopicFamily) topicFamilyKey {
-	return topicFamilyKey{topicName: fmt.Sprintf("%T", tf), forkDigest: tf.NetworkScheduleEntry().ForkDigest}
+	return topicFamilyKey{topicName: fmt.Sprintf("%s", tf.Name()), forkDigest: tf.NetworkScheduleEntry().ForkDigest}
 }
 
 type GossipsubController struct {
