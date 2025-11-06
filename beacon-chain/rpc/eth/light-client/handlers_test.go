@@ -46,7 +46,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	cfg.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(cfg)
 
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -131,7 +131,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 				resp = &pb.LightClientBootstrapCapella{}
 			case version.Deneb:
 				resp = &pb.LightClientBootstrapDeneb{}
-			case version.Electra:
+			case version.Electra, version.Fulu:
 				resp = &pb.LightClientBootstrapElectra{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -173,10 +173,11 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	config.CapellaForkEpoch = 2
 	config.DenebForkEpoch = 3
 	config.ElectraForkEpoch = 4
+	config.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(config)
 
 	t.Run("can save retrieve", func(t *testing.T) {
-		for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		for _, testVersion := range version.All()[1:] {
 			t.Run(version.String(testVersion), func(t *testing.T) {
 
 				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -252,7 +253,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 						resp = &pb.LightClientUpdateCapella{}
 					case version.Deneb:
 						resp = &pb.LightClientUpdateDeneb{}
-					case version.Electra:
+					case version.Electra, version.Fulu:
 						resp = &pb.LightClientUpdateElectra{}
 					default:
 						t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -313,7 +314,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 							resp = &pb.LightClientUpdateCapella{}
 						case version.Deneb:
 							resp = &pb.LightClientUpdateDeneb{}
-						case version.Electra:
+						case version.Electra, version.Fulu:
 							resp = &pb.LightClientUpdateElectra{}
 						default:
 							t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -730,7 +731,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	for testVersion := 1; testVersion < 6; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 
@@ -793,7 +794,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 				resp = &pb.LightClientFinalityUpdateCapella{}
 			case version.Deneb:
 				resp = &pb.LightClientFinalityUpdateDeneb{}
-			case version.Electra:
+			case version.Electra, version.Fulu:
 				resp = &pb.LightClientFinalityUpdateElectra{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -825,7 +826,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	for testVersion := 1; testVersion < 6; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
@@ -886,7 +887,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 				resp = &pb.LightClientOptimisticUpdateCapella{}
 			case version.Deneb:
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
-			case version.Electra:
+			case version.Electra, version.Fulu:
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
