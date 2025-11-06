@@ -21,6 +21,8 @@ COMMANDS=(
   'bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=deps.bzl%prysm_deps -prune=true'
   'go mod tidy && go get ./...'
   './hack/update-go-pbs.sh'
+  'bazel clean --expunge --async'
+  './hack/update-go-ssz.sh'
   'go build ./... && bazel build //cmd/beacon-chain'
 )
 # ====================
