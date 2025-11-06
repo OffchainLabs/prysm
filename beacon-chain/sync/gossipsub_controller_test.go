@@ -48,6 +48,7 @@ func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 	closedChan := make(chan struct{})
 	close(closedChan)
 	params.SetupTestConfigCleanup(t)
+	
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
 	params.BeaconConfig().InitializeForkSchedule()
