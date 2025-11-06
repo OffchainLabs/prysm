@@ -222,10 +222,13 @@ func TestListAttestationsV2(t *testing.T) {
 		cb2 := primitives.NewAttestationCommitteeBits()
 		cb2.SetBitAt(2, true)
 
+		config := params.BeaconConfig()
+		electraSlot := slots.UnsafeEpochStart(config.ElectraForkEpoch + 1)
+
 		attElectra1 := &ethpbv1alpha1.AttestationElectra{
 			AggregationBits: []byte{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            1,
+				Slot:            electraSlot,
 				CommitteeIndex:  0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot1"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
@@ -243,7 +246,7 @@ func TestListAttestationsV2(t *testing.T) {
 		attElectra2 := &ethpbv1alpha1.AttestationElectra{
 			AggregationBits: []byte{1, 10},
 			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            1,
+				Slot:            electraSlot,
 				CommitteeIndex:  0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot2"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
@@ -261,7 +264,7 @@ func TestListAttestationsV2(t *testing.T) {
 		attElectra3 := &ethpbv1alpha1.AttestationElectra{
 			AggregationBits: bitfield.NewBitlist(8),
 			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            2,
+				Slot:            electraSlot + 1,
 				CommitteeIndex:  0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot3"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
@@ -279,7 +282,7 @@ func TestListAttestationsV2(t *testing.T) {
 		attElectra4 := &ethpbv1alpha1.AttestationElectra{
 			AggregationBits: bitfield.NewBitlist(8),
 			Data: &ethpbv1alpha1.AttestationData{
-				Slot:            2,
+				Slot:            electraSlot + 1,
 				CommitteeIndex:  0,
 				BeaconBlockRoot: bytesutil.PadTo([]byte("blockroot4"), 32),
 				Source: &ethpbv1alpha1.Checkpoint{
@@ -298,11 +301,8 @@ func TestListAttestationsV2(t *testing.T) {
 		require.NoError(t, err)
 
 		params.SetupTestConfigCleanup(t)
-		config := params.BeaconConfig()
-		config.ElectraForkEpoch = 0
-		params.OverrideBeaconConfig(config)
 
-		chainService := &blockchainmock.ChainService{State: bs}
+		chainService := &blockchainmock.ChainService{State: bs, Slot: &electraSlot}
 		s := &Server{
 			AttestationsPool: attestations.NewPool(),
 			ChainInfoFetcher: chainService,
@@ -331,7 +331,7 @@ func TestListAttestationsV2(t *testing.T) {
 			assert.Equal(t, "electra", resp.Version)
 		})
 		t.Run("slot request", func(t *testing.T) {
-			url := "http://example.com?slot=2"
+			url := fmt.Sprintf("http://example.com?slot=%d", electraSlot)
 			request := httptest.NewRequest(http.MethodGet, url, nil)
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -348,7 +348,7 @@ func TestListAttestationsV2(t *testing.T) {
 			assert.Equal(t, 2, len(atts))
 			assert.Equal(t, "electra", resp.Version)
 			for _, a := range atts {
-				assert.Equal(t, "2", a.Data.Slot)
+				assert.Equal(t, fmt.Sprintf("%d", electraSlot), a.Data.Slot)
 			}
 		})
 		t.Run("index request", func(t *testing.T) {
@@ -378,7 +378,7 @@ func TestListAttestationsV2(t *testing.T) {
 			}
 		})
 		t.Run("both slot + index request", func(t *testing.T) {
-			url := "http://example.com?slot=2&committee_index=2"
+			url := fmt.Sprintf("http://example.com?slot=%d&committee_index=2", electraSlot)
 			request := httptest.NewRequest(http.MethodGet, url, nil)
 			writer := httptest.NewRecorder()
 			writer.Body = &bytes.Buffer{}
@@ -395,7 +395,7 @@ func TestListAttestationsV2(t *testing.T) {
 			assert.Equal(t, 1, len(atts))
 			assert.Equal(t, "electra", resp.Version)
 			for _, a := range atts {
-				assert.Equal(t, "2", a.Data.Slot)
+				assert.Equal(t, fmt.Sprintf("%d", electraSlot), a.Data.Slot)
 				assert.Equal(t, "0x0400000000000000", a.CommitteeBits)
 			}
 		})
@@ -1647,11 +1647,9 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
-		config.ElectraForkEpoch = 100
-		params.OverrideBeaconConfig(config)
 
-		chainService := &blockchainmock.ChainService{State: bs}
-
+		slot := slots.UnsafeEpochStart(config.ElectraForkEpoch + 1)
+		chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 		s := &Server{
 			ChainInfoFetcher: chainService,
 			TimeFetcher:      chainService,
@@ -1686,10 +1684,9 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
-		config.ElectraForkEpoch = 100
-		params.OverrideBeaconConfig(config)
 
-		chainService := &blockchainmock.ChainService{State: bs}
+		slot := slots.UnsafeEpochStart(config.ElectraForkEpoch + 1)
+		chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 
 		s := &Server{
 			ChainInfoFetcher: chainService,
@@ -1756,10 +1753,9 @@ func TestGetAttesterSlashingsV2(t *testing.T) {
 
 		params.SetupTestConfigCleanup(t)
 		config := params.BeaconConfig()
-		config.ElectraForkEpoch = 100
-		params.OverrideBeaconConfig(config)
 
-		chainService := &blockchainmock.ChainService{State: bs}
+		slot := slots.UnsafeEpochStart(config.ElectraForkEpoch + 1)
+		chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
 		s := &Server{
 			ChainInfoFetcher: chainService,
 			TimeFetcher:      chainService,
