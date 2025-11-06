@@ -3,7 +3,6 @@ package verify
 import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/pkg/errors"
 )
@@ -32,16 +31,9 @@ func BlobAlignsWithBlock(blob blocks.ROBlob, block blocks.ROBlock) error {
 		return ErrBlobBlockMisaligned
 	}
 
-	// Verify commitment byte values match
-	// TODO: verify commitment inclusion proof - actually replace this with a better rpc blob verification stack altogether.
-	commits, err := block.Block().Body().BlobKzgCommitments()
-	if err != nil {
-		return err
-	}
-	blockCommitment := bytesutil.ToBytes48(commits[blob.Index])
-	blobCommitment := bytesutil.ToBytes48(blob.KzgCommitment)
-	if blobCommitment != blockCommitment {
-		return errors.Wrapf(ErrMismatchedBlobCommitments, "commitment %#x != block commitment %#x, at index %d for block root %#x at slot %d ", blobCommitment, blockCommitment, blob.Index, block.Root(), blob.Slot())
+	// Verify commitment inclusion proof in the block body
+	if err := blocks.VerifyKZGInclusionProof(blob); err != nil {
+		return errors.Wrap(ErrMismatchedBlobCommitments, err.Error())
 	}
 	return nil
 }
