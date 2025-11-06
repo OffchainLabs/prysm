@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -148,72 +146,6 @@ func TestProposeAttestation(t *testing.T) {
 			assert.DeepEqual(t, expectedAttestationDataRoot[:], proposeResponse.AttestationDataRoot)
 		})
 	}
-}
-
-func TestProposeAttestationFallBack(t *testing.T) {
-	attestation := &ethpb.Attestation{
-		AggregationBits: testhelpers.FillByteSlice(4, 74),
-		Data: &ethpb.AttestationData{
-			Slot:            75,
-			CommitteeIndex:  76,
-			BeaconBlockRoot: testhelpers.FillByteSlice(32, 38),
-			Source: &ethpb.Checkpoint{
-				Epoch: 78,
-				Root:  testhelpers.FillByteSlice(32, 79),
-			},
-			Target: &ethpb.Checkpoint{
-				Epoch: 80,
-				Root:  testhelpers.FillByteSlice(32, 81),
-			},
-		},
-		Signature: testhelpers.FillByteSlice(96, 82),
-	}
-
-	ctrl := gomock.NewController(t)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-
-	var marshalledAttestations []byte
-	if helpers.ValidateNilAttestation(attestation) == nil {
-		b, err := json.Marshal(jsonifyAttestations([]*ethpb.Attestation{attestation}))
-		require.NoError(t, err)
-		marshalledAttestations = b
-	}
-
-	ctx := t.Context()
-	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
-	jsonRestHandler.EXPECT().Post(
-		gomock.Any(),
-		"/eth/v2/beacon/pool/attestations",
-		headers,
-		bytes.NewBuffer(marshalledAttestations),
-		nil,
-	).Return(
-		&httputil.DefaultJsonError{
-			Code: http.StatusNotFound,
-		},
-	).Times(1)
-
-	jsonRestHandler.EXPECT().Post(
-		gomock.Any(),
-		"/eth/v1/beacon/pool/attestations",
-		nil,
-		bytes.NewBuffer(marshalledAttestations),
-		nil,
-	).Return(
-		nil,
-	).Times(1)
-
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
-	proposeResponse, err := validatorClient.proposeAttestation(ctx, attestation)
-
-	require.NoError(t, err)
-	require.NotNil(t, proposeResponse)
-
-	expectedAttestationDataRoot, err := attestation.Data.HashTreeRoot()
-	require.NoError(t, err)
-
-	// Make sure that the attestation data root is set
-	assert.DeepEqual(t, expectedAttestationDataRoot[:], proposeResponse.AttestationDataRoot)
 }
 
 func TestProposeAttestationElectra(t *testing.T) {

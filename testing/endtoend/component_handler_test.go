@@ -136,10 +136,6 @@ func (c *componentHandler) setup() {
 	})
 	c.eth1Nodes = eth1Nodes
 
-	if config.TestCheckpointSync {
-		appendDebugEndpoints(config)
-	}
-
 	var builders *components.BuilderSet
 	var proxies *eth1.ProxySet
 	if config.UseBuilder {
@@ -289,11 +285,4 @@ func PIDsFromMultiComponentRunner(runner e2etypes.MultipleComponentRunners) []in
 		}
 	}
 	return pids
-}
-
-func appendDebugEndpoints(cfg *e2etypes.E2EConfig) {
-	debug := []string{
-		"--enable-debug-rpc-endpoints",
-	}
-	cfg.BeaconFlags = append(cfg.BeaconFlags, debug...)
 }

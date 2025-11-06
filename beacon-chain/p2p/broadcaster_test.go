@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -218,19 +219,30 @@ func TestService_BroadcastAttestation(t *testing.T) {
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	const port = uint(2000)
 
+	// The DB has to be shared in all peers to avoid the
+	// duplicate metrics collector registration attempted.
+	// However, we don't care for this test.
+	db := testDB.SetupDB(t)
+
 	// Setup bootnode.
-	cfg := &Config{PingInterval: testPingInterval}
+	cfg := &Config{PingInterval: testPingInterval, DB: db}
 	cfg.UDPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
+
 	s := &Service{
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
+		ctx:                   t.Context(),
+		custodyInfoSet:        make(chan struct{}),
 	}
+
+	close(s.custodyInfoSet)
+
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
@@ -245,6 +257,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
 		PingInterval:         testPingInterval,
+		DB:                   db,
 	}
 	// Setup 2 different hosts
 	for i := uint(1); i <= 2; i++ {
@@ -259,7 +272,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
 			custodyInfo:           &custodyInfo{},
+			ctx:                   t.Context(),
+			custodyInfoSet:        make(chan struct{}),
 		}
+
+		close(s.custodyInfoSet)
+
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		// Set for 2nd peer
 		if i == 2 {
@@ -711,18 +729,26 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	// Create a host.
 	_, pkey, ipAddr := createHost(t, port)
 
+	// Create a shared DB for the service
+	db := testDB.SetupDB(t)
+
+	// Create and close the custody info channel immediately since custodyInfo is already set
+	custodyInfoSet := make(chan struct{})
+	close(custodyInfoSet)
+
 	service := &Service{
 		ctx:                   ctx,
 		host:                  p1.BHost,
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
+		cfg:                   &Config{DB: db},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
 		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        custodyInfoSet,
 	}
 
 	// Create a listener.

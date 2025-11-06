@@ -30,7 +30,7 @@ const (
 	// Electra Fork Epoch for mainnet config
 	mainnetElectraForkEpoch = 364032 // May 7, 2025, 10:05:11 UTC
 	// Fulu Fork Epoch for mainnet config
-	mainnetFuluForkEpoch = math.MaxUint64 // Far future / to be defined
+	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -338,7 +338,16 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
 
-	BlobSchedule: []BlobScheduleEntry{},
+	BlobSchedule: []BlobScheduleEntry{
+		{
+			Epoch:            412672, // December 9, 2025, 02:21:11pm UTC
+			MaxBlobsPerBlock: 15,
+		},
+		{
+			Epoch:            419072, // January 7, 2026, 01:01:11am UTC
+			MaxBlobsPerBlock: 21,
+		},
+	},
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name
