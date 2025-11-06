@@ -249,6 +249,18 @@ func (s *Service) scheduleTodos() {
 	}
 }
 
+// fuluOrigin checks whether the origin block (ie the checkpoint sync block from which backfill
+// syncs backwards) is in an unsupported fork, enabling the backfill service to shut down rather than
+// run with buggy behavior.
+// This will be removed once DataColumnSidecar support is released.
+func fuluOrigin(cfg *params.BeaconChainConfig, status *dbval.BackfillStatus) bool {
+	originEpoch := slots.ToEpoch(primitives.Slot(status.OriginSlot))
+	if originEpoch < cfg.FuluForkEpoch {
+		return false
+	}
+	return true
+}
+
 // Start begins the runloop of backfill.Service in the current goroutine.
 func (s *Service) Start() {
 	if !s.enabled {
@@ -281,6 +293,12 @@ func (s *Service) Start() {
 		return
 	}
 	status := s.store.status()
+	if fuluOrigin(params.BeaconConfig(), status) {
+		log.WithField("originSlot", s.store.status().OriginSlot).
+			Warn("backfill disabled; DataColumnSidecar currently unsupported, for updates follow https://github.com/OffchainLabs/prysm/issues/15982")
+		s.markComplete()
+		return
+	}
 	// Exit early if there aren't going to be any batches to backfill.
 	if primitives.Slot(status.LowSlot) <= s.ms(s.clock.CurrentSlot()) {
 		log.WithField("minimumRequiredSlot", s.ms(s.clock.CurrentSlot())).
@@ -289,6 +307,7 @@ func (s *Service) Start() {
 		s.markComplete()
 		return
 	}
+
 	s.verifier, s.ctxMap, err = s.initVerifier(ctx)
 	if err != nil {
 		log.WithError(err).Error("Unable to initialize backfill verifier")
