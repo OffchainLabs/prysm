@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -34,11 +33,15 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err != nil {
 		return nil
 	}
-	headTarget, err := s.cfg.ForkChoiceStore.TargetRootForEpoch([32]byte(headRoot), c.Epoch)
+	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), c.Epoch)
 	if err != nil {
 		return nil
 	}
-	if !bytes.Equal(c.Root, headTarget[:]) {
+	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), c.Epoch)
+	if err != nil {
+		return nil
+	}
+	if targetDependent != headDependent {
 		return nil
 	}
 

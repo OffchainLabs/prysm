@@ -548,11 +548,12 @@ func TestRequirementSatisfaction(t *testing.T) {
 }
 
 type mockForkchoicer struct {
-	FinalizedCheckpointCB func() *forkchoicetypes.Checkpoint
-	HasNodeCB             func([32]byte) bool
-	IsCanonicalCB         func(root [32]byte) bool
-	SlotCB                func([32]byte) (primitives.Slot, error)
-	TargetRootForEpochCB  func([32]byte, primitives.Epoch) ([32]byte, error)
+	FinalizedCheckpointCB   func() *forkchoicetypes.Checkpoint
+	HasNodeCB               func([32]byte) bool
+	IsCanonicalCB           func(root [32]byte) bool
+	SlotCB                  func([32]byte) (primitives.Slot, error)
+	DependentRootForEpochCB func([32]byte, primitives.Epoch) ([32]byte, error)
+	TargetRootForEpochCB    func([32]byte, primitives.Epoch) ([32]byte, error)
 }
 
 var _ Forkchoicer = &mockForkchoicer{}
@@ -571,6 +572,10 @@ func (m *mockForkchoicer) IsCanonical(root [32]byte) bool {
 
 func (m *mockForkchoicer) Slot(root [32]byte) (primitives.Slot, error) {
 	return m.SlotCB(root)
+}
+
+func (m *mockForkchoicer) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	return m.DependentRootForEpochCB(root, epoch)
 }
 
 func (m *mockForkchoicer) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {

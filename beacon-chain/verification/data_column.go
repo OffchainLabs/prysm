@@ -319,17 +319,17 @@ func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColu
 		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, dataColumnSlot)
 	}
 
-	// If head and data column are in the same epoch and head is compatible with the parent's target, then use head
+	// If head and data column are in the same epoch and head is compatible with the parent's depdendent root, then use head
 	if dataColumnEpoch == headEpoch {
-		headTarget, err := dv.fc.TargetRootForEpoch(bytesutil.ToBytes32(headRoot), dataColumnEpoch)
+		headDependent, err := dv.fc.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dataColumnEpoch)
 		if err != nil {
 			return nil, err
 		}
-		parentTarget, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+		parentDependent, err := dv.fc.DependentRootForEpoch(parentRoot, dataColumnEpoch)
 		if err != nil {
 			return nil, err
 		}
-		if bytes.Equal(headTarget[:], parentTarget[:]) {
+		if bytes.Equal(headDependent[:], parentDependent[:]) {
 			return dv.hsp.HeadStateReadOnly(ctx)
 		}
 	}
