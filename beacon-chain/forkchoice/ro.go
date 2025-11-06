@@ -177,6 +177,13 @@ func (ro *ROForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) 
 	return ro.getter.DependentRoot(epoch)
 }
 
+// DependentRootForEpoch delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.DependentRootForEpoch(root, epoch)
+}
+
 // TargetRootForEpoch delegates to the underlying forkchoice call, under a lock.
 func (ro *ROForkChoice) TargetRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
 	ro.l.RLock()

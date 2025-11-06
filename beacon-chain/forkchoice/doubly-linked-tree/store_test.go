@@ -608,6 +608,96 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.Equal(t, blk4.Root(), target)
 }
 
+func TestStore_DependentRootForEpoch(t *testing.T) {
+	ctx := t.Context()
+	f := setup(1, 1)
+
+	// Build the following tree structure:
+	//                   /------------37
+	// 0<--31<---32 <---33 <--- 35 <-------- 65 <--- 66
+	//             \-- 36 ------------- 38
+
+	// Insert block at slot 31 (epoch 0)
+	state, blk31, err := prepareForkchoiceState(ctx, 31, [32]byte{31}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk31))
+
+	// Insert block at slot 32 (epoch 1)
+	state, blk32, err := prepareForkchoiceState(ctx, 32, [32]byte{32}, blk31.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk32))
+
+	// Insert block at slot 33 (epoch 1)
+	state, blk33, err := prepareForkchoiceState(ctx, 33, [32]byte{33}, blk32.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk33))
+
+	// Insert block at slot 35 (epoch 1)
+	state, blk35, err := prepareForkchoiceState(ctx, 35, [32]byte{35}, blk33.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk35))
+
+	// Insert fork: block at slot 36 (epoch 1) descending from block 32
+	state, blk36, err := prepareForkchoiceState(ctx, 36, [32]byte{36}, blk32.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk36))
+
+	// Insert block at slot 37 (epoch 1) descending from block 33
+	state, blk37, err := prepareForkchoiceState(ctx, 37, [32]byte{37}, blk33.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk37))
+
+	// Insert block at slot 38 (epoch 1) descending from block 36
+	state, blk38, err := prepareForkchoiceState(ctx, 38, [32]byte{38}, blk36.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk38))
+
+	// Insert block at slot 65 (epoch 2) descending from block 35
+	state, blk65, err := prepareForkchoiceState(ctx, 65, [32]byte{65}, blk35.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk65))
+
+	// Insert block at slot 66 (epoch 2) descending from block 65
+	state, blk66, err := prepareForkchoiceState(ctx, 66, [32]byte{66}, blk65.Root(), params.BeaconConfig().ZeroHash, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, state, blk66))
+
+	// Test dependent root for block 32 at epoch 1 - should be block 31
+	dependent, err := f.DependentRootForEpoch(blk32.Root(), 1)
+	require.NoError(t, err)
+	require.Equal(t, blk31.Root(), dependent)
+
+	// Test dependent root for block 32 at epoch 2 - should be block 32
+	dependent, err = f.DependentRootForEpoch(blk32.Root(), 2)
+	require.NoError(t, err)
+	require.Equal(t, blk32.Root(), dependent)
+
+	// Test dependent root for block 33 at epoch 1 - should be block 31
+	dependent, err = f.DependentRootForEpoch(blk33.Root(), 1)
+	require.NoError(t, err)
+	require.Equal(t, blk31.Root(), dependent)
+
+	// Test dependent root for block 38 at epoch 1 - should be block 31
+	dependent, err = f.DependentRootForEpoch(blk38.Root(), 1)
+	require.NoError(t, err)
+	require.Equal(t, blk31.Root(), dependent)
+
+	// Test dependent root for block 36 at epoch 2 - should be block 36
+	dependent, err = f.DependentRootForEpoch(blk36.Root(), 2)
+	require.NoError(t, err)
+	require.Equal(t, blk36.Root(), dependent)
+
+	// Test dependent root for block 66 at epoch 1 - should be block 31
+	dependent, err = f.DependentRootForEpoch(blk66.Root(), 1)
+	require.NoError(t, err)
+	require.Equal(t, blk31.Root(), dependent)
+
+	// Test dependent root for block 66 at epoch 2 - should be block 35
+	dependent, err = f.DependentRootForEpoch(blk66.Root(), 2)
+	require.NoError(t, err)
+	require.Equal(t, blk35.Root(), dependent)
+}
+
 func TestStore_CleanupInserting(t *testing.T) {
 	f := setup(0, 0)
 	ctx := t.Context()
