@@ -58,9 +58,10 @@ func WithDenebSlot(slot primitives.Slot) DenebBlockGeneratorOption {
 
 func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primitives.Slot, nblobs int, opts ...DenebBlockGeneratorOption) (blocks.ROBlock, []blocks.ROBlob) {
 	g := &denebBlockGenerator{
-		parent: parent,
-		slot:   slot,
-		nblobs: nblobs,
+		parent:   parent,
+		slot:     slot,
+		nblobs:   nblobs,
+		proposer: 3, // Anything else than zero not to fallback to the default uin64 value.
 	}
 	for _, o := range opts {
 		o(g)
