@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 	"testing"
 
-	depositcontract "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	depositcontract "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/contracts/deposit/mock"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 )

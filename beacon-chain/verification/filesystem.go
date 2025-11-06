@@ -1,9 +1,9 @@
 package verification
 
 import (
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 
 	"github.com/spf13/afero"

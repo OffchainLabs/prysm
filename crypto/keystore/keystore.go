@@ -32,7 +32,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/minio/sha256-simd"
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"

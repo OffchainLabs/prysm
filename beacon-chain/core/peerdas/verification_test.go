@@ -3,12 +3,12 @@ package peerdas_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestDataColumnsAlignWithBlock(t *testing.T) {

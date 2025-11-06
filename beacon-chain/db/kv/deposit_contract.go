@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common"
 	bolt "go.etcd.io/bbolt"
 )

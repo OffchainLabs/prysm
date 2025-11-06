@@ -1,8 +1,8 @@
 package eth
 
 import (
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 )
 
 // GenericConverter defines any struct that can be converted to a generic beacon block.

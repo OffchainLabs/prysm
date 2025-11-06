@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 )
 
 func TestMain(m *testing.M) {

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/io/file"
 )
 
 // WriteStateToDisk as a state ssz. Writes to temp directory. Debug!

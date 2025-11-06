@@ -11,9 +11,9 @@ import (
 	sync "sync"
 
 	github_com_OffchainLabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -32,9 +32,9 @@ type ExecutionPayloadBid struct {
 	BlockHash              []byte                                                                     `protobuf:"bytes,3,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty" ssz-size:"32"`
 	FeeRecipient           []byte                                                                     `protobuf:"bytes,4,opt,name=fee_recipient,json=feeRecipient,proto3" json:"fee_recipient,omitempty" ssz-size:"20"`
 	GasLimit               uint64                                                                     `protobuf:"varint,5,opt,name=gas_limit,json=gasLimit,proto3" json:"gas_limit,omitempty"`
-	BuilderIndex           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,6,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
-	Slot                   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,7,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
-	Value                  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,8,opt,name=value,proto3" json:"value,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
+	BuilderIndex           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,6,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
+	Slot                   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,7,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	Value                  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,8,opt,name=value,proto3" json:"value,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
 	BlobKzgCommitmentsRoot []byte                                                                     `protobuf:"bytes,9,opt,name=blob_kzg_commitments_root,json=blobKzgCommitmentsRoot,proto3" json:"blob_kzg_commitments_root,omitempty" ssz-size:"32"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
@@ -188,7 +188,7 @@ func (x *SignedExecutionPayloadBid) GetSignature() []byte {
 type PayloadAttestationData struct {
 	state             protoimpl.MessageState                                           `protogen:"open.v1"`
 	BeaconBlockRoot   []byte                                                           `protobuf:"bytes,1,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
-	Slot              github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot              github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	PayloadPresent    bool                                                             `protobuf:"varint,3,opt,name=payload_present,json=payloadPresent,proto3" json:"payload_present,omitempty"`
 	BlobDataAvailable bool                                                             `protobuf:"varint,4,opt,name=blob_data_available,json=blobDataAvailable,proto3" json:"blob_data_available,omitempty"`
 	unknownFields     protoimpl.UnknownFields
@@ -315,7 +315,7 @@ func (x *PayloadAttestation) GetSignature() []byte {
 
 type PayloadAttestationMessage struct {
 	state          protoimpl.MessageState                                                     `protogen:"open.v1"`
-	ValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	ValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	Data           *PayloadAttestationData                                                    `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Signature      []byte                                                                     `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
 	unknownFields  protoimpl.UnknownFields
@@ -375,8 +375,8 @@ func (x *PayloadAttestationMessage) GetSignature() []byte {
 
 type BeaconBlockGloas struct {
 	state         protoimpl.MessageState                                                     `protogen:"open.v1"`
-	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
-	ProposerIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	ProposerIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	ParentRoot    []byte                                                                     `protobuf:"bytes,3,opt,name=parent_root,json=parentRoot,proto3" json:"parent_root,omitempty" ssz-size:"32"`
 	StateRoot     []byte                                                                     `protobuf:"bytes,4,opt,name=state_root,json=stateRoot,proto3" json:"state_root,omitempty" ssz-size:"32"`
 	Body          *BeaconBlockBodyGloas                                                      `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
@@ -637,7 +637,7 @@ type BeaconStateGloas struct {
 	state                         protoimpl.MessageState                                                     `protogen:"open.v1"`
 	GenesisTime                   uint64                                                                     `protobuf:"varint,1001,opt,name=genesis_time,json=genesisTime,proto3" json:"genesis_time,omitempty"`
 	GenesisValidatorsRoot         []byte                                                                     `protobuf:"bytes,1002,opt,name=genesis_validators_root,json=genesisValidatorsRoot,proto3" json:"genesis_validators_root,omitempty" ssz-size:"32"`
-	Slot                          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1003,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Fork                          *Fork                                                                      `protobuf:"bytes,1004,opt,name=fork,proto3" json:"fork,omitempty"`
 	LatestBlockHeader             *BeaconBlockHeader                                                         `protobuf:"bytes,2001,opt,name=latest_block_header,json=latestBlockHeader,proto3" json:"latest_block_header,omitempty"`
 	BlockRoots                    [][]byte                                                                   `protobuf:"bytes,2002,rep,name=block_roots,json=blockRoots,proto3" json:"block_roots,omitempty" ssz-size:"8192,32"`
@@ -661,14 +661,14 @@ type BeaconStateGloas struct {
 	NextSyncCommittee             *SyncCommittee                                                             `protobuf:"bytes,9003,opt,name=next_sync_committee,json=nextSyncCommittee,proto3" json:"next_sync_committee,omitempty"`
 	LatestExecutionPayloadBid     *ExecutionPayloadBid                                                       `protobuf:"bytes,10001,opt,name=latest_execution_payload_bid,json=latestExecutionPayloadBid,proto3" json:"latest_execution_payload_bid,omitempty"`
 	NextWithdrawalIndex           uint64                                                                     `protobuf:"varint,11001,opt,name=next_withdrawal_index,json=nextWithdrawalIndex,proto3" json:"next_withdrawal_index,omitempty"`
-	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	NextWithdrawalValidatorIndex  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,11002,opt,name=next_withdrawal_validator_index,json=nextWithdrawalValidatorIndex,proto3" json:"next_withdrawal_validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	HistoricalSummaries           []*HistoricalSummary                                                       `protobuf:"bytes,11003,rep,name=historical_summaries,json=historicalSummaries,proto3" json:"historical_summaries,omitempty" ssz-max:"16777216"`
 	DepositRequestsStartIndex     uint64                                                                     `protobuf:"varint,12001,opt,name=deposit_requests_start_index,json=depositRequestsStartIndex,proto3" json:"deposit_requests_start_index,omitempty"`
-	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	EarliestExitEpoch             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	DepositBalanceToConsume       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12002,opt,name=deposit_balance_to_consume,json=depositBalanceToConsume,proto3" json:"deposit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	ExitBalanceToConsume          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12003,opt,name=exit_balance_to_consume,json=exitBalanceToConsume,proto3" json:"exit_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestExitEpoch             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12004,opt,name=earliest_exit_epoch,json=earliestExitEpoch,proto3" json:"earliest_exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ConsolidationBalanceToConsume github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,12005,opt,name=consolidation_balance_to_consume,json=consolidationBalanceToConsume,proto3" json:"consolidation_balance_to_consume,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	EarliestConsolidationEpoch    github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,12006,opt,name=earliest_consolidation_epoch,json=earliestConsolidationEpoch,proto3" json:"earliest_consolidation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	PendingDeposits               []*PendingDeposit                                                          `protobuf:"bytes,12007,rep,name=pending_deposits,json=pendingDeposits,proto3" json:"pending_deposits,omitempty" ssz-max:"134217728"`
 	PendingPartialWithdrawals     []*PendingPartialWithdrawal                                                `protobuf:"bytes,12008,rep,name=pending_partial_withdrawals,json=pendingPartialWithdrawals,proto3" json:"pending_partial_withdrawals,omitempty" ssz-max:"134217728"`
 	PendingConsolidations         []*PendingConsolidation                                                    `protobuf:"bytes,12009,rep,name=pending_consolidations,json=pendingConsolidations,proto3" json:"pending_consolidations,omitempty" ssz-max:"262144"`
@@ -1015,7 +1015,7 @@ func (x *BeaconStateGloas) GetLatestWithdrawalsRoot() []byte {
 
 type BuilderPendingPayment struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
-	Weight        github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei `protobuf:"varint,1,opt,name=weight,proto3" json:"weight,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
+	Weight        github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei `protobuf:"varint,1,opt,name=weight,proto3" json:"weight,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
 	Withdrawal    *BuilderPendingWithdrawal                                        `protobuf:"bytes,2,opt,name=withdrawal,proto3" json:"withdrawal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1068,9 +1068,9 @@ func (x *BuilderPendingPayment) GetWithdrawal() *BuilderPendingWithdrawal {
 type BuilderPendingWithdrawal struct {
 	state             protoimpl.MessageState                                                     `protogen:"open.v1"`
 	FeeRecipient      []byte                                                                     `protobuf:"bytes,1,opt,name=fee_recipient,json=feeRecipient,proto3" json:"fee_recipient,omitempty" ssz-size:"20"`
-	Amount            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Gwei"`
-	BuilderIndex      github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
-	WithdrawableEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,4,opt,name=withdrawable_epoch,json=withdrawableEpoch,proto3" json:"withdrawable_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	Amount            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Gwei           `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"`
+	BuilderIndex      github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
+	WithdrawableEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,4,opt,name=withdrawable_epoch,json=withdrawableEpoch,proto3" json:"withdrawable_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1139,7 +1139,7 @@ type DataColumnSidecarGloas struct {
 	Column          [][]byte                                                         `protobuf:"bytes,2,rep,name=column,proto3" json:"column,omitempty" ssz-max:"4096" ssz-size:"?,2048"`
 	KzgCommitments  [][]byte                                                         `protobuf:"bytes,3,rep,name=kzg_commitments,json=kzgCommitments,proto3" json:"kzg_commitments,omitempty" ssz-max:"4096" ssz-size:"?,48"`
 	KzgProofs       [][]byte                                                         `protobuf:"bytes,4,rep,name=kzg_proofs,json=kzgProofs,proto3" json:"kzg_proofs,omitempty" ssz-max:"4096" ssz-size:"?,48"`
-	Slot            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	BeaconBlockRoot []byte                                                           `protobuf:"bytes,6,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -1221,9 +1221,9 @@ type ExecutionPayloadEnvelope struct {
 	state              protoimpl.MessageState                                                     `protogen:"open.v1"`
 	Payload            *v1.ExecutionPayloadDeneb                                                  `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	ExecutionRequests  *v1.ExecutionRequests                                                      `protobuf:"bytes,2,opt,name=execution_requests,json=executionRequests,proto3" json:"execution_requests,omitempty"`
-	BuilderIndex       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	BuilderIndex       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,3,opt,name=builder_index,json=builderIndex,proto3" json:"builder_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	BeaconBlockRoot    []byte                                                                     `protobuf:"bytes,4,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
-	Slot               github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot               github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	BlobKzgCommitments [][]byte                                                                   `protobuf:"bytes,6,rep,name=blob_kzg_commitments,json=blobKzgCommitments,proto3" json:"blob_kzg_commitments,omitempty" ssz-max:"4096" ssz-size:"?,48"`
 	StateRoot          []byte                                                                     `protobuf:"bytes,7,opt,name=state_root,json=stateRoot,proto3" json:"state_root,omitempty" ssz-size:"32"`
 	unknownFields      protoimpl.UnknownFields

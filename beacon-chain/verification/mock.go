@@ -3,8 +3,8 @@ package verification
 import (
 	"context"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 )
 
 // MockBlobVerifier is a mock implementation of the BlobVerifier interface.

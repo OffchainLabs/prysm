@@ -11,8 +11,8 @@ import (
 	sync "sync"
 
 	github_com_OffchainLabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -26,8 +26,8 @@ const (
 
 type BeaconBlockHeader struct {
 	state         protoimpl.MessageState                                                     `protogen:"open.v1"`
-	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
-	ProposerIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	ProposerIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	ParentRoot    []byte                                                                     `protobuf:"bytes,3,opt,name=parent_root,json=parentRoot,proto3" json:"parent_root,omitempty" ssz-size:"32"`
 	StateRoot     []byte                                                                     `protobuf:"bytes,4,opt,name=state_root,json=stateRoot,proto3" json:"state_root,omitempty" ssz-size:"32"`
 	BodyRoot      []byte                                                                     `protobuf:"bytes,5,opt,name=body_root,json=bodyRoot,proto3" json:"body_root,omitempty" ssz-size:"32"`
@@ -370,8 +370,8 @@ func (x *SignedVoluntaryExit) GetSignature() []byte {
 
 type VoluntaryExit struct {
 	state          protoimpl.MessageState                                                     `protogen:"open.v1"`
-	Epoch          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,1,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	ValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	Epoch          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,1,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -588,7 +588,7 @@ type Fork struct {
 	state           protoimpl.MessageState                                            `protogen:"open.v1"`
 	PreviousVersion []byte                                                            `protobuf:"bytes,1,opt,name=previous_version,json=previousVersion,proto3" json:"previous_version,omitempty" ssz-size:"4"`
 	CurrentVersion  []byte                                                            `protobuf:"bytes,2,opt,name=current_version,json=currentVersion,proto3" json:"current_version,omitempty" ssz-size:"4"`
-	Epoch           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	Epoch           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -754,10 +754,10 @@ type Validator struct {
 	WithdrawalCredentials      []byte                                                            `protobuf:"bytes,2,opt,name=withdrawal_credentials,json=withdrawalCredentials,proto3" json:"withdrawal_credentials,omitempty" ssz-size:"32"`
 	EffectiveBalance           uint64                                                            `protobuf:"varint,3,opt,name=effective_balance,json=effectiveBalance,proto3" json:"effective_balance,omitempty"`
 	Slashed                    bool                                                              `protobuf:"varint,4,opt,name=slashed,proto3" json:"slashed,omitempty"`
-	ActivationEligibilityEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,5,opt,name=activation_eligibility_epoch,json=activationEligibilityEpoch,proto3" json:"activation_eligibility_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	ActivationEpoch            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,6,opt,name=activation_epoch,json=activationEpoch,proto3" json:"activation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	ExitEpoch                  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,7,opt,name=exit_epoch,json=exitEpoch,proto3" json:"exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	WithdrawableEpoch          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,8,opt,name=withdrawable_epoch,json=withdrawableEpoch,proto3" json:"withdrawable_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	ActivationEligibilityEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,5,opt,name=activation_eligibility_epoch,json=activationEligibilityEpoch,proto3" json:"activation_eligibility_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ActivationEpoch            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,6,opt,name=activation_epoch,json=activationEpoch,proto3" json:"activation_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	ExitEpoch                  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,7,opt,name=exit_epoch,json=exitEpoch,proto3" json:"exit_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	WithdrawableEpoch          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,8,opt,name=withdrawable_epoch,json=withdrawableEpoch,proto3" json:"withdrawable_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }

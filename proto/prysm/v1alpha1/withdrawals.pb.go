@@ -10,8 +10,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -77,7 +77,7 @@ func (x *SignedBLSToExecutionChange) GetSignature() []byte {
 
 type BLSToExecutionChange struct {
 	state              protoimpl.MessageState                                                     `protogen:"open.v1"`
-	ValidatorIndex     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	ValidatorIndex     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	FromBlsPubkey      []byte                                                                     `protobuf:"bytes,2,opt,name=from_bls_pubkey,json=fromBlsPubkey,proto3" json:"from_bls_pubkey,omitempty" ssz-size:"48"`
 	ToExecutionAddress []byte                                                                     `protobuf:"bytes,3,opt,name=to_execution_address,json=toExecutionAddress,proto3" json:"to_execution_address,omitempty" ssz-size:"20"`
 	unknownFields      protoimpl.UnknownFields

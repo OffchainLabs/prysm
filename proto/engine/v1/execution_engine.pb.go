@@ -10,8 +10,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -1584,7 +1584,7 @@ func (x *ForkchoiceState) GetFinalizedBlockHash() []byte {
 type Withdrawal struct {
 	state          protoimpl.MessageState                                                     `protogen:"open.v1"`
 	Index          uint64                                                                     `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
-	ValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	ValidatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	Address        []byte                                                                     `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty" ssz-size:"20"`
 	Amount         uint64                                                                     `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields  protoimpl.UnknownFields

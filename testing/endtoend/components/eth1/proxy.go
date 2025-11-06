@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	proxy "github.com/OffchainLabs/prysm/v6/testing/middleware/engine-api-proxy"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	proxy "github.com/OffchainLabs/prysm/v7/testing/middleware/engine-api-proxy"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )

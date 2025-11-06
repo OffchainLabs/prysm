@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/pkg/errors"
 )
 

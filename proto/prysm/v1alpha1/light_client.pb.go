@@ -10,9 +10,9 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -92,7 +92,7 @@ type LightClientUpdateAltair struct {
 	FinalizedHeader         *LightClientHeaderAltair                                         `protobuf:"bytes,4,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch          [][]byte                                                         `protobuf:"bytes,5,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate           *SyncAggregate                                                   `protobuf:"bytes,6,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -182,7 +182,7 @@ type LightClientFinalityUpdateAltair struct {
 	FinalizedHeader *LightClientHeaderAltair                                         `protobuf:"bytes,2,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch  [][]byte                                                         `protobuf:"bytes,3,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate   *SyncAggregate                                                   `protobuf:"bytes,4,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -256,7 +256,7 @@ type LightClientOptimisticUpdateAltair struct {
 	state          protoimpl.MessageState                                           `protogen:"open.v1"`
 	AttestedHeader *LightClientHeaderAltair                                         `protobuf:"bytes,1,opt,name=attested_header,json=attestedHeader,proto3" json:"attested_header,omitempty"`
 	SyncAggregate  *SyncAggregate                                                   `protobuf:"bytes,2,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -424,7 +424,7 @@ type LightClientUpdateCapella struct {
 	FinalizedHeader         *LightClientHeaderCapella                                        `protobuf:"bytes,4,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch          [][]byte                                                         `protobuf:"bytes,5,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate           *SyncAggregate                                                   `protobuf:"bytes,6,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -514,7 +514,7 @@ type LightClientFinalityUpdateCapella struct {
 	FinalizedHeader *LightClientHeaderCapella                                        `protobuf:"bytes,2,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch  [][]byte                                                         `protobuf:"bytes,3,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate   *SyncAggregate                                                   `protobuf:"bytes,4,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -588,7 +588,7 @@ type LightClientOptimisticUpdateCapella struct {
 	state          protoimpl.MessageState                                           `protogen:"open.v1"`
 	AttestedHeader *LightClientHeaderCapella                                        `protobuf:"bytes,1,opt,name=attested_header,json=attestedHeader,proto3" json:"attested_header,omitempty"`
 	SyncAggregate  *SyncAggregate                                                   `protobuf:"bytes,2,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -772,7 +772,7 @@ type LightClientUpdateDeneb struct {
 	FinalizedHeader         *LightClientHeaderDeneb                                          `protobuf:"bytes,4,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch          [][]byte                                                         `protobuf:"bytes,5,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate           *SyncAggregate                                                   `protobuf:"bytes,6,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -862,7 +862,7 @@ type LightClientFinalityUpdateDeneb struct {
 	FinalizedHeader *LightClientHeaderDeneb                                          `protobuf:"bytes,2,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch  [][]byte                                                         `protobuf:"bytes,3,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate   *SyncAggregate                                                   `protobuf:"bytes,4,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -936,7 +936,7 @@ type LightClientOptimisticUpdateDeneb struct {
 	state          protoimpl.MessageState                                           `protogen:"open.v1"`
 	AttestedHeader *LightClientHeaderDeneb                                          `protobuf:"bytes,1,opt,name=attested_header,json=attestedHeader,proto3" json:"attested_header,omitempty"`
 	SyncAggregate  *SyncAggregate                                                   `protobuf:"bytes,2,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1120,7 +1120,7 @@ type LightClientUpdateElectra struct {
 	FinalizedHeader         *LightClientHeaderDeneb                                          `protobuf:"bytes,4,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch          [][]byte                                                         `protobuf:"bytes,5,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"7,32"`
 	SyncAggregate           *SyncAggregate                                                   `protobuf:"bytes,6,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot           github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -1210,7 +1210,7 @@ type LightClientFinalityUpdateElectra struct {
 	FinalizedHeader *LightClientHeaderDeneb                                          `protobuf:"bytes,2,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch  [][]byte                                                         `protobuf:"bytes,3,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"7,32"`
 	SyncAggregate   *SyncAggregate                                                   `protobuf:"bytes,4,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	SignatureSlot   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }

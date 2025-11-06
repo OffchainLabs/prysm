@@ -11,8 +11,8 @@ import (
 	sync "sync"
 
 	github_com_OffchainLabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -78,7 +78,7 @@ func (x *SignedAggregateAttestationAndProof) GetSignature() []byte {
 
 type AggregateAttestationAndProof struct {
 	state           protoimpl.MessageState                                                     `protogen:"open.v1"`
-	AggregatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=aggregator_index,json=aggregatorIndex,proto3" json:"aggregator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	AggregatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=aggregator_index,json=aggregatorIndex,proto3" json:"aggregator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	Aggregate       *Attestation                                                               `protobuf:"bytes,3,opt,name=aggregate,proto3" json:"aggregate,omitempty"`
 	SelectionProof  []byte                                                                     `protobuf:"bytes,2,opt,name=selection_proof,json=selectionProof,proto3" json:"selection_proof,omitempty" ssz-size:"96"`
 	unknownFields   protoimpl.UnknownFields
@@ -198,8 +198,8 @@ func (x *Attestation) GetSignature() []byte {
 
 type AttestationData struct {
 	state           protoimpl.MessageState                                                     `protogen:"open.v1"`
-	Slot            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
-	CommitteeIndex  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.CommitteeIndex `protobuf:"varint,2,opt,name=committee_index,json=committeeIndex,proto3" json:"committee_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.CommitteeIndex"`
+	Slot            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	CommitteeIndex  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.CommitteeIndex `protobuf:"varint,2,opt,name=committee_index,json=committeeIndex,proto3" json:"committee_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.CommitteeIndex"`
 	BeaconBlockRoot []byte                                                                     `protobuf:"bytes,3,opt,name=beacon_block_root,json=beaconBlockRoot,proto3" json:"beacon_block_root,omitempty" ssz-size:"32"`
 	Source          *Checkpoint                                                                `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
 	Target          *Checkpoint                                                                `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
@@ -274,7 +274,7 @@ func (x *AttestationData) GetTarget() *Checkpoint {
 
 type Checkpoint struct {
 	state         protoimpl.MessageState                                            `protogen:"open.v1"`
-	Epoch         github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,1,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	Epoch         github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,1,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	Root          []byte                                                            `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty" ssz-size:"32"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -378,7 +378,7 @@ func (x *SignedAggregateAttestationAndProofElectra) GetSignature() []byte {
 
 type AggregateAttestationAndProofElectra struct {
 	state           protoimpl.MessageState                                                     `protogen:"open.v1"`
-	AggregatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=aggregator_index,json=aggregatorIndex,proto3" json:"aggregator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	AggregatorIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=aggregator_index,json=aggregatorIndex,proto3" json:"aggregator_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	Aggregate       *AttestationElectra                                                        `protobuf:"bytes,2,opt,name=aggregate,proto3" json:"aggregate,omitempty"`
 	SelectionProof  []byte                                                                     `protobuf:"bytes,3,opt,name=selection_proof,json=selectionProof,proto3" json:"selection_proof,omitempty" ssz-size:"96"`
 	unknownFields   protoimpl.UnknownFields
@@ -506,8 +506,8 @@ func (x *AttestationElectra) GetCommitteeBits() github_com_OffchainLabs_go_bitfi
 
 type SingleAttestation struct {
 	state         protoimpl.MessageState                                                     `protogen:"open.v1"`
-	CommitteeId   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.CommitteeIndex `protobuf:"varint,1,opt,name=committee_id,json=committeeId,proto3" json:"committee_id,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.CommitteeIndex"`
-	AttesterIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=attester_index,json=attesterIndex,proto3" json:"attester_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	CommitteeId   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.CommitteeIndex `protobuf:"varint,1,opt,name=committee_id,json=committeeId,proto3" json:"committee_id,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.CommitteeIndex"`
+	AttesterIndex github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=attester_index,json=attesterIndex,proto3" json:"attester_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	Data          *AttestationData                                                           `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
 	Signature     []byte                                                                     `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
 	unknownFields protoimpl.UnknownFields

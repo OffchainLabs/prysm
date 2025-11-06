@@ -11,8 +11,8 @@ import (
 	sync "sync"
 
 	github_com_OffchainLabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/descriptorpb"
@@ -29,9 +29,9 @@ type Status struct {
 	state          protoimpl.MessageState                                            `protogen:"open.v1"`
 	ForkDigest     []byte                                                            `protobuf:"bytes,1,opt,name=fork_digest,json=forkDigest,proto3" json:"fork_digest,omitempty" ssz-size:"4"`
 	FinalizedRoot  []byte                                                            `protobuf:"bytes,2,opt,name=finalized_root,json=finalizedRoot,proto3" json:"finalized_root,omitempty" ssz-size:"32"`
-	FinalizedEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=finalized_epoch,json=finalizedEpoch,proto3" json:"finalized_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	FinalizedEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=finalized_epoch,json=finalizedEpoch,proto3" json:"finalized_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	HeadRoot       []byte                                                            `protobuf:"bytes,4,opt,name=head_root,json=headRoot,proto3" json:"head_root,omitempty" ssz-size:"32"`
-	HeadSlot       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,5,opt,name=head_slot,json=headSlot,proto3" json:"head_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	HeadSlot       github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,5,opt,name=head_slot,json=headSlot,proto3" json:"head_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -105,10 +105,10 @@ type StatusV2 struct {
 	state                 protoimpl.MessageState                                            `protogen:"open.v1"`
 	ForkDigest            []byte                                                            `protobuf:"bytes,1,opt,name=fork_digest,json=forkDigest,proto3" json:"fork_digest,omitempty" ssz-size:"4"`
 	FinalizedRoot         []byte                                                            `protobuf:"bytes,2,opt,name=finalized_root,json=finalizedRoot,proto3" json:"finalized_root,omitempty" ssz-size:"32"`
-	FinalizedEpoch        github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=finalized_epoch,json=finalizedEpoch,proto3" json:"finalized_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	FinalizedEpoch        github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=finalized_epoch,json=finalizedEpoch,proto3" json:"finalized_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	HeadRoot              []byte                                                            `protobuf:"bytes,4,opt,name=head_root,json=headRoot,proto3" json:"head_root,omitempty" ssz-size:"32"`
-	HeadSlot              github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,5,opt,name=head_slot,json=headSlot,proto3" json:"head_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
-	EarliestAvailableSlot github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,6,opt,name=earliest_available_slot,json=earliestAvailableSlot,proto3" json:"earliest_available_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	HeadSlot              github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,5,opt,name=head_slot,json=headSlot,proto3" json:"head_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
+	EarliestAvailableSlot github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,6,opt,name=earliest_available_slot,json=earliestAvailableSlot,proto3" json:"earliest_available_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -187,7 +187,7 @@ func (x *StatusV2) GetEarliestAvailableSlot() github_com_OffchainLabs_prysm_v6_c
 
 type BeaconBlocksByRangeRequest struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
-	StartSlot     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=start_slot,json=startSlot,proto3" json:"start_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	StartSlot     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=start_slot,json=startSlot,proto3" json:"start_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Count         uint64                                                           `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	Step          uint64                                                           `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -249,7 +249,7 @@ type ENRForkID struct {
 	state             protoimpl.MessageState                                            `protogen:"open.v1"`
 	CurrentForkDigest []byte                                                            `protobuf:"bytes,1,opt,name=current_fork_digest,json=currentForkDigest,proto3" json:"current_fork_digest,omitempty" ssz-size:"4"`
 	NextForkVersion   []byte                                                            `protobuf:"bytes,2,opt,name=next_fork_version,json=nextForkVersion,proto3" json:"next_fork_version,omitempty" ssz-size:"4"`
-	NextForkEpoch     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=next_fork_epoch,json=nextForkEpoch,proto3" json:"next_fork_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	NextForkEpoch     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=next_fork_epoch,json=nextForkEpoch,proto3" json:"next_fork_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -487,7 +487,7 @@ func (x *MetaDataV2) GetCustodyGroupCount() uint64 {
 
 type BlobSidecarsByRangeRequest struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
-	StartSlot     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=start_slot,json=startSlot,proto3" json:"start_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	StartSlot     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=start_slot,json=startSlot,proto3" json:"start_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Count         uint64                                                           `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -539,7 +539,7 @@ func (x *BlobSidecarsByRangeRequest) GetCount() uint64 {
 
 type DataColumnSidecarsByRangeRequest struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
-	StartSlot     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=start_slot,json=startSlot,proto3" json:"start_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	StartSlot     github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=start_slot,json=startSlot,proto3" json:"start_slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Count         uint64                                                           `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	Columns       []uint64                                                         `protobuf:"varint,3,rep,packed,name=columns,proto3" json:"columns,omitempty" ssz-max:"128"`
 	unknownFields protoimpl.UnknownFields

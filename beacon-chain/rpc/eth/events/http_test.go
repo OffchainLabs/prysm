@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 type StreamingResponseWriterRecorder struct {

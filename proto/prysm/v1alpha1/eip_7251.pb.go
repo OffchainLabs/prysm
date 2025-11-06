@@ -10,8 +10,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -29,7 +29,7 @@ type PendingDeposit struct {
 	WithdrawalCredentials []byte                                                           `protobuf:"bytes,2,opt,name=withdrawal_credentials,json=withdrawalCredentials,proto3" json:"withdrawal_credentials,omitempty" ssz-size:"32"`
 	Amount                uint64                                                           `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	Signature             []byte                                                           `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"96"`
-	Slot                  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                  github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -101,9 +101,9 @@ func (x *PendingDeposit) GetSlot() github_com_OffchainLabs_prysm_v6_consensus_ty
 
 type PendingPartialWithdrawal struct {
 	state             protoimpl.MessageState                                                     `protogen:"open.v1"`
-	Index             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	Index             github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	Amount            uint64                                                                     `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
-	WithdrawableEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,3,opt,name=withdrawable_epoch,json=withdrawableEpoch,proto3" json:"withdrawable_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	WithdrawableEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch          `protobuf:"varint,3,opt,name=withdrawable_epoch,json=withdrawableEpoch,proto3" json:"withdrawable_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -161,8 +161,8 @@ func (x *PendingPartialWithdrawal) GetWithdrawableEpoch() github_com_OffchainLab
 
 type PendingConsolidation struct {
 	state         protoimpl.MessageState                                                     `protogen:"open.v1"`
-	SourceIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=source_index,json=sourceIndex,proto3" json:"source_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
-	TargetIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=target_index,json=targetIndex,proto3" json:"target_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	SourceIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,1,opt,name=source_index,json=sourceIndex,proto3" json:"source_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
+	TargetIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,2,opt,name=target_index,json=targetIndex,proto3" json:"target_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

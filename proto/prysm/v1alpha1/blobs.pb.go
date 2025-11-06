@@ -10,8 +10,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -123,9 +123,9 @@ type BlindedBlobSidecar struct {
 	state           protoimpl.MessageState                                                     `protogen:"open.v1"`
 	BlockRoot       []byte                                                                     `protobuf:"bytes,1,opt,name=block_root,json=blockRoot,proto3" json:"block_root,omitempty" ssz-size:"32"`
 	Index           uint64                                                                     `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
-	Slot            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,3,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot            github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot           `protobuf:"varint,3,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	BlockParentRoot []byte                                                                     `protobuf:"bytes,4,opt,name=block_parent_root,json=blockParentRoot,proto3" json:"block_parent_root,omitempty" ssz-size:"32"`
-	ProposerIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,5,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.ValidatorIndex"`
+	ProposerIndex   github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex `protobuf:"varint,5,opt,name=proposer_index,json=proposerIndex,proto3" json:"proposer_index,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ValidatorIndex"`
 	BlobRoot        []byte                                                                     `protobuf:"bytes,6,opt,name=blob_root,json=blobRoot,proto3" json:"blob_root,omitempty" ssz-size:"32"`
 	KzgCommitment   []byte                                                                     `protobuf:"bytes,7,opt,name=kzg_commitment,json=kzgCommitment,proto3" json:"kzg_commitment,omitempty" ssz-size:"48"`
 	KzgProof        []byte                                                                     `protobuf:"bytes,8,opt,name=kzg_proof,json=kzgProof,proto3" json:"kzg_proof,omitempty" ssz-size:"48"`

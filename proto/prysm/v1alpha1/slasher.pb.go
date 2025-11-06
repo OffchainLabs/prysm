@@ -10,8 +10,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -26,8 +26,8 @@ const (
 type HighestAttestation struct {
 	state              protoimpl.MessageState                                            `protogen:"open.v1"`
 	ValidatorIndex     uint64                                                            `protobuf:"varint,1,opt,name=validator_index,json=validatorIndex,proto3" json:"validator_index,omitempty"`
-	HighestSourceEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,2,opt,name=highest_source_epoch,json=highestSourceEpoch,proto3" json:"highest_source_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
-	HighestTargetEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=highest_target_epoch,json=highestTargetEpoch,proto3" json:"highest_target_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	HighestSourceEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,2,opt,name=highest_source_epoch,json=highestSourceEpoch,proto3" json:"highest_source_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
+	HighestTargetEpoch github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=highest_target_epoch,json=highestTargetEpoch,proto3" json:"highest_target_epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }

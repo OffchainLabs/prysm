@@ -10,8 +10,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/descriptorpb"
@@ -26,7 +26,7 @@ const (
 
 type EventHead struct {
 	state                     protoimpl.MessageState                                           `protogen:"open.v1"`
-	Slot                      github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                      github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Block                     []byte                                                           `protobuf:"bytes,2,opt,name=block,proto3" json:"block,omitempty" ssz-size:"32"`
 	State                     []byte                                                           `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty" ssz-size:"32"`
 	EpochTransition           bool                                                             `protobuf:"varint,4,opt,name=epoch_transition,json=epochTransition,proto3" json:"epoch_transition,omitempty"`
@@ -118,7 +118,7 @@ func (x *EventHead) GetExecutionOptimistic() bool {
 
 type EventBlock struct {
 	state               protoimpl.MessageState                                           `protogen:"open.v1"`
-	Slot                github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Block               []byte                                                           `protobuf:"bytes,2,opt,name=block,proto3" json:"block,omitempty" ssz-size:"32"`
 	ExecutionOptimistic bool                                                             `protobuf:"varint,3,opt,name=execution_optimistic,json=executionOptimistic,proto3" json:"execution_optimistic,omitempty"`
 	unknownFields       protoimpl.UnknownFields
@@ -178,13 +178,13 @@ func (x *EventBlock) GetExecutionOptimistic() bool {
 
 type EventChainReorg struct {
 	state               protoimpl.MessageState                                            `protogen:"open.v1"`
-	Slot                github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot                github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot  `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	Depth               uint64                                                            `protobuf:"varint,2,opt,name=depth,proto3" json:"depth,omitempty"`
 	OldHeadBlock        []byte                                                            `protobuf:"bytes,3,opt,name=old_head_block,json=oldHeadBlock,proto3" json:"old_head_block,omitempty" ssz-size:"32"`
 	NewHeadBlock        []byte                                                            `protobuf:"bytes,4,opt,name=new_head_block,json=newHeadBlock,proto3" json:"new_head_block,omitempty" ssz-size:"32"`
 	OldHeadState        []byte                                                            `protobuf:"bytes,5,opt,name=old_head_state,json=oldHeadState,proto3" json:"old_head_state,omitempty" ssz-size:"32"`
 	NewHeadState        []byte                                                            `protobuf:"bytes,6,opt,name=new_head_state,json=newHeadState,proto3" json:"new_head_state,omitempty" ssz-size:"32"`
-	Epoch               github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,7,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	Epoch               github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,7,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	ExecutionOptimistic bool                                                              `protobuf:"varint,8,opt,name=execution_optimistic,json=executionOptimistic,proto3" json:"execution_optimistic,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -280,7 +280,7 @@ type EventFinalizedCheckpoint struct {
 	state               protoimpl.MessageState                                            `protogen:"open.v1"`
 	Block               []byte                                                            `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty" ssz-size:"32"`
 	State               []byte                                                            `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty" ssz-size:"32"`
-	Epoch               github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"`
+	Epoch               github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Epoch `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"`
 	ExecutionOptimistic bool                                                              `protobuf:"varint,4,opt,name=execution_optimistic,json=executionOptimistic,proto3" json:"execution_optimistic,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache

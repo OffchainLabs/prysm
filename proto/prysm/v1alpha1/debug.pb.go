@@ -11,8 +11,8 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -81,7 +81,7 @@ func (LoggingLevelRequest_Level) EnumDescriptor() ([]byte, []int) {
 type InclusionSlotRequest struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
 	Id            uint64                                                           `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -132,7 +132,7 @@ func (x *InclusionSlotRequest) GetSlot() github_com_OffchainLabs_prysm_v6_consen
 
 type InclusionSlotResponse struct {
 	state         protoimpl.MessageState                                           `protogen:"open.v1"`
-	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot          github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,2,opt,name=slot,proto3" json:"slot,omitempty" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -246,7 +246,7 @@ type isBeaconStateRequest_QueryFilter interface {
 }
 
 type BeaconStateRequest_Slot struct {
-	Slot github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3,oneof" cast-type:"github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"`
+	Slot github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot `protobuf:"varint,1,opt,name=slot,proto3,oneof" cast-type:"github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"`
 }
 
 type BeaconStateRequest_BlockRoot struct {

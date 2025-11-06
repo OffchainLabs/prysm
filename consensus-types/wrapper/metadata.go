@@ -2,9 +2,9 @@ package wrapper
 
 import (
 	"github.com/OffchainLabs/go-bitfield"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )

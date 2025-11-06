@@ -11,7 +11,7 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	_ "github.com/OffchainLabs/prysm/v6/proto/eth/ext"
+	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"

@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
-	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 )
 
 var (
