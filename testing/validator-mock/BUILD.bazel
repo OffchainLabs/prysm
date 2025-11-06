@@ -11,7 +11,7 @@ go_library(
         "validator_client_mock.go",
         "validator_mock.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/testing/validator-mock",
+    importpath = "github.com/OffchainLabs/prysm/v7/testing/validator-mock",
     visibility = ["//visibility:public"],
     deps = [
         "//api/client/event:go_default_library",

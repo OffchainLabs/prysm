@@ -3,8 +3,8 @@ package ssz
 import (
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/gohashtree"
 )
