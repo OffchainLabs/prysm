@@ -70,8 +70,8 @@ func TestEpochBoundaryStateCache_CanTrim(t *testing.T) {
 		require.NoError(t, e.put(r, s))
 	}
 
-	assert.Equal(t, int(maxCacheSize), len(e.rootStateCache.ListKeys()), "Did not trim to the correct amount")
-	assert.Equal(t, int(maxCacheSize), len(e.slotRootCache.ListKeys()), "Did not trim to the correct amount")
+	assert.Equal(t, int(maxCacheSize), e.rootStateCache.Len(), "Did not trim to the correct amount")
+	assert.Equal(t, int(maxCacheSize), e.slotRootCache.Len(), "Did not trim to the correct amount")
 	for _, l := range e.rootStateCache.List() {
 		i, ok := l.(*rootStateInfo)
 		require.Equal(t, true, ok, "Bad type assertion")

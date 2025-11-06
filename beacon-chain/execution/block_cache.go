@@ -5,12 +5,12 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -148,14 +148,14 @@ func (c *headerCache) AddHeader(hdr *types.HeaderInfo) error {
 	trim(c.hashCache, maxCacheSize)
 	trim(c.heightCache, maxCacheSize)
 
-	headerCacheSize.Set(float64(len(c.hashCache.ListKeys())))
+	headerCacheSize.Set(float64(c.hashCache.Len()))
 
 	return nil
 }
 
 // trim the FIFO queue to the maxSize.
 func trim(queue *cache.FIFO, maxSize uint64) {
-	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
+	for s := uint64(queue.Len()); s > maxSize; s-- {
 		// #nosec G104 popProcessNoopFunc never returns an error
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
 			panic(err) // lint:nopanic -- popProcessNoopFunc never returns an error.
@@ -164,6 +164,6 @@ func trim(queue *cache.FIFO, maxSize uint64) {
 }
 
 // popProcessNoopFunc is a no-op function that never returns an error.
-func popProcessNoopFunc(_ interface{}, _ bool) error {
+func popProcessNoopFunc(_ interface{}) error {
 	return nil
 }

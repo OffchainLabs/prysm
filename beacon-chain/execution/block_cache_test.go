@@ -97,6 +97,6 @@ func TestBlockCache_maxSize(t *testing.T) {
 
 	}
 
-	assert.Equal(t, int(maxCacheSize), len(cache.hashCache.ListKeys()))
-	assert.Equal(t, int(maxCacheSize), len(cache.heightCache.ListKeys()))
+	assert.Equal(t, int(maxCacheSize), cache.hashCache.Len())
+	assert.Equal(t, int(maxCacheSize), cache.heightCache.Len())
 }
