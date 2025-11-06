@@ -69,6 +69,12 @@ var (
 	errBadTopic       = errors.New("topic is not of the one expected")
 )
 
+type LazyHeadStateProvider struct {
+	HeadStateProvider
+}
+
+var _ HeadStateProvider = &LazyHeadStateProvider{}
+
 type (
 	RODataColumnsVerifier struct {
 		*sharedResources

@@ -12,7 +12,6 @@ go_library(
         "filesystem.go",
         "initializer.go",
         "interface.go",
-        "lazy_head_state.go",
         "log.go",
         "metrics.go",
         "mock.go",
