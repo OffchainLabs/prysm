@@ -20,7 +20,7 @@ type GraffitiInfo struct {
 ```
 
 ### Flow
-1. **Startup**: Parse flags, create GraffitiInfo with user graffiti and CL info
+1. **Startup**: Parse flags, create GraffitiInfo with user graffiti and CL info. If user graffiti is set, log an informational message that custom graffiti overrides automatic client version reporting which helps track client diversity.
 2. **Wiring**: Pass struct to both execution service and RPC validator server
 3. **Runtime**: Execution service goroutine periodically calls `engine_getClientVersionV1` and updates EL fields
 4. **Block Proposal**: RPC validator server calls `GenerateGraffiti()` to get formatted graffiti
