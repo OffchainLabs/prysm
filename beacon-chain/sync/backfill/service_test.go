@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 type mockMinimumSlotter struct {
@@ -132,42 +131,4 @@ func TestBackfillMinSlotDefault(t *testing.T) {
 		// if WithMinimumSlot is newer than the spec minimum, we should use the spec minimum
 		require.Equal(t, specMin, s.ms(current))
 	})
-}
-
-func TestFuluOrigin(t *testing.T) {
-	cfg := params.BeaconConfig()
-	fuluEpoch := cfg.FuluForkEpoch
-	fuluSlot, err := slots.EpochStart(fuluEpoch)
-	require.NoError(t, err)
-	cases := []struct {
-		name   string
-		origin primitives.Slot
-		isFulu bool
-	}{
-		{
-			name:   "before fulu",
-			origin: fuluSlot - 1,
-			isFulu: false,
-		},
-		{
-			name:   "at fulu",
-			origin: fuluSlot,
-			isFulu: true,
-		},
-		{
-			name:   "after fulu",
-			origin: fuluSlot + 1,
-			isFulu: true,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			status := &dbval.BackfillStatus{
-				OriginSlot: uint64(tc.origin),
-			}
-			result := fuluOrigin(cfg, status)
-			require.Equal(t, tc.isFulu, result)
-		})
-	}
 }
