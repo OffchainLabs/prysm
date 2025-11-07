@@ -87,6 +87,7 @@ func TestGetSpec(t *testing.T) {
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.GenesisDelay = 24
 	config.SecondsPerSlot = 25
+	config.SlotDurationMilliseconds = 120
 	config.MinAttestationInclusionDelay = 26
 	config.SlotsPerEpoch = 27
 	config.MinSeedLookahead = 28
@@ -129,6 +130,10 @@ func TestGetSpec(t *testing.T) {
 	config.ProportionalSlashingMultiplierAltair = 69
 	config.InactivityScoreRecoveryRate = 70
 	config.MinSyncCommitteeParticipants = 71
+	config.ProposerReorgCutoffBPS = primitives.BP(121)
+	config.AttestationDueBPS = primitives.BP(122)
+	config.AggregrateDueBPS = primitives.BP(123)
+	config.ContributionDueBPS = primitives.BP(124)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -201,7 +206,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]interface{})
 	require.Equal(t, true, ok)
-	assert.Equal(t, 171, len(data))
+	assert.Equal(t, 176, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -291,6 +296,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "24", v)
 			case "SECONDS_PER_SLOT":
 				assert.Equal(t, "25", v)
+			case "SLOT_DURATION_MS":
+				assert.Equal(t, "120", v)
 			case "MIN_ATTESTATION_INCLUSION_DELAY":
 				assert.Equal(t, "26", v)
 			case "SLOTS_PER_EPOCH":
@@ -447,6 +454,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "20", v)
 			case "REORG_PARENT_WEIGHT_THRESHOLD":
 				assert.Equal(t, "160", v)
+			case "PROPOSER_REORG_CUTOFF_BPS":
+				assert.Equal(t, "121", v)
+			case "ATTESTATION_DUE_BPS":
+				assert.Equal(t, "122", v)
+			case "AGGREGRATE_DUE_BPS":
+				assert.Equal(t, "123", v)
+			case "CONTRIBUTION_DUE_BPS":
+				assert.Equal(t, "124", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":

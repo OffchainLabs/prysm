@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -256,9 +255,9 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
-			oneThird := slots.DivideSlotBy(3 /* one third of slot duration */)
-			timeToSleep := oneThird + oneThird
+			slotDuration := params.BeaconConfig().SlotDuration()
+			validator.genesisTime = currentTime.Add(-slotDuration * time.Duration(numOfSlots))
+			timeToSleep := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AggregrateDueBPS)
 
 			twoThirdTime := currentTime.Add(timeToSleep)
 			validator.waitToSlotTwoThirds(t.Context(), numOfSlots)
@@ -275,7 +274,8 @@ func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
 			defer finish()
 			currentTime := time.Now()
 			numOfSlots := primitives.Slot(4)
-			validator.genesisTime = currentTime.Add(-1 * time.Duration(numOfSlots.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+			slotDuration := params.BeaconConfig().SlotDuration()
+			validator.genesisTime = currentTime.Add(-slotDuration * time.Duration(numOfSlots))
 
 			expectedTime := time.Now()
 			ctx, cancel := context.WithCancel(t.Context())

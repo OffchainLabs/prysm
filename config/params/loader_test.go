@@ -27,11 +27,9 @@ var placeholderFields = []string{
 	"AGGREGATE_DUE_BPS",
 	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
-	"ATTESTATION_DUE_BPS",
 	"ATTESTATION_DUE_BPS_GLOAS",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
 	"CELLS_PER_EXT_BLOB",
-	"CONTRIBUTION_DUE_BPS",
 	"CONTRIBUTION_DUE_BPS_GLOAS",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
@@ -60,10 +58,7 @@ var placeholderFields = []string{
 	"PAYLOAD_ATTESTATION_DUE_BPS",
 	"PROPOSER_INCLUSION_LIST_CUTOFF",
 	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
-	"PROPOSER_REORG_CUTOFF_BPS",
-	"PROPOSER_SCORE_BOOST_EIP7732",
 	"PROPOSER_SELECTION_GAP",
-	"SLOT_DURATION_MS",
 	"SYNC_MESSAGE_DUE_BPS_GLOAS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
@@ -129,6 +124,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	// Time parameters.
 	assert.Equal(t, expected.GenesisDelay, actual.GenesisDelay, "%s: GenesisDelay", name)
 	assert.Equal(t, expected.SecondsPerSlot, actual.SecondsPerSlot, "%s: SecondsPerSlot", name)
+	assert.Equal(t, expected.SlotDurationMilliseconds, actual.SlotDurationMilliseconds, "%s: SlotDurationMilliseconds", name)
 	assert.Equal(t, expected.MinAttestationInclusionDelay, actual.MinAttestationInclusionDelay, "%s: MinAttestationInclusionDelay", name)
 	assert.Equal(t, expected.SlotsPerEpoch, actual.SlotsPerEpoch, "%s: SlotsPerEpoch", name)
 	assert.Equal(t, expected.MinSeedLookahead, actual.MinSeedLookahead, "%s: MinSeedLookahead", name)

@@ -128,7 +128,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 	beaconCfg.AltairForkEpoch = 0
 	beaconCfg.BellatrixForkEpoch = 0
 	beaconCfg.CapellaForkEpoch = 0
-	beaconCfg.SecondsPerSlot = 1
+	beaconCfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(beaconCfg)
 
 	exitRoutine := make(chan bool)

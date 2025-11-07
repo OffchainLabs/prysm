@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -200,6 +201,127 @@ func fillGVR(value byte) [32]byte {
 		gvr[i] = value
 	}
 	return gvr
+}
+
+func TestBeaconChainConfigSlotDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  params.BeaconChainConfig
+		want time.Duration
+	}{
+		{
+			name: "explicit duration",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			want: 12 * time.Second,
+		},
+		{
+			name: "fallback to seconds per slot",
+			cfg:  params.BeaconChainConfig{SecondsPerSlot: 8},
+			want: 8 * time.Second,
+		},
+		{
+			name: "milliseconds override seconds per slot",
+			cfg: params.BeaconChainConfig{
+				SlotDurationMilliseconds: 7_000,
+				SecondsPerSlot:           4,
+			},
+			want: 7 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.cfg.SlotDuration())
+		})
+	}
+}
+
+func TestBeaconChainConfigSlotDurationMillis(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  params.BeaconChainConfig
+		want uint64
+	}{
+		{
+			name: "uses slot duration milliseconds when set",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 4_800},
+			want: 4_800,
+		},
+		{
+			name: "derives from seconds per slot when unset",
+			cfg:  params.BeaconChainConfig{SecondsPerSlot: 6},
+			want: 6_000,
+		},
+		{
+			name: "returns zero when no duration configured",
+			cfg:  params.BeaconChainConfig{},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.cfg.SlotDurationMillis())
+		})
+	}
+}
+
+func TestBeaconChainConfigSlotComponentDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  params.BeaconChainConfig
+		bp   primitives.BP
+		want time.Duration
+	}{
+		{
+			name: "zero basis points produces zero duration",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			bp:   0,
+			want: 0,
+		},
+		{
+			name: "full slot basis points matches slot duration",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			bp:   params.BasisPoints,
+			want: 12 * time.Second,
+		},
+		{
+			name: "quarter slot with explicit milliseconds",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			bp:   params.BasisPoints / 4,
+			want: 3 * time.Second,
+		},
+		{
+			name: "fractional slot rounds down",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 1_001},
+			bp:   params.BasisPoints / 3,
+			want: 333 * time.Millisecond,
+		},
+		{
+			name: "uses seconds per slot fallback",
+			cfg:  params.BeaconChainConfig{SecondsPerSlot: 9},
+			bp:   params.BasisPoints / 2,
+			want: 4500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.cfg.SlotComponentDuration(tt.bp))
+		})
+	}
 }
 
 func TestEntryWithForkDigest(t *testing.T) {
