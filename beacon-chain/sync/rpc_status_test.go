@@ -6,33 +6,33 @@ import (
 	"testing"
 	"time"
 
-	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	testingDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	testingDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -332,7 +332,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
-	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen)
+	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen, chain)
 	p1.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 
@@ -354,7 +354,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 	markInitSyncComplete(t, r2)
 	clock = startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
-	r2.verifierWaiter = verification.NewInitializerWaiter(clock, chain2.ForkChoiceStore, r2.cfg.stateGen)
+	r2.verifierWaiter = verification.NewInitializerWaiter(clock, chain2.ForkChoiceStore, r2.cfg.stateGen, chain2)
 
 	p2.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
@@ -948,7 +948,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
 	require.NoError(t, clock.SetClock(startup.NewClock(time.Now(), [32]byte{})))
-	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen)
+	r.verifierWaiter = verification.NewInitializerWaiter(clock, chain.ForkChoiceStore, r.cfg.stateGen, chain)
 
 	go r.Start()
 

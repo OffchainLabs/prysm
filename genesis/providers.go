@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
 	"github.com/pkg/errors"
 )
 

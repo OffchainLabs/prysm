@@ -5,10 +5,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
 )
 
 func RunPendingConsolidationsTests(t *testing.T, config string) {

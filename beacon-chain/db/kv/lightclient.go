@@ -5,14 +5,14 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	light_client "github.com/OffchainLabs/prysm/v7/consensus-types/light-client"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
@@ -181,6 +181,13 @@ func decodeLightClientBootstrap(enc []byte) (interfaces.LightClientBootstrap, []
 		}
 		m = bootstrap
 		syncCommitteeHash = enc[len(ElectraKey) : len(ElectraKey)+32]
+	case hasFuluKey(enc):
+		bootstrap := &ethpb.LightClientBootstrapElectra{}
+		if err := bootstrap.UnmarshalSSZ(enc[len(fuluKey)+32:]); err != nil {
+			return nil, nil, errors.Wrap(err, "could not unmarshal Electra light client bootstrap")
+		}
+		m = bootstrap
+		syncCommitteeHash = enc[len(fuluKey) : len(fuluKey)+32]
 	default:
 		return nil, nil, errors.New("decoding of saved light client bootstrap is unsupported")
 	}
@@ -296,6 +303,12 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 			return nil, errors.Wrap(err, "could not unmarshal Electra light client update")
 		}
 		m = update
+	case hasFuluKey(enc):
+		update := &ethpb.LightClientUpdateElectra{}
+		if err := update.UnmarshalSSZ(enc[len(fuluKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal Fulu light client update")
+		}
+		m = update
 	default:
 		return nil, errors.New("decoding of saved light client update is unsupported")
 	}
@@ -304,6 +317,8 @@ func decodeLightClientUpdate(enc []byte) (interfaces.LightClientUpdate, error) {
 
 func keyForLightClientUpdate(v int) ([]byte, error) {
 	switch v {
+	case version.Fulu:
+		return fuluKey, nil
 	case version.Electra:
 		return ElectraKey, nil
 	case version.Deneb:

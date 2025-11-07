@@ -5,17 +5,17 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
@@ -238,7 +238,7 @@ func TestBlobsByRootValidation(t *testing.T) {
 		{
 			name:    "exceeds req max",
 			nblocks: int(params.BeaconConfig().MaxRequestBlobSidecars) + 1,
-			err:     p2pTypes.ErrMaxBlobReqExceeded,
+			err:     p2pTypes.ErrRateLimited,
 		},
 	}
 	for _, c := range cases {
@@ -267,6 +267,67 @@ func TestBlobsByRootOK(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			c.runTestBlobSidecarsByRoot(t)
+		})
+	}
+}
+
+func TestValidateBlobByRootRequest(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+
+	// Helper function to create blob identifiers
+	createBlobIdents := func(count int) p2pTypes.BlobSidecarsByRootReq {
+		idents := make([]*ethpb.BlobIdentifier, count)
+		for i := 0; i < count; i++ {
+			idents[i] = &ethpb.BlobIdentifier{
+				BlockRoot: make([]byte, 32),
+				Index:     uint64(i),
+			}
+		}
+		return idents
+	}
+
+	tests := []struct {
+		name        string
+		blobIdents  p2pTypes.BlobSidecarsByRootReq
+		slot        types.Slot
+		expectedErr error
+	}{
+		{
+			name:        "pre-Electra: at max limit",
+			blobIdents:  createBlobIdents(int(cfg.MaxRequestBlobSidecars)),
+			slot:        util.SlotAtEpoch(t, cfg.ElectraForkEpoch-1),
+			expectedErr: nil,
+		},
+		{
+			name:        "pre-Electra: exceeds max limit by 1",
+			blobIdents:  createBlobIdents(int(cfg.MaxRequestBlobSidecars) + 1),
+			slot:        util.SlotAtEpoch(t, cfg.ElectraForkEpoch-1),
+			expectedErr: p2pTypes.ErrMaxBlobReqExceeded,
+		},
+		{
+			name:        "Electra: at max limit",
+			blobIdents:  createBlobIdents(int(cfg.MaxRequestBlobSidecarsElectra)),
+			slot:        util.SlotAtEpoch(t, cfg.ElectraForkEpoch),
+			expectedErr: nil,
+		},
+		{
+			name:        "Electra: exceeds Electra max limit by 1",
+			blobIdents:  createBlobIdents(int(cfg.MaxRequestBlobSidecarsElectra) + 1),
+			slot:        util.SlotAtEpoch(t, cfg.ElectraForkEpoch),
+			expectedErr: p2pTypes.ErrMaxBlobReqExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBlobByRootRequest(tt.blobIdents, tt.slot)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }

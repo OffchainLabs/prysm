@@ -3,8 +3,8 @@ package state_native
 import (
 	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // ProposerLookahead is a non-mutating call to the beacon state which returns a slice of

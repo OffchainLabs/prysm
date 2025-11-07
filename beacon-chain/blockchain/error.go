@@ -3,7 +3,7 @@ package blockchain
 import (
 	stderrors "errors"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/pkg/errors"
 )
 

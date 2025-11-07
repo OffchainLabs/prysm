@@ -3,9 +3,9 @@ package peerdata_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 

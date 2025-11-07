@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -1490,20 +1490,6 @@ func sszBytesToUint256String(b []byte) (string, error) {
 		return "", fmt.Errorf("%s is not a valid Uint256", bi.String())
 	}
 	return bi.String(), nil
-}
-
-func DepositSnapshotFromConsensus(ds *eth.DepositSnapshot) *DepositSnapshot {
-	finalized := make([]string, 0, len(ds.Finalized))
-	for _, f := range ds.Finalized {
-		finalized = append(finalized, hexutil.Encode(f))
-	}
-	return &DepositSnapshot{
-		Finalized:            finalized,
-		DepositRoot:          hexutil.Encode(ds.DepositRoot),
-		DepositCount:         fmt.Sprintf("%d", ds.DepositCount),
-		ExecutionBlockHash:   hexutil.Encode(ds.ExecutionHash),
-		ExecutionBlockHeight: fmt.Sprintf("%d", ds.ExecutionDepth),
-	}
 }
 
 func PendingDepositsFromConsensus(ds []*eth.PendingDeposit) []*PendingDeposit {

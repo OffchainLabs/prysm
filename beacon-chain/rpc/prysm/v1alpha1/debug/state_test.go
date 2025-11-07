@@ -4,16 +4,16 @@ import (
 	"math"
 	"testing"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	mockstategen "github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen/mock"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	pbrpc "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pbrpc "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func addDefaultReplayerBuilder(s *Server, h stategen.HistoryAccessor) {

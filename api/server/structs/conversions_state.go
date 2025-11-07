@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 

@@ -5,15 +5,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	errors "github.com/pkg/errors"
 )
 
@@ -51,16 +51,20 @@ func Test_commitmentsToCheck(t *testing.T) {
 			name: "commitments within da",
 			block: func(t *testing.T) blocks.ROBlock {
 				d := util.NewBeaconBlockFulu()
-				d.Block.Body.BlobKzgCommitments = commits[:maxBlobs]
 				d.Block.Slot = fulu + 100
+				mb := params.GetNetworkScheduleEntry(slots.ToEpoch(d.Block.Slot)).MaxBlobsPerBlock
+				d.Block.Body.BlobKzgCommitments = commits[:mb]
 				sb, err := blocks.NewSignedBeaconBlock(d)
 				require.NoError(t, err)
 				rb, err := blocks.NewROBlock(sb)
 				require.NoError(t, err)
 				return rb
 			},
-			commits: commits[:maxBlobs],
-			slot:    fulu + 100,
+			commits: func() [][]byte {
+				mb := params.GetNetworkScheduleEntry(slots.ToEpoch(fulu + 100)).MaxBlobsPerBlock
+				return commits[:mb]
+			}(),
+			slot: fulu + 100,
 		},
 		{
 			name: "commitments outside da",

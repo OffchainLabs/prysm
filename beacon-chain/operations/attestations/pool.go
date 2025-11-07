@@ -3,9 +3,9 @@ package attestations
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/kv"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // Pool defines the necessary methods for Prysm attestations pool to serve

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestInitializerWaiter(t *testing.T) {
@@ -18,7 +18,7 @@ func TestInitializerWaiter(t *testing.T) {
 	cs := startup.NewClockSynchronizer()
 	require.NoError(t, cs.SetClock(c))
 
-	w := NewInitializerWaiter(cs, &mockForkchoicer{}, &mockStateByRooter{})
+	w := NewInitializerWaiter(cs, &mockForkchoicer{}, &mockStateByRooter{}, &mockHeadStateProvider{})
 	ini, err := w.WaitForInitializer(ctx)
 	require.NoError(t, err)
 	csc, ok := ini.shared.sc.(*sigCache)

@@ -3,7 +3,7 @@ package shadowpredecl
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/build/bazel"
+	"github.com/OffchainLabs/prysm/v7/build/bazel"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 

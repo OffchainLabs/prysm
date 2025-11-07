@@ -1,9 +1,9 @@
 package db
 
 import (
-	beacondb "github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/runtime/tos"
+	beacondb "github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/runtime/tos"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

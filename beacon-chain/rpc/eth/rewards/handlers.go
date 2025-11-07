@@ -8,19 +8,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/wealdtech/go-bytesutil"
 )
 
@@ -209,8 +209,13 @@ func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.
 		httputil.HandleError(w, "Attestation rewards are not supported for Phase 0", http.StatusNotFound)
 		return nil, false
 	}
-	currentEpoch := uint64(slots.ToEpoch(s.TimeFetcher.CurrentSlot()))
-	if requestedEpoch+1 >= currentEpoch {
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	bufferedEpoch, err := primitives.Epoch(requestedEpoch).SafeAdd(1)
+	if err != nil {
+		httputil.HandleError(w, "Could not increment epoch: "+err.Error(), http.StatusNotFound)
+		return nil, false
+	}
+	if bufferedEpoch >= currentEpoch {
 		httputil.HandleError(w,
 			"Attestation rewards are available after two epoch transitions to ensure all attestations have a chance of inclusion",
 			http.StatusNotFound)
