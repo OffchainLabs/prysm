@@ -42,12 +42,12 @@ func (c *ProofCache) Insert(proof executionproof.ExecutionProof) {
 	var existingProofs []executionproof.ExecutionProof
 
 	// Get existing proofs, if any.
-	// We use Get() here to promote the entry, similar to Rust's get_or_insert_mut.
+	// We use Get() here to promote the entry
 	if val, ok := c.cache.Get(blockHash); ok {
 		existingProofs = val.([]executionproof.ExecutionProof)
 	}
 
-	// Filter out any existing proof from the same subnet (simulates Rust's .retain())
+	// Filter out any existing proof from the same subnet
 	newProofs := make([]executionproof.ExecutionProof, 0, len(existingProofs)+1)
 	for _, p := range existingProofs {
 		if p.SubnetId != proof.SubnetId {
@@ -177,7 +177,7 @@ func (c *ProofCache) Remove(blockHash common.Hash) ([]executionproof.ExecutionPr
 func (c *ProofCache) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.cache.Purge() // Purge is the equivalent of Rust's clear
+	c.cache.Purge()
 }
 
 // Len gets the current number of entries (block hashes) in the cache.

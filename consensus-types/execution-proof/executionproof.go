@@ -82,7 +82,7 @@ func (ep *ExecutionProof) IsFromSubnet(subnetId ExecutionProofSubnetId) bool {
 	return ep.SubnetId == subnetId
 }
 
-// String implements the fmt.Stringer interface (equivalent to Rust's Debug).
+// String implements the fmt.Stringer interface
 func (ep *ExecutionProof) String() string {
 	return fmt.Sprintf(
 		"ExecutionProof(SubnetId: %s, BlockHash: %s, BlockRoot: %s, ProofDataSize: %d)",
