@@ -1,0 +1,36 @@
+{
+  "files" : {
+    "beacon-chain\/rpc\/eth\/beacon\/handlers_test.go" : {
+      "fileModificationTime" : 1762465369.2624989,
+      "ranges" : [
+        {
+          "description" : "Test imports and fillDBTestBlocks helper showing how other tests set up test data",
+          "end" : 100,
+          "start" : 1
+        }
+      ]
+    },
+    "beacon-chain\/rpc\/eth\/blob\/handlers_test.go" : {
+      "fileModificationTime" : 1762465369.2643504,
+      "ranges" : [
+        {
+          "description" : "Test imports, setup helpers, and first blob test case showing current testing pattern - direct handler calls with httptest.NewRequest\/NewRecorder",
+          "end" : 150,
+          "start" : 1
+        }
+      ]
+    },
+    "beacon-chain\/rpc\/prysm\/beacon\/validator_count_test.go" : {
+      "fileModificationTime" : 1762465369.2814872,
+      "ranges" : [
+        {
+          "description" : "Example of integration-style test using httptest.NewServer with real HTTP router - the pattern we want to adopt",
+          "end" : 120,
+          "start" : 70
+        }
+      ]
+    }
+  },
+  "updatedAt" : "2025-11-07T02:41:03Z",
+  "version" : 1
+}

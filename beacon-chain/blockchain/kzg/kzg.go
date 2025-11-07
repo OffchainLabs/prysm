@@ -59,7 +59,7 @@ func ComputeCells(blob *Blob) ([]Cell, error) {
 
 	cells := make([]Cell, len(ckzgCells))
 	for i := range ckzgCells {
-		cells[i] = Cell(ckzgCells[i])
+		copy(cells[i][:], ckzgCells[i][:])
 	}
 
 	return cells, nil
@@ -74,7 +74,9 @@ func ComputeBlobKZGProof(blob *Blob, commitment Commitment) (Proof, error) {
 	if err != nil {
 		return Proof{}, err
 	}
-	return Proof(proof[:]), nil
+	var result Proof
+	copy(result[:], proof[:])
+	return result, nil
 }
 
 // ComputeCellsAndKZGProofs computes the cells and cells KZG proofs from a given blob.
@@ -87,11 +89,15 @@ func ComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
 		return nil, nil, err
 	}
 
+	if len(ckzgCells) != len(ckzgProofs) {
+		return nil, nil, errors.New("mismatched cells and proofs length")
+	}
+
 	cells := make([]Cell, len(ckzgCells))
 	proofs := make([]Proof, len(ckzgProofs))
 	for i := range ckzgCells {
-		cells[i] = Cell(ckzgCells[i])
-		proofs[i] = Proof(ckzgProofs[i][:])
+		copy(cells[i][:], ckzgCells[i][:])
+		copy(proofs[i][:], ckzgProofs[i][:])
 	}
 
 	return cells, proofs, nil
@@ -104,7 +110,7 @@ func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, c
 	ckzgCells := make([]ckzg4844.Cell, len(cells))
 
 	for i := range cells {
-		ckzgCells[i] = ckzg4844.Cell(cells[i])
+		copy(ckzgCells[i][:], cells[i][:])
 	}
 	return ckzg4844.VerifyCellKZGProofBatch(commitmentsBytes, cellIndices, ckzgCells, proofsBytes)
 }
@@ -115,7 +121,7 @@ func RecoverCells(cellIndices []uint64, partialCells []Cell) ([]Cell, error) {
 	// Convert `Cell` type to `ckzg4844.Cell`
 	ckzgPartialCells := make([]ckzg4844.Cell, len(partialCells))
 	for i := range partialCells {
-		ckzgPartialCells[i] = ckzg4844.Cell(partialCells[i])
+		copy(ckzgPartialCells[i][:], partialCells[i][:])
 	}
 
 	ckzgCells, err := ckzg4844.RecoverCells(cellIndices, ckzgPartialCells)
@@ -125,7 +131,7 @@ func RecoverCells(cellIndices []uint64, partialCells []Cell) ([]Cell, error) {
 
 	cells := make([]Cell, len(ckzgCells))
 	for i := range ckzgCells {
-		cells[i] = Cell(ckzgCells[i])
+		copy(cells[i][:], ckzgCells[i][:])
 	}
 
 	return cells, nil
@@ -137,7 +143,7 @@ func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) ([]Cell
 	// Convert `Cell` type to `ckzg4844.Cell`
 	ckzgPartialCells := make([]ckzg4844.Cell, len(partialCells))
 	for i := range partialCells {
-		ckzgPartialCells[i] = ckzg4844.Cell(partialCells[i])
+		copy(ckzgPartialCells[i][:], partialCells[i][:])
 	}
 
 	ckzgCells, ckzgProofs, err := ckzg4844.RecoverCellsAndKZGProofs(cellIndices, ckzgPartialCells)
@@ -145,11 +151,15 @@ func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) ([]Cell
 		return nil, nil, errors.Wrap(err, "recover cells and KZG proofs")
 	}
 
+	if len(ckzgCells) != len(ckzgProofs) {
+		return nil, nil, errors.New("mismatched cells and proofs length")
+	}
+
 	cells := make([]Cell, len(ckzgCells))
 	proofs := make([]Proof, len(ckzgProofs))
 	for i := range ckzgCells {
-		cells[i] = Cell(ckzgCells[i])
-		proofs[i] = Proof(ckzgProofs[i][:])
+		copy(cells[i][:], ckzgCells[i][:])
+		copy(proofs[i][:], ckzgProofs[i][:])
 	}
 
 	return cells, proofs, nil
