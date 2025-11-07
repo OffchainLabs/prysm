@@ -35,6 +35,7 @@ func TestComputeBlobKZGProof(t *testing.T) {
 		proof, err := ComputeBlobKZGProof(&blob, commitment)
 		require.NoError(t, err)
 		require.Equal(t, BytesPerProof, len(proof))
+		require.NotEqual(t, Proof{}, proof, "proof should not be empty")
 	})
 }
 

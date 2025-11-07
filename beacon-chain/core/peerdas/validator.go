@@ -93,7 +93,7 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }
 
-// DataColumnSidecars, given ConstructionPopulator and the cells/proofs associated with each blob in the
+// DataColumnSidecars given ConstructionPopulator and the cells/proofs associated with each blob in the
 // block, assembles sidecars which can be distributed to peers.
 // cellsPerBlob and proofsPerBlob are parallel slices where each index represents a blob sidecar.
 // This is an adapted version of
@@ -104,9 +104,6 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
 	if len(cellsPerBlob) == 0 {
 		return nil, nil
-	}
-	if len(cellsPerBlob) != len(proofsPerBlob) {
-		return nil, errors.New("cells and proofs length mismatch")
 	}
 	start := time.Now()
 	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, params.BeaconConfig().NumberOfColumns)
@@ -204,6 +201,9 @@ func (b *BlockReconstructionSource) extract() (*blockInfo, error) {
 func rotateRowsToCols(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, numCols uint64) ([][][]byte, [][][]byte, error) {
 	if len(cellsPerBlob) == 0 {
 		return nil, nil, nil
+	}
+	if len(cellsPerBlob) != len(proofsPerBlob) {
+		return nil, nil, errors.New("cells and proofs length mismatch")
 	}
 	cellCols := make([][][]byte, numCols)
 	proofCols := make([][][]byte, numCols)

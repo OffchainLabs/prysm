@@ -227,12 +227,11 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 
 // blobsContext holds common information needed for blob retrieval
 type blobsContext struct {
-	root         [fieldparams.RootLength]byte
-	roBlock      blocks.ROBlock
-	commitments  [][]byte
-	indices      []int
-	fuluForkSlot primitives.Slot
-	postFulu     bool
+	root        [fieldparams.RootLength]byte
+	roBlock     blocks.ROBlock
+	commitments [][]byte
+	indices     []int
+	postFulu    bool
 }
 
 // resolveBlobsContext extracts common blob retrieval logic including block resolution,
@@ -337,12 +336,11 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 	}
 
 	return &blobsContext{
-		root:         root,
-		roBlock:      roBlockWithRoot,
-		commitments:  commitments,
-		indices:      indices,
-		fuluForkSlot: fuluForkSlot,
-		postFulu:     isPostFulu,
+		root:        root,
+		roBlock:     roBlockWithRoot,
+		commitments: commitments,
+		indices:     indices,
+		postFulu:    isPostFulu,
 	}, nil
 }
 
