@@ -1,7 +1,7 @@
 package das
 
 import (
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 )
 
 // Bisector describes a type that takes a set of RODataColumns via the Bisect method
