@@ -95,7 +95,7 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 
 // DataColumnSidecars, given ConstructionPopulator and the cells/proofs associated with each blob in the
 // block, assembles sidecars which can be distributed to peers.
-// cellsPerBlob and proofsPerBlob are parallel slices where each index represents a blob.
+// cellsPerBlob and proofsPerBlob are parallel slices where each index represents a blob sidecar.
 // This is an adapted version of
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars,
 // which is designed to be used both when constructing sidecars from a block and from a sidecar, replacing
