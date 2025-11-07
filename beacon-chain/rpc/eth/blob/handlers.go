@@ -38,7 +38,7 @@ func (s *Server) Blobs(w http.ResponseWriter, r *http.Request) {
 	segments := strings.Split(r.URL.Path, "/")
 	blockId := segments[len(segments)-1]
 
-	verifiedBlobs, rpcErr := s.Blocker.Blobs(ctx, blockId, options.WithIndices(indices))
+	verifiedBlobs, rpcErr := s.Blocker.BlobSidecars(ctx, blockId, options.WithIndices(indices))
 	if rpcErr != nil {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {
@@ -146,7 +146,7 @@ func (s *Server) GetBlobs(w http.ResponseWriter, r *http.Request) {
 			versionedHashes[i] = hash
 		}
 	}
-	blobsData, rpcErr := s.Blocker.BlobsData(ctx, blockId, options.WithVersionedHashes(versionedHashes))
+	blobsData, rpcErr := s.Blocker.Blobs(ctx, blockId, options.WithVersionedHashes(versionedHashes))
 	if rpcErr != nil {
 		code := core.ErrorReasonToHTTP(rpcErr.Reason)
 		switch code {

@@ -182,7 +182,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+		_, rpcErr := blocker.BlobSidecars(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "not found", rpcErr.Err.Error())
@@ -194,7 +194,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			ChainInfoFetcher: &mockChain.ChainService{},
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "999999")
+		_, rpcErr := blocker.BlobSidecars(ctx, "999999")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "no blocks found at slot", rpcErr.Err.Error())
@@ -206,7 +206,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 		}
 
 		// Note: genesis blocks don't support blobs, so this returns BadRequest
-		_, rpcErr := blocker.Blobs(ctx, "genesis")
+		_, rpcErr := blocker.BlobSidecars(ctx, "genesis")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 		require.StringContains(t, "not supported for Phase 0", rpcErr.Err.Error())
@@ -222,7 +222,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			},
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "finalized")
+		_, rpcErr := blocker.BlobSidecars(ctx, "finalized")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "finalized block", rpcErr.Err.Error())
@@ -239,7 +239,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			},
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "justified")
+		_, rpcErr := blocker.BlobSidecars(ctx, "justified")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "justified block", rpcErr.Err.Error())
@@ -251,7 +251,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "invalid-hex")
+		_, rpcErr := blocker.BlobSidecars(ctx, "invalid-hex")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 		require.StringContains(t, "could not parse block ID", rpcErr.Err.Error())
@@ -268,7 +268,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "100")
+		_, rpcErr := blocker.BlobSidecars(ctx, "100")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.Internal), rpcErr.Reason)
 	})
@@ -331,7 +331,7 @@ func TestGetBlob(t *testing.T) {
 
 	t.Run("genesis", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{}
-		_, rpcErr := blocker.Blobs(ctx, "genesis")
+		_, rpcErr := blocker.BlobSidecars(ctx, "genesis")
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
 		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
 	})
@@ -349,7 +349,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		retrievedVerifiedSidecars, rpcErr := blocker.Blobs(ctx, "head")
+		retrievedVerifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, "head")
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(retrievedVerifiedSidecars))
 
@@ -376,7 +376,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedSidecars, rpcErr := blocker.Blobs(ctx, "finalized")
+		verifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, "finalized")
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedSidecars))
 	})
@@ -391,7 +391,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedSidecars, rpcErr := blocker.Blobs(ctx, "justified")
+		verifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, "justified")
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedSidecars))
 	})
@@ -405,7 +405,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(denebBlockRoot[:]))
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(denebBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedBlobs))
 	})
@@ -420,7 +420,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, dsStr)
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, dsStr)
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedBlobs))
 	})
@@ -437,7 +437,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		retrievedVerifiedSidecars, rpcErr := blocker.Blobs(ctx, dsStr, options.WithIndices([]int{index}))
+		retrievedVerifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, dsStr, options.WithIndices([]int{index}))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, 1, len(retrievedVerifiedSidecars))
 
@@ -461,7 +461,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: filesystem.NewEphemeralBlobStorage(t),
 		}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, dsStr)
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, dsStr)
 		require.IsNil(t, rpcErr)
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
@@ -477,7 +477,7 @@ func TestGetBlob(t *testing.T) {
 		}
 
 		noBlobIndex := len(storedBlobSidecars) + 1
-		_, rpcErr := blocker.Blobs(ctx, dsStr, options.WithIndices([]int{0, noBlobIndex}))
+		_, rpcErr := blocker.BlobSidecars(ctx, dsStr, options.WithIndices([]int{0, noBlobIndex}))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
@@ -491,7 +491,7 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: blobStorage,
 		}
-		_, rpcErr := blocker.Blobs(ctx, dsStr, options.WithIndices([]int{0, math.MaxInt}))
+		_, rpcErr := blocker.BlobSidecars(ctx, dsStr, options.WithIndices([]int{0, math.MaxInt}))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})
@@ -510,7 +510,7 @@ func TestGetBlob(t *testing.T) {
 			DataColumnStorage: dataColumnStorage,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		_, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(fuluBlockRoot[:]))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
@@ -529,7 +529,7 @@ func TestGetBlob(t *testing.T) {
 			DataColumnStorage: dataColumnStorage,
 		}
 
-		retrievedVerifiedRoBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		retrievedVerifiedRoBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(fuluBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, len(fuluBlobSidecars), len(retrievedVerifiedRoBlobs))
 
@@ -554,7 +554,7 @@ func TestGetBlob(t *testing.T) {
 			DataColumnStorage: dataColumnStorage,
 		}
 
-		retrievedVerifiedRoBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		retrievedVerifiedRoBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(fuluBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, len(fuluBlobSidecars), len(retrievedVerifiedRoBlobs))
 
@@ -583,7 +583,7 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(predenebBlockRoot[:]))
+		_, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(predenebBlockRoot[:]))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
@@ -623,7 +623,7 @@ func TestGetBlob(t *testing.T) {
 		}
 
 		// Should successfully retrieve blobs even when FuluForkEpoch is not set
-		retrievedBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(denebBlockRoot[:]))
+		retrievedBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(denebBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, 2, len(retrievedBlobs))
 
@@ -717,7 +717,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request versioned hashes in reverse order: 2, 1, 0
 		requestedHashes := [][]byte{hash2[:], hash1[:], hash0[:]}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
 			return
@@ -742,7 +742,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request hashes for indices 1 and 0 (out of order)
 		requestedHashes := [][]byte{hash1[:], hash0[:]}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
 			return
@@ -768,7 +768,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request only the fake hash
 		requestedHashes := [][]byte{fakeHash}
 
-		_, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		_, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
@@ -788,7 +788,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request valid hash with two fake hashes
 		requestedHashes := [][]byte{fakeHash1, hash0[:], fakeHash2}
 
-		_, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		_, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())

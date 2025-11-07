@@ -2,6 +2,7 @@ package peerdas
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -28,19 +29,18 @@ func MinimumColumnCountToReconstruct() uint64 {
 	return (params.BeaconConfig().NumberOfColumns + 1) / 2
 }
 
-// recoverCellsForBlobs reconstructs cells for all blobs from the given data column sidecars.
-// When withProofs is true, it returns both cells and proofs. When false, it only returns cells (optimized).
-func recoverCellsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataColumn, blobCount int, withProofs bool) ([][]kzg.Cell, [][]kzg.Proof, error) {
+// recoverCellsForBlobs reconstructs cells for specified blobs from the given data column sidecars.
+// This is optimized to only recover cells without computing proofs.
+// Returns a map from blob index to recovered cells.
+func recoverCellsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataColumn, blobIndices []int) (map[int][]kzg.Cell, error) {
 	sidecarCount := len(verifiedRoSidecars)
 	var wg errgroup.Group
 
-	cellsPerBlob := make([][]kzg.Cell, blobCount)
-	var proofsPerBlob [][]kzg.Proof
-	if withProofs {
-		proofsPerBlob = make([][]kzg.Proof, blobCount)
-	}
+	cellsPerBlob := make(map[int][]kzg.Cell, len(blobIndices))
+	var mu sync.Mutex
 
-	for blobIndex := range uint64(blobCount) {
+	for _, blobIndex := range blobIndices {
+		blobIndex := blobIndex // Capture loop variable
 		wg.Go(func() error {
 			cellsIndices := make([]uint64, 0, sidecarCount)
 			cells := make([]kzg.Cell, 0, sidecarCount)
@@ -51,29 +51,56 @@ func recoverCellsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataColumn, blob
 				cellsIndices = append(cellsIndices, sidecar.Index)
 			}
 
-			if withProofs {
-				recoveredCells, recoveredProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
-				if err != nil {
-					return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", blobIndex)
-				}
-				cellsPerBlob[blobIndex] = recoveredCells
-				proofsPerBlob[blobIndex] = recoveredProofs
-			} else {
-				recoveredCells, err := kzg.RecoverCells(cellsIndices, cells)
-				if err != nil {
-					return errors.Wrapf(err, "recover cells for blob %d", blobIndex)
-				}
-				cellsPerBlob[blobIndex] = recoveredCells
+			recoveredCells, err := kzg.RecoverCells(cellsIndices, cells)
+			if err != nil {
+				return errors.Wrapf(err, "recover cells for blob %d", blobIndex)
 			}
+
+			mu.Lock()
+			cellsPerBlob[blobIndex] = recoveredCells
+			mu.Unlock()
 			return nil
 		})
 	}
 
 	if err := wg.Wait(); err != nil {
-		if withProofs {
-			return nil, nil, errors.Wrap(err, "wait for RecoverCellsAndKZGProofs")
-		}
-		return nil, nil, errors.Wrap(err, "wait for RecoverCells")
+		return nil, errors.Wrap(err, "wait for RecoverCells")
+	}
+	return cellsPerBlob, nil
+}
+
+// recoverCellsAndProofsForBlobs reconstructs both cells and proofs for specified blobs from the given data column sidecars.
+func recoverCellsAndProofsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataColumn, blobIndices []int) ([][]kzg.Cell, [][]kzg.Proof, error) {
+	sidecarCount := len(verifiedRoSidecars)
+	var wg errgroup.Group
+
+	cellsPerBlob := make([][]kzg.Cell, len(blobIndices))
+	proofsPerBlob := make([][]kzg.Proof, len(blobIndices))
+
+	for i, blobIndex := range blobIndices {
+		i, blobIndex := i, blobIndex // Capture loop variables
+		wg.Go(func() error {
+			cellsIndices := make([]uint64, 0, sidecarCount)
+			cells := make([]kzg.Cell, 0, sidecarCount)
+
+			for _, sidecar := range verifiedRoSidecars {
+				cell := sidecar.Column[blobIndex]
+				cells = append(cells, kzg.Cell(cell))
+				cellsIndices = append(cellsIndices, sidecar.Index)
+			}
+
+			recoveredCells, recoveredProofs, err := kzg.RecoverCellsAndKZGProofs(cellsIndices, cells)
+			if err != nil {
+				return errors.Wrapf(err, "recover cells and KZG proofs for blob %d", blobIndex)
+			}
+			cellsPerBlob[i] = recoveredCells
+			proofsPerBlob[i] = recoveredProofs
+			return nil
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		return nil, nil, errors.Wrap(err, "wait for RecoverCellsAndKZGProofs")
 	}
 	return cellsPerBlob, proofsPerBlob, nil
 }
@@ -116,9 +143,13 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 	})
 
 	// Recover cells and compute proofs in parallel.
-	cellsPerBlob, proofsPerBlob, err := recoverCellsForBlobs(verifiedRoSidecars, blobCount, true)
+	blobIndices := make([]int, blobCount)
+	for i := range blobIndices {
+		blobIndices[i] = i
+	}
+	cellsPerBlob, proofsPerBlob, err := recoverCellsAndProofsForBlobs(verifiedRoSidecars, blobIndices)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "recover cells and proofs for blobs")
 	}
 
 	outSidecars, err := DataColumnSidecars(cellsPerBlob, proofsPerBlob, PopulateFromSidecar(referenceSidecar))
@@ -137,10 +168,10 @@ func ReconstructDataColumnSidecars(verifiedRoSidecars []blocks.VerifiedRODataCol
 	return reconstructedVerifiedRoSidecars, nil
 }
 
-// validateAndPrepareDataColumns validates the input data column sidecars and returns the prepared sidecars
+// reconstructIfNeeded validates the input data column sidecars and returns the prepared sidecars
 // (reconstructed if necessary). This function performs common validation and reconstruction logic used by
-// both ReconstructBlobs and ReconstructBlobsData.
-func validateAndPrepareDataColumns(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+// both ReconstructBlobs and ReconstructBlobSidecars.
+func reconstructIfNeeded(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn) ([]blocks.VerifiedRODataColumn, error) {
 	if len(verifiedDataColumnSidecars) == 0 {
 		return nil, ErrNotEnoughDataColumnSidecars
 	}
@@ -171,13 +202,13 @@ func validateAndPrepareDataColumns(verifiedDataColumnSidecars []blocks.VerifiedR
 	return ReconstructDataColumnSidecars(verifiedDataColumnSidecars)
 }
 
-// ReconstructBlobs constructs verified read only blobs sidecars from verified read only blob sidecars.
+// ReconstructBlobSidecars constructs verified read only blobs sidecars from verified read only blob sidecars.
 // The following constraints must be satisfied:
 //   - All `dataColumnSidecars` has to be committed to the same block, and
 //   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
 //   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
 //   - either enough sidecars to reconstruct the blobs.
-func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
+func ReconstructBlobSidecars(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int) ([]*blocks.VerifiedROBlob, error) {
 	// Return early if no blobs are requested.
 	if len(indices) == 0 {
 		return nil, nil
@@ -185,7 +216,7 @@ func ReconstructBlobs(block blocks.ROBlock, verifiedDataColumnSidecars []blocks.
 
 	// Validate and prepare data columns (reconstruct if necessary).
 	// This also checks if input is empty.
-	preparedDataColumnSidecars, err := validateAndPrepareDataColumns(verifiedDataColumnSidecars)
+	preparedDataColumnSidecars, err := reconstructIfNeeded(verifiedDataColumnSidecars)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +295,7 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 	return cellsPerBlob, proofsPerBlob, nil
 }
 
-// ComputeCellsAndProofs computes the cells and proofs from blobs and cell proofs.
+// ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([][]kzg.Cell, [][]kzg.Proof, error) {
 	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
@@ -307,14 +338,14 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 	return cellsPerBlob, proofsPerBlob, nil
 }
 
-// ReconstructBlobsData reconstructs blob data from data column sidecars without computing KZG proofs or creating sidecars.
+// ReconstructBlobs reconstructs blobs from data column sidecars without computing KZG proofs or creating sidecars.
 // This is an optimized version for when only the blob data is needed (e.g., for the GetBlobs endpoint).
 // The following constraints must be satisfied:
 //   - All `dataColumnSidecars` must be committed to the same block, and
 //   - `dataColumnSidecars` must be sorted by index and should not contain duplicates.
 //   - `dataColumnSidecars` must contain either all sidecars corresponding to (non-extended) blobs,
 //   - or enough sidecars to reconstruct the blobs.
-func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int, blobCount int) ([][]byte, error) {
+func ReconstructBlobs(verifiedDataColumnSidecars []blocks.VerifiedRODataColumn, indices []int, blobCount int) ([][]byte, error) {
 	// If no specific indices are requested, populate with all blob indices.
 	if len(indices) == 0 {
 		indices = make([]int, blobCount)
@@ -373,13 +404,13 @@ func ReconstructBlobsData(verifiedDataColumnSidecars []blocks.VerifiedRODataColu
 	// Check if we have all non-extended columns (0..63) - if so, no reconstruction needed.
 	hasAllNonExtendedColumns := verifiedDataColumnSidecars[cellsPerBlob-1].Index == uint64(cellsPerBlob-1)
 
-	var reconstructedCells [][]kzg.Cell
+	var reconstructedCells map[int][]kzg.Cell
 	if !hasAllNonExtendedColumns {
-		// Need to reconstruct cells (but NOT proofs) for each blob.
+		// Need to reconstruct cells (but NOT proofs) for the requested blobs only.
 		var err error
-		reconstructedCells, _, err = recoverCellsForBlobs(verifiedDataColumnSidecars, blobCount, false)
+		reconstructedCells, err = recoverCellsForBlobs(verifiedDataColumnSidecars, indices)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "recover cells")
 		}
 	}
 

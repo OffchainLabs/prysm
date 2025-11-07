@@ -43,6 +43,7 @@ go_test(
         "das_core_test.go",
         "info_test.go",
         "p2p_interface_test.go",
+        "reconstruction_helpers_test.go",
         "reconstruction_test.go",
         "utils_test.go",
         "validator_test.go",

@@ -39,13 +39,13 @@ func (m *MockBlocker) Block(_ context.Context, b []byte) (interfaces.ReadOnlySig
 	return m.SlotBlockMap[primitives.Slot(slotNumber)], nil
 }
 
-// Blobs --
-func (*MockBlocker) Blobs(_ context.Context, _ string, _ ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+// BlobSidecars --
+func (*MockBlocker) BlobSidecars(_ context.Context, _ string, _ ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	return nil, &core.RpcError{}
 }
 
-// BlobsData --
-func (*MockBlocker) BlobsData(_ context.Context, _ string, _ ...options.BlobsOption) ([][]byte, *core.RpcError) {
+// Blobs --
+func (*MockBlocker) Blobs(_ context.Context, _ string, _ ...options.BlobsOption) ([][]byte, *core.RpcError) {
 	return nil, &core.RpcError{}
 }
 

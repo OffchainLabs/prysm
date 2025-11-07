@@ -60,8 +60,8 @@ func (e BlockIdParseError) Error() string {
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
-	BlobsData(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError)
+	BlobSidecars(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError)
 	DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
 }
 
@@ -346,7 +346,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 	}, nil
 }
 
-// Blobs returns the fetched blob sidecars (with full KZG proofs) for a given block ID.
+// BlobSidecars returns the fetched blob sidecars (with full KZG proofs) for a given block ID.
 // Options can specify either blob indices or versioned hashes for retrieval.
 // The identifier can be one of:
 //   - "head" (canonical head in node's view)
@@ -355,7 +355,7 @@ func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, op
 //   - "justified"
 //   - <slot>
 //   - <hex encoded block root with '0x' prefix>
-func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (p *BeaconDbBlocker) BlobSidecars(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
 	if rpcErr != nil {
 		return nil, rpcErr
@@ -375,7 +375,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	return p.blobsFromStoredBlobs(bctx.commitments, bctx.root, bctx.indices)
 }
 
-// BlobsData returns just the blob data without computing KZG proofs or creating full sidecars.
+// Blobs returns just the blob data without computing KZG proofs or creating full sidecars.
 // This is an optimized endpoint for when only blob data is needed (e.g., GetBlobs endpoint).
 // The identifier can be one of:
 //   - "head" (canonical head in node's view)
@@ -384,7 +384,7 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 //   - "justified"
 //   - <slot>
 //   - <hex encoded block root with '0x' prefix>
-func (p *BeaconDbBlocker) BlobsData(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError) {
+func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError) {
 	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
 	if rpcErr != nil {
 		return nil, rpcErr
@@ -467,7 +467,7 @@ func (p *BeaconDbBlocker) blobsDataFromStoredDataColumns(root [fieldparams.RootL
 	}
 
 	// Use optimized path to get just blob data without computing proofs.
-	blobsData, err := peerdas.ReconstructBlobsData(verifiedRoDataColumnSidecars, indices, blobCount)
+	blobsData, err := peerdas.ReconstructBlobs(verifiedRoDataColumnSidecars, indices, blobCount)
 	if err != nil {
 		return nil, &core.RpcError{
 			Err:    errors.Wrap(err, "reconstruct blobs data"),
@@ -572,7 +572,7 @@ func (p *BeaconDbBlocker) blobSidecarsFromStoredDataColumns(block blocks.ROBlock
 	}
 
 	// Reconstruct blob sidecars with full KZG proofs.
-	verifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(block, verifiedRoDataColumnSidecars, indices)
+	verifiedRoBlobSidecars, err := peerdas.ReconstructBlobSidecars(block, verifiedRoDataColumnSidecars, indices)
 	if err != nil {
 		return nil, &core.RpcError{
 			Err:    errors.Wrap(err, "blobs from data columns"),

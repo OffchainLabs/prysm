@@ -3,8 +3,8 @@ package kzg
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/random"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/crypto/random"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestComputeCells(t *testing.T) {
