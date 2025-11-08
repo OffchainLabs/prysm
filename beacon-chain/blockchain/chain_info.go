@@ -79,6 +79,7 @@ type HeadFetcher interface {
 	HeadPublicKeyToValidatorIndex(pubKey [fieldparams.BLSPubkeyLength]byte) (primitives.ValidatorIndex, bool)
 	HeadValidatorIndexToPublicKey(ctx context.Context, index primitives.ValidatorIndex) ([fieldparams.BLSPubkeyLength]byte, error)
 	ChainHeads() ([][32]byte, []primitives.Slot)
+	DependentRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	TargetRootForEpoch([32]byte, primitives.Epoch) ([32]byte, error)
 	HeadSyncCommitteeFetcher
 	HeadDomainFetcher
@@ -468,6 +469,13 @@ func (s *Service) IsOptimisticForRoot(ctx context.Context, root [32]byte) (bool,
 		return true, nil
 	}
 	return !isCanonical, nil
+}
+
+// DependentRootForEpoch wraps the corresponding method in forkchoice
+func (s *Service) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	s.cfg.ForkChoiceStore.RLock()
+	defer s.cfg.ForkChoiceStore.RUnlock()
+	return s.cfg.ForkChoiceStore.DependentRootForEpoch(root, epoch)
 }
 
 // TargetRootForEpoch wraps the corresponding method in forkchoice
