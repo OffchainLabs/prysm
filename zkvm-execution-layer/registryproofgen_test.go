@@ -7,11 +7,11 @@ import (
 
 // TestDummyGeneratorsRegistry translates test_dummy_generators_registry.
 func TestDummyGeneratorsRegistry(t *testing.T) {
-	subnet0, _ := executionproof.NewExecutionProofSubnetId(0)
-	subnet1, _ := executionproof.NewExecutionProofSubnetId(1)
-	subnet2, _ := executionproof.NewExecutionProofSubnetId(2)
+	subnet0, _ := executionproof.NewExecutionProofId(0)
+	subnet1, _ := executionproof.NewExecutionProofId(1)
+	subnet2, _ := executionproof.NewExecutionProofId(2)
 
-	enabledSubnets := map[executionproof.ExecutionProofSubnetId]struct{}{
+	enabledSubnets := map[executionproof.ExecutionProofId]struct{}{
 		subnet0: {},
 		subnet1: {},
 	}
@@ -38,7 +38,7 @@ func TestDummyGeneratorsRegistry(t *testing.T) {
 // TestRegisterGenerator translates test_register_generator.
 func TestRegisterGenerator(t *testing.T) {
 	registry := NewGeneratorRegistry()
-	subnetId, _ := executionproof.NewExecutionProofSubnetId(0)
+	subnetId, _ := executionproof.NewExecutionProofId(0)
 	generator := NewDummyProofGenerator(subnetId)
 
 	registry.RegisterGenerator(generator)
@@ -53,28 +53,28 @@ func TestRegisterGenerator(t *testing.T) {
 
 // TestGetGenerator translates test_get_generator.
 func TestGetGenerator(t *testing.T) {
-	subnetId, _ := executionproof.NewExecutionProofSubnetId(3)
-	enabledSubnets := map[executionproof.ExecutionProofSubnetId]struct{}{
-		subnetId: {},
+	proofId, _ := executionproof.NewExecutionProofId(3)
+	enabledSubnets := map[executionproof.ExecutionProofId]struct{}{
+		proofId: {},
 	}
 
 	registry := NewGeneratorRegistryWithDummyGenerators(enabledSubnets)
 
-	generator, ok := registry.GetGenerator(subnetId)
+	generator, ok := registry.GetGenerator(proofId)
 	if !ok {
 		t.Fatal("Expected to get generator, but 'ok' was false")
 	}
-	if generator.SubnetId() != subnetId {
-		t.Errorf("Expected generator for subnet %s, but got one for %s", subnetId, generator.SubnetId())
+	if generator.GetProofId() != proofId {
+		t.Errorf("Expected generator for subnet %s, but got one for %s", proofId, generator.GetProofId())
 	}
 }
 
 // TestSubnetIds translates test_subnet_ids.
 func TestSubnetIds(t *testing.T) {
-	subnet0, _ := executionproof.NewExecutionProofSubnetId(0)
-	subnet5, _ := executionproof.NewExecutionProofSubnetId(5)
+	subnet0, _ := executionproof.NewExecutionProofId(0)
+	subnet5, _ := executionproof.NewExecutionProofId(5)
 
-	enabledSubnets := map[executionproof.ExecutionProofSubnetId]struct{}{
+	enabledSubnets := map[executionproof.ExecutionProofId]struct{}{
 		subnet0: {},
 		subnet5: {},
 	}
@@ -87,7 +87,7 @@ func TestSubnetIds(t *testing.T) {
 	}
 
 	// Check that all returned IDs are in the original map
-	foundMap := make(map[executionproof.ExecutionProofSubnetId]bool)
+	foundMap := make(map[executionproof.ExecutionProofId]bool)
 	for _, id := range subnetIds {
 		foundMap[id] = true
 	}

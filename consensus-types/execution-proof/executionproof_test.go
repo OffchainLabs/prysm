@@ -5,18 +5,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // TestExecutionProofTooLarge translates test_execution_proof_too_large.
 func TestExecutionProofTooLarge(t *testing.T) {
-	subnetId, _ := NewExecutionProofSubnetId(0)
+	subnetId, _ := NewExecutionProofId(0)
 	// Use common.Hash{} for the zero value
 	blockHash := common.Hash{}
 	blockRoot := common.Hash{}
 	proofData := make([]byte, MAX_PROOF_DATA_BYTES+1)
+	slot := primitives.Slot(0)
 
-	_, err := NewExecutionProof(subnetId, blockHash, blockRoot, proofData)
+	_, err := NewExecutionProof(subnetId, slot, blockHash, blockRoot, proofData)
 
 	if err == nil {
 		t.Fatal("Expected an error for proof data being too large, but got nil")
@@ -29,13 +31,14 @@ func TestExecutionProofTooLarge(t *testing.T) {
 
 // TestExecutionProofMaxSize translates test_execution_proof_max_size.
 func TestExecutionProofMaxSize(t *testing.T) {
-	subnetId, _ := NewExecutionProofSubnetId(0)
+	subnetId, _ := NewExecutionProofId(0)
 	// Use common.Hash{} for the zero value
 	blockHash := common.Hash{}
 	blockRoot := common.Hash{}
 	proofData := make([]byte, MAX_PROOF_DATA_BYTES)
+	slot := primitives.Slot(0)
 
-	proof, err := NewExecutionProof(subnetId, blockHash, blockRoot, proofData)
+	proof, err := NewExecutionProof(subnetId, slot, blockHash, blockRoot, proofData)
 
 	if err != nil {
 		t.Fatalf("Expected no error for proof data at max size, but got: %v", err)
@@ -52,14 +55,15 @@ func TestExecutionProofMaxSize(t *testing.T) {
 
 // TestExecutionProofMethods checks the helper methods.
 func TestExecutionProofMethods(t *testing.T) {
-	subnetId0, _ := NewExecutionProofSubnetId(0)
-	subnetId1, _ := NewExecutionProofSubnetId(1)
+	subnetId0, _ := NewExecutionProofId(0)
+	subnetId1, _ := NewExecutionProofId(1)
 	// Use common.Hash{} for the zero value
 	blockHash0 := common.Hash{}
 	var blockHash1 common.Hash
 	blockHash1[0] = 0x01 // Set a non-zero value
+	slot := primitives.Slot(0)
 
-	proof, err := NewExecutionProof(subnetId0, blockHash0, common.Hash{}, []byte{1, 2, 3})
+	proof, err := NewExecutionProof(subnetId0, slot, blockHash0, common.Hash{}, []byte{1, 2, 3})
 	if err != nil {
 		t.Fatalf("Failed to create proof: %v", err)
 	}
@@ -83,10 +87,10 @@ func TestExecutionProofMethods(t *testing.T) {
 	}
 
 	// Test IsFromSubnet
-	if !proof.IsFromSubnet(subnetId0) {
+	if !proof.IsFromProofType(subnetId0) {
 		t.Error("IsFromSubnet returned false for correct subnet")
 	}
-	if proof.IsFromSubnet(subnetId1) {
+	if proof.IsFromProofType(subnetId1) {
 		t.Error("IsFromSubnet returned true for incorrect subnet")
 	}
 }

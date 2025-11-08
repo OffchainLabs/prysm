@@ -5,6 +5,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 )
 
 // MAX_PROOF_DATA_BYTES is the maximum size of proof data in bytes.
@@ -12,6 +13,17 @@ import (
 // and so this number was set to accommodate for the most zkVMs.
 const MAX_PROOF_DATA_BYTES = 1_048_576
 
+// Minimum number of execution proofs required from different proof types
+// before marking an execution payload as available in ZK-VM mode.
+//
+// This provides client diversity - nodes wait for proofs from K different
+// zkVM+EL combinations before considering an execution payload available.
+const DEFAULT_MIN_PROOFS_REQUIRED = 2
+
+// Maximum number of execution proofs that can be requested or stored.
+// This corresponds to the maximum number of proof types (zkVM+EL combinations)
+// that can be supported, which is currently 8 (ExecutionProofId is 0-7).
+const MAX_PROOFS = 8
 
 // ExecutionProof represents a cryptographic `proof of execution` that
 // an execution payload is valid. 
@@ -20,14 +32,17 @@ const MAX_PROOF_DATA_BYTES = 1_048_576
 // with the given execution payload, they would return the output values that are attached
 // to the proof.
 //
-// Each proof is associated with a specific subnet_id, which identifies the
+// Each proof is associated with a specific proof_id, which identifies the
 // zkVM and EL combination used to generate it. Multiple proofs from different
 // subnets can exist for the same execution payload, providing both client and EL diversity.
 type ExecutionProof struct {
-	// Which subnet/zkVM this proof belongs to
+	// Which proof this proof belongs to
     // TODO(zkproofs): The node should provide this in themselves since they
-    // know what subnet the proof came from.
-    SubnetId ExecutionProofSubnetId `json:"subnet_id"`
+    // know what proof the proof came from.
+    ProofId ExecutionProofId `json:"proof_id"`
+    
+    // The slot of the beacon block this proof validates
+    Slot primitives.Slot `json:"slot"`
     
     // The block hash of the execution payload this proof validates
     BlockHash common.Hash `json:"block_hash"`
@@ -42,7 +57,8 @@ type ExecutionProof struct {
 
 // NewExecutionProof creates a new ExecutionProof, validating the proof data size.
 func NewExecutionProof(
-	subnetId ExecutionProofSubnetId,
+	proofId ExecutionProofId,
+	slot primitives.Slot,
 	blockHash common.Hash,
 	blockRoot common.Hash,
 	proofData []byte,
@@ -55,7 +71,8 @@ func NewExecutionProof(
 	}
 
 	return &ExecutionProof{
-		SubnetId:  subnetId,
+		ProofId:   proofId,
+		Slot:      slot,
 		BlockHash: blockHash,
 		BlockRoot: blockRoot,
 		ProofData: proofData,
@@ -77,16 +94,54 @@ func (ep *ExecutionProof) IsForBlock(blockHash *common.Hash) bool {
 	return ep.BlockHash == *blockHash
 }
 
-// IsFromSubnet checks if this proof is from a specific subnet.
-func (ep *ExecutionProof) IsFromSubnet(subnetId ExecutionProofSubnetId) bool {
-	return ep.SubnetId == subnetId
+// Check if this proof is from a specific proof type
+func (ep *ExecutionProof) IsFromProofType(proofId ExecutionProofId) bool {
+	return ep.ProofId == proofId
+}
+
+// Get the proof type ID
+func (ep *ExecutionProof) GetProofTypeId() ExecutionProofId {
+	return ep.ProofId
+}
+
+// Minimum size of an ExecutionProof in SSZ bytes (with empty proof_data)
+func (ep *ExecutionProof) MinimumSize() int {
+	zeroProof := &ExecutionProof{
+		ProofId:   0,
+		Slot:      0,
+		BlockHash: common.Hash{},
+		BlockRoot: common.Hash{},
+		ProofData: []byte{},
+	}
+	b, err := zeroProof.MarshalSSZ()
+	if err != nil {
+		return 0
+	}
+	return len(b)
+}
+
+// Maximum size of an ExecutionProof in SSZ bytes (with max proof_data)
+func (ep *ExecutionProof) MaximumSize() int {
+	maxProofData := make([]byte, MAX_PROOF_DATA_BYTES)
+	maxProof := &ExecutionProof{
+		ProofId:   0,
+		Slot:      0,
+		BlockHash: common.Hash{},
+		BlockRoot: common.Hash{},
+		ProofData: maxProofData,
+	}
+	b, err := maxProof.MarshalSSZ()
+	if err != nil {
+		return 0
+	}
+	return len(b)
 }
 
 // String implements the fmt.Stringer interface
 func (ep *ExecutionProof) String() string {
 	return fmt.Sprintf(
-		"ExecutionProof(SubnetId: %s, BlockHash: %s, BlockRoot: %s, ProofDataSize: %d)",
-		ep.SubnetId,
+		"ExecutionProof(ProofId: %s, BlockHash: %s, BlockRoot: %s, ProofDataSize: %d)",
+		ep.ProofId,
 		ep.BlockHash,
 		ep.BlockRoot,
 		len(ep.ProofData),
@@ -131,7 +186,7 @@ func (ep *ExecutionProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'SubnetId'
-	hh.PutBytes([]byte{ep.SubnetId.AsU8()})
+	hh.PutBytes([]byte{ep.ProofId.AsU8()})
 
 	// Field (1) 'BlockHash'
 	if size := len(ep.BlockHash); size != 32 {

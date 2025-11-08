@@ -50,7 +50,7 @@ func (c *ProofCache) Insert(proof executionproof.ExecutionProof) {
 	// Filter out any existing proof from the same subnet
 	newProofs := make([]executionproof.ExecutionProof, 0, len(existingProofs)+1)
 	for _, p := range existingProofs {
-		if p.SubnetId != proof.SubnetId {
+		if p.ProofId != proof.ProofId {
 			newProofs = append(newProofs, p)
 		}
 	}
@@ -82,7 +82,7 @@ func (c *ProofCache) Get(blockHash common.Hash) ([]executionproof.ExecutionProof
 }
 
 // GetFromSubnets gets proofs for a specific block hash from specific subnets.
-func (c *ProofCache) GetFromSubnets(blockHash common.Hash, subnetIds []executionproof.ExecutionProofSubnetId) []executionproof.ExecutionProof {
+func (c *ProofCache) GetFromSubnets(blockHash common.Hash, subnetIds []executionproof.ExecutionProofId) []executionproof.ExecutionProof {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -93,14 +93,14 @@ func (c *ProofCache) GetFromSubnets(blockHash common.Hash, subnetIds []execution
 
 	proofs := val.([]executionproof.ExecutionProof)
 	// Create a map for quick lookup
-	subnetSet := make(map[executionproof.ExecutionProofSubnetId]struct{}, len(subnetIds))
+	subnetSet := make(map[executionproof.ExecutionProofId]struct{}, len(subnetIds))
 	for _, id := range subnetIds {
 		subnetSet[id] = struct{}{}
 	}
 
 	filteredProofs := make([]executionproof.ExecutionProof, 0)
 	for _, p := range proofs {
-		if _, exists := subnetSet[p.SubnetId]; exists {
+		if _, exists := subnetSet[p.ProofId]; exists {
 			filteredProofs = append(filteredProofs, p) // appends a copy
 		}
 	}
@@ -135,7 +135,7 @@ func (c *ProofCache) SubnetCount(blockHash common.Hash) int {
 }
 
 // HasProofFromSubnet checks if a proof exists from a specific subnet for a block.
-func (c *ProofCache) HasProofFromSubnet(blockHash common.Hash, subnetId executionproof.ExecutionProofSubnetId) bool {
+func (c *ProofCache) HasProofFromSubnet(blockHash common.Hash, subnetId executionproof.ExecutionProofId) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -146,7 +146,7 @@ func (c *ProofCache) HasProofFromSubnet(blockHash common.Hash, subnetId executio
 
 	proofs := val.([]executionproof.ExecutionProof)
 	for _, p := range proofs {
-		if p.SubnetId == subnetId {
+		if p.ProofId == subnetId {
 			return true
 		}
 	}

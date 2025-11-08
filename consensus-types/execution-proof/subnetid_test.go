@@ -8,8 +8,8 @@ import (
 
 // TestValidSubnetIds checks that valid IDs are created successfully.
 func TestValidSubnetIds(t *testing.T) {
-	for id := range EXECUTION_PROOF_SUBNET_COUNT {
-		subnetId, err := NewExecutionProofSubnetId(id)
+	for id := range EXECUTION_PROOF_TYPE_COUNT {
+		subnetId, err := NewExecutionProofId(id)
 		if err != nil {
 			t.Errorf("Expected valid subnet ID for %d, but got error: %v", id, err)
 		}
@@ -21,14 +21,14 @@ func TestValidSubnetIds(t *testing.T) {
 
 // TestInvalidSubnetIds checks that invalid IDs return an error.
 func TestInvalidSubnetIds(t *testing.T) {
-	invalidId := EXECUTION_PROOF_SUBNET_COUNT
-	_, err := NewExecutionProofSubnetId(invalidId)
+	invalidId := EXECUTION_PROOF_TYPE_COUNT
+	_, err := NewExecutionProofId(invalidId)
 	if err == nil {
 		t.Errorf("Expected error for invalid subnet ID %d, but got nil", invalidId)
 	}
 
 	// Test a higher value as well
-	_, err = NewExecutionProofSubnetId(invalidId + 10)
+	_, err = NewExecutionProofId(invalidId + 10)
 	if err == nil {
 		t.Errorf("Expected error for invalid subnet ID %d, but got nil", invalidId+10)
 	}
@@ -37,8 +37,8 @@ func TestInvalidSubnetIds(t *testing.T) {
 // TestAllSubnetIds checks the 'All' function.
 func TestAllSubnetIds(t *testing.T) {
 	all := All()
-	if len(all) != int(EXECUTION_PROOF_SUBNET_COUNT) {
-		t.Errorf("Expected %d subnet IDs from All(), but got %d", EXECUTION_PROOF_SUBNET_COUNT, len(all))
+	if len(all) != int(EXECUTION_PROOF_TYPE_COUNT) {
+		t.Errorf("Expected %d subnet IDs from All(), but got %d", EXECUTION_PROOF_TYPE_COUNT, len(all))
 	}
 
 	for idx, subnetId := range all {
@@ -50,7 +50,7 @@ func TestAllSubnetIds(t *testing.T) {
 
 // TestAsUsize checks the AsUsize method.
 func TestAsUsize(t *testing.T) {
-	id, _ := NewExecutionProofSubnetId(5)
+	id, _ := NewExecutionProofId(5)
 	if id.AsUsize() != 5 {
 		t.Errorf("Expected AsUsize() to return 5, but got %d", id.AsUsize())
 	}
@@ -58,7 +58,7 @@ func TestAsUsize(t *testing.T) {
 
 // TestString checks the fmt.Stringer implementation.
 func TestString(t *testing.T) {
-	id, _ := NewExecutionProofSubnetId(7)
+	id, _ := NewExecutionProofId(7)
 	expected := "7"
 	if id.String() != expected {
 		t.Errorf("Expected string '%s', but got '%s'", expected, id.String())
@@ -67,7 +67,7 @@ func TestString(t *testing.T) {
 
 // TestJSONMarshaling checks Serde equivalent.
 func TestJSONMarshaling(t *testing.T) {
-	id, _ := NewExecutionProofSubnetId(3)
+	id, _ := NewExecutionProofId(3)
 
 	// Test Marshal
 	data, err := json.Marshal(id)
@@ -81,7 +81,7 @@ func TestJSONMarshaling(t *testing.T) {
 	}
 
 	// Test Unmarshal (Valid)
-	var unmarshaledId ExecutionProofSubnetId
+	var unmarshaledId ExecutionProofId
 	if err := json.Unmarshal(data, &unmarshaledId); err != nil {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
 	}
@@ -91,8 +91,8 @@ func TestJSONMarshaling(t *testing.T) {
 	}
 
 	// Test Unmarshal (Invalid)
-	invalidJSON := `8` // Assuming EXECUTION_PROOF_SUBNET_COUNT is 8
-	var invalidId ExecutionProofSubnetId
+	invalidJSON := `8` // Assuming EXECUTION_PROOF_TYPE_COUNT is 8
+	var invalidId ExecutionProofId
 	err = json.Unmarshal([]byte(invalidJSON), &invalidId)
 	if err == nil {
 		t.Errorf("Expected error when unmarshaling invalid ID %s, but got nil", invalidJSON)
@@ -101,7 +101,7 @@ func TestJSONMarshaling(t *testing.T) {
 
 // TestSSZMarshaling checks the SSZ implementation.
 func TestSSZMarshaling(t *testing.T) {
-	id, _ := NewExecutionProofSubnetId(5)
+	id, _ := NewExecutionProofId(5)
 
 	// Test Marshal
 	sszBytes, err := id.MarshalSSZ()
@@ -115,7 +115,7 @@ func TestSSZMarshaling(t *testing.T) {
 	}
 
 	// Test Unmarshal (Valid)
-	var unmarshaledId ExecutionProofSubnetId
+	var unmarshaledId ExecutionProofId
 	err = unmarshaledId.UnmarshalSSZ(sszBytes)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal SSZ: %v", err)
@@ -126,8 +126,8 @@ func TestSSZMarshaling(t *testing.T) {
 	}
 
 	// Test Unmarshal (Invalid)
-	invalidBytes := []byte{0x08} // Assuming EXECUTION_PROOF_SUBNET_COUNT is 8
-	var invalidId ExecutionProofSubnetId
+	invalidBytes := []byte{0x08} // Assuming EXECUTION_PROOF_TYPE_COUNT is 8
+	var invalidId ExecutionProofId
 	err = invalidId.UnmarshalSSZ(invalidBytes)
 	if err == nil {
 		t.Errorf("Expected error when unmarshaling invalid SSZ ID %v, but got nil", invalidBytes)

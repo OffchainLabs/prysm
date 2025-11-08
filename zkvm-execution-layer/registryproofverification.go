@@ -7,45 +7,45 @@ import executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/executio
 // Each subnet can have a different zkVM/proof system, and this registry
 // maintains the mapping from subnet ID to the appropriate verifier implementation.
 type VerifierRegistry struct {
-	verifiers map[executionproof.ExecutionProofSubnetId]ProofVerifier
+	verifiers map[executionproof.ExecutionProofId]ProofVerifier
 }
 
 // NewVerifierRegistry creates a new empty verifier registry.
 func NewVerifierRegistry() *VerifierRegistry {
 	return &VerifierRegistry{
-		verifiers: make(map[executionproof.ExecutionProofSubnetId]ProofVerifier),
+		verifiers: make(map[executionproof.ExecutionProofId]ProofVerifier),
 	}
 }
 
 // NewVerifierRegistryWithDummyVerifiers creates a registry with dummy verifiers
-// for all available subnets. This is useful for testing.
+// for all available proof IDs. This is useful for testing.
 func NewVerifierRegistryWithDummyVerifiers() *VerifierRegistry {
-	verifiers := make(map[executionproof.ExecutionProofSubnetId]ProofVerifier)
+	verifiers := make(map[executionproof.ExecutionProofId]ProofVerifier)
 
 	// All() is defined in execution_proof_subnet_id.go
-	allSubnets := executionproof.All()
-	for _, subnetId := range allSubnets {
-		verifiers[subnetId] = NewDummyVerifier(subnetId)
+	allProofIds := executionproof.All()
+	for _, proofId := range allProofIds {
+		verifiers[proofId] = NewDummyVerifier(proofId)
 	}
 	return &VerifierRegistry{verifiers: verifiers}
 }
 
 // RegisterVerifier adds or replaces a verifier in the registry.
 func (r *VerifierRegistry) RegisterVerifier(verifier ProofVerifier) {
-	subnetId := verifier.SubnetId()
-	r.verifiers[subnetId] = verifier
+	proofId := verifier.GetProofId()
+	r.verifiers[proofId] = verifier
 }
 
 // GetVerifier retrieves a verifier by its subnet ID.
 // The boolean return value indicates if the verifier was found.
-func (r *VerifierRegistry) GetVerifier(subnetId executionproof.ExecutionProofSubnetId) (ProofVerifier, bool) {
-	gen, ok := r.verifiers[subnetId]
+func (r *VerifierRegistry) GetVerifier(proofId executionproof.ExecutionProofId) (ProofVerifier, bool) {
+	gen, ok := r.verifiers[proofId]
 	return gen, ok
 }
 
 // HasVerifier checks if a verifier is registered for a subnet.
-func (r *VerifierRegistry) HasVerifier(subnetId executionproof.ExecutionProofSubnetId) bool {
-	_, ok := r.verifiers[subnetId]
+func (r *VerifierRegistry) HasVerifier(proofId executionproof.ExecutionProofId) bool {
+	_, ok := r.verifiers[proofId]
 	return ok
 }
 
@@ -59,9 +59,9 @@ func (r *VerifierRegistry) IsEmpty() bool {
 	return len(r.verifiers) == 0
 }
 
-// SubnetIds returns a slice of all registered subnet IDs.
-func (r *VerifierRegistry) SubnetIds() []executionproof.ExecutionProofSubnetId {
-	ids := make([]executionproof.ExecutionProofSubnetId, 0, len(r.verifiers))
+// ProofIds returns a slice of all registered subnet IDs.
+func (r *VerifierRegistry) ProofIds() []executionproof.ExecutionProofId {
+	ids := make([]executionproof.ExecutionProofId, 0, len(r.verifiers))
 	for id := range r.verifiers {
 		ids = append(ids, id)
 	}

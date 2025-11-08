@@ -2,7 +2,6 @@ package zkvmexecutionlayer
 
 import (
 	"testing"
-
 	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
 )
 
@@ -23,13 +22,13 @@ func TestDummyVerifiersRegistry(t *testing.T) {
 	if registry.IsEmpty() {
 		t.Fatal("Expected registry to not be empty, but it was")
 	}
-	if registry.Len() != int(executionproof.EXECUTION_PROOF_SUBNET_COUNT) {
-		t.Errorf("Expected registry len %d, got %d", executionproof.EXECUTION_PROOF_SUBNET_COUNT, registry.Len())
+	if registry.Len() != int(executionproof.EXECUTION_PROOF_TYPE_COUNT) {
+		t.Errorf("Expected registry len %d, got %d", executionproof.EXECUTION_PROOF_TYPE_COUNT, registry.Len())
 	}
 
 	// Check all subnets are registered
-	for id := range executionproof.EXECUTION_PROOF_SUBNET_COUNT {
-		subnetId, _ := executionproof.NewExecutionProofSubnetId(id)
+	for id := range executionproof.EXECUTION_PROOF_TYPE_COUNT {
+		subnetId, _ := executionproof.NewExecutionProofId(id)
 		if !registry.HasVerifier(subnetId) {
 			t.Errorf("Expected registry to have verifier for subnet %d", id)
 		}
@@ -42,7 +41,7 @@ func TestDummyVerifiersRegistry(t *testing.T) {
 // TestRegisterVerifier translates test_register_verifier.
 func TestRegisterVerifier(t *testing.T) {
 	registry := NewVerifierRegistry()
-	subnetId, _ := executionproof.NewExecutionProofSubnetId(0)
+	subnetId, _ := executionproof.NewExecutionProofId(0)
 	verifier := NewDummyVerifier(subnetId) // From dummy_proof_verifier.go
 
 	registry.RegisterVerifier(verifier)
@@ -55,25 +54,25 @@ func TestRegisterVerifier(t *testing.T) {
 	}
 }
 
-// TestVerifierSubnetIds translates test_subnet_ids (for verifiers).
-func TestVerifierSubnetIds(t *testing.T) {
+// TestVerifierProofIds translates test_subnet_ids (for verifiers).
+func TestVerifierProofIds(t *testing.T) {
 	registry := NewVerifierRegistryWithDummyVerifiers()
-	subnetIds := registry.SubnetIds()
+	subnetIds := registry.ProofIds()
 
-	if len(subnetIds) != int(executionproof.EXECUTION_PROOF_SUBNET_COUNT) {
-		t.Fatalf("Expected %d subnet IDs, got %d", executionproof.EXECUTION_PROOF_SUBNET_COUNT, len(subnetIds))
+	if len(subnetIds) != int(executionproof.EXECUTION_PROOF_TYPE_COUNT) {
+		t.Fatalf("Expected %d subnet IDs, got %d", executionproof.EXECUTION_PROOF_TYPE_COUNT, len(subnetIds))
 	}
 
 	// Check that all returned IDs are valid subnets
-	foundMap := make(map[executionproof.ExecutionProofSubnetId]bool)
+	foundMap := make(map[executionproof.ExecutionProofId]bool)
 	for _, id := range subnetIds {
 		foundMap[id] = true
 	}
 
-	for id := range executionproof.EXECUTION_PROOF_SUBNET_COUNT {
-		subnet, _ := executionproof.NewExecutionProofSubnetId(id)
+	for id := range executionproof.EXECUTION_PROOF_TYPE_COUNT {
+		subnet, _ := executionproof.NewExecutionProofId(id)
 		if !foundMap[subnet] {
-			t.Errorf("Missing subnet ID %s from SubnetIds() result", subnet)
+			t.Errorf("Missing subnet ID %s from ProofIds() result", subnet)
 		}
 	}
 }

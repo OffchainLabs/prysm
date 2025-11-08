@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -16,24 +15,24 @@ const (
 // It simulates the verification process with a configurable delay
 // and always returns successful verification if the subnet and block hash match.
 type DummyVerifier struct {
-	subnetId          executionproof.ExecutionProofSubnetId
+	ProofId          executionproof.ExecutionProofId
 	verificationDelay time.Duration
 }
 
 // NewDummyVerifier creates a new dummy verifier for the specified subnet
 // with a default delay.
-func NewDummyVerifier(subnetId executionproof.ExecutionProofSubnetId) *DummyVerifier {
+func NewDummyVerifier(subnetId executionproof.ExecutionProofId) *DummyVerifier {
 	return &DummyVerifier{
-		subnetId:          subnetId,
+		ProofId:          subnetId,
 		verificationDelay: defaultVerificationDelay,
 	}
 }
 
 // NewDummyVerifierWithDelay creates a new dummy verifier with a custom
 // verification delay.
-func NewDummyVerifierWithDelay(subnetId executionproof.ExecutionProofSubnetId, delay time.Duration) *DummyVerifier {
+func NewDummyVerifierWithDelay(subnetId executionproof.ExecutionProofId, delay time.Duration) *DummyVerifier {
 	return &DummyVerifier{
-		subnetId:          subnetId,
+		ProofId:          subnetId,
 		verificationDelay: delay,
 	}
 }
@@ -43,18 +42,11 @@ func NewDummyVerifierWithDelay(subnetId executionproof.ExecutionProofSubnetId, d
 // the subnet ID and payload hash match.
 // This method fulfills the ProofVerifier interface.
 func (d *DummyVerifier) Verifier(
-	payloadHash common.Hash,
 	proof executionproof.ExecutionProof,
 ) (bool, error) {
 	// Check that the proof is for the correct subnet
-	if proof.SubnetId != d.subnetId {
-		return false, fmt.Errorf("Unsuported Subnet: %v", proof.SubnetId)
-	}
-
-	// Check that the proof is for the correct payload
-	if proof.BlockHash != payloadHash {
-		return false, fmt.Errorf("proof block hash mismatch: expected %s, got %s",
-		payloadHash.String(), proof.BlockHash.String())
+	if proof.ProofId != d.ProofId {
+		return false, fmt.Errorf("Unsuported Subnet: %v", proof.ProofId)
 	}
 
 	// Simulate verification work
@@ -66,8 +58,8 @@ func (d *DummyVerifier) Verifier(
 	return true, nil
 }
 
-// SubnetId returns the subnet ID this verifier can handle.
+// GetProofId returns the subnet ID this verifier can handle.
 // This method fulfills the ProofVerifier interface.
-func (d *DummyVerifier) SubnetId() executionproof.ExecutionProofSubnetId {
-	return d.subnetId
+func (d *DummyVerifier) GetProofId() executionproof.ExecutionProofId {
+	return d.ProofId
 }
