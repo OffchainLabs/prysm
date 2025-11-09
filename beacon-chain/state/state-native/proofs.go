@@ -3,8 +3,6 @@ package state_native
 import (
 	"context"
 	"encoding/binary"
-	"errors"
-	"math/bits"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -133,150 +131,150 @@ func (b *BeaconState) validateFieldIndex(f types.FieldIndex) error {
 	return nil
 }
 
-func (b *BeaconState) ProofByGeneralizedIndex(ctx context.Context, generalizedIndices []uint64) ([][]byte, error) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+// func (b *BeaconState) ProofByGeneralizedIndex(ctx context.Context, generalizedIndices []uint64) ([][]byte, error) {
+// 	b.lock.Lock()
+// 	defer b.lock.Unlock()
 
-	return b.proofByGeneralizedIndex(ctx, generalizedIndices)
-}
+// 	return b.proofByGeneralizedIndex(ctx, generalizedIndices)
+// }
 
-func (b *BeaconState) proofByGeneralizedIndex(ctx context.Context, generalizedIndices []uint64) ([][]byte, error) {
-	// Validate generalized index
-	if len(generalizedIndices) == 0 {
-		return nil, errors.New("no generalized indices provided for proof generation")
-	}
+// func (b *BeaconState) proofByGeneralizedIndex(ctx context.Context, generalizedIndices []uint64) ([][]byte, error) {
+// 	// Validate generalized index
+// 	if len(generalizedIndices) == 0 {
+// 		return nil, errors.New("no generalized indices provided for proof generation")
+// 	}
 
-	parentField, err := b.getParentField(generalizedIndices[0])
-	if err != nil {
-		return nil, err
-	}
+// 	parentField, err := b.getParentField(generalizedIndices[0])
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	proofs, err := b.proofByFieldIndex(ctx, parentField)
-	if err != nil {
-		return nil, err
-	}
+// 	proofs, err := b.proofByFieldIndex(ctx, parentField)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	// At this point, proofs correspond to the parent field.
-	// If the generalized index does not correspond to a top-level field,
-	// we need to drill down into the field's Merkle tree representation.
-	fieldCount, err := b.getFieldCount()
-	if err != nil {
-		return nil, err
-	}
+// 	// At this point, proofs correspond to the parent field.
+// 	// If the generalized index does not correspond to a top-level field,
+// 	// we need to drill down into the field's Merkle tree representation.
+// 	fieldCount, err := b.getFieldCount()
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	// Compute depths
-	fieldsDepth := getDepth(fieldCount)
-	currentDepth := uint64(bits.Len64(generalizedIndices[0]) - 1)
-	if uint64(fieldsDepth) == currentDepth {
-		// Top-level leaf (no inner path)
-		return proofs, nil
-	}
+// 	// Compute depths
+// 	fieldsDepth := getDepth(fieldCount)
+// 	currentDepth := uint64(bits.Len64(generalizedIndices[0]) - 1)
+// 	if uint64(fieldsDepth) == currentDepth {
+// 		// Top-level leaf (no inner path)
+// 		return proofs, nil
+// 	}
 
-	fieldLayers := b.stateFieldLeaves[parentField].GetFieldLayers()
-	startingLeafIndex := generalizedIndices[0] - (1 << currentDepth)
+// 	fieldLayers := b.stateFieldLeaves[parentField].GetFieldLayers()
+// 	startingLeafIndex := generalizedIndices[0] - (1 << currentDepth)
 
-	innerProof := trie.ProofFromMerkleLayers(convertFieldLayers(fieldLayers), int(startingLeafIndex))
-	combined := make([][]byte, 0, len(innerProof)+len(proofs))
-	combined = append(combined, innerProof...)
-	combined = append(combined, proofs...)
+// 	innerProof := trie.ProofFromMerkleLayers(convertFieldLayers(fieldLayers), int(startingLeafIndex))
+// 	combined := make([][]byte, 0, len(innerProof)+len(proofs))
+// 	combined = append(combined, innerProof...)
+// 	combined = append(combined, proofs...)
 
-	// For other field types, return the top-level proof for now.
-	return combined, nil
-}
+// 	// For other field types, return the top-level proof for now.
+// 	return combined, nil
+// }
 
-func (b *BeaconState) getFieldCount() (uint64, error) {
-	var fieldCount int
-	switch b.version {
-	case version.Phase0:
-		fieldCount = params.BeaconConfig().BeaconStateFieldCount
-	case version.Altair:
-		fieldCount = params.BeaconConfig().BeaconStateAltairFieldCount
-	case version.Bellatrix:
-		fieldCount = params.BeaconConfig().BeaconStateBellatrixFieldCount
-	case version.Capella:
-		fieldCount = params.BeaconConfig().BeaconStateCapellaFieldCount
-	case version.Deneb:
-		fieldCount = params.BeaconConfig().BeaconStateDenebFieldCount
-	case version.Electra:
-		fieldCount = params.BeaconConfig().BeaconStateElectraFieldCount
-	case version.Fulu:
-		fieldCount = params.BeaconConfig().BeaconStateFuluFieldCount
-	default:
-		return 0, errNotSupported("getParentField", b.version)
-	}
-	return uint64(fieldCount), nil
-}
+// func (b *BeaconState) getFieldCount() (uint64, error) {
+// 	var fieldCount int
+// 	switch b.version {
+// 	case version.Phase0:
+// 		fieldCount = params.BeaconConfig().BeaconStateFieldCount
+// 	case version.Altair:
+// 		fieldCount = params.BeaconConfig().BeaconStateAltairFieldCount
+// 	case version.Bellatrix:
+// 		fieldCount = params.BeaconConfig().BeaconStateBellatrixFieldCount
+// 	case version.Capella:
+// 		fieldCount = params.BeaconConfig().BeaconStateCapellaFieldCount
+// 	case version.Deneb:
+// 		fieldCount = params.BeaconConfig().BeaconStateDenebFieldCount
+// 	case version.Electra:
+// 		fieldCount = params.BeaconConfig().BeaconStateElectraFieldCount
+// 	case version.Fulu:
+// 		fieldCount = params.BeaconConfig().BeaconStateFuluFieldCount
+// 	default:
+// 		return 0, errNotSupported("getParentField", b.version)
+// 	}
+// 	return uint64(fieldCount), nil
+// }
 
-func (b *BeaconState) getParentField(gIndex uint64) (types.FieldIndex, error) {
-	fieldCount, err := b.getFieldCount()
-	if err != nil {
-		return -1, err
-	}
+// func (b *BeaconState) getParentField(gIndex uint64) (types.FieldIndex, error) {
+// 	fieldCount, err := b.getFieldCount()
+// 	if err != nil {
+// 		return -1, err
+// 	}
 
-	topLevelFieldsDepth := getDepth(fieldCount)
-	parentField, err := getAncestorFieldAtDepth(gIndex, uint64(topLevelFieldsDepth))
-	if err != nil {
-		return -1, err
-	}
+// 	topLevelFieldsDepth := getDepth(fieldCount)
+// 	parentField, err := getAncestorFieldAtDepth(gIndex, uint64(topLevelFieldsDepth))
+// 	if err != nil {
+// 		return -1, err
+// 	}
 
-	return types.FieldIndex(parentField), nil
-}
+// 	return types.FieldIndex(parentField), nil
+// }
 
-func nextPowerOfTwo(v uint64) uint {
-	v--
-	v |= v >> 1
-	v |= v >> 2
-	v |= v >> 4
-	v |= v >> 8
-	v |= v >> 16
-	v++
-	return uint(v)
-}
+// func nextPowerOfTwo(v uint64) uint {
+// 	v--
+// 	v |= v >> 1
+// 	v |= v >> 2
+// 	v |= v >> 4
+// 	v |= v >> 8
+// 	v |= v >> 16
+// 	v++
+// 	return uint(v)
+// }
 
-// getDepth computes the depth of a Merkle tree given the number of leaves.
-//
-//	      1           --depth = 0  2**0 + 0 = 1
-//	  2       3       --depth = 1  2**1 + 0 = 2, 2**1+1 = 3
-//	4   5   6   7     --depth = 2  2**2 + 0 = 4, 2**2 + 1 = 5...
-func getDepth(d uint64) uint8 {
-	if d <= 1 {
-		return 0
-	}
-	i := nextPowerOfTwo(d)
-	leadingZeros := bits.LeadingZeros(i)
-	return 64 - uint8(leadingZeros) - 1
-}
+// // getDepth computes the depth of a Merkle tree given the number of leaves.
+// //
+// //	      1           --depth = 0  2**0 + 0 = 1
+// //	  2       3       --depth = 1  2**1 + 0 = 2, 2**1+1 = 3
+// //	4   5   6   7     --depth = 2  2**2 + 0 = 4, 2**2 + 1 = 5...
+// func getDepth(d uint64) uint8 {
+// 	if d <= 1 {
+// 		return 0
+// 	}
+// 	i := nextPowerOfTwo(d)
+// 	leadingZeros := bits.LeadingZeros(i)
+// 	return 64 - uint8(leadingZeros) - 1
+// }
 
-func getAncestorFieldAtDepth(generalizedIndex uint64, depth uint64) (uint64, error) {
-	if generalizedIndex == 0 {
-		return 0, errors.New("generalized index cannot be zero")
-	}
+// func getAncestorFieldAtDepth(generalizedIndex uint64, depth uint64) (uint64, error) {
+// 	if generalizedIndex == 0 {
+// 		return 0, errors.New("generalized index cannot be zero")
+// 	}
 
-	currentDepth := uint64(bits.Len64(generalizedIndex) - 1)
+// 	currentDepth := uint64(bits.Len64(generalizedIndex) - 1)
 
-	if depth > currentDepth {
-		return 0, errors.New("depth exceeds current depth")
-	}
+// 	if depth > currentDepth {
+// 		return 0, errors.New("depth exceeds current depth")
+// 	}
 
-	shift := currentDepth - depth
-	ancestorIndex := generalizedIndex >> shift
-	ancestorField := ancestorIndex - 1<<depth
-	return ancestorField, nil
-}
+// 	shift := currentDepth - depth
+// 	ancestorIndex := generalizedIndex >> shift
+// 	ancestorField := ancestorIndex - 1<<depth
+// 	return ancestorField, nil
+// }
 
-func convertFieldLayers(layers [][]*[32]byte) [][][]byte {
-	converted := make([][][]byte, len(layers))
-	for i, layer := range layers {
-		converted[i] = make([][]byte, len(layer))
-		for j, node := range layer {
-			if node == nil {
-				converted[i][j] = make([]byte, 32)
-				continue
-			}
-			leaf := make([]byte, 32)
-			copy(leaf, node[:])
-			converted[i][j] = leaf
-		}
-	}
-	return converted
-}
+// func convertFieldLayers(layers [][]*[32]byte) [][][]byte {
+// 	converted := make([][][]byte, len(layers))
+// 	for i, layer := range layers {
+// 		converted[i] = make([][]byte, len(layer))
+// 		for j, node := range layer {
+// 			if node == nil {
+// 				converted[i][j] = make([]byte, 32)
+// 				continue
+// 			}
+// 			leaf := make([]byte, 32)
+// 			copy(leaf, node[:])
+// 			converted[i][j] = leaf
+// 		}
+// 	}
+// 	return converted
+// }
