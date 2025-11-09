@@ -11,7 +11,7 @@ go_library(
         "tree.go",
         "wrapper.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz/query/proof",
+    importpath = "github.com/OffchainLabs/prysm/v7/encoding/ssz/query/proof",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_emicklei_dot//:go_default_library",

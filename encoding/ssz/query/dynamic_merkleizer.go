@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query/proof"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query/proof"
 )
 
 // HashTreeRootWith builds a complete merkle tree for any SSZObject by walking its structure

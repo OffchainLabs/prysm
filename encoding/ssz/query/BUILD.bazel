@@ -7,8 +7,10 @@ go_library(
         "bitlist.go",
         "bitvector.go",
         "container.go",
+        "dynamic_merkleizer.go",
         "generalized_index.go",
         "list.go",
+        "merkle_proof_generator.go",
         "path.go",
         "query.go",
         "ssz_info.go",
@@ -21,6 +23,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//encoding/ssz:go_default_library",
+        "//encoding/ssz/query/proof:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )
@@ -35,6 +38,7 @@ go_test(
     ],
     deps = [
         ":go_default_library",
+        "//encoding/ssz/query/proof:go_default_library",
         "//encoding/ssz/query/testutil:go_default_library",
         "//proto/ssz_query/testing:go_default_library",
         "//testing/require:go_default_library",

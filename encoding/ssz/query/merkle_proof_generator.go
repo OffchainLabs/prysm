@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query/proof"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query/proof"
 )
 
 // GenerateMerkleProof generates a merkle proof for a given SSZ object and generalized index.
