@@ -550,9 +550,15 @@ func (vs *Server) PrepareBeaconProposer(
 		validatorIndices = append(validatorIndices, r.ValidatorIndex)
 	}
 	if len(validatorIndices) != 0 {
-		log.WithFields(logrus.Fields{
-			"validatorCount": len(validatorIndices),
-		}).Debug("Updated fee recipient addresses for validator indices")
+		if logrus.IsLevelEnabled(logrus.TraceLevel) {
+			log.WithFields(logrus.Fields{
+				"validatorIndices": validatorIndices,
+			}).Trace("Updated fee recipient addresses for validator indices")
+		} else {
+			log.WithFields(logrus.Fields{
+				"validatorCount": len(validatorIndices),
+			}).Debug("Updated fee recipient addresses for validator indices")
+		}
 	}
 	return &emptypb.Empty{}, nil
 }
