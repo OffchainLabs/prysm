@@ -61,20 +61,13 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 		if isDatabaseMinimal {
 			databaseFileDir = filesystem.DatabaseDirName
 		}
-		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", databaseFileDir, dataDir)
-	} else {
-		if !isDatabaseMinimal {
-			matchPath = filepath.Dir(matchPath) // strip the file name
-		}
-		dataDir = matchPath
-		log.Infof("Found validator database at path %s", dataDir)
+		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to import", databaseFileDir, dataDir)
 	}
-	message := "Found existing database inside of %s"
-	if !found {
-		message = "Did not find existing database inside of %s, creating a new one"
+	if !isDatabaseMinimal {
+		matchPath = filepath.Dir(matchPath) // strip the file name
 	}
-
-	log.Infof(message, dataDir)
+	dataDir = matchPath
+	log.Infof("Found validator database at path %s", dataDir)
 
 	// Open the validator database.
 	if isDatabaseMinimal {

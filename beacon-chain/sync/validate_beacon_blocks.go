@@ -337,17 +337,17 @@ func (s *Service) blockVerifyingState(ctx context.Context, blk interfaces.ReadOn
 		}
 		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, blockSlot)
 	}
-	// If head and block are in the same epoch and head is compatible with the parent's target, then use head
+	// If head and block are in the same epoch and head is compatible with the parent's dependent root, then use head
 	if blockEpoch == headEpoch {
-		headTarget, err := s.cfg.chain.TargetRootForEpoch([32]byte(headRoot), blockEpoch)
+		headDependent, err := s.cfg.chain.DependentRootForEpoch([32]byte(headRoot), blockEpoch)
 		if err != nil {
 			return nil, err
 		}
-		parentTarget, err := s.cfg.chain.TargetRootForEpoch([32]byte(parentRoot), blockEpoch)
+		parentDependent, err := s.cfg.chain.DependentRootForEpoch([32]byte(parentRoot), blockEpoch)
 		if err != nil {
 			return nil, err
 		}
-		if bytes.Equal(headTarget[:], parentTarget[:]) {
+		if bytes.Equal(headDependent[:], parentDependent[:]) {
 			return s.cfg.chain.HeadStateReadOnly(ctx)
 		}
 	}
