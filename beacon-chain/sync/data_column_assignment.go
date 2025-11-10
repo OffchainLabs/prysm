@@ -65,7 +65,7 @@ func (c *DASPeerCache) NewPicker(pids []peer.ID, toCustody peerdas.ColumnIndices
 	custodians := make(map[uint64][]*dasPeer, len(toCustody))
 	scores := make([]*dasPeerScore, 0, len(pids))
 	for _, pid := range pids {
-		peer, err := c.refresh(pid)
+		peer, err := c.refresh(pid, toCustody)
 		if err != nil {
 			log.WithField("peerID", pid).WithError(err).Debug("Failed to convert peer ID to node ID.")
 			continue
@@ -91,7 +91,7 @@ func (c *DASPeerCache) NewPicker(pids []peer.ID, toCustody peerdas.ColumnIndices
 // refresh supports NewPicker in getting the latest dasPeer view for the given peer.ID. It caches the result
 // of the enode.ID computation but refreshes the custody group count each time it is called, leveraging the
 // cache behind peerdas.Info.
-func (c *DASPeerCache) refresh(pid peer.ID) (*dasPeer, error) {
+func (c *DASPeerCache) refresh(pid peer.ID, toCustody peerdas.ColumnIndices) (*dasPeer, error) {
 	// Computing the enode.ID seems to involve multiple parseing and validation steps followed by a
 	// hash computation, so it seems worth trying to cache the result.
 	p, ok := c.peers[pid]
@@ -104,13 +104,17 @@ func (c *DASPeerCache) refresh(pid peer.ID) (*dasPeer, error) {
 		}
 		p = &dasPeer{enid: nodeID, pid: pid}
 	}
-	dasInfo, _, err := peerdas.Info(p.enid, c.p2pSvc.CustodyGroupCountFromPeer(pid))
-	if err != nil {
-		// If we can't get the peerDAS info, remove peer from the cache.
-		delete(c.peers, pid)
-		return nil, errors.Wrapf(err, "CustodyGroupCountFromPeer, peerID=%s, nodeID=%s", pid, p.enid)
+	if len(toCustody) > 0 {
+		dasInfo, _, err := peerdas.Info(p.enid, c.p2pSvc.CustodyGroupCountFromPeer(pid))
+		if err != nil {
+			// If we can't get the peerDAS info, remove peer from the cache.
+			delete(c.peers, pid)
+			return nil, errors.Wrapf(err, "CustodyGroupCountFromPeer, peerID=%s, nodeID=%s", pid, p.enid)
+		}
+		p.custodied = peerdas.NewColumnIndicesFromMap(dasInfo.CustodyColumns)
+	} else {
+		p.custodied = peerdas.NewColumnIndices()
 	}
-	p.custodied = peerdas.NewColumnIndicesFromMap(dasInfo.CustodyColumns)
 	c.peers[pid] = p
 	return p, nil
 }

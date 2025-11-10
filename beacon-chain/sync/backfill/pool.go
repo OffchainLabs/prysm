@@ -4,10 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -163,9 +166,12 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		return todo, nil
 	}
 
-	custodied, err := currentCustodiedColumns(p.ctx, p.p2p)
-	if err != nil {
-		return nil, errors.Wrap(err, "current custodied columns")
+	custodied := peerdas.NewColumnIndices()
+	if highestEpoch(todo) >= params.BeaconConfig().FuluForkEpoch {
+		custodied, err = currentCustodiedColumns(p.ctx, p.p2p)
+		if err != nil {
+			return nil, errors.Wrap(err, "current custodied columns")
+		}
 	}
 	picker, err := p.peerCache.NewPicker(notBusy, custodied, minReqInterval)
 	if err != nil {
@@ -200,6 +206,17 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		p.updateEarliest(b.begin)
 	}
 	return []batch{}, nil
+}
+
+func highestEpoch(batches []batch) primitives.Epoch {
+	highest := primitives.Epoch(0)
+	for _, b := range batches {
+		epoch := slots.ToEpoch(b.end - 1)
+		if epoch > highest {
+			highest = epoch
+		}
+	}
+	return highest
 }
 
 func (p *p2pBatchWorkerPool) updateEarliest(current primitives.Slot) {
