@@ -1,8 +1,8 @@
 package common
 
 import (
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 const FailedBlockSignLocalErr = "block rejected by local protection"

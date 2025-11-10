@@ -8,7 +8,7 @@ go_library(
         "options.go",
         "transport.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/api/client",
+    importpath = "github.com/OffchainLabs/prysm/v7/api/client",
     visibility = ["//visibility:public"],
     deps = ["@com_github_pkg_errors//:go_default_library"],
 )

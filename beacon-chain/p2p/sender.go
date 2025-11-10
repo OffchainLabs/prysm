@@ -3,8 +3,8 @@ package p2p
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/kr/pretty"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"

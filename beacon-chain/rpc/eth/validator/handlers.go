@@ -13,68 +13,36 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	rpchelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Deprecated: use GetAggregateAttestationV2 instead
-// GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
-func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestation")
-	defer span.End()
-
-	_, attDataRoot, ok := shared.HexFromQuery(w, r, "attestation_data_root", fieldparams.RootLength, true)
-	if !ok {
-		return
-	}
-	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
-	if !ok {
-		return
-	}
-
-	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, 0)
-	if agg == nil {
-		return
-	}
-	typedAgg, ok := agg.(*ethpbalpha.Attestation)
-	if !ok {
-		httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
-		return
-	}
-	data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	httputil.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
-}
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Request) {
@@ -323,58 +291,6 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 		}
 		httputil.WriteError(w, failuresErr)
 		return
-	}
-}
-
-// Deprecated: use SubmitAggregateAndProofsV2 instead
-// SubmitAggregateAndProofs verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
-func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofs")
-	defer span.End()
-
-	var req structs.SubmitAggregateAndProofsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
-	broadcastFailed := false
-	for _, item := range req.Data {
-		var signedAggregate structs.SignedAggregateAttestationAndProof
-		err := json.Unmarshal(item, &signedAggregate)
-		if err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		consensusItem, err := signedAggregate.ToConsensus()
-		if err != nil {
-			httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
-		if rpcError != nil {
-			var broadcastFailedErr *server.BroadcastFailedError
-			ok := errors.As(rpcError.Err, &broadcastFailedErr)
-			if ok {
-				broadcastFailed = true
-			} else {
-				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-				return
-			}
-		}
-	}
-
-	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
 	}
 }
 

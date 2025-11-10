@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 )
 
 func TestMain(t *testing.M) {

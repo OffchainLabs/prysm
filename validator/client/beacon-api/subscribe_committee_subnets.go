@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 

@@ -1,8 +1,8 @@
 package helpers
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // DepositRequestsStarted determines if the deposit requests have started.

@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/userprompt"
-	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/userprompt"
+	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -61,20 +61,13 @@ func importSlashingProtectionJSON(cliCtx *cli.Context) error {
 		if isDatabaseMinimal {
 			databaseFileDir = filesystem.DatabaseDirName
 		}
-		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to export", databaseFileDir, dataDir)
-	} else {
-		if !isDatabaseMinimal {
-			matchPath = filepath.Dir(matchPath) // strip the file name
-		}
-		dataDir = matchPath
-		log.Infof("Found validator database at path %s", dataDir)
+		return fmt.Errorf("%s (validator database) was not found at path %s, so nothing to import", databaseFileDir, dataDir)
 	}
-	message := "Found existing database inside of %s"
-	if !found {
-		message = "Did not find existing database inside of %s, creating a new one"
+	if !isDatabaseMinimal {
+		matchPath = filepath.Dir(matchPath) // strip the file name
 	}
-
-	log.Infof(message, dataDir)
+	dataDir = matchPath
+	log.Infof("Found validator database at path %s", dataDir)
 
 	// Open the validator database.
 	if isDatabaseMinimal {

@@ -7,23 +7,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
@@ -69,10 +69,13 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 
 	bootNodeService := &Service{
 		cfg:                   &Config{UDPPort: 2000, TCPPort: 3000, QUICPort: 3000, DisableLivenessCheck: true, PingInterval: testPingInterval},
+		ctx:                   ctx,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: params.BeaconConfig().GenesisValidatorsRoot[:],
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        make(chan struct{}),
 	}
+	close(bootNodeService.custodyInfoSet)
 
 	bootNodeForkDigest, err := bootNodeService.currentForkDigest()
 	require.NoError(t, err)
@@ -102,6 +105,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
 			DB:                   db,
+			DataDir:              t.TempDir(), // Unique data dir for each peer
 		})
 
 		require.NoError(t, err)
@@ -109,6 +113,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		service.genesisTime = genesisTime
 		service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 		service.custodyInfo = &custodyInfo{}
+		close(service.custodyInfoSet)
 
 		nodeForkDigest, err := service.currentForkDigest()
 		require.NoError(t, err)
@@ -152,6 +157,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		TCPPort:              3010,
 		QUICPort:             3010,
 		DB:                   db,
+		DataDir:              t.TempDir(), // Unique data dir for test service
 	}
 
 	service, err := NewService(t.Context(), cfg)
@@ -160,6 +166,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	service.genesisTime = genesisTime
 	service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 	service.custodyInfo = &custodyInfo{}
+	close(service.custodyInfoSet)
 
 	service.Start()
 	defer func() {

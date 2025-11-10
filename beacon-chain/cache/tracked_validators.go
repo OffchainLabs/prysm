@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"

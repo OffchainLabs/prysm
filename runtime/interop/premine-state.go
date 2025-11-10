@@ -4,20 +4,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 )
@@ -28,7 +28,7 @@ type PremineGenesisConfig struct {
 	GenesisTime     time.Time
 	NVals           uint64
 	PregenesisCreds uint64
-	Version         int          // as in "github.com/OffchainLabs/prysm/v6/runtime/version"
+	Version         int          // as in "github.com/OffchainLabs/prysm/v7/runtime/version"
 	GB              *types.Block // geth genesis block
 	depositEntries  *depositEntries
 }

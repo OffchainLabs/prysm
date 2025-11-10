@@ -3,7 +3,7 @@ package minimal
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/bellatrix/epoch_processing"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/shared/bellatrix/epoch_processing"
 )
 
 func TestMinimal_Bellatrix_EpochProcessing_RandaoMixesReset(t *testing.T) {
