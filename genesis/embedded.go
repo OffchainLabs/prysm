@@ -3,9 +3,9 @@ package genesis
 import (
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/genesis/internal/embedded"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/genesis/internal/embedded"
 )
 
 var embeddedGenesisData map[string]GenesisData

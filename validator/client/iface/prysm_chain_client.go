@@ -3,8 +3,8 @@ package iface
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 

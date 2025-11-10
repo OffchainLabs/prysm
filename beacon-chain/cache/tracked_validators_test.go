@@ -3,8 +3,8 @@ package cache
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func mapEqual(a, b map[primitives.ValidatorIndex]bool) bool {

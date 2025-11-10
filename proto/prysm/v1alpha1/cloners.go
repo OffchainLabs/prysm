@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 type copier[T any] interface {

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/apiutil"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 )

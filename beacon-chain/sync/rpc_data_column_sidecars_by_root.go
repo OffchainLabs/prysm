@@ -7,16 +7,16 @@ import (
 	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -49,8 +49,18 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 	SetRPCStreamDeadlines(stream)
 
+	// Count the total number of requested data column sidecars.
+	totalRequested := 0
+	for _, ident := range requestedColumnIdents {
+		totalRequested += len(ident.Columns)
+	}
+
+	if err := s.rateLimiter.validateRequest(stream, uint64(totalRequested)); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
+
 	// Penalize peers that send invalid requests.
-	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
+	if err := validateDataColumnsByRootRequest(totalRequested); err != nil {
 		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
@@ -154,13 +164,8 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 }
 
 // validateDataColumnsByRootRequest checks if the request for data column sidecars is valid.
-func validateDataColumnsByRootRequest(colIdents types.DataColumnsByRootIdentifiers) error {
-	total := uint64(0)
-	for _, id := range colIdents {
-		total += uint64(len(id.Columns))
-	}
-
-	if total > params.BeaconConfig().MaxRequestDataColumnSidecars {
+func validateDataColumnsByRootRequest(count int) error {
+	if uint64(count) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}
 

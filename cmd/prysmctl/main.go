@@ -3,12 +3,12 @@ package main
 import (
 	"os"
 
-	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/checkpointsync"
-	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/db"
-	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/p2p"
-	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/testnet"
-	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/validator"
-	"github.com/OffchainLabs/prysm/v6/cmd/prysmctl/weaksubjectivity"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/checkpointsync"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/db"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/p2p"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/testnet"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/validator"
+	"github.com/OffchainLabs/prysm/v7/cmd/prysmctl/weaksubjectivity"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

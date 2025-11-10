@@ -3,7 +3,7 @@ package p2p
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 

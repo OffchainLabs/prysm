@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	fuzz "github.com/google/gofuzz"
 )
 

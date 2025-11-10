@@ -1,0 +1,21 @@
+### Removed
+
+- Deprecated flag `--enable-optional-engine-methods` has been removed.
+- Deprecated flag `--disable-build-block-parallel` has been removed.
+- Deprecated flag `--disable-reorg-late-blocks` has been removed.
+- Deprecated flag `--disable-optional-engine-methods` has been removed.
+- Deprecated flag `--disable-aggregate-parallel` has been removed.
+- Deprecated flag `--enable-eip-4881` has been removed.
+- Deprecated flag `--disable-eip-4881` has been removed.
+- Deprecated flag `--enable-verbose-sig-verification` has been removed.
+- Deprecated flag `--enable-debug-rpc-endpoints` has been removed.
+- Deprecated flag `--beacon-rpc-gateway-provider` has been removed.
+- Deprecated flag `--disable-grpc-gateway` has been removed.
+- Deprecated flag `--enable-experimental-state` has been removed.
+- Deprecated flag `--enable-committee-aware-packing` has been removed.
+- Deprecated flag `--interop-genesis-time` has been removed.
+- Deprecated flag `--interop-num-validators` has been removed (from beacon-chain only; still available in validator client).
+- Deprecated flag `--enable-quic` has been removed.
+- Deprecated flag `--attest-timely` has been removed.
+- Deprecated flag `--disable-experimental-state` has been removed.
+- Deprecated flag `--p2p-metadata` has been removed.

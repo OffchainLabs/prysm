@@ -6,10 +6,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
