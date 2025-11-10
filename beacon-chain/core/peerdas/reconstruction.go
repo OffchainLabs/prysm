@@ -40,7 +40,6 @@ func recoverCellsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataColumn, blob
 	var mu sync.Mutex
 
 	for _, blobIndex := range blobIndices {
-		blobIndex := blobIndex // Capture loop variable
 		wg.Go(func() error {
 			cellsIndices := make([]uint64, 0, sidecarCount)
 			cells := make([]kzg.Cell, 0, sidecarCount)
@@ -78,7 +77,6 @@ func recoverCellsAndProofsForBlobs(verifiedRoSidecars []blocks.VerifiedRODataCol
 	proofsPerBlob := make([][]kzg.Proof, len(blobIndices))
 
 	for i, blobIndex := range blobIndices {
-		i, blobIndex := i, blobIndex // Capture loop variables
 		wg.Go(func() error {
 			cellsIndices := make([]uint64, 0, sidecarCount)
 			cells := make([]kzg.Cell, 0, sidecarCount)
