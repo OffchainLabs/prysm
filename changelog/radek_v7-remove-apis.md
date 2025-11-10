@@ -1,3 +1,0 @@
-### Removed
-
-- Remove Beacon API endpoints that were deprecated in Electra: `GET /eth/v1/beacon/deposit_snapshot`, `GET /eth/v1/beacon/blocks/{block_id}/attestations`, `GET /eth/v1/beacon/pool/attestations`, `POST /eth/v1/beacon/pool/attestations`, `GET /eth/v1/beacon/pool/attester_slashings`, `POST /eth/v1/beacon/pool/attester_slashings`, `GET /eth/v1/validator/aggregate_attestation`, `POST /eth/v1/validator/aggregate_and_proofs`, `POST /eth/v1/beacon/blocks`, `POST /eth/v1/beacon/blinded_blocks`, `GET /eth/v1/builder/states/{state_id}/expected_withdrawals`.
