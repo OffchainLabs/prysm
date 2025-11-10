@@ -281,6 +281,25 @@ var (
 		Usage:   "Target file path for outputting a generated JWT secret to be used for JSON-RPC authentication",
 		Aliases: []string{"o"},
 	}
+	// Activate ZKVM execution proof mode
+	ActivateZkvmFlag = &cli.BoolFlag{
+		Name:  "activate-zkvm",
+		Usage: `
+			Activates ZKVM execution proof mode. Enables the node to subscribe to the
+        	execution_proof gossip topic, receive and verify execution proofs from peers,
+        	and advertise zkVM support in its ENR for peer discovery.
+        	Use --zkvm-generation-proof-types to specify which proof types this node
+        	should generate (optional - nodes can verify without generating).
+		`,
+	}
+	// ZKVM Generation Proof Type
+	ZkvmGenerationProofTypeFlag = &cli.StringFlag{
+		Name:    "zkvm-generation-proof-types",
+		Usage:   `
+			Comma-separated list of proof type IDs to generate
+            (e.g., '0,1' where 0=SP1+Reth, 1=Risc0+Geth).
+            Optional - nodes can verify proofs without generating them.`,
+	}
 )
 
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.
