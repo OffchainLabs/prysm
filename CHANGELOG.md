@@ -6,6 +6,16 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [v7.0.0](https://github.com/prysmaticlabs/prysm/compare/v6.1.4...v7.0.0) - 2025-11-10
 
+This is our initial mainnet release for the Ethereum mainnet Fulu fork on December 3rd, 2025. All operators MUST update to v7.0.0 or later release prior to the fulu fork epoch `411392`. See the [Ethereum Foundation blog post](https://blog.ethereum.org/2025/11/06/fusaka-mainnet-announcement) for more information on Fulu.
+
+Other than the mainnet fulu fork schedule, there are a few callouts in this release:
+- `by-epoch` blob storage format is the default for new installations. Users that haven't migrated will see a warning to migrate to the new format. Existing deployments may set `--blob-storage-layout=by-epoch` to perform the migration.
+- Several deprecated flags have been deleted! Please review the "removed" section of this changelog carefully. If you are referencing a removed flag, Prysm will not start! All of these flags had no effect for at least one release.
+- Several deprecated API endpoints have been deleted. Please review the "removed" section of this changelog carefully. 
+- Backfill is not supported in Fulu. This is expected to be fixed in the next release and should be delivered prior to the mainnet activation fork.
+- The builder default gas limit is raised from `45000000` (45 MGas) to `60000000` (60 MGas).
+- Several bug fixes and improvements.
+
 ### Added
 
 - Allow custom headers in validator client HTTP requests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15884)
