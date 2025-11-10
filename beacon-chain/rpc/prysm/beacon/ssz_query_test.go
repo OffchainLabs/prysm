@@ -143,6 +143,10 @@ func TestQueryBeaconState_withProof(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, st.UpdateBalancesAtIndex(0, 42000000000))
 
+	// Recompute state root after modification to match what merkleizer will produce
+	stateRoot, err = st.HashTreeRoot(ctx)
+	require.NoError(t, err)
+
 	tests := []struct {
 		path          string
 		expectedValue []byte

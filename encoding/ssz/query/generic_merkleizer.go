@@ -13,33 +13,21 @@ import (
 //
 // If sszInfo is nil, the object will be analyzed on-the-fly, but providing pre-analyzed
 // SszInfo avoids redundant reflection overhead when the same type is processed multiple times.
-func HashTreeRootWith(object any, info *SszInfo, hh proof.HashWalker) error {
+func HashTreeRootWith(object SSZObject, info *SszInfo, hh proof.HashWalker) error {
 	var sszInfo *SszInfo
 	var err error
 
+	// Use provided SszInfo or analyze the object if nil
 	if info != nil {
 		sszInfo = info
 	} else {
-		// Analyze the object to get pre-computed SSZ type information including max sizes
-		sszObj, ok := object.(SSZObject)
-		if !ok {
-			return fmt.Errorf("object does not implement SSZObject interface")
-		}
-
-		sszInfo, err = AnalyzeObject(sszObj)
+		sszInfo, err = AnalyzeObject(object)
 		if err != nil {
 			return fmt.Errorf("failed to analyze object: %w", err)
 		}
 	}
 
 	sourceValue := reflect.ValueOf(object)
-	// Dereference pointers
-	if sourceValue.Kind() == reflect.Ptr {
-		if sourceValue.IsNil() {
-			return fmt.Errorf("cannot build merkle tree from nil object")
-		}
-		sourceValue = sourceValue.Elem()
-	}
 
 	// Start with pack=false for the root container
 	return buildRootFromType(sszInfo, sourceValue, hh, false)
@@ -47,7 +35,7 @@ func HashTreeRootWith(object any, info *SszInfo, hh proof.HashWalker) error {
 
 // buildRootFromType is the main dispatcher that routes to appropriate handlers based on SszInfo type.
 // Uses pre-analyzed SSZ type information (Container, List, Vector, etc.) for accurate handling
-// and access to metadata like max sizes. The 'pack' parameter indicates whether to use
+// and access to metadata like limits. The 'pack' parameter indicates whether to use
 // Append* (true) or Put* (false) methods.
 func buildRootFromType(info *SszInfo, sourceValue reflect.Value, hh proof.HashWalker, pack bool) error {
 	if info == nil {
@@ -55,11 +43,8 @@ func buildRootFromType(info *SszInfo, sourceValue reflect.Value, hh proof.HashWa
 	}
 
 	// Dereference pointers
-	for sourceValue.Kind() == reflect.Ptr {
-		if sourceValue.IsNil() {
-			return fmt.Errorf("nil pointer")
-		}
-		sourceValue = sourceValue.Elem()
+	if sourceValue.Kind() == reflect.Ptr {
+		sourceValue = dereferencePointer(sourceValue)
 	}
 
 	switch info.sszType {
@@ -69,8 +54,14 @@ func buildRootFromType(info *SszInfo, sourceValue reflect.Value, hh proof.HashWa
 	case Vector:
 		return buildRootFromVector(info, sourceValue, hh)
 
+	case Bitvector:
+		return buildRootFromBitvector(info, sourceValue, hh)
+
 	case List:
 		return buildRootFromList(info, sourceValue, hh)
+
+	case Bitlist:
+		return buildRootFromBitlist(info, sourceValue, hh)
 
 	case Uint8:
 		return buildRootFromUint8(sourceValue, hh, pack)
@@ -87,12 +78,6 @@ func buildRootFromType(info *SszInfo, sourceValue reflect.Value, hh proof.HashWa
 	case Boolean:
 		return buildRootFromBoolean(sourceValue, hh, pack)
 
-	case Bitvector:
-		return buildRootFromBitvector(info, sourceValue, hh)
-
-	case Bitlist:
-		return buildRootFromBitlist(info, sourceValue, hh)
-
 	default:
 		return fmt.Errorf("unsupported SSZ type: %v", info.sszType)
 	}
@@ -105,7 +90,7 @@ func buildRootFromType(info *SszInfo, sourceValue reflect.Value, hh proof.HashWa
 //   - All field roots are collected in order
 //   - The collection is Merkleized to produce the container's root
 //
-// The function uses the pre-computed TypeDescriptor to efficiently iterate through
+// The function uses pre-analyzed SSZ type information to efficiently iterate through
 // fields without repeated reflection calls.
 //
 // Parameters:
@@ -163,17 +148,17 @@ func buildRootFromContainer(info *SszInfo, sourceValue reflect.Value, hh proof.H
 // the array length in the final hash computation.
 //
 // Parameters:
-//   - sourceType: The TypeDescriptor containing array metadata
+//   - info: The SszInfo containing vector metadata and max length
 //   - sourceValue: The reflect.Value of the array to hash
-//   - hh: The Hasher instance for hash computation
-//   - idt: Indentation level for verbose logging
+//   - hh: The HashWalker instance for hash computation
 //
 // Returns:
 //   - error: An error if element hashing fails
 //
 // Special handling:
-//   - Byte arrays use PutBytes for efficient chunk-based hashing
-//   - Arrays with max size hints include length mixing for proper limits
+//   - Byte arrays use AppendBytes32 for efficient chunk-based hashing
+//   - Vectors shorter than max length are padded with zeros
+//   - Array types cannot exceed their max length
 func buildRootFromVector(info *SszInfo, sourceValue reflect.Value, hh proof.HashWalker) error {
 	// Handle both array and slice types (proto uses slices for byte vectors)
 	if sourceValue.Kind() != reflect.Slice {
@@ -191,25 +176,71 @@ func buildRootFromVector(info *SszInfo, sourceValue reflect.Value, hh proof.Hash
 		return fmt.Errorf("failed to get element info: %w", err)
 	}
 
-	vectorLength := sourceValue.Len()
+	sliceLen := sourceValue.Len()
 
-	// Special case: byte vectors [N]byte are treated as a single value, chunked
+	appendZero := 0
+	if uint32(sliceLen) < uint32(vectorInfo.Length()) {
+		appendZero = int(vectorInfo.Length()) - sliceLen
+	}
+
+	// For byte arrays, handle as a single unit
 	if elemInfo.sszType == Uint8 {
-		// Convert array to byte slice
-		byteSlice := make([]byte, vectorLength)
-		for i := 0; i < vectorLength; i++ {
-			byteSlice[i] = byte(sourceValue.Index(i).Uint())
+		if !sourceValue.CanAddr() {
+			// workaround for unaddressable static arrays
+			sourceValPtr := reflect.New(elemInfo.typ)
+			sourceValPtr.Elem().Set(sourceValue)
+			sourceValue = sourceValPtr.Elem()
 		}
-		hh.AppendBytes32(byteSlice)
+
+		var bytes []byte
+		if elemInfo.typ.Kind() == reflect.String {
+			bytes = []byte(sourceValue.String())[:sliceLen]
+		} else {
+			bytes = sourceValue.Bytes()[:sliceLen]
+		}
+
+		if appendZero > 0 {
+			zeroBytes := make([]byte, appendZero)
+			bytes = append(bytes, zeroBytes...)
+		}
+
+		hh.AppendBytes32(bytes)
 	} else {
-		// Other array types: process each element with pack=true
-		for i := 0; i < vectorLength; i++ {
-			elemValue := sourceValue.Index(i)
-			err := buildRootFromType(elemInfo, elemValue, hh, true)
+		// For other types, process each element
+		for i := 0; i < sliceLen; i++ {
+			fieldValue := sourceValue.Index(i)
+
+			err := buildRootFromType(elemInfo, fieldValue, hh, true)
 			if err != nil {
 				return err
 			}
 		}
+
+		if appendZero > 0 {
+			var zeroVal reflect.Value
+			if elemInfo.typ.Kind() == reflect.Ptr {
+				zeroVal = reflect.New(elemInfo.typ.Elem())
+			} else {
+				zeroVal = reflect.New(elemInfo.typ).Elem()
+			}
+
+			index := hh.Index()
+			err := buildRootFromType(elemInfo, zeroVal, hh, true)
+			if err != nil {
+				return err
+			}
+
+			zeroLen := hh.Index() - index
+			zeroBytes := hh.Hash()
+			if len(zeroBytes) > zeroLen {
+				zeroBytes = zeroBytes[len(zeroBytes)-zeroLen:]
+			}
+
+			for i := 1; i < appendZero; i++ {
+				hh.Append(zeroBytes)
+			}
+		}
+
 		hh.FillUpTo32()
 	}
 
@@ -219,8 +250,26 @@ func buildRootFromVector(info *SszInfo, sourceValue reflect.Value, hh proof.Hash
 }
 
 // buildRootFromList processes a dynamic slice (list in SSZ) using SszInfo for element type guidance.
+// Lists in SSZ are hashed as follows:
+//   - Computing the root of the slice contents (as if it were an array)
+//   - Mixing the slice length into the final hash for proper domain separation
+//
 // Uses listInfo.Limit() to get the maximum size for proper length mixing in MerkleizeWithMixin.
 // Byte lists are handled specially (chunked into 32-byte segments).
+//
+// Parameters:
+//   - info: The SszInfo containing list element metadata and max limit
+//   - sourceValue: The reflect.Value of the slice to hash
+//   - hh: The HashWalker instance for hash computation
+//
+// Returns:
+//   - error: An error if element hashing fails or list exceeds limit
+//
+// Special handling:
+//   - Byte lists are appended as a single unit with chunk padding
+//   - Variable-sized elements are processed without packing
+//   - Fixed-size elements are packed together with padding
+//   - List size is mixed into the final hash via MerkleizeWithMixin
 func buildRootFromList(info *SszInfo, sourceValue reflect.Value, hh proof.HashWalker) error {
 	if sourceValue.Kind() != reflect.Slice {
 		return fmt.Errorf("expected slice, got %v", sourceValue.Kind())
@@ -237,107 +286,88 @@ func buildRootFromList(info *SszInfo, sourceValue reflect.Value, hh proof.HashWa
 		return fmt.Errorf("failed to get element info: %w", err)
 	}
 
-	listLength := int(listInfo.length) //  sourceValue.Len() // TODO: Use actual slice length, not analyzed length
+	sliceLen := listInfo.Length()
 	limit := listInfo.Limit()
 
-	// Special case: byte lists/slices []byte (fixed-size Uint8 elements)
+	// For byte arrays, handle as a single unit
 	if elemInfo.sszType == Uint8 {
-		// Get the byte slice directly
-		byteSlice := make([]byte, listLength)
-		for i := 0; i < listLength; i++ {
-			byteSlice[i] = byte(sourceValue.Index(i).Uint())
+		if !sourceValue.CanAddr() {
+			// workaround for unaddressable static arrays
+			sourceValPtr := reflect.New(elemInfo.typ)
+			sourceValPtr.Elem().Set(sourceValue)
+			sourceValue = sourceValPtr.Elem()
 		}
-		hh.AppendBytes32(byteSlice)
-	} else if elemInfo.isVariable {
-		// Variable-sized elements: process each element without packing/filling
-		// Each element is complete and will be merkleized separately
-		for i := 0; i < listLength; i++ {
-			elemValue := sourceValue.Index(i)
-			err := buildRootFromType(elemInfo, elemValue, hh, false)
-			if err != nil {
-				return err
-			}
+
+		var bytes []byte
+		if elemInfo.typ.Kind() == reflect.String {
+			bytes = []byte(sourceValue.String())
+		} else {
+			bytes = sourceValue.Bytes()
 		}
+
+		hh.AppendBytes32(bytes)
 	} else {
-		// Fixed-size elements: pack them together with padding
-		for i := 0; i < listLength; i++ {
-			elemValue := sourceValue.Index(i)
-			err := buildRootFromType(elemInfo, elemValue, hh, true)
+		// For other types, process each element
+		for i := 0; i < int(sliceLen); i++ {
+			fieldValue := sourceValue.Index(i)
+
+			err := buildRootFromType(elemInfo, fieldValue, hh, true)
 			if err != nil {
 				return err
 			}
 		}
+
 		hh.FillUpTo32()
 	}
 
-	// For lists, merkleize with mixin to include length in the hash.
-	// Use CalculateLimit to compute the tree capacity, same as fastssz does:
-	// - For primitive types (Uint8/16/32/64, Boolean): treeCapacity = (maxElements * elementSize + 31) / 32
-	// - For containers/lists/vectors: treeCapacity = maxElements (each element is a separate node)
-	var treeCapacity uint64
-
-	if elemInfo.sszType.isBasic() && elemInfo.Size() > 0 {
-		// Primitive types: calculate bytes and convert to chunks
-		elementSize := elemInfo.Size()
-		if elementSize > 0 {
-			treeCapacity = proof.CalculateLimit(limit, uint64(listLength), elemInfo.Size())
+	// Merkleize with mixin to include length in the hash
+	if limit > 0 {
+		// Calculate tree capacity (you already do this above)
+		var treeCapacity uint64
+		if elemInfo.sszType.isBasic() && elemInfo.Size() > 0 {
+			treeCapacity = proof.CalculateLimit(limit, uint64(sliceLen), elemInfo.Size())
 		} else {
 			treeCapacity = limit
 		}
+
+		hh.MerkleizeWithMixin(hashIndex, uint64(sliceLen), treeCapacity)
+
 	} else {
-		// Variable-size and complex types: each is a separate node, use limit directly
-		treeCapacity = limit
+		hh.Merkleize(hashIndex)
 	}
-	hh.MerkleizeWithMixin(hashIndex, uint64(listLength), treeCapacity)
 
 	return nil
 }
 
 // buildRootFromBitvector processes a fixed-size bitvector using SszInfo for type guidance.
 // Bitvectors are represented as byte slices in proto, with a fixed bit length.
-// They are hashed like regular byte vectors since their size is fixed.
+// Appends bytes as a single unit and merkleizes them.
 func buildRootFromBitvector(_ *SszInfo, sourceValue reflect.Value, hh proof.HashWalker) error {
-	if sourceValue.Kind() != reflect.Slice {
-		return fmt.Errorf("expected slice for bitvector, got %v", sourceValue.Kind())
-	}
+	hashIndex := hh.Index()
+	bytes := sourceValue.Bytes()
 
-	// Get the byte slice representation of the bitvector
-	byteSlice := make([]byte, sourceValue.Len())
-	for i := 0; i < sourceValue.Len(); i++ {
-		byteSlice[i] = byte(sourceValue.Index(i).Uint())
-	}
+	// Append bytes in 32-byte chunks
+	hh.AppendBytes32(bytes)
 
-	// Bitvectors are fixed-size byte sequences, hashed the same way as byte vectors
-	// PutBytes handles merkleization internally if needed
-	hh.PutBytes(byteSlice)
+	// Merkleize the result
+	hh.Merkleize(hashIndex)
 
 	return nil
 }
 
 // buildRootFromBitlist processes a dynamic-size bitlist using SszInfo for type guidance.
 // Bitlists are represented as byte slices in proto, with a max bit limit and actual length.
+// Uses PutBitlist which handles parsing and merkleizing internally.
 func buildRootFromBitlist(info *SszInfo, sourceValue reflect.Value, hh proof.HashWalker) error {
-	if sourceValue.Kind() != reflect.Slice {
-		return fmt.Errorf("expected slice for bitlist, got %v", sourceValue.Kind())
-	}
+	bytes := sourceValue.Bytes()
 
 	bitlistInfo, err := info.BitlistInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get bitlist info: %w", err)
 	}
 
-	if sourceValue.Len() > int(bitlistInfo.Limit()) {
-		return fmt.Errorf("bitlist length exceeds limit: %d > %d", sourceValue.Len(), bitlistInfo.Limit())
-	}
-
-	// Get the byte slice representation of the bitlist
-	byteSlice := make([]byte, sourceValue.Len())
-	for i := 0; i < sourceValue.Len(); i++ {
-		byteSlice[i] = byte(sourceValue.Index(i).Uint())
-	}
-
-	// For bitlists, use PutBitlist which handles the length encoding and merkleization
-	hh.PutBitlist(byteSlice, bitlistInfo.Limit())
+	// PutBitlist handles parsing and merkleizing with mixin internally
+	hh.PutBitlist(bytes, bitlistInfo.Limit())
 
 	return nil
 }
@@ -388,7 +418,7 @@ func buildRootFromUint64(sourceValue reflect.Value, hh proof.HashWalker, pack bo
 
 // buildRootFromBoolean processes a boolean value. Only Put is supported; Append is not available in HashWalker.
 func buildRootFromBoolean(sourceValue reflect.Value, hh proof.HashWalker, _ bool) error {
-	val := sourceValue.Bool() // TODO: it panics if sourceValue is invalid
+	val := sourceValue.Bool()
 	hh.PutBool(val)
 	return nil
 }

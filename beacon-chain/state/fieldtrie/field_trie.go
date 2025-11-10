@@ -273,8 +273,3 @@ func (f *FieldTrie) Empty() bool {
 func (f *FieldTrie) InsertFieldLayer(layer [][]*[32]byte) {
 	f.fieldLayers = layer
 }
-
-// GetFieldLayers returns the field layer at the specified index.
-func (f *FieldTrie) GetFieldLayers() [][]*[32]byte {
-	return f.fieldLayers
-}

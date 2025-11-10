@@ -10,7 +10,7 @@ go_library(
         "generalized_index.go",
         "generic_merkleizer.go",
         "list.go",
-        "merkle_proof_generator.go",
+        "merkle_tree_prover.go",
         "path.go",
         "query.go",
         "ssz_info.go",
