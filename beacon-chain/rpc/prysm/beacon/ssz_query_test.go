@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query/proof"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -228,14 +229,31 @@ func TestQueryBeaconState_withProof(t *testing.T) {
 			s.QueryBeaconState(writer, request)
 			require.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
-			// TODO: compute proofs in python and add them here if we want to verify a full response message
-			// expectedResponse := &sszquerypb.SSZQueryResponse{
-			// 	Root:   stateRoot[:],
-			// 	Result: tt.expectedValue,
-			// }
-			// sszExpectedResponse, err := expectedResponse.MarshalSSZ()
-			// require.NoError(t, err)
-			// assert.DeepEqual(t, sszExpectedResponse, writer.Body.Bytes())
+
+			// Decode the response to verify the proof
+			responseData := writer.Body.Bytes()
+			var response sszquerypb.SSZQueryResponseWithProof
+			require.NoError(t, response.UnmarshalSSZ(responseData))
+
+			// Verify the proof is included
+			require.NotNil(t, response.Proof)
+			require.Equal(t, true, len(response.Proof.Proofs) > 0, "merkle proof should not be empty")
+
+			// Verify the result matches expected value
+			assert.DeepEqual(t, tt.expectedValue, response.Result)
+
+			// Verify root matches state root
+			assert.DeepEqual(t, stateRoot[:], response.Root)
+
+			// Verify the merkle proof using VerifyProof
+			merkleProof := &proof.Proof{
+				Index:  int(response.Proof.Gindex),
+				Leaf:   response.Proof.Leaf,
+				Hashes: response.Proof.Proofs,
+			}
+			isValid, err := proof.VerifyProof(response.Root, merkleProof)
+			require.NoError(t, err)
+			require.Equal(t, true, isValid, "merkle proof verification failed")
 		})
 	}
 }
@@ -546,16 +564,32 @@ func TestQueryBeaconBlock_withProof(t *testing.T) {
 			require.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, version.String(version.Phase0), writer.Header().Get(api.VersionHeader))
 
-			// blockRoot, err := tt.block.Block().HashTreeRoot()
-			// require.NoError(t, err)
+			// Decode the response to verify the proof
+			responseData := writer.Body.Bytes()
+			var response sszquerypb.SSZQueryResponseWithProof
+			require.NoError(t, response.UnmarshalSSZ(responseData))
 
-			// expectedResponse := &sszquerypb.SSZQueryResponse{
-			// 	Root:   blockRoot[:],
-			// 	Result: tt.expectedValue,
-			// }
-			// sszExpectedResponse, err := expectedResponse.MarshalSSZ()
-			// require.NoError(t, err)
-			// assert.DeepEqual(t, sszExpectedResponse, writer.Body.Bytes())
+			// Verify the proof is included
+			require.NotNil(t, response.Proof)
+			require.Equal(t, true, len(response.Proof.Proofs) > 0, "merkle proof should not be empty")
+
+			// Verify the result matches expected value
+			assert.DeepEqual(t, tt.expectedValue, response.Result)
+
+			// Verify block root
+			blockRoot, err := tt.block.Block().HashTreeRoot()
+			require.NoError(t, err)
+			assert.DeepEqual(t, blockRoot[:], response.Root)
+
+			// Verify the merkle proof using VerifyProof
+			merkleProof := &proof.Proof{
+				Index:  int(response.Proof.Gindex),
+				Leaf:   response.Proof.Leaf,
+				Hashes: response.Proof.Proofs,
+			}
+			isValid, err := proof.VerifyProof(response.Root, merkleProof)
+			require.NoError(t, err)
+			require.Equal(t, true, isValid, "merkle proof verification failed")
 		})
 	}
 }
