@@ -7,15 +7,6 @@ import (
 // Deprecated flags list.
 const deprecatedUsage = "DEPRECATED. DO NOT USE."
 
-var (
-	// To deprecate a feature flag, first copy the example below, then insert deprecated flag in `deprecatedFlags`.
-	exampleDeprecatedFeatureFlag = &cli.StringFlag{
-		Name:   "name",
-		Usage:  deprecatedUsage,
-		Hidden: true,
-	}
-)
-
 // Deprecated flags for both the beacon node and validator client.
 var deprecatedFlags = []cli.Flag{}
 
