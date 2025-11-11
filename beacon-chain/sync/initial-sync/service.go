@@ -217,6 +217,10 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return nil
 	}
 
+	if err != nil {
+		return errors.Wrap(err, "error fetching origin checkpoint blockroot")
+	}
+
 	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "block")
