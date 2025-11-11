@@ -225,7 +225,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	if err != nil {
 		return errors.Wrap(err, "block")
 	}
-	if block == nil || block.Block() == nil {
+	if block.IsNil() {
 		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
