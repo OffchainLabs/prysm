@@ -26,6 +26,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	dataColumnStepParentSeen        = "parent_seen"
+	dataColumnStepParentValid       = "parent_valid"
+	dataColumnStepProposerSignature = "proposer_signature"
+	dataColumnStepInclusionProof    = "inclusion_proof"
+	dataColumnStepKzgBatch          = "kzg_batch_verification"
+	dataColumnStepProposerExpected  = "proposer_expected"
+)
+
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
 	const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
@@ -101,7 +110,9 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	// [IGNORE] The sidecar's block's parent (defined by `block_header.parent_root`) has been seen (via gossip or non-gossip sources
 	// (a client MAY queue sidecars for processing once the parent block is retrieved).
+	parentSeenStart := prysmTime.Now()
 	if err := verifier.SidecarParentSeen(s.hasBadBlock); err != nil {
+		logDataColumnVerificationDuration(roDataColumn, dataColumnStepParentSeen, parentSeenStart, false, err)
 		// If we haven't seen the parent, request it asynchronously.
 		go func() {
 			customCtx := context.Background()
@@ -115,18 +126,25 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 		return pubsub.ValidationIgnore, err
 	}
+	logDataColumnVerificationDuration(roDataColumn, dataColumnStepParentSeen, parentSeenStart, true, nil)
 
 	// [REJECT] The sidecar's block's parent (defined by `block_header.parent_root`) passes validation.
+	parentValidStart := prysmTime.Now()
 	if err := verifier.SidecarParentValid(s.hasBadBlock); err != nil {
+		logDataColumnVerificationDuration(roDataColumn, dataColumnStepParentValid, parentValidStart, false, err)
 		return pubsub.ValidationReject, err
 	}
+	logDataColumnVerificationDuration(roDataColumn, dataColumnStepParentValid, parentValidStart, true, nil)
 
 	// [REJECT] The proposer signature of `sidecar.signed_block_header`, is valid with respect to the `block_header.proposer_index` pubkey.
 	//          We do not strictly respect the spec ordering here. This is necessary because signature verification depends on the parent root,
 	//          which is only available if the parent block is known.
+	proposerSigStart := prysmTime.Now()
 	if err := verifier.ValidProposerSignature(ctx); err != nil {
+		logDataColumnVerificationDuration(roDataColumn, dataColumnStepProposerSignature, proposerSigStart, false, err)
 		return pubsub.ValidationReject, err
 	}
+	logDataColumnVerificationDuration(roDataColumn, dataColumnStepProposerSignature, proposerSigStart, true, nil)
 
 	// [REJECT] The sidecar is from a higher slot than the sidecar's block's parent (defined by `block_header.parent_root`).
 	if err := verifier.SidecarParentSlotLower(); err != nil {
@@ -140,15 +158,22 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// [REJECT] The sidecar's `kzg_commitments` field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
+	inclusionProofStart := prysmTime.Now()
 	if err := verifier.SidecarInclusionProven(); err != nil {
+		logDataColumnVerificationDuration(roDataColumn, dataColumnStepInclusionProof, inclusionProofStart, false, err)
 		return pubsub.ValidationReject, err
 	}
+	logDataColumnVerificationDuration(roDataColumn, dataColumnStepInclusionProof, inclusionProofStart, true, nil)
 
 	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
+	kzgVerificationStart := prysmTime.Now()
 	validationResult, err := s.validateWithKzgBatchVerifier(ctx, roDataColumns)
-	if validationResult != pubsub.ValidationAccept {
+	kzgVerificationSuccess := err == nil && validationResult == pubsub.ValidationAccept
+	logDataColumnVerificationDuration(roDataColumn, dataColumnStepKzgBatch, kzgVerificationStart, kzgVerificationSuccess, err)
+	if !kzgVerificationSuccess {
 		return validationResult, err
 	}
+
 	// Mark KZG verification as satisfied since we did it via batch verifier
 	verifier.SatisfyRequirement(verification.RequireSidecarKzgProofVerified)
 
@@ -161,9 +186,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).
 	// If the `proposer_index` cannot immediately be verified against the expected shuffling, the sidecar MAY be queued for later processing while proposers for the block's branch are calculated
 	// -- in such a case do not REJECT, instead IGNORE this message.
+	proposerExpectedStart := prysmTime.Now()
 	if err := verifier.SidecarProposerExpected(ctx); err != nil {
+		logDataColumnVerificationDuration(roDataColumn, dataColumnStepProposerExpected, proposerExpectedStart, false, err)
 		return pubsub.ValidationReject, err
 	}
+	logDataColumnVerificationDuration(roDataColumn, dataColumnStepProposerExpected, proposerExpectedStart, true, nil)
 
 	verifiedRODataColumns, err := verifier.VerifiedRODataColumns()
 	if err != nil {
@@ -314,4 +342,18 @@ func (s *Service) processDataColumnLogs() {
 func roundFloat(f float64, decimals int) float64 {
 	mult := math.Pow(10, float64(decimals))
 	return math.Round(f*mult) / mult
+}
+
+func logDataColumnVerificationDuration(ro blocks.RODataColumn, step string, started time.Time, success bool, err error) {
+	duration := prysmTime.Since(started)
+	fields := logging.DataColumnFields(ro)
+	fields["verificationStep"] = step
+	fields["durationMillis"] = float64(duration) / float64(time.Millisecond)
+	fields["success"] = success
+
+	entry := log.WithFields(fields)
+	if err != nil {
+		entry = entry.WithError(err)
+	}
+	entry.Info("Data column verification step duration")
 }
