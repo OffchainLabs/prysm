@@ -250,7 +250,7 @@ func generateSSZQueryResponseWithProof(
 	}
 
 	// 2. Get the merkle proof for the given SSZ object and generalized index.
-	merkleProof, err := query.GenerateMerkleProof(sszObject, gi, info)
+	merkleProof, err := query.GenerateMerkleProof(gi, info)
 	if err != nil {
 		return nil, err
 	}

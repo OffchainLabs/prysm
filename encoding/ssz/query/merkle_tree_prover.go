@@ -12,7 +12,6 @@ import (
 // dynamic reflection-based type analysis guided by pre-computed SszInfo.
 //
 // Parameters:
-//   - sszObject: Any SSZ-serializable object (BeaconState, BeaconBlock, etc.)
 //   - generalizedIndex: The index in the merkle tree to generate proof for
 //   - info: Pre-analyzed SSZ type information (use AnalyzeObject if not available)
 //
@@ -20,11 +19,11 @@ import (
 // 1. Create a Wrapper that implements HashWalker to build the merkle tree
 // 2. Call HashTreeRootWith to walk the object structure and build the tree
 // 3. Extract the proof from the resulting tree at the specified generalized index
-func GenerateMerkleProof(sszObject SSZObject, generalizedIndex uint64, info *SszInfo) (*proof.Proof, error) {
+func GenerateMerkleProof(generalizedIndex uint64, info *SszInfo) (*proof.Proof, error) {
 	// GetTree step:
 	w := &proof.Wrapper{}
 
-	if err := HashTreeRootWith(sszObject, info, w); err != nil {
+	if err := HashTreeRootWith(info, w); err != nil {
 		return nil, err
 	}
 

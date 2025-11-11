@@ -7,30 +7,26 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query/proof"
 )
 
-// HashTreeRootWith builds a complete merkle tree for any SSZObject by walking its structure
-// and hashing all fields using the provided HashWalker. Pre-analyzed SszInfo provides metadata
-// (field order, max sizes, element types) to guide the reflection-based traversal.
+// HashTreeRootWith builds a complete merkle tree by walking the object structure and hashing
+// all fields using the provided HashWalker. Pre-analyzed SszInfo provides metadata (field order,
+// max sizes, element types) to guide value extraction and hashing.
 //
-// If sszInfo is nil, the object will be analyzed on-the-fly, but providing pre-analyzed
-// SszInfo avoids redundant reflection overhead when the same type is processed multiple times.
-func HashTreeRootWith(object SSZObject, info *SszInfo, hh proof.HashWalker) error {
-	var sszInfo *SszInfo
-	var err error
-
+// Parameters:
+//   - info: Pre-analyzed SszInfo containing the source object and type metadata
+//   - hh: HashWalker for hash computation (e.g., proof.Wrapper for tree building)
+//
+// Returns:
+//   - error: If hashing fails or SszInfo is nil
+func HashTreeRootWith(info *SszInfo, hh proof.HashWalker) error {
 	// Use provided SszInfo or analyze the object if nil
-	if info != nil {
-		sszInfo = info
-	} else {
-		sszInfo, err = AnalyzeObject(object)
-		if err != nil {
-			return fmt.Errorf("failed to analyze object: %w", err)
-		}
+	if info == nil {
+		return fmt.Errorf("SszInfo cannot be nil")
 	}
 
-	sourceValue := reflect.ValueOf(object)
+	sourceValue := reflect.ValueOf(info.source)
 
 	// Start with pack=false for the root container
-	return buildRootFromType(sszInfo, sourceValue, hh, false)
+	return buildRootFromType(info, sourceValue, hh, false)
 }
 
 // buildRootFromType is the main dispatcher that routes to appropriate handlers based on SszInfo type.
@@ -288,7 +284,7 @@ func buildRootFromList(info *SszInfo, sourceValue reflect.Value, hh proof.HashWa
 
 	sliceLen := sourceValue.Len()
 	// NOTE: using listInfo.Length() is only possible if multi-dimensional array has the same length e.g. `[][32]byte`.
-	// In case of variable-length multi-dimensional arrays, it cannot be used e.g. `[][]byte`` as we only store the length of first element.
+	// In case of variable-length multi-dimensional arrays, it cannot be used e.g. `[][]byte` as we only store the length of first element.
 	limit := listInfo.Limit()
 
 	// For byte arrays, handle as a single unit

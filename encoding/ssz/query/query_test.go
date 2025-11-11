@@ -394,7 +394,7 @@ func TestHashTreeRoot(t *testing.T) {
 
 			// Compute merkle tree using dynamic merkleizer with a fresh wrapper for each test
 			wrapper := &proof.Wrapper{}
-			err = query.HashTreeRootWith(tt.obj, info, wrapper)
+			err = query.HashTreeRootWith(info, wrapper)
 			require.NoError(t, err, "ComputeMerkleTree should not return an error")
 			require.NotNil(t, wrapper.Node(), "Expected non-nil merkle tree node")
 
