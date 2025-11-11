@@ -226,9 +226,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return errors.Wrap(err, "block")
 	}
 	if block == nil || block.Block() == nil {
-		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).
-			Warn("Origin checkpoint block not found in database, skipping sidecar fetch")
-		return nil
+		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
 	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
