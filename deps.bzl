@@ -3406,12 +3406,6 @@ def prysm_deps():
         version = "v0.0.0-20250212181730-4c2b8e9e784b",
     )
     go_repository(
-        name = "com_github_tyler_smith_go_bip39",
-        importpath = "github.com/tyler-smith/go-bip39",
-        sum = "h1:5eUemwrMargf3BSLRRCalXT93Ns6pQJIjYQN2nyfOP8=",
-        version = "v1.1.0",
-    )
-    go_repository(
         name = "com_github_ugorji_go_codec",
         importpath = "github.com/ugorji/go/codec",
         sum = "h1:YPXUKf7fYbp/y8xloBqZOw2qaVggbfwMlI8WM3wZUJ0=",
