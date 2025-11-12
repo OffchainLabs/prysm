@@ -1,7 +1,7 @@
 package slasher
 
 import (
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 

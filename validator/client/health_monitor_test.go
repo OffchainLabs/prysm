@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 )
 
 // TestHealthMonitor_IsHealthy_Concurrency tests thread-safety of IsHealthy.

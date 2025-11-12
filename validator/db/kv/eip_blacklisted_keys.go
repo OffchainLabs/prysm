@@ -3,8 +3,8 @@ package kv
 import (
 	"context"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	bolt "go.etcd.io/bbolt"
 )
 

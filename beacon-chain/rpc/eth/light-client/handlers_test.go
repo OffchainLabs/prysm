@@ -11,25 +11,25 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	blockchainTest "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	p2ptesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	blockchainTest "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	dbtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	p2ptesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	light_client "github.com/OffchainLabs/prysm/v7/consensus-types/light-client"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/protobuf/proto"
@@ -46,7 +46,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	cfg.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(cfg)
 
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -131,7 +131,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 				resp = &pb.LightClientBootstrapCapella{}
 			case version.Deneb:
 				resp = &pb.LightClientBootstrapDeneb{}
-			case version.Electra:
+			case version.Electra, version.Fulu:
 				resp = &pb.LightClientBootstrapElectra{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -173,10 +173,11 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	config.CapellaForkEpoch = 2
 	config.DenebForkEpoch = 3
 	config.ElectraForkEpoch = 4
+	config.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(config)
 
 	t.Run("can save retrieve", func(t *testing.T) {
-		for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		for _, testVersion := range version.All()[1:] {
 			t.Run(version.String(testVersion), func(t *testing.T) {
 
 				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -252,7 +253,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 						resp = &pb.LightClientUpdateCapella{}
 					case version.Deneb:
 						resp = &pb.LightClientUpdateDeneb{}
-					case version.Electra:
+					case version.Electra, version.Fulu:
 						resp = &pb.LightClientUpdateElectra{}
 					default:
 						t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -313,7 +314,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 							resp = &pb.LightClientUpdateCapella{}
 						case version.Deneb:
 							resp = &pb.LightClientUpdateDeneb{}
-						case version.Electra:
+						case version.Electra, version.Fulu:
 							resp = &pb.LightClientUpdateElectra{}
 						default:
 							t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -730,7 +731,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	for testVersion := 1; testVersion < 6; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 
@@ -793,7 +794,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 				resp = &pb.LightClientFinalityUpdateCapella{}
 			case version.Deneb:
 				resp = &pb.LightClientFinalityUpdateDeneb{}
-			case version.Electra:
+			case version.Electra, version.Fulu:
 				resp = &pb.LightClientFinalityUpdateElectra{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))
@@ -825,7 +826,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	for testVersion := 1; testVersion < 6; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
@@ -886,7 +887,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 				resp = &pb.LightClientOptimisticUpdateCapella{}
 			case version.Deneb:
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
-			case version.Electra:
+			case version.Electra, version.Fulu:
 				resp = &pb.LightClientOptimisticUpdateDeneb{}
 			default:
 				t.Fatalf("Unsupported version %s", version.String(testVersion))

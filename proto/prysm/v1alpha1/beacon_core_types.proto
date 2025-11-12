@@ -8,7 +8,7 @@ import "proto/eth/ext/options.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 
 option csharp_namespace = "Ethereum.Eth.v1alpha1";
-option go_package = "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1;eth";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 option java_multiple_files = true;
 option java_outer_classname = "BeaconCoreTypesProto";
 option java_package = "org.ethereum.eth.v1alpha1";
@@ -22,12 +22,12 @@ message BeaconBlockHeader {
   // Beacon chain slot that this block represents.
   uint64 slot = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Slot"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
 
   // Validator index of the validator that proposed the block header.
   uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
-                                  "github.com/OffchainLabs/prysm/v6/"
+                                  "github.com/OffchainLabs/prysm/v7/"
                                   "consensus-types/primitives.ValidatorIndex" ];
 
   // 32 byte merkle tree root of the parent ssz encoded block.
@@ -116,13 +116,13 @@ message VoluntaryExit {
   // The epoch on when exit request becomes valid.
   uint64 epoch = 1 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 
   // Index of the exiting validator.
   uint64 validator_index = 2
       [ (ethereum.eth.ext.cast_type) =
-            "github.com/OffchainLabs/prysm/v6/consensus-types/"
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
             "primitives.ValidatorIndex" ];
 }
 
@@ -162,7 +162,7 @@ message Fork {
   bytes current_version = 2 [ (ethereum.eth.ext.ssz_size) = "4" ];
   uint64 epoch = 3 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 }
 
@@ -203,7 +203,7 @@ message Validator {
   // activated.
   uint64 activation_eligibility_epoch = 5 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 
   // Epoch when the validator was activated. This field may be zero if the
@@ -211,7 +211,7 @@ message Validator {
   // FAR_FUTURE_EPOCH if the validator has not been activated.
   uint64 activation_epoch = 6 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 
   // Epoch when the validator was exited. This field is FAR_FUTURE_EPOCH if
@@ -221,7 +221,7 @@ message Validator {
   // https://github.com/ethereum/consensus-specs/blob/v0.9.2/specs/core/0_beacon-chain.md#constants
   uint64 exit_epoch = 7 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 
   // Epoch when the validator is eligible to withdraw their funds. This field
@@ -231,6 +231,6 @@ message Validator {
   // https://github.com/ethereum/consensus-specs/blob/v0.9.2/specs/core/0_beacon-chain.md#constants
   uint64 withdrawable_epoch = 8 [
     (ethereum.eth.ext.cast_type) =
-        "github.com/OffchainLabs/prysm/v6/consensus-types/primitives.Epoch"
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
   ];
 }

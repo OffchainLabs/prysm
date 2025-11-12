@@ -19,7 +19,7 @@ go_proto_library(
     compilers = [
         "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query",
+    importpath = "github.com/OffchainLabs/prysm/v7/proto/ssz_query",
     proto = ":proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -48,7 +48,7 @@ go_library(
         ":ssz_generated",  # keep
     ],
     embed = [":go_proto"],
-    importpath = "github.com/OffchainLabs/prysm/v6/proto/ssz_query",
+    importpath = "github.com/OffchainLabs/prysm/v7/proto/ssz_query",
     visibility = ["//visibility:public"],
     deps = SSZ_DEPS + [
         "//proto/eth/ext:go_default_library",

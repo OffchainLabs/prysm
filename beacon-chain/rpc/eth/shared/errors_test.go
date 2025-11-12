@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/pkg/errors"
 )
 

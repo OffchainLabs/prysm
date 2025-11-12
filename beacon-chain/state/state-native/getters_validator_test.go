@@ -3,14 +3,14 @@ package state_native_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	testtmpl "github.com/OffchainLabs/prysm/v6/beacon-chain/state/testing"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	testtmpl "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 

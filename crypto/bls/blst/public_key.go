@@ -5,10 +5,10 @@ package blst
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/cache/nonblocking"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v7/cache/nonblocking"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	"github.com/pkg/errors"
 )
 

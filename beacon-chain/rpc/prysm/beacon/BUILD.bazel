@@ -8,7 +8,7 @@ go_library(
         "ssz_query.go",
         "validator_count.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/beacon",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/beacon",
     visibility = ["//visibility:public"],
     deps = [
         "//api:go_default_library",
