@@ -1,24 +1,23 @@
 package verification
 
 import (
-	"context"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -329,7 +328,7 @@ func TestValidProposerSignature(t *testing.T) {
 			svcbError:       nil,
 			vscbShouldError: false,
 			vscbError:       nil,
-			stateByRooter:   sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			stateByRooter:   sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
 			isError:         false,
 		},
 		{
@@ -347,7 +346,7 @@ func TestValidProposerSignature(t *testing.T) {
 			svcbError:       nil,
 			vscbShouldError: false,
 			vscbError:       errors.New("signature, not so good!"),
-			stateByRooter:   sbrForValOverride(firstColumn.ProposerIndex(), validator),
+			stateByRooter:   sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
 			isError:         true,
 		},
 	}
@@ -377,8 +376,12 @@ func TestValidProposerSignature(t *testing.T) {
 
 			initializer := Initializer{
 				shared: &sharedResources{
-					sc: signatureCache,
-					sr: tc.stateByRooter,
+					sc:  signatureCache,
+					sr:  tc.stateByRooter,
+					hsp: &mockHeadStateProvider{},
+					fc: &mockForkchoicer{
+						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+					},
 				},
 			}
 
@@ -795,18 +798,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 	parentRoot := [fieldparams.RootLength]byte{}
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 	firstColumn := columns[0]
-
-	newColumns := GenerateTestDataColumns(t, parentRoot, 2*params.BeaconConfig().SlotsPerEpoch, blobCount)
-	firstNewColumn := newColumns[0]
-
-	validator := &ethpb.Validator{}
-
-	commonComputeProposerCB := func(_ context.Context, root [fieldparams.RootLength]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-		require.Equal(t, firstColumn.ParentRoot(), root)
-		require.Equal(t, firstColumn.Slot(), slot)
-		return firstColumn.ProposerIndex(), nil
-	}
-
+	ctx := t.Context()
 	testCases := []struct {
 		name          string
 		stateByRooter StateByRooter
@@ -838,66 +830,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 				ProposerCB: pcReturnsNotFound(),
 			},
 			columns: columns,
-			error:   "state by root",
-		},
-		{
-			name:          "Not cached, proposer matches",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB:        pcReturnsNotFound(),
-				ComputeProposerCB: commonComputeProposerCB,
-			},
-			columns: columns,
-		},
-		{
-			name:          "Not cached, proposer matches",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB:        pcReturnsNotFound(),
-				ComputeProposerCB: commonComputeProposerCB,
-			},
-			columns: columns,
-		},
-		{
-			name:          "Not cached, proposer matches for next epoch",
-			stateByRooter: sbrForValOverride(firstNewColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-					require.Equal(t, firstNewColumn.ParentRoot(), root)
-					require.Equal(t, firstNewColumn.Slot(), slot)
-					return firstColumn.ProposerIndex(), nil
-				},
-			},
-			columns: newColumns,
-		},
-		{
-			name:          "Not cached, proposer does not match",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-					require.Equal(t, firstColumn.ParentRoot(), root)
-					require.Equal(t, firstColumn.Slot(), slot)
-					return firstColumn.ProposerIndex() + 1, nil
-				},
-			},
-			columns: columns,
-			error:   errSidecarUnexpectedProposer.Error(),
-		},
-		{
-			name:          "Not cached, ComputeProposer fails",
-			stateByRooter: sbrForValOverride(firstColumn.ProposerIndex(), validator),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-				ComputeProposerCB: func(_ context.Context, root [32]byte, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
-					require.Equal(t, firstColumn.ParentRoot(), root)
-					require.Equal(t, firstColumn.Slot(), slot)
-					return 0, errors.New("ComputeProposer failed")
-				},
-			},
-			columns: columns,
-			error:   "compute proposer",
+			error:   "verifying state",
 		},
 	}
 
@@ -905,8 +838,9 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			initializer := Initializer{
 				shared: &sharedResources{
-					sr: tc.stateByRooter,
-					pc: tc.proposerCache,
+					sr:  tc.stateByRooter,
+					pc:  tc.proposerCache,
+					hsp: &mockHeadStateProvider{},
 					fc: &mockForkchoicer{
 						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
 					},
@@ -914,20 +848,31 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 			}
 
 			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipDataColumnSidecarRequirements)
-			err := verifier.SidecarProposerExpected(t.Context())
+			var wg sync.WaitGroup
+
+			var err1, err2 error
+			wg.Go(func() {
+				err1 = verifier.SidecarProposerExpected(ctx)
+			})
+			wg.Go(func() {
+				err2 = verifier.SidecarProposerExpected(ctx)
+			})
+			wg.Wait()
 
 			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
 
 			if len(tc.error) > 0 {
-				require.ErrorContains(t, tc.error, err)
+				require.ErrorContains(t, tc.error, err1)
+				require.ErrorContains(t, tc.error, err2)
 				require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
 				return
 			}
 
-			require.NoError(t, err)
+			require.NoError(t, err1)
+			require.NoError(t, err2)
 			require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
 
-			err = verifier.SidecarProposerExpected(t.Context())
+			err := verifier.SidecarProposerExpected(ctx)
 			require.NoError(t, err)
 		})
 	}
@@ -975,4 +920,14 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 	require.Equal(t, true, verifier.results.allSatisfied())
 	_, err = verifier.VerifiedRODataColumns()
 	require.NoError(t, err)
+}
+
+func TestConcatRootSlot(t *testing.T) {
+	root := [fieldparams.RootLength]byte{1, 2, 3}
+	const slot = primitives.Slot(3210)
+
+	const expected = "\x01\x02\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x003210"
+
+	actual := concatRootSlot(root, slot)
+	require.Equal(t, expected, actual)
 }

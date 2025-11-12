@@ -13,7 +13,6 @@ go_library(
         "conversions_state.go",
         "endpoints_beacon.go",
         "endpoints_blob.go",
-        "endpoints_builder.go",
         "endpoints_config.go",
         "endpoints_debug.go",
         "endpoints_events.go",
@@ -24,7 +23,7 @@ go_library(
         "other.go",
         "state.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/api/server/structs",
+    importpath = "github.com/OffchainLabs/prysm/v7/api/server/structs",
     visibility = ["//visibility:public"],
     deps = [
         "//api/server:go_default_library",

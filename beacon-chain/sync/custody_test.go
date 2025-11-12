@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	dbtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	dbtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 type testSetup struct {
@@ -116,11 +116,11 @@ func withSubscribeAllDataSubnets(t *testing.T, fn func()) {
 
 func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.NumberOfCustodyGroups = 128
-	beaconConfig.CustodyRequirement = 4
-	beaconConfig.SamplesPerSlot = 8
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.NumberOfCustodyGroups = 128
+	cfg.CustodyRequirement = 4
+	cfg.SamplesPerSlot = 8
+	params.OverrideBeaconConfig(cfg)
 
 	t.Run("Skip update when actual custody count >= target", func(t *testing.T) {
 		setup := setupCustodyTest(t, false)
@@ -159,7 +159,7 @@ func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 			require.NoError(t, err)
 
 			const expectedSlot = primitives.Slot(100)
-			setup.assertCustodyInfo(t, expectedSlot, beaconConfig.NumberOfCustodyGroups)
+			setup.assertCustodyInfo(t, expectedSlot, cfg.NumberOfCustodyGroups)
 		})
 	})
 }

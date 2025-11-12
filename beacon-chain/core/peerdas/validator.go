@@ -3,13 +3,13 @@ package peerdas
 import (
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -84,10 +84,10 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 		totalNodeBalance += validator.EffectiveBalance()
 	}
 
-	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
-	validatorCustodyRequirement := beaconConfig.ValidatorCustodyRequirement
-	balancePerAdditionalCustodyGroup := beaconConfig.BalancePerAdditionalCustodyGroup
+	cfg := params.BeaconConfig()
+	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
+	validatorCustodyRequirement := cfg.ValidatorCustodyRequirement
+	balancePerAdditionalCustodyGroup := cfg.BalancePerAdditionalCustodyGroup
 
 	count := totalNodeBalance / balancePerAdditionalCustodyGroup
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil

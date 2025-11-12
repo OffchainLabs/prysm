@@ -11,18 +11,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
-	constant "github.com/OffchainLabs/prysm/v6/validator/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
+	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
@@ -221,10 +221,10 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 	// Expected output format definition
 	const prologLength = 4
 	const accountLength = 4
-	const epilogLength = 2
-	const nameOffset = 1
-	const keyOffset = 2
-	const privkeyOffset = 3
+	const epilogLength = 1
+
+	const keyOffset = 1
+	const privkeyOffset = 2
 
 	// Require the output has correct number of lines
 	lineCount := prologLength + accountLength*numAccounts + epilogLength
@@ -242,7 +242,7 @@ func TestListAccounts_LocalKeymanager(t *testing.T) {
 
 	// Assert that account names are printed on the correct lines
 	for i, accountName := range accountNames {
-		lineNumber := prologLength + accountLength*i + nameOffset
+		lineNumber := prologLength + accountLength*i
 		accountNameFound := strings.Contains(lines[lineNumber], accountName)
 		assert.Equal(t, true, accountNameFound, "Account Name %s not found on line number %d", accountName, lineNumber)
 	}

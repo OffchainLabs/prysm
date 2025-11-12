@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
@@ -334,6 +334,42 @@ func (s *Store) HasBlock(ctx context.Context, blockRoot [32]byte) bool {
 		panic(err) // lint:nopanic -- View never returns an error.
 	}
 	return exists
+}
+
+// AvailableBlocks returns a set of roots indicating which blocks corresponding to `blockRoots` are available in the storage.
+func (s *Store) AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[[32]byte]bool {
+	_, span := trace.StartSpan(ctx, "BeaconDB.AvailableBlocks")
+	defer span.End()
+
+	count := len(blockRoots)
+	availableRoots := make(map[[32]byte]bool, count)
+
+	// First, check the cache for each block root.
+	notInCacheRoots := make([][32]byte, 0, count)
+	for _, root := range blockRoots {
+		if v, ok := s.blockCache.Get(string(root[:])); v != nil && ok {
+			availableRoots[root] = true
+			continue
+		}
+
+		notInCacheRoots = append(notInCacheRoots, root)
+	}
+
+	// Next, check the database for the remaining block roots.
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blocksBucket)
+		for _, root := range notInCacheRoots {
+			if bkt.Get(root[:]) != nil {
+				availableRoots[root] = true
+			}
+		}
+
+		return nil
+	}); err != nil {
+		panic(err) // lint:nopanic -- View never returns an error.
+	}
+
+	return availableRoots
 }
 
 // BlocksBySlot retrieves a list of beacon blocks and its respective roots by slot.

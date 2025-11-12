@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
+	"github.com/OffchainLabs/prysm/v7/monitoring/clientstats"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

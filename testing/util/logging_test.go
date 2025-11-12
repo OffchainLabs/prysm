@@ -1,10 +1,11 @@
 package util
 
 import (
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -66,13 +67,7 @@ func assertNoHooks(t *testing.T, logger *logrus.Logger) {
 func assertRegistered(t *testing.T, logger *logrus.Logger, hook ComparableHook) {
 	for _, lvl := range hook.Levels() {
 		registered := logger.Hooks[lvl]
-		found := false
-		for _, h := range registered {
-			if hook.Equal(h) {
-				found = true
-				break
-			}
-		}
+		found := slices.ContainsFunc(registered, hook.Equal)
 		require.Equal(t, true, found, "Expected hook %v to be registered at level %s, but it was not", hook, lvl.String())
 	}
 }

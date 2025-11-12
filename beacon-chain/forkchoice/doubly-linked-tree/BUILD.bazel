@@ -17,7 +17,7 @@ go_library(
         "types.go",
         "unrealized_justification.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//testing/spectest:__subpackages__",
@@ -27,6 +27,7 @@ go_library(
         "//beacon-chain/forkchoice:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
