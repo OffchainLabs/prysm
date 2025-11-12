@@ -1,3 +1,3 @@
 ### Added
 
-- A peer crawler for Gossipsub.
+- A discV5 peer crawler for Gossipsub.
