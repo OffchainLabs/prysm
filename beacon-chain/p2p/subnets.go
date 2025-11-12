@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
@@ -103,31 +104,32 @@ func (s *Service) FindAndDialPeersWithSubnets(
 
 	defectiveSubnets := s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
 	for len(defectiveSubnets) > 0 {
+		defectiveSubnets = s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
+
 		// Stop the search/dialing loop if the context is canceled.
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 
-		peersToDial, err := func() ([]*enode.Node, error) {
-			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
-			defer cancel()
-
-			peersToDial, err := s.findPeersWithSubnets(ctx, fullTopicForSubnet, minimumPeersPerSubnet, defectiveSubnets)
-			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-				return nil, errors.Wrap(err, "find peers with subnets")
+		var peersToDial []*enode.Node
+		for subnet := range defectiveSubnets {
+			topic := fullTopicForSubnet(subnet)
+			peersToDial = append(peersToDial, s.crawler.PeersForTopic(gossipsubcrawler.Topic(topic))...)
+		}
+		if len(peersToDial) > minimumPeersPerSubnet {
+			peersToDial = peersToDial[:minimumPeersPerSubnet]
+		}
+		if len(peersToDial) == 0 {
+			select {
+			case <-time.After(100 * time.Millisecond):
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-
-			return peersToDial, nil
-		}()
-
-		if err != nil {
-			return err
+			continue
 		}
 
 		// Dial new peers in batches.
 		s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
-
-		defectiveSubnets = s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
 	}
 
 	return nil

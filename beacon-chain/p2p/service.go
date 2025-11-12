@@ -62,6 +62,10 @@ var (
 	// for the current peer limit status for the time period
 	// defined below.
 	pollingPeriod = 6 * time.Second
+
+	crawlTimeout       = 30 * time.Second
+	crawlInterval      = 1 * time.Second
+	maxConcurrentDials = 256
 )
 
 // Service for managing peer to peer (p2p) networking.
@@ -244,7 +248,8 @@ func (s *Service) Start() {
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
 		// Create the crawler using the local constructor, passing the service reference
-		crawler, err := NewGossipsubPeerCrawler(s, s.dv5Listener, 10*time.Second, 10*time.Second, 10)
+		crawler, err := NewGossipsubPeerCrawler(s, s.dv5Listener, crawlTimeout, crawlInterval,
+			maxConcurrentDials)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to create peer crawler")
 			s.startupErr = err

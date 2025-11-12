@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -266,6 +267,7 @@ func NewGossipsubPeerCrawler(
 	}
 	return g, nil
 }
+
 func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node {
 	g.crawledPeers.mu.RLock()
 	defer g.crawledPeers.mu.RUnlock()
@@ -275,15 +277,29 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 		return nil
 	}
 
-	var nodes []*enode.Node
+	var peerNodes []*peerNode
 	for peerID := range peerIDs {
 		peerNode, ok := g.crawledPeers.byPeerId[peerID]
 		if !ok {
 			continue
 		}
-		if peerNode.status == peerStatusPinged {
-			nodes = append(nodes, peerNode.node)
+		if peerNode.status == peerStatusPinged && g.service.filterPeer(peerNode.node) {
+			peerNodes = append(peerNodes, peerNode)
 		}
+	}
+
+	scorer := g.service.Peers().Scorers()
+
+	// Sort peerNodes in descending order of their scores.
+	sort.Slice(peerNodes, func(i, j int) bool {
+		scoreI := scorer.Score(peerNodes[i].peerID)
+		scoreJ := scorer.Score(peerNodes[j].peerID)
+		return scoreI > scoreJ
+	})
+
+	nodes := make([]*enode.Node, len(peerNodes))
+	for i, pn := range peerNodes {
+		nodes[i] = pn.node
 	}
 
 	return nodes

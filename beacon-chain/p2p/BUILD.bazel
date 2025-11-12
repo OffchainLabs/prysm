@@ -8,7 +8,6 @@ go_library(
         "config.go",
         "connection_gater.go",
         "custody.go",
-        "gossipsub_peer_crawler.go",
         "dial_relay_node.go",
         "discovery.go",
         "doc.go",
@@ -16,6 +15,7 @@ go_library(
         "fork_watcher.go",
         "gossip_scoring_params.go",
         "gossip_topic_mappings.go",
+        "gossipsub_peer_crawler.go",
         "handshake.go",
         "info.go",
         "interfaces.go",
@@ -115,8 +115,8 @@ go_library(
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
-        "@org_golang_x_sync//semaphore:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_x_sync//semaphore:go_default_library",
     ],
 )
 

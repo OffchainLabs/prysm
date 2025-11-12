@@ -114,8 +114,23 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, true, nodeForkDigest == bootNodeForkDigest, "fork digest of the node doesn't match the boot node")
 
-		// Start the service.
-		service.Start()
+        // Start the service.
+        service.Start()
+
+        // start the crawler with a topic extractor that maps ENR attestation subnets
+        // to full attestation topics for the current fork digest and encoding.
+        _ = service.Crawler().Start(func(ctx context.Context, node *enode.Node) ([]string, error) {
+            subs, err := attestationSubnets(node.Record())
+            if err != nil {
+                return nil, err
+            }
+            var topics []string
+            for subnet := range subs {
+                t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
+                topics = append(topics, t)
+            }
+            return topics, nil
+        })
 
 		// Set the ENR `attnets`, used by Prysm to filter peers by subnet.
 		bitV := bitfield.NewBitvector64()
@@ -161,7 +176,21 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	service.genesisValidatorsRoot = params.BeaconConfig().GenesisValidatorsRoot[:]
 	service.custodyInfo = &custodyInfo{}
 
-	service.Start()
+    service.Start()
+    // start the crawler with a topic extractor that maps ENR attestation subnets
+    // to full attestation topics for the current fork digest and encoding.
+    _ = service.Crawler().Start(func(ctx context.Context, node *enode.Node) ([]string, error) {
+        subs, err := attestationSubnets(node.Record())
+        if err != nil {
+            return nil, err
+        }
+        var topics []string
+        for subnet := range subs {
+            t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
+            topics = append(topics, t)
+        }
+        return topics, nil
+    })
 	defer func() {
 		err := service.Stop()
 		require.NoError(t, err)
@@ -174,7 +203,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	defectiveSubnets := service.defectiveSubnets(builder, minimumPeersPerSubnet, subnets)
 	require.Equal(t, subnetCount, len(defectiveSubnets))
 
-	ctxWithTimeOut, cancel := context.WithTimeout(ctx, 5*time.Second)
+    ctxWithTimeOut, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	err = service.FindAndDialPeersWithSubnets(ctxWithTimeOut, builder, minimumPeersPerSubnet, subnets)
