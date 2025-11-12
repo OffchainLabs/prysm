@@ -33,8 +33,8 @@ func init() {
 // hash repeatedly hashes the data passed to it
 func hash(input [][]byte) [][]byte {
 	output := make([][]byte, len(input))
+	copy(output, input)
 	for i := range input {
-		copy(output, input)
 		for j := 0; j < benchmarkHashRuns; j++ {
 			hash := sha256.Sum256(output[i])
 			output[i] = hash[:]
