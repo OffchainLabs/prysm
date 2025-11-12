@@ -325,3 +325,103 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	}
 
 }
+
+func TestServer_ListAccounts_FilterAndPagination(t *testing.T) {
+	ctx := t.Context()
+	localWalletDir := setupWalletDir(t)
+	defaultWalletPath = localWalletDir
+	// Create wallet with derived keymanager and recover N accounts
+	opts := []accounts.Option{
+		accounts.WithWalletDir(defaultWalletPath),
+		accounts.WithKeymanagerType(keymanager.Derived),
+		accounts.WithWalletPassword(strongPass),
+		accounts.WithSkipMnemonicConfirm(true),
+	}
+	acc, err := accounts.NewCLIManager(opts...)
+	require.NoError(t, err)
+	w, err := acc.WalletCreate(ctx)
+	require.NoError(t, err)
+	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
+	require.NoError(t, err)
+	vs, err := client.NewValidatorService(ctx, &client.Config{
+		Wallet: w,
+		Validator: &testutil.FakeValidator{
+			Km: km,
+		},
+	})
+	require.NoError(t, err)
+	s := &Server{
+		walletInitialized: true,
+		wallet:            w,
+		validatorService:  vs,
+	}
+	// Recover multiple accounts
+	numAccounts := 10
+	dr, ok := km.(*derived.Keymanager)
+	require.Equal(t, true, ok)
+	err = dr.RecoverAccountsFromMnemonic(ctx, constant.TestMnemonic, derived.DefaultMnemonicLanguage, "", numAccounts)
+	require.NoError(t, err)
+
+	// Fetch all accounts to pick two pubkeys for filtering
+	req := httptest.NewRequest(http.MethodGet, api.WebUrlPrefix+"accounts?all=true", nil)
+	wr := httptest.NewRecorder()
+	wr.Body = &bytes.Buffer{}
+	s.ListAccounts(wr, req)
+	require.Equal(t, http.StatusOK, wr.Code)
+	resp := &ListAccountsResponse{}
+	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
+	if len(resp.Accounts) < 2 {
+		t.Fatalf("expected at least 2 accounts, got %d", len(resp.Accounts))
+	}
+
+	target1 := resp.Accounts[1]
+	target2 := resp.Accounts[3]
+
+	// Page 1: page_size=1, filtered by two pubkeys
+	url1 := api.WebUrlPrefix + "accounts?page_size=1" +
+		"&public_keys=" + target1.ValidatingPublicKey +
+		"&public_keys=" + target2.ValidatingPublicKey
+	req = httptest.NewRequest(http.MethodGet, url1, nil)
+	wr = httptest.NewRecorder()
+	wr.Body = &bytes.Buffer{}
+	s.ListAccounts(wr, req)
+	require.Equal(t, http.StatusOK, wr.Code)
+	page1 := &ListAccountsResponse{}
+	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), page1))
+	require.Equal(t, int32(2), page1.TotalSize)
+	require.Equal(t, 1, len(page1.Accounts))
+	assert.Equal(t, target1.ValidatingPublicKey, page1.Accounts[0].ValidatingPublicKey)
+	require.NotEmpty(t, page1.NextPageToken)
+
+	// Page 2: use next page token
+	url2 := api.WebUrlPrefix + "accounts?page_size=1&page_token=" + page1.NextPageToken +
+		"&public_keys=" + target1.ValidatingPublicKey +
+		"&public_keys=" + target2.ValidatingPublicKey
+	req = httptest.NewRequest(http.MethodGet, url2, nil)
+	wr = httptest.NewRecorder()
+	wr.Body = &bytes.Buffer{}
+	s.ListAccounts(wr, req)
+	require.Equal(t, http.StatusOK, wr.Code)
+	page2 := &ListAccountsResponse{}
+	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), page2))
+	require.Equal(t, int32(2), page2.TotalSize)
+	require.Equal(t, 1, len(page2.Accounts))
+	assert.Equal(t, target2.ValidatingPublicKey, page2.Accounts[0].ValidatingPublicKey)
+
+	// all=true: both filtered accounts returned
+	urlAll := api.WebUrlPrefix + "accounts?all=true" +
+		"&public_keys=" + target1.ValidatingPublicKey +
+		"&public_keys=" + target2.ValidatingPublicKey
+	req = httptest.NewRequest(http.MethodGet, urlAll, nil)
+	wr = httptest.NewRecorder()
+	wr.Body = &bytes.Buffer{}
+	s.ListAccounts(wr, req)
+	require.Equal(t, http.StatusOK, wr.Code)
+	allResp := &ListAccountsResponse{}
+	require.NoError(t, json.Unmarshal(wr.Body.Bytes(), allResp))
+	require.Equal(t, int32(2), allResp.TotalSize)
+	require.Equal(t, 2, len(allResp.Accounts))
+	// Order should reflect the original order by index in key list
+	assert.Equal(t, target1.ValidatingPublicKey, allResp.Accounts[0].ValidatingPublicKey)
+	assert.Equal(t, target2.ValidatingPublicKey, allResp.Accounts[1].ValidatingPublicKey)
+}
