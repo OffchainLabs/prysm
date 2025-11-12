@@ -1,3 +1,3 @@
-### Added
+### Changed
 
-- Added alias `--supernode` to `--subscribe-all-data-subnets` flag
+- Changed `--subscribe-all-data-subnets` flag to `--supernode` and aliased `--subscribe-all-data-subnets` existing users.

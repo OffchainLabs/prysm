@@ -335,8 +335,8 @@ var (
 	}
 	// SubscribeAllDataSubnets enables subscription to all data subnets.
 	SubscribeAllDataSubnets = &cli.BoolFlag{
-		Name:    "subscribe-all-data-subnets",
-		Aliases: []string{"supernode"},
+		Name:    "supernode",
+		Aliases: []string{"subscribe-all-data-subnets"},
 		Usage:   "Enable subscription to all data subnets. Needed post-Fusaka for full blob reconstruction. Once set, unsetting this flag won't have any effect.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
