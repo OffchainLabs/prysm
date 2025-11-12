@@ -328,6 +328,10 @@ func (s *Service) Stop() error {
 		s.unSubscribeFromTopic(t)
 	}
 
+	if s.cfg.p2p.Crawler() != nil {
+		s.cfg.p2p.Crawler().Stop()
+	}
+
 	// Stop the gossipsub controller.
 	s.gossipsubController.Stop()
 
@@ -414,6 +418,16 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 
 	// Start the gossipsub controller.
 	go s.gossipsubController.Start()
+
+	// Configure the crawler with the topic extractor if available
+	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
+		// Start the crawler now that it has the extractor
+		if err := crawler.Start(s.gossipsubController.ExtractTopics); err != nil {
+			log.WithError(err).Warn("Failed to start peer crawler")
+		}
+	} else {
+		log.Info("No crawler available, topic extraction disabled")
+	}
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

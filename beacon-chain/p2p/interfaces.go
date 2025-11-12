@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
@@ -102,6 +103,7 @@ type (
 		RefreshPersistentSubnets()
 		FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
+		Crawler() gossipsubcrawler.Crawler
 	}
 
 	// Sender abstracts the sending functionality from libp2p.

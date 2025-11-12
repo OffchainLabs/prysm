@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
@@ -455,6 +456,10 @@ func (s *Service) unSubscribeFromTopic(topic string) {
 	s.subHandler.removeTopic(topic)
 	if err := s.cfg.p2p.LeaveTopic(topic); err != nil {
 		log.WithError(err).Error("Unable to leave topic")
+	}
+
+	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
+		crawler.RemoveTopic(gossipsubcrawler.Topic(topic))
 	}
 }
 

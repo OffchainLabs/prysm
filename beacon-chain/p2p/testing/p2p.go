@@ -13,6 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/config/params"
@@ -555,4 +556,36 @@ func (s *TestP2P) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 	}
 
 	return custodyGroupCount
+}
+
+// MockCrawler is a minimal mock implementation of PeerCrawler for testing
+type MockCrawler struct{}
+
+// Start does nothing as this is a mock
+func (m *MockCrawler) Start(gossipsubcrawler.TopicExtractor) error {
+	return nil
+}
+
+// Stop does nothing as this is a mock
+func (m *MockCrawler) Stop() {}
+
+// SetTopicExtractor does nothing as this is a mock
+func (m *MockCrawler) SetTopicExtractor(extractor func(context.Context, *enode.Node) ([]string, error)) error {
+	return nil
+}
+
+// RemoveTopic does nothing as this is a mock
+func (m *MockCrawler) RemoveTopic(topic gossipsubcrawler.Topic) {}
+
+// RemovePeerID does nothing as this is a mock
+func (m *MockCrawler) RemovePeerId(pid peer.ID) {}
+
+// PeersForTopic returns empty list as this is a mock
+func (m *MockCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node {
+	return []*enode.Node{}
+}
+
+// Crawler returns a mock crawler implementation for testing.
+func (*TestP2P) Crawler() gossipsubcrawler.Crawler {
+	return &MockCrawler{}
 }

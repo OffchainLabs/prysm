@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/async"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
@@ -95,6 +96,7 @@ type Service struct {
 	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
+	crawler                  gossipsubcrawler.Crawler
 }
 
 type custodyInfo struct {
@@ -241,6 +243,14 @@ func (s *Service) Start() {
 
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
+		// Create the crawler using the local constructor, passing the service reference
+		crawler, err := NewGossipsubPeerCrawler(s, s.dv5Listener, 10*time.Second, 10*time.Second, 10)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to create peer crawler")
+			s.startupErr = err
+			return
+		}
+		s.crawler = crawler
 	}
 
 	s.started = true
@@ -311,10 +321,17 @@ func (s *Service) Start() {
 func (s *Service) Stop() error {
 	defer s.cancel()
 	s.started = false
+
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
 	}
+
 	return nil
+}
+
+// Crawler returns the p2p service's peer crawler.
+func (s *Service) Crawler() gossipsubcrawler.Crawler {
+	return s.crawler
 }
 
 // Status of the p2p service. Will return an error if the service is considered unhealthy to

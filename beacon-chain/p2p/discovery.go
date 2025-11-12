@@ -554,6 +554,7 @@ func (s *Service) createListener(
 		Bootnodes:               bootNodes,
 		PingInterval:            s.cfg.PingInterval,
 		NoFindnodeLivenessCheck: s.cfg.DisableLivenessCheck,
+		V5RespTimeout:           300 * time.Millisecond,
 	}
 
 	listener, err := discover.ListenV5(conn, localNode, dv5Cfg)

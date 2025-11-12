@@ -16,7 +16,77 @@ import (
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/genesis"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
+
+// fakeDynFamily is a test implementation of a dynamic-subnet topic family.
+type fakeDynFamily struct {
+	baseGossipsubTopicFamily
+	topics []string
+	name   string
+}
+
+func (f *fakeDynFamily) Name() string {
+	return f.name
+}
+
+func (f *fakeDynFamily) Validator() wrappedVal {
+	return nil
+}
+
+func (f *fakeDynFamily) Handler() subHandler {
+	return noopHandler
+}
+
+func (f *fakeDynFamily) Subscribe() {
+
+}
+
+func (f *fakeDynFamily) Unsubscribe() {
+
+}
+
+func (f *fakeDynFamily) GetFullTopicString(subnet uint64) string {
+	return fmt.Sprintf("topic-%d", subnet)
+}
+
+func (f *fakeDynFamily) GetSubnetsToJoin(_ primitives.Slot) map[uint64]bool {
+	return nil
+}
+
+func (f *fakeDynFamily) GetSubnetsForBroadcast(_ primitives.Slot) map[uint64]bool {
+	return nil
+}
+
+func (f *fakeDynFamily) GetTopicsForNode(_ *enode.Node) ([]string, error) {
+	return append([]string{}, f.topics...), nil
+}
+
+type fakeStaticFamily struct {
+	baseGossipsubTopicFamily
+	name string
+}
+
+func (f *fakeStaticFamily) Name() string {
+	return f.name
+}
+
+func (f *fakeStaticFamily) Validator() wrappedVal {
+	return nil
+}
+
+func (f *fakeStaticFamily) Handler() subHandler {
+	return noopHandler
+}
+
+func (f *fakeStaticFamily) Subscribe() {
+
+}
+
+func (f *fakeStaticFamily) Unsubscribe() {
+
+}
 
 func testGossipsubControllerService(t *testing.T, current primitives.Epoch) *Service {
 	closedChan := make(chan struct{})
@@ -48,7 +118,6 @@ func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 	closedChan := make(chan struct{})
 	close(closedChan)
 	params.SetupTestConfigCleanup(t)
-	
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
 	params.BeaconConfig().InitializeForkSchedule()
@@ -177,6 +246,142 @@ func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 			s.gossipsubController.updateActiveTopicFamilies(tt.nextForkEpoch + 1)
 			assert.Equal(t, false, s.subHandler.digestExists(digest))
 			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
+		})
+	}
+}
+
+func TestGossipsubController_ExtractTopics(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+
+	type tc struct {
+		name    string
+		setup   func(*GossipsubController)
+		ctx     func() context.Context
+		node    *enode.Node
+		want    []string
+		wantErr bool
+	}
+
+	dummyNode := new(enode.Node)
+
+	tests := []tc{
+		{
+			name:    "nil node returns error",
+			setup:   func(g *GossipsubController) {},
+			ctx:     func() context.Context { return context.Background() },
+			node:    nil,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "no families yields empty",
+			setup:   func(g *GossipsubController) {},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{},
+			wantErr: false,
+		},
+		{
+			name: "static family ignored",
+			setup: func(g *GossipsubController) {
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &fakeStaticFamily{name: "StaticFam"}
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{},
+			wantErr: false,
+		},
+		{
+			name: "single dynamic family topics returned",
+			setup: func(g *GossipsubController) {
+				fam := &fakeDynFamily{topics: []string{"t1", "t2"}, name: "Dyn1"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{"t1", "t2"},
+			wantErr: false,
+		},
+		{
+			name: "multiple dynamic families de-dup",
+			setup: func(g *GossipsubController) {
+				f1 := &fakeDynFamily{topics: []string{"t1", "t2"}, name: "Dyn1"}
+				f2 := &fakeDynFamily{topics: []string{"t2", "t3"}, name: "Dyn2"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &fakeStaticFamily{name: "StaticFam"}
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{"t1", "t2", "t3"},
+			wantErr: false,
+		},
+		{
+			name: "mixed static and dynamic",
+			setup: func(g *GossipsubController) {
+				f1 := &fakeDynFamily{topics: []string{"a", "b"}, name: "Dyn"}
+				s1 := &fakeStaticFamily{name: "Static"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{9}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{9}}] = s1
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{"a", "b"},
+			wantErr: false,
+		},
+		{
+			name: "context cancelled short-circuits",
+			setup: func(g *GossipsubController) {
+				f1 := &fakeDynFamily{topics: []string{"x"}, name: "Dyn"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{0}}] = f1
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { c, cancel := context.WithCancel(context.Background()); cancel(); return c },
+			node:    dummyNode,
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	s := &Service{}
+	g := NewGossipsubController(context.Background(), s)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset families for each subtest
+			g.mu.Lock()
+			g.activeTopicFamilies = make(map[topicFamilyKey]GossipsubTopicFamily)
+			g.mu.Unlock()
+
+			tt.setup(g)
+			topics, err := g.ExtractTopics(tt.ctx(), tt.node)
+			if tt.wantErr {
+				require.NotNil(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			got := map[string]bool{}
+			for _, tpc := range topics {
+				got[tpc] = true
+			}
+			want := map[string]bool{}
+			for _, tpc := range tt.want {
+				want[tpc] = true
+			}
+			require.Equal(t, len(want), len(got))
+			for k := range want {
+				require.Equal(t, true, got[k], "missing topic %s", k)
+			}
 		})
 	}
 }

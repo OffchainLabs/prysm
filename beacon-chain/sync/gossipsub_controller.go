@@ -8,6 +8,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -119,6 +121,50 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 func (g *GossipsubController) Stop() {
 	g.cancel()
 	g.wg.Wait()
+}
+
+func (g *GossipsubController) ExtractTopics(ctx context.Context, node *enode.Node) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if node == nil {
+		return nil, errors.New("enode is nil")
+	}
+
+	g.mu.RLock()
+	families := make([]GossipsubTopicFamilyWithDynamicSubnets, 0, len(g.activeTopicFamilies))
+	for _, f := range g.activeTopicFamilies {
+		if tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets); ok {
+			families = append(families, tfm)
+		}
+	}
+	g.mu.RUnlock()
+
+	// Collect topics from dynamic families only, de-duplicated.
+	topicSet := make(map[string]struct{})
+	for _, df := range families {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		topics, err := df.GetTopicsForNode(node)
+		if err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"topicFamily": fmt.Sprintf("%T", df),
+			}).Debug("Failed to get topics for node from family")
+			continue
+		}
+		for _, t := range topics {
+			topicSet[t] = struct{}{}
+		}
+	}
+
+	// Flatten set to slice with stable but unspecified order.
+	out := make([]string, 0, len(topicSet))
+	for t := range topicSet {
+		out = append(out, t)
+	}
+	return out, nil
 }
 
 func isNextEpochForkBoundary(currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
