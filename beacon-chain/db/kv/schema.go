@@ -77,5 +77,5 @@ var (
 	groupCountKey              = []byte("group-count")
 	earliestAvailableSlotKey   = []byte("earliest-available-slot")
 	subscribeAllDataSubnetsKey = []byte("subscribe-all-data-subnets")
-	semiSuperNodeKey           = []byte("semi-super-node")
+	liteSupernodeKey           = []byte("lite-supernode")
 )

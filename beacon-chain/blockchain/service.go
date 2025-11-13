@@ -471,17 +471,17 @@ func (s *Service) removeStartupState() {
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
 	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
-	isSemiSuperNode := flags.Get().SemiSuperNode
+	isLiteSupernode := flags.Get().LiteSupernode
 
 	cfg := params.BeaconConfig()
 	custodyRequirement := cfg.CustodyRequirement
 
-	// Warn if both flags are set (super-node takes precedence).
-	if isSubscribedToAllDataSubnets && isSemiSuperNode {
+	// Warn if both flags are set (supernode takes precedence).
+	if isSubscribedToAllDataSubnets && isLiteSupernode {
 		log.Warnf(
-			"Both `--%s` and `--%s` flags are set. The super-node flag takes precedence.",
+			"Both `--%s` and `--%s` flags are set. The supernode flag takes precedence.",
 			flags.SubscribeAllDataSubnets.Name,
-			flags.SemiSuperNode.Name,
+			flags.LiteSupernode.Name,
 		)
 	}
 
@@ -500,31 +500,31 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		)
 	}
 
-	// Check if the node was previously in semi-super-node mode, and if so,
+	// Check if the node was previously in lite-supernode mode, and if so,
 	// store the new status accordingly.
-	wasSemiSuperNode, err := s.cfg.BeaconDB.UpdateSemiSuperNode(s.ctx, isSemiSuperNode)
+	wasLiteSupernode, err := s.cfg.BeaconDB.UpdateLiteSupernode(s.ctx, isLiteSupernode)
 	if err != nil {
-		log.WithError(err).Error("Could not update semi-super-node status")
+		log.WithError(err).Error("Could not update lite-supernode status")
 	}
 
-	// Warn the user if the node was previously in semi-super-node mode and is not any more.
-	if wasSemiSuperNode && !isSemiSuperNode {
+	// Warn the user if the node was previously in lite-supernode mode and is not any more.
+	if wasLiteSupernode && !isLiteSupernode {
 		log.Warnf(
-			"Because the flag `--%s` was previously used, the node will remain in semi-super-node mode (subscribe to 64 subnets).",
-			flags.SemiSuperNode.Name,
+			"Because the flag `--%s` was previously used, the node will remain in lite-supernode mode (subscribe to 64 subnets).",
+			flags.LiteSupernode.Name,
 		)
 	}
 
 	// Compute the custody group count.
-	// Note: Semi-super-node subscribes to 64 subnets (enough to reconstruct) but only custodies the minimum groups (4).
-	// Only super-node increases custody to all 128 groups.
+	// Note: Lite-supernode subscribes to 64 subnets (enough to reconstruct) but only custodies the minimum groups (4).
+	// Only supernode increases custody to all 128 groups.
 	// Persistence (preventing downgrades) is handled by UpdateCustodyInfo() which
 	// refuses to decrease the stored custody count.
 	custodyGroupCount := custodyRequirement
 	if isSubscribedToAllDataSubnets {
 		custodyGroupCount = cfg.NumberOfCustodyGroups
 	}
-	// Semi-super-node does NOT increase custody count - it keeps the minimum (4 or validator requirement).
+	// Lite-supernode does NOT increase custody count - it keeps the minimum (4 or validator requirement).
 
 	// Safely compute the fulu fork slot.
 	fuluForkSlot, err := fuluForkSlot()

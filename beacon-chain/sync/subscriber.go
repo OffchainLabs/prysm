@@ -697,13 +697,13 @@ func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 func (s *Service) samplingSize() (uint64, error) {
 	cfg := params.BeaconConfig()
 
-	// Super-node subscribes to all subnets.
+	// Supernode subscribes to all subnets.
 	if flags.Get().SubscribeAllDataSubnets {
 		return cfg.DataColumnSidecarSubnetCount, nil
 	}
 
-	// Semi-super-node subscribes to half (64 subnets - minimum needed to reconstruct).
-	if flags.Get().SemiSuperNode {
+	// Lite-supernode subscribes to half (64 subnets - minimum needed to reconstruct).
+	if flags.Get().LiteSupernode {
 		return cfg.DataColumnSidecarSubnetCount / 2, nil
 	}
 

@@ -10,7 +10,7 @@ import (
 type GlobalFlags struct {
 	SubscribeToAllSubnets           bool
 	SubscribeAllDataSubnets         bool
-	SemiSuperNode                   bool
+	LiteSupernode                   bool
 	MinimumSyncPeers                int
 	MinimumPeersPerSubnet           int
 	MaxConcurrentDials              int
@@ -52,9 +52,9 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 		cfg.SubscribeAllDataSubnets = true
 	}
 
-	if ctx.Bool(SemiSuperNode.Name) {
-		log.Warning("Enabling semi-super-node mode (subscribe to 64 subnets, custody 4 groups)")
-		cfg.SemiSuperNode = true
+	if ctx.Bool(LiteSupernode.Name) {
+		log.Warning("Enabling lite-supernode mode (subscribe to 64 subnets, custody 4 groups)")
+		cfg.LiteSupernode = true
 	}
 
 	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
