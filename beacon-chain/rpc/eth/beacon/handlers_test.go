@@ -3786,12 +3786,12 @@ func Test_validateBlobs(t *testing.T) {
 		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
 		for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-			cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
+			_, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
 			require.NoError(t, err)
 
 			for colIdx := uint64(0); colIdx < numberOfColumns; colIdx++ {
 				cellProofIdx := uint64(blobIdx)*numberOfColumns + colIdx
-				cellProofs[cellProofIdx] = cellsAndProofs.Proofs[colIdx][:]
+				cellProofs[cellProofIdx] = proofs[colIdx][:]
 			}
 		}
 
