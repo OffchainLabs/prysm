@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -598,7 +597,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 
 		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
 		require.NoError(t, err)
-		expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))
+		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
 			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}
@@ -674,7 +673,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 
 		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
 		require.NoError(t, err)
-		expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))
+		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
 			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}

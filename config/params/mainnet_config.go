@@ -117,12 +117,13 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ReorgParentWeightThreshold:      160,
 	ReorgMaxEpochsSinceFinalization: 2,
 	IntervalsPerSlot:                3,
-	ProposerReorgCutoffBPS:          primitives.BP(1667),
-	AttestationDueBPS:               primitives.BP(3333),
-	AggregrateDueBPS:                primitives.BP(6667),
 
-	SyncMessageDueBPS:  primitives.BP(3333),
-	ContributionDueBPS: primitives.BP(6667),
+	// Time-based protocol parameters.
+	ProposerReorgCutoffBPS: primitives.BP(1667),
+	AttestationDueBPS:      primitives.BP(3333),
+	AggregrateDueBPS:       primitives.BP(6667),
+	SyncMessageDueBPS:      primitives.BP(3333),
+	ContributionDueBPS:     primitives.BP(6667),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.

@@ -66,7 +66,7 @@ func TestSlotComponentSpanName(t *testing.T) {
 func TestWaitUntilSlotComponent_ContextCancelReturnsImmediately(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
-	cfg.SlotDurationMilliseconds = 10
+	cfg.SlotDurationMilliseconds = 10000
 	params.OverrideBeaconConfig(cfg)
 
 	v := &validator{genesisTime: time.Now()}
