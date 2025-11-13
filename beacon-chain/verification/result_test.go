@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestResultList(t *testing.T) {

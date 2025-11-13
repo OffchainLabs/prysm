@@ -1,10 +1,10 @@
 package depositsnapshot
 
 import (
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	protodb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	protodb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // DepositTreeSnapshot represents the data used to create a deposit tree given a snapshot.

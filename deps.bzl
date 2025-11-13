@@ -2023,8 +2023,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_libp2p_go_netroute",
         importpath = "github.com/libp2p/go-netroute",
-        sum = "h1:Dejd8cQ47Qx2kRABg6lPwknU7+nBnFRpko45/fFPuZ8=",
-        version = "v0.2.2",
+        sum = "h1:sZZx9hyANYUx9PZyqcgE/E1GUG3iEtTZHUEvdtXT7/Q=",
+        version = "v0.4.0",
     )
     go_repository(
         name = "com_github_libp2p_go_reuseport",
@@ -2872,14 +2872,14 @@ def prysm_deps():
     go_repository(
         name = "com_github_prysmaticlabs_fastssz",
         importpath = "github.com/prysmaticlabs/fastssz",
-        sum = "h1:xuVAdtz5ShYblG2sPyb4gw01DF8InbOI/kBCQjk7NiM=",
-        version = "v0.0.0-20241008181541-518c4ce73516",
+        sum = "h1:ASmh3y4ALne2OoabF5pPL8OcIpBko8gFMg5018MxkBI=",
+        version = "v0.0.0-20251103153600-259302269bfc",
     )
     go_repository(
         name = "com_github_prysmaticlabs_go_bitfield",
-        importpath = "github.com/prysmaticlabs/go-bitfield",
-        sum = "h1:ATgOe+abbzfx9kCPeXIW4fiWyDdxlwHw07j8UGhdTd4=",
-        version = "v0.0.0-20240328144219-a1caa50c3a1e",
+        importpath = "github.com/OffchainLabs/go-bitfield",
+        sum = "h1:d/SJkN8/9Ca+1YmuDiUJxAiV4w/a9S8NcsG7GMQSrVI=",
+        version = "v0.0.0-20251031151322-f427d04d8506",
     )
     go_repository(
         name = "com_github_prysmaticlabs_gohashtree",

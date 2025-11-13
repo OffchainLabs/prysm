@@ -6,16 +6,17 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -36,6 +37,11 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 	}
 
 	blobIdents := *ref
+
+	if err := s.rateLimiter.validateRequest(stream, uint64(len(blobIdents))); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
+
 	cs := s.cfg.clock.CurrentSlot()
 	remotePeer := stream.Conn().RemotePeer()
 	if err := validateBlobByRootRequest(blobIdents, cs); err != nil {
@@ -43,6 +49,7 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return err
 	}
+
 	// Sort the identifiers so that requests for the same blob root will be adjacent, minimizing db lookups.
 	sort.Sort(blobIdents)
 
@@ -58,6 +65,17 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 		return errors.Wrapf(err, "unexpected error computing min valid blob request slot, current_slot=%d", cs)
 	}
 
+	// Extract all needed roots.
+	roots := make([][fieldparams.RootLength]byte, 0, len(blobIdents))
+	for _, ident := range blobIdents {
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		roots = append(roots, root)
+	}
+
+	// Filter all available roots in block storage.
+	availableRoots := s.cfg.beaconDB.AvailableBlocks(ctx, roots)
+
+	// Serve each requested blob sidecar.
 	for i := range blobIdents {
 		if err := ctx.Err(); err != nil {
 			closeStream(stream, log)
@@ -69,7 +87,15 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 			<-ticker.C
 		}
 		s.rateLimiter.add(stream, 1)
+
 		root, idx := bytesutil.ToBytes32(blobIdents[i].BlockRoot), blobIdents[i].Index
+
+		// Do not serve a blob sidecar if the corresponding block is not available.
+		if !availableRoots[root] {
+			log.Trace("Peer requested blob sidecar by root but corresponding block not found in db")
+			continue
+		}
+
 		sc, err := s.cfg.blobStorage.Get(root, idx)
 		if err != nil {
 			log := log.WithFields(logrus.Fields{
@@ -113,19 +139,19 @@ func (s *Service) blobSidecarByRootRPCHandler(ctx context.Context, msg interface
 }
 
 func validateBlobByRootRequest(blobIdents types.BlobSidecarsByRootReq, slot primitives.Slot) error {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	epoch := slots.ToEpoch(slot)
 	blobIdentCount := uint64(len(blobIdents))
 
-	if epoch >= beaconConfig.ElectraForkEpoch {
-		if blobIdentCount > beaconConfig.MaxRequestBlobSidecarsElectra {
+	if epoch >= cfg.ElectraForkEpoch {
+		if blobIdentCount > cfg.MaxRequestBlobSidecarsElectra {
 			return types.ErrMaxBlobReqExceeded
 		}
 
 		return nil
 	}
 
-	if blobIdentCount > beaconConfig.MaxRequestBlobSidecars {
+	if blobIdentCount > cfg.MaxRequestBlobSidecars {
 		return types.ErrMaxBlobReqExceeded
 	}
 

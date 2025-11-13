@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -30,25 +29,8 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 		bytes.NewBuffer(marshalledAttestation),
 		nil,
 	)
-	errJson := &httputil.DefaultJsonError{}
 	if err != nil {
-		// TODO: remove this when v2 becomes default
-		if !errors.As(err, &errJson) {
-			return nil, err
-		}
-		if errJson.Code != http.StatusNotFound {
-			return nil, errJson
-		}
-		log.Debug("Endpoint /eth/v2/beacon/pool/attestations is not supported, falling back to older endpoints for submit attestation.")
-		if err = c.jsonRestHandler.Post(
-			ctx,
-			"/eth/v1/beacon/pool/attestations",
-			nil,
-			bytes.NewBuffer(marshalledAttestation),
-			nil,
-		); err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	attestationDataRoot, err := attestation.Data.HashTreeRoot()
@@ -67,7 +49,8 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
+	consensusVersion := version.String(slots.ToForkVersion(attestation.Data.Slot))
+	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
 	if err = c.jsonRestHandler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -126,7 +126,7 @@ func NewWarmedEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts 
 
 func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
 	opts = append(opts,
-		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
+		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest),
 		WithDataColumnFs(fs),
 	)
 

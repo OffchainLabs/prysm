@@ -15,9 +15,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/emicklei/dot"
 )
 

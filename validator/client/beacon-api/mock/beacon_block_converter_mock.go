@@ -12,8 +12,8 @@ package mock
 import (
 	reflect "reflect"
 
-	structs "github.com/OffchainLabs/prysm/v6/api/server/structs"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	structs "github.com/OffchainLabs/prysm/v7/api/server/structs"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	gomock "go.uber.org/mock/gomock"
 )
 

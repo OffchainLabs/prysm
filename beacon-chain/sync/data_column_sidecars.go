@@ -7,20 +7,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -169,7 +169,7 @@ func FetchDataColumnSidecars(
 		result[root] = sidecars
 	}
 
-	log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Failed to fetch data column sidecars from storage and peers using rescue mode")
+	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
 }
 
@@ -738,7 +738,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
-				log.WithError(err).Warning("Failed to send data column sidecars request")
+				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
 			}
 
@@ -1122,19 +1122,21 @@ func randomPeer(
 			}
 		}
 
-		slices.Sort(nonRateLimitedPeers)
-
-		if len(nonRateLimitedPeers) == 0 {
-			log.WithFields(logrus.Fields{
-				"peerCount": peerCount,
-				"delay":     waitPeriod,
-			}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
-			time.Sleep(waitPeriod)
-			continue
+		if len(nonRateLimitedPeers) > 0 {
+			slices.Sort(nonRateLimitedPeers)
+			randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
+			return nonRateLimitedPeers[randomIndex], nil
 		}
 
-		randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
-		return nonRateLimitedPeers[randomIndex], nil
+		log.WithFields(logrus.Fields{
+			"peerCount": peerCount,
+			"delay":     waitPeriod,
+		}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
+
+		select {
+		case <-time.After(waitPeriod):
+		case <-ctx.Done():
+		}
 	}
 
 	return "", ctx.Err()

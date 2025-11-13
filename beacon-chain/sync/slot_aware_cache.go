@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	lru "github.com/hashicorp/golang-lru"
 )
 

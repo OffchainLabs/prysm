@@ -11,11 +11,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	log "github.com/sirupsen/logrus"
@@ -568,10 +568,9 @@ func TestGetSpec(t *testing.T) {
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "104", v)
 			case "BLOB_SCHEDULE":
-				// BLOB_SCHEDULE should be an empty slice when no schedule is defined
 				blobSchedule, ok := v.([]interface{})
 				assert.Equal(t, true, ok)
-				assert.Equal(t, 0, len(blobSchedule))
+				assert.Equal(t, 2, len(blobSchedule))
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

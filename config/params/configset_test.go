@@ -3,8 +3,8 @@ package params
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestConfigset_Add(t *testing.T) {

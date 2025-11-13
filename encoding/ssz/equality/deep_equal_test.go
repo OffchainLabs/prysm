@@ -3,9 +3,9 @@ package equality_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
 
 func TestDeepEqualBasicTypes(t *testing.T) {

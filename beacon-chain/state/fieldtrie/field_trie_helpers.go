@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"reflect"
 
-	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	multi_value_slice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	pmath "github.com/OffchainLabs/prysm/v6/math"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	pmath "github.com/OffchainLabs/prysm/v7/math"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
