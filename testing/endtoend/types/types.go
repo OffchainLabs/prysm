@@ -6,10 +6,10 @@ import (
 	"context"
 	"os"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )

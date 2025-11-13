@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )

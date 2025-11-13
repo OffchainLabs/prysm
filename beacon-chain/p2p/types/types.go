@@ -8,9 +8,9 @@ import (
 	"encoding/binary"
 	"sort"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )

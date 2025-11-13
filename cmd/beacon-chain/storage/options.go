@@ -2,15 +2,17 @@ package storage
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"path"
+	"path/filepath"
+	"slices"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -55,10 +57,8 @@ func layoutFlagUsage() string {
 }
 
 func validateLayoutFlag(_ *cli.Context, v string) error {
-	for _, l := range filesystem.LayoutNames {
-		if v == l {
-			return nil
-		}
+	if slices.Contains(filesystem.LayoutNames, v) {
+		return nil
 	}
 	return errors.Errorf("invalid value '%s' for flag --%s, %s", v, BlobStorageLayout.Name, layoutOptions())
 }
@@ -120,7 +120,7 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 		return explicit, nil
 	}
 
-	dir = path.Clean(dir)
+	dir = filepath.Clean(dir)
 	// nosec: this path is provided by the node operator via flag
 	base, err := os.Open(dir) // #nosec G304
 	if err != nil {
@@ -140,6 +140,10 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 	// amount of wiggle room to be confident that we'll likely see a by-root director if one exists.
 	entries, err := base.Readdirnames(16)
 	if err != nil {
+		// We can get this error if the directory exists and is empty
+		if errors.Is(err, io.EOF) {
+			return filesystem.LayoutNameByEpoch, nil
+		}
 		return "", errors.Wrap(err, "reading blob storage directory")
 	}
 	for _, entry := range entries {
@@ -154,7 +158,7 @@ func blobStoragePath(c *cli.Context) string {
 	blobsPath := c.Path(BlobStoragePathFlag.Name)
 	if blobsPath == "" {
 		// append a "blobs" subdir to the end of the data dir path
-		blobsPath = path.Join(c.String(cmd.DataDirFlag.Name), "blobs")
+		blobsPath = filepath.Join(c.String(cmd.DataDirFlag.Name), "blobs")
 	}
 	return blobsPath
 }
@@ -163,7 +167,7 @@ func dataColumnStoragePath(c *cli.Context) string {
 	dataColumnsPath := c.Path(DataColumnStoragePathFlag.Name)
 	if dataColumnsPath == "" {
 		// append a "data-columns" subdir to the end of the data dir path
-		dataColumnsPath = path.Join(c.String(cmd.DataDirFlag.Name), "data-columns")
+		dataColumnsPath = filepath.Join(c.String(cmd.DataDirFlag.Name), "data-columns")
 	}
 
 	return dataColumnsPath

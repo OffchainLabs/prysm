@@ -8,27 +8,27 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -756,6 +756,11 @@ func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
 func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) error {
 	c.DataColumns = append(c.DataColumns, dcs...)
 	return nil
+}
+
+// DependentRootForEpoch mocks the same method in the chain service
+func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+	return c.TargetRoot, nil
 }
 
 // TargetRootForEpoch mocks the same method in the chain service

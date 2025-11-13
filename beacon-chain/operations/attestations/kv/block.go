@@ -1,8 +1,8 @@
 package kv
 
 import (
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/pkg/errors"
 )
 

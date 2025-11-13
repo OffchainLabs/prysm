@@ -206,18 +206,6 @@ type WeakSubjectivityData struct {
 	StateRoot    string      `json:"state_root"`
 }
 
-type GetDepositSnapshotResponse struct {
-	Data *DepositSnapshot `json:"data"`
-}
-
-type DepositSnapshot struct {
-	Finalized            []string `json:"finalized"`
-	DepositRoot          string   `json:"deposit_root"`
-	DepositCount         string   `json:"deposit_count"`
-	ExecutionBlockHash   string   `json:"execution_block_hash"`
-	ExecutionBlockHeight string   `json:"execution_block_height"`
-}
-
 type GetIndividualVotesRequest struct {
 	Epoch      string   `json:"epoch"`
 	PublicKeys []string `json:"public_keys,omitempty"`

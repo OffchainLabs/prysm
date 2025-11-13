@@ -10,11 +10,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )

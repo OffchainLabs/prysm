@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"sync"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/pkg/errors"
 	blst "github.com/supranational/blst/bindings/go"
 )

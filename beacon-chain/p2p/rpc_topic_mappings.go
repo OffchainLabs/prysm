@@ -3,11 +3,11 @@ package p2p
 import (
 	"reflect"
 
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 

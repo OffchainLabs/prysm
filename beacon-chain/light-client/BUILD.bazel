@@ -9,7 +9,7 @@ go_library(
         "log.go",
         "store.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client",
     visibility = ["//visibility:public"],
     deps = [
         "//async/event:go_default_library",

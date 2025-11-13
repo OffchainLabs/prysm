@@ -3,9 +3,9 @@ package eth1
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/pkg/errors"
 )
 

@@ -3,7 +3,7 @@ package peers
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func Benchmark_retrieveIndicesFromBitfield(b *testing.B) {

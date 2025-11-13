@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestParseNodeVersion(t *testing.T) {

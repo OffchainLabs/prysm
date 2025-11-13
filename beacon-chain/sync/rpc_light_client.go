@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 )
 

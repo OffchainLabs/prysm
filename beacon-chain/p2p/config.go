@@ -4,9 +4,9 @@ import (
 	"net"
 	"time"
 
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/sirupsen/logrus"
 )
 

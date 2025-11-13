@@ -25,28 +25,29 @@ package peers
 import (
 	"context"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	pmath "github.com/OffchainLabs/prysm/v6/math"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	pmath "github.com/OffchainLabs/prysm/v7/math"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const (
@@ -306,11 +307,8 @@ func (p *Status) SubscribedToSubnet(index uint64) []peer.ID {
 		connectedStatus := peerData.ConnState == Connecting || peerData.ConnState == Connected
 		if connectedStatus && peerData.MetaData != nil && !peerData.MetaData.IsNil() && peerData.MetaData.AttnetsBitfield() != nil {
 			indices := indicesFromBitfield(peerData.MetaData.AttnetsBitfield())
-			for _, idx := range indices {
-				if idx == index {
-					peers = append(peers, pid)
-					break
-				}
+			if slices.Contains(indices, index) {
+				peers = append(peers, pid)
 			}
 		}
 	}

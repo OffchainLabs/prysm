@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	mock "github.com/OffchainLabs/prysm/v6/validator/accounts/testing"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	mock "github.com/OffchainLabs/prysm/v7/validator/accounts/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )

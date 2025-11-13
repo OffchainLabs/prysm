@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 // blobIndexMask is a bitmask representing the set of blob indices that are currently set.

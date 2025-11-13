@@ -7,14 +7,14 @@ import (
 	"reflect"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/db/common"
-	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
-	valtest "github.com/OffchainLabs/prysm/v6/validator/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/db/common"
+	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
+	valtest "github.com/OffchainLabs/prysm/v7/validator/testing"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 

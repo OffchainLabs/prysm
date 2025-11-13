@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
-	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
+	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query/testing"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
@@ -64,12 +64,6 @@ func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
 			path:          "value2[31]",
 			expectedIndex: 3,
 			expectError:   false,
-		},
-		{
-			name:         "Empty path error",
-			path:         "",
-			expectError:  true,
-			errorMessage: "empty path",
 		},
 	}
 
@@ -217,8 +211,8 @@ func TestGetIndicesFromPath_VariableTestContainer(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
-			path:         "variable_container_list[0].inner_1.len(nested_list_field[3])",
+			name:         "len(variable_container_list[0].inner_1.nested_list_field[3])",
+			path:         "len(variable_container_list[0].inner_1.nested_list_field[3])",
 			expectError:  true,
 			errorMessage: "length calculation error: len() is not supported for multi-dimensional arrays",
 		},

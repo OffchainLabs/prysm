@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func Test_VectorizedSha256(t *testing.T) {

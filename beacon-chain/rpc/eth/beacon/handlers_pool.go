@@ -8,83 +8,31 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 const broadcastBLSChangesRateLimit = 128
-
-// Deprecated: use ListAttestationsV2 instead
-// ListAttestations retrieves attestations known by the node but
-// not necessarily incorporated into any block. Allows filtering by committee index or slot.
-func (s *Server) ListAttestations(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "beacon.ListAttestations")
-	defer span.End()
-
-	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
-	if !ok {
-		return
-	}
-	rawCommitteeIndex, committeeIndex, ok := shared.UintFromQuery(w, r, "committee_index", false)
-	if !ok {
-		return
-	}
-
-	var attestations []eth.Att
-	if features.Get().EnableExperimentalAttestationPool {
-		attestations = s.AttestationCache.GetAll()
-	} else {
-		attestations = s.AttestationsPool.AggregatedAttestations()
-		unaggAtts := s.AttestationsPool.UnaggregatedAttestations()
-		attestations = append(attestations, unaggAtts...)
-	}
-
-	filteredAtts := make([]*structs.Attestation, 0, len(attestations))
-	for _, a := range attestations {
-		var includeAttestation bool
-		att, ok := a.(*eth.Attestation)
-		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("Unable to convert attestation of type %T", a), http.StatusInternalServerError)
-			return
-		}
-
-		includeAttestation = shouldIncludeAttestation(att, rawSlot, slot, rawCommitteeIndex, committeeIndex)
-		if includeAttestation {
-			attStruct := structs.AttFromConsensus(att)
-			filteredAtts = append(filteredAtts, attStruct)
-		}
-	}
-
-	attsData, err := json.Marshal(filteredAtts)
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestations: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	httputil.WriteJson(w, &structs.ListAttestationsResponse{
-		Data: attsData,
-	})
-}
 
 // ListAttestationsV2 retrieves attestations known by the node but
 // not necessarily incorporated into any block. Allows filtering by committee index or slot.
@@ -174,49 +122,6 @@ func shouldIncludeAttestation(
 		slotMatch = false
 	}
 	return committeeIndexMatch && slotMatch
-}
-
-// SubmitAttestations submits an attestation object to node. If the attestation passes all validation
-// constraints, node MUST publish the attestation on an appropriate subnet.
-func (s *Server) SubmitAttestations(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestations")
-	defer span.End()
-
-	var req structs.SubmitAttestationsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	attFailures, failedBroadcasts, err := s.handleAttestations(ctx, req.Data)
-	if err != nil {
-		httputil.HandleError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if len(attFailures) > 0 {
-		failuresErr := &server.IndexedErrorContainer{
-			Code:     http.StatusBadRequest,
-			Message:  server.ErrIndexedValidationFail,
-			Failures: attFailures,
-		}
-		httputil.WriteError(w, failuresErr)
-		return
-	}
-	if len(failedBroadcasts) > 0 {
-		failuresErr := &server.IndexedErrorContainer{
-			Code:     http.StatusInternalServerError,
-			Message:  server.ErrIndexedBroadcastFail,
-			Failures: failedBroadcasts,
-		}
-		httputil.WriteError(w, failuresErr)
-		return
-	}
 }
 
 // SubmitAttestationsV2 submits an attestation object to node. If the attestation passes all validation
@@ -749,36 +654,6 @@ func (s *Server) ListBLSToExecutionChanges(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// Deprecated: use GetAttesterSlashingsV2 instead
-// GetAttesterSlashings retrieves attester slashings known by the node but
-// not necessarily incorporated into any block.
-func (s *Server) GetAttesterSlashings(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.GetAttesterSlashings")
-	defer span.End()
-
-	headState, err := s.ChainInfoFetcher.HeadStateReadOnly(ctx)
-	if err != nil {
-		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	sourceSlashings := s.SlashingsPool.PendingAttesterSlashings(ctx, headState, true /* return unlimited slashings */)
-	slashings := make([]*structs.AttesterSlashing, len(sourceSlashings))
-	for i, slashing := range sourceSlashings {
-		as, ok := slashing.(*eth.AttesterSlashing)
-		if !ok {
-			httputil.HandleError(w, fmt.Sprintf("Unable to convert slashing of type %T", slashing), http.StatusInternalServerError)
-			return
-		}
-		slashings[i] = structs.AttesterSlashingFromConsensus(as)
-	}
-	attBytes, err := json.Marshal(slashings)
-	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Failed to marshal slashings: %v", err), http.StatusInternalServerError)
-		return
-	}
-	httputil.WriteJson(w, &structs.GetAttesterSlashingsResponse{Data: attBytes})
-}
-
 // GetAttesterSlashingsV2 retrieves attester slashings known by the node but
 // not necessarily incorporated into any block, supporting both AttesterSlashing and AttesterSlashingElectra.
 func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) {
@@ -828,31 +703,6 @@ func (s *Server) GetAttesterSlashingsV2(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set(api.VersionHeader, version.String(v))
 	httputil.WriteJson(w, resp)
-}
-
-// SubmitAttesterSlashings submits an attester slashing object to node's pool and
-// if passes validation node MUST broadcast it to network.
-func (s *Server) SubmitAttesterSlashings(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttesterSlashings")
-	defer span.End()
-
-	var req structs.AttesterSlashing
-	err := json.NewDecoder(r.Body).Decode(&req)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	slashing, err := req.ToConsensus()
-	if err != nil {
-		httputil.HandleError(w, "Could not convert request slashing to consensus slashing: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	s.submitAttesterSlashing(w, ctx, slashing)
 }
 
 // SubmitAttesterSlashingsV2 submits an attester slashing object to node's pool and

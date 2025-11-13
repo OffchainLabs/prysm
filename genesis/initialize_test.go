@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
