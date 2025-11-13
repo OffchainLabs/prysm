@@ -711,6 +711,7 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 			if pn == nil {
 				return false
 			}
+			
 			return pn.isPinged
 		}
 		return false
