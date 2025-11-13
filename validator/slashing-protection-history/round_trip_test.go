@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/db/common"
-	dbtest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
-	history "github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history"
-	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
-	slashtest "github.com/OffchainLabs/prysm/v6/validator/testing"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/db/common"
+	dbtest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	history "github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history"
+	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
+	slashtest "github.com/OffchainLabs/prysm/v7/validator/testing"
 )
 
 // TestImportExport_RoundTrip tests that we can import and export slashing protection data

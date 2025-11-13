@@ -6,6 +6,7 @@ import (
 	"errors"
 	"go/ast"
 	"go/token"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -178,12 +179,7 @@ func isLoggingCall(call *ast.CallExpr, logFunctions []string, aliases map[string
 // isCommonLogPackage checks for common logging package names
 func isCommonLogPackage(pkg string) bool {
 	common := []string{"log", "logrus", "zerolog", "zap", "glog", "klog"}
-	for _, c := range common {
-		if pkg == c {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(common, pkg)
 }
 
 // isFormatFunction checks if this is a format function (ending with 'f')
@@ -274,10 +270,8 @@ func isAcceptableStart(firstRune rune, s string) bool {
 
 	// Special characters that are OK to start with
 	acceptableChars := []rune{'%', '$', '/', '\\', '[', '(', '{', '"', '\'', '`', '-'}
-	for _, char := range acceptableChars {
-		if firstRune == char {
-			return true
-		}
+	if slices.Contains(acceptableChars, firstRune) {
+		return true
 	}
 
 	// URLs/paths are OK

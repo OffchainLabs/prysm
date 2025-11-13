@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/k0kubun/go-ansi"
 	"github.com/pkg/errors"
 	"github.com/schollz/progressbar/v3"

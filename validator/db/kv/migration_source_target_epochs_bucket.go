@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/progress"
+	"github.com/OffchainLabs/prysm/v7/monitoring/progress"
 	bolt "go.etcd.io/bbolt"
 )
 

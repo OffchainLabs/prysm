@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/cmd/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -264,6 +264,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		gen.Config.ShanghaiTime = interop.GethShanghaiTime(genesis, params.BeaconConfig())
 		gen.Config.CancunTime = interop.GethCancunTime(genesis, params.BeaconConfig())
 		gen.Config.PragueTime = interop.GethPragueTime(genesis, params.BeaconConfig())
+		gen.Config.OsakaTime = interop.GethOsakaTime(genesis, params.BeaconConfig())
 
 		fields := logrus.Fields{}
 		if gen.Config.ShanghaiTime != nil {
@@ -274,6 +275,9 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		}
 		if gen.Config.PragueTime != nil {
 			fields["prague"] = fmt.Sprintf("%d", *gen.Config.PragueTime)
+		}
+		if gen.Config.OsakaTime != nil {
+			fields["osaka"] = fmt.Sprintf("%d", *gen.Config.OsakaTime)
 		}
 		log.WithFields(fields).Info("Setting fork geth times")
 		if v > version.Altair {

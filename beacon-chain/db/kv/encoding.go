@@ -5,8 +5,8 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/golang/snappy"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/protobuf/proto"

@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
@@ -67,6 +67,14 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 	)
 	err := kzg.Start()
 	require.NoError(t, err)
+
+	t.Run("size mismatch", func(t *testing.T) {
+		sidecars := generateRandomSidecars(t, seed, blobCount)
+		sidecars[0].Column[0] = sidecars[0].Column[0][:len(sidecars[0].Column[0])-1] // Remove one byte to create size mismatch
+
+		err := peerdas.VerifyDataColumnsSidecarKZGProofs(sidecars)
+		require.ErrorIs(t, err, peerdas.ErrMismatchLength)
+	})
 
 	t.Run("invalid proof", func(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
@@ -379,10 +387,10 @@ func generateRandomSidecars(t testing.TB, seed, blobCount int64) []blocks.ROData
 	sBlock, err := blocks.NewSignedBeaconBlock(dbBlock)
 	require.NoError(t, err)
 
-	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
 	rob, err := blocks.NewROBlock(sBlock)
 	require.NoError(t, err)
-	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	sidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	return sidecars

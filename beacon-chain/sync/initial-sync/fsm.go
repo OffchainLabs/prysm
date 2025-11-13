@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 const (

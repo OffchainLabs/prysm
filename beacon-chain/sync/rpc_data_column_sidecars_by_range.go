@@ -5,13 +5,13 @@ import (
 	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 
@@ -38,8 +38,8 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	defer cancel()
 
 	SetRPCStreamDeadlines(stream)
-	beaconConfig := params.BeaconConfig()
-	maxRequestDataColumnSidecars := beaconConfig.MaxRequestDataColumnSidecars
+	cfg := params.BeaconConfig()
+	maxRequestDataColumnSidecars := cfg.MaxRequestDataColumnSidecars
 	remotePeer := stream.Conn().RemotePeer()
 
 	log := log.WithFields(logrus.Fields{
@@ -102,7 +102,7 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 
 		// Once the quota is reached, we're done serving the request.
 		if maxRequestDataColumnSidecars == 0 {
-			log.WithField("initialQuota", beaconConfig.MaxRequestDataColumnSidecars).Trace("Reached quota for data column sidecars by range request")
+			log.WithField("initialQuota", cfg.MaxRequestDataColumnSidecars).Trace("Reached quota for data column sidecars by range request")
 			break
 		}
 	}

@@ -5,12 +5,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -192,6 +192,13 @@ var (
 		},
 	)
 
+	dataColumnsRecoveredFromELTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "data_columns_recovered_from_el_total",
+			Help: "Count the number of times data columns have been recovered from the execution layer.",
+		},
+	)
+
 	// Data column sidecar validation, beacon metrics specs
 	dataColumnSidecarVerificationRequestsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "beacon_data_column_sidecar_processing_requests_total",
@@ -207,7 +214,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "beacon_data_column_sidecar_gossip_verification_milliseconds",
 			Help:    "Captures the time taken to verify data column sidecars.",
-			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
+			Buckets: []float64{2, 5, 10, 25, 50, 75, 100, 250, 500, 1000, 2000},
 		},
 	)
 
@@ -279,6 +286,7 @@ func (s *Service) updateMetrics() {
 		topicPeerCount.WithLabelValues(formattedTopic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(formattedTopic))))
 	}
 
+	subscribedTopicPeerCount.Reset()
 	for _, topic := range s.cfg.p2p.PubSub().GetTopics() {
 		subscribedTopicPeerCount.WithLabelValues(topic).Set(float64(len(s.cfg.p2p.PubSub().ListPeers(topic))))
 	}

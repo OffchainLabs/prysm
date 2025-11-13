@@ -3,8 +3,8 @@ package aggregation
 import (
 	"sort"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // ErrInvalidMaxCoverProblem is returned when Maximum Coverage problem was initialized incorrectly.

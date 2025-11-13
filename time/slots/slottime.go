@@ -5,11 +5,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mathutil "github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
