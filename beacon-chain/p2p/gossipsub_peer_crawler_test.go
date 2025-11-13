@@ -355,13 +355,6 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 		}
 	}
 
-	// Helper: local node with specific sequence
-	newNodeWithSeq := func(t *testing.T, seq uint64) *enode.Node {
-		ln := createTestNodeRandom(t)
-		setNodeSeq(ln, seq)
-		return ln.Node()
-	}
-
 	// Helper: local node that will cause enodeToPeerID to fail (no TCP/UDP multiaddrs)
 	newNodeNoPorts := func(t *testing.T) *enode.Node {
 		_, privKey := createAddrAndPrivKey(t)
@@ -374,18 +367,11 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 		return ln.Node()
 	}
 
-	nodeA1 := newNodeWithSeq(t, 1)
-	nodeA2 := newNodeWithSeq(t, 2) // same ID but different record required; we will rebuild to keep IDs stable
 	// Ensure both A nodes have the same enode.ID but differing seq
-	// Recreate using same LocalNode to keep ID; using helper to set seq
-	{
-		ln := createTestNodeRandom(t)
-		nodeA1 = ln.Node()
-		setNodeSeq(ln, nodeA1.Seq())
-		nodeA1 = ln.Node()
-		setNodeSeq(ln, nodeA1.Seq()+1)
-		nodeA2 = ln.Node()
-	}
+	ln := createTestNodeRandom(t)
+	nodeA1 := ln.Node()
+	setNodeSeq(ln, nodeA1.Seq()+1)
+	nodeA2 := ln.Node()
 
 	tests := []struct {
 		name         string
@@ -693,7 +679,7 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 	}
 
 	// Run ping loop in background and perform a single crawl
-	g.Start(topicExtractor)
+	require.NoError(t, g.Start(topicExtractor))
 	defer g.Stop()
 
 	// Verify that the peer has been indexed under the topic and marked as pinged
