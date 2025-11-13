@@ -88,19 +88,15 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 }
 
 // custodyGroupCount computes the custody group count based on the custody requirement,
-// the validators custody requirement, whether the node is subscribed to all data subnets,
-// and whether the node is in semi-super-node mode.
+// the validators custody requirement, and whether the node is subscribed to all data subnets.
+// Note: Semi-super-node subscribes to 64 subnets (enough to reconstruct) but only custodies the minimum groups.
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 	cfg := params.BeaconConfig()
 
-	// Super-node mode takes precedence (custody all 128 groups).
+	// Only super-node mode increases custody to all 128 groups.
+	// Semi-super-node subscribes to 64 subnets but custodies the minimum.
 	if flags.Get().SubscribeAllDataSubnets {
 		return cfg.NumberOfCustodyGroups, nil
-	}
-
-	// Semi-super-node mode custodies 64 groups (minimum needed for reconstruction).
-	if flags.Get().SemiSuperNode {
-		return cfg.NumberOfCustodyGroups / 2, nil
 	}
 
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()

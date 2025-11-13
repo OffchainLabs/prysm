@@ -53,7 +53,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) {
 	}
 
 	if ctx.Bool(SemiSuperNode.Name) {
-		log.Warning("Enabling semi-super-node mode (64 custody groups)")
+		log.Warning("Enabling semi-super-node mode (subscribe to 64 subnets, custody 4 groups)")
 		cfg.SemiSuperNode = true
 	}
 

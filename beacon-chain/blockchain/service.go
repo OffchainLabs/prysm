@@ -510,21 +510,21 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	// Warn the user if the node was previously in semi-super-node mode and is not any more.
 	if wasSemiSuperNode && !isSemiSuperNode {
 		log.Warnf(
-			"Because the flag `--%s` was previously used, the node will remain in semi-super-node mode (custody 64 groups).",
+			"Because the flag `--%s` was previously used, the node will remain in semi-super-node mode (subscribe to 64 subnets).",
 			flags.SemiSuperNode.Name,
 		)
 	}
 
 	// Compute the custody group count.
-	// Priority: super-node (128) > semi-super-node (64) > validator requirement.
-	// Note: Persistence (preventing downgrades) is handled by UpdateCustodyInfo() which
+	// Note: Semi-super-node subscribes to 64 subnets (enough to reconstruct) but only custodies the minimum groups (4).
+	// Only super-node increases custody to all 128 groups.
+	// Persistence (preventing downgrades) is handled by UpdateCustodyInfo() which
 	// refuses to decrease the stored custody count.
 	custodyGroupCount := custodyRequirement
 	if isSubscribedToAllDataSubnets {
 		custodyGroupCount = cfg.NumberOfCustodyGroups
-	} else if isSemiSuperNode {
-		custodyGroupCount = cfg.NumberOfCustodyGroups / 2
 	}
+	// Semi-super-node does NOT increase custody count - it keeps the minimum (4 or validator requirement).
 
 	// Safely compute the fulu fork slot.
 	fuluForkSlot, err := fuluForkSlot()
