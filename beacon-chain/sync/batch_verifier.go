@@ -190,7 +190,7 @@ func (s *Service) validateUnbatchedColumnsKzg(ctx context.Context, columns []blo
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, err
 	}
-	verification.DataColumnBatchKZGVerificationHistogram.Observe(float64(time.Since(start).Milliseconds()))
+	verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("fallback").Observe(float64(time.Since(start).Milliseconds()))
 	return pubsub.ValidationAccept, nil
 }
 
@@ -210,7 +210,7 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 	if err != nil {
 		verificationErr = errors.Wrap(err, "batch KZG verification failed")
 	} else {
-		verification.DataColumnBatchKZGVerificationHistogram.Observe(float64(time.Since(start).Milliseconds()))
+		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(float64(time.Since(start).Milliseconds()))
 	}
 
 	// Send the same result to all verifiers in the batch
