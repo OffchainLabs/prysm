@@ -67,6 +67,29 @@ func getSubscriptionStatusFromDB(t *testing.T, db *Store) bool {
 	return subscribed
 }
 
+// getSemiSuperNodeStatusFromDB reads the semi-super-node status directly from the database for testing purposes.
+func getSemiSuperNodeStatusFromDB(t *testing.T, db *Store) bool {
+	t.Helper()
+	var enabled bool
+
+	err := db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(custodyBucket)
+		if bucket == nil {
+			return nil
+		}
+
+		bytes := bucket.Get(semiSuperNodeKey)
+		if len(bytes) != 0 && bytes[0] == 1 {
+			enabled = true
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	return enabled
+}
+
 func TestUpdateCustodyInfo(t *testing.T) {
 	ctx := t.Context()
 
@@ -299,6 +322,60 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, true, prev)
 
 		stored := getSubscriptionStatusFromDB(t, db)
+		require.Equal(t, true, stored)
+	})
+}
+
+func TestUpdateSemiSuperNode(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("initial update with empty database - set to false", func(t *testing.T) {
+		db := setupDB(t)
+
+		prev, err := db.UpdateSemiSuperNode(ctx, false)
+		require.NoError(t, err)
+		require.Equal(t, false, prev)
+
+		stored := getSemiSuperNodeStatusFromDB(t, db)
+		require.Equal(t, false, stored)
+	})
+
+	t.Run("initial update with empty database - set to true", func(t *testing.T) {
+		db := setupDB(t)
+
+		prev, err := db.UpdateSemiSuperNode(ctx, true)
+		require.NoError(t, err)
+		require.Equal(t, false, prev)
+
+		stored := getSemiSuperNodeStatusFromDB(t, db)
+		require.Equal(t, true, stored)
+	})
+
+	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
+		db := setupDB(t)
+
+		_, err := db.UpdateSemiSuperNode(ctx, true)
+		require.NoError(t, err)
+
+		prev, err := db.UpdateSemiSuperNode(ctx, false)
+		require.NoError(t, err)
+		require.Equal(t, true, prev)
+
+		stored := getSemiSuperNodeStatusFromDB(t, db)
+		require.Equal(t, true, stored)
+	})
+
+	t.Run("update from true to true (no change)", func(t *testing.T) {
+		db := setupDB(t)
+
+		_, err := db.UpdateSemiSuperNode(ctx, true)
+		require.NoError(t, err)
+
+		prev, err := db.UpdateSemiSuperNode(ctx, true)
+		require.NoError(t, err)
+		require.Equal(t, true, prev)
+
+		stored := getSemiSuperNodeStatusFromDB(t, db)
 		require.Equal(t, true, stored)
 	})
 }

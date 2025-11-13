@@ -338,6 +338,12 @@ var (
 		Name:  "subscribe-all-data-subnets",
 		Usage: "Enable subscription to all data subnets. Once set, unsetting this flag won't have any effect.",
 	}
+	// SemiSuperNode enables semi-super-node mode: custody 64 columns (minimum for reconstruction) instead of all 128.
+	SemiSuperNode = &cli.BoolFlag{
+		Name: "semi-super-node",
+		Usage: "Enable semi-super-node mode: custody 64 columns (minimum needed for reconstruction) and serve only " +
+			"custodied columns to peers. Once set, you can only upgrade to full super-node, not downgrade.",
+	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{
 		Name:  "batch-verifier-limit",

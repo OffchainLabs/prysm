@@ -471,9 +471,19 @@ func (s *Service) removeStartupState() {
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
 	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
+	isSemiSuperNode := flags.Get().SemiSuperNode
 
 	cfg := params.BeaconConfig()
 	custodyRequirement := cfg.CustodyRequirement
+
+	// Warn if both flags are set (super-node takes precedence).
+	if isSubscribedToAllDataSubnets && isSemiSuperNode {
+		log.Warnf(
+			"Both `--%s` and `--%s` flags are set. The super-node flag takes precedence.",
+			flags.SubscribeAllDataSubnets.Name,
+			flags.SemiSuperNode.Name,
+		)
+	}
 
 	// Check if the node was previously subscribed to all data subnets, and if so,
 	// store the new status accordingly.
@@ -490,10 +500,30 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		)
 	}
 
+	// Check if the node was previously in semi-super-node mode, and if so,
+	// store the new status accordingly.
+	wasSemiSuperNode, err := s.cfg.BeaconDB.UpdateSemiSuperNode(s.ctx, isSemiSuperNode)
+	if err != nil {
+		log.WithError(err).Error("Could not update semi-super-node status")
+	}
+
+	// Warn the user if the node was previously in semi-super-node mode and is not any more.
+	if wasSemiSuperNode && !isSemiSuperNode {
+		log.Warnf(
+			"Because the flag `--%s` was previously used, the node will remain in semi-super-node mode (custody 64 groups).",
+			flags.SemiSuperNode.Name,
+		)
+	}
+
 	// Compute the custody group count.
+	// Priority: super-node (128) > semi-super-node (64) > validator requirement.
+	// Note: Persistence (preventing downgrades) is handled by UpdateCustodyInfo() which
+	// refuses to decrease the stored custody count.
 	custodyGroupCount := custodyRequirement
 	if isSubscribedToAllDataSubnets {
 		custodyGroupCount = cfg.NumberOfCustodyGroups
+	} else if isSemiSuperNode {
+		custodyGroupCount = cfg.NumberOfCustodyGroups / 2
 	}
 
 	// Safely compute the fulu fork slot.

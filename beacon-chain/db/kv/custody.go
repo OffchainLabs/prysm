@@ -203,3 +203,61 @@ func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed
 
 	return result, nil
 }
+
+// UpdateSemiSuperNode updates the "semi-super-node" status in the database
+// only if `enabled` is `true`.
+// It returns the previous semi-super-node status.
+func (s *Store) UpdateSemiSuperNode(ctx context.Context, enabled bool) (bool, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateSemiSuperNode")
+	defer span.End()
+
+	result := false
+	if !enabled {
+		if err := s.db.View(func(tx *bolt.Tx) error {
+			// Retrieve the custody bucket.
+			bucket := tx.Bucket(custodyBucket)
+			if bucket == nil {
+				return nil
+			}
+
+			// Retrieve the semi-super-node flag.
+			bytes := bucket.Get(semiSuperNodeKey)
+			if len(bytes) == 0 {
+				return nil
+			}
+
+			if bytes[0] == 1 {
+				result = true
+			}
+
+			return nil
+		}); err != nil {
+			return false, err
+		}
+
+		return result, nil
+	}
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		// Retrieve the custody bucket.
+		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
+		if err != nil {
+			return errors.Wrap(err, "create custody bucket")
+		}
+
+		bytes := bucket.Get(semiSuperNodeKey)
+		if len(bytes) != 0 && bytes[0] == 1 {
+			result = true
+		}
+
+		if err := bucket.Put(semiSuperNodeKey, []byte{1}); err != nil {
+			return errors.Wrap(err, "put semi-super-node")
+		}
+
+		return nil
+	}); err != nil {
+		return false, err
+	}
+
+	return result, nil
+}
