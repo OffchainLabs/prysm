@@ -132,6 +132,7 @@ go_test(
         "fork_test.go",
         "gossip_scoring_params_test.go",
         "gossip_topic_mappings_test.go",
+        "gossipsub_peer_crawler_test.go",
         "message_id_test.go",
         "options_test.go",
         "parameter_test.go",
@@ -157,6 +158,7 @@ go_test(
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/db/testing:go_default_library",
         "//beacon-chain/p2p/encoder:go_default_library",
+        "//beacon-chain/p2p/gossipsubcrawler:go_default_library",
         "//beacon-chain/p2p/peers:go_default_library",
         "//beacon-chain/p2p/peers/peerdata:go_default_library",
         "//beacon-chain/p2p/peers/scorers:go_default_library",
@@ -204,6 +206,7 @@ go_test(
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_sirupsen_logrus//hooks/test:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

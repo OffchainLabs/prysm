@@ -15,58 +15,53 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-type peerStatus int
-
-const (
-	peerStatusUnknown peerStatus = iota
-	peerStatusCrawled
-	peerStatusPinged
-)
-
 type peerNode struct {
-	id     enode.ID
-	status peerStatus
-	node   *enode.Node
-	peerID peer.ID
-	topics map[gossipsubcrawler.Topic]struct{}
+	id       enode.ID
+	isPinged bool
+	node     *enode.Node
+	peerID   peer.ID
+	topics   map[gossipsubcrawler.Topic]struct{}
 }
 
 type crawledPeers struct {
-	g  *GossipsubPeerCrawler
-	mu sync.RWMutex
+	g *GossipsubPeerCrawler
 
+	mu       sync.RWMutex
 	byEnode  map[enode.ID]*peerNode
 	byPeerId map[peer.ID]*peerNode
 	byTopic  map[gossipsubcrawler.Topic]map[peer.ID]struct{}
 }
 
-func (cp *crawledPeers) updateStatusToPinged(node *enode.Node) {
+func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
-	enodeID := node.ID()
 	existingPNode, ok := cp.byEnode[enodeID]
 	if !ok {
 		return
 	}
-	if existingPNode.node.Seq() == node.Seq() {
-		existingPNode.status = peerStatusPinged
-		return
-	}
+
+	// we only want to ping a node with a given NodeId once -> not on every sequence number change
+	// as ping is simply a test of a node being reachable and not fake
+	existingPNode.isPinged = true
 }
 
-func (cp *crawledPeers) removePeerOnPingFailure(node *enode.Node) {
+func (cp *crawledPeers) removePeerOnPingFailure(enodeID enode.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
-	enodeID := node.ID()
 	existingPNode, ok := cp.byEnode[enodeID]
 	if !ok {
 		return
 	}
-	if existingPNode.node.Seq() == node.Seq() {
-		cp.updateTopicsUnlocked(existingPNode, nil)
-	}
+
+	// same idea as in "updateStatusToPinged" above.
+	// We don't want to test pings for every sequence number change for a given node as that
+	// can lead to an explosion in the number of pings the crawler needs to do.
+	// So, remove the peer when the first ping fails. If the node becomes reachable later,
+	// we will discover it during a re-crawl and ping it again to test for reachability.
+	// we're not blacklisting this peer anyways.
+	cp.updateTopicsUnlocked(existingPNode, nil)
 }
 
 func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) {
@@ -74,11 +69,21 @@ func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) 
 
 	enodeID := node.ID()
 	existingPNode, ok := cp.byEnode[enodeID]
+
+	if ok && existingPNode.node == nil {
+		log.WithField("enodeId", enodeID).Error("enode is nil for enodeId")
+		cp.mu.Unlock()
+		return
+	}
+
+	// we don't want to update enodes with a lower sequence number as they're stale records
 	if ok && existingPNode.node.Seq() >= node.Seq() {
 		cp.mu.Unlock()
 		return
 	}
+
 	if !ok {
+		// this is a new peer
 		peerID, err := enodeToPeerID(node)
 		if err != nil {
 			log.WithError(err).WithField("node", node.ID()).Debug("Failed to convert enode to peer ID")
@@ -98,10 +103,13 @@ func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) 
 	}
 
 	cp.updateTopicsUnlocked(existingPNode, topics)
-	cp.mu.Unlock()
-	if len(topics) == 0 {
+
+	if existingPNode.isPinged || len(topics) == 0 {
+		cp.mu.Unlock()
 		return
 	}
+	cp.mu.Unlock()
+
 	select {
 	case cp.g.pingCh <- *node:
 	case <-cp.g.ctx.Done():
@@ -123,6 +131,10 @@ func (cp *crawledPeers) removeTopic(topic gossipsubcrawler.Topic) {
 	for peerID := range peers {
 		if pnode, exists := cp.byPeerId[peerID]; exists {
 			delete(pnode.topics, topic)
+			// remove the peer if it has no more topics left
+			if len(pnode.topics) == 0 {
+				cp.updateTopicsUnlocked(pnode, nil)
+			}
 		}
 	}
 
@@ -216,6 +228,9 @@ type GossipsubPeerCrawler struct {
 
 	topicExtractor gossipsubcrawler.TopicExtractor
 
+	peerFilter gossipsubcrawler.PeerFilterFunc
+	scorer     PeerScoreFunc
+
 	maxConcurrentPings int
 	pingCh             chan enode.Node
 	pingSemaphore      *semaphore.Weighted
@@ -224,12 +239,22 @@ type GossipsubPeerCrawler struct {
 	once sync.Once
 }
 
+// cleanupInterval controls how frequently we sweep crawled peers and prune
+// those that are no longer useful.
+const cleanupInterval = 5 * time.Minute
+
+// PeerScoreFunc provides a way to calculate a score for a given peer ID.
+// Higher scores should indicate better peers.
+type PeerScoreFunc func(peer.ID) float64
+
 func NewGossipsubPeerCrawler(
 	service *Service,
 	dv5 ListenerRebooter,
 	crawlTimeout time.Duration,
 	crawlInterval time.Duration,
 	maxConcurrentPings int,
+	peerFilter gossipsubcrawler.PeerFilterFunc,
+	scorer PeerScoreFunc,
 ) (*GossipsubPeerCrawler, error) {
 	if service == nil {
 		return nil, errors.New("service is nil")
@@ -246,6 +271,12 @@ func NewGossipsubPeerCrawler(
 	if maxConcurrentPings <= 0 {
 		return nil, errors.New("max concurrent pings must be greater than 0")
 	}
+	if peerFilter == nil {
+		return nil, errors.New("peer filter is nil")
+	}
+	if scorer == nil {
+		return nil, errors.New("peer scorer is nil")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g := &GossipsubPeerCrawler{
@@ -256,6 +287,8 @@ func NewGossipsubPeerCrawler(
 		service:            service,
 		dv5:                dv5,
 		maxConcurrentPings: maxConcurrentPings,
+		peerFilter:         peerFilter,
+		scorer:             scorer,
 	}
 	g.pingCh = make(chan enode.Node, 4*g.maxConcurrentPings)
 	g.pingSemaphore = semaphore.NewWeighted(int64(g.maxConcurrentPings))
@@ -283,17 +316,15 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 		if !ok {
 			continue
 		}
-		if peerNode.status == peerStatusPinged && g.service.filterPeer(peerNode.node) {
+		if peerNode.isPinged && g.peerFilter(peerNode.node) {
 			peerNodes = append(peerNodes, peerNode)
 		}
 	}
 
-	scorer := g.service.Peers().Scorers()
-
 	// Sort peerNodes in descending order of their scores.
 	sort.Slice(peerNodes, func(i, j int) bool {
-		scoreI := scorer.Score(peerNodes[i].peerID)
-		scoreJ := scorer.Score(peerNodes[j].peerID)
+		scoreI := g.scorer(peerNodes[i].peerID)
+		scoreJ := g.scorer(peerNodes[j].peerID)
 		return scoreI > scoreJ
 	})
 
@@ -326,6 +357,9 @@ func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
 		g.wg.Go(func() {
 			g.pingLoop()
 		})
+		g.wg.Go(func() {
+			g.cleanupLoop()
+		})
 	})
 
 	return nil
@@ -348,11 +382,11 @@ func (g *GossipsubPeerCrawler) pingLoop() {
 				defer g.pingSemaphore.Release(1)
 
 				if err := g.dv5.Ping(node); err != nil {
-					g.crawledPeers.removePeerOnPingFailure(node)
+					g.crawledPeers.removePeerOnPingFailure(node.ID())
 					return
 				}
 
-				g.crawledPeers.updateStatusToPinged(node)
+				g.crawledPeers.updateStatusToPinged(node.ID())
 			}(&node)
 
 		case <-g.ctx.Done():
@@ -398,7 +432,7 @@ func (g *GossipsubPeerCrawler) crawl() {
 			continue
 		}
 
-		if !g.service.filterPeer(node) {
+		if !g.peerFilter(node) {
 			g.crawledPeers.removePeer(node.ID())
 			continue
 		}
@@ -410,6 +444,57 @@ func (g *GossipsubPeerCrawler) crawl() {
 		}
 
 		g.crawledPeers.updateCrawledIfNewer(node, topics)
+	}
+}
+
+// cleanupLoop periodically removes peers that the filter rejects or that
+// have no topics of interest. It uses the same context lifecycle as other
+// background loops.
+func (g *GossipsubPeerCrawler) cleanupLoop() {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	// Initial cleanup to catch any leftovers from startup state
+	g.cleanup()
+
+	for {
+		select {
+		case <-ticker.C:
+			g.cleanup()
+		case <-g.ctx.Done():
+			return
+		}
+	}
+}
+
+// cleanup scans the crawled peer set and removes entries that either fail
+// the current peer filter or have no topics of interest remaining.
+func (g *GossipsubPeerCrawler) cleanup() {
+	cp := g.crawledPeers
+
+	// Snapshot current peers to evaluate without holding the lock during
+	// filter and topic extraction.
+	cp.mu.RLock()
+	peers := make([]*peerNode, 0, len(cp.byPeerId))
+	for _, p := range cp.byPeerId {
+		peers = append(peers, p)
+	}
+	cp.mu.RUnlock()
+
+	for _, p := range peers {
+		p := p
+
+		// Remove peers that no longer pass the filter
+		if !g.peerFilter(p.node) {
+			cp.removePeer(p.id)
+			continue
+		}
+
+		// Re-extract topics; if the extractor errors or yields none, drop the peer.
+		topics, err := g.topicExtractor(g.ctx, p.node)
+		if err != nil || len(topics) == 0 {
+			cp.removePeer(p.id)
+		}
 	}
 }
 

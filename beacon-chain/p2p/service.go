@@ -247,9 +247,15 @@ func (s *Service) Start() {
 
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
-		// Create the crawler using the local constructor, passing the service reference
-		crawler, err := NewGossipsubPeerCrawler(s, s.dv5Listener, crawlTimeout, crawlInterval,
-			maxConcurrentDials)
+		crawler, err := NewGossipsubPeerCrawler(
+			s,
+			s.dv5Listener,
+			crawlTimeout,
+			crawlInterval,
+			maxConcurrentDials,
+			gossipsubcrawler.PeerFilterFunc(s.filterPeer),
+			s.Peers().Scorers().Score,
+		)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to create peer crawler")
 			s.startupErr = err
