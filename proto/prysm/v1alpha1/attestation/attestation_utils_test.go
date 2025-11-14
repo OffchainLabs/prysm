@@ -217,8 +217,7 @@ func BenchmarkAttestingIndices_PartialCommittee(b *testing.B) {
 	bf := bitfield.Bitlist{0b11111111, 0b11111111, 0b10000111, 0b11111111, 0b100}
 	committee := []primitives.ValidatorIndex{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := attestation.AttestingIndices(&eth.Attestation{AggregationBits: bf}, committee)
 		require.NoError(b, err)
 	}
@@ -226,7 +225,7 @@ func BenchmarkAttestingIndices_PartialCommittee(b *testing.B) {
 
 func BenchmarkIsValidAttestationIndices(b *testing.B) {
 	indices := make([]uint64, params.BeaconConfig().MaxValidatorsPerCommittee)
-	for i := 0; i < len(indices); i++ {
+	for i := range indices {
 		indices[i] = uint64(i)
 	}
 	att := &eth.IndexedAttestation{
@@ -237,8 +236,8 @@ func BenchmarkIsValidAttestationIndices(b *testing.B) {
 		},
 		Signature: make([]byte, fieldparams.BLSSignatureLength),
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		if err := attestation.IsValidAttestationIndices(b.Context(), att, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 			require.NoError(b, err)
 		}
@@ -460,14 +459,14 @@ func BenchmarkAttDataIsEqual(b *testing.B) {
 
 	b.Run("fast", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			assert.Equal(b, true, attestation.AttDataIsEqual(attData1, attData2))
 		}
 	})
 
 	b.Run("proto.Equal", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			assert.Equal(b, true, attestation.AttDataIsEqual(attData1, attData2))
 		}
 	})

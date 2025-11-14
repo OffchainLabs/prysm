@@ -19,20 +19,20 @@ import (
 
 // AssertionTestingTB exposes enough testing.TB methods for assertions.
 type AssertionTestingTB interface {
-	Errorf(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
+	Errorf(format string, args ...any)
+	Fatalf(format string, args ...any)
 }
 
-type assertionLoggerFn func(string, ...interface{})
+type assertionLoggerFn func(string, ...any)
 
 func SprintfAssertionLoggerFn(s *string) assertionLoggerFn {
-	return func(ef string, eargs ...interface{}) {
+	return func(ef string, eargs ...any) {
 		*s = fmt.Sprintf(ef, eargs...)
 	}
 }
 
 // Equal compares values using comparison operator.
-func Equal(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...interface{}) {
+func Equal(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if expected != actual {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -41,7 +41,7 @@ func Equal(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...inte
 }
 
 // NotEqual compares values using comparison operator.
-func NotEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...interface{}) {
+func NotEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if expected == actual {
 		errMsg := parseMsg("Values are equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -50,7 +50,7 @@ func NotEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...i
 }
 
 // DeepEqual compares values using DeepEqual.
-func DeepEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...interface{}) {
+func DeepEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if !isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -68,7 +68,7 @@ var protobufPrivateFields = map[string]bool{
 	"state":     true,
 }
 
-func ProtobufPrettyDiff(a, b interface{}) string {
+func ProtobufPrettyDiff(a, b any) string {
 	d, _ := messagediff.DeepDiff(a, b)
 	var dstr []string
 	appendNotProto := func(path, str string) {
@@ -92,7 +92,7 @@ func ProtobufPrettyDiff(a, b interface{}) string {
 }
 
 // DeepNotEqual compares values using DeepEqual.
-func DeepNotEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...interface{}) {
+func DeepNotEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if isDeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -101,7 +101,7 @@ func DeepNotEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg 
 }
 
 // DeepSSZEqual compares values using ssz.DeepEqual.
-func DeepSSZEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...interface{}) {
+func DeepSSZEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if !equality.DeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are not equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -111,7 +111,7 @@ func DeepSSZEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg 
 }
 
 // DeepNotSSZEqual compares values using ssz.DeepEqual.
-func DeepNotSSZEqual(loggerFn assertionLoggerFn, expected, actual interface{}, msg ...interface{}) {
+func DeepNotSSZEqual(loggerFn assertionLoggerFn, expected, actual any, msg ...any) {
 	if equality.DeepEqual(expected, actual) {
 		errMsg := parseMsg("Values are equal", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -120,7 +120,7 @@ func DeepNotSSZEqual(loggerFn assertionLoggerFn, expected, actual interface{}, m
 }
 
 // StringContains checks whether a string contains specified substring. If flag is false, inverse is checked.
-func StringContains(loggerFn assertionLoggerFn, expected, actual string, flag bool, msg ...interface{}) {
+func StringContains(loggerFn assertionLoggerFn, expected, actual string, flag bool, msg ...any) {
 	if flag {
 		if !strings.Contains(actual, expected) {
 			errMsg := parseMsg("Expected substring is not found", msg...)
@@ -137,7 +137,7 @@ func StringContains(loggerFn assertionLoggerFn, expected, actual string, flag bo
 }
 
 // NoError asserts that error is nil.
-func NoError(loggerFn assertionLoggerFn, err error, msg ...interface{}) {
+func NoError(loggerFn assertionLoggerFn, err error, msg ...any) {
 	// reflect.ValueOf is needed for nil instances of custom types implementing Error
 	if err != nil && !reflect.ValueOf(err).IsNil() {
 		errMsg := parseMsg("Unexpected error", msg...)
@@ -148,7 +148,7 @@ func NoError(loggerFn assertionLoggerFn, err error, msg ...interface{}) {
 
 // ErrorIs uses Errors.Is to recursively unwrap err looking for target in the chain.
 // If any error in the chain matches target, the assertion will pass.
-func ErrorIs(loggerFn assertionLoggerFn, err, target error, msg ...interface{}) {
+func ErrorIs(loggerFn assertionLoggerFn, err, target error, msg ...any) {
 	if !errors.Is(err, target) {
 		errMsg := parseMsg(fmt.Sprintf("error %s", target), msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -157,7 +157,7 @@ func ErrorIs(loggerFn assertionLoggerFn, err, target error, msg ...interface{}) 
 }
 
 // ErrorContains asserts that actual error contains wanted message.
-func ErrorContains(loggerFn assertionLoggerFn, want string, err error, msg ...interface{}) {
+func ErrorContains(loggerFn assertionLoggerFn, want string, err error, msg ...any) {
 	if want == "" {
 		loggerFn("Want string can't be empty")
 	}
@@ -169,7 +169,7 @@ func ErrorContains(loggerFn assertionLoggerFn, want string, err error, msg ...in
 }
 
 // NotNil asserts that passed value is not nil.
-func NotNil(loggerFn assertionLoggerFn, obj interface{}, msg ...interface{}) {
+func NotNil(loggerFn assertionLoggerFn, obj any, msg ...any) {
 	if deepNil(obj) {
 		errMsg := parseMsg("Unexpected nil value", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -178,7 +178,7 @@ func NotNil(loggerFn assertionLoggerFn, obj interface{}, msg ...interface{}) {
 }
 
 // IsNil asserts that observed value is nil.
-func IsNil(loggerFn assertionLoggerFn, got interface{}, msg ...interface{}) {
+func IsNil(loggerFn assertionLoggerFn, got any, msg ...any) {
 	if !deepNil(got) {
 		errMsg := parseMsg("Value is unexpectedly not nil", msg...)
 		_, file, line, _ := runtime.Caller(2)
@@ -187,7 +187,7 @@ func IsNil(loggerFn assertionLoggerFn, got interface{}, msg ...interface{}) {
 }
 
 // deepNil checks that underlying value of obj is nil.
-func deepNil(got interface{}) bool {
+func deepNil(got any) bool {
 	if got == nil {
 		return true
 	}
@@ -200,7 +200,7 @@ func deepNil(got interface{}) bool {
 }
 
 // LogsContain checks whether a given substring is a part of logs. If flag=false, inverse is checked.
-func LogsContain(loggerFn assertionLoggerFn, hook *test.Hook, want string, flag bool, msg ...interface{}) {
+func LogsContain(loggerFn assertionLoggerFn, hook *test.Hook, want string, flag bool, msg ...any) {
 	_, file, line, _ := runtime.Caller(2)
 	entries := hook.AllEntries()
 	logs := make([]string, 0, len(entries))
@@ -236,7 +236,7 @@ func LogsContain(loggerFn assertionLoggerFn, hook *test.Hook, want string, flag 
 	}
 }
 
-func parseMsg(defaultMsg string, msg ...interface{}) string {
+func parseMsg(defaultMsg string, msg ...any) string {
 	if len(msg) >= 1 {
 		msgFormat, ok := msg[0].(string)
 		if !ok {
@@ -247,7 +247,7 @@ func parseMsg(defaultMsg string, msg ...interface{}) string {
 	return defaultMsg
 }
 
-func isDeepEqual(expected, actual interface{}) bool {
+func isDeepEqual(expected, actual any) bool {
 	_, isProto := expected.(proto.Message)
 	if isProto {
 		return proto.Equal(expected.(proto.Message), actual.(proto.Message))
@@ -257,7 +257,7 @@ func isDeepEqual(expected, actual interface{}) bool {
 
 // NotEmpty asserts that an object's fields are not empty. This function recursively checks each
 // pointer / struct field.
-func NotEmpty(loggerFn assertionLoggerFn, obj interface{}, msg ...interface{}) {
+func NotEmpty(loggerFn assertionLoggerFn, obj any, msg ...any) {
 	_, ignoreFieldsWithoutTags := obj.(proto.Message)
 	notEmpty(loggerFn, obj, ignoreFieldsWithoutTags, []string{} /*fields*/, 0 /*stackSize*/, msg...)
 }
@@ -265,7 +265,7 @@ func NotEmpty(loggerFn assertionLoggerFn, obj interface{}, msg ...interface{}) {
 // notEmpty checks all fields are not zero, including pointer field references to other structs.
 // This method has the option to ignore fields without struct tags, which is helpful for checking
 // protobuf messages that have internal fields.
-func notEmpty(loggerFn assertionLoggerFn, obj interface{}, ignoreFieldsWithoutTags bool, fields []string, stackSize int, msg ...interface{}) {
+func notEmpty(loggerFn assertionLoggerFn, obj any, ignoreFieldsWithoutTags bool, fields []string, stackSize int, msg ...any) {
 	var v reflect.Value
 	if vo, ok := obj.(reflect.Value); ok {
 		v = reflect.Indirect(vo)
@@ -333,11 +333,11 @@ type TBMock struct {
 }
 
 // Errorf writes testing logs to ErrorfMsg.
-func (tb *TBMock) Errorf(format string, args ...interface{}) {
+func (tb *TBMock) Errorf(format string, args ...any) {
 	tb.ErrorfMsg = fmt.Sprintf(format, args...)
 }
 
 // Fatalf writes testing logs to FatalfMsg.
-func (tb *TBMock) Fatalf(format string, args ...interface{}) {
+func (tb *TBMock) Fatalf(format string, args ...any) {
 	tb.FatalfMsg = fmt.Sprintf(format, args...)
 }

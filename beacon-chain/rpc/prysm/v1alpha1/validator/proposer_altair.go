@@ -71,12 +71,12 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 
 	subcommitteeCount := params.BeaconConfig().SyncCommitteeSubnetCount
 	var bitsHolder [][]byte
-	for i := uint64(0); i < subcommitteeCount; i++ {
+	for range subcommitteeCount {
 		bitsHolder = append(bitsHolder, ethpb.NewSyncCommitteeAggregationBits())
 	}
 	sigsHolder := make([]bls.Signature, 0, params.BeaconConfig().SyncCommitteeSize/subcommitteeCount)
 
-	for i := uint64(0); i < subcommitteeCount; i++ {
+	for i := range subcommitteeCount {
 		cs := proposerContributions.filterBySubIndex(i)
 		aggregates, err := synccontribution.Aggregate(cs)
 		if err != nil {
@@ -130,7 +130,7 @@ func (vs *Server) aggregatedSyncCommitteeMessages(
 	subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / subcommitteeCount
 	sigsPerSubcommittee := make([][][]byte, subcommitteeCount)
 	bitsPerSubcommittee := make([]bitfield.Bitfield, subcommitteeCount)
-	for i := uint64(0); i < subcommitteeCount; i++ {
+	for i := range subcommitteeCount {
 		sigsPerSubcommittee[i] = make([][]byte, 0, subcommitteeSize)
 		bitsPerSubcommittee[i] = ethpb.NewSyncCommitteeAggregationBits()
 	}
@@ -180,7 +180,7 @@ func (vs *Server) aggregatedSyncCommitteeMessages(
 
 	// Aggregate.
 	result := make([]*ethpb.SyncCommitteeContribution, 0, subcommitteeCount)
-	for i := uint64(0); i < subcommitteeCount; i++ {
+	for i := range subcommitteeCount {
 		aggregatedSig := make([]byte, 96)
 		aggregatedSig[0] = 0xC0
 		if len(sigsPerSubcommittee[i]) != 0 {

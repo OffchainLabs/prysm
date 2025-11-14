@@ -425,7 +425,7 @@ func TestService_ValidateSyncCommitteeMessage(t *testing.T) {
 				ReceivedFrom:  "",
 				ValidatorData: nil,
 			}
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				if !svc.chainIsStarted() {
 					time.Sleep(100 * time.Millisecond)
 				}
@@ -522,7 +522,7 @@ func TestService_rejectIncorrectSyncCommittee(t *testing.T) {
 			},
 			committeeIndices: []primitives.CommitteeIndex{0},
 			setupTopic: func(s *Service) string {
-				format := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.SyncCommitteeMessage{})]
+				format := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()]
 
 				digest, err := s.currentForkDigest()
 				require.NoError(t, err)

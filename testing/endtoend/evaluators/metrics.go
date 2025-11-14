@@ -90,7 +90,7 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	currentSlot := slots.CurrentSlot(genesis.Time())
 	currentEpoch := slots.ToEpoch(currentSlot)
 	forkDigest := params.ForkDigest(currentEpoch)
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
 			// Continue if the connection fails, regular flake.

@@ -352,7 +352,7 @@ func runDataColumnStep(t *testing.T,
 		} else {
 			numCells := len(kzgs)
 			column := make([][]byte, numCells)
-			for cellIndex := 0; cellIndex < numCells; cellIndex++ {
+			for cellIndex := range numCells {
 				cell := make([]byte, 2048)
 				cellStart := cellIndex * 2048
 				cellEnd := cellStart + 2048

@@ -165,7 +165,7 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
 	key := fmt.Sprintf("%#x", source.Root())
-	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
 		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
 

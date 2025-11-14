@@ -412,8 +412,7 @@ func BenchmarkHasBlockDB(b *testing.B) {
 	r, err := blk.Block.HashTreeRoot()
 	require.NoError(b, err)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, true, s.cfg.BeaconDB.HasBlock(ctx, r), "Block is not in DB")
 	}
 }
@@ -432,8 +431,7 @@ func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, true, s.cfg.ForkChoiceStore.HasNode(r), "Block is not in fork choice store")
 	}
 }

@@ -16,7 +16,7 @@ func TestFuzzProcessDeposits_10000(t *testing.T) {
 	state := &ethpb.BeaconStateElectra{}
 	deposits := make([]*ethpb.Deposit, 100)
 	ctx := t.Context()
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		for i := range deposits {
 			fuzzer.Fuzz(deposits[i])
@@ -36,7 +36,7 @@ func TestFuzzProcessDeposit_10000(t *testing.T) {
 	state := &ethpb.BeaconStateElectra{}
 	deposit := &ethpb.Deposit{}
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
 		s, err := state_native.InitializeFromProtoUnsafeElectra(state)

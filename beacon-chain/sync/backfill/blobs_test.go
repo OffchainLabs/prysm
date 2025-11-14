@@ -16,7 +16,7 @@ import (
 func testBlobGen(t *testing.T, start primitives.Slot, n int) ([]blocks.ROBlock, [][]blocks.ROBlob) {
 	blks := make([]blocks.ROBlock, n)
 	blobs := make([][]blocks.ROBlob, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		bk, bl := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, start+primitives.Slot(i), 3)
 		blks[i] = bk
 		blobs[i] = bl

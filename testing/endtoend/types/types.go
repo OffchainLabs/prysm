@@ -184,7 +184,7 @@ type MultipleComponentRunners interface {
 type EngineProxy interface {
 	ComponentRunner
 	// AddRequestInterceptor adds in a json-rpc request interceptor.
-	AddRequestInterceptor(rpcMethodName string, responseGen func() interface{}, trigger func() bool)
+	AddRequestInterceptor(rpcMethodName string, responseGen func() any, trigger func() bool)
 	// RemoveRequestInterceptor removes the request interceptor for the provided method.
 	RemoveRequestInterceptor(rpcMethodName string)
 	// ReleaseBackedUpRequests releases backed up http requests.

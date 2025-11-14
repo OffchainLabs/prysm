@@ -101,7 +101,7 @@ func EmptyMinSpanChunksSlice(params *Parameters) *MinSpanChunksSlice {
 		params: params,
 	}
 	data := make([]uint16, params.chunkSize*params.validatorChunkSize)
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		data[i] = m.NeutralElement()
 	}
 	m.data = data
@@ -116,7 +116,7 @@ func EmptyMaxSpanChunksSlice(params *Parameters) *MaxSpanChunksSlice {
 		params: params,
 	}
 	data := make([]uint16, params.chunkSize*params.validatorChunkSize)
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		data[i] = m.NeutralElement()
 	}
 	m.data = data

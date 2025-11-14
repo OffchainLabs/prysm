@@ -75,12 +75,12 @@ type encryptedKeyJSON struct {
 }
 
 type cryptoJSON struct {
-	Cipher       string                 `json:"cipher"`
-	CipherText   string                 `json:"ciphertext"`
-	CipherParams cipherparamsJSON       `json:"cipherparams"`
-	KDF          string                 `json:"kdf"`
-	KDFParams    map[string]interface{} `json:"kdfparams"`
-	MAC          string                 `json:"mac"`
+	Cipher       string           `json:"cipher"`
+	CipherText   string           `json:"ciphertext"`
+	CipherParams cipherparamsJSON `json:"cipherparams"`
+	KDF          string           `json:"kdf"`
+	KDFParams    map[string]any   `json:"kdfparams"`
+	MAC          string           `json:"mac"`
 }
 
 type cipherparamsJSON struct {

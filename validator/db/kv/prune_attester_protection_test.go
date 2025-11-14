@@ -41,7 +41,7 @@ func TestPruneAttestations_NoPruning(t *testing.T) {
 func TestPruneAttestations_OK(t *testing.T) {
 	numKeys := uint64(64)
 	pks := make([][fieldparams.BLSPubkeyLength]byte, 0, numKeys)
-	for i := uint64(0); i < numKeys; i++ {
+	for i := range numKeys {
 		pks = append(pks, bytesutil.ToBytes48(bytesutil.ToBytes(i, 48)))
 	}
 	validatorDB := setupDB(t, pks)
@@ -90,7 +90,7 @@ func TestPruneAttestations_OK(t *testing.T) {
 func BenchmarkPruneAttestations(b *testing.B) {
 	numKeys := uint64(8)
 	pks := make([][fieldparams.BLSPubkeyLength]byte, 0, numKeys)
-	for i := uint64(0); i < numKeys; i++ {
+	for i := range numKeys {
 		pks = append(pks, bytesutil.ToBytes48(bytesutil.ToBytes(i, 48)))
 	}
 	validatorDB := setupDB(b, pks)
@@ -99,8 +99,7 @@ func BenchmarkPruneAttestations(b *testing.B) {
 	// since genesis to SLASHING_PROTECTION_PRUNING_EPOCHS * 20.
 	numEpochs := params.BeaconConfig().SlashingProtectionPruningEpochs * 20
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		for _, pk := range pks {
 			require.NoError(b, setupAttestationsForEveryEpoch(validatorDB, pk, numEpochs))
@@ -128,7 +127,7 @@ func setupAttestationsForEveryEpoch(validatorDB *Store, pubKey [48]byte, numEpoc
 		if err != nil {
 			return err
 		}
-		for sourceEpoch := primitives.Epoch(0); sourceEpoch < numEpochs; sourceEpoch++ {
+		for sourceEpoch := range numEpochs {
 			targetEpoch := sourceEpoch + 1
 			targetEpochBytes := bytesutil.EpochToBytesBigEndian(targetEpoch)
 			sourceEpochBytes := bytesutil.EpochToBytesBigEndian(sourceEpoch)

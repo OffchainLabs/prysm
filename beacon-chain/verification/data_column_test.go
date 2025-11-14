@@ -28,8 +28,8 @@ func GenerateTestDataColumns(t *testing.T, parent [fieldparams.RootLength]byte, 
 		blobs = append(blobs, kzg.Blob(roBlobs[i].Blob))
 	}
 
-	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
-	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(roBlock))
+	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
 	require.NoError(t, err)
 
 	return roDataColumnSidecars

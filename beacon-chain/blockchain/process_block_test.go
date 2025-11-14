@@ -147,7 +147,7 @@ func TestStore_OnBlockBatch(t *testing.T) {
 	bState := st.Copy()
 
 	var blks []consensusblocks.ROBlock
-	for i := 0; i < 97; i++ {
+	for i := range 97 {
 		b, err := util.GenerateFullBlock(bState, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
 		require.NoError(t, err)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(b)
@@ -1323,7 +1323,7 @@ func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 	require.NoError(t, err)
 
 	logHook := logTest.NewGlobal()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		fc := &ethpb.Checkpoint{}
 		st, blkRoot, err := prepareForkchoiceState(ctx, 0, wsb1.Block().ParentRoot(), [32]byte{}, [32]byte{}, fc, fc)
 		require.NoError(t, err)
@@ -1949,7 +1949,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.Equal(t, true, optimistic)
 
 	// Check that the invalid blocks are not in database
-	for i := 0; i < 19-13; i++ {
+	for i := range 19 - 13 {
 		require.Equal(t, false, service.cfg.BeaconDB.HasBlock(ctx, invalidRoots[i]))
 	}
 
@@ -2879,7 +2879,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 
 				// set a better sync aggregate
 				scb := make([]byte, 64)
-				for i := 0; i < 5; i++ {
+				for i := range 5 {
 					scb[i] = 0x01
 				}
 				oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{

@@ -44,7 +44,7 @@ func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpe
 			entry.setDiskSummary(sum)
 		}
 		expected := make([]blocks.ROBlob, 0, nBlobs)
-		for i := 0; i < len(commits); i++ {
+		for i := range commits {
 			if entry.diskSummary.HasIndex(uint64(i)) {
 				continue
 			}

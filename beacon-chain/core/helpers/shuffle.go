@@ -23,7 +23,7 @@ var maxShuffleListSize uint64 = 1 << 40
 func SplitIndices(l []uint64, n uint64) [][]uint64 {
 	var divided [][]uint64
 	var lSize = uint64(len(l))
-	for i := uint64(0); i < n; i++ {
+	for i := range n {
 		start := slice.SplitOffset(lSize, n, i)
 		end := slice.SplitOffset(lSize, n, i+1)
 		divided = append(divided, l[start:end])
@@ -103,10 +103,7 @@ func ComputeShuffledIndex(index primitives.ValidatorIndex, indexCount uint64, se
 		pivot := hash8Int % indexCount
 		flip := (pivot + indexCount - uint64(index)) % indexCount
 		// Consider every pair only once by picking the highest pair index to retrieve randomness.
-		position := uint64(index)
-		if flip > position {
-			position = flip
-		}
+		position := max(flip, uint64(index))
 		// Add position except its last byte to []buf for randomness,
 		// it will be used later to select a bit from the resulting hash.
 		binary.LittleEndian.PutUint64(posBuffer[:8], position>>8)

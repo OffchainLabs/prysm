@@ -191,9 +191,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		// Set eth1 data.
 		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
@@ -233,7 +231,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
-	}()
+	})
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
@@ -413,13 +411,13 @@ func (vs *Server) handleUnblindedBlock(
 
 	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
-		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
 		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(block))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "data column sidcars")
 		}

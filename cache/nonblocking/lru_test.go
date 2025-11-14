@@ -18,7 +18,7 @@ func TestLRU_Concurrency(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*2)
 	defer cancel()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		go func(j int) {
 			for {
 				if ctx.Err() != nil {
@@ -43,7 +43,7 @@ func TestLRU_Eviction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		cache.Add(i, i)
 		cache.Get(i)
 	}

@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-func UnmarshalFromURL(ctx context.Context, from string, to interface{}) error {
+func UnmarshalFromURL(ctx context.Context, from string, to any) error {
 	u, err := url.ParseRequestURI(from)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func UnmarshalFromURL(ctx context.Context, from string, to interface{}) error {
 	return nil
 }
 
-func UnmarshalFromFile(from string, to interface{}) error {
+func UnmarshalFromFile(from string, to any) error {
 	cleanpath := filepath.Clean(from)
 	b, err := os.ReadFile(cleanpath)
 	if err != nil {

@@ -142,7 +142,7 @@ func computeRanges(hbns []hashBlockNumber) []byRangeReq {
 	ranges := make([]byRangeReq, 0)
 	start := hbns[0].n
 	count := uint64(0)
-	for i := 0; i < len(hbns); i++ {
+	for i := range hbns {
 		if hbns[i].n == start+count {
 			count++
 			continue

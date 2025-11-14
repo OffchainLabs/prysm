@@ -15,15 +15,15 @@ func RunSSZStaticTests(t *testing.T, config string) {
 	common.RunSSZStaticTests(t, config, "gloas", unmarshalledSSZ, customHtr)
 }
 
-func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
+func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	// TODO: Add custom HTR for BeaconStateGloas when state-native support is implemented
 	// For now, only use the default fastssz HTR methods
 	return htrs
 }
 
 // unmarshalledSSZ unmarshalls serialized input.
-func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (interface{}, error) {
-	var obj interface{}
+func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (any, error) {
+	var obj any
 
 	switch folderName {
 	// Gloas specific types

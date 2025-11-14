@@ -230,6 +230,17 @@ var (
 			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
 		},
 	)
+
+	// Custody earliest available slot metrics
+	earliestAvailableSlotP2P = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "custody_earliest_available_slot_p2p",
+		Help: "The earliest available slot tracked by the p2p service for custody purposes",
+	})
+
+	earliestAvailableSlotDB = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "custody_earliest_available_slot_db",
+		Help: "The earliest available slot tracked by the database for custody purposes",
+	})
 )
 
 func (s *Service) updateMetrics() {
@@ -245,8 +256,8 @@ func (s *Service) updateMetrics() {
 	}
 	indices := aggregatorSubnetIndices(s.cfg.clock.CurrentSlot())
 	syncIndices := cache.SyncSubnetIDs.GetAllSubnets(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
-	attTopic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.Attestation{})]
-	syncTopic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})]
+	attTopic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.Attestation]()]
+	syncTopic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.SyncCommitteeMessage]()]
 	attTopic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	syncTopic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	if flags.Get().SubscribeToAllSubnets {

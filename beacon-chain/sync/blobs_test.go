@@ -53,8 +53,8 @@ type blobsTestCase struct {
 }
 
 type testHandler func(s *Service) rpcHandler
-type expectedDefiner func(t *testing.T, scs []blocks.ROBlob, req interface{}) []*expectedBlobChunk
-type requestFromSidecars func([]blocks.ROBlob) interface{}
+type expectedDefiner func(t *testing.T, scs []blocks.ROBlob, req any) []*expectedBlobChunk
+type requestFromSidecars func([]blocks.ROBlob) any
 type oldestSlotCallback func(t *testing.T) types.Slot
 type expectedRequirer func(*testing.T, *Service, []*expectedBlobChunk) func(network.Stream)
 

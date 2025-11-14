@@ -198,7 +198,7 @@ func (d *Depositor) SendAndMineByBatch(ctx context.Context, offset, nvals, batch
 	}
 	numBatch := len(deposits) / batchSize
 	log.WithField("numDeposits", len(deposits)).WithField("batchSize", batchSize).WithField("numBatches", numBatch).WithField("balance", balance.String()).WithField("account", d.Key.Address.Hex()).Info("SendAndMineByBatch check")
-	for i := 0; i < numBatch; i++ {
+	for i := range numBatch {
 		txo, err := d.txops(ctx)
 		if err != nil {
 			return err

@@ -381,7 +381,7 @@ func TestService_Stop_ConcurrentGoodbyeMessages(t *testing.T) {
 	testPeers := make([]*p2ptest.TestP2P, numPeers)
 
 	// Create and connect multiple peers
-	for i := 0; i < numPeers; i++ {
+	for i := range numPeers {
 		testPeers[i] = p2ptest.NewTestP2P(t)
 		p1.Connect(testPeers[i])
 		// Register peer in the peer status
@@ -419,7 +419,7 @@ func TestService_Stop_ConcurrentGoodbyeMessages(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numPeers)
 
-	for i := 0; i < numPeers; i++ {
+	for i := range numPeers {
 		idx := i // capture loop variable
 		testPeers[idx].BHost.SetStreamHandler(pcl, func(stream network.Stream) {
 			defer wg.Done()

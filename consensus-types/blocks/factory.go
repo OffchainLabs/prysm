@@ -30,7 +30,7 @@ var (
 )
 
 // NewSignedBeaconBlock creates a signed beacon block from a protobuf signed beacon block.
-func NewSignedBeaconBlock(i interface{}) (interfaces.SignedBeaconBlock, error) {
+func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 	switch b := i.(type) {
 	case nil:
 		return nil, ErrNilObject
@@ -88,7 +88,7 @@ func NewSignedBeaconBlock(i interface{}) (interfaces.SignedBeaconBlock, error) {
 }
 
 // NewBeaconBlock creates a beacon block from a protobuf beacon block.
-func NewBeaconBlock(i interface{}) (interfaces.ReadOnlyBeaconBlock, error) {
+func NewBeaconBlock(i any) (interfaces.ReadOnlyBeaconBlock, error) {
 	switch b := i.(type) {
 	case nil:
 		return nil, ErrNilObject
@@ -144,7 +144,7 @@ func NewBeaconBlock(i interface{}) (interfaces.ReadOnlyBeaconBlock, error) {
 }
 
 // NewBeaconBlockBody creates a beacon block body from a protobuf beacon block body.
-func NewBeaconBlockBody(i interface{}) (interfaces.ReadOnlyBeaconBlockBody, error) {
+func NewBeaconBlockBody(i any) (interfaces.ReadOnlyBeaconBlockBody, error) {
 	switch b := i.(type) {
 	case nil:
 		return nil, ErrNilObject
@@ -265,7 +265,7 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 	}
 }
 
-func getWrappedPayload(payload interface{}) (wrappedPayload interfaces.ExecutionData, wrapErr error) {
+func getWrappedPayload(payload any) (wrappedPayload interfaces.ExecutionData, wrapErr error) {
 	switch p := payload.(type) {
 	case *enginev1.ExecutionPayload:
 		wrappedPayload, wrapErr = WrappedExecutionPayload(p)
@@ -308,7 +308,7 @@ func checkPayloadAgainstHeader(wrappedPayload, payloadHeader interfaces.Executio
 // BuildSignedBeaconBlockFromExecutionPayload takes a signed, blinded beacon block and converts into
 // a full, signed beacon block by specifying an execution payload.
 // nolint:gocognit
-func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBeaconBlock, payload interface{}) (interfaces.SignedBeaconBlock, error) {
+func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBeaconBlock, payload any) (interfaces.SignedBeaconBlock, error) {
 	if err := BeaconBlockIsNil(blk); err != nil {
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 	graffiti := b.Body().Graffiti()
 	sig := blk.Signature()
 
-	var fullBlock interface{}
+	var fullBlock any
 	switch blk.Version() {
 	case version.Bellatrix:
 		p, ok := payload.(*enginev1.ExecutionPayload)

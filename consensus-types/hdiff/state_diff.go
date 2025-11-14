@@ -752,7 +752,7 @@ func (ret *stateDiff) readProposerLookahead(data *[]byte) error {
 	// Read the proposer lookahead (2 * SlotsPerEpoch uint64 values)
 	numProposers := 2 * fieldparams.SlotsPerEpoch
 	ret.proposerLookahead = make([]uint64, numProposers)
-	for i := 0; i < numProposers; i++ {
+	for i := range numProposers {
 		ret.proposerLookahead[i] = binary.LittleEndian.Uint64((*data)[i*8 : (i+1)*8])
 	}
 	*data = (*data)[proposerLookaheadLength:]

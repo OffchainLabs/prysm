@@ -24,7 +24,7 @@ func EpochAttestationsRoot(atts []*ethpb.PendingAttestation) ([32]byte, error) {
 	}
 
 	roots := make([][32]byte, len(atts))
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		pendingRoot, err := pendingAttestationRoot(atts[i])
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "could not attestation merkleization")

@@ -209,16 +209,14 @@ func TestService_GetAttPreState_Concurrency(t *testing.T) {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1000)
 
-	for i := 0; i < 1000; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 1000 {
+		wg.Go(func() {
 			cp1 := &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}
 			_, err := service.getAttPreState(ctx, cp1)
 			if err != nil {
 				errChan <- err
 			}
-		}()
+		})
 	}
 
 	go func() {

@@ -42,7 +42,7 @@ func (m MetadataV0) CustodyGroupCount() uint64 {
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
-func (m MetadataV0) InnerObject() interface{} {
+func (m MetadataV0) InnerObject() any {
 	return m.md
 }
 
@@ -136,7 +136,7 @@ func (m MetadataV1) CustodyGroupCount() uint64 {
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
-func (m MetadataV1) InnerObject() interface{} {
+func (m MetadataV1) InnerObject() any {
 	return m.md
 }
 
@@ -230,7 +230,7 @@ func (m MetadataV2) CustodyGroupCount() uint64 {
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
-func (m MetadataV2) InnerObject() interface{} {
+func (m MetadataV2) InnerObject() any {
 	return m.md
 }
 

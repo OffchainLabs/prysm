@@ -20,9 +20,9 @@ import (
 func Test_Equal(t *testing.T) {
 	type args struct {
 		tb       *assertions.TBMock
-		expected interface{}
-		actual   interface{}
-		msgs     []interface{}
+		expected any
+		actual   any
+		msgs     []any
 	}
 	tests := []struct {
 		name        string
@@ -61,7 +61,7 @@ func Test_Equal(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: 42,
 				actual:   41,
-				msgs:     []interface{}{"Custom values are not equal"},
+				msgs:     []any{"Custom values are not equal"},
 			},
 			expectedErr: "Custom values are not equal, want: 42 (int), got: 41 (int)",
 		},
@@ -71,7 +71,7 @@ func Test_Equal(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: 42,
 				actual:   41,
-				msgs:     []interface{}{"Custom values are not equal (for slot %d)", 12},
+				msgs:     []any{"Custom values are not equal (for slot %d)", 12},
 			},
 			expectedErr: "Custom values are not equal (for slot 12), want: 42 (int), got: 41 (int)",
 		},
@@ -98,9 +98,9 @@ func Test_Equal(t *testing.T) {
 func Test_NotEqual(t *testing.T) {
 	type args struct {
 		tb       *assertions.TBMock
-		expected interface{}
-		actual   interface{}
-		msgs     []interface{}
+		expected any
+		actual   any
+		msgs     []any
 	}
 	tests := []struct {
 		name        string
@@ -138,7 +138,7 @@ func Test_NotEqual(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: 42,
 				actual:   42,
-				msgs:     []interface{}{"Custom values are equal"},
+				msgs:     []any{"Custom values are equal"},
 			},
 			expectedErr: "Custom values are equal, both values are equal",
 		},
@@ -165,9 +165,9 @@ func Test_NotEqual(t *testing.T) {
 func TestAssert_DeepEqual(t *testing.T) {
 	type args struct {
 		tb       *assertions.TBMock
-		expected interface{}
-		actual   interface{}
-		msgs     []interface{}
+		expected any
+		actual   any
+		msgs     []any
 	}
 	tests := []struct {
 		name        string
@@ -197,7 +197,7 @@ func TestAssert_DeepEqual(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: struct{ i int }{42},
 				actual:   struct{ i int }{41},
-				msgs:     []interface{}{"Custom values are not equal"},
+				msgs:     []any{"Custom values are not equal"},
 			},
 			expectedErr: "Custom values are not equal, expected != actual, diff:   struct{ i int }{\n- \ti: 42,\n+ \ti: 41,\n  }",
 		},
@@ -207,7 +207,7 @@ func TestAssert_DeepEqual(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: struct{ i int }{42},
 				actual:   struct{ i int }{41},
-				msgs:     []interface{}{"Custom values are not equal (for slot %d)", 12},
+				msgs:     []any{"Custom values are not equal (for slot %d)", 12},
 			},
 			expectedErr: "Custom values are not equal (for slot 12), expected != actual, diff:   struct{ i int }{\n- \ti: 42,\n+ \ti: 41,\n  }\n",
 		},
@@ -249,9 +249,9 @@ func TestAssert_DeepEqual(t *testing.T) {
 func TestAssert_DeepNotEqual(t *testing.T) {
 	type args struct {
 		tb       *assertions.TBMock
-		expected interface{}
-		actual   interface{}
-		msgs     []interface{}
+		expected any
+		actual   any
+		msgs     []any
 	}
 	tests := []struct {
 		name        string
@@ -281,7 +281,7 @@ func TestAssert_DeepNotEqual(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: struct{ i int }{42},
 				actual:   struct{ i int }{42},
-				msgs:     []interface{}{"Custom values are equal"},
+				msgs:     []any{"Custom values are equal"},
 			},
 			expectedErr: "Custom values are equal, want: struct { i int }{i:42}, got: struct { i int }{i:42}",
 		},
@@ -291,7 +291,7 @@ func TestAssert_DeepNotEqual(t *testing.T) {
 				tb:       &assertions.TBMock{},
 				expected: struct{ i int }{42},
 				actual:   struct{ i int }{42},
-				msgs:     []interface{}{"Custom values are equal (for slot %d)", 12},
+				msgs:     []any{"Custom values are equal (for slot %d)", 12},
 			},
 			expectedErr: "Custom values are equal (for slot 12), want: struct { i int }{i:42}, got: struct { i int }{i:42}",
 		},
@@ -318,8 +318,8 @@ func TestAssert_DeepNotEqual(t *testing.T) {
 func TestAssert_DeepSSZEqual(t *testing.T) {
 	type args struct {
 		tb       *assertions.TBMock
-		expected interface{}
-		actual   interface{}
+		expected any
+		actual   any
 	}
 	tests := []struct {
 		name           string
@@ -380,8 +380,8 @@ func TestAssert_DeepSSZEqual(t *testing.T) {
 func TestAssert_DeepNotSSZEqual(t *testing.T) {
 	type args struct {
 		tb       *assertions.TBMock
-		expected interface{}
-		actual   interface{}
+		expected any
+		actual   any
 	}
 	tests := []struct {
 		name           string
@@ -443,7 +443,7 @@ func TestAssert_NoError(t *testing.T) {
 	type args struct {
 		tb   *assertions.TBMock
 		err  error
-		msgs []interface{}
+		msgs []any
 	}
 	tests := []struct {
 		name        string
@@ -469,7 +469,7 @@ func TestAssert_NoError(t *testing.T) {
 			args: args{
 				tb:   &assertions.TBMock{},
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Custom error message"},
+				msgs: []any{"Custom error message"},
 			},
 			expectedErr: "Custom error message: failed",
 		},
@@ -478,7 +478,7 @@ func TestAssert_NoError(t *testing.T) {
 			args: args{
 				tb:   &assertions.TBMock{},
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Custom error message (for slot %d)", 12},
+				msgs: []any{"Custom error message (for slot %d)", 12},
 			},
 			expectedErr: "Custom error message (for slot 12): failed",
 		},
@@ -507,7 +507,7 @@ func TestAssert_ErrorContains(t *testing.T) {
 		tb   *assertions.TBMock
 		want string
 		err  error
-		msgs []interface{}
+		msgs []any
 	}
 	tests := []struct {
 		name        string
@@ -546,7 +546,7 @@ func TestAssert_ErrorContains(t *testing.T) {
 				tb:   &assertions.TBMock{},
 				want: "another error",
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Something wrong"},
+				msgs: []any{"Something wrong"},
 			},
 			expectedErr: "Something wrong, got: failed, want: another error",
 		},
@@ -556,7 +556,7 @@ func TestAssert_ErrorContains(t *testing.T) {
 				tb:   &assertions.TBMock{},
 				want: "failed",
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Something wrong"},
+				msgs: []any{"Something wrong"},
 			},
 			expectedErr: "",
 		},
@@ -566,7 +566,7 @@ func TestAssert_ErrorContains(t *testing.T) {
 				tb:   &assertions.TBMock{},
 				want: "another error",
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Something wrong (for slot %d)", 12},
+				msgs: []any{"Something wrong (for slot %d)", 12},
 			},
 			expectedErr: "Something wrong (for slot 12), got: failed, want: another error",
 		},
@@ -576,7 +576,7 @@ func TestAssert_ErrorContains(t *testing.T) {
 				tb:   &assertions.TBMock{},
 				want: "failed",
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Something wrong (for slot %d)", 12},
+				msgs: []any{"Something wrong (for slot %d)", 12},
 			},
 			expectedErr: "",
 		},
@@ -586,7 +586,7 @@ func TestAssert_ErrorContains(t *testing.T) {
 				tb:   &assertions.TBMock{},
 				want: "",
 				err:  errors.New("failed"),
-				msgs: []interface{}{"Something wrong (for slot %d)", 12},
+				msgs: []any{"Something wrong (for slot %d)", 12},
 			},
 			expectedErr: "Want string can't be empty",
 		},
@@ -613,8 +613,8 @@ func TestAssert_ErrorContains(t *testing.T) {
 func Test_NotNil(t *testing.T) {
 	type args struct {
 		tb   *assertions.TBMock
-		obj  interface{}
-		msgs []interface{}
+		obj  any
+		msgs []any
 	}
 	var nilBlock *eth.SignedBeaconBlock = nil
 	tests := []struct {
@@ -633,7 +633,7 @@ func Test_NotNil(t *testing.T) {
 			name: "nil custom message",
 			args: args{
 				tb:   &assertions.TBMock{},
-				msgs: []interface{}{"This should not be nil"},
+				msgs: []any{"This should not be nil"},
 			},
 			expectedErr: "This should not be nil",
 		},
@@ -641,7 +641,7 @@ func Test_NotNil(t *testing.T) {
 			name: "nil custom message with params",
 			args: args{
 				tb:   &assertions.TBMock{},
-				msgs: []interface{}{"This should not be nil (for slot %d)", 12},
+				msgs: []any{"This should not be nil (for slot %d)", 12},
 			},
 			expectedErr: "This should not be nil (for slot 12)",
 		},
@@ -693,7 +693,7 @@ func Test_LogsContainDoNotContain(t *testing.T) {
 		tb   *assertions.TBMock
 		want string
 		flag bool
-		msgs []interface{}
+		msgs []any
 	}
 	tests := []struct {
 		name        string
@@ -726,7 +726,7 @@ func Test_LogsContainDoNotContain(t *testing.T) {
 			name: "should contain not found custom message",
 			args: args{
 				tb:   &assertions.TBMock{},
-				msgs: []interface{}{"Waited for logs"},
+				msgs: []any{"Waited for logs"},
 				want: "here goes some expected log string",
 				flag: true,
 			},
@@ -736,7 +736,7 @@ func Test_LogsContainDoNotContain(t *testing.T) {
 			name: "should contain not found custom message with params",
 			args: args{
 				tb:   &assertions.TBMock{},
-				msgs: []interface{}{"Waited for %d logs", 10},
+				msgs: []any{"Waited for %d logs", 10},
 				want: "here goes some expected log string",
 				flag: true,
 			},
@@ -765,7 +765,7 @@ func Test_LogsContainDoNotContain(t *testing.T) {
 			name: "should not contain but found custom message",
 			args: args{
 				tb:   &assertions.TBMock{},
-				msgs: []interface{}{"Dit not expect logs"},
+				msgs: []any{"Dit not expect logs"},
 				want: "here goes some unexpected log string",
 			},
 			updateLogs: func(log *logrus.Logger) {
@@ -777,7 +777,7 @@ func Test_LogsContainDoNotContain(t *testing.T) {
 			name: "should not contain but found custom message with params",
 			args: args{
 				tb:   &assertions.TBMock{},
-				msgs: []interface{}{"Dit not expect %d logs", 10},
+				msgs: []any{"Dit not expect %d logs", 10},
 				want: "here goes some unexpected log string",
 			},
 			updateLogs: func(log *logrus.Logger) {
@@ -824,9 +824,9 @@ func Test_LogsContainDoNotContain(t *testing.T) {
 func TestAssert_NotEmpty(t *testing.T) {
 	type args struct {
 		tb     *assertions.TBMock
-		input  interface{}
-		actual interface{}
-		msgs   []interface{}
+		input  any
+		actual any
+		msgs   []any
 	}
 	tests := []struct {
 		name        string

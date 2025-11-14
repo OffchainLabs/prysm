@@ -749,7 +749,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		wantedSubnets[subnet] = true
 	}
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.Attestation{})]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
 
 	// Map of peers in subnets
 	peerMap := make(map[peer.ID]bool)

@@ -184,7 +184,7 @@ func TestBeaconProposerIndex_OK(t *testing.T) {
 	c.MinGenesisActiveValidatorCount = 16384
 	params.OverrideBeaconConfig(c)
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount/8)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
@@ -241,7 +241,7 @@ func TestBeaconProposerIndex_BadState(t *testing.T) {
 	c.MinGenesisActiveValidatorCount = 16384
 	params.OverrideBeaconConfig(c)
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount/8)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
@@ -270,7 +270,7 @@ func TestComputeProposerIndex_Compatibility(t *testing.T) {
 	helpers.ClearCache()
 
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
@@ -322,7 +322,7 @@ func TestActiveValidatorCount_Genesis(t *testing.T) {
 
 	c := 1000
 	validators := make([]*ethpb.Validator, c)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
@@ -357,7 +357,7 @@ func TestChurnLimit_OK(t *testing.T) {
 		helpers.ClearCache()
 
 		validators := make([]*ethpb.Validator, test.validatorCount)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			validators[i] = &ethpb.Validator{
 				ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 			}
@@ -861,7 +861,7 @@ func TestLastActivatedValidatorIndex_OK(t *testing.T) {
 
 	validators := make([]*ethpb.Validator, 4)
 	balances := make([]uint64, len(validators))
-	for i := uint64(0); i < 4; i++ {
+	for i := range uint64(4) {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, params.BeaconConfig().BLSPubkeyLength),
 			WithdrawalCredentials: make([]byte, 32),

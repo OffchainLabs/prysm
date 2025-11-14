@@ -17,6 +17,7 @@ go_library(
         "sync_committee.go",
         "validator.go",
         "wait_for_activation.go",
+        "wait_helpers.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/validator/client",
     visibility = [
@@ -115,6 +116,7 @@ go_test(
         "sync_committee_test.go",
         "validator_test.go",
         "wait_for_activation_test.go",
+        "wait_helpers_test.go",
     ],
     data = [
         "@eip3076_spec_tests//:test_data",

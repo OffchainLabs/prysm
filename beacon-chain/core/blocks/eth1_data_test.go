@@ -19,7 +19,7 @@ import (
 
 func FakeDeposits(n uint64) []*ethpb.Eth1Data {
 	deposits := make([]*ethpb.Eth1Data, n)
-	for i := uint64(0); i < n; i++ {
+	for i := range n {
 		deposits[i] = &ethpb.Eth1Data{
 			DepositCount: 1,
 			DepositRoot:  bytesutil.PadTo([]byte("root"), 32),
@@ -175,7 +175,7 @@ func TestProcessEth1Data_SetsCorrectly(t *testing.T) {
 	}
 
 	period := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod)))
-	for i := uint64(0); i < period; i++ {
+	for range period {
 		processedState, err := blocks.ProcessEth1DataInBlock(t.Context(), beaconState, b.Block.Body.Eth1Data)
 		require.NoError(t, err)
 		require.Equal(t, true, processedState.Version() == version.Phase0)

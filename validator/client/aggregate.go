@@ -4,20 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
-	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
@@ -210,32 +207,7 @@ func (v *validator) signSlotWithSelectionProof(ctx context.Context, pubKey [fiel
 // such that any attestations from this slot have time to reach the beacon node
 // before creating the aggregated attestation.
 func (v *validator) waitToSlotTwoThirds(ctx context.Context, slot primitives.Slot) {
-	ctx, span := trace.StartSpan(ctx, "validator.waitToSlotTwoThirds")
-	defer span.End()
-
-	oneThird := slots.DivideSlotBy(3 /* one third of slot duration */)
-	twoThird := oneThird + oneThird
-	delay := twoThird
-
-	startTime, err := slots.StartTime(v.genesisTime, slot)
-	if err != nil {
-		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for slot two thirds!")
-		return
-	}
-	finalTime := startTime.Add(delay)
-	wait := prysmTime.Until(finalTime)
-	if wait <= 0 {
-		return
-	}
-	t := time.NewTimer(wait)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		tracing.AnnotateError(span, ctx.Err())
-		return
-	case <-t.C:
-		return
-	}
+	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().AggregrateDueBPS)
 }
 
 // This returns the signature of validator signing over aggregate and
