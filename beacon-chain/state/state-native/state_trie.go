@@ -145,7 +145,7 @@ const (
 	denebSharedFieldRefCount     = 7
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
-	gloasSharedFieldRefCount     = 13
+	gloasSharedFieldRefCount     = 12
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -862,7 +862,6 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingConsolidations] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.ProposerLookahead] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.BuilderPendingPayments] = stateutil.NewRef(1)    // New in Gloas.
 	b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1) // New in Gloas.
 
 	state.Count.Inc()
