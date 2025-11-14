@@ -20,6 +20,8 @@ import (
 )
 
 func TestStateDiff_LoadOrInitOffset(t *testing.T) {
+	setDefaultExponents()
+
 	db := setupDB(t)
 	err := setOffsetInDB(db, 10)
 	require.NoError(t, err)
@@ -427,7 +429,7 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 			require.NoError(t, err)
 
 			// at first the cache should be empty
-			for i := 0; i < len(flags.Get().StateDiffExponents); i++ {
+			for i := 0; i < len(flags.Get().StateDiffExponents)-1; i++ {
 				anchor := db.stateDiffCache.getAnchor(i)
 				require.IsNil(t, anchor)
 			}

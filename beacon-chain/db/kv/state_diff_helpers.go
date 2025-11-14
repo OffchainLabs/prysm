@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
@@ -30,14 +31,17 @@ func makeKey(level int, slot uint64) []byte {
 }
 
 func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
-	if lvl <= 0 || lvl >= len(flags.Get().StateDiffExponents) {
+	if lvl <= 0 || lvl > len(flags.Get().StateDiffExponents) {
 		return nil, errors.New("invalid value for level")
 	}
 
+	if uint64(slot) < offset {
+		return nil, ErrSlotBeforeOffset
+	}
 	relSlot := uint64(slot) - offset
 	prevExp := flags.Get().StateDiffExponents[lvl-1]
 	span := math.PowerOf2(uint64(prevExp))
-	anchorSlot := primitives.Slot((relSlot / span * span) + offset)
+	anchorSlot := primitives.Slot(uint64(slot) - relSlot%span)
 
 	// anchorLvl can be [0, lvl-1]
 	anchorLvl := computeLevel(offset, anchorSlot)
@@ -195,16 +199,21 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 	exponents := flags.Get().StateDiffExponents
 
 	baseSpan := math.PowerOf2(uint64(exponents[0]))
-	baseAnchorSlot := (rel / baseSpan * baseSpan) + offset
+	baseAnchorSlot := uint64(slot) - rel%baseSpan
 
-	var diffChainIndices []uint64
-	for i := 1; i <= lvl; i++ {
-		span := math.PowerOf2(uint64(exponents[i]))
+	type diffItem struct {
+		level int
+		slot  uint64
+	}
+
+	var diffChainItems []diffItem
+	for i, exp := range exponents[1 : lvl+1] {
+		span := math.PowerOf2(uint64(exp))
 		diffSlot := rel / span * span
 		if diffSlot == baseAnchorSlot {
 			continue
 		}
-		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
+		diffChainItems = append(diffChainItems, diffItem{level: i + 1, slot: diffSlot + offset})
 	}
 
 	baseSnapshot, err := s.getFullSnapshot(baseAnchorSlot)
@@ -212,9 +221,9 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		return nil, nil, err
 	}
 
-	diffChain := make([]hdiff.HdiffBytes, 0, len(diffChainIndices))
-	for _, diffSlot := range diffChainIndices {
-		diff, err := s.getDiff(computeLevel(offset, primitives.Slot(diffSlot)), diffSlot)
+	diffChain := make([]hdiff.HdiffBytes, 0, len(diffChainItems))
+	for _, item := range diffChainItems {
+		diff, err := s.getDiff(item.level, item.slot)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -231,4 +240,13 @@ func appendUnique(s []uint64, v uint64) []uint64 {
 		}
 	}
 	return append(s, v)
+}
+
+func sortedKeys(m map[int]uint64) []int {
+	keys := make([]int, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
 }

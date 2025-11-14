@@ -19,7 +19,7 @@ const (
 )
 
 /*
-	We use a level-based approach to save state diffs. The levels are 0-6, where each level corresponds to an exponent of 2 (exponents[lvl]).
+	We use a level-based approach to save state diffs. Each level corresponds to an exponent of 2 (exponents[lvl]).
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
 */
 
@@ -55,12 +55,7 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return err
 	}
 
-	err = s.saveHdiff(lvl, anchorState, st)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.saveHdiff(lvl, anchorState, st)
 }
 
 // stateByDiff retrieves the full state for a given slot.
@@ -76,6 +71,10 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 	}
 
 	for _, diff := range diffChain {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		snapshot, err = hdiff.ApplyDiff(ctx, snapshot, diff)
 		if err != nil {
 			return nil, err
@@ -85,7 +84,8 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 	return snapshot, nil
 }
 
-// SaveHdiff computes the diff between the anchor state and the current state and saves it to the database.
+// saveHdiff computes the diff between the anchor state and the current state and saves it to the database.
+// This function needs to be called only with the latest finalized state, and in a strictly increasing slot order.
 func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKey(lvl, slot)

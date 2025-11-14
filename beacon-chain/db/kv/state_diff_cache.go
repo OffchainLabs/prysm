@@ -37,7 +37,7 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 	}
 
 	return &stateDiffCache{
-		anchors: make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)),
+		anchors: make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)-1), // -1 because last level doesn't need to be cached
 		offset:  offset,
 	}, nil
 }
@@ -73,5 +73,5 @@ func (c *stateDiffCache) setOffset(offset uint64) {
 func (c *stateDiffCache) clearAnchors() {
 	c.Lock()
 	defer c.Unlock()
-	c.anchors = make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents))
+	c.anchors = make([]state.ReadOnlyBeaconState, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
 }
