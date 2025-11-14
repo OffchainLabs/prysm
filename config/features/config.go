@@ -25,9 +25,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -69,6 +69,7 @@ type Flags struct {
 
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
+	DisableLastEpochTargets    bool // Disables processing of states for attestations to old blocks.
 
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
 
@@ -274,10 +275,13 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(forceHeadFlag)
 		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
-
 	if ctx.IsSet(blacklistRoots.Name) {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
+	}
+	if ctx.IsSet(disableLastEpochTargets.Name) {
+		logEnabled(disableLastEpochTargets)
+		cfg.DisableLastEpochTargets = true
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

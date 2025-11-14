@@ -8,23 +8,23 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	blocktest "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	blocktest "github.com/OffchainLabs/prysm/v7/consensus-types/blocks/testing"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-func marshalToEnvelope(val interface{}) ([]byte, error) {
+func marshalToEnvelope(val any) ([]byte, error) {
 	raw, err := json.Marshal(val)
 	if err != nil {
 		return nil, errors.Wrap(err, "error marshaling value to place in data envelope")
@@ -136,8 +136,8 @@ func TestDownloadWeakSubjectivityCheckpoint(t *testing.T) {
 				Root:  fmt.Sprintf("%#x", bRoot),
 			}
 			wsr := struct {
-				Checkpoint interface{} `json:"ws_checkpoint"`
-				StateRoot  string      `json:"state_root"`
+				Checkpoint any    `json:"ws_checkpoint"`
+				StateRoot  string `json:"state_root"`
 			}{
 				Checkpoint: cp,
 				StateRoot:  fmt.Sprintf("%#x", wRoot),
@@ -306,7 +306,7 @@ func defaultTestHeadState(t *testing.T, cfg *params.BeaconChainConfig) (state.Be
 func populateValidators(cfg *params.BeaconChainConfig, st state.BeaconState, valCount, avgBalance uint64) error {
 	validators := make([]*ethpb.Validator, valCount)
 	balances := make([]uint64, len(validators))
-	for i := uint64(0); i < valCount; i++ {
+	for i := range valCount {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, cfg.BLSPubkeyLength),
 			WithdrawalCredentials: make([]byte, 32),

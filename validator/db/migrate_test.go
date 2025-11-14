@@ -4,10 +4,10 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	dbtest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	dbtest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	"github.com/urfave/cli/v2"
 )
 

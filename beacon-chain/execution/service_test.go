@@ -7,28 +7,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/contracts/deposit/mock"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/monitoring/clientstats"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -60,7 +61,7 @@ func (g *goodLogger) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQ
 func (g *goodLogger) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]gethTypes.Log, error) {
 	if g.backend == nil {
 		logs := make([]gethTypes.Log, 3)
-		for i := 0; i < len(logs); i++ {
+		for i := range logs {
 			logs[i].Address = common.Address{}
 			logs[i].Topics = make([]common.Hash, 5)
 			logs[i].Topics[0] = common.Hash{'a'}
@@ -99,7 +100,7 @@ func TestStart_OK(t *testing.T) {
 	c := startup.NewClockSynchronizer()
 	require.NoError(t, c.SetClock(startup.NewClock(time.Unix(0, 0), [32]byte{})))
 	waiter := verification.NewInitializerWaiter(
-		c, forkchoice.NewROForkChoice(nil), nil)
+		c, forkchoice.NewROForkChoice(nil), nil, &chainMock.ChainService{})
 
 	web3Service, err := NewService(t.Context(),
 		WithHttpEndpoint(endpoint),
@@ -245,7 +246,7 @@ func TestFollowBlock_OK(t *testing.T) {
 	numToForward := uint64(2)
 	expectedHeight := numToForward + baseHeight
 	// forward 2 blocks
-	for i := uint64(0); i < numToForward; i++ {
+	for range numToForward {
 		testAcc.Backend.Commit()
 	}
 
@@ -343,7 +344,7 @@ func TestLogTillGenesis_OK(t *testing.T) {
 
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 	web3Service.httpLogger = testAcc.Backend.Client()
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		testAcc.Backend.Commit()
 	}
 	web3Service.latestEth1Data = &ethpb.LatestETH1Data{LastRequestedBlock: 0}
@@ -497,7 +498,7 @@ func TestNewService_EarliestVotingBlock(t *testing.T) {
 
 	numToForward := 1500
 	// forward 1500 blocks
-	for i := 0; i < numToForward; i++ {
+	for range numToForward {
 		testAcc.Backend.Commit()
 	}
 	currHeader, err := testAcc.Backend.Client().HeaderByNumber(t.Context(), nil)
@@ -694,7 +695,7 @@ func TestService_ValidateDepositContainers(t *testing.T) {
 			name: "ordered containers",
 			ctrsFunc: func() []*ethpb.DepositContainer {
 				ctrs := make([]*ethpb.DepositContainer, 0)
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					ctrs = append(ctrs, &ethpb.DepositContainer{Index: int64(i), Eth1BlockHeight: uint64(i + 10)})
 				}
 				return ctrs
@@ -716,7 +717,7 @@ func TestService_ValidateDepositContainers(t *testing.T) {
 			name: "skipped containers",
 			ctrsFunc: func() []*ethpb.DepositContainer {
 				ctrs := make([]*ethpb.DepositContainer, 0)
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					if i == 5 || i == 7 {
 						continue
 					}
@@ -832,7 +833,7 @@ func (s *slowRPCClient) BatchCall(b []rpc.BatchElem) error {
 	return nil
 }
 
-func (s *slowRPCClient) CallContext(_ context.Context, _ interface{}, _ string, _ ...interface{}) error {
+func (s *slowRPCClient) CallContext(_ context.Context, _ any, _ string, _ ...any) error {
 	panic("implement me")
 }
 
@@ -868,7 +869,7 @@ func TestService_migrateOldDepositTree(t *testing.T) {
 	dt, err := trie.NewTrie(32)
 	require.NoError(t, err)
 
-	for i := 0; i < totalDeposits; i++ {
+	for i := range totalDeposits {
 		err := dt.Insert(input[:], i)
 		require.NoError(t, err)
 	}

@@ -3,7 +3,7 @@ package structs
 import (
 	"encoding/json"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 type AggregateAttestationResponse struct {

@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -189,7 +189,7 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 }
 
 // unmarshalResponse is a utility method for unmarshalling responses.
-func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject interface{}) error {
+func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject any) error {
 	defer closeBody(responseBody)
 	if err := json.NewDecoder(responseBody).Decode(&unmarshalledResponseObject); err != nil {
 		body, err := io.ReadAll(responseBody)

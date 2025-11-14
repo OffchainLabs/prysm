@@ -11,13 +11,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -59,7 +59,7 @@ func (s *LighthouseValidatorNodeSet) Start(ctx context.Context) error {
 
 	// Create validator nodes.
 	nodes := make([]types.ComponentRunner, lighthouseBeaconNum)
-	for i := 0; i < lighthouseBeaconNum; i++ {
+	for i := range lighthouseBeaconNum {
 		offsetIdx := i + prysmBeaconNum
 		nodes[i] = NewLighthouseValidatorNode(s.config, validatorsPerNode, i, validatorsPerNode*offsetIdx)
 	}
@@ -260,7 +260,7 @@ func (k *KeystoreGenerator) Start(_ context.Context) error {
 	}
 	validatorsPerNode := validatorNum / beaconNodeNum
 
-	for i := 0; i < lighthouseBeaconNum; i++ {
+	for i := range lighthouseBeaconNum {
 		offsetIdx := i + prysmBeaconNum
 		_, err := setupKeystores(i, validatorsPerNode*offsetIdx, validatorsPerNode)
 		if err != nil {

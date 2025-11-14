@@ -5,11 +5,11 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
@@ -220,15 +220,9 @@ func (c beaconApiChainClient) Validators(ctx context.Context, in *ethpb.ListVali
 		return nil, errors.New("state validators data is nil")
 	}
 
-	start := pageToken * uint64(pageSize)
-	if start > uint64(len(stateValidators.Data)) {
-		start = uint64(len(stateValidators.Data))
-	}
+	start := min(pageToken*uint64(pageSize), uint64(len(stateValidators.Data)))
 
-	end := start + uint64(pageSize)
-	if end > uint64(len(stateValidators.Data)) {
-		end = uint64(len(stateValidators.Data))
-	}
+	end := min(start+uint64(pageSize), uint64(len(stateValidators.Data)))
 
 	validators := make([]*ethpb.Validators_ValidatorContainer, end-start)
 	for idx := start; idx < end; idx++ {

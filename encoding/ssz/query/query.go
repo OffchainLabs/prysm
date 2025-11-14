@@ -7,19 +7,19 @@ import (
 
 // CalculateOffsetAndLength calculates the offset and length of a given path within the SSZ object.
 // By walking the given path, it accumulates the offsets based on SszInfo.
-func CalculateOffsetAndLength(sszInfo *SszInfo, path []PathElement) (*SszInfo, uint64, uint64, error) {
+func CalculateOffsetAndLength(sszInfo *SszInfo, path Path) (*SszInfo, uint64, uint64, error) {
 	if sszInfo == nil {
 		return nil, 0, 0, errors.New("sszInfo is nil")
 	}
 
-	if len(path) == 0 {
+	if len(path.Elements) == 0 {
 		return nil, 0, 0, errors.New("path is empty")
 	}
 
 	walk := sszInfo
 	offset := uint64(0)
 
-	for pathIndex, elem := range path {
+	for pathIndex, elem := range path.Elements {
 		containerInfo, err := walk.ContainerInfo()
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("could not get field infos: %w", err)
@@ -56,7 +56,7 @@ func CalculateOffsetAndLength(sszInfo *SszInfo, path []PathElement) (*SszInfo, u
 					// to the next field's sszInfo, which would have the correct size information.
 					// However, if this is the last element in the path, we need to ensure we return the correct size
 					// for the indexed element. Hence, we return the size from elementSizes.
-					if pathIndex == len(path)-1 {
+					if pathIndex == len(path.Elements)-1 {
 						return walk, offset, listInfo.elementSizes[index], nil
 					}
 				} else {

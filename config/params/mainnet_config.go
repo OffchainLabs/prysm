@@ -4,8 +4,9 @@ import (
 	"math"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 // MainnetConfig returns the configuration to be used in the main network.
@@ -30,7 +31,7 @@ const (
 	// Electra Fork Epoch for mainnet config
 	mainnetElectraForkEpoch = 364032 // May 7, 2025, 10:05:11 UTC
 	// Fulu Fork Epoch for mainnet config
-	mainnetFuluForkEpoch = math.MaxUint64 // Far future / to be defined
+	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -98,6 +99,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Time parameter constants.
 	MinAttestationInclusionDelay:     1,
 	SecondsPerSlot:                   12,
+	SlotDurationMilliseconds:         12000,
 	SlotsPerEpoch:                    32,
 	SqrRootSlotsPerEpoch:             5,
 	MinSeedLookahead:                 1,
@@ -115,6 +117,13 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ReorgParentWeightThreshold:      160,
 	ReorgMaxEpochsSinceFinalization: 2,
 	IntervalsPerSlot:                3,
+
+	// Time-based protocol parameters.
+	ProposerReorgCutoffBPS: primitives.BP(1667),
+	AttestationDueBPS:      primitives.BP(3333),
+	AggregrateDueBPS:       primitives.BP(6667),
+	SyncMessageDueBPS:      primitives.BP(3333),
+	ContributionDueBPS:     primitives.BP(6667),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.
@@ -257,7 +266,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Light client
 	MinSyncCommitteeParticipants: 1,
 	MaxRequestLightClientUpdates: 128,
-	SyncMessageDueBPS:            3333,
 
 	// Bellatrix
 	TerminalBlockHashActivationEpoch: 18446744073709551615,
@@ -268,7 +276,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BytesPerLogsBloom:                256,
 	MaxExtraDataBytes:                32,
 	EthBurnAddressHex:                "0x0000000000000000000000000000000000000000",
-	DefaultBuilderGasLimit:           uint64(45000000),
+	DefaultBuilderGasLimit:           uint64(60000000),
 
 	// Mevboost circuit breaker
 	MaxBuilderConsecutiveMissedSlots: 3,
@@ -338,7 +346,16 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	SubnetsPerNode:                  2,
 	NodeIdBits:                      256,
 
-	BlobSchedule: []BlobScheduleEntry{},
+	BlobSchedule: []BlobScheduleEntry{
+		{
+			Epoch:            412672, // December 9, 2025, 02:21:11pm UTC
+			MaxBlobsPerBlock: 15,
+		},
+		{
+			Epoch:            419072, // January 7, 2026, 01:01:11am UTC
+			MaxBlobsPerBlock: 21,
+		},
+	},
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

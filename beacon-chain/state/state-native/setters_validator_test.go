@@ -3,9 +3,9 @@ package state_native_test
 import (
 	"testing"
 
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func BenchmarkAppendBalance(b *testing.B) {
@@ -18,9 +18,8 @@ func BenchmarkAppendBalance(b *testing.B) {
 	}
 
 	ref := st.Copy()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		require.NoError(b, ref.AppendBalance(uint64(i)))
 		ref = st.Copy()
 	}
@@ -36,9 +35,8 @@ func BenchmarkAppendInactivityScore(b *testing.B) {
 	}
 
 	ref := st.Copy()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		require.NoError(b, ref.AppendInactivityScore(uint64(i)))
 		ref = st.Copy()
 	}

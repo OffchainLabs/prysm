@@ -1,9 +1,9 @@
 package genesis
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
-	"github.com/OffchainLabs/prysm/v6/genesis"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v7/genesis"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"

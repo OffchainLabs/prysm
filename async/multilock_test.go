@@ -107,15 +107,13 @@ func TestLockUnlock(_ *testing.T) {
 
 func TestLockUnlock_CleansUnused(t *testing.T) {
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		lock := NewMultilock("dog", "cat", "owl")
 		lock.Lock()
 		assert.Equal(t, 3, len(locks.list))
 		lock.Unlock()
 
-		wg.Done()
-	}()
+	})
 	wg.Wait()
 	// We expect that unlocking completely cleared the locks list
 	// given all 3 lock keys were unused at time of unlock.

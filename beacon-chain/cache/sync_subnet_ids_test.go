@@ -3,22 +3,22 @@ package cache
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestSyncSubnetIDsCache_Roundtrip(t *testing.T) {
 	c := newSyncSubnetIDs()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		pubkey := [fieldparams.BLSPubkeyLength]byte{byte(i)}
 		c.AddSyncCommitteeSubnets(pubkey[:], 100, []uint64{uint64(i)}, 0)
 	}
 
-	for i := uint64(0); i < 20; i++ {
+	for i := range uint64(20) {
 		pubkey := [fieldparams.BLSPubkeyLength]byte{byte(i)}
 
 		idxs, _, ok, _ := c.GetSyncCommitteeSubnets(pubkey[:], 100)
@@ -35,7 +35,7 @@ func TestSyncSubnetIDsCache_Roundtrip(t *testing.T) {
 func TestSyncSubnetIDsCache_ValidateCurrentEpoch(t *testing.T) {
 	c := newSyncSubnetIDs()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		pubkey := [fieldparams.BLSPubkeyLength]byte{byte(i)}
 		c.AddSyncCommitteeSubnets(pubkey[:], 100, []uint64{uint64(i)}, 0)
 	}
@@ -43,7 +43,7 @@ func TestSyncSubnetIDsCache_ValidateCurrentEpoch(t *testing.T) {
 	coms := c.GetAllSubnets(50)
 	assert.Equal(t, 0, len(coms))
 
-	for i := uint64(0); i < 20; i++ {
+	for i := range uint64(20) {
 		pubkey := [fieldparams.BLSPubkeyLength]byte{byte(i)}
 
 		_, jEpoch, ok, _ := c.GetSyncCommitteeSubnets(pubkey[:], 100)
