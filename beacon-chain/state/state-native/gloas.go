@@ -26,9 +26,7 @@ func (b *BeaconState) builderPendingPaymentsVal() []*ethpb.BuilderPendingPayment
 
 	payments := make([]*ethpb.BuilderPendingPayment, len(b.builderPendingPayments))
 	for i, payment := range b.builderPendingPayments {
-		if payment != nil {
-			payments[i] = payment.Copy()
-		}
+		payments[i] = payment.Copy()
 	}
 
 	return payments
@@ -43,9 +41,7 @@ func (b *BeaconState) builderPendingWithdrawalsVal() []*ethpb.BuilderPendingWith
 
 	withdrawals := make([]*ethpb.BuilderPendingWithdrawal, len(b.builderPendingWithdrawals))
 	for i, withdrawal := range b.builderPendingWithdrawals {
-		if withdrawal != nil {
-			withdrawals[i] = withdrawal.Copy()
-		}
+		withdrawals[i] = withdrawal.Copy()
 	}
 
 	return withdrawals

@@ -816,7 +816,7 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 		pendingPartialWithdrawals:     st.PendingPartialWithdrawals,
 		pendingConsolidations:         st.PendingConsolidations,
 		proposerLookahead:             proposerLookahead,
-		executionPayloadbid:           st.LatestExecutionPayloadBid,
+		latestExecutionPayloadBid:     st.LatestExecutionPayloadBid,
 		executionPayloadAvailability:  st.ExecutionPayloadAvailability,
 		builderPendingPayments:        st.BuilderPendingPayments,
 		builderPendingWithdrawals:     st.BuilderPendingWithdrawals,
@@ -948,7 +948,7 @@ func (b *BeaconState) Copy() state.BeaconState {
 		latestExecutionPayloadHeader:        b.latestExecutionPayloadHeader.Copy(),
 		latestExecutionPayloadHeaderCapella: b.latestExecutionPayloadHeaderCapella.Copy(),
 		latestExecutionPayloadHeaderDeneb:   b.latestExecutionPayloadHeaderDeneb.Copy(),
-		executionPayloadbid:                 b.executionPayloadbid.Copy(),
+		latestExecutionPayloadBid:           b.latestExecutionPayloadBid.Copy(),
 		executionPayloadAvailability:        b.executionPayloadAvailabilityVal(),
 		builderPendingPayments:              b.builderPendingPaymentsVal(),
 		builderPendingWithdrawals:           b.builderPendingWithdrawalsVal(),
@@ -1328,7 +1328,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
 	case types.ExecutionPayloadBid:
-		return b.executionPayloadbid.HashTreeRoot()
+		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.ExecutionPayloadAvailability:
 		return stateutil.ExecutionPayloadAvailabilityRoot(b.executionPayloadAvailability)
 

@@ -308,7 +308,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
 			LatestBlockHash:               b.latestBlockHash,
 			LatestWithdrawalsRoot:         b.latestWithdrawalsRoot,
-			LatestExecutionPayloadBid:     b.executionPayloadbid,
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid,
 		}
 	default:
 		return nil
@@ -610,7 +610,7 @@ func (b *BeaconState) ToProto() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
 			LatestBlockHash:               b.latestBlockHashVal(),
 			LatestWithdrawalsRoot:         b.latestWithdrawalsRootVal(),
-			LatestExecutionPayloadBid:     b.executionPayloadbid.Copy(),
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid.Copy(),
 		}
 	default:
 		return nil

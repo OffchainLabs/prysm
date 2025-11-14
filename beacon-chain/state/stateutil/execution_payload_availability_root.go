@@ -11,12 +11,9 @@ func ExecutionPayloadAvailabilityRoot(bitvector []byte) ([32]byte, error) {
 	chunkCount := (len(bitvector) + 31) / 32
 	chunks := make([][32]byte, chunkCount)
 
-	for i := 0; i < chunkCount; i++ {
+	for i := range chunks {
 		start := i * 32
-		end := start + 32
-		if end > len(bitvector) {
-			end = len(bitvector)
-		}
+		end := min(start+32, len(bitvector))
 		copy(chunks[i][:], bitvector[start:end])
 	}
 

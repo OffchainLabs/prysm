@@ -258,7 +258,7 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 
 	if state.version >= version.Gloas {
 		// Execution payload bid root for Gloas.
-		executionPayloadRoot, err := state.executionPayloadbid.HashTreeRoot()
+		executionPayloadRoot, err := state.latestExecutionPayloadBid.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}

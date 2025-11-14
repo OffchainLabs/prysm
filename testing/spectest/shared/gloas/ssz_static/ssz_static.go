@@ -18,13 +18,13 @@ func RunSSZStaticTests(t *testing.T, config string) {
 	common.RunSSZStaticTests(t, config, "gloas", unmarshalledSSZ, customHtr)
 }
 
-func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
+func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	_, ok := object.(*ethpb.BeaconStateGloas)
 	if !ok {
 		return htrs
 	}
 
-	htrs = append(htrs, func(s interface{}) ([32]byte, error) {
+	htrs = append(htrs, func(s any) ([32]byte, error) {
 		beaconState, err := state_native.InitializeFromProtoGloas(s.(*ethpb.BeaconStateGloas))
 		require.NoError(t, err)
 

@@ -71,7 +71,7 @@ type BeaconState struct {
 	proposerLookahead             []primitives.ValidatorIndex       // proposer_look_ahead: List[uint64, (MIN_LOOKAHEAD + 1)*SLOTS_PER_EPOCH]
 
 	// Gloas fields
-	executionPayloadbid          *ethpb.ExecutionPayloadBid
+	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
 	executionPayloadAvailability []byte
 	builderPendingPayments       []*ethpb.BuilderPendingPayment
 	builderPendingWithdrawals    []*ethpb.BuilderPendingWithdrawal
@@ -133,7 +133,7 @@ type beaconStateMarshalable struct {
 	PendingPartialWithdrawals           []*ethpb.PendingPartialWithdrawal       `json:"pending_partial_withdrawals" yaml:"pending_partial_withdrawals"`
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
-	ExecutionPayloadBid                 *ethpb.ExecutionPayloadBid              `json:"execution_payload_bid" yaml:"execution_payload_bid"`
+	LatestExecutionPayloadBid           *ethpb.ExecutionPayloadBid              `json:"latest_execution_payload_bid" yaml:"latest_execution_payload_bid"`
 	ExecutionPayloadAvailability        []byte                                  `json:"execution_payload_availability" yaml:"execution_payload_availability"`
 	BuilderPendingPayments              []*ethpb.BuilderPendingPayment          `json:"builder_pending_payments" yaml:"builder_pending_payments"`
 	BuilderPendingWithdrawals           []*ethpb.BuilderPendingWithdrawal       `json:"builder_pending_withdrawals" yaml:"builder_pending_withdrawals"`
@@ -193,7 +193,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingPartialWithdrawals:           b.pendingPartialWithdrawals,
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
-		ExecutionPayloadBid:                 b.executionPayloadbid,
+		LatestExecutionPayloadBid:           b.latestExecutionPayloadBid,
 		ExecutionPayloadAvailability:        b.executionPayloadAvailability,
 		BuilderPendingPayments:              b.builderPendingPayments,
 		BuilderPendingWithdrawals:           b.builderPendingWithdrawals,
