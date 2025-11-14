@@ -1,0 +1,2 @@
+### Added
+- New flag `--lite-supernode` is an option to run the node with the minimum custody based on number of validators, but will subscribe to 64 subnets to obtain 64 data columns required to reconstruct all blobs.
