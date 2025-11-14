@@ -232,7 +232,6 @@ func TestBeaconChainConfigSlotDuration(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tt.want, tt.cfg.SlotDuration())
@@ -266,7 +265,6 @@ func TestBeaconChainConfigSlotDurationMillis(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tt.want, tt.cfg.SlotDurationMillis())
@@ -316,7 +314,6 @@ func TestBeaconChainConfigSlotComponentDuration(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tt.want, tt.cfg.SlotComponentDuration(tt.bp))
