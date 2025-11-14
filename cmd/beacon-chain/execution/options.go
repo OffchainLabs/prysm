@@ -78,4 +78,3 @@ func parseExecutionChainEndpoint(c *cli.Context) (string, error) {
 	}
 	return c.String(flags.ExecutionEngineEndpoint.Name), nil
 }
-

@@ -111,4 +111,3 @@ func TestPowchainPreregistration_EmptyWeb3Provider(t *testing.T) {
 	_, err := parseExecutionChainEndpoint(ctx)
 	assert.ErrorContains(t, "you need to specify", err)
 }
-
