@@ -58,7 +58,7 @@ func BenchmarkProposerAtts_sortByProfitability(b *testing.B) {
 			b.StopTimer()
 			atts := aggtesting.MakeAttestationsFromBitlists(tt.inputs)
 			b.StartTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				runner(atts)
 			}
 		})

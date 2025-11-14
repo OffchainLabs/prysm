@@ -236,7 +236,7 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 // Given the `syncCommitteeIndexPosition` object, this returns the key of the object.
 // The key is the `currentSyncCommitteeRoot` within the field.
 // Error gets returned if input does not comply with `currentSyncCommitteeRoot` object.
-func keyFn(obj interface{}) (string, error) {
+func keyFn(obj any) (string, error) {
 	info, ok := obj.(*syncCommitteeIndexPosition)
 	if !ok {
 		return "", errNotSyncCommitteeIndexPosition

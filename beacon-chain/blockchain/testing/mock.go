@@ -106,7 +106,7 @@ type EventFeedWrapper struct {
 	subscribed chan struct{} // this channel is closed once a subscription is made
 }
 
-func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
+func (w *EventFeedWrapper) Subscribe(channel any) event.Subscription {
 	select {
 	case <-w.subscribed:
 		break // already closed
@@ -116,7 +116,7 @@ func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
 	return w.feed.Subscribe(channel)
 }
 
-func (w *EventFeedWrapper) Send(value interface{}) int {
+func (w *EventFeedWrapper) Send(value any) int {
 	return w.feed.Send(value)
 }
 

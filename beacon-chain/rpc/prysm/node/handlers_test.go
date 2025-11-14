@@ -91,7 +91,7 @@ func TestListTrustedPeer(t *testing.T) {
 		// assert number of trusted peer is right
 		assert.Equal(t, 9, len(peers))
 
-		for i := 0; i < 9; i++ {
+		for i := range 9 {
 			pid, err := peer.Decode(peers[i].PeerId)
 			require.NoError(t, err)
 			if pid == ids[8] {

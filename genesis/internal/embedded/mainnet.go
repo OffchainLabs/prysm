@@ -1,5 +1,4 @@
 //go:build !noMainnetGenesis
-// +build !noMainnetGenesis
 
 package embedded
 

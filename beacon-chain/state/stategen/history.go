@@ -188,7 +188,7 @@ func (c *CanonicalHistory) ancestorChain(ctx context.Context, tail interfaces.Re
 func reverseChain(c []interfaces.ReadOnlySignedBeaconBlock) {
 	last := len(c) - 1
 	swaps := (last + 1) / 2
-	for i := 0; i < swaps; i++ {
+	for i := range swaps {
 		c[i], c[last-i] = c[last-i], c[i]
 	}
 }

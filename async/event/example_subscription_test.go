@@ -26,7 +26,7 @@ func ExampleNewSubscription() {
 	// Create a subscription that sends 10 integers on ch.
 	ch := make(chan int)
 	sub := event.NewSubscription(func(quit <-chan struct{}) error {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			select {
 			case ch <- i:
 			case <-quit:

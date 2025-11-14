@@ -303,7 +303,7 @@ func waitHighestExpectedSlot(q *blocksQueue) bool {
 
 // onScheduleEvent is an event called on newly arrived epochs. Transforms state to scheduled.
 func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if m.state != stateNew {
 			return m.state, errInvalidInitialState
 		}
@@ -321,7 +321,7 @@ func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
 
 // onDataReceivedEvent is an event called when data is received from fetcher.
 func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}
@@ -359,7 +359,7 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 
 // onReadyToSendEvent is an event called to allow epochs with available blocks to send them downstream.
 func (q *blocksQueue) onReadyToSendEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}
@@ -404,7 +404,7 @@ func (q *blocksQueue) onReadyToSendEvent(ctx context.Context) eventHandlerFn {
 // onProcessSkippedEvent is an event triggered on skipped machines, allowing handlers to
 // extend lookahead window, in case where progress is not possible otherwise.
 func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}
@@ -468,7 +468,7 @@ func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
 // onCheckStaleEvent is an event that allows to mark stale epochs,
 // so that they can be re-processed.
 func onCheckStaleEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}

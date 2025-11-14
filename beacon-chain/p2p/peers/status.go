@@ -646,10 +646,7 @@ func (p *Status) Prune() {
 		return peersToPrune[i].score > peersToPrune[j].score
 	})
 
-	limitDiff := len(p.store.Peers()) - p.store.Config().MaxPeers
-	if limitDiff > len(peersToPrune) {
-		limitDiff = len(peersToPrune)
-	}
+	limitDiff := min(len(p.store.Peers())-p.store.Config().MaxPeers, len(peersToPrune))
 
 	peersToPrune = peersToPrune[:limitDiff]
 
@@ -698,10 +695,7 @@ func (p *Status) deprecatedPrune() {
 		return peersToPrune[i].badResp < peersToPrune[j].badResp
 	})
 
-	limitDiff := len(p.store.Peers()) - p.store.Config().MaxPeers
-	if limitDiff > len(peersToPrune) {
-		limitDiff = len(peersToPrune)
-	}
+	limitDiff := min(len(p.store.Peers())-p.store.Config().MaxPeers, len(peersToPrune))
 	peersToPrune = peersToPrune[:limitDiff]
 	// Delete peers from map.
 	for _, peerData := range peersToPrune {
@@ -1129,7 +1123,7 @@ func sameIP(firstAddr, secondAddr ma.Multiaddr) bool {
 
 func indicesFromBitfield(bitV bitfield.Bitvector64) []uint64 {
 	committeeIdxs := make([]uint64, 0, bitV.Count())
-	for i := uint64(0); i < 64; i++ {
+	for i := range uint64(64) {
 		if bitV.BitAt(i) {
 			committeeIdxs = append(committeeIdxs, i)
 		}

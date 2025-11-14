@@ -47,10 +47,11 @@ func FuzzPropertyRoundTrip(f *testing.F) {
 		ctx := t.Context()
 
 		// Create source state with reasonable size
-		validatorCount := uint64(len(validatorChanges) + 8) // Minimum 8 validators
-		if validatorCount > 64 {
-			validatorCount = 64 // Cap at 64 for performance
-		}
+		validatorCount := min(
+			// Minimum 8 validators
+			uint64(len(validatorChanges)+8),
+			// Cap at 64 for performance
+			64)
 		source, _ := util.DeterministicGenesisStateElectra(t, validatorCount)
 
 		// Create target state with modifications

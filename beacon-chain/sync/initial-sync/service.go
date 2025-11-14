@@ -312,10 +312,7 @@ func (s *Service) Resync() error {
 }
 
 func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
-	required := params.BeaconConfig().MaxPeersToSync
-	if flags.Get().MinimumSyncPeers < required {
-		required = flags.Get().MinimumSyncPeers
-	}
+	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
 	for {
 		if s.ctx.Err() != nil {
 			return nil, s.ctx.Err()

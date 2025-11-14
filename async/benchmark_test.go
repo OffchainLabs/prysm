@@ -21,7 +21,7 @@ const (
 
 func init() {
 	input = make([][]byte, benchmarkElements)
-	for i := 0; i < benchmarkElements; i++ {
+	for i := range benchmarkElements {
 		input[i] = make([]byte, benchmarkElementSize)
 		_, err := rand.Read(input[i])
 		if err != nil {
@@ -35,7 +35,7 @@ func hash(input [][]byte) [][]byte {
 	output := make([][]byte, len(input))
 	for i := range input {
 		copy(output, input)
-		for j := 0; j < benchmarkHashRuns; j++ {
+		for range benchmarkHashRuns {
 			hash := sha256.Sum256(output[i])
 			output[i] = hash[:]
 		}
@@ -44,15 +44,15 @@ func hash(input [][]byte) [][]byte {
 }
 
 func BenchmarkHash(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		hash(input)
 	}
 }
 
 func BenchmarkHashMP(b *testing.B) {
 	output := make([][]byte, len(input))
-	for i := 0; i < b.N; i++ {
-		workerResults, err := async.Scatter(len(input), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
+	for b.Loop() {
+		workerResults, err := async.Scatter(len(input), func(offset int, entries int, _ *sync.RWMutex) (any, error) {
 			return hash(input[offset : offset+entries]), nil
 		})
 		require.NoError(b, err)

@@ -280,13 +280,11 @@ func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitive
 		return
 	}
 
-	delay := slots.DivideSlotBy(3 /* a third of the slot duration */)
-	startTime, err := slots.StartTime(v.genesisTime, slot)
+	finalTime, err := v.slotComponentDeadline(slot, params.BeaconConfig().AttestationDueBPS)
 	if err != nil {
-		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for slot two thirds!")
+		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for attestation deadline")
 		return
 	}
-	finalTime := startTime.Add(delay)
 	wait := prysmTime.Until(finalTime)
 	if wait <= 0 {
 		return

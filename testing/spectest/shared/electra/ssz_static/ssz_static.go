@@ -18,13 +18,13 @@ func RunSSZStaticTests(t *testing.T, config string) {
 	common.RunSSZStaticTests(t, config, "electra", UnmarshalledSSZ, customHtr)
 }
 
-func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
+func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	_, ok := object.(*ethpb.BeaconStateElectra)
 	if !ok {
 		return htrs
 	}
 
-	htrs = append(htrs, func(s interface{}) ([32]byte, error) {
+	htrs = append(htrs, func(s any) ([32]byte, error) {
 		beaconState, err := state_native.InitializeFromProtoElectra(s.(*ethpb.BeaconStateElectra))
 		require.NoError(t, err)
 		return beaconState.HashTreeRoot(context.Background())
@@ -33,8 +33,8 @@ func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR
 }
 
 // UnmarshalledSSZ unmarshalls serialized input.
-func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (interface{}, error) {
-	var obj interface{}
+func UnmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (any, error) {
+	var obj any
 	switch folderName {
 	case "ExecutionPayload":
 		obj = &enginev1.ExecutionPayloadDeneb{}

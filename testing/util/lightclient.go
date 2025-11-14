@@ -1285,7 +1285,7 @@ func MockOptimisticUpdate() (interfaces.LightClientOptimisticUpdate, error) {
 
 func MockFinalityUpdate() (interfaces.LightClientFinalityUpdate, error) {
 	finalityBranch := make([][]byte, fieldparams.FinalityBranchDepth)
-	for i := 0; i < len(finalityBranch); i++ {
+	for i := range finalityBranch {
 		finalityBranch[i] = make([]byte, 32)
 	}
 

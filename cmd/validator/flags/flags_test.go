@@ -20,9 +20,9 @@ func TestLoadFlagsFromConfig_PreProcessing_Web3signer(t *testing.T) {
 	pubkey1 := "0xbd36226746676565cd40141a7f0fe1445b9a3fbeb222288b226392c4b230ed0b"
 	pubkey2 := "0xbd36226746676565cd40141a7f0fe1445b9a3fbeb222288b226392c4b230ed0a"
 
-	require.NoError(t, os.WriteFile("flags_test.yaml", []byte(fmt.Sprintf("%s:\n - %s\n - %s\n", Web3SignerPublicValidatorKeysFlag.Name,
+	require.NoError(t, os.WriteFile("flags_test.yaml", fmt.Appendf(nil, "%s:\n - %s\n - %s\n", Web3SignerPublicValidatorKeysFlag.Name,
 		pubkey1,
-		pubkey2)), 0666))
+		pubkey2), 0666))
 
 	require.NoError(t, set.Parse([]string{"test-command", "--" + cmd.ConfigFileFlag.Name, "flags_test.yaml"}))
 	comFlags := cmd.WrapFlags([]cli.Flag{

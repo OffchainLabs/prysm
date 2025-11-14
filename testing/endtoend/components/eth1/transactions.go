@@ -138,7 +138,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	}
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
-	for i := uint64(0); i < 10; i++ {
+	for i := range uint64(10) {
 		index := i
 		g.Go(func() error {
 			tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
@@ -182,7 +182,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	}
 
 	txs = make([]*types.Transaction, N)
-	for i := uint64(0); i < N; i++ {
+	for i := range N {
 		index := i
 		g.Go(func() error {
 			tx, err := txfuzz.RandomValidTx(client, f, sender, nonce+index, gasPrice, chainid, al)
@@ -359,10 +359,7 @@ func encodeBlobs(data []byte) []kzg4844.Blob {
 			blobIndex++
 			fieldIndex = 0
 		}
-		max := i + 31
-		if max > len(data) {
-			max = len(data)
-		}
+		max := min(i+31, len(data))
 		copy(blobs[blobIndex][fieldIndex*32+1:], data[i:max])
 	}
 	return blobs

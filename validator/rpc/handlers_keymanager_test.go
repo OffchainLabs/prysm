@@ -109,7 +109,7 @@ func TestServer_ListKeystores(t *testing.T) {
 		resp := &ListKeystoresResponse{}
 		require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
 		require.Equal(t, numAccounts, len(resp.Data))
-		for i := 0; i < numAccounts; i++ {
+		for i := range numAccounts {
 			require.DeepEqual(t, hexutil.Encode(expectedKeys[i][:]), resp.Data[i].ValidatingPubkey)
 			require.Equal(
 				t,
@@ -243,7 +243,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 		password := "12345678"
 		encodedKeystores := make([]string, numKeystores)
 		passwords := make([]string, numKeystores)
-		for i := 0; i < numKeystores; i++ {
+		for i := range numKeystores {
 			enc, err := json.Marshal(createRandomKeystore(t, password))
 			encodedKeystores[i] = string(enc)
 			require.NoError(t, err)
@@ -280,7 +280,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 			keystores := make([]*keymanager.Keystore, numKeystores)
 			passwords := make([]string, numKeystores)
 			publicKeys := make([][fieldparams.BLSPubkeyLength]byte, numKeystores)
-			for i := 0; i < numKeystores; i++ {
+			for i := range numKeystores {
 				keystores[i] = createRandomKeystore(t, password)
 				pubKey, err := hexutil.Decode("0x" + keystores[i].Pubkey)
 				require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 				require.NoError(t, validatorDB.Close())
 			}()
 			encodedKeystores := make([]string, numKeystores)
-			for i := 0; i < numKeystores; i++ {
+			for i := range numKeystores {
 				enc, err := json.Marshal(keystores[i])
 				require.NoError(t, err)
 				encodedKeystores[i] = string(enc)
@@ -316,7 +316,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 			// Generate mock slashing history.
 			attestingHistory := make([][]*dbCommon.AttestationRecord, 0)
 			proposalHistory := make([]dbCommon.ProposalHistoryForPubkey, len(publicKeys))
-			for i := 0; i < len(publicKeys); i++ {
+			for i := range publicKeys {
 				proposalHistory[i].Proposals = make([]dbCommon.Proposal, 0)
 			}
 			mockJSON, err := mocks.MockSlashingProtectionJSON(publicKeys, attestingHistory, proposalHistory)
@@ -439,7 +439,7 @@ func TestServer_DeleteKeystores(t *testing.T) {
 		// Generate mock slashing history.
 		attestingHistory := make([][]*dbCommon.AttestationRecord, 0)
 		proposalHistory := make([]dbCommon.ProposalHistoryForPubkey, len(publicKeys))
-		for i := 0; i < len(publicKeys); i++ {
+		for i := range publicKeys {
 			proposalHistory[i].Proposals = make([]dbCommon.Proposal, 0)
 		}
 		mockJSON, err := mocks.MockSlashingProtectionJSON(publicKeys, attestingHistory, proposalHistory)

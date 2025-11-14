@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
 	require.NoError(t, err)
 	parentRoot := genesisBlkRoot
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		blk := util.NewBeaconBlock()
 		blk.Block.Slot = primitives.Slot(i)
 		blk.Block.ParentRoot = parentRoot[:]
@@ -309,7 +310,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 
 	knownBlocks := make(map[[32]byte]*ethpb.SignedBeaconBlock)
 	knownRoots := make([][32]byte, 0)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		blk := util.NewBeaconBlock()
 		blkRoot, err := blk.Block.HashTreeRoot()
 		require.NoError(t, err)
@@ -635,7 +636,7 @@ func TestSeqBlobValid(t *testing.T) {
 	}{
 		{
 			name: "all valid",
-			seq:  append(append([]blocks.ROBlob{}, oneBlobs...), twoBlobs...),
+			seq:  slices.Concat(oneBlobs, twoBlobs),
 		},
 		{
 			name: "idx out of bounds",
@@ -660,7 +661,7 @@ func TestSeqBlobValid(t *testing.T) {
 		},
 		{
 			name:  "slots not ascending",
-			seq:   append(append([]blocks.ROBlob{}, twoBlobs...), oops...),
+			seq:   slices.Concat(twoBlobs, oops),
 			err:   errChunkResponseSlotNotAsc,
 			errAt: len(twoBlobs),
 		},
@@ -790,7 +791,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 				require.NoError(t, err)
 				prevRoot = bRoot
 				// Send the maximum possible blobs per slot.
-				for j := 0; j < maxBlobsForSlot; j++ {
+				for j := range maxBlobsForSlot {
 					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
 					b.SignedBlockHeader = header
 					b.Index = uint64(j)
@@ -858,7 +859,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 				require.NoError(t, err)
 				prevRoot = bRoot
 				// Send the maximum possible blobs per slot.
-				for j := 0; j < maxBlobsForSlot; j++ {
+				for j := range maxBlobsForSlot {
 					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
 					b.SignedBlockHeader = header
 					b.Index = uint64(j)

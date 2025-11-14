@@ -76,7 +76,7 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accs := make([]*Account, len(keys))
-	for i := 0; i < len(keys); i++ {
+	for i := range keys {
 		accs[i] = &Account{
 			ValidatingPublicKey: hexutil.Encode(keys[i][:]),
 			AccountName:         petnames.DeterministicName(keys[i][:], "-"),

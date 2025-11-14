@@ -29,14 +29,14 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	var err error
 
 	sampleRoot := make([]byte, 32)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		sampleRoot[i] = byte(i)
 	}
 
 	sampleExecutionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		sampleExecutionBranch[i] = make([]byte, 32)
-		for j := 0; j < 32; j++ {
+		for j := range 32 {
 			sampleExecutionBranch[i][j] = byte(i + j)
 		}
 	}
@@ -460,7 +460,7 @@ func createDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
+	for i := range syncCommitteeSize {
 		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	nextSyncCommittee := &pb.SyncCommittee{
@@ -479,7 +479,7 @@ func createDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	}
 
 	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+	for i := range fieldparams.ExecutionBranchDepth {
 		executionBranch[i] = make([]byte, 32)
 	}
 
@@ -731,7 +731,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	currentEpoch := slots.ToEpoch(currentSlot)
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
+	for i := range syncCommitteeSize {
 		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	currentSyncCommittee := &pb.SyncCommittee{
@@ -750,7 +750,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	}
 
 	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+	for i := range fieldparams.ExecutionBranchDepth {
 		executionBranch[i] = make([]byte, 32)
 	}
 

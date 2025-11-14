@@ -121,7 +121,7 @@ func (s *Uint64String) UnmarshalText(t []byte) error {
 
 // MarshalText returns a byte representation of the text from Uint64String.
 func (s Uint64String) MarshalText() ([]byte, error) {
-	return []byte(fmt.Sprintf("%d", s)), nil
+	return fmt.Appendf(nil, "%d", s), nil
 }
 
 // VersionResponse is a JSON representation of a field in the builder API header response.

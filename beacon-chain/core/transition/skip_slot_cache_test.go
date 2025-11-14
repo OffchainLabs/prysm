@@ -108,7 +108,7 @@ func TestSkipSlotCache_ConcurrentMixup(t *testing.T) {
 
 	// prepare copies for both states
 	var setups []state.BeaconState
-	for i := uint64(0); i < 300; i++ {
+	for i := range uint64(300) {
 		var st state.BeaconState
 		if i%2 == 0 {
 			st = s1

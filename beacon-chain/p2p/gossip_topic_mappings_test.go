@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestMappingHasNoDuplicates(t *testing.T) {
@@ -18,7 +19,7 @@ func TestMappingHasNoDuplicates(t *testing.T) {
 		if _, ok := m[reflect.TypeOf(v())]; ok {
 			t.Errorf("%T is duplicated in the topic mapping", v)
 		}
-		m[reflect.TypeOf(v)] = true
+		m[reflect.TypeFor[func() proto.Message]()] = true
 	}
 }
 

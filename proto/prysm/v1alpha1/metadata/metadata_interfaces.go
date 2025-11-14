@@ -12,7 +12,7 @@ type Metadata interface {
 	AttnetsBitfield() bitfield.Bitvector64
 	SyncnetsBitfield() bitfield.Bitvector4
 	CustodyGroupCount() uint64
-	InnerObject() interface{}
+	InnerObject() any
 	IsNil() bool
 	Copy() Metadata
 	ssz.Marshaler

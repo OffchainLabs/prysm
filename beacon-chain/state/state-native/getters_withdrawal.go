@@ -161,7 +161,7 @@ func (b *BeaconState) ExpectedWithdrawals() ([]*enginev1.Withdrawal, uint64, err
 
 	validatorsLen := b.validatorsLen()
 	bound := min(uint64(validatorsLen), params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep)
-	for i := uint64(0); i < bound; i++ {
+	for range bound {
 		val, err := b.validatorAtIndexReadOnly(validatorIndex)
 		if err != nil {
 			return nil, 0, errors.Wrapf(err, "could not retrieve validator at index %d", validatorIndex)

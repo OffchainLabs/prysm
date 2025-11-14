@@ -29,7 +29,7 @@ func (b *BeaconState) previousEpochAttestationsVal() []*ethpb.PendingAttestation
 	}
 
 	res := make([]*ethpb.PendingAttestation, len(b.previousEpochAttestations))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i] = b.previousEpochAttestations[i].Copy()
 	}
 	return res
@@ -59,7 +59,7 @@ func (b *BeaconState) currentEpochAttestationsVal() []*ethpb.PendingAttestation 
 	}
 
 	res := make([]*ethpb.PendingAttestation, len(b.currentEpochAttestations))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i] = b.currentEpochAttestations[i].Copy()
 	}
 	return res

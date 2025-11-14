@@ -18,7 +18,7 @@ func TestStore_migrateSourceTargetEpochsBucketUp(t *testing.T) {
 	// See: https://github.com/prysmaticlabs/prysm/issues/8509
 	numKeys := 2*publicKeyMigrationBatchSize + 1
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		var pk [fieldparams.BLSPubkeyLength]byte
 		copy(pk[:], fmt.Sprintf("%d", i))
 		pubKeys[i] = pk
@@ -119,7 +119,7 @@ func TestStore_migrateSourceTargetEpochsBucketDown(t *testing.T) {
 	// See: https://github.com/prysmaticlabs/prysm/issues/8509
 	numKeys := 2*publicKeyMigrationBatchSize + 1
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		var pk [fieldparams.BLSPubkeyLength]byte
 		copy(pk[:], fmt.Sprintf("%d", i))
 		pubKeys[i] = pk

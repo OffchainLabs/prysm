@@ -261,7 +261,7 @@ func (node *LighthouseBeaconNode) createTestnetDir(ctx context.Context, index in
 		return "", err
 	}
 	bootPath := filepath.Join(testNetDir, "boot_enr.yaml")
-	enrYaml := []byte(fmt.Sprintf("[%s]", node.enr))
+	enrYaml := fmt.Appendf(nil, "[%s]", node.enr)
 	if err := file.WriteFile(bootPath, enrYaml); err != nil {
 		return "", err
 	}

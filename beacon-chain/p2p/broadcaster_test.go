@@ -22,7 +22,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -61,7 +60,7 @@ func TestService_Broadcast(t *testing.T) {
 
 	topic := "/eth2/%x/testing"
 	// Set a test gossip mapping for testpb.TestSimpleMessage.
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Fork]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest)
@@ -107,7 +106,7 @@ func TestService_Broadcast_ReturnsErr_TopicNotMapped(t *testing.T) {
 }
 
 func TestService_Attestation_Subnet(t *testing.T) {
-	if gtm := GossipTypeMapping[reflect.TypeOf(&ethpb.Attestation{})]; gtm != AttestationSubnetTopicFormat {
+	if gtm := GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]; gtm != AttestationSubnetTopicFormat {
 		t.Errorf("Constant is out of date. Wanted %s, got %s", AttestationSubnetTopicFormat, gtm)
 	}
 
@@ -175,7 +174,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	subnet := uint64(5)
 
 	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -355,7 +354,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
 	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -433,7 +432,7 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	subnet := uint64(5)
 
 	topic := SyncCommitteeSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -510,7 +509,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 	subnet := uint64(0)
 
 	topic := BlobSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(blobSidecar)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -598,7 +597,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 
 		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
 		require.NoError(t, err)
-		expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))
+		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
 			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}
@@ -674,7 +673,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 
 		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
 		require.NoError(t, err)
-		expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))
+		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
 			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}

@@ -436,7 +436,7 @@ func requestedValIndices(w http.ResponseWriter, r *http.Request, st state.Beacon
 	}
 	if len(valIndices) == 0 {
 		valIndices = make([]primitives.ValidatorIndex, len(allVals))
-		for i := 0; i < len(allVals); i++ {
+		for i := range allVals {
 			valIndices[i] = primitives.ValidatorIndex(i)
 		}
 	}

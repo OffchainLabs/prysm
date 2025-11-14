@@ -146,7 +146,7 @@ func TestEnsureEmbeddedGenesis(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Embedded Genesis works with Mainnet config
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	undo, err := params.SetActiveWithUndo(cfg)
 	require.NoError(t, err)
 	defer func() {

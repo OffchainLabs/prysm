@@ -16,11 +16,11 @@ import (
 
 // testBlobSetup holds common test data for blob reconstruction tests.
 type testBlobSetup struct {
-	blobCount                     int
-	blobs                         []kzg.Blob
-	roBlock                       blocks.ROBlock
-	roDataColumnSidecars          []blocks.RODataColumn
-	verifiedRoDataColumnSidecars  []blocks.VerifiedRODataColumn
+	blobCount                    int
+	blobs                        []kzg.Blob
+	roBlock                      blocks.ROBlock
+	roDataColumnSidecars         []blocks.RODataColumn
+	verifiedRoDataColumnSidecars []blocks.VerifiedRODataColumn
 }
 
 // setupTestBlobs creates a complete test setup with blobs, cells, proofs, and data column sidecars.
