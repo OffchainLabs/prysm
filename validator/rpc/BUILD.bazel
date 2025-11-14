@@ -17,12 +17,13 @@ go_library(
         "server.go",
         "structs.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/validator/rpc",
+    importpath = "github.com/OffchainLabs/prysm/v7/validator/rpc",
     visibility = [
         "//visibility:public",
     ],
     deps = [
         "//api:go_default_library",
+        "//api/client:go_default_library",
         "//api/grpc:go_default_library",
         "//api/pagination:go_default_library",
         "//api/server:go_default_library",

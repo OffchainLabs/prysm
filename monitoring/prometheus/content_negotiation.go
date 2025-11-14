@@ -20,7 +20,7 @@ type generatedResponse struct {
 	Err string `json:"error"`
 
 	// Data is response output, if any.
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }
 
 // negotiateContentType parses "Accept:" header and returns preferred content type string.

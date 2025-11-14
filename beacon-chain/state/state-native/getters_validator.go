@@ -1,13 +1,13 @@
 package state_native
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // Validators participating in consensus on the beacon chain.
@@ -34,7 +34,7 @@ func (b *BeaconState) validatorsVal() []*ethpb.Validator {
 	v = b.validatorsMultiValue.Value(b)
 
 	res := make([]*ethpb.Validator, len(v))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		val := v[i]
 		if val == nil {
 			continue
@@ -52,7 +52,7 @@ func (b *BeaconState) validatorsReadOnlyVal() []state.ReadOnlyValidator {
 
 	res := make([]state.ReadOnlyValidator, len(v))
 	var err error
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		val := v[i]
 		if val == nil {
 			continue
@@ -172,7 +172,7 @@ func (b *BeaconState) PublicKeys() ([][fieldparams.BLSPubkeyLength]byte, error) 
 
 	l := b.validatorsLen()
 	res := make([][fieldparams.BLSPubkeyLength]byte, l)
-	for i := 0; i < l; i++ {
+	for i := range l {
 		val, err := b.validatorsMultiValue.At(b, uint64(i))
 		if err != nil {
 			return nil, err
@@ -201,7 +201,7 @@ func (b *BeaconState) ReadFromEveryValidator(f func(idx int, val state.ReadOnlyV
 		return state.ErrNilValidatorsInState
 	}
 	l := b.validatorsMultiValue.Len(b)
-	for i := 0; i < l; i++ {
+	for i := range l {
 		v, err := b.validatorsMultiValue.At(b, uint64(i))
 		if err != nil {
 			return err

@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/pkg/errors"
 )
 

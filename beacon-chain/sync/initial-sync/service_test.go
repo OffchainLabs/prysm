@@ -7,31 +7,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	prysmSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	prysmSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -174,7 +174,7 @@ func TestService_InitStartStop(t *testing.T) {
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
 			})
-			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
+			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
 			time.Sleep(500 * time.Millisecond)
 			assert.NotNil(t, s)
 			if tt.setGenesis != nil {
@@ -182,11 +182,9 @@ func TestService_InitStartStop(t *testing.T) {
 			}
 
 			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				s.Start()
-				wg.Done()
-			}()
+			})
 
 			go func() {
 				// Allow to exit from test (on no head loop waiting for head is started).
@@ -217,7 +215,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
 			genesisChan:  make(chan time.Time),
 		}
-		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil)
+		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil, nil)
 		return s, cs
 	}
 
@@ -228,11 +226,9 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		s, _ := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			s.Start()
-			wg.Done()
-		}()
+		})
 		go func() {
 			time.AfterFunc(500*time.Millisecond, func() {
 				cancel()
@@ -259,11 +255,9 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		expectedGenesisTime := gt
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			s.Start()
-			wg.Done()
-		}()
+		})
 		rg := func() time.Time { return gt.Add(time.Second * 12) }
 		go func() {
 			time.AfterFunc(200*time.Millisecond, func() {
@@ -290,15 +284,13 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		expectedGenesisTime := time.Now().Add(60 * time.Second)
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			time.AfterFunc(500*time.Millisecond, func() {
 				var vr [32]byte
 				require.NoError(t, gs.SetClock(startup.NewClock(expectedGenesisTime, vr)))
 			})
 			s.Start()
-			wg.Done()
-		}()
+		})
 
 		if util.WaitTimeout(wg, time.Second*5) {
 			t.Fatalf("Test should have exited by now, timed out")
@@ -530,12 +522,12 @@ func TestOriginOutsideRetention(t *testing.T) {
 func TestFetchOriginSidecars(t *testing.T) {
 	ctx := t.Context()
 
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-	secondsPerSlot := beaconConfig.SecondsPerSlot
-	slotsPerEpoch := beaconConfig.SlotsPerEpoch
+	secondsPerSlot := cfg.SecondsPerSlot
+	slotsPerEpoch := cfg.SlotsPerEpoch
 	secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
-	retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+	retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
 
 	genesisValidatorRoot := [fieldparams.RootLength]byte{}
 
@@ -683,6 +675,7 @@ func TestFetchOriginColumns(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
 	params.OverrideBeaconConfig(cfg)
 
 	const (
@@ -785,7 +778,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 

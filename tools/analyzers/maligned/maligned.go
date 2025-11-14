@@ -38,7 +38,7 @@ func optimalSort(sizes gcSizes, str *types.Struct) string {
 	fields := make([]*types.Var, nf)
 	alignofs := make([]int64, nf)
 	sizeofs := make([]int64, nf)
-	for i := 0; i < nf; i++ {
+	for i := range nf {
 		fields[i] = str.Field(i)
 		ft := fields[i].Type()
 		alignofs[i] = sizes.Alignof(ft)
@@ -62,7 +62,7 @@ func optimalSize(str *types.Struct, sizes *gcSizes) int64 {
 	fields := make([]*types.Var, nf)
 	alignofs := make([]int64, nf)
 	sizeofs := make([]int64, nf)
-	for i := 0; i < nf; i++ {
+	for i := range nf {
 		fields[i] = str.Field(i)
 		ft := fields[i].Type()
 		alignofs[i] = sizes.Alignof(ft)
@@ -197,7 +197,7 @@ func (s *gcSizes) Sizeof(T types.Type) int64 {
 
 		var o int64
 		max := int64(1)
-		for i := 0; i < nf; i++ {
+		for i := range nf {
 			ft := t.Field(i).Type()
 			a, sz := s.Alignof(ft), s.Sizeof(ft)
 			if a > max {

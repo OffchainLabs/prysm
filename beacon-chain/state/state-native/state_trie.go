@@ -4,23 +4,23 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sort"
+	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/fieldtrie"
-	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
+	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
@@ -650,6 +650,11 @@ func InitializeFromProtoUnsafeFulu(st *ethpb.BeaconStateFulu) (state.BeaconState
 	for i, v := range st.ProposerLookahead {
 		proposerLookahead[i] = primitives.ValidatorIndex(v)
 	}
+	// Proposer lookahead must be exactly 2 * SLOTS_PER_EPOCH in length. We fill in with zeroes instead of erroring out here
+	for i := len(proposerLookahead); i < 2*fieldparams.SlotsPerEpoch; i++ {
+		proposerLookahead = append(proposerLookahead, 0)
+	}
+
 	fieldCount := params.BeaconConfig().BeaconStateFuluFieldCount
 	b := &BeaconState{
 		version:                           version.Fulu,
@@ -1199,7 +1204,7 @@ func (b *BeaconState) CopyAllTries() {
 	}
 }
 
-func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements interface{}) ([32]byte, error) {
+func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements any) ([32]byte, error) {
 	fTrie := b.stateFieldLeaves[index]
 	fTrieMutex := fTrie.RWMutex
 	// We can't lock the trie directly because the trie's variable gets reassigned,
@@ -1236,9 +1241,7 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements interf
 	// remove duplicate indexes
 	b.dirtyIndices[index] = slice.SetUint64(b.dirtyIndices[index])
 	// sort indexes again
-	sort.Slice(b.dirtyIndices[index], func(i int, j int) bool {
-		return b.dirtyIndices[index][i] < b.dirtyIndices[index][j]
-	})
+	slices.Sort(b.dirtyIndices[index])
 	root, err := fTrie.RecomputeTrie(b.dirtyIndices[index], elements)
 	if err != nil {
 		return [32]byte{}, err
@@ -1247,7 +1250,7 @@ func (b *BeaconState) recomputeFieldTrie(index types.FieldIndex, elements interf
 	return root, nil
 }
 
-func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements interface{}, length uint64) error {
+func (b *BeaconState) resetFieldTrie(index types.FieldIndex, elements any, length uint64) error {
 	fTrie, err := fieldtrie.NewFieldTrie(index, fieldMap[index], elements, length)
 	if err != nil {
 		return err

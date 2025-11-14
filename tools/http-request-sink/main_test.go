@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 type sampleRPCRequest struct {
@@ -31,7 +31,7 @@ func Test_parseAndCaptureRequest(t *testing.T) {
 	httpReq, err := http.NewRequest("GET", "/", bytes.NewBuffer(enc))
 	require.NoError(t, err)
 
-	reqContent := map[string]interface{}{}
+	reqContent := map[string]any{}
 	err = parseRequest(httpReq, &reqContent)
 	require.NoError(t, err)
 
@@ -52,7 +52,7 @@ func Test_parseAndCaptureRequest(t *testing.T) {
 	fileContents, err := io.ReadAll(f)
 	require.NoError(t, err)
 
-	receivedContent := map[string]interface{}{}
+	receivedContent := map[string]any{}
 	err = json.Unmarshal(fileContents, &receivedContent)
 	require.NoError(t, err)
 

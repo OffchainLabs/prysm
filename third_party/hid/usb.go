@@ -46,7 +46,7 @@ type DeviceInfo struct {
 	Interface int
 
 	// Raw low level libusb endpoint data for simplified communication
-	rawDevice interface{}
+	rawDevice any
 	rawPort   *uint8 // Pointer to differentiate between unset and port 0
 	rawReader *uint8 // Pointer to differentiate between unset and endpoint 0
 	rawWriter *uint8 // Pointer to differentiate between unset and endpoint 0

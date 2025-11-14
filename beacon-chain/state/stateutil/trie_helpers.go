@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
 )
 
@@ -61,7 +61,7 @@ func ReturnTrieLayerVariable(elements [][32]byte, length uint64) [][]*[32]byte {
 	buffer := bytes.NewBuffer([]byte{})
 	buffer.Grow(64)
 
-	for i := uint8(0); i < depth; i++ {
+	for i := range depth {
 		layerLen := len(layers[i])
 		oddNodeLength := layerLen%2 == 1
 		if oddNodeLength {

@@ -4,21 +4,21 @@ import (
 	"context"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	stateTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/state/testing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestProcessPendingDepositsMultiplesSameDeposits(t *testing.T) {
@@ -95,7 +95,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, primitives.Gwei(100), res)
 				// Validators 0..9 should have their balance increased
-				for i := primitives.ValidatorIndex(0); i < 10; i++ {
+				for i := range primitives.ValidatorIndex(10) {
 					b, err := st.BalanceAtIndex(i)
 					require.NoError(t, err)
 					require.Equal(t, params.BeaconConfig().MinActivationBalance+uint64(amountAvailForProcessing)/10, b)
@@ -122,7 +122,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 			check: func(t *testing.T, st state.BeaconState) {
 				amountAvailForProcessing := helpers.ActivationExitChurnLimit(1_000 * 1e9)
 				// Validators 0..9 should have their balance increased
-				for i := primitives.ValidatorIndex(0); i < 2; i++ {
+				for i := range primitives.ValidatorIndex(2) {
 					b, err := st.BalanceAtIndex(i)
 					require.NoError(t, err)
 					require.Equal(t, params.BeaconConfig().MinActivationBalance+uint64(amountAvailForProcessing), b)
@@ -149,7 +149,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, primitives.Gwei(0), res)
 				// Validators 0..4 should have their balance increased
-				for i := primitives.ValidatorIndex(0); i < 4; i++ {
+				for i := range primitives.ValidatorIndex(4) {
 					b, err := st.BalanceAtIndex(i)
 					require.NoError(t, err)
 					require.Equal(t, params.BeaconConfig().MinActivationBalance+uint64(amountAvailForProcessing)/5, b)
@@ -528,7 +528,7 @@ func stateWithActiveBalanceETH(t *testing.T, balETH uint64) state.BeaconState {
 
 	vals := make([]*eth.Validator, numVals)
 	bals := make([]uint64, numVals)
-	for i := uint64(0); i < numVals; i++ {
+	for i := range numVals {
 		wc := make([]byte, 32)
 		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
 		wc[31] = byte(i)

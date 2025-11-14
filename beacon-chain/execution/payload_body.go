@@ -4,11 +4,11 @@ import (
 	"context"
 	"sort"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -142,7 +142,7 @@ func computeRanges(hbns []hashBlockNumber) []byRangeReq {
 	ranges := make([]byRangeReq, 0)
 	start := hbns[0].n
 	count := uint64(0)
-	for i := 0; i < len(hbns); i++ {
+	for i := range hbns {
 		if hbns[i].n == start+count {
 			count++
 			continue

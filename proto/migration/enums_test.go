@@ -3,8 +3,8 @@ package migration
 import (
 	"testing"
 
-	v1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 func TestV1Alpha1ConnectionStateToV1(t *testing.T) {

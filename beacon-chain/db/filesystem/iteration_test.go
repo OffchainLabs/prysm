@@ -10,11 +10,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/spf13/afero"
 )
 
@@ -188,7 +188,7 @@ func TestListDir(t *testing.T) {
 			name:     "root filter",
 			dirPath:  ".",
 			expected: []string{childlessBlob.name, blobWithSsz.name, blobWithSszAndTmp.name},
-			filter:   isRootDir,
+			filter:   IsBlockRootDir,
 		},
 		{
 			name:     "ssz filter",

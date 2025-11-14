@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -390,7 +390,7 @@ func TestListValidators(t *testing.T) {
 
 					// Generate more than 250 validators, but expect only 250 to be returned
 					validators := make([]*structs.ValidatorContainer, 267)
-					for idx := 0; idx < len(validators); idx++ {
+					for idx := range validators {
 						validators[idx] = validValidatorsResponse.Data[0]
 					}
 
@@ -402,7 +402,7 @@ func TestListValidators(t *testing.T) {
 				},
 				generateProtoValidatorsResponse: func() *ethpb.Validators {
 					validators := make([]*ethpb.Validators_ValidatorContainer, 250)
-					for idx := 0; idx < len(validators); idx++ {
+					for idx := range validators {
 						validators[idx] = &ethpb.Validators_ValidatorContainer{
 							Index: 1,
 							Validator: &ethpb.Validator{

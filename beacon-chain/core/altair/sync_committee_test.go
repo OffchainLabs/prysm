@@ -4,24 +4,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 )
 
 func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 	getState := func(t *testing.T, count uint64, vers int) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			validators[i] = &ethpb.Validator{
 				ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
@@ -113,7 +113,7 @@ func TestSyncCommitteeIndices_DifferentPeriods(t *testing.T) {
 	helpers.ClearCache()
 	getState := func(t *testing.T, count uint64) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			validators[i] = &ethpb.Validator{
 				ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
@@ -147,7 +147,7 @@ func TestSyncCommitteeIndices_DifferentPeriods(t *testing.T) {
 func TestSyncCommittee_CanGet(t *testing.T) {
 	getState := func(t *testing.T, count uint64) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			blsKey, err := bls.RandKey()
 			require.NoError(t, err)
 			validators[i] = &ethpb.Validator{
@@ -394,7 +394,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 
 func getState(t *testing.T, count uint64) state.BeaconState {
 	validators := make([]*ethpb.Validator, count)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		blsKey, err := bls.RandKey()
 		require.NoError(t, err)
 		validators[i] = &ethpb.Validator{

@@ -7,28 +7,28 @@ import (
 	"sync"
 	"time"
 
-	builderapi "github.com/OffchainLabs/prysm/v6/api/client/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
@@ -191,9 +191,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		// Set eth1 data.
 		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
@@ -229,11 +227,11 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
 
 		// Set sync aggregate. New in Altair.
-		vs.setSyncAggregate(ctx, sBlk)
+		vs.setSyncAggregate(ctx, sBlk, head)
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
-	}()
+	})
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
@@ -312,14 +310,14 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
+		if errors.Is(err, builderapi.ErrBadGateway) {
+			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
+			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+		}
 	} else if block.Version() >= version.Deneb {
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
-		if errors.Is(err, builderapi.ErrBadGateway) && block.IsBlinded() {
-			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
-			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
-		}
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
 	}
 
@@ -413,13 +411,13 @@ func (vs *Server) handleUnblindedBlock(
 
 	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
-		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
 		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(block))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "data column sidcars")
 		}

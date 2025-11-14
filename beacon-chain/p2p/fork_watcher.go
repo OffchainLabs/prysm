@@ -1,8 +1,8 @@
 package p2p
 
 import (
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // A background routine which listens for new and upcoming forks and

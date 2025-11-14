@@ -205,6 +205,26 @@ prysm_image_deps()
 
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 
+# Override golang.org/x/tools to use v0.38.0 instead of v0.30.0
+# This is necessary as this dependency is required by rules_go and they do not accept dependency
+# update PRs. Instead, they ask downstream projects to override the dependency. To generate the
+# patches or update this dependency again, check out the rules_go repo then run the releaser tool.
+# bazel run //go/tools/releaser -- upgrade-dep -mirror=false org_golang_x_tools
+# Copy the patches and http_archive updates from rules_go here.
+http_archive(
+    name = "org_golang_x_tools",
+    patch_args = ["-p1"],
+    patches = [
+        "//third_party:org_golang_x_tools-deletegopls.patch",
+        "//third_party:org_golang_x_tools-gazelle.patch",
+    ],
+    sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
+    strip_prefix = "tools-0.38.0",
+    urls = [
+        "https://github.com/golang/tools/archive/refs/tags/v0.38.0.zip",
+    ],
+)
+
 go_rules_dependencies()
 
 go_register_toolchains(
@@ -253,16 +273,16 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.6.0-beta.0"
+consensus_spec_version = "v1.6.0"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
 consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
-        "general": "sha256-rT3jQp2+ZaDiO66gIQggetzqr+kGeexaLqEhbx4HDMY=",
-        "minimal": "sha256-wowwwyvd0KJLsE+oDOtPkrhZyJndJpJ0lbXYsLH6XBw=",
-        "mainnet": "sha256-4ZLrLNeO7NihZ4TuWH5V5fUhvW9Y3mAPBQDCqrfShps=",
+        "general": "sha256-54hTaUNF9nLg+hRr3oHoq0yjZpW3MNiiUUuCQu6Rajk=",
+        "minimal": "sha256-1JHIGg3gVMjvcGYRHR5cwdDgOvX47oR/MWp6gyAeZfA=",
+        "mainnet": "sha256-292h3W2Ffts0YExgDTyxYe9Os7R0bZIXuAaMO8P6kl4=",
     },
     version = consensus_spec_version,
 )
@@ -278,7 +298,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-sBe3Rx8zGq9IrvfgIhZQpYidGjy3mE1SiCb6/+pjLdY=",
+    integrity = "sha256-VzBgrEokvYSMIIXVnSA5XS9I3m9oxpvToQGxC1N5lzw=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
@@ -327,9 +347,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-NZr/gsQK9rBHRnznlPBiNzJpK8MPMrfUa3f+QYqn1+g=",
-    strip_prefix = "mainnet-978f1794eada6f85bee76e4d2d5959a5fb8e0cc5",
-    url = "https://github.com/eth-clients/mainnet/archive/978f1794eada6f85bee76e4d2d5959a5fb8e0cc5.tar.gz",
+    integrity = "sha256-+mqMXyboedVw8Yp0v+U9GDz98QoC1SZET8mjaKPX+AI=",
+    strip_prefix = "mainnet-980aee8893a2291d473c38f63797d5bc370fa381",
+    url = "https://github.com/eth-clients/mainnet/archive/980aee8893a2291d473c38f63797d5bc370fa381.tar.gz",
 )
 
 http_archive(

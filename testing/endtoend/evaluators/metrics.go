@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -90,7 +90,7 @@ func metricsTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	currentSlot := slots.CurrentSlot(genesis.Time())
 	currentEpoch := slots.ToEpoch(currentSlot)
 	forkDigest := params.ForkDigest(currentEpoch)
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		response, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
 			// Continue if the connection fails, regular flake.
