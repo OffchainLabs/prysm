@@ -2,6 +2,7 @@ package peers
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -35,7 +36,7 @@ func TestPickBest(t *testing.T) {
 		{
 			name:     "all busy except i=5",
 			n:        1,
-			busy:     testBusyMap(append(append([]peer.ID{}, best[0:5]...), best[6:]...)),
+			busy:     testBusyMap(slices.Concat(best[0:5], best[6:])),
 			expected: []peer.ID{best[5]},
 		},
 		{

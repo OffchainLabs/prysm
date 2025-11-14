@@ -55,10 +55,7 @@ func (s *Simulator) generateAttestationsForSlot(ctx context.Context, ver int, sl
 
 		valsPerAttestation := uint64(math.Floor(s.srvConfig.Params.AggregationPercent * float64(valsPerCommittee)))
 		for i := startIdx; i < endIdx; i += valsPerAttestation {
-			attEndIdx := i + valsPerAttestation
-			if attEndIdx >= endIdx {
-				attEndIdx = endIdx
-			}
+			attEndIdx := min(i+valsPerAttestation, endIdx)
 			indices := make([]uint64, 0, valsPerAttestation)
 			for idx := i; idx < attEndIdx; idx++ {
 				indices = append(indices, idx)

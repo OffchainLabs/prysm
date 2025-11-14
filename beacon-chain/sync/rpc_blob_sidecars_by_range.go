@@ -60,7 +60,7 @@ func (s *Service) streamBlobBatch(ctx context.Context, batch blockBatch, wQuota 
 var blobRpcThrottleInterval = time.Second
 
 // blobsSidecarsByRangeRPCHandler looks up the request blobs from the database from a given start slot index
-func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) blobSidecarsByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	var err error
 	ctx, span := trace.StartSpan(ctx, "sync.BlobsSidecarsByRangeHandler")
 	defer span.End()
@@ -209,10 +209,7 @@ func validateBlobsByRange(r *pb.BlobSidecarsByRangeRequest, current primitives.S
 		rp.end = rp.start
 	}
 
-	limit := blobBatchLimit(current)
-	if limit > maxRequest {
-		limit = maxRequest
-	}
+	limit := min(blobBatchLimit(current), maxRequest)
 	if rp.size > limit {
 		rp.size = limit
 	}

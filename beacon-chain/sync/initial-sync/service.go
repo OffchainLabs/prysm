@@ -217,9 +217,16 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return nil
 	}
 
+	if err != nil {
+		return errors.Wrap(err, "error fetching origin checkpoint blockroot")
+	}
+
 	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "block")
+	}
+	if block.IsNil() {
+		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
 	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
@@ -305,10 +312,7 @@ func (s *Service) Resync() error {
 }
 
 func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
-	required := params.BeaconConfig().MaxPeersToSync
-	if flags.Get().MinimumSyncPeers < required {
-		required = flags.Get().MinimumSyncPeers
-	}
+	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
 	for {
 		if s.ctx.Err() != nil {
 			return nil, s.ctx.Err()

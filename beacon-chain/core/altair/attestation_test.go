@@ -461,7 +461,7 @@ func TestFuzzProcessAttestationsNoVerify_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	st := &ethpb.BeaconStateAltair{}
 	b := &ethpb.SignedBeaconBlockAltair{Block: &ethpb.BeaconBlockAltair{}}
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(st)
 		fuzzer.Fuzz(b)
 		if b.Block == nil {

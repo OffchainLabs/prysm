@@ -74,11 +74,11 @@ func setupGenesisState(t testing.TB, count uint64) *ethpb.BeaconState {
 }
 
 func BenchmarkCloneValidators_Proto(b *testing.B) {
-	b.StopTimer()
+
 	validators := make([]*ethpb.Validator, 16384)
 	somePubKey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
 	someRoot := [32]byte{3, 4, 5}
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:                  somePubKey[:],
 			WithdrawalCredentials:      someRoot[:],
@@ -90,18 +90,18 @@ func BenchmarkCloneValidators_Proto(b *testing.B) {
 			WithdrawableEpoch:          5,
 		}
 	}
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		cloneValidatorsWithProto(validators)
 	}
 }
 
 func BenchmarkCloneValidators_Manual(b *testing.B) {
-	b.StopTimer()
+
 	validators := make([]*ethpb.Validator, 16384)
 	somePubKey := [fieldparams.BLSPubkeyLength]byte{1, 2, 3}
 	someRoot := [32]byte{3, 4, 5}
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:                  somePubKey[:],
 			WithdrawalCredentials:      someRoot[:],
@@ -113,33 +113,33 @@ func BenchmarkCloneValidators_Manual(b *testing.B) {
 			WithdrawableEpoch:          5,
 		}
 	}
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		cloneValidatorsManually(validators)
 	}
 }
 
 func BenchmarkStateClone_Proto(b *testing.B) {
-	b.StopTimer()
+
 	params.SetupTestConfigCleanup(b)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(b, 64)
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, ok := proto.Clone(genesis).(*ethpb.BeaconState)
 		assert.Equal(b, true, ok, "Entity is not of type *ethpb.BeaconState")
 	}
 }
 
 func BenchmarkStateClone_Manual(b *testing.B) {
-	b.StopTimer()
+
 	params.SetupTestConfigCleanup(b)
 	params.OverrideBeaconConfig(params.MinimalSpecConfig())
 	genesis := setupGenesisState(b, 64)
 	st, err := statenative.InitializeFromProtoPhase0(genesis)
 	require.NoError(b, err)
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = st.ToProto()
 	}
 }
@@ -147,7 +147,7 @@ func BenchmarkStateClone_Manual(b *testing.B) {
 func cloneValidatorsWithProto(vals []*ethpb.Validator) []*ethpb.Validator {
 	var ok bool
 	res := make([]*ethpb.Validator, len(vals))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i], ok = proto.Clone(vals[i]).(*ethpb.Validator)
 		if !ok {
 			log.Debug("Entity is not of type *ethpb.Validator")
@@ -158,7 +158,7 @@ func cloneValidatorsWithProto(vals []*ethpb.Validator) []*ethpb.Validator {
 
 func cloneValidatorsManually(vals []*ethpb.Validator) []*ethpb.Validator {
 	res := make([]*ethpb.Validator, len(vals))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		val := vals[i]
 		res[i] = &ethpb.Validator{
 			PublicKey:                  val.PublicKey,

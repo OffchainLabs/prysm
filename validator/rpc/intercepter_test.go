@@ -24,7 +24,7 @@ func TestServer_AuthTokenInterceptor_Verify(t *testing.T) {
 	unaryInfo := &grpc.UnaryServerInfo{
 		FullMethod: "Proto.CreateWallet",
 	}
-	unaryHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	unaryHandler := func(ctx context.Context, req any) (any, error) {
 		return nil, nil
 	}
 	ctxMD := map[string][]string{
@@ -45,7 +45,7 @@ func TestServer_AuthTokenInterceptor_BadToken(t *testing.T) {
 	unaryInfo := &grpc.UnaryServerInfo{
 		FullMethod: "Proto.CreateWallet",
 	}
-	unaryHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	unaryHandler := func(ctx context.Context, req any) (any, error) {
 		return nil, nil
 	}
 

@@ -50,7 +50,7 @@ func TestService_PublishToTopicConcurrentMapWrite(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(i int) {
 			assert.NoError(t, s.PublishToTopic(ctx, topic, []byte{}))
 			wg.Done()
@@ -131,8 +131,8 @@ func TestExtractGossipDigest(t *testing.T) {
 
 func BenchmarkExtractGossipDigest(b *testing.B) {
 	topic := fmt.Sprintf(BlockSubnetTopicFormat, []byte{0xb5, 0x30, 0x3f, 0x2a}) + "/" + encoder.ProtocolSuffixSSZSnappy
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := ExtractGossipDigest(topic)
 		if err != nil {
 			b.Fatal(err)

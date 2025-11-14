@@ -17,5 +17,5 @@ type Event struct {
 	// Type is the type of event.
 	Type EventType
 	// Data is event-specific data.
-	Data interface{}
+	Data any
 }

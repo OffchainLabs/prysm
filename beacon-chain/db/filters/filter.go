@@ -74,7 +74,7 @@ func (aq AncestryQuery) Span() primitives.Slot {
 // QueryFilter defines a generic interface for type-asserting
 // specific filters to use in querying DB objects.
 type QueryFilter struct {
-	queries  map[FilterType]interface{}
+	queries  map[FilterType]any
 	ancestry AncestryQuery
 }
 
@@ -82,14 +82,14 @@ type QueryFilter struct {
 // certain Ethereum data types by attribute.
 func NewFilter() *QueryFilter {
 	return &QueryFilter{
-		queries: make(map[FilterType]interface{}),
+		queries: make(map[FilterType]any),
 	}
 }
 
 // Filters returns and underlying map of FilterType to interface{}, giving us
 // a copy of the currently set filters which can then be iterated over and type
 // asserted for use anywhere.
-func (q *QueryFilter) Filters() map[FilterType]interface{} {
+func (q *QueryFilter) Filters() map[FilterType]any {
 	return q.queries
 }
 

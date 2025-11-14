@@ -307,7 +307,7 @@ func SlashValidator(
 // ActivatedValidatorIndices determines the indices activated during the given epoch.
 func ActivatedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) []primitives.ValidatorIndex {
 	activations := make([]primitives.ValidatorIndex, 0)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		val := validators[i]
 		if val.ActivationEpoch <= epoch && epoch < val.ExitEpoch {
 			activations = append(activations, primitives.ValidatorIndex(i))
@@ -319,7 +319,7 @@ func ActivatedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Valid
 // SlashedValidatorIndices determines the indices slashed during the given epoch.
 func SlashedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) []primitives.ValidatorIndex {
 	slashed := make([]primitives.ValidatorIndex, 0)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		val := validators[i]
 		maxWithdrawableEpoch := primitives.MaxEpoch(val.WithdrawableEpoch, epoch+params.BeaconConfig().EpochsPerSlashingsVector)
 		if val.WithdrawableEpoch == maxWithdrawableEpoch && val.Slashed {

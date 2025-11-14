@@ -46,9 +46,9 @@ func TestDouble(t *testing.T) {
 				inValues[i] = i
 			}
 			outValues := make([]int, test.inValues)
-			workerResults, err := async.Scatter(len(inValues), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
+			workerResults, err := async.Scatter(len(inValues), func(offset int, entries int, _ *sync.RWMutex) (any, error) {
 				extent := make([]int, entries)
-				for i := 0; i < entries; i++ {
+				for i := range entries {
 					extent[i] = inValues[offset+i] * 2
 				}
 				return extent, nil
@@ -72,8 +72,8 @@ func TestDouble(t *testing.T) {
 func TestMutex(t *testing.T) {
 	totalRuns := 1048576
 	val := 0
-	_, err := async.Scatter(totalRuns, func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
-		for i := 0; i < entries; i++ {
+	_, err := async.Scatter(totalRuns, func(offset int, entries int, mu *sync.RWMutex) (any, error) {
+		for range entries {
 			mu.Lock()
 			val++
 			mu.Unlock()
@@ -90,8 +90,8 @@ func TestMutex(t *testing.T) {
 func TestError(t *testing.T) {
 	totalRuns := 1024
 	val := 0
-	_, err := async.Scatter(totalRuns, func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
-		for i := 0; i < entries; i++ {
+	_, err := async.Scatter(totalRuns, func(offset int, entries int, mu *sync.RWMutex) (any, error) {
+		for range entries {
 			mu.Lock()
 			val++
 			if val == 1011 {

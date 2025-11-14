@@ -28,7 +28,7 @@ func (pq priorityQueue) Swap(i, j int) {
 }
 
 // Push a LeakyBucket to priorityQueue
-func (pq *priorityQueue) Push(x interface{}) {
+func (pq *priorityQueue) Push(x any) {
 	n := len(*pq)
 	b, ok := x.(*LeakyBucket)
 	if !ok {
@@ -38,7 +38,7 @@ func (pq *priorityQueue) Push(x interface{}) {
 	*pq = append(*pq, b)
 }
 
-func (pq *priorityQueue) Pop() interface{} {
+func (pq *priorityQueue) Pop() any {
 	old := *pq
 	n := len(old)
 	b := old[n-1]

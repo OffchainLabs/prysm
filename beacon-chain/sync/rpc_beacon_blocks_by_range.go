@@ -21,7 +21,7 @@ import (
 )
 
 // beaconBlocksByRangeRPCHandler looks up the request blocks from the database from a given start block.
-func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) beaconBlocksByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.BeaconBlocksByRangeHandler")
 	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
@@ -144,10 +144,7 @@ func validateRangeRequest(r *pb.BeaconBlocksByRangeRequest, current primitives.S
 		return rangeParams{}, p2ptypes.ErrInvalidRequest
 	}
 
-	limit := uint64(flags.Get().BlockBatchLimit)
-	if limit > maxRequest {
-		limit = maxRequest
-	}
+	limit := min(uint64(flags.Get().BlockBatchLimit), maxRequest)
 	if rp.size > limit {
 		rp.size = limit
 	}

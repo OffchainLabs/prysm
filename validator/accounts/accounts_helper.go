@@ -65,7 +65,7 @@ func selectAccounts(selectionPrompt string, pubKeys [][fieldparams.BLSPubkeyLeng
 		}
 		if result == allAccountsText {
 			fmt.Printf("%s\n", au.BrightRed("[Selected all accounts]").Bold())
-			for i := 0; i < len(pubKeys); i++ {
+			for i := range pubKeys {
 				results = append(results, i)
 			}
 			break

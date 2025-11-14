@@ -367,10 +367,7 @@ func (*Service) Status() error {
 // minimumBackfillSlot determines the lowest slot that backfill needs to download based on looking back
 // MIN_EPOCHS_FOR_BLOCK_REQUESTS from the current slot.
 func minimumBackfillSlot(current primitives.Slot) primitives.Slot {
-	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
-	if oe > slots.MaxSafeEpoch() {
-		oe = slots.MaxSafeEpoch()
-	}
+	oe := min(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests), slots.MaxSafeEpoch())
 	offset := slots.UnsafeEpochStart(oe)
 	if offset >= current {
 		// Slot 0 is the genesis block, therefore the signature in it is invalid.

@@ -98,7 +98,7 @@ func TestValidateAttesterSlashing_ValidSlashing(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -143,7 +143,7 @@ func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -188,7 +188,7 @@ func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -237,7 +237,7 @@ func TestValidateAttesterSlashing_CanFilter(t *testing.T) {
 	r.setAttesterSlashingIndicesSeen([]uint64{1, 2, 3, 4}, []uint64{3, 4, 5, 6})
 
 	// The below attestations should be filtered hence bad signature is ok.
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.AttesterSlashing{})]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -308,7 +308,7 @@ func TestValidateAttesterSlashing_ContextTimeout(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -339,7 +339,7 @@ func TestValidateAttesterSlashing_Syncing(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),

@@ -57,7 +57,7 @@ func TestPoolDetectAllEnded(t *testing.T) {
 	br := batcher{min: 10, size: 10}
 	endSeq := br.before(0)
 	require.Equal(t, batchEndSequence, endSeq.state)
-	for i := 0; i < nw; i++ {
+	for range nw {
 		pool.todo(endSeq)
 	}
 	b, err := pool.complete()

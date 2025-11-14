@@ -230,8 +230,8 @@ func Benchmark_MerkleProofKZGCommitment(b *testing.B) {
 	body, err := NewBeaconBlockBody(pbBody)
 	require.NoError(b, err)
 	index := 1
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := MerkleProofKZGCommitment(body, index)
 		require.NoError(b, err)
 	}

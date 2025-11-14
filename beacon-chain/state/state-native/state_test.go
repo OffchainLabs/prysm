@@ -47,11 +47,10 @@ func TestBeaconState_NoDeadlock_Phase0(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// Continuously lock and unlock the state
 		// by acquiring the lock.
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			for _, f := range st.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
@@ -61,12 +60,11 @@ func TestBeaconState_NoDeadlock_Phase0(t *testing.T) {
 				f.FieldReference().AddRef()
 			}
 		}
-		wg.Done()
-	}()
+	})
 	// Constantly read from the offending portion
 	// of the code to ensure there is no possible
 	// recursive read locking.
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		go func() {
 			_ = st.FieldReferencesCount()
 		}()
@@ -103,11 +101,10 @@ func TestBeaconState_NoDeadlock_Altair(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// Continuously lock and unlock the state
 		// by acquiring the lock.
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
@@ -117,12 +114,11 @@ func TestBeaconState_NoDeadlock_Altair(t *testing.T) {
 				f.FieldReference().AddRef()
 			}
 		}
-		wg.Done()
-	}()
+	})
 	// Constantly read from the offending portion
 	// of the code to ensure there is no possible
 	// recursive read locking.
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		go func() {
 			_ = st.FieldReferencesCount()
 		}()
@@ -159,11 +155,10 @@ func TestBeaconState_NoDeadlock_Bellatrix(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// Continuously lock and unlock the state
 		// by acquiring the lock.
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
@@ -173,12 +168,11 @@ func TestBeaconState_NoDeadlock_Bellatrix(t *testing.T) {
 				f.FieldReference().AddRef()
 			}
 		}
-		wg.Done()
-	}()
+	})
 	// Constantly read from the offending portion
 	// of the code to ensure there is no possible
 	// recursive read locking.
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		go func() {
 			_ = st.FieldReferencesCount()
 		}()
@@ -215,11 +209,10 @@ func TestBeaconState_NoDeadlock_Capella(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// Continuously lock and unlock the state
 		// by acquiring the lock.
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
@@ -229,12 +222,11 @@ func TestBeaconState_NoDeadlock_Capella(t *testing.T) {
 				f.FieldReference().AddRef()
 			}
 		}
-		wg.Done()
-	}()
+	})
 	// Constantly read from the offending portion
 	// of the code to ensure there is no possible
 	// recursive read locking.
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		go func() {
 			_ = st.FieldReferencesCount()
 		}()
@@ -271,11 +263,10 @@ func TestBeaconState_NoDeadlock_Deneb(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// Continuously lock and unlock the state
 		// by acquiring the lock.
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			for _, f := range s.stateFieldLeaves {
 				f.Lock()
 				if f.Empty() {
@@ -285,12 +276,11 @@ func TestBeaconState_NoDeadlock_Deneb(t *testing.T) {
 				f.FieldReference().AddRef()
 			}
 		}
-		wg.Done()
-	}()
+	})
 	// Constantly read from the offending portion
 	// of the code to ensure there is no possible
 	// recursive read locking.
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		go func() {
 			_ = st.FieldReferencesCount()
 		}()
@@ -307,7 +297,7 @@ func TestBeaconState_AppendBalanceWithTrie(t *testing.T) {
 	_, err := st.HashTreeRoot(t.Context())
 	assert.NoError(t, err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if i%2 == 0 {
 			assert.NoError(t, st.UpdateBalancesAtIndex(primitives.ValidatorIndex(i), 1000))
 		}
@@ -392,7 +382,7 @@ func TestDuplicateDirtyIndices(t *testing.T) {
 		rebuildTrie:  make(map[types.FieldIndex]bool),
 		dirtyIndices: make(map[types.FieldIndex][]uint64),
 	}
-	for i := uint64(0); i < indicesLimit-5; i++ {
+	for i := range uint64(indicesLimit - 5) {
 		newState.dirtyIndices[types.Balances] = append(newState.dirtyIndices[types.Balances], i)
 	}
 	// Append duplicates
@@ -430,16 +420,16 @@ func generateState(t *testing.T) state.BeaconState {
 	}
 	zeroHash := params.BeaconConfig().ZeroHash
 	mockblockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
-	for i := 0; i < len(mockblockRoots); i++ {
+	for i := range mockblockRoots {
 		mockblockRoots[i] = zeroHash[:]
 	}
 
 	mockstateRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
-	for i := 0; i < len(mockstateRoots); i++ {
+	for i := range mockstateRoots {
 		mockstateRoots[i] = zeroHash[:]
 	}
 	mockrandaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(mockrandaoMixes); i++ {
+	for i := range mockrandaoMixes {
 		mockrandaoMixes[i] = zeroHash[:]
 	}
 	newState, err := InitializeFromProtoPhase0(&ethpb.BeaconState{

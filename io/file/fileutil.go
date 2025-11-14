@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -326,7 +327,7 @@ func HashDir(dir string) (string, error) {
 	}
 
 	h := sha256.New()
-	files = append([]string(nil), files...)
+	files = slices.Clone(files)
 	sort.Strings(files)
 	for _, file := range files {
 		hf, err := HashFile(filepath.Join(dir, file))

@@ -66,7 +66,7 @@ func (km *Keymanager) RecoverAccountsFromMnemonic(
 	}
 	privKeys := make([][]byte, numAccounts)
 	pubKeys := make([][]byte, numAccounts)
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		privKey, err := util.PrivateKeyFromSeedAndPath(
 			seed, fmt.Sprintf(ValidatingKeyDerivationPathTemplate, i),
 		)
@@ -156,7 +156,7 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 	} else {
 		fmt.Printf("Showing %d validator accounts\n", len(accountNames))
 	}
-	for i := 0; i < len(accountNames); i++ {
+	for i := range accountNames {
 		fmt.Println("")
 		validatingKeyPath := fmt.Sprintf(ValidatingKeyDerivationPathTemplate, i)
 

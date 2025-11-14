@@ -53,8 +53,7 @@ func TestValidateWithKzgBatchVerifier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			service := &Service{
 				ctx:     ctx,
@@ -79,8 +78,7 @@ func TestVerifierRoutine(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("processes single request", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		service := &Service{
 			ctx:     ctx,
@@ -101,8 +99,7 @@ func TestVerifierRoutine(t *testing.T) {
 	})
 
 	t.Run("batches multiple requests", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		service := &Service{
 			ctx:     ctx,
@@ -200,8 +197,7 @@ func TestKzgBatchVerifierConcurrency(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	service := &Service{
 		ctx:     ctx,
@@ -237,8 +233,7 @@ func TestKzgBatchVerifierFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("fallback handles mixed valid/invalid batch correctly", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		service := &Service{
 			ctx:     ctx,
@@ -259,8 +254,7 @@ func TestKzgBatchVerifierFallback(t *testing.T) {
 	})
 
 	t.Run("empty data columns fallback", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		service := &Service{
 			ctx:     ctx,

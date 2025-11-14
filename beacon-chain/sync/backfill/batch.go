@@ -78,7 +78,7 @@ type batch struct {
 }
 
 func (b batch) logFields() logrus.Fields {
-	f := map[string]interface{}{
+	f := map[string]any{
 		"batchId":   b.id(),
 		"state":     b.state.String(),
 		"scheduled": b.scheduled.String(),

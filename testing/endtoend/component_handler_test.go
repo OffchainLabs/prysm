@@ -256,7 +256,7 @@ func (c *componentHandler) required() []e2etypes.ComponentRunner {
 	return requiredComponents
 }
 
-func (c *componentHandler) printPIDs(logger func(string, ...interface{})) {
+func (c *componentHandler) printPIDs(logger func(string, ...any)) {
 	msg := "\nPID of components. Attach a debugger... if you dare!\n\n"
 
 	msg += "This test PID: " + strconv.Itoa(os.Getpid()) + " (parent=" + strconv.Itoa(os.Getppid()) + ")\n"

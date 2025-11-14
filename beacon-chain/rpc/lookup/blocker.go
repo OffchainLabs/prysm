@@ -60,7 +60,8 @@ func (e BlockIdParseError) Error() string {
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
-	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	BlobSidecars(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
+	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError)
 	DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
 }
 
@@ -224,23 +225,18 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 	return blk, nil
 }
 
-// Blobs returns the fetched blobs for a given block ID with configurable options.
-// Options can specify either blob indices or versioned hashes for retrieval.
-// The identifier can be one of:
-//   - "head" (canonical head in node's view)
-//   - "genesis"
-//   - "finalized"
-//   - "justified"
-//   - <slot>
-//   - <hex encoded block root with '0x' prefix>
-//   - <block root>
-//
-// cases:
-//   - no block, 404
-//   - block exists, has commitments, inside retention period (greater of protocol- or user-specified) serve then w/ 200 unless we hit an error reading them.
-//     we are technically not supposed to import a block to forkchoice unless we have the blobs, so the nuance here is if we can't find the file and we are inside the protocol-defined retention period, then it's actually a 500.
-//   - block exists, has commitments, outside retention period (greater of protocol- or user-specified) - ie just like block exists, no commitment
-func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+// blobsContext holds common information needed for blob retrieval
+type blobsContext struct {
+	root        [fieldparams.RootLength]byte
+	roBlock     blocks.ROBlock
+	commitments [][]byte
+	indices     []int
+	postFulu    bool
+}
+
+// resolveBlobsContext extracts common blob retrieval logic including block resolution,
+// validation, and index conversion from versioned hashes.
+func (p *BeaconDbBlocker) resolveBlobsContext(ctx context.Context, id string, opts ...options.BlobsOption) (*blobsContext, *core.RpcError) {
 	// Apply options
 	cfg := &options.BlobsConfig{}
 	for _, opt := range opts {
@@ -277,11 +273,6 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 	commitments, err := roBlock.Body().BlobKzgCommitments()
 	if err != nil {
 		return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to retrieve kzg commitments from block %#x", root), Reason: core.Internal}
-	}
-
-	// If there are no commitments return 200 w/ empty list
-	if len(commitments) == 0 {
-		return make([]*blocks.VerifiedROBlob, 0), nil
 	}
 
 	// Compute the first Fulu slot.
@@ -333,16 +324,156 @@ func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.
 		}
 	}
 
+	isPostFulu := false
+	// Create ROBlock with root for post-Fulu blocks
+	var roBlockWithRoot blocks.ROBlock
 	if roBlock.Slot() >= fuluForkSlot {
-		roBlock, err := blocks.NewROBlockWithRoot(roSignedBlock, root)
+		roBlockWithRoot, err = blocks.NewROBlockWithRoot(roSignedBlock, root)
 		if err != nil {
 			return nil, &core.RpcError{Err: errors.Wrapf(err, "failed to create roBlock with root %#x", root), Reason: core.Internal}
 		}
-
-		return p.blobsFromStoredDataColumns(roBlock, indices)
+		isPostFulu = true
 	}
 
-	return p.blobsFromStoredBlobs(commitments, root, indices)
+	return &blobsContext{
+		root:        root,
+		roBlock:     roBlockWithRoot,
+		commitments: commitments,
+		indices:     indices,
+		postFulu:    isPostFulu,
+	}, nil
+}
+
+// BlobSidecars returns the fetched blob sidecars (with full KZG proofs) for a given block ID.
+// Options can specify either blob indices or versioned hashes for retrieval.
+// The identifier can be one of:
+//   - "head" (canonical head in node's view)
+//   - "genesis"
+//   - "finalized"
+//   - "justified"
+//   - <slot>
+//   - <hex encoded block root with '0x' prefix>
+func (p *BeaconDbBlocker) BlobSidecars(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	// If there are no commitments return 200 w/ empty list
+	if len(bctx.commitments) == 0 {
+		return make([]*blocks.VerifiedROBlob, 0), nil
+	}
+
+	// Check if this is a post-Fulu block (uses data columns)
+	if bctx.postFulu {
+		return p.blobSidecarsFromStoredDataColumns(bctx.roBlock, bctx.indices)
+	}
+
+	// Pre-Fulu block (uses blob sidecars)
+	return p.blobsFromStoredBlobs(bctx.commitments, bctx.root, bctx.indices)
+}
+
+// Blobs returns just the blob data without computing KZG proofs or creating full sidecars.
+// This is an optimized endpoint for when only blob data is needed (e.g., GetBlobs endpoint).
+// The identifier can be one of:
+//   - "head" (canonical head in node's view)
+//   - "genesis"
+//   - "finalized"
+//   - "justified"
+//   - <slot>
+//   - <hex encoded block root with '0x' prefix>
+func (p *BeaconDbBlocker) Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError) {
+	bctx, rpcErr := p.resolveBlobsContext(ctx, id, opts...)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	// If there are no commitments return 200 w/ empty list
+	if len(bctx.commitments) == 0 {
+		return make([][]byte, 0), nil
+	}
+
+	// Check if this is a post-Fulu block (uses data columns)
+	if bctx.postFulu {
+		return p.blobsDataFromStoredDataColumns(bctx.root, bctx.indices, len(bctx.commitments))
+	}
+
+	// Pre-Fulu block (uses blob sidecars)
+	return p.blobsDataFromStoredBlobs(bctx.root, bctx.indices)
+}
+
+// blobsDataFromStoredBlobs retrieves just blob data (without proofs) from stored blob sidecars.
+func (p *BeaconDbBlocker) blobsDataFromStoredBlobs(root [fieldparams.RootLength]byte, indices []int) ([][]byte, *core.RpcError) {
+	summary := p.BlobStorage.Summary(root)
+
+	// If no indices are provided, use all indices that are available in the summary.
+	if len(indices) == 0 {
+		maxBlobCount := summary.MaxBlobsForEpoch()
+		for index := 0; uint64(index) < maxBlobCount; index++ { // needed for safe conversion
+			if summary.HasIndex(uint64(index)) {
+				indices = append(indices, index)
+			}
+		}
+	}
+
+	// Retrieve blob sidecars from the store and extract just the blob data.
+	blobsData := make([][]byte, 0, len(indices))
+	for _, index := range indices {
+		if !summary.HasIndex(uint64(index)) {
+			return nil, &core.RpcError{
+				Err:    fmt.Errorf("requested index %d not found", index),
+				Reason: core.NotFound,
+			}
+		}
+
+		blobSidecar, err := p.BlobStorage.Get(root, uint64(index))
+		if err != nil {
+			return nil, &core.RpcError{
+				Err:    fmt.Errorf("could not retrieve blob for block root %#x at index %d", root, index),
+				Reason: core.Internal,
+			}
+		}
+
+		blobsData = append(blobsData, blobSidecar.Blob)
+	}
+
+	return blobsData, nil
+}
+
+// blobsDataFromStoredDataColumns retrieves blob data from stored data columns without computing KZG proofs.
+func (p *BeaconDbBlocker) blobsDataFromStoredDataColumns(root [fieldparams.RootLength]byte, indices []int, blobCount int) ([][]byte, *core.RpcError) {
+	// Count how many columns we have in the store.
+	summary := p.DataColumnStorage.Summary(root)
+	stored := summary.Stored()
+	count := uint64(len(stored))
+
+	if count < peerdas.MinimumColumnCountToReconstruct() {
+		// There is no way to reconstruct the data columns.
+		return nil, &core.RpcError{
+			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs - please start the beacon node with the `--%s` flag to ensure this call to succeed, or retry later if it is already the case", flags.SubscribeAllDataSubnets.Name),
+			Reason: core.NotFound,
+		}
+	}
+
+	// Retrieve from the database needed data columns.
+	verifiedRoDataColumnSidecars, err := p.neededDataColumnSidecars(root, stored)
+	if err != nil {
+		return nil, &core.RpcError{
+			Err:    errors.Wrap(err, "needed data column sidecars"),
+			Reason: core.Internal,
+		}
+	}
+
+	// Use optimized path to get just blob data without computing proofs.
+	blobsData, err := peerdas.ReconstructBlobs(verifiedRoDataColumnSidecars, indices, blobCount)
+	if err != nil {
+		return nil, &core.RpcError{
+			Err:    errors.Wrap(err, "reconstruct blobs data"),
+			Reason: core.Internal,
+		}
+	}
+
+	return blobsData, nil
 }
 
 // blobsFromStoredBlobs retrieves blob sidercars corresponding to `indices` and `root` from the store.
@@ -393,13 +524,12 @@ func (p *BeaconDbBlocker) blobsFromStoredBlobs(commitments [][]byte, root [field
 	return blobs, nil
 }
 
-// blobsFromStoredDataColumns retrieves data column sidecars from the store,
-// reconstructs the whole matrix if needed, converts the matrix to blobs,
-// and then returns converted blobs corresponding to `indices` and `root`.
+// blobSidecarsFromStoredDataColumns retrieves data column sidecars from the store,
+// reconstructs the whole matrix if needed, converts the matrix to blob sidecars with full KZG proofs.
 // This function expects data column sidecars to be stored (aka. no blob sidecars).
 // If not enough data column sidecars are available to convert blobs from them
 // (either directly or after reconstruction), an error is returned.
-func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
+func (p *BeaconDbBlocker) blobSidecarsFromStoredDataColumns(block blocks.ROBlock, indices []int) ([]*blocks.VerifiedROBlob, *core.RpcError) {
 	root := block.Root()
 
 	// Use all indices if none are provided.
@@ -439,8 +569,8 @@ func (p *BeaconDbBlocker) blobsFromStoredDataColumns(block blocks.ROBlock, indic
 		}
 	}
 
-	// Reconstruct blob sidecars from data column sidecars.
-	verifiedRoBlobSidecars, err := peerdas.ReconstructBlobs(block, verifiedRoDataColumnSidecars, indices)
+	// Reconstruct blob sidecars with full KZG proofs.
+	verifiedRoBlobSidecars, err := peerdas.ReconstructBlobSidecars(block, verifiedRoDataColumnSidecars, indices)
 	if err != nil {
 		return nil, &core.RpcError{
 			Err:    errors.Wrap(err, "blobs from data columns"),

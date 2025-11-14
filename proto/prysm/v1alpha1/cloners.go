@@ -11,7 +11,7 @@ type copier[T any] interface {
 func CopySlice[T any, C copier[T]](original []C) []T {
 	// Create a new slice with the same length as the original
 	newSlice := make([]T, len(original))
-	for i := 0; i < len(newSlice); i++ {
+	for i := range newSlice {
 		newSlice[i] = original[i].Copy()
 	}
 	return newSlice

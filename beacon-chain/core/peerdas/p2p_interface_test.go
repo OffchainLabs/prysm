@@ -100,7 +100,7 @@ func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
 	// Generate random KZG commitments `blobCount` blobs.
 	kzgCommitments := make([][]byte, blobCount)
 
-	for i := 0; i < blobCount; i++ {
+	for i := range blobCount {
 		kzgCommitments[i] = make([]byte, 48)
 		_, err := rand.Read(kzgCommitments[i])
 		require.NoError(t, err)
@@ -387,10 +387,10 @@ func generateRandomSidecars(t testing.TB, seed, blobCount int64) []blocks.ROData
 	sBlock, err := blocks.NewSignedBeaconBlock(dbBlock)
 	require.NoError(t, err)
 
-	cellsAndProofs := util.GenerateCellsAndProofs(t, blobs)
+	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
 	rob, err := blocks.NewROBlock(sBlock)
 	require.NoError(t, err)
-	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	sidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
 	return sidecars

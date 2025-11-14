@@ -694,10 +694,7 @@ func sbrForValOverride(idx primitives.ValidatorIndex, val *ethpb.Validator) *moc
 func sbrForValOverrideWithT(t testing.TB, idx primitives.ValidatorIndex, val *ethpb.Validator) *mockStateByRooter {
 	return &mockStateByRooter{sbr: func(_ context.Context, root [32]byte) (state.BeaconState, error) {
 		// Use a real deterministic state so that helpers.BeaconProposerIndexAtSlot works correctly
-		numValidators := uint64(idx + 1)
-		if numValidators < 64 {
-			numValidators = 64
-		}
+		numValidators := max(uint64(idx+1), 64)
 
 		var st state.BeaconState
 		var err error
@@ -769,10 +766,7 @@ func (v *validxStateOverride) Validators() []*ethpb.Validator {
 		}
 	}
 	// Ensure we have at least 64 validators for a valid beacon state
-	numValidators := maxIdx + 1
-	if numValidators < 64 {
-		numValidators = 64
-	}
+	numValidators := max(maxIdx+1, 64)
 	validators := make([]*ethpb.Validator, numValidators)
 	for i := range validators {
 		if val, ok := v.vals[primitives.ValidatorIndex(i)]; ok {

@@ -17,8 +17,7 @@ func BenchmarkSignature_Verify(b *testing.B) {
 	msg := []byte("Some msg")
 	sig := sk.Sign(msg)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if !sig.Verify(sk.PublicKey(), msg) {
 			b.Fatal("could not verify sig")
 		}
@@ -31,7 +30,7 @@ func BenchmarkSignature_AggregateVerify(b *testing.B) {
 	var pks []common.PublicKey
 	var sigs []common.Signature
 	var msgs [][32]byte
-	for i := 0; i < sigN; i++ {
+	for i := range sigN {
 		msg := [32]byte{'s', 'i', 'g', 'n', 'e', 'd', byte(i)}
 		sk, err := blst.RandKey()
 		require.NoError(b, err)
@@ -42,9 +41,8 @@ func BenchmarkSignature_AggregateVerify(b *testing.B) {
 	}
 	aggregated := blst.AggregateSignatures(sigs)
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if !aggregated.AggregateVerify(pks, msgs) {
 			b.Fatal("could not verify aggregate sig")
 		}
@@ -56,8 +54,7 @@ func BenchmarkSecretKey_Marshal(b *testing.B) {
 	require.NoError(b, err)
 	d := key.Marshal()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := blst.SecretKeyFromBytes(d)
 		_ = err
 	}

@@ -1168,10 +1168,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	startingEpoch := requestedEpoch
-	if startingEpoch > currentEpoch {
-		startingEpoch = currentEpoch
-	}
+	startingEpoch := min(requestedEpoch, currentEpoch)
 	slot, err := slots.EpochStart(startingEpoch)
 	if err != nil {
 		httputil.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)

@@ -51,7 +51,7 @@ func testBlocksWithKeys(t *testing.T, nBlocks uint64, nBlobs int, vr []byte) ([]
 	sks, pks, err := interop.DeterministicallyGenerateKeys(0, nBlocks)
 	require.NoError(t, err)
 	prevRoot := [32]byte{}
-	for i := uint64(0); i < nBlocks; i++ {
+	for i := range nBlocks {
 		block, blobs := util.GenerateTestDenebBlockWithSidecar(t, prevRoot, primitives.Slot(i), nBlobs, util.WithProposerSigning(primitives.ValidatorIndex(i), sks[i], vr))
 		prevRoot = block.Root()
 		blks[i] = block

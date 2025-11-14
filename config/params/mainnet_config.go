@@ -5,6 +5,7 @@ import (
 	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
@@ -98,6 +99,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Time parameter constants.
 	MinAttestationInclusionDelay:     1,
 	SecondsPerSlot:                   12,
+	SlotDurationMilliseconds:         12000,
 	SlotsPerEpoch:                    32,
 	SqrRootSlotsPerEpoch:             5,
 	MinSeedLookahead:                 1,
@@ -115,6 +117,13 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ReorgParentWeightThreshold:      160,
 	ReorgMaxEpochsSinceFinalization: 2,
 	IntervalsPerSlot:                3,
+
+	// Time-based protocol parameters.
+	ProposerReorgCutoffBPS: primitives.BP(1667),
+	AttestationDueBPS:      primitives.BP(3333),
+	AggregrateDueBPS:       primitives.BP(6667),
+	SyncMessageDueBPS:      primitives.BP(3333),
+	ContributionDueBPS:     primitives.BP(6667),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.
@@ -257,7 +266,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Light client
 	MinSyncCommitteeParticipants: 1,
 	MaxRequestLightClientUpdates: 128,
-	SyncMessageDueBPS:            3333,
 
 	// Bellatrix
 	TerminalBlockHashActivationEpoch: 18446744073709551615,

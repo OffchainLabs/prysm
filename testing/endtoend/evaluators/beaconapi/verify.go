@@ -244,7 +244,7 @@ func postEvaluation(nodeIdx int, requests map[string]endpoint, epoch primitives.
 	return nil
 }
 
-func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
+func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp any, customEval func(any, any) error) error {
 	if err := doJSONGETRequest(base, path, nodeIdx, pResp); err != nil {
 		return errors.Wrapf(err, "issue during Prysm JSON GET request for path %s", path)
 	}
@@ -264,7 +264,7 @@ func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp interface{}, c
 	}
 }
 
-func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp interface{}, customEval func(interface{}, interface{}) error) error {
+func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp any, customEval func(any, any) error) error {
 	if err := doJSONPOSTRequest(base, path, nodeIdx, postObj, pResp); err != nil {
 		return errors.Wrapf(err, "issue during Prysm JSON POST request for path %s", path)
 	}
@@ -299,7 +299,7 @@ func compareGETSSZ(nodeIdx int, base, path string) ([]byte, error) {
 	return pResp, nil
 }
 
-func comparePOSTSSZ(nodeIdx int, base, path string, postObj interface{}) ([]byte, error) {
+func comparePOSTSSZ(nodeIdx int, base, path string, postObj any) ([]byte, error) {
 	pResp, err := doSSZPOSTRequest(base, path, nodeIdx, postObj)
 	if err != nil {
 		return nil, errors.Wrapf(err, "issue during Prysm SSZ POST request for path %s", path)
@@ -314,7 +314,7 @@ func comparePOSTSSZ(nodeIdx int, base, path string, postObj interface{}) ([]byte
 	return pResp, nil
 }
 
-func compareJSON(pResp, lhResp interface{}) error {
+func compareJSON(pResp, lhResp any) error {
 	if !reflect.DeepEqual(pResp, lhResp) {
 		p, err := json.Marshal(pResp)
 		if err != nil {

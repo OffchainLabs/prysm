@@ -67,7 +67,7 @@ func TestMetaDataRPCHandler_ReceivesMetadata(t *testing.T) {
 	stream1, err := p1.BHost.NewStream(t.Context(), p2.BHost.ID(), pcl)
 	require.NoError(t, err)
 
-	assert.NoError(t, r.metaDataHandler(t.Context(), new(interface{}), stream1))
+	assert.NoError(t, r.metaDataHandler(t.Context(), new(any), stream1))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -295,7 +295,7 @@ func TestMetadataRPCHandler_SendMetadataRequest(t *testing.T) {
 			wg.Add(1)
 			peer2.BHost.SetStreamHandler(protocolID, func(stream network.Stream) {
 				defer wg.Done()
-				err := servicePeer2.metaDataHandler(ctx, new(interface{}), stream)
+				err := servicePeer2.metaDataHandler(ctx, new(any), stream)
 				require.NoError(t, err)
 			})
 
@@ -368,7 +368,7 @@ func TestMetadataRPCHandler_SendsMetadataQUIC(t *testing.T) {
 	wg.Add(1)
 	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
 		defer wg.Done()
-		err := r2.metaDataHandler(t.Context(), new(interface{}), stream)
+		err := r2.metaDataHandler(t.Context(), new(any), stream)
 		assert.NoError(t, err)
 	})
 
@@ -389,7 +389,7 @@ func TestMetadataRPCHandler_SendsMetadataQUIC(t *testing.T) {
 	wg.Add(1)
 	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
 		defer wg.Done()
-		assert.NoError(t, r2.metaDataHandler(t.Context(), new(interface{}), stream))
+		assert.NoError(t, r2.metaDataHandler(t.Context(), new(any), stream))
 	})
 
 	md, err := r.sendMetaDataRequest(t.Context(), p2.BHost.ID())

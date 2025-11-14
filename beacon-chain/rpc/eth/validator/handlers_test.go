@@ -786,7 +786,7 @@ func TestSubmitSyncCommitteeSubscription(t *testing.T) {
 	require.NoError(t, bs.SetBlockRoots(roots))
 
 	pubkeys := make([][]byte, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubkeys[i] = deposits[i].Data.PublicKey
 	}
 
@@ -958,7 +958,7 @@ func TestSubmitBeaconCommitteeSubscription(t *testing.T) {
 	require.NoError(t, bs.SetBlockRoots(roots))
 
 	pubkeys := make([][]byte, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubkeys[i] = deposits[i].Data.PublicKey
 	}
 
@@ -1979,7 +1979,7 @@ func TestGetAttesterDuties(t *testing.T) {
 	require.NoError(t, bs.SetValidators(vals))
 
 	pubKeys := make([][]byte, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 	}
 
@@ -2242,7 +2242,7 @@ func TestGetProposerDuties(t *testing.T) {
 	roots[31] = []byte("next_epoch_dependent_root")
 
 	pubKeys := make([][]byte, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 	}
 
@@ -2441,7 +2441,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 	require.NoError(t, st.SetGenesisTime(genesisTime))
 	vals := st.Validators()
 	currCommittee := &ethpbalpha.SyncCommittee{}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		currCommittee.Pubkeys = append(currCommittee.Pubkeys, vals[i].PublicKey)
 		currCommittee.AggregatePubkey = make([]byte, 48)
 	}
@@ -2633,7 +2633,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		}
 		require.NoError(t, newSyncPeriodSt.SetCurrentSyncCommittee(currCommittee))
 		nextCommittee := &ethpbalpha.SyncCommittee{}
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			nextCommittee.Pubkeys = append(nextCommittee.Pubkeys, vals[i].PublicKey)
 			nextCommittee.AggregatePubkey = make([]byte, 48)
 
@@ -2949,14 +2949,14 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*structs.FeeRecipient, 0)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		recipients = append(recipients, &structs.FeeRecipient{FeeRecipient: hexutil.Encode(f), ValidatorIndex: fmt.Sprint(i)})
 	}
 	byt, err := json.Marshal(recipients)
 	require.NoError(b, err)
 	var body bytes.Buffer
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err = body.WriteString(string(byt))
 		require.NoError(b, err)
 		url := "http://example.com/eth/v1/validator/prepare_beacon_proposer"

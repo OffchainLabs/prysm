@@ -817,7 +817,7 @@ func (s *Service) areDataColumnsAvailable(
 			}
 
 		case <-ctx.Done():
-			var missingIndices interface{} = "all"
+			var missingIndices any = "all"
 			numberOfColumns := params.BeaconConfig().NumberOfColumns
 			missingIndicesCount := uint64(len(missing))
 

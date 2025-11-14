@@ -26,7 +26,7 @@ func TestHash(t *testing.T) {
 }
 
 func BenchmarkHash(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		hash.Hash([]byte("abc"))
 	}
 }
@@ -50,7 +50,7 @@ func TestHashKeccak256(t *testing.T) {
 }
 
 func BenchmarkHashKeccak256(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		hash.Keccak256([]byte("abc"))
 	}
 }
@@ -77,7 +77,7 @@ func TestHashProtoFuzz(t *testing.T) {
 		}
 	}(t)
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		msg := &pb.AddressBook{}
 		f.Fuzz(msg)
 		_, err := hash.Proto(msg)
@@ -98,7 +98,7 @@ func BenchmarkHashProto(b *testing.B) {
 		Signature: bls.NewAggregateSignature().Marshal(),
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := hash.Proto(att); err != nil {
 			b.Log(err)
 		}

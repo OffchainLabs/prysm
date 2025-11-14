@@ -66,6 +66,7 @@ type BeaconChainConfig struct {
 	GenesisDelay                     uint64           `yaml:"GENESIS_DELAY" spec:"true"`                   // GenesisDelay is the minimum number of seconds to delay starting the Ethereum Beacon Chain genesis. Must be at least 1 second.
 	MinAttestationInclusionDelay     primitives.Slot  `yaml:"MIN_ATTESTATION_INCLUSION_DELAY" spec:"true"` // MinAttestationInclusionDelay defines how many slots validator has to wait to include attestation for beacon block.
 	SecondsPerSlot                   uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // SecondsPerSlot is how many seconds are in a single slot.
+	SlotDurationMilliseconds         uint64           `yaml:"SLOT_DURATION_MS" spec:"true"`                // SlotDurationMilliseconds is the slot time expressed in milliseconds.
 	SlotsPerEpoch                    primitives.Slot  `yaml:"SLOTS_PER_EPOCH" spec:"true"`                 // SlotsPerEpoch is the number of slots in an epoch.
 	SqrRootSlotsPerEpoch             primitives.Slot  // SqrRootSlotsPerEpoch is a hard coded value where we take the square root of `SlotsPerEpoch` and round down.
 	MinSeedLookahead                 primitives.Epoch `yaml:"MIN_SEED_LOOKAHEAD" spec:"true"`                  // MinSeedLookahead is the duration of randao look ahead seed.
@@ -84,6 +85,11 @@ type BeaconChainConfig struct {
 	ReorgParentWeightThreshold      uint64           `yaml:"REORG_PARENT_WEIGHT_THRESHOLD" spec:"true"`       // ReorgParentWeightThreshold defines a value that is a % of the committee weight to consider a parent block strong and subject its child to being orphaned.
 	ReorgMaxEpochsSinceFinalization primitives.Epoch `yaml:"REORG_MAX_EPOCHS_SINCE_FINALIZATION" spec:"true"` // This defines a limit to consider safe to orphan a block if the network is finalizing
 	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT"`                              // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
+	ProposerReorgCutoffBPS          primitives.BP    `yaml:"PROPOSER_REORG_CUTOFF_BPS" spec:"true"`           // ProposerReorgCutoffBPS defines the proposer reorg deadline in basis points of the slot.
+	AttestationDueBPS               primitives.BP    `yaml:"ATTESTATION_DUE_BPS" spec:"true"`                 // AttestationDueBPS defines the attestation due time in basis points of the slot.
+	AggregrateDueBPS                primitives.BP    `yaml:"AGGREGRATE_DUE_BPS" spec:"true"`                  // AggregrateDueBPS defines the aggregate due time in basis points of the slot.
+	SyncMessageDueBPS               primitives.BP    `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`                // SyncMessageDueBPS defines the sync message due time in basis points of the slot.
+	ContributionDueBPS              primitives.BP    `yaml:"CONTRIBUTION_DUE_BPS" spec:"true"`                // ContributionDueBPS defines the contribution due time in basis points of the slot.
 
 	// Ethereum PoW parameters.
 	DepositChainID         uint64 `yaml:"DEPOSIT_CHAIN_ID" spec:"true"`         // DepositChainID of the eth1 network. This used for replay protection.
@@ -221,7 +227,6 @@ type BeaconChainConfig struct {
 	// Light client
 	MinSyncCommitteeParticipants uint64 `yaml:"MIN_SYNC_COMMITTEE_PARTICIPANTS" spec:"true"`  // MinSyncCommitteeParticipants defines the minimum amount of sync committee participants for which the light client acknowledges the signature.
 	MaxRequestLightClientUpdates uint64 `yaml:"MAX_REQUEST_LIGHT_CLIENT_UPDATES" spec:"true"` // MaxRequestLightClientUpdates defines the maximum amount of light client updates that can be requested in a single request.
-	SyncMessageDueBPS            uint64 `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`             // SyncMessageDueBPS defines the due time for a sync message.
 
 	// Bellatrix
 	TerminalBlockHash                common.Hash      `yaml:"TERMINAL_BLOCK_HASH" spec:"true"`                  // TerminalBlockHash of beacon chain.
@@ -741,10 +746,29 @@ func SlotsForEpochs(count primitives.Epoch, b *BeaconChainConfig) primitives.Slo
 
 // SlotsDuration returns the time duration of the given number of slots.
 func SlotsDuration(count primitives.Slot, b *BeaconChainConfig) time.Duration {
-	return time.Duration(count) * SecondsPerSlot(b)
+	return time.Duration(count) * b.SlotDuration()
 }
 
 // SecondsPerSlot returns the time duration of a single slot.
 func SecondsPerSlot(b *BeaconChainConfig) time.Duration {
-	return time.Duration(b.SecondsPerSlot) * time.Second
+	return b.SlotDuration()
+}
+
+// SlotDuration returns the configured slot duration as a time.Duration.
+func (b *BeaconChainConfig) SlotDuration() time.Duration {
+	return time.Duration(b.SlotDurationMillis()) * time.Millisecond
+}
+
+// SlotDurationMillis returns the configured slot duration in milliseconds.
+func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
+	if b.SlotDurationMilliseconds > 0 {
+		return b.SlotDurationMilliseconds
+	}
+	return b.SecondsPerSlot * 1000
+}
+
+// SlotComponentDuration returns the duration representing the given portion (in basis points) of a slot.
+func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
+	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
+	return time.Duration(ms) * time.Millisecond
 }
