@@ -2,8 +2,8 @@
 package eth
 
 import (
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	github_com_OffchainLabs_prysm_v7_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -458,7 +458,7 @@ func (b *BeaconBlocksByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'StartSlot'
-	b.StartSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Count'
 	b.Count = ssz.UnmarshallUint64(buf[8:16])
@@ -786,7 +786,7 @@ func (b *BlobSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'StartSlot'
-	b.StartSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Count'
 	b.Count = ssz.UnmarshallUint64(buf[8:16])
@@ -863,7 +863,7 @@ func (d *DataColumnSidecarsByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	var o2 uint64
 
 	// Field (0) 'StartSlot'
-	d.StartSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	d.StartSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Count'
 	d.Count = ssz.UnmarshallUint64(buf[8:16])

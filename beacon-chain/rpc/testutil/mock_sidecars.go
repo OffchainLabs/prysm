@@ -1,6 +1,6 @@
 package testutil
 
-import ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+import ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 
 // CreateDataColumnSidecar generates a filled dummy data column sidecar
 func CreateDataColumnSidecar(index uint64, data []byte) *ethpb.DataColumnSidecar {

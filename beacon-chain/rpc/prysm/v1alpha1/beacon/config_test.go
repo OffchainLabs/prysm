@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -17,12 +17,12 @@ func TestServer_GetBeaconConfig(t *testing.T) {
 	res, err := bs.GetBeaconConfig(ctx, &emptypb.Empty{})
 	require.NoError(t, err)
 	conf := params.BeaconConfig()
-	confType := reflect.TypeOf(conf).Elem()
+	confType := reflect.TypeFor[params.BeaconChainConfig]()
 	numFields := confType.NumField()
 
 	// Count only exported fields, as unexported fields are not included in the config
 	exportedFields := 0
-	for i := 0; i < numFields; i++ {
+	for i := range numFields {
 		if confType.Field(i).IsExported() {
 			exportedFields++
 		}

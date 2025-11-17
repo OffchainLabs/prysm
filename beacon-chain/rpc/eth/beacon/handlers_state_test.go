@@ -11,19 +11,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -384,7 +384,7 @@ func Test_currentCommitteeIndicesFromState(t *testing.T) {
 	vals := st.Validators()
 	wantedCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	wantedIndices := make([]string, len(wantedCommittee))
-	for i := 0; i < len(wantedCommittee); i++ {
+	for i := range wantedCommittee {
 		wantedIndices[i] = strconv.FormatUint(uint64(i), 10)
 		wantedCommittee[i] = vals[i].PublicKey
 	}
@@ -415,7 +415,7 @@ func Test_nextCommitteeIndicesFromState(t *testing.T) {
 	vals := st.Validators()
 	wantedCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	wantedIndices := make([]string, len(wantedCommittee))
-	for i := 0; i < len(wantedCommittee); i++ {
+	for i := range wantedCommittee {
 		wantedIndices[i] = strconv.FormatUint(uint64(i), 10)
 		wantedCommittee[i] = vals[i].PublicKey
 	}
@@ -445,7 +445,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetCurrentSyncCommittee(&ethpbalpha.SyncCommittee{
@@ -460,10 +460,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 	for i := uint64(0); i < commSize; i += subCommSize {
 		sub := make([]string, 0)
 		start := i
-		end := i + subCommSize
-		if end > commSize {
-			end = commSize
-		}
+		end := min(i+subCommSize, commSize)
 		for j := start; j < end; j++ {
 			sub = append(sub, strconv.FormatUint(j, 10))
 		}
@@ -498,7 +495,7 @@ func TestGetSyncCommittees(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetCurrentSyncCommittee(&ethpbalpha.SyncCommittee{
@@ -661,7 +658,7 @@ func TestGetSyncCommittees_Future(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetNextSyncCommittee(&ethpbalpha.SyncCommittee{

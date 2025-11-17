@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -28,14 +28,14 @@ func newSlotAwareCache(size int) *slotAwareCache {
 }
 
 // Get retrieves a value from the cache.
-func (c *slotAwareCache) Get(key string) (interface{}, bool) {
+func (c *slotAwareCache) Get(key string) (any, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.cache.Get(key)
 }
 
 // Add adds a value to the cache associated with a specific slot.
-func (c *slotAwareCache) Add(slot primitives.Slot, key string, value interface{}) {
+func (c *slotAwareCache) Add(slot primitives.Slot, key string, value any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

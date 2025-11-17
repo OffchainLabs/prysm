@@ -6,10 +6,10 @@ import (
 	"context"
 	"os"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -184,7 +184,7 @@ type MultipleComponentRunners interface {
 type EngineProxy interface {
 	ComponentRunner
 	// AddRequestInterceptor adds in a json-rpc request interceptor.
-	AddRequestInterceptor(rpcMethodName string, responseGen func() interface{}, trigger func() bool)
+	AddRequestInterceptor(rpcMethodName string, responseGen func() any, trigger func() bool)
 	// RemoveRequestInterceptor removes the request interceptor for the provided method.
 	RemoveRequestInterceptor(rpcMethodName string)
 	// ReleaseBackedUpRequests releases backed up http requests.

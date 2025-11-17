@@ -1,0 +1,9 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["analyzer.go"],
+    importpath = "github.com/OffchainLabs/prysm/v7/tools/analyzers/modernize/fmtappendf",
+    visibility = ["//visibility:public"],
+    deps = ["@org_golang_x_tools//go/analysis/passes/modernize:go_default_library"],
+)

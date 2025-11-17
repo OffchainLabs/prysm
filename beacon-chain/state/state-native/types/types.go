@@ -3,7 +3,7 @@ package types
 import (
 	"fmt"
 
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
+	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/pkg/errors"
 )
 

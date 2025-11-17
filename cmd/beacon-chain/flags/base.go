@@ -5,8 +5,8 @@ package flags
 import (
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -204,7 +204,7 @@ var (
 	BlobBatchLimit = &cli.IntFlag{
 		Name:  "blob-batch-limit",
 		Usage: "The amount of blobs the local peer is bounded to request and respond to in a batch.",
-		Value: 192,
+		Value: 384,
 	}
 	// BlobBatchLimitBurstFactor specifies the factor by which blob batch size may increase.
 	BlobBatchLimitBurstFactor = &cli.IntFlag{
@@ -222,7 +222,7 @@ var (
 	DataColumnBatchLimitBurstFactor = &cli.IntFlag{
 		Name:  "data-column-batch-limit-burst-factor",
 		Usage: "The factor by which data column batch limit may increase on burst.",
-		Value: 2,
+		Value: 4,
 	}
 	// DisableDebugRPCEndpoints disables the debug Beacon API namespace.
 	DisableDebugRPCEndpoints = &cli.BoolFlag{
@@ -335,8 +335,9 @@ var (
 	}
 	// SubscribeAllDataSubnets enables subscription to all data subnets.
 	SubscribeAllDataSubnets = &cli.BoolFlag{
-		Name:  "subscribe-all-data-subnets",
-		Usage: "Enable subscription to all data subnets. Once set, unsetting this flag won't have any effect.",
+		Name:    "supernode",
+		Aliases: []string{"subscribe-all-data-subnets"},
+		Usage:   "Enable subscription to all data subnets and store all blob columns, serving them over RPC. Required post-Fusaka for full blob reconstruction. This is effectively one-way: once enabled, the node keeps storing and serving all columns even if the flag is later unset.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{

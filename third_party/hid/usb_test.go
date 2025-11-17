@@ -25,12 +25,12 @@ import (
 // Tests that HID enumeration can be called concurrently from multiple threads.
 func TestThreadedEnumerateHid(t *testing.T) {
 	var pend sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		pend.Add(1)
 
 		go func(index int) {
 			defer pend.Done()
-			for j := 0; j < 512; j++ {
+			for j := range 512 {
 				if _, err := EnumerateHid(uint16(index), 0); err != nil {
 					t.Errorf("thread %d, iter %d: failed to enumerate: %v", index, j, err)
 				}
@@ -48,12 +48,12 @@ func TestThreadedEnumerateRaw(t *testing.T) {
 	}
 	// Yay, we can actually test this
 	var pend sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		pend.Add(1)
 
 		go func(index int) {
 			defer pend.Done()
-			for j := 0; j < 512; j++ {
+			for j := range 512 {
 				if _, err := EnumerateRaw(uint16(index), 0); err != nil {
 					t.Errorf("thread %d, iter %d: failed to enumerate: %v", index, j, err)
 				}
@@ -70,12 +70,12 @@ func TestThreadedEnumerate(t *testing.T) {
 		t.Skip("Linux on Travis doesn't have usbfs, skipping test")
 	}
 	var pend sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		pend.Add(1)
 
 		go func(index int) {
 			defer pend.Done()
-			for j := 0; j < 512; j++ {
+			for j := range 512 {
 				if _, err := Enumerate(uint16(index), 0); err != nil {
 					t.Errorf("thread %d, iter %d: failed to enumerate: %v", index, j, err)
 				}

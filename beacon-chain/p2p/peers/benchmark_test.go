@@ -3,7 +3,7 @@ package peers
 import (
 	"testing"
 
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
 )
 
 func Benchmark_retrieveIndicesFromBitfield(b *testing.B) {
@@ -11,8 +11,8 @@ func Benchmark_retrieveIndicesFromBitfield(b *testing.B) {
 	for i := uint64(0); i < bv.Len(); i++ {
 		bv.SetBitAt(i, true)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		indicesFromBitfield(bv)
 	}
 }

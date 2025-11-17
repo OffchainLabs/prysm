@@ -5,28 +5,29 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
@@ -51,7 +52,7 @@ func TestSendRequest_SendBeaconBlocksByRangeRequest(t *testing.T) {
 	genesisBlkRoot, err := genesisBlk.Block.HashTreeRoot()
 	require.NoError(t, err)
 	parentRoot := genesisBlkRoot
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		blk := util.NewBeaconBlock()
 		blk.Block.Slot = primitives.Slot(i)
 		blk.Block.ParentRoot = parentRoot[:]
@@ -309,7 +310,7 @@ func TestSendRequest_SendBeaconBlocksByRootRequest(t *testing.T) {
 
 	knownBlocks := make(map[[32]byte]*ethpb.SignedBeaconBlock)
 	knownRoots := make([][32]byte, 0)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		blk := util.NewBeaconBlock()
 		blkRoot, err := blk.Block.HashTreeRoot()
 		require.NoError(t, err)
@@ -635,7 +636,7 @@ func TestSeqBlobValid(t *testing.T) {
 	}{
 		{
 			name: "all valid",
-			seq:  append(append([]blocks.ROBlob{}, oneBlobs...), twoBlobs...),
+			seq:  slices.Concat(oneBlobs, twoBlobs),
 		},
 		{
 			name: "idx out of bounds",
@@ -660,7 +661,7 @@ func TestSeqBlobValid(t *testing.T) {
 		},
 		{
 			name:  "slots not ascending",
-			seq:   append(append([]blocks.ROBlob{}, twoBlobs...), oops...),
+			seq:   slices.Concat(twoBlobs, oops),
 			err:   errChunkResponseSlotNotAsc,
 			errAt: len(twoBlobs),
 		},
@@ -790,7 +791,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 				require.NoError(t, err)
 				prevRoot = bRoot
 				// Send the maximum possible blobs per slot.
-				for j := 0; j < maxBlobsForSlot; j++ {
+				for j := range maxBlobsForSlot {
 					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
 					b.SignedBlockHeader = header
 					b.Index = uint64(j)
@@ -858,7 +859,7 @@ func TestSendBlobsByRangeRequest(t *testing.T) {
 				require.NoError(t, err)
 				prevRoot = bRoot
 				// Send the maximum possible blobs per slot.
-				for j := 0; j < maxBlobsForSlot; j++ {
+				for j := range maxBlobsForSlot {
 					b := util.HydrateBlobSidecar(&ethpb.BlobSidecar{})
 					b.SignedBlockHeader = header
 					b.Index = uint64(j)
@@ -889,9 +890,9 @@ func TestErrInvalidFetchedDataDistinction(t *testing.T) {
 
 func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
@@ -923,9 +924,9 @@ func TestSendDataColumnSidecarsByRangeRequest(t *testing.T) {
 
 	t.Run("too many columns in request", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.MaxRequestDataColumnSidecars = 0
-		params.OverrideBeaconConfig(beaconConfig)
+		cfg := params.BeaconConfig()
+		cfg.MaxRequestDataColumnSidecars = 0
+		params.OverrideBeaconConfig(cfg)
 
 		request := &ethpb.DataColumnSidecarsByRangeRequest{Count: 1, Columns: []uint64{1, 2, 3}}
 		_, err := SendDataColumnSidecarsByRangeRequest(DataColumnSidecarsParams{Ctx: t.Context()}, "", request)
@@ -1193,9 +1194,9 @@ func TestIsSidecarIndexRequested(t *testing.T) {
 
 func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	beaconConfig := params.BeaconConfig()
-	beaconConfig.FuluForkEpoch = 0
-	params.OverrideBeaconConfig(beaconConfig)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	params.OverrideBeaconConfig(cfg)
 	params.BeaconConfig().InitializeForkSchedule()
 	ctxMap, err := ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
 	require.NoError(t, err)
@@ -1223,9 +1224,9 @@ func TestSendDataColumnSidecarsByRootRequest(t *testing.T) {
 
 	t.Run("too many columns in request", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
-		beaconConfig := params.BeaconConfig()
-		beaconConfig.MaxRequestDataColumnSidecars = 4
-		params.OverrideBeaconConfig(beaconConfig)
+		cfg := params.BeaconConfig()
+		cfg.MaxRequestDataColumnSidecars = 4
+		params.OverrideBeaconConfig(cfg)
 
 		request := p2ptypes.DataColumnsByRootIdentifiers{
 			{Columns: []uint64{1, 2, 3}},

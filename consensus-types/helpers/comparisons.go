@@ -3,7 +3,7 @@ package helpers
 import (
 	"bytes"
 
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 func ForksEqual(s, t *ethpb.Fork) bool {
