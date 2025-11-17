@@ -85,14 +85,14 @@ var (
 		types.HistoricalSummaries,
 	}
 
-	capellaFields = append(
-		append([]types.FieldIndex{}, altairFields...),
-		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderCapella}, withdrawalAndHistoricalSummaryFields...)...,
+	capellaFields = slices.Concat(
+		altairFields,
+		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderCapella}, withdrawalAndHistoricalSummaryFields...),
 	)
 
-	denebFields = append(
-		append([]types.FieldIndex{}, altairFields...),
-		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb}, withdrawalAndHistoricalSummaryFields...)...,
+	denebFields = slices.Concat(
+		altairFields,
+		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb}, withdrawalAndHistoricalSummaryFields...),
 	)
 
 	electraAdditionalFields = []types.FieldIndex{
@@ -107,9 +107,9 @@ var (
 		types.PendingConsolidations,
 	}
 
-	electraFields = append(
-		append([]types.FieldIndex{}, denebFields...),
-		electraAdditionalFields...,
+	electraFields = slices.Concat(
+		denebFields,
+		electraAdditionalFields,
 	)
 
 	fuluFields = append(
@@ -125,21 +125,13 @@ var (
 		types.LatestWithdrawalsRoot,
 	}
 
-	gloasFields = append(
-		append([]types.FieldIndex{}, altairFields...),
-		append(
-			[]types.FieldIndex{types.LatestExecutionPayloadBid},
-			append(
-				append([]types.FieldIndex{}, withdrawalAndHistoricalSummaryFields...),
-				append(
-					append([]types.FieldIndex{}, electraAdditionalFields...),
-					append(
-						[]types.FieldIndex{types.ProposerLookahead},
-						gloasAdditionalFields...,
-					)...,
-				)...,
-			)...,
-		)...,
+	gloasFields = slices.Concat(
+		altairFields,
+		[]types.FieldIndex{types.LatestExecutionPayloadBid},
+		withdrawalAndHistoricalSummaryFields,
+		electraAdditionalFields,
+		[]types.FieldIndex{types.ProposerLookahead},
+		gloasAdditionalFields,
 	)
 )
 
