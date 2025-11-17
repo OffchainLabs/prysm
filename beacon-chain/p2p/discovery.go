@@ -369,11 +369,11 @@ func (s *Service) listenForNewNodes() {
 	}
 }
 
-// FindAndDialPeersWithSubnets ensures that our node is connected to enough peers.
-// If, the threshold is met, then this function immediately returns.
+// findAndDialPeers ensures that our node is connected to enough peers.
+// If the threshold is met, then this function immediately returns.
 // Otherwise, it searches for new peers and dials them.
-// If `ctx“ is canceled while searching for peers, search is stopped, but new found peers are still dialed.
-// In this case, the function returns an error.
+// If `ctx` is canceled while searching for peers, search is stopped, but newly
+// found peers are still dialed. In this case, the function returns an error.
 func (s *Service) findAndDialPeers(ctx context.Context) error {
 	// Restrict dials if limit is applied.
 	maxConcurrentDials := math.MaxInt
@@ -404,7 +404,7 @@ func (s *Service) findAndDialPeers(ctx context.Context) error {
 			return err
 		}
 
-		dialedPeerCount := s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
+		dialedPeerCount := s.DialPeers(s.ctx, maxConcurrentDials, peersToDial)
 
 		if dialedPeerCount > missingPeerCount {
 			missingPeerCount = 0

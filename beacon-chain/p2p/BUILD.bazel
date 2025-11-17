@@ -15,6 +15,7 @@ go_library(
         "fork_watcher.go",
         "gossip_scoring_params.go",
         "gossip_topic_mappings.go",
+        "gossipsub_peer_controller.go",
         "gossipsub_peer_crawler.go",
         "handshake.go",
         "info.go",

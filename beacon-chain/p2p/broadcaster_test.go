@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"google.golang.org/protobuf/proto"
@@ -736,6 +737,16 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 	topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+
+	crawler, err := NewGossipsubPeerCrawler(service, listener, 1*time.Second, 1*time.Second, 10,
+		func(n *enode.Node) bool { return true },
+		service.Peers().Scorers().Score)
+	require.NoError(t, err)
+	err = crawler.Start(func(ctx context.Context, node *enode.Node) ([]string, error) {
+		return []string{topic}, nil
+	})
+	require.NoError(t, err)
+	service.gossipsubDialer = NewGossipsubPeerDialer(service, crawler)
 
 	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
 	verifiedRoSidecar := verifiedRoSidecars[0]

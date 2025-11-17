@@ -24,3 +24,16 @@ type Crawler interface {
 	RemoveTopic(topic Topic)
 	PeersForTopic(topic Topic) []*enode.Node
 }
+
+// SubnetTopicsProvider returns the set of gossipsub topics the node
+// should currently maintain peer connections for (e.g. attestation,
+// sync committee subnets).
+type SubnetTopicsProvider func() []string
+
+// GossipsubDialer controls dialing peers for gossipsub topics based
+// on a provided SubnetTopicsProvider and the p2p crawler.
+type GossipsubDialer interface {
+	Start(provider SubnetTopicsProvider) error
+	Stop()
+	DialPeersForTopicBlocking(topic string, nPeers int) error
+}

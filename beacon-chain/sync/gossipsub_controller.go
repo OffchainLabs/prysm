@@ -27,8 +27,7 @@ type GossipsubController struct {
 	cancel context.CancelFunc
 
 	syncService *Service
-
-	wg sync.WaitGroup
+	wg          sync.WaitGroup
 
 	mu                  sync.RWMutex
 	activeTopicFamilies map[topicFamilyKey]GossipsubTopicFamily
@@ -121,6 +120,25 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 func (g *GossipsubController) Stop() {
 	g.cancel()
 	g.wg.Wait()
+}
+
+func (g *GossipsubController) GetCurrentSubnetTopics(slot primitives.Slot) []string {
+	g.mu.RLock()
+	var topics []string
+	for _, f := range g.activeTopicFamilies {
+		if tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets); ok {
+			bsubnets := tfm.GetSubnetsForBroadcast(slot)
+			for subnet := range bsubnets {
+				topics = append(topics, tfm.GetFullTopicString(subnet))
+			}
+			jsubnets := tfm.GetSubnetsToJoin(slot)
+			for subnet := range jsubnets {
+				topics = append(topics, tfm.GetFullTopicString(subnet))
+			}
+		}
+	}
+	g.mu.RUnlock()
+	return topics
 }
 
 func (g *GossipsubController) ExtractTopics(ctx context.Context, node *enode.Node) ([]string, error) {

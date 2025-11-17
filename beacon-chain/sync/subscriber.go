@@ -339,7 +339,6 @@ func (s *Service) subscribeToSubnets(tf GossipsubTopicFamilyWithDynamicSubnets, 
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 
-	go s.ensurePeers(ctx, tracker)
 	go s.logMinimumPeersPerSubnet(ctx, tf)
 
 	s.trySubscribeSubnets(tracker)
@@ -375,35 +374,6 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 	for _, subnet := range t.missing(subnetsToJoin) {
 		topic := t.family.GetFullTopicString(subnet)
 		t.track(subnet, s.subscribe(topic, t.family.Validator(), t.family.Handler()))
-	}
-}
-
-func (s *Service) ensurePeers(ctx context.Context, tracker *subnetTracker) {
-	// Try once immediately so we don't have to wait until the next slot.
-	s.tryEnsurePeers(ctx, tracker)
-
-	oncePerSlot := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
-	defer oncePerSlot.Done()
-	for {
-		select {
-		case <-oncePerSlot.C():
-			s.tryEnsurePeers(ctx, tracker)
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (s *Service) tryEnsurePeers(ctx context.Context, tracker *subnetTracker) {
-	timeout := (time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) - 100*time.Millisecond
-	minPeers := flags.Get().MinimumPeersPerSubnet
-	neededSubnets := computeAllNeededSubnets(s.cfg.clock.CurrentSlot(), tracker.family)
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	builder := func(idx uint64) string { return tracker.family.GetFullTopicString(idx) }
-	err := s.cfg.p2p.FindAndDialPeersWithSubnets(ctx, builder, minPeers, neededSubnets)
-	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-		log.WithFields(familyLogFields(tracker.family)).WithError(err).Debug("Could not find peers with subnets")
 	}
 }
 

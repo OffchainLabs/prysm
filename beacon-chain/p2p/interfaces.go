@@ -98,10 +98,11 @@ type (
 		PeerID() peer.ID
 		Host() host.Host
 		ENR() *enr.Record
+		GossipsubDialer() gossipsubcrawler.GossipsubDialer
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
-		FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error
+		DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
 		Crawler() gossipsubcrawler.Crawler
 	}

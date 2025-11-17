@@ -101,6 +101,7 @@ type Service struct {
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
 	crawler                  gossipsubcrawler.Crawler
+	gossipsubDialer          gossipsubcrawler.GossipsubDialer
 }
 
 type custodyInfo struct {
@@ -262,6 +263,9 @@ func (s *Service) Start() {
 			return
 		}
 		s.crawler = crawler
+		// Initialise the gossipsub dialer which will be started
+		// once the sync service is ready to provide subnet topics.
+		s.gossipsubDialer = NewGossipsubPeerDialer(s, s.crawler)
 	}
 
 	s.started = true
@@ -343,6 +347,12 @@ func (s *Service) Stop() error {
 // Crawler returns the p2p service's peer crawler.
 func (s *Service) Crawler() gossipsubcrawler.Crawler {
 	return s.crawler
+}
+
+// GossipsubDialer returns the dialer responsible for maintaining
+// peer counts per gossipsub topic, if discovery is enabled.
+func (s *Service) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+	return s.gossipsubDialer
 }
 
 // Status of the p2p service. Will return an error if the service is considered unhealthy to

@@ -328,6 +328,10 @@ func (s *Service) Stop() error {
 		s.unSubscribeFromTopic(t)
 	}
 
+	// Stop gossipsub dialer and crawler if present.
+	if dialer := s.cfg.p2p.GossipsubDialer(); dialer != nil {
+		dialer.Stop()
+	}
 	if s.cfg.p2p.Crawler() != nil {
 		s.cfg.p2p.Crawler().Stop()
 	}
@@ -419,14 +423,30 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	// Start the gossipsub controller.
 	go s.gossipsubController.Start()
 
-	// Configure the crawler with the topic extractor if available
-	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
-		// Start the crawler now that it has the extractor
-		if err := crawler.Start(s.gossipsubController.ExtractTopics); err != nil {
-			log.WithError(err).Warn("Failed to start peer crawler")
+	// Configure the crawler and dialer with the topic extractor / subnet topics
+	// provider if available.
+	crawler := s.cfg.p2p.Crawler()
+	if crawler == nil {
+		log.Info("No crawler available, topic extraction disabled")
+		return
+	}
+
+	// Start the crawler now that it has the extractor.
+	if err := crawler.Start(s.gossipsubController.ExtractTopics); err != nil {
+		log.WithError(err).Warn("Failed to start peer crawler")
+		return
+	}
+
+	// Start the gossipsub dialer if available.
+	if dialer := s.cfg.p2p.GossipsubDialer(); dialer != nil {
+		provider := func() []string {
+			return s.gossipsubController.GetCurrentSubnetTopics(s.cfg.clock.CurrentSlot())
+		}
+		if err := dialer.Start(provider); err != nil {
+			log.WithError(err).Warn("Failed to start gossipsub peer dialer")
 		}
 	} else {
-		log.Info("No crawler available, topic extraction disabled")
+		log.Info("No gossipsub peer dialer available")
 	}
 }
 

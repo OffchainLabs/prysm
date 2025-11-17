@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -12,14 +11,12 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
 	"github.com/OffchainLabs/prysm/v6/crypto/hash"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
 	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -74,65 +71,6 @@ func (s *Service) nodeFilter(topic string, indices map[uint64]int) (func(node *e
 	default:
 		return nil, errors.Errorf("no subnet exists for provided topic: %s", topic)
 	}
-}
-
-// FindAndDialPeersWithSubnets ensures that our node is connected to at least `minimumPeersPerSubnet`
-// peers for each subnet listed in `subnets`.
-// If, for all subnets, the threshold is met, then this function immediately returns.
-// Otherwise, it searches for new peers for defective subnets, and dials them.
-// If `ctx“ is canceled while searching for peers, search is stopped, but new found peers are still dialed.
-// In this case, the function returns an error.
-func (s *Service) FindAndDialPeersWithSubnets(
-	ctx context.Context,
-	fullTopicForSubnet func(uint64) string,
-	minimumPeersPerSubnet int,
-	subnets map[uint64]bool,
-) error {
-	ctx, span := trace.StartSpan(ctx, "p2p.FindAndDialPeersWithSubnet")
-	defer span.End()
-
-	// Return early if the discovery listener isn't set.
-	if s.dv5Listener == nil {
-		return nil
-	}
-
-	// Restrict dials if limit is applied.
-	maxConcurrentDials := math.MaxInt
-	if flags.MaxDialIsActive() {
-		maxConcurrentDials = flags.Get().MaxConcurrentDials
-	}
-
-	defectiveSubnets := s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
-	for len(defectiveSubnets) > 0 {
-		defectiveSubnets = s.defectiveSubnets(fullTopicForSubnet, minimumPeersPerSubnet, subnets)
-
-		// Stop the search/dialing loop if the context is canceled.
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		var peersToDial []*enode.Node
-		for subnet := range defectiveSubnets {
-			topic := fullTopicForSubnet(subnet)
-			peersToDial = append(peersToDial, s.crawler.PeersForTopic(gossipsubcrawler.Topic(topic))...)
-		}
-		if len(peersToDial) > minimumPeersPerSubnet {
-			peersToDial = peersToDial[:minimumPeersPerSubnet]
-		}
-		if len(peersToDial) == 0 {
-			select {
-			case <-time.After(100 * time.Millisecond):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			continue
-		}
-
-		// Dial new peers in batches.
-		s.dialPeers(s.ctx, maxConcurrentDials, peersToDial)
-	}
-
-	return nil
 }
 
 // updateDefectiveSubnets updates the defective subnets map when a node with matching subnets is found.
@@ -280,9 +218,9 @@ func (s *Service) defectiveSubnets(
 	return missingCountPerSubnet
 }
 
-// dialPeers dials multiple peers concurrently up to `maxConcurrentDials` at a time.
+// DialPeers dials multiple peers concurrently up to `maxConcurrentDials` at a time.
 // In case of a dial failure, it logs the error but continues dialing other peers.
-func (s *Service) dialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+func (s *Service) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
 	var mut sync.Mutex
 
 	counter := uint(0)

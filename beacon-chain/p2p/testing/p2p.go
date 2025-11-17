@@ -66,6 +66,7 @@ type TestP2P struct {
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
 	enr                   *enr.Record
+	dialer                gossipsubcrawler.GossipsubDialer
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -418,6 +419,10 @@ func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
 }
 
+func (p *TestP2P) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	return 0
+}
+
 // FindAndDialPeersWithSubnets mocks the p2p func.
 func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
 	return nil
@@ -588,4 +593,9 @@ func (m *MockCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node 
 // Crawler returns a mock crawler implementation for testing.
 func (*TestP2P) Crawler() gossipsubcrawler.Crawler {
 	return &MockCrawler{}
+}
+
+// GossipsubDialer returns nil for tests that do not exercise dialer behaviour.
+func (p *TestP2P) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+	return p.dialer
 }

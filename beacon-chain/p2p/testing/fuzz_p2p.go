@@ -46,6 +46,11 @@ func (*FakeP2P) Crawler() gossipsubcrawler.Crawler {
 	return &MockCrawler{}
 }
 
+// GossipsubDialer -- fake.
+func (*FakeP2P) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+	return nil
+}
+
 // AddDisconnectionHandler -- fake.
 func (*FakeP2P) AddDisconnectionHandler(_ func(ctx context.Context, id peer.ID) error) {
 }
@@ -96,6 +101,11 @@ func (*FakeP2P) Metadata() metadata.Metadata {
 // Peers -- fake.
 func (*FakeP2P) Peers() *peers.Status {
 	return nil
+}
+
+// DialPeers -- fake.
+func (*FakeP2P) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	return 0
 }
 
 // PublishToTopic -- fake.
