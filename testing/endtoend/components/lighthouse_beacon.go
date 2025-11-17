@@ -249,6 +249,10 @@ func (node *LighthouseBeaconNode) Stop() error {
 	return node.cmd.Process.Kill()
 }
 
+func (node *LighthouseBeaconNode) UnderlyingProcess() *os.Process {
+	return node.cmd.Process
+}
+
 func (node *LighthouseBeaconNode) createTestnetDir(ctx context.Context, index int) (string, error) {
 	testNetDir := e2e.TestParams.TestPath + fmt.Sprintf("/lighthouse-testnet-%d", index)
 	configPath := filepath.Join(testNetDir, "config.yaml")
