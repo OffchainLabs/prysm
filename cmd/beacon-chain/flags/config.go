@@ -3,8 +3,8 @@ package flags
 import (
 	"math"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/features"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
