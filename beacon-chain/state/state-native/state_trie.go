@@ -87,12 +87,14 @@ var (
 
 	capellaFields = slices.Concat(
 		altairFields,
-		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderCapella}, withdrawalAndHistoricalSummaryFields...),
+		[]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb},
+		withdrawalAndHistoricalSummaryFields,
 	)
 
 	denebFields = slices.Concat(
 		altairFields,
-		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb}, withdrawalAndHistoricalSummaryFields...),
+		[]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb},
+		withdrawalAndHistoricalSummaryFields,
 	)
 
 	electraAdditionalFields = []types.FieldIndex{
