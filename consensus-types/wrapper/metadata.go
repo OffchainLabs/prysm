@@ -2,9 +2,9 @@ package wrapper
 
 import (
 	"github.com/OffchainLabs/go-bitfield"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -42,7 +42,7 @@ func (m MetadataV0) CustodyGroupCount() uint64 {
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
-func (m MetadataV0) InnerObject() interface{} {
+func (m MetadataV0) InnerObject() any {
 	return m.md
 }
 
@@ -136,7 +136,7 @@ func (m MetadataV1) CustodyGroupCount() uint64 {
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
-func (m MetadataV1) InnerObject() interface{} {
+func (m MetadataV1) InnerObject() any {
 	return m.md
 }
 
@@ -230,7 +230,7 @@ func (m MetadataV2) CustodyGroupCount() uint64 {
 }
 
 // InnerObject returns the underlying metadata protobuf structure.
-func (m MetadataV2) InnerObject() interface{} {
+func (m MetadataV2) InnerObject() any {
 	return m.md
 }
 

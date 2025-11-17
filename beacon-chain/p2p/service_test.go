@@ -8,18 +8,18 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -128,7 +128,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 	beaconCfg.AltairForkEpoch = 0
 	beaconCfg.BellatrixForkEpoch = 0
 	beaconCfg.CapellaForkEpoch = 0
-	beaconCfg.SecondsPerSlot = 1
+	beaconCfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(beaconCfg)
 
 	exitRoutine := make(chan bool)
@@ -369,7 +369,7 @@ func TestService_connectWithPeer(t *testing.T) {
 				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
 					ScorerParams: &scorers.Config{},
 				})
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					ps.Scorers().BadResponsesScorer().Increment("bad")
 				}
 				return ps

@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
 
 func Test_endpoints(t *testing.T) {

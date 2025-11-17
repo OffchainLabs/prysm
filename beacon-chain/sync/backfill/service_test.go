@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/proto/dbval"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 type mockMinimumSlotter struct {
@@ -69,7 +69,7 @@ func TestServiceInit(t *testing.T) {
 	todo := make([]batch, 0)
 	todo = testReadN(ctx, t, pool.todoChan, nWorkers, todo)
 	require.Equal(t, nWorkers, len(todo))
-	for i := 0; i < remaining; i++ {
+	for i := range remaining {
 		b := todo[i]
 		if b.state == batchSequenced {
 			b.state = batchImportable
@@ -96,7 +96,7 @@ func TestMinimumBackfillSlot(t *testing.T) {
 }
 
 func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []batch) []batch {
-	for i := 0; i < n; i++ {
+	for range n {
 		select {
 		case b := <-c:
 			into = append(into, b)

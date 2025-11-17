@@ -7,24 +7,24 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	slashingsmock "github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings/mock"
-	slashertypes "github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls/common"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	slashingsmock "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings/mock"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -659,7 +659,7 @@ func Test_processAttestations(t *testing.T) {
 				validators := make([]*ethpb.Validator, numVals)
 				privateKeys := make([]bls.SecretKey, numVals)
 
-				for i := uint64(0); i < numVals; i++ {
+				for i := range numVals {
 					// Create a random private key.
 					privateKey, err := bls.RandKey()
 					require.NoError(t, err)
@@ -1463,7 +1463,7 @@ func Benchmark_saveChunksToDisk(b *testing.B) {
 	chunkByChunkIndexByValidatorChunkIndex := make(map[uint64]map[uint64]Chunker, validatorsChunksCount)
 
 	// Populate the chunkers.
-	for i := 0; i < validatorsChunksCount; i++ {
+	for i := range validatorsChunksCount {
 		data := make([]uint16, params.chunkSize)
 		for j := 0; j < int(params.chunkSize); j++ {
 			data[j] = uint16(rand.Intn(1 << 16))
@@ -1481,10 +1481,9 @@ func Benchmark_saveChunksToDisk(b *testing.B) {
 	require.NoError(b, err)
 
 	// Reset the benchmark timer.
-	b.ResetTimer()
 
 	// Run the benchmark.
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StartTimer()
 		err = service.saveChunksToDisk(ctx, slashertypes.MinSpan, chunkByChunkIndexByValidatorChunkIndex)
 		b.StopTimer()
@@ -1553,11 +1552,11 @@ func BenchmarkCheckSlashableAttestations(b *testing.B) {
 
 func runAttestationsBenchmark(b *testing.B, s *Service, numAtts, numValidators uint64) {
 	indices := make([]uint64, numValidators)
-	for i := uint64(0); i < numValidators; i++ {
+	for i := range numValidators {
 		indices[i] = i
 	}
 	atts := make([]*slashertypes.IndexedAttestationWrapper, numAtts)
-	for i := uint64(0); i < numAtts; i++ {
+	for i := range numAtts {
 		source := primitives.Epoch(i)
 		target := primitives.Epoch(i + 1)
 		var signingRoot [32]byte
@@ -1571,7 +1570,7 @@ func runAttestationsBenchmark(b *testing.B, s *Service, numAtts, numValidators u
 			signingRoot[:], /* signingRoot */
 		)
 	}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		numEpochs := numAtts
 		totalSeconds := numEpochs * uint64(params.BeaconConfig().SlotsPerEpoch) * params.BeaconConfig().SecondsPerSlot
 		genesisTime := time.Now().Add(-time.Second * time.Duration(totalSeconds))
@@ -1623,7 +1622,7 @@ func Benchmark_checkSurroundVotes(b *testing.B) {
 
 	attestingValidatorsCount := validatorsCount / slotsPerEpoch
 	validatorIndexes := make([]uint64, attestingValidatorsCount)
-	for i := 0; i < attestingValidatorsCount; i++ {
+	for i := range attestingValidatorsCount {
 		validatorIndexes[i] = 32 * uint64(i)
 	}
 
@@ -1633,8 +1632,8 @@ func Benchmark_checkSurroundVotes(b *testing.B) {
 	attWrappers := []*slashertypes.IndexedAttestationWrapper{attWrapper}
 
 	// Run the benchmark.
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		b.StartTimer()
 		_, err = service.checkSurroundVotes(ctx, attWrappers, currentEpoch)
 		b.StopTimer()

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	common "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/ssz_static"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
 	"github.com/pkg/errors"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
@@ -16,8 +16,8 @@ import (
 func ExampleRunSSZStaticTests() {
 	// Define an unmarshaller to select the correct go type based on the string
 	// name provided in spectests and then populate it with the serialized bytes.
-	unmarshaller := func(t *testing.T, serializedBytes []byte, objectName string) (interface{}, error) {
-		var obj interface{}
+	unmarshaller := func(t *testing.T, serializedBytes []byte, objectName string) (any, error) {
+		var obj any
 		switch objectName {
 		case "Attestation":
 			obj = &ethpb.Attestation{}
@@ -45,10 +45,10 @@ func ExampleRunSSZStaticTests() {
 	// This argument may be nil if your test does not require custom HTR methods.
 	// Most commonly, this is used when a handwritten HTR method with specialized caching
 	// is used and you want to ensure it passes spectests.
-	customHTR := func(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
+	customHTR := func(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 		switch object.(type) {
 		case *ethpb.BeaconState:
-			htrs = append(htrs, func(s interface{}) ([32]byte, error) {
+			htrs = append(htrs, func(s any) ([32]byte, error) {
 				beaconState, err := state_native.InitializeFromProtoPhase0(s.(*ethpb.BeaconState))
 				require.NoError(t, err)
 				return beaconState.HashTreeRoot(context.TODO())

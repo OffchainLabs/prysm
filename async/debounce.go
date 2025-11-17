@@ -7,7 +7,7 @@ import (
 
 // Debounce events fired over a channel by a specified duration, ensuring no events
 // are handled until a certain interval of time has passed.
-func Debounce(ctx context.Context, interval time.Duration, eventsChan <-chan interface{}, handler func(interface{})) {
+func Debounce(ctx context.Context, interval time.Duration, eventsChan <-chan any, handler func(any)) {
 	var timer *time.Timer
 	defer func() {
 		if timer != nil {

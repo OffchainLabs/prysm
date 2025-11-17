@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 )
 
@@ -86,7 +86,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 				// you can just remove it from the hot state cache as it becomes redundant.
 				s.saveHotStateDB.lock.Lock()
 				roots := s.saveHotStateDB.blockRootsOfSavedStates
-				for i := 0; i < len(roots); i++ {
+				for i := range roots {
 					if aRoot == roots[i] {
 						s.saveHotStateDB.blockRootsOfSavedStates = append(roots[:i], roots[i+1:]...)
 						// There shouldn't be duplicated roots in `blockRootsOfSavedStates`.

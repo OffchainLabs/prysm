@@ -17,23 +17,23 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	prysmNetwork "github.com/OffchainLabs/prysm/v6/network"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	prysmNetwork "github.com/OffchainLabs/prysm/v7/network"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -536,14 +536,14 @@ func TestInboundPeerLimit(t *testing.T) {
 		host: fakePeer.BHost,
 	}
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
 	require.Equal(t, true, s.isPeerAtLimit(all), "not at limit for outbound peers")
 	require.Equal(t, false, s.isPeerAtLimit(inbound), "at limit for inbound peers")
 
-	for i := 0; i < highWatermarkBuffer; i++ {
+	for range highWatermarkBuffer {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), false)
 	}
 
@@ -562,13 +562,13 @@ func TestOutboundPeerThreshold(t *testing.T) {
 		host: fakePeer.BHost,
 	}
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), true)
 	}
 
 	require.Equal(t, true, s.isBelowOutboundPeerThreshold(), "not at outbound peer threshold")
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = addPeer(t, s.peers, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED), true)
 	}
 
@@ -697,7 +697,7 @@ func addPeer(t *testing.T, p *peers.Status, state peerdata.ConnectionState, outb
 func createAndConnectPeer(t *testing.T, p2pService *testp2p.TestP2P, offset int) {
 	// Create the private key.
 	privateKeyBytes := make([]byte, 32)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		privateKeyBytes[i] = byte(offset + i)
 	}
 
@@ -932,7 +932,7 @@ func TestRefreshPersistentSubnets(t *testing.T) {
 
 			// Create the private key.
 			privateKeyBytes := make([]byte, 32)
-			for i := 0; i < 32; i++ {
+			for i := range 32 {
 				privateKeyBytes[i] = byte(i)
 			}
 
@@ -1279,7 +1279,7 @@ func TestFindPeers_received_bad_existing_node(t *testing.T) {
 				if peerData != nil {
 					service.peers.Add(node1_seq2.Record(), peerData.ID, nil, network.DirUnknown)
 					// Mark as bad peer - need enough increments to exceed threshold (6)
-					for i := 0; i < 10; i++ {
+					for range 10 {
 						service.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
 					}
 				}

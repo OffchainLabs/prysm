@@ -3,18 +3,18 @@ package backfill
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/proto/dbval"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -367,10 +367,7 @@ func (*Service) Status() error {
 // minimumBackfillSlot determines the lowest slot that backfill needs to download based on looking back
 // MIN_EPOCHS_FOR_BLOCK_REQUESTS from the current slot.
 func minimumBackfillSlot(current primitives.Slot) primitives.Slot {
-	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
-	if oe > slots.MaxSafeEpoch() {
-		oe = slots.MaxSafeEpoch()
-	}
+	oe := min(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests), slots.MaxSafeEpoch())
 	offset := slots.UnsafeEpochStart(oe)
 	if offset >= current {
 		// Slot 0 is the genesis block, therefore the signature in it is invalid.

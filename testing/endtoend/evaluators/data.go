@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"google.golang.org/grpc"
 )
 
@@ -26,7 +26,7 @@ func checkColdStateCheckpoint(_ *e2etypes.EvaluationContext, conns ...*grpc.Clie
 	ctx := context.Background()
 	client := eth.NewBeaconChainClient(conns[0])
 
-	for i := primitives.Epoch(0); i < epochToCheck; i++ {
+	for i := range primitives.Epoch(epochToCheck) {
 		res, err := client.ListValidatorAssignments(ctx, &eth.ListValidatorAssignmentsRequest{
 			QueryFilter: &eth.ListValidatorAssignmentsRequest_Epoch{Epoch: i},
 		})

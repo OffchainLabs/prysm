@@ -1,9 +1,9 @@
 package forkchoice
 
 import (
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 // ROForkChoice is an implementation of forkchoice.Getter which calls `Rlock`/`RUnlock`
@@ -175,6 +175,13 @@ func (ro *ROForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) 
 	ro.l.RLock()
 	defer ro.l.RUnlock()
 	return ro.getter.DependentRoot(epoch)
+}
+
+// DependentRootForEpoch delegates to the underlying forkchoice call, under a lock.
+func (ro *ROForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	ro.l.RLock()
+	defer ro.l.RUnlock()
+	return ro.getter.DependentRootForEpoch(root, epoch)
 }
 
 // TargetRootForEpoch delegates to the underlying forkchoice call, under a lock.

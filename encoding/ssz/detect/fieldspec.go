@@ -3,7 +3,7 @@ package detect
 import (
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/pkg/errors"
 )
 

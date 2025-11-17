@@ -6,10 +6,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 )
@@ -100,7 +100,7 @@ func (bb *blockRangeBatcher) next(ctx context.Context, stream libp2pcore.Stream)
 		}
 		rob = append(rob, gb)
 	}
-	for i := 0; i < len(blks); i++ {
+	for i := range blks {
 		rb, err := blocks.NewROBlockWithRoot(blks[i], roots[i])
 		if err != nil {
 			return blockBatch{err: errors.Wrap(err, "Could not initialize ROBlock")}, false

@@ -13,34 +13,34 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	mock2 "github.com/OffchainLabs/prysm/v6/testing/mock"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -61,7 +61,7 @@ func fillDBTestBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (
 	count := primitives.Slot(100)
 	blks := make([]interfaces.ReadOnlySignedBeaconBlock, count)
 	blkContainers := make([]*eth.BeaconBlockContainer, count)
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		b := util.NewBeaconBlock()
 		b.Block.Slot = i
 		b.Block.ParentRoot = bytesutil.PadTo([]byte{uint8(i)}, 32)
@@ -3765,7 +3765,7 @@ func Test_validateBlobs(t *testing.T) {
 		fuluBlobs := make([][]byte, blobCount)
 		var kzgBlobs []kzg.Blob
 
-		for i := 0; i < blobCount; i++ {
+		for i := range blobCount {
 			blob := util.GetRandBlob(int64(i))
 			fuluBlobs[i] = blob[:]
 			var kzgBlob kzg.Blob
@@ -3785,13 +3785,13 @@ func Test_validateBlobs(t *testing.T) {
 		// Generate cell proofs for the blobs (flattened format like execution client)
 		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
-		for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-			cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
+		for blobIdx := range blobCount {
+			_, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
 			require.NoError(t, err)
 
-			for colIdx := uint64(0); colIdx < numberOfColumns; colIdx++ {
+			for colIdx := range numberOfColumns {
 				cellProofIdx := uint64(blobIdx)*numberOfColumns + colIdx
-				cellProofs[cellProofIdx] = cellsAndProofs.Proofs[colIdx][:]
+				cellProofs[cellProofIdx] = proofs[colIdx][:]
 			}
 		}
 
@@ -3808,7 +3808,7 @@ func Test_validateBlobs(t *testing.T) {
 		blobCount := 2
 		commitments := make([][]byte, blobCount)
 		fuluBlobs := make([][]byte, blobCount)
-		for i := 0; i < blobCount; i++ {
+		for i := range blobCount {
 			blob := util.GetRandBlob(int64(i))
 			fuluBlobs[i] = blob[:]
 
@@ -3977,7 +3977,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 		consolidationSize := (&eth.PendingConsolidation{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), consolidationSize*len(cs))
 
-		for i := 0; i < len(cs); i++ {
+		for i := range cs {
 			start := i * consolidationSize
 			end := start + consolidationSize
 
@@ -4103,7 +4103,7 @@ func TestGetPendingDeposits(t *testing.T) {
 
 	validators := st.Validators()
 	dummySig := make([]byte, 96)
-	for j := 0; j < 96; j++ {
+	for j := range 96 {
 		dummySig[j] = byte(j)
 	}
 	deps := make([]*eth.PendingDeposit, 10)
@@ -4170,7 +4170,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		depositSize := (&eth.PendingDeposit{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), depositSize*len(deps))
 
-		for i := 0; i < len(deps); i++ {
+		for i := range deps {
 			start := i * depositSize
 			end := start + depositSize
 
@@ -4357,7 +4357,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 		withdrawalSize := (&eth.PendingPartialWithdrawal{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), withdrawalSize*len(withdrawals))
 
-		for i := 0; i < len(withdrawals); i++ {
+		for i := range withdrawals {
 			start := i * withdrawalSize
 			end := start + withdrawalSize
 
@@ -4487,7 +4487,7 @@ func TestGetProposerLookahead(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateFulu(t, uint64(numValidators))
 	lookaheadSize := int(params.BeaconConfig().MinSeedLookahead+1) * int(params.BeaconConfig().SlotsPerEpoch)
 	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
-	for i := 0; i < lookaheadSize; i++ {
+	for i := range lookaheadSize {
 		lookahead[i] = primitives.ValidatorIndex(i % numValidators) // Cycle through validators
 	}
 
@@ -4525,7 +4525,7 @@ func TestGetProposerLookahead(t *testing.T) {
 
 		// Verify the data
 		require.Equal(t, lookaheadSize, len(resp.Data))
-		for i := 0; i < lookaheadSize; i++ {
+		for i := range lookaheadSize {
 			expectedIdx := strconv.FormatUint(uint64(i%numValidators), 10)
 			require.Equal(t, expectedIdx, resp.Data[i])
 		}
@@ -4546,7 +4546,7 @@ func TestGetProposerLookahead(t *testing.T) {
 		require.Equal(t, len(responseBytes), validatorIndexSize*lookaheadSize)
 
 		recoveredIndices := make([]primitives.ValidatorIndex, lookaheadSize)
-		for i := 0; i < lookaheadSize; i++ {
+		for i := range lookaheadSize {
 			start := i * validatorIndexSize
 			end := start + validatorIndexSize
 

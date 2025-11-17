@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	proxy "github.com/OffchainLabs/prysm/v6/testing/middleware/engine-api-proxy"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	proxy "github.com/OffchainLabs/prysm/v7/testing/middleware/engine-api-proxy"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -36,7 +36,7 @@ func NewProxySet() *ProxySet {
 func (s *ProxySet) Start(ctx context.Context) error {
 	totalNodeCount := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount
 	nodes := make([]e2etypes.ComponentRunner, totalNodeCount)
-	for i := 0; i < totalNodeCount; i++ {
+	for i := range totalNodeCount {
 		nodes[i] = NewProxy(i)
 	}
 	s.proxies = nodes
@@ -194,7 +194,7 @@ func (node *Proxy) Stop() error {
 }
 
 // AddRequestInterceptor adds in a json-rpc request interceptor.
-func (node *Proxy) AddRequestInterceptor(rpcMethodName string, responseGen func() interface{}, trigger func() bool) {
+func (node *Proxy) AddRequestInterceptor(rpcMethodName string, responseGen func() any, trigger func() bool) {
 	node.engineProxy.AddRequestInterceptor(rpcMethodName, responseGen, trigger)
 }
 

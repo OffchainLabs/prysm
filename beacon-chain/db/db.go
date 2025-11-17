@@ -3,7 +3,7 @@
 package db
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 )
 
 // NewFileName uses the KVStoreDatafilePath so that if this layer of
