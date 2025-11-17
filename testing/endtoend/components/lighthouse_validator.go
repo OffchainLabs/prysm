@@ -240,6 +240,10 @@ func (v *LighthouseValidatorNode) Stop() error {
 	return v.cmd.Process.Kill()
 }
 
+func (v *LighthouseValidatorNode) UnderlyingProcess() *os.Process {
+	return v.cmd.Process
+}
+
 var _ types.ComponentRunner = &KeystoreGenerator{}
 
 type KeystoreGenerator struct {
