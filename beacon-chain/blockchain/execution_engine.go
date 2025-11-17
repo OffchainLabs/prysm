@@ -164,26 +164,27 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 	// If the forkchoice update call has an attribute, update the payload ID cache.
 	hasAttr := arg.attributes != nil && !arg.attributes.IsEmpty()
 	nextSlot := s.CurrentSlot() + 1
-	if hasAttr {
-		if payloadID != nil {
-			var pId [8]byte
-			copy(pId[:], payloadID[:])
-			log.WithFields(logrus.Fields{
-				"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(arg.headRoot[:])),
-				"headSlot":  headBlk.Slot(),
-				"nextSlot":  nextSlot,
-				"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
-			}).Info("Forkchoice updated with payload attributes for proposal")
-			s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
-		} else if !features.Get().PrepareAllPayloads {
-			log.WithFields(logrus.Fields{
-				"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
-				"slot":      headBlk.Slot(),
-				"nextSlot":  nextSlot,
-			}).Error("Received nil payload ID on VALID engine response")
-		}
-		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot)
+	if hasAttr && payloadID != nil {
+		var pId [8]byte
+		copy(pId[:], payloadID[:])
+		log.WithFields(logrus.Fields{
+			"blockRoot": fmt.Sprintf("%#x", bytesutil.Trunc(arg.headRoot[:])),
+			"headSlot":  headBlk.Slot(),
+			"nextSlot":  nextSlot,
+			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
+		}).Info("Forkchoice updated with payload attributes for proposal")
+		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
+	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
+		log.WithFields(logrus.Fields{
+			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
+			"slot":      headBlk.Slot(),
+			"nextSlot":  nextSlot,
+		}).Error("Received nil payload ID on VALID engine response")
 	}
+
+	// If the attribute is nil, it gets built in the rpc package in events.go, which calls fillEventData and then computePayloadAttributes to populate the attribute data
+	go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot)
+
 	return payloadID, nil
 }
 
