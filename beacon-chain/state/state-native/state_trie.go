@@ -79,24 +79,23 @@ var (
 
 	bellatrixFields = append(altairFields, types.LatestExecutionPayloadHeader)
 
-	capellaFields = append(
-		altairFields,
-		types.LatestExecutionPayloadHeaderCapella,
+	withdrawalAndHistoricalSummaryFields = []types.FieldIndex{
 		types.NextWithdrawalIndex,
 		types.NextWithdrawalValidatorIndex,
 		types.HistoricalSummaries,
+	}
+
+	capellaFields = append(
+		append([]types.FieldIndex{}, altairFields...),
+		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderCapella}, withdrawalAndHistoricalSummaryFields...)...,
 	)
 
 	denebFields = append(
-		altairFields,
-		types.LatestExecutionPayloadHeaderDeneb,
-		types.NextWithdrawalIndex,
-		types.NextWithdrawalValidatorIndex,
-		types.HistoricalSummaries,
+		append([]types.FieldIndex{}, altairFields...),
+		append([]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb}, withdrawalAndHistoricalSummaryFields...)...,
 	)
 
-	electraFields = append(
-		denebFields,
+	electraAdditionalFields = []types.FieldIndex{
 		types.DepositRequestsStartIndex,
 		types.DepositBalanceToConsume,
 		types.ExitBalanceToConsume,
@@ -106,6 +105,11 @@ var (
 		types.PendingDeposits,
 		types.PendingPartialWithdrawals,
 		types.PendingConsolidations,
+	}
+
+	electraFields = append(
+		append([]types.FieldIndex{}, denebFields...),
+		electraAdditionalFields...,
 	)
 
 	fuluFields = append(
@@ -113,27 +117,29 @@ var (
 		types.ProposerLookahead,
 	)
 
-	gloasFields = append(
-		altairFields,
-		types.NextWithdrawalIndex,
-		types.NextWithdrawalValidatorIndex,
-		types.HistoricalSummaries,
-		types.DepositRequestsStartIndex,
-		types.DepositBalanceToConsume,
-		types.ExitBalanceToConsume,
-		types.EarliestExitEpoch,
-		types.ConsolidationBalanceToConsume,
-		types.EarliestConsolidationEpoch,
-		types.PendingDeposits,
-		types.PendingPartialWithdrawals,
-		types.PendingConsolidations,
-		types.ProposerLookahead,
-		types.ExecutionPayloadBid,
+	gloasAdditionalFields = []types.FieldIndex{
 		types.ExecutionPayloadAvailability,
 		types.BuilderPendingPayments,
 		types.BuilderPendingWithdrawals,
 		types.LatestBlockHash,
 		types.LatestWithdrawalsRoot,
+	}
+
+	gloasFields = append(
+		append([]types.FieldIndex{}, altairFields...),
+		append(
+			[]types.FieldIndex{types.LatestExecutionPayloadBid},
+			append(
+				append([]types.FieldIndex{}, withdrawalAndHistoricalSummaryFields...),
+				append(
+					append([]types.FieldIndex{}, electraAdditionalFields...),
+					append(
+						[]types.FieldIndex{types.ProposerLookahead},
+						gloasAdditionalFields...,
+					)...,
+				)...,
+			)...,
+		)...,
 	)
 )
 
@@ -145,7 +151,7 @@ const (
 	denebSharedFieldRefCount     = 7
 	electraSharedFieldRefCount   = 10
 	fuluSharedFieldRefCount      = 11
-	gloasSharedFieldRefCount     = 12
+	gloasSharedFieldRefCount     = 12 // Adds LatestExecutionPayloadBid to the shared-ref set.
 )
 
 // InitializeFromProtoPhase0 the beacon state from a protobuf representation.
@@ -856,7 +862,6 @@ func InitializeFromProtoUnsafeGloas(st *ethpb.BeaconStateGloas) (state.BeaconSta
 	b.sharedFieldReferences[types.Slashings] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PreviousEpochParticipationBits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.CurrentEpochParticipationBits] = stateutil.NewRef(1)
-	b.sharedFieldReferences[types.ExecutionPayloadBid] = stateutil.NewRef(1) // New in Gloas.
 	b.sharedFieldReferences[types.HistoricalSummaries] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingDeposits] = stateutil.NewRef(1)
 	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
@@ -1327,7 +1332,7 @@ func (b *BeaconState) rootSelector(ctx context.Context, field types.FieldIndex) 
 		return stateutil.PendingConsolidationsRoot(b.pendingConsolidations)
 	case types.ProposerLookahead:
 		return stateutil.ProposerLookaheadRoot(b.proposerLookahead)
-	case types.ExecutionPayloadBid:
+	case types.LatestExecutionPayloadBid:
 		return b.latestExecutionPayloadBid.HashTreeRoot()
 	case types.ExecutionPayloadAvailability:
 		return stateutil.ExecutionPayloadAvailabilityRoot(b.executionPayloadAvailability)

@@ -290,6 +290,7 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			InactivityScores:              inactivityScores,
 			CurrentSyncCommittee:          b.currentSyncCommittee,
 			NextSyncCommittee:             b.nextSyncCommittee,
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid,
 			NextWithdrawalIndex:           b.nextWithdrawalIndex,
 			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
 			HistoricalSummaries:           b.historicalSummaries,
@@ -308,7 +309,6 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
 			LatestBlockHash:               b.latestBlockHash,
 			LatestWithdrawalsRoot:         b.latestWithdrawalsRoot,
-			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid,
 		}
 	default:
 		return nil
@@ -592,6 +592,7 @@ func (b *BeaconState) ToProto() any {
 			InactivityScores:              b.inactivityScoresVal(),
 			CurrentSyncCommittee:          b.currentSyncCommitteeVal(),
 			NextSyncCommittee:             b.nextSyncCommitteeVal(),
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid.Copy(),
 			NextWithdrawalIndex:           b.nextWithdrawalIndex,
 			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
 			HistoricalSummaries:           b.historicalSummariesVal(),
@@ -610,7 +611,6 @@ func (b *BeaconState) ToProto() any {
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
 			LatestBlockHash:               b.latestBlockHashVal(),
 			LatestWithdrawalsRoot:         b.latestWithdrawalsRootVal(),
-			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid.Copy(),
 		}
 	default:
 		return nil
