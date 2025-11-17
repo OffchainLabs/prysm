@@ -835,18 +835,17 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		s.TrackedValidatorsCache.Set(val)
 		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
 	}
+
 	if len(validatorIndices) == 0 {
 		return
 	}
-	if logrus.IsLevelEnabled(logrus.TraceLevel) {
-		log.WithFields(logrus.Fields{
-			"validatorIndices": validatorIndices,
-		}).Trace("Updated fee recipient addresses")
-	} else {
-		log.WithFields(logrus.Fields{
-			"validatorCount": len(validatorIndices),
-		}).Debug("Updated fee recipient addresses")
+
+	log := log.WithField("validatorCount", len(validatorIndices))
+	if logrus.GetLevel() >= logrus.TraceLevel {
+		log = log.WithField("validatorIndices", validatorIndices)
 	}
+
+	log.Debug("Updated fee recipient addresses")
 }
 
 // GetAttesterDuties requests the beacon node to provide a set of attestation duties,

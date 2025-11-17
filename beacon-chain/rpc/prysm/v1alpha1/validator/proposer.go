@@ -549,17 +549,19 @@ func (vs *Server) PrepareBeaconProposer(
 		vs.TrackedValidatorsCache.Set(val)
 		validatorIndices = append(validatorIndices, r.ValidatorIndex)
 	}
-	if len(validatorIndices) != 0 {
-		if logrus.IsLevelEnabled(logrus.TraceLevel) {
-			log.WithFields(logrus.Fields{
-				"validatorIndices": validatorIndices,
-			}).Trace("Updated fee recipient addresses for validator indices")
-		} else {
-			log.WithFields(logrus.Fields{
-				"validatorCount": len(validatorIndices),
-			}).Debug("Updated fee recipient addresses for validator indices")
-		}
+
+	if len(validatorIndices) == 0 {
+		return &emptypb.Empty{}, nil
+
 	}
+
+	log := log.WithField("validatorCount", len(validatorIndices))
+	if logrus.GetLevel() >= logrus.TraceLevel {
+		log = log.WithField("validatorIndices", validatorIndices)
+	}
+
+	log.Debug("Updated fee recipient addresses")
+
 	return &emptypb.Empty{}, nil
 }
 
