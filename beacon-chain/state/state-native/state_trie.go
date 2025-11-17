@@ -87,7 +87,7 @@ var (
 
 	capellaFields = slices.Concat(
 		altairFields,
-		[]types.FieldIndex{types.LatestExecutionPayloadHeaderDeneb},
+		[]types.FieldIndex{types.LatestExecutionPayloadHeaderCapella},
 		withdrawalAndHistoricalSummaryFields,
 	)
 
