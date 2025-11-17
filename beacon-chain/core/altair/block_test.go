@@ -4,22 +4,22 @@ import (
 	"math"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	p2pType "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	p2pType "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestProcessSyncCommittee_PerfectParticipation(t *testing.T) {
@@ -53,9 +53,19 @@ func TestProcessSyncCommittee_PerfectParticipation(t *testing.T) {
 		SyncCommitteeSignature: aggregatedSig,
 	}
 
+	// Verify that ProcessSyncAggregateNoVerifySig and ProcessSyncAggregate have the same outcome.
+	beaconStateNoVerifySig := beaconState.Copy()
+	beaconStateNoVerifySig, rewardNoVerifySig, err := altair.ProcessSyncAggregateNoVerifySig(t.Context(), beaconStateNoVerifySig, syncAggregate)
+	require.NoError(t, err)
+	sszNoVerifySig, err := beaconStateNoVerifySig.MarshalSSZ()
+	require.NoError(t, err)
 	var reward uint64
 	beaconState, reward, err = altair.ProcessSyncAggregate(t.Context(), beaconState, syncAggregate)
 	require.NoError(t, err)
+	ssz, err := beaconState.MarshalSSZ()
+	require.NoError(t, err)
+	assert.DeepEqual(t, sszNoVerifySig, ssz, "States resulting from ProcessSyncAggregateNoVerifySig and ProcessSyncAggregate are not equal")
+	assert.Equal(t, rewardNoVerifySig, reward, "Rewards resulting from ProcessSyncAggregateNoVerifySig and ProcessSyncAggregate are not equal")
 	assert.Equal(t, uint64(72192), reward)
 
 	// Use a non-sync committee index to compare profitability.
@@ -230,7 +240,7 @@ func TestProcessSyncCommittee_processSyncAggregate(t *testing.T) {
 	proposerIndex, err := helpers.BeaconProposerIndex(t.Context(), beaconState)
 	require.NoError(t, err)
 
-	for i := 0; i < len(syncBits); i++ {
+	for i := range syncBits {
 		if syncBits.BitAt(uint64(i)) {
 			pk := bytesutil.ToBytes48(committeeKeys[i])
 			require.DeepEqual(t, true, votedMap[pk])

@@ -25,7 +25,7 @@ func (u *Uint64) UnmarshalJSON(bs []byte) error {
 }
 
 // UnmarshalYAML custom unmarshal function for yaml
-func (u *Uint64) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (u *Uint64) UnmarshalYAML(unmarshal func(any) error) error {
 	var str string
 	err := unmarshal(&str)
 	if err != nil {

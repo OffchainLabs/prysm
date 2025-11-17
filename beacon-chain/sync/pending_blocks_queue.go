@@ -4,24 +4,24 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -146,6 +146,11 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 				continue
 			}
 			cancelFunction()
+
+			// Process pending attestations for this block.
+			if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
+				log.WithError(err).Debug("Failed to process pending attestations for block")
+			}
 
 			// Remove the processed block from the queue.
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
@@ -447,9 +452,7 @@ func (s *Service) sortedPendingSlots() []primitives.Slot {
 		slot := cacheKeyToSlot(k)
 		ss = append(ss, slot)
 	}
-	sort.Slice(ss, func(i, j int) bool {
-		return ss[i] < ss[j]
-	})
+	slices.Sort(ss)
 	return ss
 }
 

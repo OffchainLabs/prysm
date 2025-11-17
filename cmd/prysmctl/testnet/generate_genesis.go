@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/cmd/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -188,7 +188,7 @@ func cliActionGenerateGenesisState(cliCtx *cli.Context) error {
 		type MinimumSSZMarshal interface {
 			MarshalSSZ() ([]byte, error)
 		}
-		marshalFn := func(o interface{}) ([]byte, error) {
+		marshalFn := func(o any) ([]byte, error) {
 			marshaler, ok := o.(MinimumSSZMarshal)
 			if !ok {
 				return nil, errors.New("not a marshaler")
@@ -276,7 +276,6 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if gen.Config.PragueTime != nil {
 			fields["prague"] = fmt.Sprintf("%d", *gen.Config.PragueTime)
 		}
-
 		if gen.Config.OsakaTime != nil {
 			fields["osaka"] = fmt.Sprintf("%d", *gen.Config.OsakaTime)
 		}
@@ -398,8 +397,8 @@ func depositJSONToDepositData(input *depositDataJSON) ([]byte, *ethpb.Deposit_Da
 
 func writeToOutputFile(
 	fPath string,
-	data interface{},
-	marshalFn func(o interface{}) ([]byte, error),
+	data any,
+	marshalFn func(o any) ([]byte, error),
 ) error {
 	encoded, err := marshalFn(data)
 	if err != nil {

@@ -11,11 +11,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	log "github.com/sirupsen/logrus"
@@ -87,6 +87,7 @@ func TestGetSpec(t *testing.T) {
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.GenesisDelay = 24
 	config.SecondsPerSlot = 25
+	config.SlotDurationMilliseconds = 120
 	config.MinAttestationInclusionDelay = 26
 	config.SlotsPerEpoch = 27
 	config.MinSeedLookahead = 28
@@ -129,6 +130,10 @@ func TestGetSpec(t *testing.T) {
 	config.ProportionalSlashingMultiplierAltair = 69
 	config.InactivityScoreRecoveryRate = 70
 	config.MinSyncCommitteeParticipants = 71
+	config.ProposerReorgCutoffBPS = primitives.BP(121)
+	config.AttestationDueBPS = primitives.BP(122)
+	config.AggregrateDueBPS = primitives.BP(123)
+	config.ContributionDueBPS = primitives.BP(124)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -199,9 +204,9 @@ func TestGetSpec(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := structs.GetSpecResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
-	data, ok := resp.Data.(map[string]interface{})
+	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 171, len(data))
+	assert.Equal(t, 176, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -291,6 +296,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "24", v)
 			case "SECONDS_PER_SLOT":
 				assert.Equal(t, "25", v)
+			case "SLOT_DURATION_MS":
+				assert.Equal(t, "120", v)
 			case "MIN_ATTESTATION_INCLUSION_DELAY":
 				assert.Equal(t, "26", v)
 			case "SLOTS_PER_EPOCH":
@@ -447,6 +454,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "20", v)
 			case "REORG_PARENT_WEIGHT_THRESHOLD":
 				assert.Equal(t, "160", v)
+			case "PROPOSER_REORG_CUTOFF_BPS":
+				assert.Equal(t, "121", v)
+			case "ATTESTATION_DUE_BPS":
+				assert.Equal(t, "122", v)
+			case "AGGREGRATE_DUE_BPS":
+				assert.Equal(t, "123", v)
+			case "CONTRIBUTION_DUE_BPS":
+				assert.Equal(t, "124", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":
@@ -568,10 +583,9 @@ func TestGetSpec(t *testing.T) {
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "104", v)
 			case "BLOB_SCHEDULE":
-				// BLOB_SCHEDULE should be an empty slice when no schedule is defined
-				blobSchedule, ok := v.([]interface{})
+				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
-				assert.Equal(t, 0, len(blobSchedule))
+				assert.Equal(t, 2, len(blobSchedule))
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
@@ -650,7 +664,7 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := structs.GetSpecResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
-	data, ok := resp.Data.(map[string]interface{})
+	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
 
 	// Verify BLOB_SCHEDULE is present and properly formatted
@@ -659,13 +673,13 @@ func TestGetSpec_BlobSchedule(t *testing.T) {
 
 	// Verify it's a slice of maps (actual JSON object, not string)
 	// The JSON unmarshaling converts it to []interface{} with map[string]interface{} entries
-	blobScheduleSlice, ok := blobScheduleValue.([]interface{})
+	blobScheduleSlice, ok := blobScheduleValue.([]any)
 	require.Equal(t, true, ok)
 
 	// Convert to generic interface for easier testing
-	var blobSchedule []map[string]interface{}
+	var blobSchedule []map[string]any
 	for _, entry := range blobScheduleSlice {
-		entryMap, ok := entry.(map[string]interface{})
+		entryMap, ok := entry.(map[string]any)
 		require.Equal(t, true, ok)
 		blobSchedule = append(blobSchedule, entryMap)
 	}
@@ -721,7 +735,7 @@ func TestGetSpec_BlobSchedule_NotFulu(t *testing.T) {
 	require.Equal(t, http.StatusOK, writer.Code)
 	resp := structs.GetSpecResponse{}
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
-	data, ok := resp.Data.(map[string]interface{})
+	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
 
 	_, exists := data["BLOB_SCHEDULE"]

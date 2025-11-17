@@ -121,7 +121,7 @@ func (m *MockJsonRestHandler) PostSSZ(ctx context.Context, endpoint string, head
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(http.Header)
 	ret2, _ := ret[2].(error)
-	return ret0,ret1,ret2
+	return ret0, ret1, ret2
 }
 
 // Post indicates an expected call of Post.

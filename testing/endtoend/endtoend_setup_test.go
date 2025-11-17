@@ -6,13 +6,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ev "github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators/beaconapi"
-	e2eParams "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ev "github.com/OffchainLabs/prysm/v7/testing/endtoend/evaluators"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/evaluators/beaconapi"
+	e2eParams "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2EConfigOpt) *testRunner {
@@ -20,7 +20,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	require.NoError(t, params.SetActive(cfg))
 	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 
-	// Run for 12 epochs if not in long-running to confirm long-running has no issues.
 	var err error
 	epochsToRun := 18
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
@@ -104,7 +103,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	} else {
 		require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 	}
-	// Run for 10 epochs if not in long-running to confirm long-running has no issues.
+
 	var err error
 	epochsToRun := 16
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")

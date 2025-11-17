@@ -7,13 +7,13 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
 )
 
 // RecoveryHandlerFunc is a function that recovers from the panic `p` by returning an `error`.
 // The context can be used to extract request scoped metadata and context values.
-func RecoveryHandlerFunc(ctx context.Context, p interface{}) error {
+func RecoveryHandlerFunc(ctx context.Context, p any) error {
 	span := trace.FromContext(ctx)
 	if span != nil {
 		span.SetAttributes(trace.StringAttribute("stack", string(debug.Stack())))

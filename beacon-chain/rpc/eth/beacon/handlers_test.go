@@ -12,39 +12,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	mock2 "github.com/OffchainLabs/prysm/v6/testing/mock"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/mock/gomock"
@@ -62,7 +61,7 @@ func fillDBTestBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (
 	count := primitives.Slot(100)
 	blks := make([]interfaces.ReadOnlySignedBeaconBlock, count)
 	blkContainers := make([]*eth.BeaconBlockContainer, count)
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		b := util.NewBeaconBlock()
 		b.Block.Slot = i
 		b.Block.ParentRoot = bytesutil.PadTo([]byte{uint8(i)}, 32)
@@ -576,7 +575,7 @@ func TestGetBlockSSZV2(t *testing.T) {
 	})
 }
 
-func TestGetBlockAttestations(t *testing.T) {
+func TestGetBlockAttestationsV2(t *testing.T) {
 	preElectraAtts := []*eth.Attestation{
 		{
 			AggregationBits: bitfield.Bitlist{0x00},
@@ -667,112 +666,108 @@ func TestGetBlockAttestations(t *testing.T) {
 	esb, err := blocks.NewSignedBeaconBlock(eb)
 	require.NoError(t, err)
 
-	t.Run("v1", func(t *testing.T) {
-		t.Run("ok", func(t *testing.T) {
-			mockChainService := &chainMock.ChainService{
-				FinalizedRoots: map[[32]byte]bool{},
-			}
+	t.Run("ok-pre-electra", func(t *testing.T) {
+		mockChainService := &chainMock.ChainService{
+			FinalizedRoots: map[[32]byte]bool{},
+		}
 
-			s := &Server{
-				OptimisticModeFetcher: mockChainService,
-				FinalizationFetcher:   mockChainService,
-				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
-			}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
+		}
 
-			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
-			request.SetPathValue("block_id", "head")
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
 
-			s.GetBlockAttestations(writer, request)
-			require.Equal(t, http.StatusOK, writer.Code)
+		s.GetBlockAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
 
-			resp := &structs.GetBlockAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-			require.Equal(t, len(b.Block.Body.Attestations), len(resp.Data))
+		resp := &structs.GetBlockAttestationsV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 
-			atts := make([]*eth.Attestation, len(b.Block.Body.Attestations))
-			for i, a := range resp.Data {
-				atts[i], err = a.ToConsensus()
-				require.NoError(t, err)
-			}
-			assert.DeepEqual(t, b.Block.Body.Attestations, atts)
-		})
-		t.Run("execution-optimistic", func(t *testing.T) {
-			r, err := bsb.Block().HashTreeRoot()
+		var attStructs []structs.Attestation
+		require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
+
+		atts := make([]*eth.Attestation, len(attStructs))
+		for i, attStruct := range attStructs {
+			atts[i], err = attStruct.ToConsensus()
 			require.NoError(t, err)
-			mockChainService := &chainMock.ChainService{
-				OptimisticRoots: map[[32]byte]bool{r: true},
-				FinalizedRoots:  map[[32]byte]bool{},
-			}
-			s := &Server{
-				OptimisticModeFetcher: mockChainService,
-				FinalizationFetcher:   mockChainService,
-				Blocker:               &testutil.MockBlocker{BlockToReturn: bsb},
-			}
+		}
 
-			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
-			request.SetPathValue("block_id", "head")
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
-
-			s.GetBlockAttestations(writer, request)
-			require.Equal(t, http.StatusOK, writer.Code)
-			resp := &structs.GetBlockAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-			assert.Equal(t, true, resp.ExecutionOptimistic)
-		})
-		t.Run("finalized", func(t *testing.T) {
-			r, err := sb.Block().HashTreeRoot()
-			require.NoError(t, err)
-
-			t.Run("true", func(t *testing.T) {
-				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
-				s := &Server{
-					OptimisticModeFetcher: mockChainService,
-					FinalizationFetcher:   mockChainService,
-					Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
-				}
-
-				request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
-				request.SetPathValue("block_id", "head")
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.GetBlockAttestations(writer, request)
-				require.Equal(t, http.StatusOK, writer.Code)
-				resp := &structs.GetBlockAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-				assert.Equal(t, true, resp.Finalized)
-			})
-			t.Run("false", func(t *testing.T) {
-				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
-				s := &Server{
-					OptimisticModeFetcher: mockChainService,
-					FinalizationFetcher:   mockChainService,
-					Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
-				}
-
-				request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
-				request.SetPathValue("block_id", "head")
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.GetBlockAttestations(writer, request)
-				require.Equal(t, http.StatusOK, writer.Code)
-				resp := &structs.GetBlockAttestationsResponse{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-				assert.Equal(t, false, resp.ExecutionOptimistic)
-			})
-		})
+		assert.DeepEqual(t, b.Block.Body.Attestations, atts)
+		assert.Equal(t, "phase0", resp.Version)
 	})
+	t.Run("ok-post-electra", func(t *testing.T) {
+		mockChainService := &chainMock.ChainService{
+			FinalizedRoots: map[[32]byte]bool{},
+		}
 
-	t.Run("V2", func(t *testing.T) {
-		t.Run("ok-pre-electra", func(t *testing.T) {
-			mockChainService := &chainMock.ChainService{
-				FinalizedRoots: map[[32]byte]bool{},
-			}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: esb},
+		}
 
+		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: esb}
+		s.Blocker = mockBlockFetcher
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlockAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+
+		resp := &structs.GetBlockAttestationsV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+		var attStructs []structs.AttestationElectra
+		require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
+
+		atts := make([]*eth.AttestationElectra, len(attStructs))
+		for i, attStruct := range attStructs {
+			atts[i], err = attStruct.ToConsensus()
+			require.NoError(t, err)
+		}
+
+		assert.DeepEqual(t, eb.Block.Body.Attestations, atts)
+		assert.Equal(t, "electra", resp.Version)
+	})
+	t.Run("execution-optimistic", func(t *testing.T) {
+		r, err := bsb.Block().HashTreeRoot()
+		require.NoError(t, err)
+		mockChainService := &chainMock.ChainService{
+			OptimisticRoots: map[[32]byte]bool{r: true},
+			FinalizedRoots:  map[[32]byte]bool{},
+		}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               &testutil.MockBlocker{BlockToReturn: bsb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlockAttestationsV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlockAttestationsV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, true, resp.ExecutionOptimistic)
+		assert.Equal(t, "bellatrix", resp.Version)
+	})
+	t.Run("finalized", func(t *testing.T) {
+		r, err := sb.Block().HashTreeRoot()
+		require.NoError(t, err)
+
+		t.Run("true", func(t *testing.T) {
+			mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
 			s := &Server{
 				OptimisticModeFetcher: mockChainService,
 				FinalizationFetcher:   mockChainService,
@@ -786,70 +781,17 @@ func TestGetBlockAttestations(t *testing.T) {
 
 			s.GetBlockAttestationsV2(writer, request)
 			require.Equal(t, http.StatusOK, writer.Code)
-
 			resp := &structs.GetBlockAttestationsV2Response{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-
-			var attStructs []structs.Attestation
-			require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
-
-			atts := make([]*eth.Attestation, len(attStructs))
-			for i, attStruct := range attStructs {
-				atts[i], err = attStruct.ToConsensus()
-				require.NoError(t, err)
-			}
-
-			assert.DeepEqual(t, b.Block.Body.Attestations, atts)
+			assert.Equal(t, true, resp.Finalized)
 			assert.Equal(t, "phase0", resp.Version)
 		})
-		t.Run("ok-post-electra", func(t *testing.T) {
-			mockChainService := &chainMock.ChainService{
-				FinalizedRoots: map[[32]byte]bool{},
-			}
-
+		t.Run("false", func(t *testing.T) {
+			mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
 			s := &Server{
 				OptimisticModeFetcher: mockChainService,
 				FinalizationFetcher:   mockChainService,
-				Blocker:               &testutil.MockBlocker{BlockToReturn: esb},
-			}
-
-			mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: esb}
-			s.Blocker = mockBlockFetcher
-
-			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
-			request.SetPathValue("block_id", "head")
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
-
-			s.GetBlockAttestationsV2(writer, request)
-			require.Equal(t, http.StatusOK, writer.Code)
-
-			resp := &structs.GetBlockAttestationsV2Response{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-
-			var attStructs []structs.AttestationElectra
-			require.NoError(t, json.Unmarshal(resp.Data, &attStructs))
-
-			atts := make([]*eth.AttestationElectra, len(attStructs))
-			for i, attStruct := range attStructs {
-				atts[i], err = attStruct.ToConsensus()
-				require.NoError(t, err)
-			}
-
-			assert.DeepEqual(t, eb.Block.Body.Attestations, atts)
-			assert.Equal(t, "electra", resp.Version)
-		})
-		t.Run("execution-optimistic", func(t *testing.T) {
-			r, err := bsb.Block().HashTreeRoot()
-			require.NoError(t, err)
-			mockChainService := &chainMock.ChainService{
-				OptimisticRoots: map[[32]byte]bool{r: true},
-				FinalizedRoots:  map[[32]byte]bool{},
-			}
-			s := &Server{
-				OptimisticModeFetcher: mockChainService,
-				FinalizationFetcher:   mockChainService,
-				Blocker:               &testutil.MockBlocker{BlockToReturn: bsb},
+				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
 			}
 
 			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
@@ -861,89 +803,13 @@ func TestGetBlockAttestations(t *testing.T) {
 			require.Equal(t, http.StatusOK, writer.Code)
 			resp := &structs.GetBlockAttestationsV2Response{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-			assert.Equal(t, true, resp.ExecutionOptimistic)
-			assert.Equal(t, "bellatrix", resp.Version)
-		})
-		t.Run("finalized", func(t *testing.T) {
-			r, err := sb.Block().HashTreeRoot()
-			require.NoError(t, err)
-
-			t.Run("true", func(t *testing.T) {
-				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: true}}
-				s := &Server{
-					OptimisticModeFetcher: mockChainService,
-					FinalizationFetcher:   mockChainService,
-					Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
-				}
-
-				request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
-				request.SetPathValue("block_id", "head")
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.GetBlockAttestationsV2(writer, request)
-				require.Equal(t, http.StatusOK, writer.Code)
-				resp := &structs.GetBlockAttestationsV2Response{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-				assert.Equal(t, true, resp.Finalized)
-				assert.Equal(t, "phase0", resp.Version)
-			})
-			t.Run("false", func(t *testing.T) {
-				mockChainService := &chainMock.ChainService{FinalizedRoots: map[[32]byte]bool{r: false}}
-				s := &Server{
-					OptimisticModeFetcher: mockChainService,
-					FinalizationFetcher:   mockChainService,
-					Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
-				}
-
-				request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}/attestations", nil)
-				request.SetPathValue("block_id", "head")
-				writer := httptest.NewRecorder()
-				writer.Body = &bytes.Buffer{}
-
-				s.GetBlockAttestationsV2(writer, request)
-				require.Equal(t, http.StatusOK, writer.Code)
-				resp := &structs.GetBlockAttestationsV2Response{}
-				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-				assert.Equal(t, false, resp.ExecutionOptimistic)
-				assert.Equal(t, "phase0", resp.Version)
-			})
+			assert.Equal(t, false, resp.ExecutionOptimistic)
+			assert.Equal(t, "phase0", resp.Version)
 		})
 	})
 
 	t.Run("empty-attestations", func(t *testing.T) {
-		t.Run("v1", func(t *testing.T) {
-			b := util.NewBeaconBlock()
-			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
-			sb, err := blocks.NewSignedBeaconBlock(b)
-			require.NoError(t, err)
-
-			mockChainService := &chainMock.ChainService{
-				FinalizedRoots: map[[32]byte]bool{},
-			}
-
-			s := &Server{
-				OptimisticModeFetcher: mockChainService,
-				FinalizationFetcher:   mockChainService,
-				Blocker:               &testutil.MockBlocker{BlockToReturn: sb},
-			}
-
-			request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v1/beacon/blocks/{block_id}/attestations", nil)
-			request.SetPathValue("block_id", "head")
-			writer := httptest.NewRecorder()
-			writer.Body = &bytes.Buffer{}
-
-			s.GetBlockAttestations(writer, request)
-			require.Equal(t, http.StatusOK, writer.Code)
-			resp := &structs.GetBlockAttestationsResponse{}
-			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-
-			// Ensure data is empty array, not null
-			require.NotNil(t, resp.Data)
-			assert.Equal(t, 0, len(resp.Data))
-		})
-
-		t.Run("v2-pre-electra", func(t *testing.T) {
+		t.Run("pre-electra", func(t *testing.T) {
 			b := util.NewBeaconBlock()
 			b.Block.Body.Attestations = []*eth.Attestation{} // Explicitly set empty attestations
 			sb, err := blocks.NewSignedBeaconBlock(b)
@@ -972,7 +838,7 @@ func TestGetBlockAttestations(t *testing.T) {
 			assert.Equal(t, string(json.RawMessage("[]")), string(resp.Data))
 		})
 
-		t.Run("v2-electra", func(t *testing.T) {
+		t.Run("electra", func(t *testing.T) {
 			eb := util.NewBeaconBlockFulu()
 			eb.Block.Body.Attestations = []*eth.AttestationElectra{} // Explicitly set empty attestations
 			esb, err := blocks.NewSignedBeaconBlock(eb)
@@ -1408,290 +1274,6 @@ func TestGetBlindedBlockSSZ(t *testing.T) {
 	})
 }
 
-func TestPublishBlock(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Run("Phase 0", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Phase0)
-			var signedblock *structs.SignedBeaconBlock
-			err := json.Unmarshal([]byte(rpctesting.Phase0Block), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockFromConsensus(block.Phase0.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Altair", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Altair)
-			var signedblock *structs.SignedBeaconBlockAltair
-			err := json.Unmarshal([]byte(rpctesting.AltairBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockAltairFromConsensus(block.Altair.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.AltairBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Bellatrix", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Bellatrix)
-			converted, err := structs.BeaconBlockBellatrixFromConsensus(block.Bellatrix.Block)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockBellatrix
-			err = json.Unmarshal([]byte(rpctesting.BellatrixBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Capella", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Capella)
-			converted, err := structs.BeaconBlockCapellaFromConsensus(block.Capella.Block)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockCapella
-			err = json.Unmarshal([]byte(rpctesting.CapellaBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.CapellaBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Capella block without version header succeeds", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		cfg.CapellaForkEpoch = 4
-		params.OverrideBeaconConfig(cfg)
-		params.SetupTestConfigCleanup(t)
-		var signedblock *structs.SignedBeaconBlockCapella
-		require.NoError(t, json.Unmarshal([]byte(rpctesting.CapellaBlock), &signedblock))
-		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().CapellaForkEpoch))
-		newBlock, err := json.Marshal(signedblock)
-		require.NoError(t, err)
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Capella)
-			converted, err := structs.BeaconBlockCapellaFromConsensus(block.Capella.Block)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockCapella
-			err = json.Unmarshal(newBlock, &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(newBlock))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Deneb", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Deneb)
-			converted, err := structs.SignedBeaconBlockContentsDenebFromConsensus(block.Deneb)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockContentsDeneb
-			err = json.Unmarshal([]byte(rpctesting.DenebBlockContents), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.DenebBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Electra", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
-			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockContentsElectra
-			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Electra block without version header succeeds", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		cfg.ElectraForkEpoch = 6
-		params.OverrideBeaconConfig(cfg)
-		params.SetupTestConfigCleanup(t)
-		var signedblock *structs.SignedBeaconBlockContentsElectra
-		require.NoError(t, json.Unmarshal([]byte(rpctesting.ElectraBlockContents), &signedblock))
-		signedblock.SignedBlock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().ElectraForkEpoch))
-		newContents, err := json.Marshal(signedblock)
-		require.NoError(t, err)
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
-			converted, err := structs.SignedBeaconBlockContentsElectraFromConsensus(block.Electra)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockContentsElectra
-			err = json.Unmarshal(newContents, &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(newContents))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Electra block without version header on wrong fork", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.ElectraBlockContents)))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
-	})
-	t.Run("Fulu", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Fulu)
-			converted, err := structs.SignedBeaconBlockContentsFuluFromConsensus(block.Fulu)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBeaconBlockContentsFulu
-			err = json.Unmarshal([]byte(rpctesting.FuluBlockContents), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.FuluBlockContents)))
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("invalid block", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
-	})
-	t.Run("wrong version header", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
-	})
-	t.Run("syncing", func(t *testing.T) {
-		chainService := &chainMock.ChainService{}
-		server := &Server{
-			SyncChecker:           &mockSync.Sync{IsSyncing: true},
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
-		assert.StringContains(t, "Beacon node is currently syncing and not serving request on that endpoint", writer.Body.String())
-	})
-}
-
 func TestVersionHeaderFromRequest(t *testing.T) {
 	t.Run("Fulu block contents returns fulu header", func(t *testing.T) {
 		cfg := params.BeaconConfig().Copy()
@@ -1860,759 +1442,6 @@ func TestVersionHeaderFromRequest(t *testing.T) {
 		malformedJSON := []byte(`{"age": 30,}`)
 		_, err := versionHeaderFromRequest(malformedJSON)
 		require.ErrorContains(t, "unable to peek slot", err)
-	})
-}
-
-func TestPublishBlockSSZ(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Run("Phase 0", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Phase0)
-			var signedblock *structs.SignedBeaconBlock
-			err := json.Unmarshal([]byte(rpctesting.Phase0Block), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockFromConsensus(block.Phase0.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlock
-		err := json.Unmarshal([]byte(rpctesting.Phase0Block), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetPhase0().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Altair", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Altair)
-			var signedblock *structs.SignedBeaconBlockAltair
-			err := json.Unmarshal([]byte(rpctesting.AltairBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockAltairFromConsensus(block.Altair.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockAltair
-		err := json.Unmarshal([]byte(rpctesting.AltairBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetAltair().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Bellatrix", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Bellatrix)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-		var blk structs.SignedBeaconBlockBellatrix
-		err := json.Unmarshal([]byte(rpctesting.BellatrixBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBellatrix().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Capella", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Capella)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockCapella
-		err := json.Unmarshal([]byte(rpctesting.CapellaBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetCapella().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Deneb", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Deneb)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockContentsDeneb
-		err := json.Unmarshal([]byte(rpctesting.DenebBlockContents), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetDeneb().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Electra", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Electra)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockContentsElectra
-		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetElectra().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Fulu", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_Fulu)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockContentsFulu
-		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetFulu().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("invalid block", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockBellatrix
-		err := json.Unmarshal([]byte(rpctesting.BlindedBellatrixBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
-	})
-	t.Run("wrong version header", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockBellatrix
-		err := json.Unmarshal([]byte(rpctesting.BellatrixBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBellatrix().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
-	})
-	t.Run("syncing", func(t *testing.T) {
-		chainService := &chainMock.ChainService{}
-		server := &Server{
-			SyncChecker:           &mockSync.Sync{IsSyncing: true},
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlock(writer, request)
-		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
-		assert.StringContains(t, "Beacon node is currently syncing and not serving request on that endpoint", writer.Body.String())
-	})
-}
-
-func TestPublishBlindedBlock(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Run("Phase 0", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Phase0)
-			var signedblock *structs.SignedBeaconBlock
-			err := json.Unmarshal([]byte(rpctesting.Phase0Block), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockFromConsensus(block.Phase0.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.Phase0Block)))
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Altair", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Altair)
-			var signedblock *structs.SignedBeaconBlockAltair
-			err := json.Unmarshal([]byte(rpctesting.AltairBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockAltairFromConsensus(block.Altair.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.AltairBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Blinded Bellatrix", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedBellatrix)
-			converted, err := structs.BlindedBeaconBlockBellatrixFromConsensus(block.BlindedBellatrix.Block)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockBellatrix
-			err = json.Unmarshal([]byte(rpctesting.BlindedBellatrixBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Blinded Capella", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedCapella)
-			converted, err := structs.BlindedBeaconBlockCapellaFromConsensus(block.BlindedCapella.Block)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockCapella
-			err = json.Unmarshal([]byte(rpctesting.BlindedCapellaBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedCapellaBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Blinded Deneb", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedDeneb)
-			converted, err := structs.BlindedBeaconBlockDenebFromConsensus(block.BlindedDeneb.Message)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockDeneb
-			err = json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedDenebBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Blinded Electra", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedElectra)
-			converted, err := structs.BlindedBeaconBlockElectraFromConsensus(block.BlindedElectra.Message)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockElectra
-			err = json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedElectraBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Blinded Electra block without version header succeeds", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		cfg.ElectraForkEpoch = 6
-		params.OverrideBeaconConfig(cfg)
-		params.SetupTestConfigCleanup(t)
-		var signedblock *structs.SignedBlindedBeaconBlockElectra
-		require.NoError(t, json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &signedblock))
-		signedblock.Message.Slot = fmt.Sprintf("%d", uint64(params.BeaconConfig().SlotsPerEpoch)*uint64(params.BeaconConfig().ElectraForkEpoch))
-		newBlock, err := json.Marshal(signedblock)
-		require.NoError(t, err)
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedElectra)
-			converted, err := structs.BlindedBeaconBlockElectraFromConsensus(block.BlindedElectra.Message)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockElectra
-			err = json.Unmarshal(newBlock, &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(newBlock))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Blinded Electra block without version header on wrong fork", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedElectraBlock)))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		// block is sent with slot == 1 which means it's in the phase0 fork
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Phase0)), writer.Body.String())
-	})
-	t.Run("Blinded Fulu", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedFulu)
-			converted, err := structs.BlindedBeaconBlockFuluFromConsensus(block.BlindedFulu.Message)
-			require.NoError(t, err)
-			var signedblock *structs.SignedBlindedBeaconBlockFulu
-			err = json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, converted, signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedFuluBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("invalid block", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
-	})
-	t.Run("wrong version header", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BlindedBellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
-	})
-	t.Run("syncing", func(t *testing.T) {
-		chainService := &chainMock.ChainService{}
-		server := &Server{
-			SyncChecker:           &mockSync.Sync{IsSyncing: true},
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
-		assert.StringContains(t, "Beacon node is currently syncing and not serving request on that endpoint", writer.Body.String())
-	})
-}
-
-func TestPublishBlindedBlockSSZ(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Run("Phase 0", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Phase0)
-			var signedblock *structs.SignedBeaconBlock
-			err := json.Unmarshal([]byte(rpctesting.Phase0Block), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockFromConsensus(block.Phase0.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlock
-		err := json.Unmarshal([]byte(rpctesting.Phase0Block), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetPhase0().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Altair", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			block, ok := req.Block.(*eth.GenericSignedBeaconBlock_Altair)
-			var signedblock *structs.SignedBeaconBlockAltair
-			err := json.Unmarshal([]byte(rpctesting.AltairBlock), &signedblock)
-			require.NoError(t, err)
-			require.DeepEqual(t, structs.BeaconBlockAltairFromConsensus(block.Altair.Block), signedblock.Message)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBeaconBlockAltair
-		err := json.Unmarshal([]byte(rpctesting.AltairBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetAltair().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Altair))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Bellatrix", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedBellatrix)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockBellatrix
-		err := json.Unmarshal([]byte(rpctesting.BlindedBellatrixBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Capella", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedCapella)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockCapella
-		err := json.Unmarshal([]byte(rpctesting.BlindedCapellaBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedCapella().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Deneb", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedDeneb)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockDeneb
-		err := json.Unmarshal([]byte(rpctesting.BlindedDenebBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedDeneb().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Electra", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedElectra)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockElectra
-		err := json.Unmarshal([]byte(rpctesting.BlindedElectraBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedElectra().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Electra))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("Fulu", func(t *testing.T) {
-		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
-		v1alpha1Server.EXPECT().ProposeBeaconBlock(gomock.Any(), mock.MatchedBy(func(req *eth.GenericSignedBeaconBlock) bool {
-			_, ok := req.Block.(*eth.GenericSignedBeaconBlock_BlindedFulu)
-			return ok
-		}))
-		server := &Server{
-			V1Alpha1ValidatorServer: v1alpha1Server,
-			SyncChecker:             &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockFulu
-		err := json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedFulu().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-	})
-	t.Run("invalid block", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte(rpctesting.BellatrixBlock)))
-		request.Header.Set(api.VersionHeader, version.String(version.Bellatrix))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Bellatrix)), writer.Body.String())
-	})
-	t.Run("wrong version header", func(t *testing.T) {
-		server := &Server{
-			SyncChecker: &mockSync.Sync{IsSyncing: false},
-		}
-
-		var blk structs.SignedBlindedBeaconBlockBellatrix
-		err := json.Unmarshal([]byte(rpctesting.BlindedBellatrixBlock), &blk)
-		require.NoError(t, err)
-		genericBlock, err := blk.ToGeneric()
-		require.NoError(t, err)
-		ssz, err := genericBlock.GetBlindedBellatrix().MarshalSSZ()
-		require.NoError(t, err)
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader(ssz))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		request.Header.Set(api.VersionHeader, version.String(version.Capella))
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusBadRequest, writer.Code)
-		assert.StringContains(t, fmt.Sprintf("could not decode request body into %s consensus block", version.String(version.Capella)), writer.Body.String())
-	})
-	t.Run("syncing", func(t *testing.T) {
-		chainService := &chainMock.ChainService{}
-		server := &Server{
-			SyncChecker:           &mockSync.Sync{IsSyncing: true},
-			HeadFetcher:           chainService,
-			TimeFetcher:           chainService,
-			OptimisticModeFetcher: chainService,
-		}
-
-		request := httptest.NewRequest(http.MethodPost, "http://foo.example", bytes.NewReader([]byte("foo")))
-		request.Header.Set("Content-Type", api.OctetStreamMediaType)
-		writer := httptest.NewRecorder()
-		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
-		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
-		assert.StringContains(t, "Beacon node is currently syncing and not serving request on that endpoint", writer.Body.String())
 	})
 }
 
@@ -3463,7 +2292,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		request.Header.Set(api.VersionHeader, version.String(version.Deneb))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
+		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 	})
 	t.Run("Electra", func(t *testing.T) {
@@ -3489,7 +2318,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		request.Header.Set(api.VersionHeader, version.String(version.Electra))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
+		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 	})
 	t.Run("Fulu", func(t *testing.T) {
@@ -3515,7 +2344,7 @@ func TestPublishBlindedBlockV2SSZ(t *testing.T) {
 		request.Header.Set(api.VersionHeader, version.String(version.Fulu))
 		writer := httptest.NewRecorder()
 		writer.Body = &bytes.Buffer{}
-		server.PublishBlindedBlock(writer, request)
+		server.PublishBlindedBlockV2(writer, request)
 		assert.Equal(t, http.StatusOK, writer.Code)
 	})
 	t.Run("invalid block", func(t *testing.T) {
@@ -4790,67 +3619,6 @@ func TestGetGenesis(t *testing.T) {
 	})
 }
 
-func TestGetDepositSnapshot(t *testing.T) {
-	beaconDB := dbTest.SetupDB(t)
-	mockTrie := depositsnapshot.NewDepositTree()
-	deposits := [][32]byte{
-		bytesutil.ToBytes32([]byte{1}),
-		bytesutil.ToBytes32([]byte{2}),
-		bytesutil.ToBytes32([]byte{3}),
-	}
-	finalized := 2
-	for _, leaf := range deposits {
-		err := mockTrie.Insert(leaf[:], 0)
-		require.NoError(t, err)
-	}
-	err := mockTrie.Finalize(1, deposits[1], 1)
-	require.NoError(t, err)
-	err = mockTrie.Finalize(2, deposits[2], 2)
-	require.NoError(t, err)
-
-	snapshot, err := mockTrie.GetSnapshot()
-	require.NoError(t, err)
-	root, err := snapshot.CalculateRoot()
-	require.NoError(t, err)
-	chainData := &eth.ETH1ChainData{
-		DepositSnapshot: snapshot.ToProto(),
-	}
-	err = beaconDB.SaveExecutionChainData(t.Context(), chainData)
-	require.NoError(t, err)
-	s := Server{
-		BeaconDB: beaconDB,
-	}
-
-	request := httptest.NewRequest(http.MethodGet, "/eth/v1/beacon/deposit_snapshot", nil)
-	writer := httptest.NewRecorder()
-	t.Run("JSON response", func(t *testing.T) {
-		writer.Body = &bytes.Buffer{}
-		s.GetDepositSnapshot(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &structs.GetDepositSnapshotResponse{}
-		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		require.NotNil(t, resp.Data)
-
-		assert.Equal(t, hexutil.Encode(root[:]), resp.Data.DepositRoot)
-		assert.Equal(t, hexutil.Encode(deposits[2][:]), resp.Data.ExecutionBlockHash)
-		assert.Equal(t, strconv.Itoa(mockTrie.NumOfItems()), resp.Data.DepositCount)
-		assert.Equal(t, finalized, len(resp.Data.Finalized))
-	})
-	t.Run("SSZ response", func(t *testing.T) {
-		writer.Body = &bytes.Buffer{}
-		request.Header.Set("Accept", api.OctetStreamMediaType)
-		s.GetDepositSnapshot(writer, request)
-		assert.Equal(t, http.StatusOK, writer.Code)
-		resp := &eth.DepositSnapshot{}
-		require.NoError(t, resp.UnmarshalSSZ(writer.Body.Bytes()))
-
-		assert.Equal(t, hexutil.Encode(root[:]), hexutil.Encode(resp.DepositRoot))
-		assert.Equal(t, hexutil.Encode(deposits[2][:]), hexutil.Encode(resp.ExecutionHash))
-		assert.Equal(t, uint64(mockTrie.NumOfItems()), resp.DepositCount)
-		assert.Equal(t, finalized, len(resp.Finalized))
-	})
-}
-
 func TestServer_broadcastBlobSidecars(t *testing.T) {
 	hook := logTest.NewGlobal()
 	blockToPropose := util.NewBeaconBlockContentsDeneb()
@@ -4876,8 +3644,16 @@ func TestServer_broadcastBlobSidecars(t *testing.T) {
 }
 
 func Test_validateBlobs(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	es := util.SlotAtEpoch(t, params.BeaconConfig().ElectraForkEpoch)
+	fe := params.BeaconConfig().FuluForkEpoch
+	fs := util.SlotAtEpoch(t, fe)
+
 	require.NoError(t, kzg.Start())
 
+	denebMax := params.BeaconConfig().MaxBlobsPerBlock(ds)
 	blob := util.GetRandBlob(123)
 	// Generate proper commitment and proof for the blob
 	var kzgBlob kzg.Blob
@@ -4887,6 +3663,7 @@ func Test_validateBlobs(t *testing.T) {
 	proof, err := kzg.ComputeBlobKZGProof(&kzgBlob, commitment)
 	require.NoError(t, err)
 	blk := util.NewBeaconBlockDeneb()
+	blk.Block.Slot = ds
 	blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
 	b, err := blocks.NewSignedBeaconBlock(blk)
 	require.NoError(t, err)
@@ -4902,10 +3679,11 @@ func Test_validateBlobs(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorContains(t, "could not verify blob proofs", s.validateBlobs(b, [][]byte{blob[:]}, [][]byte{proof[:]}))
 
+	electraMax := params.BeaconConfig().MaxBlobsPerBlock(es)
 	blobs := [][]byte{}
 	commitments := [][]byte{}
 	proofs := [][]byte{}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < electraMax+1; i++ {
 		blobs = append(blobs, blob[:])
 		commitments = append(commitments, commitment[:])
 		proofs = append(proofs, proof[:])
@@ -4923,6 +3701,7 @@ func Test_validateBlobs(t *testing.T) {
 
 	t.Run("Deneb block with valid single blob", func(t *testing.T) {
 		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = ds
 		blk.Block.Body.BlobKzgCommitments = [][]byte{commitment[:]}
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
@@ -4931,107 +3710,54 @@ func Test_validateBlobs(t *testing.T) {
 	})
 
 	t.Run("Deneb block with max blobs (6)", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 100
-		testCfg.DeprecatedMaxBlobsPerBlock = 6
-		params.OverrideBeaconConfig(testCfg)
-
 		blk := util.NewBeaconBlockDeneb()
-		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Slot = ds
 		blk.Block.Body.BlobKzgCommitments = commitments[:6]
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		s := &Server{}
 		// Should pass with exactly 6 blobs
-		require.NoError(t, s.validateBlobs(b, blobs[:6], proofs[:6]))
+		require.NoError(t, s.validateBlobs(b, blobs[:denebMax], proofs[:denebMax]))
 	})
 
 	t.Run("Deneb block exceeding max blobs", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 100
-		testCfg.DeprecatedMaxBlobsPerBlock = 6
-		params.OverrideBeaconConfig(testCfg)
-
 		blk := util.NewBeaconBlockDeneb()
-		blk.Block.Slot = 10 // Deneb slot
+		blk.Block.Slot = ds
 		blk.Block.Body.BlobKzgCommitments = commitments[:7]
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		s := &Server{}
 		// Should fail with 7 blobs when max is 6
-		err = s.validateBlobs(b, blobs[:7], proofs[:7])
-		require.ErrorContains(t, "number of blobs over max, 7 > 6", err)
+		err = s.validateBlobs(b, blobs[:denebMax+1], proofs[:denebMax+1])
+		require.ErrorContains(t, "number of blobs over max", err)
 	})
 
 	t.Run("Electra block with valid blobs", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		// Set up Electra config with max 9 blobs
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 5
-		testCfg.DeprecatedMaxBlobsPerBlock = 6
-		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
-		params.OverrideBeaconConfig(testCfg)
-
 		blk := util.NewBeaconBlockElectra()
-		blk.Block.Slot = 160 // Electra slot (epoch 5+)
+		blk.Block.Slot = es
 		blk.Block.Body.BlobKzgCommitments = commitments[:9]
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		s := &Server{}
 		// Should pass with 9 blobs in Electra
-		require.NoError(t, s.validateBlobs(b, blobs[:9], proofs[:9]))
+		require.NoError(t, s.validateBlobs(b, blobs[:electraMax], proofs[:electraMax]))
 	})
 
 	t.Run("Electra block exceeding max blobs", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		// Set up Electra config with max 9 blobs
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 5
-		testCfg.DeprecatedMaxBlobsPerBlock = 6
-		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
-		params.OverrideBeaconConfig(testCfg)
-
 		blk := util.NewBeaconBlockElectra()
-		blk.Block.Slot = 160 // Electra slot
-		blk.Block.Body.BlobKzgCommitments = commitments[:10]
+		blk.Block.Slot = es
+		blk.Block.Body.BlobKzgCommitments = commitments[:electraMax+1]
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
 		s := &Server{}
 		// Should fail with 10 blobs when max is 9
-		err = s.validateBlobs(b, blobs[:10], proofs[:10])
-		require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
+		err = s.validateBlobs(b, blobs[:electraMax+1], proofs[:electraMax+1])
+		require.ErrorContains(t, "number of blobs over max", err)
 	})
 
 	t.Run("Fulu block with valid cell proofs", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 5
-		testCfg.FuluForkEpoch = 10
-		testCfg.DeprecatedMaxBlobsPerBlock = 6
-		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
-		testCfg.NumberOfColumns = 128 // Standard PeerDAS configuration
-		params.OverrideBeaconConfig(testCfg)
-
-		// Create Fulu block with proper cell proofs
 		blk := util.NewBeaconBlockFulu()
-		blk.Block.Slot = 320 // Epoch 10 (Fulu fork)
+		blk.Block.Slot = fs
 
 		// Generate valid commitments and cell proofs for testing
 		blobCount := 2
@@ -5039,7 +3765,7 @@ func Test_validateBlobs(t *testing.T) {
 		fuluBlobs := make([][]byte, blobCount)
 		var kzgBlobs []kzg.Blob
 
-		for i := 0; i < blobCount; i++ {
+		for i := range blobCount {
 			blob := util.GetRandBlob(int64(i))
 			fuluBlobs[i] = blob[:]
 			var kzgBlob kzg.Blob
@@ -5059,13 +3785,13 @@ func Test_validateBlobs(t *testing.T) {
 		// Generate cell proofs for the blobs (flattened format like execution client)
 		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
-		for blobIdx := 0; blobIdx < blobCount; blobIdx++ {
-			cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
+		for blobIdx := range blobCount {
+			_, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
 			require.NoError(t, err)
 
-			for colIdx := uint64(0); colIdx < numberOfColumns; colIdx++ {
+			for colIdx := range numberOfColumns {
 				cellProofIdx := uint64(blobIdx)*numberOfColumns + colIdx
-				cellProofs[cellProofIdx] = cellsAndProofs.Proofs[colIdx][:]
+				cellProofs[cellProofIdx] = proofs[colIdx][:]
 			}
 		}
 
@@ -5075,24 +3801,14 @@ func Test_validateBlobs(t *testing.T) {
 	})
 
 	t.Run("Fulu block with invalid cell proof count", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		defer params.OverrideBeaconConfig(cfg)
-
-		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 5
-		testCfg.FuluForkEpoch = 10
-		testCfg.NumberOfColumns = 128
-		params.OverrideBeaconConfig(testCfg)
-
 		blk := util.NewBeaconBlockFulu()
-		blk.Block.Slot = 320 // Epoch 10 (Fulu fork)
+		blk.Block.Slot = fs
 
 		// Create valid commitments but wrong number of cell proofs
 		blobCount := 2
 		commitments := make([][]byte, blobCount)
 		fuluBlobs := make([][]byte, blobCount)
-		for i := 0; i < blobCount; i++ {
+		for i := range blobCount {
 			blob := util.GetRandBlob(int64(i))
 			fuluBlobs[i] = blob[:]
 
@@ -5123,6 +3839,7 @@ func Test_validateBlobs(t *testing.T) {
 		require.NoError(t, err)
 
 		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = ds
 		blk.Block.Body.BlobKzgCommitments = [][]byte{sk.PublicKey().Marshal()}
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
@@ -5134,6 +3851,7 @@ func Test_validateBlobs(t *testing.T) {
 
 	t.Run("empty blobs and proofs should pass", func(t *testing.T) {
 		blk := util.NewBeaconBlockDeneb()
+		blk.Block.Slot = ds
 		blk.Block.Body.BlobKzgCommitments = [][]byte{}
 		b, err := blocks.NewSignedBeaconBlock(blk)
 		require.NoError(t, err)
@@ -5148,53 +3866,48 @@ func Test_validateBlobs(t *testing.T) {
 
 		// Set up config with BlobSchedule (BPO - Blob Production Optimization)
 		testCfg := params.BeaconConfig().Copy()
-		testCfg.DenebForkEpoch = 0
-		testCfg.ElectraForkEpoch = 100
-		testCfg.FuluForkEpoch = 200
 		testCfg.DeprecatedMaxBlobsPerBlock = 6
 		testCfg.DeprecatedMaxBlobsPerBlockElectra = 9
 		// Define blob schedule with progressive increases
 		testCfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 0, MaxBlobsPerBlock: 3},  // Start with 3 blobs
-			{Epoch: 10, MaxBlobsPerBlock: 5}, // Increase to 5 at epoch 10
-			{Epoch: 20, MaxBlobsPerBlock: 7}, // Increase to 7 at epoch 20
-			{Epoch: 30, MaxBlobsPerBlock: 9}, // Increase to 9 at epoch 30
+			{Epoch: fe + 1, MaxBlobsPerBlock: 3},  // Start with 3 blobs
+			{Epoch: fe + 10, MaxBlobsPerBlock: 5}, // Increase to 5 at epoch 10
+			{Epoch: fe + 20, MaxBlobsPerBlock: 7}, // Increase to 7 at epoch 20
+			{Epoch: fe + 30, MaxBlobsPerBlock: 9}, // Increase to 9 at epoch 30
 		}
 		params.OverrideBeaconConfig(testCfg)
 
 		s := &Server{}
-
-		// Test epoch 0-9: max 3 blobs
-		t.Run("epoch 0-9: max 3 blobs", func(t *testing.T) {
+		t.Run("deneb under and over max", func(t *testing.T) {
 			blk := util.NewBeaconBlockDeneb()
-			blk.Block.Slot = 5 // Epoch 0
-			blk.Block.Body.BlobKzgCommitments = commitments[:3]
+			blk.Block.Slot = ds
+			blk.Block.Body.BlobKzgCommitments = commitments[:denebMax]
 			b, err := blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			require.NoError(t, s.validateBlobs(b, blobs[:3], proofs[:3]))
+			require.NoError(t, s.validateBlobs(b, blobs[:denebMax], proofs[:denebMax]))
 
 			// Should fail with 4 blobs
 			blk.Block.Body.BlobKzgCommitments = commitments[:4]
 			b, err = blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			err = s.validateBlobs(b, blobs[:4], proofs[:4])
-			require.ErrorContains(t, "number of blobs over max, 4 > 3", err)
+			err = s.validateBlobs(b, blobs[:denebMax+1], proofs[:denebMax+1])
+			require.ErrorContains(t, "number of blobs over max", err)
 		})
 
 		// Test epoch 30+: max 9 blobs
-		t.Run("epoch 30+: max 9 blobs", func(t *testing.T) {
-			blk := util.NewBeaconBlockDeneb()
-			blk.Block.Slot = 960 // Epoch 30
-			blk.Block.Body.BlobKzgCommitments = commitments[:9]
+		t.Run("different max in electra", func(t *testing.T) {
+			blk := util.NewBeaconBlockElectra()
+			blk.Block.Slot = es
+			blk.Block.Body.BlobKzgCommitments = commitments[:electraMax]
 			b, err := blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			require.NoError(t, s.validateBlobs(b, blobs[:9], proofs[:9]))
+			require.NoError(t, s.validateBlobs(b, blobs[:electraMax], proofs[:electraMax]))
 
-			// Should fail with 10 blobs
-			blk.Block.Body.BlobKzgCommitments = commitments[:10]
+			// exceed the electra max
+			blk.Block.Body.BlobKzgCommitments = commitments[:electraMax+1]
 			b, err = blocks.NewSignedBeaconBlock(blk)
 			require.NoError(t, err)
-			err = s.validateBlobs(b, blobs[:10], proofs[:10])
+			err = s.validateBlobs(b, blobs[:electraMax+1], proofs[:electraMax+1])
 			require.ErrorContains(t, "number of blobs over max, 10 > 9", err)
 		})
 	})
@@ -5264,7 +3977,7 @@ func TestGetPendingConsolidations(t *testing.T) {
 		consolidationSize := (&eth.PendingConsolidation{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), consolidationSize*len(cs))
 
-		for i := 0; i < len(cs); i++ {
+		for i := range cs {
 			start := i * consolidationSize
 			end := start + consolidationSize
 
@@ -5390,7 +4103,7 @@ func TestGetPendingDeposits(t *testing.T) {
 
 	validators := st.Validators()
 	dummySig := make([]byte, 96)
-	for j := 0; j < 96; j++ {
+	for j := range 96 {
 		dummySig[j] = byte(j)
 	}
 	deps := make([]*eth.PendingDeposit, 10)
@@ -5457,7 +4170,7 @@ func TestGetPendingDeposits(t *testing.T) {
 		depositSize := (&eth.PendingDeposit{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), depositSize*len(deps))
 
-		for i := 0; i < len(deps); i++ {
+		for i := range deps {
 			start := i * depositSize
 			end := start + depositSize
 
@@ -5644,7 +4357,7 @@ func TestGetPendingPartialWithdrawals(t *testing.T) {
 		withdrawalSize := (&eth.PendingPartialWithdrawal{}).SizeSSZ()
 		require.Equal(t, len(responseBytes), withdrawalSize*len(withdrawals))
 
-		for i := 0; i < len(withdrawals); i++ {
+		for i := range withdrawals {
 			start := i * withdrawalSize
 			end := start + withdrawalSize
 
@@ -5774,7 +4487,7 @@ func TestGetProposerLookahead(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateFulu(t, uint64(numValidators))
 	lookaheadSize := int(params.BeaconConfig().MinSeedLookahead+1) * int(params.BeaconConfig().SlotsPerEpoch)
 	lookahead := make([]primitives.ValidatorIndex, lookaheadSize)
-	for i := 0; i < lookaheadSize; i++ {
+	for i := range lookaheadSize {
 		lookahead[i] = primitives.ValidatorIndex(i % numValidators) // Cycle through validators
 	}
 
@@ -5812,7 +4525,7 @@ func TestGetProposerLookahead(t *testing.T) {
 
 		// Verify the data
 		require.Equal(t, lookaheadSize, len(resp.Data))
-		for i := 0; i < lookaheadSize; i++ {
+		for i := range lookaheadSize {
 			expectedIdx := strconv.FormatUint(uint64(i%numValidators), 10)
 			require.Equal(t, expectedIdx, resp.Data[i])
 		}
@@ -5833,7 +4546,7 @@ func TestGetProposerLookahead(t *testing.T) {
 		require.Equal(t, len(responseBytes), validatorIndexSize*lookaheadSize)
 
 		recoveredIndices := make([]primitives.ValidatorIndex, lookaheadSize)
-		for i := 0; i < lookaheadSize; i++ {
+		for i := range lookaheadSize {
 			start := i * validatorIndexSize
 			end := start + validatorIndexSize
 

@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/proto/dbval"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 type mockMinimumSlotter struct {
@@ -69,7 +69,7 @@ func TestServiceInit(t *testing.T) {
 	todo := make([]batch, 0)
 	todo = testReadN(ctx, t, pool.todoChan, nWorkers, todo)
 	require.Equal(t, nWorkers, len(todo))
-	for i := 0; i < remaining; i++ {
+	for i := range remaining {
 		b := todo[i]
 		if b.state == batchSequenced {
 			b.state = batchImportable
@@ -84,7 +84,7 @@ func TestServiceInit(t *testing.T) {
 }
 
 func TestMinimumBackfillSlot(t *testing.T) {
-	oe := helpers.MinEpochsForBlockRequests()
+	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 
 	currSlot := (oe + 100).Mul(uint64(params.BeaconConfig().SlotsPerEpoch))
 	minSlot := minimumBackfillSlot(primitives.Slot(currSlot))
@@ -96,7 +96,7 @@ func TestMinimumBackfillSlot(t *testing.T) {
 }
 
 func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []batch) []batch {
-	for i := 0; i < n; i++ {
+	for range n {
 		select {
 		case b := <-c:
 			into = append(into, b)
@@ -109,7 +109,7 @@ func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []ba
 }
 
 func TestBackfillMinSlotDefault(t *testing.T) {
-	oe := helpers.MinEpochsForBlockRequests()
+	oe := primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
 	current := primitives.Slot((oe + 100).Mul(uint64(params.BeaconConfig().SlotsPerEpoch)))
 	s := &Service{}
 	specMin := minimumBackfillSlot(current)
@@ -131,4 +131,42 @@ func TestBackfillMinSlotDefault(t *testing.T) {
 		// if WithMinimumSlot is newer than the spec minimum, we should use the spec minimum
 		require.Equal(t, specMin, s.ms(current))
 	})
+}
+
+func TestFuluOrigin(t *testing.T) {
+	cfg := params.BeaconConfig()
+	fuluEpoch := cfg.FuluForkEpoch
+	fuluSlot, err := slots.EpochStart(fuluEpoch)
+	require.NoError(t, err)
+	cases := []struct {
+		name   string
+		origin primitives.Slot
+		isFulu bool
+	}{
+		{
+			name:   "before fulu",
+			origin: fuluSlot - 1,
+			isFulu: false,
+		},
+		{
+			name:   "at fulu",
+			origin: fuluSlot,
+			isFulu: true,
+		},
+		{
+			name:   "after fulu",
+			origin: fuluSlot + 1,
+			isFulu: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &dbval.BackfillStatus{
+				OriginSlot: uint64(tc.origin),
+			}
+			result := fuluOrigin(cfg, status)
+			require.Equal(t, tc.isFulu, result)
+		})
+	}
 }

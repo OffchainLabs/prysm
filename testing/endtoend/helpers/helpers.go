@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
@@ -303,7 +303,7 @@ func NewLocalConnection(ctx context.Context, port int) (*grpc.ClientConn, error)
 // NewLocalConnections returns number of GRPC connections, along with function to close all of them.
 func NewLocalConnections(ctx context.Context, numConns int) ([]*grpc.ClientConn, func(), error) {
 	conns := make([]*grpc.ClientConn, numConns)
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		conn, err := NewLocalConnection(ctx, e2e.TestParams.Ports.PrysmBeaconNodeRPCPort+i)
 		if err != nil {
 			return nil, nil, err
@@ -322,7 +322,7 @@ func NewLocalConnections(ctx context.Context, numConns int) ([]*grpc.ClientConn,
 // BeaconAPIHostnames constructs a hostname:port string for the
 func BeaconAPIHostnames(numConns int) []string {
 	hostnames := make([]string, 0)
-	for i := 0; i < numConns; i++ {
+	for i := range numConns {
 		port := e2e.TestParams.Ports.PrysmBeaconNodeHTTPPort + i
 		hostnames = append(hostnames, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	}

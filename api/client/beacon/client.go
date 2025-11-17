@@ -11,12 +11,12 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -284,7 +284,7 @@ func (c *Client) SubmitChangeBLStoExecution(ctx context.Context, request []*stru
 	if resp.StatusCode != http.StatusOK {
 		decoder := json.NewDecoder(resp.Body)
 		decoder.DisallowUnknownFields()
-		errorJson := &server.IndexedVerificationFailureError{}
+		errorJson := &server.IndexedErrorContainer{}
 		if err := decoder.Decode(errorJson); err != nil {
 			return errors.Wrapf(err, "failed to decode error JSON for %s", resp.Request.URL)
 		}

@@ -3,19 +3,20 @@ package backfill
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func testBlobGen(t *testing.T, start primitives.Slot, n int) ([]blocks.ROBlock, [][]blocks.ROBlob) {
 	blks := make([]blocks.ROBlock, n)
 	blobs := make([][]blocks.ROBlob, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		bk, bl := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, start+primitives.Slot(i), 3)
 		blks[i] = bk
 		blobs[i] = bl
@@ -24,8 +25,9 @@ func testBlobGen(t *testing.T, start primitives.Slot, n int) ([]blocks.ROBlock, 
 }
 
 func TestValidateNext_happy(t *testing.T) {
-	current := primitives.Slot(128)
-	blks, blobs := testBlobGen(t, 63, 4)
+	startSlot := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	current := startSlot + 65
+	blks, blobs := testBlobGen(t, startSlot, 4)
 	cfg := &blobSyncConfig{
 		retentionStart: 0,
 		nbv:            testNewBlobVerifier(),
@@ -74,8 +76,9 @@ func TestValidateNext_sigMatch(t *testing.T) {
 }
 
 func TestValidateNext_errorsFromVerifier(t *testing.T) {
-	current := primitives.Slot(128)
-	blks, blobs := testBlobGen(t, 63, 1)
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	current := primitives.Slot(ds + 96)
+	blks, blobs := testBlobGen(t, ds+31, 1)
 	cases := []struct {
 		name string
 		err  error

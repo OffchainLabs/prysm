@@ -5,8 +5,8 @@ import (
 	"math/big"
 	"time"
 
-	clparams "github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	clparams "github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -114,10 +114,9 @@ func GethPragueTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uin
 }
 
 // GethOsakaTime calculates the absolute time of the osaka (aka fulu) fork block
-// by adding the relative time of the fulu the fork epoch to the given genesis timestamp.
+// by adding the relative time of the capella the fork epoch to the given genesis timestamp.
 func GethOsakaTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
 	var osakaTime *uint64
-
 	if cfg.FuluForkEpoch != math.MaxUint64 {
 		startSlot, err := slots.EpochStart(cfg.FuluForkEpoch)
 		if err == nil {
@@ -126,7 +125,6 @@ func GethOsakaTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint
 			osakaTime = &newTime
 		}
 	}
-
 	return osakaTime
 }
 
@@ -147,13 +145,10 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 	if cfg.ElectraForkEpoch == 0 {
 		pragueTime = &genesisTime
 	}
-
 	osakaTime := GethOsakaTime(genesis, cfg)
-
 	if cfg.FuluForkEpoch == 0 {
 		osakaTime = &genesisTime
 	}
-
 	cc := &params.ChainConfig{
 		ChainID:                 big.NewInt(defaultTestChainId),
 		HomesteadBlock:          bigz,

@@ -6,27 +6,27 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -219,6 +219,9 @@ func (s *Service) validateExecutionAndConsensus(
 	eg.Go(func() error {
 		var err error
 		postState, err = s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return invalidBlock{error: err, root: block.Root()}
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to validate consensus state transition function")
 		}
@@ -585,17 +588,17 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySignedBeaconBlock, preState state.BeaconState) {
 	// Feed the indexed attestation to slasher if enabled. This action
 	// is done in the background to avoid adding more load to this critical code path.
-	ctx := context.TODO()
+	ctx := s.ctx
 	for _, att := range signed.Block().Body().Attestations() {
 		committees, err := helpers.AttestationCommitteesFromState(ctx, preState, att)
 		if err != nil {
 			log.WithError(err).Error("Could not get attestation committees")
-			return
+			continue
 		}
 		indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committees...)
 		if err != nil {
 			log.WithError(err).Error("Could not convert to indexed attestation")
-			return
+			continue
 		}
 		s.cfg.SlasherAttestationsFeed.Send(&types.WrappedIndexedAtt{IndexedAtt: indexedAtt})
 	}

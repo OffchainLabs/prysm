@@ -10,20 +10,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/snappy"
 )
@@ -49,6 +49,8 @@ func Run(t *testing.T, config string, fork int) {
 
 func runTest(t *testing.T, config string, fork int, basePath string) { // nolint:gocognit
 	require.NoError(t, utils.SetConfig(t, config))
+	cfg := params.BeaconConfig()
+	params.SetGenesisFork(t, cfg, fork)
 	testFolders, _ := utils.TestFolders(t, config, version.String(fork), basePath)
 	if len(testFolders) == 0 {
 		t.Fatalf("No test folders found for %s/%s/%s", config, version.String(fork), basePath)
@@ -350,7 +352,7 @@ func runDataColumnStep(t *testing.T,
 		} else {
 			numCells := len(kzgs)
 			column := make([][]byte, numCells)
-			for cellIndex := 0; cellIndex < numCells; cellIndex++ {
+			for cellIndex := range numCells {
 				cell := make([]byte, 2048)
 				cellStart := cellIndex * 2048
 				cellEnd := cellStart + 2048

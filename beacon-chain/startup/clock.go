@@ -3,8 +3,8 @@ package startup
 import (
 	"time"
 
-	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // Nower is a function that can return the current time.
@@ -71,6 +71,18 @@ func WithNower(n Nower) ClockOpt {
 func WithTimeAsNow(t time.Time) ClockOpt {
 	return func(g *Clock) {
 		g.now = func() time.Time { return t }
+	}
+}
+
+func WithSlotAsNow(s types.Slot) ClockOpt {
+	return func(g *Clock) {
+		g.now = func() time.Time {
+			t, err := slots.StartTime(g.t, s)
+			if err != nil {
+				panic(err) // lint:nopanic -- This is a programming error if genesis/slot are invalid.
+			}
+			return t
+		}
 	}
 }
 

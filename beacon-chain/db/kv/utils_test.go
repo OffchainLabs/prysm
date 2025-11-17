@@ -5,9 +5,9 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -151,7 +151,7 @@ func TestSplitRoots(t *testing.T) {
 	bt := make([][32]byte, 0)
 	for _, x := range []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9} {
 		var b [32]byte
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			b[i] = x
 		}
 		bt = append(bt, b)

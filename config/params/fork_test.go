@@ -4,11 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestFork(t *testing.T) {
@@ -93,15 +92,6 @@ func TestRetrieveForkDataFromDigest(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().AltairForkEpoch, epoch)
 }
 
-func TestIsForkNextEpoch(t *testing.T) {
-	// at
-	assert.Equal(t, false, params.DigestChangesAfter(params.BeaconConfig().ElectraForkEpoch))
-	// just before
-	assert.Equal(t, true, params.DigestChangesAfter(params.BeaconConfig().ElectraForkEpoch-1))
-	// just after
-	assert.Equal(t, false, params.DigestChangesAfter(params.BeaconConfig().ElectraForkEpoch+1))
-}
-
 func TestNextForkData(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().InitializeForkSchedule()
@@ -140,10 +130,10 @@ func TestNextForkData(t *testing.T) {
 			wantedEpoch:       cfg.BellatrixForkEpoch,
 		},
 		{
-			name:              "after last bpo - should be far future epoch and 0x00000000",
+			name:              "post last full fork, fulu bpo 1",
 			currEpoch:         params.LastForkEpoch() + 1,
-			wantedForkVersion: [4]byte(cfg.ElectraForkVersion),
-			wantedEpoch:       cfg.ElectraForkEpoch,
+			wantedForkVersion: [4]byte(cfg.FuluForkVersion),
+			wantedEpoch:       cfg.BlobSchedule[0].Epoch,
 		},
 	}
 	for _, tt := range tests {
@@ -163,7 +153,9 @@ func TestNextForkData(t *testing.T) {
 func TestLastForkEpoch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
-	require.Equal(t, cfg.ElectraForkEpoch, params.LastForkEpoch())
+	if cfg.FuluForkEpoch == cfg.FarFutureEpoch {
+		require.Equal(t, cfg.ElectraForkEpoch, params.LastForkEpoch())
+	}
 }
 
 func TestForkFromConfig_UsesPassedConfig(t *testing.T) {

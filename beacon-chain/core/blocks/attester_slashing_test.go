@@ -3,21 +3,21 @@ package blocks_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestSlashableAttestationData_CanSlash(t *testing.T) {
@@ -242,8 +242,18 @@ func TestProcessAttesterSlashings_AppliesCorrectStatus(t *testing.T) {
 			currentSlot := 2 * params.BeaconConfig().SlotsPerEpoch
 			require.NoError(t, tc.st.SetSlot(currentSlot))
 
+			// Verify that ProcessAttesterSlashingsNoVerify and ProcessAttesterSlashings have the same outcome.
+			stNoVerify := tc.st.Copy()
+			newStateNoVerify, err := blocks.ProcessAttesterSlashingsNoVerify(t.Context(), stNoVerify, []ethpb.AttSlashing{tc.slashing}, v.ExitInformation(stNoVerify))
+			require.NoError(t, err)
+			sszNoVerify, err := newStateNoVerify.MarshalSSZ()
+			require.NoError(t, err)
 			newState, err := blocks.ProcessAttesterSlashings(t.Context(), tc.st, []ethpb.AttSlashing{tc.slashing}, v.ExitInformation(tc.st))
 			require.NoError(t, err)
+			ssz, err := newState.MarshalSSZ()
+			require.NoError(t, err)
+			assert.DeepEqual(t, sszNoVerify, ssz, "States resulting from ProcessAttesterSlashingsNoVerify and ProcessAttesterSlashings are not equal")
+
 			newRegistry := newState.Validators()
 
 			// Given the intersection of slashable indices is [1], only validator

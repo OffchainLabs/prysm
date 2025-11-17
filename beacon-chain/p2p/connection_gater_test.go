@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -48,7 +48,7 @@ func TestPeer_AtMaxLimit(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	for i := 0; i < highWatermarkBuffer; i++ {
+	for range highWatermarkBuffer {
 		addPeer(t, s.peers, peers.Connected, false)
 	}
 
@@ -85,7 +85,7 @@ func TestService_InterceptBannedIP(t *testing.T) {
 	require.NoError(t, err)
 	s.started = true
 
-	for i := 0; i < ipBurst; i++ {
+	for range ipBurst {
 		valid := s.validateDial(multiAddress)
 		if !valid {
 			t.Errorf("Expected multiaddress with ip %s to not be rejected", ip)

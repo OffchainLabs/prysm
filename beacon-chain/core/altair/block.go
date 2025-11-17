@@ -3,15 +3,15 @@ package altair
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	p2pType "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	p2pType "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -49,9 +49,18 @@ func ProcessSyncAggregate(ctx context.Context, s state.BeaconState, sync *ethpb.
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "could not filter sync committee votes")
 	}
-
 	if err := VerifySyncCommitteeSig(s, votedKeys, sync.SyncCommitteeSignature); err != nil {
 		return nil, 0, errors.Wrap(err, "could not verify sync committee signature")
+	}
+	return s, reward, nil
+}
+
+// ProcessSyncAggregateNoVerifySig processes the sync aggregate without verifying the sync committee signature.
+// This is useful in scenarios such as block reward calculation, where we can assume the data in the block is valid.
+func ProcessSyncAggregateNoVerifySig(ctx context.Context, s state.BeaconState, sync *ethpb.SyncAggregate) (state.BeaconState, uint64, error) {
+	s, _, reward, err := processSyncAggregate(ctx, s, sync)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "could not filter sync committee votes")
 	}
 	return s, reward, nil
 }

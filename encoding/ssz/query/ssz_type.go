@@ -9,8 +9,10 @@ type SSZType int
 // SSZ type constants.
 const (
 	// Basic types
-	UintN SSZType = iota
-	Byte
+	Uint8 SSZType = iota
+	Uint16
+	Uint32
+	Uint64
 	Boolean
 
 	// Composite types
@@ -27,10 +29,14 @@ const (
 
 func (t SSZType) String() string {
 	switch t {
-	case UintN:
-		return "UintN"
-	case Byte:
-		return "Byte"
+	case Uint8:
+		return "Uint8"
+	case Uint16:
+		return "Uint16"
+	case Uint32:
+		return "Uint32"
+	case Uint64:
+		return "Uint64"
 	case Boolean:
 		return "Boolean"
 	case Container:
@@ -50,4 +56,9 @@ func (t SSZType) String() string {
 	default:
 		return fmt.Sprintf("Unknown(%d)", t)
 	}
+}
+
+// isBasic returns true if the SSZType is a basic type.
+func (t SSZType) isBasic() bool {
+	return t == Uint8 || t == Uint16 || t == Uint32 || t == Uint64 || t == Boolean
 }

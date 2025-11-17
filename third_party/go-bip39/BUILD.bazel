@@ -1,0 +1,14 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+# gazelle:prefix github.com/tyler-smith/go-bip39
+
+go_library(
+    name = "go_default_library",
+    srcs = ["bip39.go"],
+    importpath = "github.com/tyler-smith/go-bip39",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//third_party/go-bip39/wordlists:go_default_library",
+        "@org_golang_x_crypto//pbkdf2:go_default_library",
+    ],
+)

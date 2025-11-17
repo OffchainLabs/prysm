@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestBatcherBefore(t *testing.T) {
@@ -112,7 +112,7 @@ func TestBatchSequencer(t *testing.T) {
 	}
 	got, err := seq.sequence()
 	require.Equal(t, seqLen, len(got))
-	for i := 0; i < seqLen; i++ {
+	for i := range seqLen {
 		g := got[i]
 		exp := expected[i]
 		require.NoError(t, err)

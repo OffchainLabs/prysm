@@ -6,9 +6,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
@@ -236,7 +236,7 @@ func (s *SyncCommitteeCache) UpdatePositionsInCommittee(syncCommitteeBoundaryRoo
 // Given the `syncCommitteeIndexPosition` object, this returns the key of the object.
 // The key is the `currentSyncCommitteeRoot` within the field.
 // Error gets returned if input does not comply with `currentSyncCommitteeRoot` object.
-func keyFn(obj interface{}) (string, error) {
+func keyFn(obj any) (string, error) {
 	info, ok := obj.(*syncCommitteeIndexPosition)
 	if !ok {
 		return "", errNotSyncCommitteeIndexPosition

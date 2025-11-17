@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -252,7 +252,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			peerStats := make(map[peer.ID]int, len(tt.want))
 			var filteredPIDs []peer.ID
 			var err error
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, tt.args.peersPercentage)
 				if len(filteredPIDs) <= 1 {
 					break

@@ -7,16 +7,16 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -202,10 +202,10 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockError_ThenPass(t *testing.T)
 
 func TestBeaconApiValidatorClient_ProposeBeaconBlockAllTypes(t *testing.T) {
 	tests := []struct {
-		name          string
-		block         *ethpb.GenericSignedBeaconBlock
-		expectedPath  string
-		wantErr       bool
+		name         string
+		block        *ethpb.GenericSignedBeaconBlock
+		expectedPath string
+		wantErr      bool
 		errorMessage string
 	}{
 		{
@@ -374,7 +374,7 @@ func TestBeaconApiValidatorClient_ProposeBeaconBlockHTTPErrors(t *testing.T) {
 				gomock.Any(),
 				gomock.Any(),
 			).Return(nil, nil, tt.sszError).Times(1)
-			
+
 			if tt.expectJSON {
 				// When SSZ fails, it falls back to JSON
 				jsonRestHandler.EXPECT().Post(

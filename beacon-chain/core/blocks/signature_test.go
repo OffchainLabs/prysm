@@ -3,16 +3,16 @@ package blocks_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestVerifyBlockHeaderSignature(t *testing.T) {
@@ -88,4 +88,37 @@ func TestVerifyBlockSignatureUsingCurrentFork(t *testing.T) {
 	wsb, err := consensusblocks.NewSignedBeaconBlock(altairBlk)
 	require.NoError(t, err)
 	assert.NoError(t, blocks.VerifyBlockSignatureUsingCurrentFork(bState, wsb, blkRoot))
+}
+
+func TestVerifyBlockSignatureUsingCurrentFork_InvalidSignature(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	bCfg := params.BeaconConfig()
+	bCfg.AltairForkEpoch = 100
+	bCfg.ForkVersionSchedule[bytesutil.ToBytes4(bCfg.AltairForkVersion)] = 100
+	params.OverrideBeaconConfig(bCfg)
+	bState, keys := util.DeterministicGenesisState(t, 100)
+	altairBlk := util.NewBeaconBlockAltair()
+	altairBlk.Block.ProposerIndex = 0
+	altairBlk.Block.Slot = params.BeaconConfig().SlotsPerEpoch * 100
+	blkRoot, err := altairBlk.Block.HashTreeRoot()
+	assert.NoError(t, err)
+
+	// Sign with wrong key (proposer index 0, but using key 1)
+	fData := &ethpb.Fork{
+		Epoch:           100,
+		CurrentVersion:  params.BeaconConfig().AltairForkVersion,
+		PreviousVersion: params.BeaconConfig().GenesisForkVersion,
+	}
+	domain, err := signing.Domain(fData, 100, params.BeaconConfig().DomainBeaconProposer, bState.GenesisValidatorsRoot())
+	assert.NoError(t, err)
+	rt, err := signing.ComputeSigningRoot(altairBlk.Block, domain)
+	assert.NoError(t, err)
+	wrongSig := keys[1].Sign(rt[:]).Marshal()
+	altairBlk.Signature = wrongSig
+
+	wsb, err := consensusblocks.NewSignedBeaconBlock(altairBlk)
+	require.NoError(t, err)
+
+	err = blocks.VerifyBlockSignatureUsingCurrentFork(bState, wsb, blkRoot)
+	require.ErrorIs(t, err, blocks.ErrInvalidSignature, "Expected ErrInvalidSignature for invalid signature")
 }

@@ -1,11 +1,11 @@
 package validator_client_factory
 
 import (
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	beaconApi "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api"
-	grpcApi "github.com/OffchainLabs/prysm/v6/validator/client/grpc-api"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
-	validatorHelpers "github.com/OffchainLabs/prysm/v6/validator/helpers"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
+	grpcApi "github.com/OffchainLabs/prysm/v7/validator/client/grpc-api"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 )
 
 func NewValidatorClient(

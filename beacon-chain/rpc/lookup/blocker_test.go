@@ -8,24 +8,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/options"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/options"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -96,7 +96,7 @@ func TestGetBlock(t *testing.T) {
 		},
 		{
 			name:    "non canonical",
-			blockID: []byte(fmt.Sprintf("%d", nextSlot)),
+			blockID: fmt.Appendf(nil, "%d", nextSlot),
 			want:    nil,
 		},
 		{
@@ -182,7 +182,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+		_, rpcErr := blocker.BlobSidecars(ctx, "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "not found", rpcErr.Err.Error())
@@ -190,11 +190,11 @@ func TestBlobsErrorHandling(t *testing.T) {
 
 	t.Run("non-existent block by slot returns 404", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			BeaconDB: db,
+			BeaconDB:         db,
 			ChainInfoFetcher: &mockChain.ChainService{},
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "999999")
+		_, rpcErr := blocker.BlobSidecars(ctx, "999999")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "no blocks found at slot", rpcErr.Err.Error())
@@ -206,7 +206,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 		}
 
 		// Note: genesis blocks don't support blobs, so this returns BadRequest
-		_, rpcErr := blocker.Blobs(ctx, "genesis")
+		_, rpcErr := blocker.BlobSidecars(ctx, "genesis")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 		require.StringContains(t, "not supported for Phase 0", rpcErr.Err.Error())
@@ -222,7 +222,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			},
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "finalized")
+		_, rpcErr := blocker.BlobSidecars(ctx, "finalized")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "finalized block", rpcErr.Err.Error())
@@ -239,7 +239,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			},
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "justified")
+		_, rpcErr := blocker.BlobSidecars(ctx, "justified")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "justified block", rpcErr.Err.Error())
@@ -251,7 +251,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "invalid-hex")
+		_, rpcErr := blocker.BlobSidecars(ctx, "invalid-hex")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 		require.StringContains(t, "could not parse block ID", rpcErr.Err.Error())
@@ -268,46 +268,26 @@ func TestBlobsErrorHandling(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, "100")
+		_, rpcErr := blocker.BlobSidecars(ctx, "100")
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.Internal), rpcErr.Reason)
 	})
 }
 
 func TestGetBlob(t *testing.T) {
-	const (
-		slot          = 123
-		blobCount     = 4
-		denebForEpoch = 1
-		fuluForkEpoch = 2
-	)
-
-	setupDeneb := func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.DenebForkEpoch = denebForEpoch
-		params.OverrideBeaconConfig(cfg)
-	}
-
-	setupFulu := func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig().Copy()
-		cfg.DenebForkEpoch = denebForEpoch
-		cfg.FuluForkEpoch = fuluForkEpoch
-		params.OverrideBeaconConfig(cfg)
-	}
-
+	const blobCount = 4
 	ctx := t.Context()
-	db := testDB.SetupDB(t)
+	params.SetupTestConfigCleanup(t)
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().DenebForkEpoch + 4096*2
 
-	// Start the trusted setup.
-	err := kzg.Start()
-	require.NoError(t, err)
+	db := testDB.SetupDB(t)
+	require.NoError(t, kzg.Start())
 
 	// Create and save Deneb block and blob sidecars.
 	_, blobStorage := filesystem.NewEphemeralBlobStorageAndFs(t)
 
-	denebBlock, storedBlobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [fieldparams.RootLength]byte{}, slot, blobCount)
+	denebBlock, storedBlobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [fieldparams.RootLength]byte{}, ds, blobCount, util.WithDenebSlot(ds))
 	denebBlockRoot := denebBlock.Root()
 
 	verifiedStoredSidecars := verification.FakeVerifySliceForTest(t, storedBlobSidecars)
@@ -316,25 +296,28 @@ func TestGetBlob(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = db.SaveBlock(t.Context(), denebBlock)
+	err := db.SaveBlock(t.Context(), denebBlock)
 	require.NoError(t, err)
 
 	// Create Electra block and blob sidecars. (Electra block = Fulu block),
 	// save the block, convert blob sidecars to data column sidecars and save the block.
-	fuluForkSlot := fuluForkEpoch * params.BeaconConfig().SlotsPerEpoch
-	fuluBlock, fuluBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, fuluForkSlot, blobCount)
+	fs := util.SlotAtEpoch(t, params.BeaconConfig().FuluForkEpoch)
+	dsStr := fmt.Sprintf("%d", ds)
+	fuluBlock, fuluBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, fs, blobCount)
 	fuluBlockRoot := fuluBlock.Root()
 
-	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobSidecars))
+	cellsPerBlobList := make([][]kzg.Cell, 0, len(fuluBlobSidecars))
+	proofsPerBlobList := make([][]kzg.Proof, 0, len(fuluBlobSidecars))
 	for _, blob := range fuluBlobSidecars {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+		cellsPerBlobList = append(cellsPerBlobList, cells)
+		proofsPerBlobList = append(proofsPerBlobList, proofs)
 	}
 
-	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlobList, proofsPerBlobList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))
@@ -347,17 +330,13 @@ func TestGetBlob(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("genesis", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{}
-		_, rpcErr := blocker.Blobs(ctx, "genesis")
+		_, rpcErr := blocker.BlobSidecars(ctx, "genesis")
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
 		require.StringContains(t, "not supported for Phase 0 fork", rpcErr.Err.Error())
 	})
 
 	t.Run("head", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{
 				Root:  denebBlockRoot[:],
@@ -370,7 +349,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		retrievedVerifiedSidecars, rpcErr := blocker.Blobs(ctx, "head")
+		retrievedVerifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, "head")
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(retrievedVerifiedSidecars))
 
@@ -388,8 +367,6 @@ func TestGetBlob(t *testing.T) {
 	})
 
 	t.Run("finalized", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: denebBlockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -399,14 +376,12 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedSidecars, rpcErr := blocker.Blobs(ctx, "finalized")
+		verifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, "finalized")
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedSidecars))
 	})
 
 	t.Run("justified", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: denebBlockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -416,14 +391,12 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedSidecars, rpcErr := blocker.Blobs(ctx, "justified")
+		verifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, "justified")
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedSidecars))
 	})
 
 	t.Run("root", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
 				Genesis: time.Now(),
@@ -432,14 +405,12 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(denebBlockRoot[:]))
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(denebBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedBlobs))
 	})
 
 	t.Run("slot", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -449,15 +420,13 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123")
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, dsStr)
 		require.IsNil(t, rpcErr)
 		require.Equal(t, blobCount, len(verifiedBlobs))
 	})
 
 	t.Run("one blob only", func(t *testing.T) {
 		const index = 2
-
-		setupDeneb(t)
 
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: denebBlockRoot[:]}},
@@ -468,7 +437,7 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: blobStorage,
 		}
 
-		retrievedVerifiedSidecars, rpcErr := blocker.Blobs(ctx, "123", options.WithIndices([]int{index}))
+		retrievedVerifiedSidecars, rpcErr := blocker.BlobSidecars(ctx, dsStr, options.WithIndices([]int{index}))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, 1, len(retrievedVerifiedSidecars))
 
@@ -483,8 +452,6 @@ func TestGetBlob(t *testing.T) {
 	})
 
 	t.Run("no blobs returns an empty array", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: denebBlockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -494,14 +461,12 @@ func TestGetBlob(t *testing.T) {
 			BlobStorage: filesystem.NewEphemeralBlobStorage(t),
 		}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "123")
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, dsStr)
 		require.IsNil(t, rpcErr)
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
 
 	t.Run("no blob at index", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: denebBlockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -512,14 +477,12 @@ func TestGetBlob(t *testing.T) {
 		}
 
 		noBlobIndex := len(storedBlobSidecars) + 1
-		_, rpcErr := blocker.Blobs(ctx, "123", options.WithIndices([]int{0, noBlobIndex}))
+		_, rpcErr := blocker.BlobSidecars(ctx, dsStr, options.WithIndices([]int{0, noBlobIndex}))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 
 	t.Run("index too big", func(t *testing.T) {
-		setupDeneb(t)
-
 		blocker := &BeaconDbBlocker{
 			ChainInfoFetcher: &mockChain.ChainService{FinalizedCheckPoint: &ethpb.Checkpoint{Root: denebBlockRoot[:]}},
 			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
@@ -528,14 +491,12 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB:    db,
 			BlobStorage: blobStorage,
 		}
-		_, rpcErr := blocker.Blobs(ctx, "123", options.WithIndices([]int{0, math.MaxInt}))
+		_, rpcErr := blocker.BlobSidecars(ctx, dsStr, options.WithIndices([]int{0, math.MaxInt}))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 	})
 
 	t.Run("not enough stored data column sidecars", func(t *testing.T) {
-		setupFulu(t)
-
 		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
 		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars[:fieldparams.CellsPerBlob-1])
 		require.NoError(t, err)
@@ -549,14 +510,12 @@ func TestGetBlob(t *testing.T) {
 			DataColumnStorage: dataColumnStorage,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		_, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(fuluBlockRoot[:]))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 	})
 
 	t.Run("reconstruction needed", func(t *testing.T) {
-		setupFulu(t)
-
 		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
 		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars[1 : peerdas.MinimumColumnCountToReconstruct()+1])
 		require.NoError(t, err)
@@ -570,7 +529,7 @@ func TestGetBlob(t *testing.T) {
 			DataColumnStorage: dataColumnStorage,
 		}
 
-		retrievedVerifiedRoBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		retrievedVerifiedRoBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(fuluBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, len(fuluBlobSidecars), len(retrievedVerifiedRoBlobs))
 
@@ -582,8 +541,6 @@ func TestGetBlob(t *testing.T) {
 	})
 
 	t.Run("no reconstruction needed", func(t *testing.T) {
-		setupFulu(t)
-
 		_, dataColumnStorage := filesystem.NewEphemeralDataColumnStorageAndFs(t)
 		err = dataColumnStorage.Save(verifiedRoDataColumnSidecars)
 		require.NoError(t, err)
@@ -597,7 +554,7 @@ func TestGetBlob(t *testing.T) {
 			DataColumnStorage: dataColumnStorage,
 		}
 
-		retrievedVerifiedRoBlobs, rpcErr := blocker.Blobs(ctx, hexutil.Encode(fuluBlockRoot[:]))
+		retrievedVerifiedRoBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(fuluBlockRoot[:]))
 		require.IsNil(t, rpcErr)
 		require.Equal(t, len(fuluBlobSidecars), len(retrievedVerifiedRoBlobs))
 
@@ -626,11 +583,56 @@ func TestGetBlob(t *testing.T) {
 			BeaconDB: db,
 		}
 
-		_, rpcErr := blocker.Blobs(ctx, hexutil.Encode(predenebBlockRoot[:]))
+		_, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(predenebBlockRoot[:]))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.BadRequest), rpcErr.Reason)
 		require.Equal(t, http.StatusBadRequest, core.ErrorReasonToHTTP(rpcErr.Reason))
 		require.StringContains(t, "not supported before", rpcErr.Err.Error())
+	})
+
+	t.Run("fulu fork epoch not set (MaxUint64)", func(t *testing.T) {
+		// Setup with Deneb fork enabled but Fulu fork epoch set to MaxUint64 (not set/far future)
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.DenebForkEpoch = 1
+		cfg.FuluForkEpoch = primitives.Epoch(math.MaxUint64) // Not set / far future
+		params.OverrideBeaconConfig(cfg)
+
+		// Create and save Deneb block and blob sidecars
+		denebSlot := util.SlotAtEpoch(t, cfg.DenebForkEpoch)
+		_, tempBlobStorage := filesystem.NewEphemeralBlobStorageAndFs(t)
+
+		denebBlockWithBlobs, denebBlobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [fieldparams.RootLength]byte{}, denebSlot, 2, util.WithDenebSlot(denebSlot))
+		denebBlockRoot := denebBlockWithBlobs.Root()
+
+		verifiedDenebBlobs := verification.FakeVerifySliceForTest(t, denebBlobSidecars)
+		for i := range verifiedDenebBlobs {
+			err := tempBlobStorage.Save(verifiedDenebBlobs[i])
+			require.NoError(t, err)
+		}
+
+		err := db.SaveBlock(t.Context(), denebBlockWithBlobs)
+		require.NoError(t, err)
+
+		blocker := &BeaconDbBlocker{
+			GenesisTimeFetcher: &testutil.MockGenesisTimeFetcher{
+				Genesis: time.Now(),
+			},
+			BeaconDB:    db,
+			BlobStorage: tempBlobStorage,
+		}
+
+		// Should successfully retrieve blobs even when FuluForkEpoch is not set
+		retrievedBlobs, rpcErr := blocker.BlobSidecars(ctx, hexutil.Encode(denebBlockRoot[:]))
+		require.IsNil(t, rpcErr)
+		require.Equal(t, 2, len(retrievedBlobs))
+
+		// Verify blob content matches
+		for i, retrievedBlob := range retrievedBlobs {
+			require.NotNil(t, retrievedBlob.BlobSidecar)
+			require.DeepEqual(t, denebBlobSidecars[i].Blob, retrievedBlob.Blob)
+			require.DeepEqual(t, denebBlobSidecars[i].KzgCommitment, retrievedBlob.KzgCommitment)
+		}
 	})
 }
 
@@ -665,16 +667,18 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	require.Equal(t, 3, len(commitments))
 
 	// Convert blob sidecars to data column sidecars for Fulu
-	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobs))
+	cellsPerBlobList := make([][]kzg.Cell, 0, len(fuluBlobs))
+	proofsPerBlobList := make([][]kzg.Proof, 0, len(fuluBlobs))
 	for _, blob := range fuluBlobs {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+		cellsPerBlobList = append(cellsPerBlobList, cells)
+		proofsPerBlobList = append(proofsPerBlobList, proofs)
 	}
 
-	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	dataColumnSidecarPb, err := peerdas.DataColumnSidecars(cellsPerBlobList, proofsPerBlobList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(dataColumnSidecarPb))
@@ -713,7 +717,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request versioned hashes in reverse order: 2, 1, 0
 		requestedHashes := [][]byte{hash2[:], hash1[:], hash0[:]}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
 			return
@@ -738,7 +742,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request hashes for indices 1 and 0 (out of order)
 		requestedHashes := [][]byte{hash1[:], hash0[:]}
 
-		verifiedBlobs, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		verifiedBlobs, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		if rpcErr != nil {
 			t.Errorf("RPC Error: %v (reason: %v)", rpcErr.Err, rpcErr.Reason)
 			return
@@ -757,14 +761,14 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 	t.Run("request non-existent hash", func(t *testing.T) {
 		// Create a fake versioned hash
 		fakeHash := make([]byte, 32)
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			fakeHash[i] = 0xFF
 		}
 
 		// Request only the fake hash
 		requestedHashes := [][]byte{fakeHash}
 
-		_, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		_, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
@@ -776,7 +780,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Create two fake versioned hashes
 		fakeHash1 := make([]byte, 32)
 		fakeHash2 := make([]byte, 32)
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			fakeHash1[i] = 0xAA
 			fakeHash2[i] = 0xBB
 		}
@@ -784,7 +788,7 @@ func TestBlobs_CommitmentOrdering(t *testing.T) {
 		// Request valid hash with two fake hashes
 		requestedHashes := [][]byte{fakeHash1, hash0[:], fakeHash2}
 
-		_, rpcErr := blocker.Blobs(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
+		_, rpcErr := blocker.BlobSidecars(ctx, "finalized", options.WithVersionedHashes(requestedHashes))
 		require.NotNil(t, rpcErr)
 		require.Equal(t, core.ErrorReason(core.NotFound), rpcErr.Reason)
 		require.StringContains(t, "versioned hash(es) not found in block", rpcErr.Err.Error())
@@ -829,16 +833,18 @@ func TestGetDataColumns(t *testing.T) {
 	fuluBlock, fuluBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, fuluForkSlot, blobCount)
 	fuluBlockRoot := fuluBlock.Root()
 
-	cellsAndProofsList := make([]kzg.CellsAndProofs, 0, len(fuluBlobSidecars))
+	cellsPerBlobList := make([][]kzg.Cell, 0, len(fuluBlobSidecars))
+	proofsPerBlobList := make([][]kzg.Proof, 0, len(fuluBlobSidecars))
 	for _, blob := range fuluBlobSidecars {
 		var kzgBlob kzg.Blob
 		copy(kzgBlob[:], blob.Blob)
-		cellsAndProofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlob)
 		require.NoError(t, err)
-		cellsAndProofsList = append(cellsAndProofsList, cellsAndProofs)
+		cellsPerBlobList = append(cellsPerBlobList, cells)
+		proofsPerBlobList = append(proofsPerBlobList, proofs)
 	}
 
-	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofsList, peerdas.PopulateFromBlock(fuluBlock))
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlobList, proofsPerBlobList, peerdas.PopulateFromBlock(fuluBlock))
 	require.NoError(t, err)
 
 	verifiedRoDataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roDataColumnSidecars))

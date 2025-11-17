@@ -13,3 +13,12 @@ func (v *bitvectorInfo) Length() uint64 {
 
 	return v.length
 }
+
+func (v *bitvectorInfo) Size() uint64 {
+	if v == nil {
+		return 0
+	}
+
+	// Size in bytes.
+	return v.length / 8
+}

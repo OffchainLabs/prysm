@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 )
 
 // HandleKeyReload makes sure the validator keeps operating correctly after a change to the underlying keys.

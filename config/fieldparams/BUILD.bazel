@@ -7,7 +7,7 @@ go_library(
         "//config:minimal": ["minimal.go"],
         "//config:e2e": ["e2e.go"],
     }),
-    importpath = "github.com/OffchainLabs/prysm/v6/config/fieldparams",
+    importpath = "github.com/OffchainLabs/prysm/v7/config/fieldparams",
     visibility = ["//visibility:public"],
 )
 

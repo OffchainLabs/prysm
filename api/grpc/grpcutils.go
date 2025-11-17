@@ -15,7 +15,7 @@ import (
 func LogRequests(
 	ctx context.Context,
 	method string, req,
-	reply interface{},
+	reply any,
 	cc *grpc.ClientConn,
 	invoker grpc.UnaryInvoker,
 	opts ...grpc.CallOption,

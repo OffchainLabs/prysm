@@ -1,10 +1,10 @@
 package cache
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"

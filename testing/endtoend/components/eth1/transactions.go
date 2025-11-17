@@ -12,11 +12,10 @@ import (
 
 	"github.com/MariusVanDerWijden/FuzzyVM/filler"
 	txfuzz "github.com/MariusVanDerWijden/tx-fuzz"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -625,10 +624,7 @@ func encodeBlobs(data []byte) []kzg4844.Blob {
 			blobIndex++
 			fieldIndex = 0
 		}
-		max := i + 31
-		if max > len(data) {
-			max = len(data)
-		}
+		max := min(i+31, len(data))
 		copy(blobs[blobIndex][fieldIndex*32+1:], data[i:max])
 	}
 	return blobs

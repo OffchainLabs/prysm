@@ -1,14 +1,15 @@
 package blstoexec
 
 import (
+	"maps"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	doublylinkedlist "github.com/OffchainLabs/prysm/v6/container/doubly-linked-list"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	doublylinkedlist "github.com/OffchainLabs/prysm/v7/container/doubly-linked-list"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
@@ -54,9 +55,7 @@ func NewPool() *Pool {
 // Copies the internal map and returns a new one.
 func (p *Pool) cycleMap() {
 	newMap := make(map[primitives.ValidatorIndex]*doublylinkedlist.Node[*ethpb.SignedBLSToExecutionChange])
-	for k, v := range p.m {
-		newMap[k] = v
-	}
+	maps.Copy(newMap, p.m)
 	p.m = newMap
 }
 

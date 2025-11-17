@@ -6,11 +6,13 @@ import (
 	"math"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -44,7 +46,7 @@ func TestConfig_OverrideBeaconConfigTestTeardown(t *testing.T) {
 func TestConfig_DataRace(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	wg := new(sync.WaitGroup)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
@@ -109,75 +111,80 @@ func TestConfigGenesisValidatorRoot(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().GenesisValidatorsRoot, genesis.ValidatorsRoot())
 }
 
-func TestMaxBlobsPerBlock(t *testing.T) {
-	t.Run("Before all forks and no BlobSchedule", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = nil
-		cfg.ElectraForkEpoch = 100
-		cfg.FuluForkEpoch = 200
-		require.Equal(t, cfg.MaxBlobsPerBlock(0), cfg.DeprecatedMaxBlobsPerBlock)
-	})
+func TestMaxBlobsJumbled(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4098*2
+	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
+	offsets := []primitives.Epoch{cfg.FuluForkEpoch}
+	for _, offset := range []primitives.Epoch{320, 640, 960, 1080} {
+		offsets = append(offsets, cfg.FuluForkEpoch+offset)
+	}
+	maxBlobs := map[primitives.Epoch]uint64{
+		cfg.FuluForkEpoch: electraMaxBlobs,
+		offsets[0]:        electraMaxBlobs + 3,
+		offsets[1]:        electraMaxBlobs + 6,
+		offsets[2]:        electraMaxBlobs + 9,
+		offsets[3]:        electraMaxBlobs + 12,
+	}
+	schedule := make([]params.BlobScheduleEntry, 0, len(maxBlobs))
+	for _, epoch := range offsets[1:] {
+		schedule = append(schedule, params.BlobScheduleEntry{Epoch: epoch, MaxBlobsPerBlock: maxBlobs[epoch]})
+	}
+	cfg.BlobSchedule = schedule
+	cfg.InitializeForkSchedule()
+	for i := 1; i < len(cfg.BlobSchedule); i++ {
+		beforeEpoch, epoch := cfg.BlobSchedule[i-1].Epoch, cfg.BlobSchedule[i].Epoch
+		before, after := maxBlobs[beforeEpoch], maxBlobs[epoch]
+		require.Equal(t, before, uint64(cfg.MaxBlobsPerBlockAtEpoch(epoch-1)))
+		require.Equal(t, after, uint64(cfg.MaxBlobsPerBlockAtEpoch(epoch)))
+		beforeSlot, err := cfg.SlotsPerEpoch.SafeMul(uint64(beforeEpoch))
+		require.NoError(t, err)
+		afterSlot, err := cfg.SlotsPerEpoch.SafeMul(uint64(epoch))
+		require.NoError(t, err)
+		require.Equal(t, before, uint64(cfg.MaxBlobsPerBlock(beforeSlot)))
+		require.Equal(t, after, uint64(cfg.MaxBlobsPerBlock(afterSlot)))
+	}
 
-	t.Run("Uses latest matching BlobSchedule entry", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-		}
-		slot := 11 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
-	})
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch-1))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch))
+	preBlobEpochs := []primitives.Epoch{cfg.DenebForkEpoch - 1, cfg.CapellaForkEpoch, cfg.BellatrixForkEpoch, cfg.AltairForkEpoch, 0}
+	for _, epoch := range preBlobEpochs {
+		require.Equal(t, 0, cfg.MaxBlobsPerBlockAtEpoch(epoch))
+	}
+}
 
-	t.Run("Uses earlier matching BlobSchedule entry", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-		}
-		slot := 6 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
-	})
+func TestFirstBPOAtFork(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	cfg.FuluForkEpoch = cfg.ElectraForkEpoch + 4096*2
+	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: cfg.FuluForkEpoch, MaxBlobsPerBlock: electraMaxBlobs + 1},
+		{Epoch: cfg.FuluForkEpoch + 1, MaxBlobsPerBlock: electraMaxBlobs + 2},
+	}
+	cfg.InitializeForkSchedule()
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
+	require.Equal(t, electraMaxBlobs+1, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch)))
+	require.Equal(t, electraMaxBlobs+2, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch+2)))
+}
 
-	t.Run("Before first BlobSchedule entry falls back to fork logic", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.FuluForkEpoch = 1
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := primitives.Slot(2) // Epoch 0
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
-	})
-
-	t.Run("Unsorted BlobSchedule still picks latest matching entry", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := 11 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 11)
-	})
-
-	t.Run("Unsorted BlobSchedule picks earlier matching entry correctly", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := 6 * cfg.SlotsPerEpoch
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), 7)
-	})
-
-	t.Run("Unsorted BlobSchedule falls back to fork logic when epoch is before all entries", func(t *testing.T) {
-		cfg := params.MainnetConfig()
-		cfg.ElectraForkEpoch = 2
-		cfg.BlobSchedule = []params.BlobScheduleEntry{
-			{Epoch: 10, MaxBlobsPerBlock: 11},
-			{Epoch: 5, MaxBlobsPerBlock: 7},
-		}
-		slot := primitives.Slot(1) // Epoch 0
-		require.Equal(t, cfg.MaxBlobsPerBlock(slot), cfg.DeprecatedMaxBlobsPerBlock)
-	})
+func TestMaxBlobsNoSchedule(t *testing.T) {
+	params.SetActiveTestCleanup(t, params.MainnetBeaconConfig)
+	cfg := params.MainnetConfig()
+	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
+	cfg.BlobSchedule = nil
+	cfg.InitializeForkSchedule()
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
+	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch-1))
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.DenebForkEpoch))
+	preBlobEpochs := []primitives.Epoch{cfg.DenebForkEpoch - 1, cfg.CapellaForkEpoch, cfg.BellatrixForkEpoch, cfg.AltairForkEpoch, 0}
+	for _, epoch := range preBlobEpochs {
+		require.Equal(t, 0, cfg.MaxBlobsPerBlockAtEpoch(epoch))
+	}
 }
 
 func Test_TargetBlobCount(t *testing.T) {
@@ -190,10 +197,128 @@ func Test_TargetBlobCount(t *testing.T) {
 
 func fillGVR(value byte) [32]byte {
 	var gvr [32]byte
-	for i := 0; i < len(gvr); i++ {
+	for i := range len(gvr) {
 		gvr[i] = value
 	}
 	return gvr
+}
+
+func TestBeaconChainConfigSlotDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  params.BeaconChainConfig
+		want time.Duration
+	}{
+		{
+			name: "explicit duration",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			want: 12 * time.Second,
+		},
+		{
+			name: "fallback to seconds per slot",
+			cfg:  params.BeaconChainConfig{SecondsPerSlot: 8},
+			want: 8 * time.Second,
+		},
+		{
+			name: "milliseconds override seconds per slot",
+			cfg: params.BeaconChainConfig{
+				SlotDurationMilliseconds: 7_000,
+				SecondsPerSlot:           4,
+			},
+			want: 7 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.cfg.SlotDuration())
+		})
+	}
+}
+
+func TestBeaconChainConfigSlotDurationMillis(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  params.BeaconChainConfig
+		want uint64
+	}{
+		{
+			name: "uses slot duration milliseconds when set",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 4_800},
+			want: 4_800,
+		},
+		{
+			name: "derives from seconds per slot when unset",
+			cfg:  params.BeaconChainConfig{SecondsPerSlot: 6},
+			want: 6_000,
+		},
+		{
+			name: "returns zero when no duration configured",
+			cfg:  params.BeaconChainConfig{},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.cfg.SlotDurationMillis())
+		})
+	}
+}
+
+func TestBeaconChainConfigSlotComponentDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  params.BeaconChainConfig
+		bp   primitives.BP
+		want time.Duration
+	}{
+		{
+			name: "zero basis points produces zero duration",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			bp:   0,
+			want: 0,
+		},
+		{
+			name: "full slot basis points matches slot duration",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			bp:   params.BasisPoints,
+			want: 12 * time.Second,
+		},
+		{
+			name: "quarter slot with explicit milliseconds",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 12_000},
+			bp:   params.BasisPoints / 4,
+			want: 3 * time.Second,
+		},
+		{
+			name: "fractional slot rounds down",
+			cfg:  params.BeaconChainConfig{SlotDurationMilliseconds: 1_001},
+			bp:   params.BasisPoints / 3,
+			want: 333 * time.Millisecond,
+		},
+		{
+			name: "uses seconds per slot fallback",
+			cfg:  params.BeaconChainConfig{SecondsPerSlot: 9},
+			bp:   params.BasisPoints / 2,
+			want: 4500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.cfg.SlotComponentDuration(tt.bp))
+		})
+	}
 }
 
 func TestEntryWithForkDigest(t *testing.T) {
@@ -286,4 +411,16 @@ func TestFarFuturePrepareFilter(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	entry := params.GetNetworkScheduleEntry(oldElectra)
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), entry.ForkVersion)
+}
+
+func TestMaxBlobsOverrideEpoch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	require.Equal(t, 0, cfg.MaxBlobsPerBlockAtEpoch(0))
+	params.SetGenesisFork(t, cfg, version.Deneb)
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(0))
+	params.SetGenesisFork(t, cfg, version.Electra)
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlockElectra, cfg.MaxBlobsPerBlockAtEpoch(0))
+	params.SetGenesisFork(t, cfg, version.Fulu)
+	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlockElectra, cfg.MaxBlobsPerBlockAtEpoch(0))
 }

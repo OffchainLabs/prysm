@@ -5,12 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 )
@@ -19,6 +21,10 @@ type SSZToBlockBody func([]byte) (interfaces.ReadOnlyBeaconBlockBody, error)
 
 func RunExecutionPayloadTest(t *testing.T, config string, fork string, sszToBlockBody SSZToBlockBody, sszToState SSZToState) {
 	require.NoError(t, utils.SetConfig(t, config))
+	cfg := params.BeaconConfig()
+	fv, err := version.FromString(fork)
+	require.NoError(t, err)
+	params.SetGenesisFork(t, cfg, fv)
 	testFolders, testsFolderPath := utils.TestFolders(t, config, fork, "operations/execution_payload/pyspec_tests")
 	if len(testFolders) == 0 {
 		t.Fatalf("No test folders found for %s/%s/%s", config, fork, "operations/execution_payload/pyspec_tests")

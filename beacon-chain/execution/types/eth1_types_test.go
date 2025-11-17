@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/ethereum/go-ethereum/common"
 )
 

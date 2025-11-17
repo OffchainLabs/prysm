@@ -13,32 +13,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/config/proposer"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v6/validator/client"
-	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
-	dbCommon "github.com/OffchainLabs/prysm/v6/validator/db/common"
-	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
-	DBIface "github.com/OffchainLabs/prysm/v6/validator/db/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
-	dbtest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/derived"
-	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
-	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
-	mocks "github.com/OffchainLabs/prysm/v6/validator/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/client"
+	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
+	dbCommon "github.com/OffchainLabs/prysm/v7/validator/db/common"
+	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
+	DBIface "github.com/OffchainLabs/prysm/v7/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
+	dbtest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
+	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/urfave/cli/v2"
@@ -109,7 +109,7 @@ func TestServer_ListKeystores(t *testing.T) {
 		resp := &ListKeystoresResponse{}
 		require.NoError(t, json.Unmarshal(wr.Body.Bytes(), resp))
 		require.Equal(t, numAccounts, len(resp.Data))
-		for i := 0; i < numAccounts; i++ {
+		for i := range numAccounts {
 			require.DeepEqual(t, hexutil.Encode(expectedKeys[i][:]), resp.Data[i].ValidatingPubkey)
 			require.Equal(
 				t,
@@ -243,7 +243,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 		password := "12345678"
 		encodedKeystores := make([]string, numKeystores)
 		passwords := make([]string, numKeystores)
-		for i := 0; i < numKeystores; i++ {
+		for i := range numKeystores {
 			enc, err := json.Marshal(createRandomKeystore(t, password))
 			encodedKeystores[i] = string(enc)
 			require.NoError(t, err)
@@ -280,7 +280,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 			keystores := make([]*keymanager.Keystore, numKeystores)
 			passwords := make([]string, numKeystores)
 			publicKeys := make([][fieldparams.BLSPubkeyLength]byte, numKeystores)
-			for i := 0; i < numKeystores; i++ {
+			for i := range numKeystores {
 				keystores[i] = createRandomKeystore(t, password)
 				pubKey, err := hexutil.Decode("0x" + keystores[i].Pubkey)
 				require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 				require.NoError(t, validatorDB.Close())
 			}()
 			encodedKeystores := make([]string, numKeystores)
-			for i := 0; i < numKeystores; i++ {
+			for i := range numKeystores {
 				enc, err := json.Marshal(keystores[i])
 				require.NoError(t, err)
 				encodedKeystores[i] = string(enc)
@@ -316,7 +316,7 @@ func TestServer_ImportKeystores(t *testing.T) {
 			// Generate mock slashing history.
 			attestingHistory := make([][]*dbCommon.AttestationRecord, 0)
 			proposalHistory := make([]dbCommon.ProposalHistoryForPubkey, len(publicKeys))
-			for i := 0; i < len(publicKeys); i++ {
+			for i := range publicKeys {
 				proposalHistory[i].Proposals = make([]dbCommon.Proposal, 0)
 			}
 			mockJSON, err := mocks.MockSlashingProtectionJSON(publicKeys, attestingHistory, proposalHistory)
@@ -439,7 +439,7 @@ func TestServer_DeleteKeystores(t *testing.T) {
 		// Generate mock slashing history.
 		attestingHistory := make([][]*dbCommon.AttestationRecord, 0)
 		proposalHistory := make([]dbCommon.ProposalHistoryForPubkey, len(publicKeys))
-		for i := 0; i < len(publicKeys); i++ {
+		for i := range publicKeys {
 			proposalHistory[i].Proposals = make([]dbCommon.Proposal, 0)
 		}
 		mockJSON, err := mocks.MockSlashingProtectionJSON(publicKeys, attestingHistory, proposalHistory)
