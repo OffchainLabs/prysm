@@ -120,8 +120,7 @@ func TestStateDiff_ComputeLevel(t *testing.T) {
 func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -154,8 +153,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -183,8 +181,7 @@ func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 func TestStateDiff_SaveDiff(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -250,8 +247,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 func TestStateDiff_SaveAndReadDiff(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -285,8 +281,7 @@ func TestStateDiff_SaveAndReadDiff(t *testing.T) {
 func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -352,8 +347,7 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 5; v++ {
+	for v := range version.All()[:len(version.All())-1] {
 		t.Run(version.String(v), func(t *testing.T) {
 			db := setupDB(t)
 
@@ -388,9 +382,8 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 	setDefaultExponents()
 
 	// test for slot numbers 0 and 1 for every version
-	for slotNum := 0; slotNum < 2; slotNum++ {
-		// test for every version
-		for v := 0; v < 6; v++ {
+	for slotNum := range 2 {
+		for v := range version.All() {
 			t.Run(fmt.Sprintf("slotNum=%d,%s", slotNum, version.String(v)), func(t *testing.T) {
 				db := setupDB(t)
 
@@ -419,8 +412,7 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 func TestStateDiff_AnchorCache(t *testing.T) {
 	setDefaultExponents()
 
-	// test for every version
-	for v := 0; v < 6; v++ {
+	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
 			exponents := flags.Get().StateDiffExponents
 			localCache := make([]state.ReadOnlyBeaconState, len(exponents)-1)
@@ -539,6 +531,15 @@ func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaco
 			PreviousVersion: p.DenebForkVersion,
 			CurrentVersion:  p.ElectraForkVersion,
 			Epoch:           p.ElectraForkEpoch,
+		})
+		require.NoError(t, err)
+	case version.Fulu:
+		st, err = util.NewBeaconStateFulu()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.ElectraForkVersion,
+			CurrentVersion:  p.FuluForkVersion,
+			Epoch:           p.FuluForkEpoch,
 		})
 		require.NoError(t, err)
 	default:
