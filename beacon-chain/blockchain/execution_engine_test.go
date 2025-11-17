@@ -7,6 +7,8 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	feed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -17,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -36,7 +39,9 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 	altairBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockAltair())
 	altairBlkRoot, err := altairBlk.Block().HashTreeRoot()
 	require.NoError(t, err)
-	bellatrixBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockBellatrix())
+	bellatrix := util.NewBeaconBlockBellatrix()
+	bellatrix.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte{0x1}, fieldparams.RootLength)
+	bellatrixBlk := util.SaveBlock(t, ctx, beaconDB, bellatrix)
 	bellatrixBlkRoot, err := bellatrixBlk.Block().HashTreeRoot()
 	require.NoError(t, err)
 
@@ -44,6 +49,7 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 	service.head = &head{
 		state: st,
 	}
+	require.Equal(t, true, service.cfg.SyncChecker.Synced())
 
 	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
 	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
@@ -86,6 +92,63 @@ func Test_NotifyForkchoiceUpdate_GetPayloadAttrErrorCanContinue(t *testing.T) {
 	got, err := service.notifyForkchoiceUpdate(ctx, arg)
 	require.NoError(t, err)
 	require.IsNil(t, got)
+}
+
+func Test_NotifyForkchoiceUpdate_FiresPayloadAttributesEventWithoutPayloadID(t *testing.T) {
+	service, tr := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
+	ctx, beaconDB, fcs := tr.ctx, tr.db, tr.fcs
+
+	events := make(chan *feed.Event, 1)
+	sub := service.cfg.StateNotifier.StateFeed().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	altairBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockAltair())
+	altairBlkRoot, err := altairBlk.Block().HashTreeRoot()
+	require.NoError(t, err)
+	bellatrix := util.NewBeaconBlockBellatrix()
+	bellatrix.Block.Body.ExecutionPayload.BlockHash = bytesutil.PadTo([]byte{0x1}, fieldparams.RootLength)
+	bellatrixBlk := util.SaveBlock(t, ctx, beaconDB, bellatrix)
+	bellatrixBlkRoot, err := bellatrixBlk.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	st, _ := util.DeterministicGenesisState(t, 10)
+	service.head = &head{
+		state: st,
+	}
+
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	state, blkRoot, err := prepareForkchoiceState(ctx, 0, [32]byte{}, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 1, altairBlkRoot, [32]byte{}, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 2, bellatrixBlkRoot, altairBlkRoot, params.BeaconConfig().ZeroHash, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+
+	attr, err := payloadattribute.New(&v1.PayloadAttributes{
+		Timestamp: 1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, false, attr.IsEmpty())
+	arg := &fcuConfig{
+		headState:  st,
+		headRoot:   bellatrixBlkRoot,
+		headBlock:  bellatrixBlk,
+		attributes: attr,
+	}
+
+	expectedSlot := service.CurrentSlot() + 1
+	got, err := service.notifyForkchoiceUpdate(ctx, arg)
+	require.NoError(t, err)
+	require.IsNil(t, got)
+
+	data := waitForPayloadAttributesEvent(t, events)
+	require.Equal(t, bellatrixBlkRoot, data.HeadRoot)
+	require.Equal(t, expectedSlot, data.ProposalSlot)
+	require.Equal(t, arg.headBlock.Block().Slot(), data.HeadBlock.Block().Slot())
 }
 
 func Test_NotifyForkchoiceUpdate(t *testing.T) {
@@ -1089,4 +1152,26 @@ func TestComputePayloadAttribute(t *testing.T) {
 	require.NoError(t, service.computePayloadAttributes(cfg, fcu))
 	require.Equal(t, false, fcu.attributes.IsEmpty())
 	require.Equal(t, suggestedAddr, common.BytesToAddress(fcu.attributes.SuggestedFeeRecipient()))
+}
+
+func waitForPayloadAttributesEvent(t *testing.T, events <-chan *feed.Event) payloadattribute.EventData {
+	t.Helper()
+
+	timeout := time.NewTimer(2 * time.Second)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for payload attributes event")
+			return payloadattribute.EventData{}
+		case evt := <-events:
+			if evt == nil || evt.Type != statefeed.PayloadAttributes {
+				continue
+			}
+			data, ok := evt.Data.(payloadattribute.EventData)
+			require.Equal(t, true, ok)
+			return data
+		}
+	}
 }
