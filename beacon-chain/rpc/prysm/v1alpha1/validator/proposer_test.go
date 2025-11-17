@@ -53,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -3162,6 +3163,8 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
+	logrus.SetLevel(logrus.DebugLevel)
+
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
@@ -3178,13 +3181,13 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err := proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validator
 	hook.Reset()
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validator with different fee recipient
 	hook.Reset()
@@ -3196,7 +3199,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// More than one validator
 	hook.Reset()
@@ -3209,13 +3212,13 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validators
 	hook.Reset()
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 }
 
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
