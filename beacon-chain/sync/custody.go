@@ -103,15 +103,27 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		return cfg.NumberOfCustodyGroups, nil
 	}
 
-	if flags.Get().SemiSupernode {
-		// Semi-supernode mode custodies exactly half of all custody groups (64 out of 128),
-		// which is the minimum required for blob reconstruction.
-		return cfg.NumberOfCustodyGroups / 2, nil
-	}
-
+	// Calculate validator custody requirements
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
 	if err != nil {
 		return 0, errors.Wrap(err, "validators custody requirement")
+	}
+
+	if flags.Get().SemiSupernode {
+		// Semi-supernode mode custodies exactly half of all custody groups (64 out of 128),
+		// which is the minimum required for blob reconstruction.
+		semiSupernodeTarget := cfg.NumberOfCustodyGroups / 2
+
+		// If validators require more custody than semi-supernode provides, use the higher value
+		if validatorsCustodyRequirement > semiSupernodeTarget {
+			log.WithFields(logrus.Fields{
+				"semiSupernodeTarget":          semiSupernodeTarget,
+				"validatorsCustodyRequirement": validatorsCustodyRequirement,
+			}).Warn("Validators require more custody groups than semi-supernode mode provides. Using higher custody count to meet validator requirements.")
+			return validatorsCustodyRequirement, nil
+		}
+
+		return semiSupernodeTarget, nil
 	}
 
 	return max(cfg.CustodyRequirement, validatorsCustodyRequirement), nil
