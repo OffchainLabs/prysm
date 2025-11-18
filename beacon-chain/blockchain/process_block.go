@@ -946,6 +946,10 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	}
 
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
+	// return early if we are not proposing next slot
+	if attribute.IsEmpty() {
+		return
+	}
 
 	s.headLock.RLock()
 	headBlock, err := s.headBlock()
