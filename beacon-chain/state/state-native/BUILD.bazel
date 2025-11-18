@@ -23,6 +23,7 @@ go_library(
         "getters_sync_committee.go",
         "getters_validator.go",
         "getters_withdrawal.go",
+        "gloas.go",
         "hasher.go",
         "multi_value_slices.go",
         "proofs.go",
