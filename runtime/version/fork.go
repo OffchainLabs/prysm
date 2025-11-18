@@ -25,11 +25,19 @@ var versionToString = map[int]string{
 	Deneb:     "deneb",
 	Electra:   "electra",
 	Fulu:      "fulu",
+	Gloas:     "gloas",
 }
 
 // stringToVersion and allVersions are populated in init()
 var stringToVersion = map[string]int{}
 var allVersions []int
+var releasedVersions []int
+
+// featureGatedVersions contains fork versions that exist in the enums but are not yet
+// enabled on any supported network. These versions are removed from Released().
+var featureGatedVersions = []int{Gloas}
+
+var featureGatedVersionSet = map[int]struct{}{}
 
 // ErrUnrecognizedVersionName means a string does not match the list of canonical version names.
 var ErrUnrecognizedVersionName = errors.New("version name doesn't map to a known value in the enum")
@@ -58,6 +66,22 @@ func All() []int {
 	return allVersions
 }
 
+// Released returns the list of fork versions that are not feature gated.
+func Released() []int {
+	return releasedVersions
+}
+
+// FeatureGated returns fork versions that exist in the enum but are not yet enabled.
+func FeatureGated() []int {
+	return featureGatedVersions
+}
+
+// IsFeatureGated reports whether the provided version is currently gate-kept.
+func IsFeatureGated(version int) bool {
+	_, ok := featureGatedVersionSet[version]
+	return ok
+}
+
 func init() {
 	allVersions = make([]int, len(versionToString))
 	i := 0
@@ -67,4 +91,18 @@ func init() {
 		i++
 	}
 	sort.Ints(allVersions)
+
+	featureGatedVersionSet = make(map[int]struct{}, len(featureGatedVersions))
+	for _, v := range featureGatedVersions {
+		featureGatedVersionSet[v] = struct{}{}
+	}
+	sort.Ints(featureGatedVersions)
+
+	releasedVersions = make([]int, 0, len(allVersions))
+	for _, v := range allVersions {
+		if _, skip := featureGatedVersionSet[v]; skip {
+			continue
+		}
+		releasedVersions = append(releasedVersions, v)
+	}
 }

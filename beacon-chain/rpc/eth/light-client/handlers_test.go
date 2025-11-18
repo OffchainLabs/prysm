@@ -46,7 +46,7 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	cfg.FuluForkEpoch = 5
 	params.OverrideBeaconConfig(cfg)
 
-	for _, testVersion := range version.All()[1:] {
+	for _, testVersion := range version.Released()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -177,7 +177,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	params.OverrideBeaconConfig(config)
 
 	t.Run("can save retrieve", func(t *testing.T) {
-		for _, testVersion := range version.All()[1:] {
+		for _, testVersion := range version.Released()[1:] {
 			t.Run(version.String(testVersion), func(t *testing.T) {
 
 				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -731,7 +731,7 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	for _, testVersion := range version.All()[1:] {
+	for _, testVersion := range version.Released()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 
@@ -826,7 +826,7 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, writer.Code)
 	})
 
-	for _, testVersion := range version.All()[1:] {
+	for _, testVersion := range version.Released()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)

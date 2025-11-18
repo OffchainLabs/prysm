@@ -32,7 +32,7 @@ func TestLightClient_NewLightClientOptimisticUpdateFromBeaconState(t *testing.T)
 	cfg.FuluForkEpoch = 6
 	params.OverrideBeaconConfig(cfg)
 
-	for _, testVersion := range version.All()[1:] {
+	for _, testVersion := range version.Released()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 

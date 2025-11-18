@@ -8,7 +8,7 @@ import (
 )
 
 func TestSlashingParamsPerVersion_NoErrors(t *testing.T) {
-	for _, v := range version.All() {
+	for _, v := range version.Released() {
 		_, _, _, err := validators.SlashingParamsPerVersion(v)
 		if err != nil {
 			// If this test is failing, you need to add a case for the version in slashingParamsPerVersion.
