@@ -88,7 +88,7 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 // This function needs to be called only with the latest finalized state, and in a strictly increasing slot order.
 func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
-	key := makeKey(lvl, slot)
+	key := makeKeyForStateDiffTree(lvl, slot)
 
 	diff, err := hdiff.Diff(anchor, st)
 	if err != nil {
@@ -132,7 +132,7 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 // SaveFullSnapshot saves the full level 0 state snapshot to the database.
 func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
-	key := makeKey(0, slot)
+	key := makeKeyForStateDiffTree(0, slot)
 	stateBytes, err := st.MarshalSSZ()
 	if err != nil {
 		return err
@@ -169,7 +169,7 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 }
 
 func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
-	key := makeKey(lvl, slot)
+	key := makeKeyForStateDiffTree(lvl, slot)
 	var stateDiff []byte
 	var validatorDiff []byte
 	var balancesDiff []byte
@@ -209,7 +209,7 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 }
 
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
-	key := makeKey(0, slot)
+	key := makeKeyForStateDiffTree(0, slot)
 	var enc []byte
 
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -228,5 +228,5 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		return nil, err
 	}
 
-	return s.decodeStateSnapshot(enc)
+	return decodeStateSnapshot(enc)
 }

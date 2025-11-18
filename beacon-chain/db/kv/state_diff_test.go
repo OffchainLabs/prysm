@@ -138,7 +138,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 				if bucket == nil {
 					return bbolt.ErrBucketNotFound
 				}
-				s := bucket.Get(makeKey(0, uint64(0)))
+				s := bucket.Get(makeKeyForStateDiffTree(0, uint64(0)))
 				if s == nil {
 					return bbolt.ErrIncompatibleValue
 				}
@@ -200,7 +200,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 				if bucket == nil {
 					return bbolt.ErrBucketNotFound
 				}
-				s := bucket.Get(makeKey(0, uint64(slot)))
+				s := bucket.Get(makeKeyForStateDiffTree(0, uint64(slot)))
 				if s == nil {
 					return bbolt.ErrIncompatibleValue
 				}
@@ -216,7 +216,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 			err = db.saveStateByDiff(context.Background(), st)
 			require.NoError(t, err)
 
-			key := makeKey(1, uint64(slot))
+			key := makeKeyForStateDiffTree(1, uint64(slot))
 			err = db.db.View(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(stateDiffBucket)
 				if bucket == nil {
@@ -483,11 +483,35 @@ func TestStateDiff_AnchorCache(t *testing.T) {
 	}
 }
 
+func TestStateDiff_EncodingAndDecoding(t *testing.T) {
+	for v := range version.All() {
+		t.Run(version.String(v), func(t *testing.T) {
+			st, enc := createState(t, 0, v) // this has addKey called inside
+			stDecoded, err := decodeStateSnapshot(enc)
+			require.NoError(t, err)
+			st1ssz, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			st2ssz, err := stDecoded.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, st1ssz, st2ssz)
+		})
+	}
+}
+
 func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaconState, []byte) {
 	p := params.BeaconConfig()
 	var st state.BeaconState
 	var err error
 	switch v {
+	case version.Phase0:
+		st, err = util.NewBeaconState()
+		require.NoError(t, err)
+		err = st.SetFork(&ethpb.Fork{
+			PreviousVersion: p.GenesisForkVersion,
+			CurrentVersion:  p.GenesisForkVersion,
+			Epoch:           0,
+		})
+		require.NoError(t, err)
 	case version.Altair:
 		st, err = util.NewBeaconStateAltair()
 		require.NoError(t, err)
@@ -543,14 +567,7 @@ func createState(t *testing.T, slot primitives.Slot, v int) (state.ReadOnlyBeaco
 		})
 		require.NoError(t, err)
 	default:
-		st, err = util.NewBeaconState()
-		require.NoError(t, err)
-		err = st.SetFork(&ethpb.Fork{
-			PreviousVersion: p.GenesisForkVersion,
-			CurrentVersion:  p.GenesisForkVersion,
-			Epoch:           0,
-		})
-		require.NoError(t, err)
+		t.Fatalf("unsupported version: %d", v)
 	}
 
 	err = st.SetSlot(slot)

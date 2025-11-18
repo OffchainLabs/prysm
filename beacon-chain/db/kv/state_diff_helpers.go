@@ -22,7 +22,7 @@ var (
 	ErrSlotBeforeOffset = errors.New("slot is before root offset")
 )
 
-func makeKey(level int, slot uint64) []byte {
+func makeKeyForStateDiffTree(level int, slot uint64) []byte {
 	buf := make([]byte, 16)
 	buf[0] = byte(level)
 	binary.LittleEndian.PutUint64(buf[1:], slot)
@@ -39,6 +39,9 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	}
 	relSlot := uint64(slot) - offset
 	prevExp := flags.Get().StateDiffExponents[lvl-1]
+	if prevExp < 2 || prevExp >= 64 {
+		return nil, fmt.Errorf("state diff exponent %d out of range for uint64", prevExp)
+	}
 	span := math.PowerOf2(uint64(prevExp))
 	anchorSlot := primitives.Slot(uint64(slot) - relSlot%span)
 
@@ -72,6 +75,9 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 func computeLevel(offset uint64, slot primitives.Slot) int {
 	rel := uint64(slot) - offset
 	for i, exp := range flags.Get().StateDiffExponents {
+		if exp < 2 || exp >= 64 {
+			return -1
+		}
 		span := math.PowerOf2(uint64(exp))
 		if rel%span == 0 {
 			return i
@@ -113,35 +119,39 @@ func (s *Store) getOffset() uint64 {
 	return s.stateDiffCache.getOffset()
 }
 
-func keyForSnapshot(v int) []byte {
+func keyForSnapshot(v int) ([]byte, error) {
 	switch v {
 	case version.Fulu:
-		return fuluKey
+		return fuluKey, nil
 	case version.Electra:
-		return ElectraKey
+		return ElectraKey, nil
 	case version.Deneb:
-		return denebKey
+		return denebKey, nil
 	case version.Capella:
-		return capellaKey
+		return capellaKey, nil
 	case version.Bellatrix:
-		return bellatrixKey
+		return bellatrixKey, nil
 	case version.Altair:
-		return altairKey
+		return altairKey, nil
+	case version.Phase0:
+		return phase0Key, nil
 	default:
-		// Phase0
-		return []byte{}
+		return nil, errors.New("unsupported fork")
 	}
 }
 
 func addKey(v int, bytes []byte) ([]byte, error) {
-	key := keyForSnapshot(v)
+	key, err := keyForSnapshot(v)
+	if err != nil {
+		return nil, err
+	}
 	enc := make([]byte, len(key)+len(bytes))
 	copy(enc, key)
 	copy(enc[len(key):], bytes)
 	return enc, nil
 }
 
-func (s *Store) decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
+func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 	switch {
 	case hasFuluKey(enc):
 		var fuluState ethpb.BeaconStateFulu
@@ -179,16 +189,21 @@ func (s *Store) decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 			return nil, err
 		}
 		return statenative.InitializeFromProtoUnsafeAltair(&altairState)
-	default:
+	case hasPhase0Key(enc):
 		var phase0State ethpb.BeaconState
-		if err := phase0State.UnmarshalSSZ(enc); err != nil {
+		if err := phase0State.UnmarshalSSZ(enc[len(phase0Key):]); err != nil {
 			return nil, err
 		}
 		return statenative.InitializeFromProtoUnsafePhase0(&phase0State)
+	default:
+		return nil, errors.New("unsupported fork")
 	}
 }
 
 func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.BeaconState, []hdiff.HdiffBytes, error) {
+	if uint64(slot) < offset {
+		return nil, nil, ErrSlotBeforeOffset
+	}
 	rel := uint64(slot) - offset
 	lvl := computeLevel(offset, slot)
 	if lvl == -1 {
