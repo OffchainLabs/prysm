@@ -225,20 +225,15 @@ func (s *LazilyPersistentStoreColumn) columnsNotStored(sidecars []blocks.RODataC
 }
 
 type custodyRequirement struct {
-	nodeID      enode.ID
-	cgc         uint64 // custody group count
-	current     primitives.Epoch
-	requirement peerdas.ColumnIndices
+	nodeID  enode.ID
+	cgc     uint64 // custody group count
+	indices peerdas.ColumnIndices
 }
 
 func (c *custodyRequirement) required(current primitives.Epoch) (peerdas.ColumnIndices, error) {
-	if c.current != current {
-		peerInfo, _, err := peerdas.Info(c.nodeID, max(c.cgc, params.BeaconConfig().SamplesPerSlot))
-		if err != nil {
-			return peerdas.NewColumnIndices(), errors.Wrap(err, "peer info")
-		}
-		c.requirement = peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns)
-		c.current = current
+	peerInfo, _, err := peerdas.Info(c.nodeID, max(c.cgc, params.BeaconConfig().SamplesPerSlot))
+	if err != nil {
+		return peerdas.NewColumnIndices(), errors.Wrap(err, "peer info")
 	}
-	return c.requirement, nil
+	return peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns), nil
 }
