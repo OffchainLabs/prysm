@@ -114,13 +114,18 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		// which is the minimum required for blob reconstruction.
 		semiSupernodeTarget := cfg.NumberOfCustodyGroups / 2
 
-		// If validators require more custody than semi-supernode provides, use the higher value
-		if validatorsCustodyRequirement > semiSupernodeTarget {
+		// Calculate the effective custody requirement (respects both base requirement and validator requirement)
+		effectiveCustodyRequirement := max(cfg.CustodyRequirement, validatorsCustodyRequirement)
+
+		// If effective requirement is higher than semi-supernode target, use it
+		if effectiveCustodyRequirement > semiSupernodeTarget {
 			log.WithFields(logrus.Fields{
-				"semiSupernodeTarget":          semiSupernodeTarget,
-				"validatorsCustodyRequirement": validatorsCustodyRequirement,
-			}).Warn("Validators require more custody groups than semi-supernode mode provides. Using higher custody count to meet validator requirements.")
-			return validatorsCustodyRequirement, nil
+				"semiSupernodeTarget":           semiSupernodeTarget,
+				"effectiveCustodyRequirement":   effectiveCustodyRequirement,
+				"custodyRequirement":            cfg.CustodyRequirement,
+				"validatorsCustodyRequirement":  validatorsCustodyRequirement,
+			}).Warn("Custody requirements exceed semi-supernode mode. Using higher custody count to meet requirements.")
+			return effectiveCustodyRequirement, nil
 		}
 
 		return semiSupernodeTarget, nil

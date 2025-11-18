@@ -332,4 +332,30 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 		semiSupernodeTarget := config.NumberOfCustodyGroups / 2
 		require.Equal(t, uint64(64), semiSupernodeTarget)
 	})
+
+	t.Run("Semi-supernode respects base CustodyRequirement", func(t *testing.T) {
+		// Test that semi-supernode respects max(CustodyRequirement, validatorsCustodyRequirement)
+		// even when both are below the semi-supernode target
+
+		// Setup with high base custody requirement (but still less than 64)
+		testConfig := params.BeaconConfig()
+		testConfig.NumberOfCustodyGroups = 128
+		testConfig.CustodyRequirement = 32 // Higher than validator requirement
+		testConfig.ValidatorCustodyRequirement = 8
+		params.OverrideBeaconConfig(testConfig)
+
+		withSemiSupernode(t, func() {
+			service := &Service{
+				ctx:                    context.Background(),
+				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+
+			// Should return semi-supernode target (64) since
+			// max(CustodyRequirement=32, validatorsCustodyRequirement=0) = 32 < 64
+			require.Equal(t, uint64(64), result)
+		})
+	})
 }
