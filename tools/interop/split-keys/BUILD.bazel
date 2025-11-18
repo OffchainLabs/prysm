@@ -8,11 +8,11 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//io/file:go_default_library",
+        "//third_party/go-bip39:go_default_library",
         "//validator/accounts/wallet:go_default_library",
         "//validator/keymanager:go_default_library",
         "//validator/keymanager/derived:go_default_library",
         "//validator/keymanager/local:go_default_library",
-        "@com_github_tyler_smith_go_bip39//:go_default_library",
         "@com_github_wealdtech_go_eth2_util//:go_default_library",
     ],
 )

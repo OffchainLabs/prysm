@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
@@ -183,11 +184,13 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 func (s *Service) validateUnbatchedColumnsKzg(ctx context.Context, columns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
 	_, span := trace.StartSpan(ctx, "sync.validateUnbatchedColumnsKzg")
 	defer span.End()
+	start := time.Now()
 	if err := peerdas.VerifyDataColumnsSidecarKZGProofs(columns); err != nil {
 		err = errors.Wrap(err, "could not verify")
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, err
 	}
+	verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("fallback").Observe(float64(time.Since(start).Milliseconds()))
 	return pubsub.ValidationAccept, nil
 }
 
@@ -202,9 +205,12 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 	}
 
 	var verificationErr error
+	start := time.Now()
 	err := peerdas.VerifyDataColumnsSidecarKZGProofs(allDataColumns)
 	if err != nil {
 		verificationErr = errors.Wrap(err, "batch KZG verification failed")
+	} else {
+		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(float64(time.Since(start).Milliseconds()))
 	}
 
 	// Send the same result to all verifiers in the batch

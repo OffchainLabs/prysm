@@ -44,6 +44,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -2854,6 +2855,8 @@ func TestPrepareBeaconProposer(t *testing.T) {
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
+	logrus.SetLevel(logrus.DebugLevel)
+
 	db := dbutil.SetupDB(t)
 
 	// New validator
