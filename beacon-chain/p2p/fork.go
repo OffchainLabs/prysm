@@ -48,16 +48,20 @@ func compareForkENR(self, peer *enr.Record) error {
 	if err != nil {
 		return err
 	}
-	peerString, err := SerializeENR(peer)
-	if err != nil {
-		return err
+	// Lazily serialize peer ENR only for logging/error paths; fallback to peer.String() on failure.
+	peerENRString := func() string {
+		s, err := SerializeENR(peer)
+		if err != nil {
+			return peer.String()
+		}
+		return s
 	}
 	// Clients SHOULD connect to peers with current_fork_digest, next_fork_version,
 	// and next_fork_epoch that match local values.
 	if !bytes.Equal(peerEntry.CurrentForkDigest, selfEntry.CurrentForkDigest) {
 		return errors.Wrapf(errCurrentDigestMismatch,
 			"fork digest of peer with ENR %s: %v, does not match local value: %v",
-			peerString,
+			peerENRString(),
 			peerEntry.CurrentForkDigest,
 			selfEntry.CurrentForkDigest,
 		)
@@ -72,7 +76,7 @@ func compareForkENR(self, peer *enr.Record) error {
 		log.WithFields(logrus.Fields{
 			"peerNextForkEpoch":   peerEntry.NextForkEpoch,
 			"peerNextForkVersion": peerEntry.NextForkVersion,
-			"peerENR":             peerString,
+			"peerENR":             peerENRString(),
 		}).Trace("Peer matches fork digest but has different next fork epoch")
 		// We allow the connection because we have a different view of the next fork epoch. This
 		// could be due to peers that have no upgraded ahead of a fork or BPO schedule change, so
@@ -87,7 +91,7 @@ func compareForkENR(self, peer *enr.Record) error {
 	if !bytes.Equal(peerEntry.NextForkVersion, selfEntry.NextForkVersion) {
 		return errors.Wrapf(errNextVersionMismatch,
 			"next fork version of peer with ENR %s: %#x, does not match local value: %#x",
-			peerString, peerEntry.NextForkVersion, selfEntry.NextForkVersion)
+			peerENRString(), peerEntry.NextForkVersion, selfEntry.NextForkVersion)
 	}
 
 	// Fulu adds the following to the spec:
@@ -122,7 +126,7 @@ func compareForkENR(self, peer *enr.Record) error {
 	if peerNFD != selfNFD {
 		return errors.Wrapf(errNextDigestMismatch,
 			"next fork digest of peer with ENR %s: %v, does not match local value: %v",
-			peerString, peerNFD, selfNFD)
+			peerENRString(), peerNFD, selfNFD)
 	}
 	return nil
 }
