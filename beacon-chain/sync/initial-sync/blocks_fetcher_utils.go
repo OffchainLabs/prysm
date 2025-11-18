@@ -331,9 +331,7 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 
 // bestFinalizedSlot returns the highest finalized slot of the majority of connected peers.
 func (f *blocksFetcher) bestFinalizedSlot() primitives.Slot {
-	cp := f.chain.FinalizedCheckpt()
-	finalizedEpoch, _ := f.p2p.Peers().BestFinalized(
-		params.BeaconConfig().MaxPeersToSync, cp.Epoch)
+	finalizedEpoch, _ := f.p2p.Peers().BestFinalized(f.chain.FinalizedCheckpt().Epoch)
 	return params.BeaconConfig().SlotsPerEpoch.Mul(uint64(finalizedEpoch))
 }
 
@@ -350,7 +348,10 @@ func (f *blocksFetcher) calculateHeadAndTargetEpochs() (headEpoch, targetEpoch p
 	if f.mode == modeStopOnFinalizedEpoch {
 		cp := f.chain.FinalizedCheckpt()
 		headEpoch = cp.Epoch
-		targetEpoch, peers = f.p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, headEpoch)
+		targetEpoch, peers = f.p2p.Peers().BestFinalized(headEpoch)
+		if len(peers) > params.BeaconConfig().MaxPeersToSync {
+			peers = peers[:params.BeaconConfig().MaxPeersToSync]
+		}
 
 		return headEpoch, targetEpoch, peers
 	}

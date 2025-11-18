@@ -297,7 +297,10 @@ func (s *Service) handleBlockProcessingError(ctx context.Context, err error, b i
 
 // getBestPeers returns the list of best peers based on finalized checkpoint epoch.
 func (s *Service) getBestPeers() []core.PeerID {
-	_, bestPeers := s.cfg.p2p.Peers().BestFinalized(maxPeerRequest, s.cfg.chain.FinalizedCheckpt().Epoch)
+	_, bestPeers := s.cfg.p2p.Peers().BestFinalized(s.cfg.chain.FinalizedCheckpt().Epoch)
+	if len(bestPeers) > maxPeerRequest {
+		bestPeers = bestPeers[:maxPeerRequest]
+	}
 	return bestPeers
 }
 

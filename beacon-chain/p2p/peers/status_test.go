@@ -654,9 +654,10 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 		FinalizedRoot:  mockroot2[:],
 	})
 
-	target, pids := p.BestFinalized(maxPeers, 0)
+	target, pids := p.BestFinalized(0)
 	assert.Equal(t, expectedTarget, target, "Incorrect target epoch retrieved")
-	assert.Equal(t, maxPeers, len(pids), "Incorrect number of peers retrieved")
+	// addPeer called 5 times above
+	assert.Equal(t, 5, len(pids), "Incorrect number of peers retrieved")
 
 	// Expect the returned list to be ordered by finalized epoch and trimmed to max peers.
 	assert.Equal(t, pid3, pids[0], "Incorrect first peer")
@@ -1017,7 +1018,10 @@ func TestStatus_BestPeer(t *testing.T) {
 					HeadSlot:       peerConfig.headSlot,
 				})
 			}
-			epoch, pids := p.BestFinalized(tt.limitPeers, tt.ourFinalizedEpoch)
+			epoch, pids := p.BestFinalized(tt.ourFinalizedEpoch)
+			if len(pids) > tt.limitPeers {
+				pids = pids[:tt.limitPeers]
+			}
 			assert.Equal(t, tt.targetEpoch, epoch, "Unexpected epoch retrieved")
 			assert.Equal(t, tt.targetEpochSupport, len(pids), "Unexpected number of peers supporting retrieved epoch")
 		})
@@ -1044,7 +1048,10 @@ func TestBestFinalized_returnsMaxValue(t *testing.T) {
 		})
 	}
 
-	_, pids := p.BestFinalized(maxPeers, 0)
+	_, pids := p.BestFinalized(0)
+	if len(pids) > maxPeers {
+		pids = pids[:maxPeers]
+	}
 	assert.Equal(t, maxPeers, len(pids), "Wrong number of peers returned")
 }
 

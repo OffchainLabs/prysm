@@ -42,7 +42,7 @@ func (a *Assigner) freshPeers() ([]peer.ID, error) {
 	if flags.Get().MinimumSyncPeers < required {
 		required = flags.Get().MinimumSyncPeers
 	}
-	_, peers := a.ps.BestFinalized(-1, a.fc.FinalizedCheckpoint().Epoch)
+	_, peers := a.ps.BestFinalized(a.fc.FinalizedCheckpoint().Epoch)
 	if len(peers) < required {
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),

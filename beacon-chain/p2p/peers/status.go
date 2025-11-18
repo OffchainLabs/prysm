@@ -79,6 +79,9 @@ const (
 	MaxBackOffDuration = 5000
 )
 
+// PeerCountUnlimited is used to indicate "unlimited" where a max peers limit is required.
+const PeerCountUnlimited = -1
+
 type InternetProtocol string
 
 const (
@@ -715,9 +718,7 @@ func (p *Status) deprecatedPrune() {
 // Any peer with a finalized epoch < ourFinalizedEpoch is excluded from consideration.
 // In the event of a tie in largest group size, the higher epoch is the tie breaker.
 // The selected epoch is returned, along with a list of peers with a finalized epoch >= the selected epoch.
-// `maxPeers` > 0: truncate the []peer.ID result at maxPeers, ie best[:maxPeers]
-// `maxPeers` <= 0: return all peers in agreement, ie best[:]
-func (p *Status) BestFinalized(maxPeers int, ourFinalized primitives.Epoch) (primitives.Epoch, []peer.ID) {
+func (p *Status) BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch, []peer.ID) {
 	connected := p.Connected()
 	pids := make([]peer.ID, 0, len(connected))
 	views := make(map[peer.ID]*pb.StatusV2, len(connected))
@@ -759,9 +760,6 @@ func (p *Status) BestFinalized(maxPeers int, ourFinalized primitives.Epoch) (pri
 	})
 	pids = pids[:trim]
 
-	if maxPeers > 0 && len(pids) > maxPeers {
-		return winner, pids[:maxPeers]
-	}
 	return winner, pids
 }
 
