@@ -170,7 +170,7 @@ func TestLazyPersistOnceCommitted(t *testing.T) {
 	// stashes as expected
 	require.NoError(t, as.Persist(ds, blobSidecars...))
 	// ignores duplicates
-	require.ErrorIs(t, as.Persist(ds, blobSidecars...), ErrDuplicateSidecar)
+	require.ErrorIs(t, as.Persist(ds, blobSidecars...), errDuplicateSidecar)
 
 	// ignores index out of bound
 	blobSidecars[0].Index = 6

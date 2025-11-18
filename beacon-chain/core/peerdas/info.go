@@ -108,9 +108,8 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 	return key
 }
 
-// ColumnIndices is a map of column indices where the key is the column index and the value is a boolean.
-// The boolean could indicate different things, eg whether the column is needed (in the context of satisfying custody requirements)
-// or present (in the context of a custody check on disk or in cache).
+// ColumnIndices represents as a set of ColumnIndices. This could be the set of indices that a node is required to custody,
+// the set that a peer custodies, missing indices for a given block, indices that are present on disk, etc.
 type ColumnIndices map[uint64]struct{}
 
 // Has returns true if the index is present in the ColumnIndices.
@@ -163,7 +162,7 @@ func (ci ColumnIndices) Union(other ColumnIndices) {
 	}
 }
 
-// ToMap converts a ColumnIndices into a map of uint64 to bool.
+// ToMap converts a ColumnIndices into a map[uint64]struct{}.
 // In the future ColumnIndices may be changed to a bit map, so using
 // ToMap will ensure forwards-compatibility.
 func (ci ColumnIndices) ToMap() map[uint64]struct{} {
@@ -180,7 +179,6 @@ func (ci ColumnIndices) ToSlice() []uint64 {
 }
 
 // NewColumnIndicesFromSlice creates a ColumnIndices from a slice of uint64.
-// Unlike the untyped map, this explicitly indicates that the boolean value is meaningful.
 func NewColumnIndicesFromSlice(indices []uint64) ColumnIndices {
 	ci := make(ColumnIndices, len(indices))
 	for _, index := range indices {

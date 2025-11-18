@@ -147,7 +147,7 @@ func TestIsDataAvailable(t *testing.T) {
 		_, verifiedRoDataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnsParams)
 
 		key := keyFromBlock(signedRoBlock)
-		entry := lazilyPersistentStoreColumns.cache.ensure(key)
+		entry := lazilyPersistentStoreColumns.cache.entry(key)
 		defer lazilyPersistentStoreColumns.cache.delete(key)
 
 		for _, verifiedRoDataColumn := range verifiedRoDataColumns {

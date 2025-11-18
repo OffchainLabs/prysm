@@ -87,8 +87,8 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 		}
 
 		key := keyFromBlock(block)
-		entry := s.cache.ensure(key)
-		toVerify, err = entry.append(toVerify, block.Root(), IndicesNotStored(s.store.Summary(block.Root()), indices))
+		entry := s.cache.entry(key)
+		toVerify, err = entry.append(toVerify, IndicesNotStored(s.store.Summary(block.Root()), indices))
 		if err != nil {
 			return errors.Wrap(err, "entry filter")
 		}
@@ -101,7 +101,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 		}
 	}
 
-	s.cache.cleanup(blks...)
+	s.cache.cleanup(blks)
 	return nil
 }
 

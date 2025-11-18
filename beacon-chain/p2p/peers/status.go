@@ -79,9 +79,6 @@ const (
 	MaxBackOffDuration = 5000
 )
 
-// PeerCountUnlimited is used to indicate "unlimited" where a max peers limit is required.
-const PeerCountUnlimited = -1
-
 type InternetProtocol string
 
 const (

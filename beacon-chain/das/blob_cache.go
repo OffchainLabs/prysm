@@ -76,7 +76,7 @@ func (e *blobCacheEntry) stash(sc *blocks.ROBlob) error {
 		e.scs = make([]*blocks.ROBlob, maxBlobsPerBlock)
 	}
 	if e.scs[sc.Index] != nil {
-		return errors.Wrapf(ErrDuplicateSidecar, "root=%#x, index=%d, commitment=%#x", sc.BlockRoot(), sc.Index, sc.KzgCommitment)
+		return errors.Wrapf(errDuplicateSidecar, "root=%#x, index=%d, commitment=%#x", sc.BlockRoot(), sc.Index, sc.KzgCommitment)
 	}
 	e.scs[sc.Index] = sc
 	return nil
