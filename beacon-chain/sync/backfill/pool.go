@@ -180,6 +180,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	}
 
 	for i, b := range todo {
+		excludePeers := busy
 		if b.state == batchErrFatal {
 			// Fatal error detected in batch, shut down the pool.
 			return nil, b.err
@@ -191,8 +192,15 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 			b = resetRetryableColumns(b)
 			// Set the next correct state after retryable error
 			b = b.transitionToNext()
+			if b.state == batchSequenced {
+				// Transitioning to batchSequenced means we need to download a new block batch because there was
+				// a problem making or verifying the last block request, so we should try to pick a different peer this time.
+				excludePeers = busyCopy(busy)
+				excludePeers[b.blockPid] = true
+				b.blockPid = "" // reset block peer so we can fail back to it next time if there is an issue with assignment.
+			}
 		}
-		pid, cols, err := b.selectPeer(picker, busy)
+		pid, cols, err := b.selectPeer(picker, excludePeers)
 		if err != nil {
 			p.peerFailLogger.WithField("notBusy", len(notBusy)).WithError(err).WithFields(b.logFields()).Error("Failed to select peer for batch")
 			// Return the remaining todo items and allow the outer loop to control when we try again.
@@ -206,6 +214,14 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		p.updateEarliest(b.begin)
 	}
 	return []batch{}, nil
+}
+
+func busyCopy(busy map[peer.ID]bool) map[peer.ID]bool {
+	busyCp := make(map[peer.ID]bool, len(busy))
+	for k, v := range busy {
+		busyCp[k] = v
+	}
+	return busyCp
 }
 
 func highestEpoch(batches []batch) primitives.Epoch {
