@@ -114,6 +114,15 @@ func withSubscribeAllDataSubnets(t *testing.T, fn func()) {
 	fn()
 }
 
+func withSemiSupernode(t *testing.T, fn func()) {
+	originalFlag := flags.Get().SemiSupernode
+	defer func() {
+		flags.Get().SemiSupernode = originalFlag
+	}()
+	flags.Get().SemiSupernode = true
+	fn()
+}
+
 func TestUpdateCustodyInfoIfNeeded(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
@@ -194,5 +203,37 @@ func TestCustodyGroupCount(t *testing.T) {
 		result, err := service.custodyGroupCount(ctx)
 		require.NoError(t, err)
 		require.Equal(t, config.CustodyRequirement, result)
+	})
+
+	t.Run("SemiSupernode enabled returns half of NumberOfCustodyGroups", func(t *testing.T) {
+		withSemiSupernode(t, func() {
+			service := &Service{
+				ctx: context.Background(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+			require.Equal(t, config.NumberOfCustodyGroups/2, result)
+		})
+	})
+
+	t.Run("Supernode takes precedence over SemiSupernode", func(t *testing.T) {
+		// Test that when both flags are set, supernode takes precedence
+		originalSupernode := flags.Get().SubscribeAllDataSubnets
+		originalSemiSupernode := flags.Get().SemiSupernode
+		defer func() {
+			flags.Get().SubscribeAllDataSubnets = originalSupernode
+			flags.Get().SemiSupernode = originalSemiSupernode
+		}()
+		flags.Get().SubscribeAllDataSubnets = true
+		flags.Get().SemiSupernode = true
+
+		service := &Service{
+			ctx: context.Background(),
+		}
+
+		result, err := service.custodyGroupCount(ctx)
+		require.NoError(t, err)
+		require.Equal(t, config.NumberOfCustodyGroups, result)
 	})
 }
