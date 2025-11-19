@@ -60,16 +60,14 @@ func TestVersionSorting(t *testing.T) {
 }
 
 func TestUnsupportedVersionsExcludedFromAll(t *testing.T) {
-	supported := version.All()
-	unsupported := version.Unsupported()
-
-	for _, v := range unsupported {
-		assert.NotContains(t, supported, v, "unsupported version %s should not be returned by version.All()", version.String(v))
+	for _, v := range unsupportedVersions() {
+		assert.NotContains(t, version.All(), v, "unsupported version %s should not be returned by version.All()", version.String(v))
 	}
 }
 
 func TestUnsupportedVersionsAreNotScheduledOnTestnets(t *testing.T) {
-	if len(version.Unsupported()) == 0 {
+	unsupported := unsupportedVersions()
+	if len(unsupported) == 0 {
 		t.Skip("no unsupported versions defined")
 	}
 
@@ -79,14 +77,14 @@ func TestUnsupportedVersionsAreNotScheduledOnTestnets(t *testing.T) {
 		params.HoodiConfig(),
 	}
 
-	for _, v := range version.Unsupported() {
+	for _, v := range unsupported {
 		for _, cfg := range testnetConfigs {
 			epoch := forkEpochForVersion(cfg, v)
 			require.Equalf(
 				t,
 				cfg.FarFutureEpoch,
 				epoch,
-				"feature gated version %s should not be scheduled on %s (epoch=%d)",
+				"unsupported version %s should not be scheduled on %s (epoch=%d)",
 				version.String(v),
 				cfg.ConfigName,
 				epoch,
@@ -117,4 +115,17 @@ func forkEpochForVersion(cfg *params.BeaconChainConfig, v int) primitives.Epoch 
 		}
 		panic("forkEpochForVersion missing version " + version.String(v))
 	}
+}
+
+func unsupportedVersions() []int {
+	var unsupportedVersions []int
+	for v := 0; ; v++ {
+		if version.String(v) == "unknown version" {
+			break
+		}
+		if version.IsUnsupported(v) {
+			unsupportedVersions = append(unsupportedVersions, v)
+		}
+	}
+	return unsupportedVersions
 }

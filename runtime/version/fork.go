@@ -35,9 +35,9 @@ var supportedVersions []int
 
 // unsupportedVersions contains fork versions that exist in the enums but are not yet
 // enabled on any supported network. These versions are removed from All().
-var unsupportedVersions = []int{Gloas}
-
-var unsupportedVersionSet = map[int]struct{}{}
+var unsupportedVersions = map[int]struct{}{
+	Gloas: {},
+}
 
 // ErrUnrecognizedVersionName means a string does not match the list of canonical version names.
 var ErrUnrecognizedVersionName = errors.New("version name doesn't map to a known value in the enum")
@@ -66,14 +66,9 @@ func All() []int {
 	return supportedVersions
 }
 
-// Unsupported returns fork versions that exist in the enum but are not yet enabled.
-func Unsupported() []int {
-	return unsupportedVersions
-}
-
 // IsUnsupported reports whether the provided version is currently gate-kept.
 func IsUnsupported(version int) bool {
-	_, ok := unsupportedVersionSet[version]
+	_, ok := unsupportedVersions[version]
 	return ok
 }
 
@@ -87,15 +82,9 @@ func init() {
 	}
 	sort.Ints(allVersions)
 
-	unsupportedVersionSet = make(map[int]struct{}, len(unsupportedVersions))
-	for _, v := range unsupportedVersions {
-		unsupportedVersionSet[v] = struct{}{}
-	}
-	sort.Ints(unsupportedVersions)
-
 	supportedVersions = make([]int, 0, len(allVersions))
 	for _, v := range allVersions {
-		if _, skip := unsupportedVersionSet[v]; skip {
+		if _, skip := unsupportedVersions[v]; skip {
 			continue
 		}
 		supportedVersions = append(supportedVersions, v)
