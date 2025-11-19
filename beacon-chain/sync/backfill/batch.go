@@ -73,7 +73,7 @@ type batch struct {
 	blocks         verifiedROBlocks
 	err            error
 	state          batchState
-	// `assignedPeer`` is used by the worker pool to assign and unassign peer.IDs to serve requests for the current batch state.
+	// `assignedPeer` is used by the worker pool to assign and unassign peer.IDs to serve requests for the current batch state.
 	// Depending on the state it will be copied to blockPeer, columns.Peer, blobs.Peer.
 	assignedPeer peer.ID
 	blockPeer    peer.ID
