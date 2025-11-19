@@ -166,28 +166,30 @@ func (s *LazilyPersistentStoreColumn) bisectVerification(columns []blocks.ROData
 	if s.bisector == nil {
 		return errors.New("bisector not initialized")
 	}
-	if err := s.bisector.Bisect(columns); err != nil {
+	iter, err := s.bisector.Bisect(columns)
+	if err != nil {
 		return errors.Wrap(err, "Bisector.Bisect")
 	}
 	// It's up to the bisector how to chunk up columns for verification,
 	// which could be by block, or by peer, or any other strategy.
 	// For the purposes of range syncing or backfill this will be by peer,
 	// so that the node can learn which peer is giving us bad data and downscore them.
-	for columns, err := s.bisector.Next(); columns != nil; columns, err = s.bisector.Next() {
+	for columns, err := iter.Next(); columns != nil; columns, err = iter.Next() {
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				return errors.Wrap(err, "Bisector.Next")
 			}
 			break // io.EOF signals end of iteration
 		}
-		// We're pretty sure it's worth saving these, given that they pass signature verification.
+		// We save the parts of the batch that have been verified successfully even though we don't know
+		// if all columns for the block will be available until the block is imported.
 		if err := s.verifyAndSave(s.columnsNotStored(columns)); err != nil {
-			s.bisector.OnError(err)
+			iter.OnError(err)
 			continue
 		}
 	}
 	// This should give us a single error representing any unresolved errors seen via onError.
-	return s.bisector.Error()
+	return iter.Error()
 }
 
 // columnsNotStored filters the list of ROColumnSidecars to only include those that are not found in the storage summary.

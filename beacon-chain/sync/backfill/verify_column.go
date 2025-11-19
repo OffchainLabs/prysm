@@ -116,11 +116,11 @@ func (c *columnBisector) reset() {
 }
 
 // Bisect initializes columnBisector with the set of columns to bisect.
-func (c *columnBisector) Bisect(columns []blocks.RODataColumn) error {
+func (c *columnBisector) Bisect(columns []blocks.RODataColumn) (das.BisectionIterator, error) {
 	for _, col := range columns {
 		pid, err := c.peerFor(col)
 		if err != nil {
-			return errors.Wrap(err, "could not lookup peer for column")
+			return nil, errors.Wrap(err, "could not lookup peer for column")
 		}
 		c.bisected[pid] = append(c.bisected[pid], col)
 	}
@@ -131,7 +131,7 @@ func (c *columnBisector) Bisect(columns []blocks.RODataColumn) error {
 	// The implementation of Next() assumes these are equal in
 	// the base case.
 	c.current, c.next = 0, 0
-	return nil
+	return c, nil
 }
 
 // Next implements an iterator for the columnBisector.
@@ -163,6 +163,7 @@ func (c *columnBisector) OnError(err error) {
 }
 
 var _ das.Bisector = &columnBisector{}
+var _ das.BisectionIterator = &columnBisector{}
 
 func newColumnBisector(downscorer peerDownscorer) *columnBisector {
 	return &columnBisector{
