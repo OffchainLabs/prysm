@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "precompiles",
+    srcs = [
+        "bigModExp.go",
+        "blake2f.go",
+        "bn256ScalarMul.go",
+        "bn256_helpers.go",
+        "bn256add.go",
+        "bn256pairing.go",
+        "ecdsa.go",
+        "identity.go",
+        "precompiles.go",
+        "ripemd.go",
+        "sha256.go",
+    ],
+    importpath = "github.com/MariusVanDerWijden/FuzzyVM/generator/precompiles",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//filler",
+        "@com_github_ethereum_go_ethereum//common",
+        "@com_github_ethereum_go_ethereum//core/vm/program",
+        "@com_github_ethereum_go_ethereum//crypto",
+        "@com_github_ethereum_go_ethereum//crypto/bn256",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":precompiles",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "precompiles_test",
+    srcs = ["bn256pairing_test.go"],
+    embed = [":precompiles"],
+    deps = [
+        "//filler",
+        "@com_github_ethereum_go_ethereum//crypto/bn256/cloudflare",
+    ],
+)

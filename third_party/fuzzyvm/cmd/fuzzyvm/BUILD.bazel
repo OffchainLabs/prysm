@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "fuzzyvm_lib",
+    srcs = [
+        "flags.go",
+        "main.go",
+    ],
+    importpath = "github.com/MariusVanDerWijden/FuzzyVM/cmd/fuzzyvm",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//benchmark",
+        "//fuzzer",
+        "@com_github_ethereum_go_ethereum//common",
+        "@com_github_urfave_cli_v2//:cli",
+    ],
+)
+
+go_binary(
+    name = "fuzzyvm",
+    embed = [":fuzzyvm_lib"],
+    visibility = ["//visibility:public"],
+)

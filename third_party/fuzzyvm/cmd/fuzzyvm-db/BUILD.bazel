@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_test")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "fuzzyvm-db_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/MariusVanDerWijden/FuzzyVM/cmd/fuzzyvm-db",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//filler",
+        "//fuzzer",
+        "//generator",
+        "@com_github_cockroachdb_pebble//:pebble",
+        "@com_github_pkg_errors//:errors",
+    ],
+)
+
+go_binary(
+    name = "fuzzyvm-db",
+    embed = [":fuzzyvm-db_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "fuzzyvm-db_test",
+    srcs = ["main_test.go"],
+    embed = [":fuzzyvm-db_lib"],
+)

@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "filler",
+    srcs = ["fill.go"],
+    importpath = "github.com/MariusVanDerWijden/FuzzyVM/filler",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":filler",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "filler_test",
+    srcs = ["fill_test.go"],
+    embed = [":filler"],
+)

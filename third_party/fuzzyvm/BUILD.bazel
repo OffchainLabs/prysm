@@ -1,0 +1,1 @@
+# gazelle:map_kind go_library go_library @prysm//tools/go:def.bzl

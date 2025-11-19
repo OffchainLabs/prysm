@@ -51,8 +51,6 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/DataDog/zstd v1.5.7 h1:ybO8RBeh29qrxIhCA9E8gKY6xfONU9T6G6aP9DTKfLE=
 github.com/DataDog/zstd v1.5.7/go.mod h1:g4AWEaM3yOg3HYfnJ3YIawPnVdXJh9QME85blwSAmyw=
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
-github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20250605165815-58523f4fb4b1 h1:6whPVsgSup3YgoLC6mmfO3ZiTzjMSHGXIPElVFkED8I=
-github.com/MariusVanDerWijden/FuzzyVM v0.0.0-20250605165815-58523f4fb4b1/go.mod h1:OIxBUyJX1QusK8r7rGOE6/Ii/ykFpqjMjWAHSbgjx2U=
 github.com/MariusVanDerWijden/tx-fuzz v1.4.0 h1:Tq4lXivsR8mtoP4RpasUDIUpDLHfN1YhFge/kzrzK78=
 github.com/MariusVanDerWijden/tx-fuzz v1.4.0/go.mod h1:gmOVECg7o5FY5VU3DQ/fY0zTk/ExBdMkUGz0vA8qqms=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
