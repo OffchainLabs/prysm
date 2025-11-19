@@ -69,7 +69,7 @@ type batch struct {
 	retries        int
 	retryAfter     time.Time
 	begin          primitives.Slot
-	end            primitives.Slot // half-open interval, [begin, end), ie >= start, < end.
+	end            primitives.Slot // half-open interval, [begin, end), ie >= begin, < end.
 	blocks         verifiedROBlocks
 	err            error
 	state          batchState
@@ -112,6 +112,8 @@ func (b batch) logFields() logrus.Fields {
 	return f
 }
 
+// replaces returns true if `r` is a version of `b` that has been updated by a worker,
+// meaning it should replace `b` in the batch sequencing queue.
 func (b batch) replaces(r batch) bool {
 	if r.state == batchImportComplete {
 		return false
