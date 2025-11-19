@@ -104,3 +104,68 @@ index fbbe81c..fd99a62 100644
 +    srcs = ["element_6w_arm64.s"],
 +    visibility = ["//visibility:public"],
 +)
+diff -urN gnark-patch-a/ecc/bn254/fp/BUILD.bazel gnark-patch-b/ecc/bn254/fp/BUILD.bazel
+--- gnark-patch-a/ecc/bn254/fp/BUILD.bazel	2025-11-19 13:10:39
++++ gnark-patch-b/ecc/bn254/fp/BUILD.bazel	2025-11-19 13:08:50
+@@ -7,16 +7,22 @@
+         "arith.go",
+         "doc.go",
+         "element.go",
+-        "element_amd64.go",
+-        "element_amd64.s",
+-        "element_arm64.go",
+-        "element_arm64.s",
+         "element_exp.go",
+         "element_purego.go",
+         "vector.go",
+-        "vector_amd64.go",
+         "vector_purego.go",
+-    ],
++    ] + select({
++        "@io_bazel_rules_go//go/platform:amd64": [
++            "element_amd64.go",
++            "//field/asm/element_4w:element_4w_amd64",
++            "vector_amd64.go",
++        ],
++        "@io_bazel_rules_go//go/platform:arm64": [
++            "element_arm64.go",
++            "//field/asm/element_4w:element_4w_arm64",
++        ],
++        "//conditions:default": [],
++    }),
+     importpath = "github.com/consensys/gnark-crypto/ecc/bn254/fp",
+     visibility = ["//visibility:public"],
+     deps = [
+diff -urN gnark-patch-a/ecc/bn254/fr/BUILD.bazel gnark-patch-b/ecc/bn254/fr/BUILD.bazel
+--- gnark-patch-a/ecc/bn254/fr/BUILD.bazel	2025-11-19 13:10:39
++++ gnark-patch-b/ecc/bn254/fr/BUILD.bazel	2025-11-19 13:08:55
+@@ -7,17 +7,23 @@
+         "arith.go",
+         "doc.go",
+         "element.go",
+-        "element_amd64.go",
+-        "element_amd64.s",
+-        "element_arm64.go",
+-        "element_arm64.s",
+         "element_exp.go",
+         "element_purego.go",
+         "generator.go",
+         "vector.go",
+-        "vector_amd64.go",
+         "vector_purego.go",
+-    ],
++    ] + select({
++        "@io_bazel_rules_go//go/platform:amd64": [
++            "element_amd64.go",
++            "//field/asm/element_4w:element_4w_amd64",
++            "vector_amd64.go",
++        ],
++        "@io_bazel_rules_go//go/platform:arm64": [
++            "element_arm64.go",
++            "//field/asm/element_4w:element_4w_arm64",
++        ],
++        "//conditions:default": [],
++    }),
+     importpath = "github.com/consensys/gnark-crypto/ecc/bn254/fr",
+     visibility = ["//visibility:public"],
+     deps = [

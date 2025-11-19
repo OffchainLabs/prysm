@@ -104,9 +104,9 @@ e2e = {
     "slashings.size": "64",
     "sync_committee_bits.size": "32",
     "sync_committee_bytes.size": "4",
-    "sync_committee_bits.type": "github.com/prysmaticlabs/go-bitfield.Bitvector32",
+    "sync_committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector32",
     "sync_committee_aggregate_bytes.size": "1",
-    "sync_committee_aggregate_bits.type": "github.com/prysmaticlabs/go-bitfield.Bitvector8",
+    "sync_committee_aggregate_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector8",
     "withdrawal.size": "4",
     "blob.size": "131072",
     "logs_bloom.size": "256",
@@ -120,7 +120,7 @@ e2e = {
     "max_attesting_indices.size": "8192",
     "max_committees_per_slot.size": "4",
     "committee_bits.size": "1",
-    "committee_bits.type": "github.com/prysmaticlabs/go-bitfield.Bitvector4",
+    "committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector4",
     "pending_deposits_limit": "134217728",
     "pending_partial_withdrawals_limit": "64",
     "pending_consolidations_limit": "64",
@@ -131,6 +131,11 @@ e2e = {
     "cells_per_blob.size": "128",
     "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "12",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH for e2e (2 * 6)
+    "ptc.size": "1",  # Gloas: Payload Timeliness Committee aggregation bits
+    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector2",
+    "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
+    "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
+    "builder_pending_payments.size": "16"  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
 }
 
 ###### Rules definitions #######

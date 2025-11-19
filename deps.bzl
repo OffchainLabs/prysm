@@ -2121,8 +2121,12 @@ def prysm_deps():
     go_repository(
         name = "com_github_mariusvanderwijden_fuzzyvm",
         importpath = "github.com/MariusVanDerWijden/FuzzyVM",
-        sum = "h1:RQtzNvriR3Yu5CvVBTJPwDmfItBT90TWZ3fFondhc08=",
-        version = "v0.0.0-20240516070431-7828990cad7d",
+        patches = [
+            "//third_party:com_github_mariusvanderwijden_fuzzyvm.patch",
+        ],
+        patch_args = ["-p1"],
+        sum = "h1:6whPVsgSup3YgoLC6mmfO3ZiTzjMSHGXIPElVFkED8I=",
+        version = "v0.0.0-20250605165815-58523f4fb4b1",
     )
     go_repository(
         name = "com_github_mariusvanderwijden_tx_fuzz",
