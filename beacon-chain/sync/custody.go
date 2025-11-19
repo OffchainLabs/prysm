@@ -129,7 +129,7 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		"effectiveCustodyRequirement":  effectiveCustodyRequirement,
 		"custodyRequirement":           cfg.CustodyRequirement,
 		"validatorsCustodyRequirement": validatorsCustodyRequirement,
-	}).Warn("custody requirements exceed semi-supernode mode; using higher custody count to meet requirements.")
+	}).Warn("Custody requirements exceed semi-supernode mode; using higher custody count to meet requirements.")
 
 	return effectiveCustodyRequirement, nil
 }
