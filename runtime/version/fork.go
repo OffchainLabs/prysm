@@ -30,14 +30,14 @@ var versionToString = map[int]string{
 
 // stringToVersion and allVersions are populated in init()
 var stringToVersion = map[string]int{}
-var allVersions []int
-var releasedVersions []int
+var allKnownVersions []int
+var supportedVersions []int
 
-// featureGatedVersions contains fork versions that exist in the enums but are not yet
-// enabled on any supported network. These versions are removed from Released().
-var featureGatedVersions = []int{Gloas}
+// unsupportedVersions contains fork versions that exist in the enums but are not yet
+// enabled on any supported network. These versions are removed from All().
+var unsupportedVersions = []int{Gloas}
 
-var featureGatedVersionSet = map[int]struct{}{}
+var unsupportedVersionSet = map[int]struct{}{}
 
 // ErrUnrecognizedVersionName means a string does not match the list of canonical version names.
 var ErrUnrecognizedVersionName = errors.New("version name doesn't map to a known value in the enum")
@@ -61,48 +61,43 @@ func String(version int) string {
 	return name
 }
 
-// All returns a list of all known fork versions.
+// All returns a list of all supported fork versions.
 func All() []int {
-	return allVersions
+	return supportedVersions
 }
 
-// Released returns the list of fork versions that are not feature gated.
-func Released() []int {
-	return releasedVersions
+// Unsupported returns fork versions that exist in the enum but are not yet enabled.
+func Unsupported() []int {
+	return unsupportedVersions
 }
 
-// FeatureGated returns fork versions that exist in the enum but are not yet enabled.
-func FeatureGated() []int {
-	return featureGatedVersions
-}
-
-// IsFeatureGated reports whether the provided version is currently gate-kept.
-func IsFeatureGated(version int) bool {
-	_, ok := featureGatedVersionSet[version]
+// IsUnsupported reports whether the provided version is currently gate-kept.
+func IsUnsupported(version int) bool {
+	_, ok := unsupportedVersionSet[version]
 	return ok
 }
 
 func init() {
-	allVersions = make([]int, len(versionToString))
+	allKnownVersions = make([]int, len(versionToString))
 	i := 0
 	for v, s := range versionToString {
-		allVersions[i] = v
+		allKnownVersions[i] = v
 		stringToVersion[s] = v
 		i++
 	}
-	sort.Ints(allVersions)
+	sort.Ints(allKnownVersions)
 
-	featureGatedVersionSet = make(map[int]struct{}, len(featureGatedVersions))
-	for _, v := range featureGatedVersions {
-		featureGatedVersionSet[v] = struct{}{}
+	unsupportedVersionSet = make(map[int]struct{}, len(unsupportedVersions))
+	for _, v := range unsupportedVersions {
+		unsupportedVersionSet[v] = struct{}{}
 	}
-	sort.Ints(featureGatedVersions)
+	sort.Ints(unsupportedVersions)
 
-	releasedVersions = make([]int, 0, len(allVersions))
-	for _, v := range allVersions {
-		if _, skip := featureGatedVersionSet[v]; skip {
+	supportedVersions = make([]int, 0, len(allKnownVersions))
+	for _, v := range allKnownVersions {
+		if _, skip := unsupportedVersionSet[v]; skip {
 			continue
 		}
-		releasedVersions = append(releasedVersions, v)
+		supportedVersions = append(supportedVersions, v)
 	}
 }

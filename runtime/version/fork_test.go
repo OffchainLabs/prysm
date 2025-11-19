@@ -59,37 +59,18 @@ func TestVersionSorting(t *testing.T) {
 	}
 }
 
-func TestReleasedExcludesFeatureGated(t *testing.T) {
-	released := version.Released()
-	gated := version.FeatureGated()
+func TestUnsupportedVersionsExcludedFromAll(t *testing.T) {
+	supported := version.All()
+	unsupported := version.Unsupported()
 
-	for _, v := range gated {
-		assert.NotContains(t, released, v, "released versions should exclude feature gated fork %s", version.String(v))
-	}
-
-	releasedSet := make(map[int]struct{}, len(released))
-	for _, v := range released {
-		releasedSet[v] = struct{}{}
-	}
-
-	gatedSet := make(map[int]struct{}, len(gated))
-	for _, v := range gated {
-		gatedSet[v] = struct{}{}
-	}
-
-	for _, v := range version.All() {
-		if _, skip := gatedSet[v]; skip {
-			continue
-		}
-		if _, ok := releasedSet[v]; !ok {
-			t.Fatalf("version %s missing from released versions", version.String(v))
-		}
+	for _, v := range unsupported {
+		assert.NotContains(t, supported, v, "unsupported version %s should not be returned by version.All()", version.String(v))
 	}
 }
 
-func TestFeatureGatedVersionsAreNotScheduledOnTestnets(t *testing.T) {
-	if len(version.FeatureGated()) == 0 {
-		t.Skip("no feature gated versions defined")
+func TestUnsupportedVersionsAreNotScheduledOnTestnets(t *testing.T) {
+	if len(version.Unsupported()) == 0 {
+		t.Skip("no unsupported versions defined")
 	}
 
 	testnetConfigs := []*params.BeaconChainConfig{
@@ -98,7 +79,7 @@ func TestFeatureGatedVersionsAreNotScheduledOnTestnets(t *testing.T) {
 		params.HoodiConfig(),
 	}
 
-	for _, v := range version.FeatureGated() {
+	for _, v := range version.Unsupported() {
 		for _, cfg := range testnetConfigs {
 			epoch := forkEpochForVersion(cfg, v)
 			require.Equalf(
@@ -131,7 +112,7 @@ func forkEpochForVersion(cfg *params.BeaconChainConfig, v int) primitives.Epoch 
 	case version.Fulu:
 		return cfg.FuluForkEpoch
 	default:
-		if version.IsFeatureGated(v) {
+		if version.IsUnsupported(v) {
 			return cfg.FarFutureEpoch
 		}
 		panic("forkEpochForVersion missing version " + version.String(v))

@@ -215,7 +215,7 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 
 	db := setupDB(t)
 	ctx := t.Context()
-	for _, testVersion := range version.Released()[1:] {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			update, err := createUpdate(t, testVersion)
 			require.NoError(t, err)
@@ -571,7 +571,7 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 		require.NoError(t, err)
 		require.IsNil(t, retrievedBootstrap)
 	})
-	for _, testVersion := range version.Released()[1:] {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().VersionToForkEpochMap()[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 			require.NoError(t, err)
