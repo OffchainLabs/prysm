@@ -13,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -121,7 +121,7 @@ func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primit
 		ok := errors.As(err, &me)
 		if ok {
 			fails := me.Failures()
-			lf := make(log.Fields, len(fails))
+			lf := make(logrus.Fields, len(fails))
 			for i := range fails {
 				lf[fmt.Sprintf("fail_%d", i)] = fails[i].Error()
 			}

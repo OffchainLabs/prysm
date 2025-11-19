@@ -2,6 +2,7 @@ package das
 
 import (
 	"context"
+	"io"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -12,7 +13,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // LazilyPersistentStoreColumn is an implementation of AvailabilityStore to be used when batch syncing data columns.
@@ -175,7 +175,10 @@ func (s *LazilyPersistentStoreColumn) bisectVerification(columns []blocks.ROData
 	// so that the node can learn which peer is giving us bad data and downscore them.
 	for columns, err := s.bisector.Next(); columns != nil; columns, err = s.bisector.Next() {
 		if err != nil {
-			break
+			if !errors.Is(err, io.EOF) {
+				return errors.Wrap(err, "Bisector.Next")
+			}
+			break // io.EOF signals end of iteration
 		}
 		// We're pretty sure it's worth saving these, given that they pass signature verification.
 		if err := s.verifyAndSave(s.columnsNotStored(columns)); err != nil {
@@ -183,6 +186,7 @@ func (s *LazilyPersistentStoreColumn) bisectVerification(columns []blocks.ROData
 			continue
 		}
 	}
+	// This should give us a single error representing any unresolved errors seen via onError.
 	return s.bisector.Error()
 }
 

@@ -712,7 +712,7 @@ func (p *Status) deprecatedPrune() {
 
 // BestFinalized groups all peers by their last known finalized epoch
 // and selects the epoch of the largest group as best.
-// Any peer with a finalized epoch < ourFinalizedEpoch is excluded from consideration.
+// Any peer with a finalized epoch < ourFinalized is excluded from consideration.
 // In the event of a tie in largest group size, the higher epoch is the tie breaker.
 // The selected epoch is returned, along with a list of peers with a finalized epoch >= the selected epoch.
 func (p *Status) BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch, []peer.ID) {
@@ -736,7 +736,7 @@ func (p *Status) BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch,
 			continue
 		}
 		e, v := view.FinalizedEpoch, votes[view.FinalizedEpoch]
-		if v > votes[winner] || (v == votes[winner] && e > winner) {
+		if v > votes[winner] || v == votes[winner] && e > winner {
 			winner = e
 		}
 	}
