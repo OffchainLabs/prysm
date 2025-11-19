@@ -123,8 +123,7 @@ func (c *DASPeerCache) refresh(pid peer.ID, toCustody peerdas.ColumnIndices) (*d
 func (m *PeerPicker) ForColumns(needed peerdas.ColumnIndices, busy map[peer.ID]bool) (peer.ID, []uint64, error) {
 	// - find the custodied column with the lowest frequency
 	// - collect all the peers that have custody of that column
-	// - score the peers by how many other of the needed columns they ave
-	// -- or, score them by the rank of the columns they have??
+	// - score the peers by the rarity of the needed columns they offer
 	var best *dasPeer
 	bestScore, bestCoverage := 0.0, []uint64{}
 	for _, col := range m.ranker.ascendingRarity(needed) {

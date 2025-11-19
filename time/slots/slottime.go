@@ -287,7 +287,8 @@ func MaxSafeEpoch() primitives.Epoch {
 }
 
 // SafeEpochStartOrMax returns the start slot of the given epoch if it will not overflow,
-// otherwise it returns the
+// otherwise it takes the highest epoch that won't overflow,
+// and to introduce a little margin for error, returns the slot beginning the prior epoch.
 func SafeEpochStartOrMax(e primitives.Epoch) primitives.Slot {
 	// The max value converted to a slot can't be the start of a conceptual epoch,
 	// because the first slot of that epoch would be overflow
