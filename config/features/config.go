@@ -51,6 +51,8 @@ type Flags struct {
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
+	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -282,6 +284,16 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(disableLastEpochTargets.Name) {
 		logEnabled(disableLastEpochTargets)
 		cfg.DisableLastEpochTargets = true
+	}
+
+	if ctx.IsSet(enableStateDiff.Name) {
+		logEnabled(enableStateDiff)
+		cfg.EnableStateDiff = true
+
+		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {
+			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
+			cfg.EnableHistoricalSpaceRepresentation = false
+		}
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
