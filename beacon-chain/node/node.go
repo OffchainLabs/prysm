@@ -280,7 +280,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure beacon chain")
 	}
 
-	flags.ConfigureGlobalFlags(cliCtx)
+	err := flags.ConfigureGlobalFlags(cliCtx)
+	if err != nil {
+		return errors.Wrap(err, "could not configure global flags")
+	}
 
 	if err := configureChainConfig(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure chain config")
