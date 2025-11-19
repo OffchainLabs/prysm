@@ -1,5 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_test")
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "fuzzer",
@@ -30,12 +29,12 @@ alias(
 )
 
 go_test(
-    name = "fuzzer_test",
+    name = "go_default_test",
     srcs = ["fuzzer_test.go"],
-    embed = [":fuzzer"],
+    embed = [":go_default_library"],
     deps = [
-        "//filler",
-        "//generator",
-        "@com_github_ethereum_go_ethereum//common",
+        "//third_party/fuzzyvm/filler",
+        "//third_party/fuzzyvm/generator",
+        "@com_github_ethereum_go_ethereum//common:go_default_library",
     ],
 )

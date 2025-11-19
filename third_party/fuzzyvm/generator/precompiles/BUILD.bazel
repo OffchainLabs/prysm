@@ -1,5 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_test")
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "precompiles",
@@ -35,11 +34,11 @@ alias(
 )
 
 go_test(
-    name = "precompiles_test",
+    name = "go_default_test",
     srcs = ["bn256pairing_test.go"],
-    embed = [":precompiles"],
+    embed = [":go_default_library"],
     deps = [
-        "//filler",
-        "@com_github_ethereum_go_ethereum//crypto/bn256/cloudflare",
+        "//third_party/fuzzyvm/filler",
+        "@com_github_ethereum_go_ethereum//crypto/bn256/cloudflare:go_default_library",
     ],
 )
