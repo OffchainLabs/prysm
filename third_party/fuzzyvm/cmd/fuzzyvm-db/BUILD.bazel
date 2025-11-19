@@ -33,9 +33,9 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/third_party/fuzzyvm/cmd/fuzzyvm-db",
     visibility = ["//visibility:private"],
     deps = [
-        "//third_party/fuzzyvm/filler",
-        "//third_party/fuzzyvm/fuzzer",
-        "//third_party/fuzzyvm/generator",
+        "//filler",
+        "//fuzzer",
+        "//generator",
         "@com_github_cockroachdb_pebble//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],

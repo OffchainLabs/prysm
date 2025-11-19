@@ -67,7 +67,7 @@ func (f *Filler) Byte() byte {
 func (f *Filler) Read(b []byte) (n int, err error) {
 	// TODO (MariusVanDerWijden) this can be done more efficiently
 	tmp := f.ByteSlice(len(b))
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		b[i] = tmp[i]
 	}
 	return len(b), nil
@@ -76,13 +76,13 @@ func (f *Filler) Read(b []byte) (n int, err error) {
 // BigInt16 returns a new big int in [0, 2^16).
 func (f *Filler) BigInt16() *big.Int {
 	i := f.Uint16()
-	return big.NewInt(int64(i))
+	return new(big.Int).SetUint64(uint64(i))
 }
 
 // BigInt32 returns a new big int in [0, 2^32).
 func (f *Filler) BigInt32() *big.Int {
 	i := f.Uint32()
-	return big.NewInt(int64(i))
+	return new(big.Int).SetUint64(uint64(i))
 }
 
 // BigInt64 returns a new big int in [0, 2^64).
@@ -127,7 +127,7 @@ func (f *Filler) MemInt() *big.Int {
 	} else if b == 255 {
 		return f.BigInt256()
 	}
-	return big.NewInt(int64(f.Byte()))
+	return new(big.Int).SetUint64(uint64(f.Byte()))
 }
 
 // ByteSlice returns a byteslice with `items` values.
@@ -141,7 +141,10 @@ func (f *Filler) ByteSlice(items int) []byte {
 		for i := 0; i < items; {
 			it := copy(b[i:], f.data[f.pointer:])
 			if it == 0 {
-				panic("should not happen, infinite loop")
+				// This should not happen, but if it does, mark as used up and return
+				f.usedUp = true
+				f.pointer = 0
+				return b[:i]
 			}
 			i += it
 			f.pointer = 0
@@ -154,7 +157,8 @@ func (f *Filler) ByteSlice(items int) []byte {
 
 // ByteSlice256 returns a byteslice with 0..255 values.
 func (f *Filler) ByteSlice256() []byte {
-	return f.ByteSlice(int(f.Byte()))
+	length := f.Byte()
+	return f.ByteSlice(int(length))
 }
 
 // Uint16 returns a new uint16.

@@ -38,7 +38,7 @@ go_test(
     srcs = ["bn256pairing_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//third_party/fuzzyvm/filler",
+        "//filler",
         "@com_github_ethereum_go_ethereum//crypto/bn256/cloudflare:go_default_library",
     ],
 )

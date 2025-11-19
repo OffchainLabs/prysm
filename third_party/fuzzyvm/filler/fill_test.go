@@ -67,7 +67,7 @@ func TestByte(t *testing.T) {
 	fut := func(f *Filler, exp []byte) bool {
 		return f.Byte() == byte(exp[0])
 	}
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		testFunc(t, []byte{byte(i)}, []byte{byte(i)}, fut)
 	}
 }
