@@ -766,7 +766,7 @@ func TestSamplingSize(t *testing.T) {
 		require.Equal(t, highCustodyCount, size) // Should return the higher custody count
 
 		// Check for warning log
-		assert.LogsContain(t, hook, "validator custody requirement exceeds semi-supernode minimum")
+		assert.LogsContain(t, hook, "Validator custody requirement exceeds semi-supernode minimum")
 	})
 
 	t.Run("semi-supernode downgrade prevention from database", func(t *testing.T) {

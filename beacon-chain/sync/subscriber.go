@@ -718,9 +718,13 @@ func (s *Service) samplingSize() (uint64, error) {
 	// Semi-supernode subscribes to at least half (64 subnets - minimum needed to reconstruct),
 	// but will subscribe to more if validator requirements exceed that.
 	// Check database for downgrade prevention.
-	wasSemiSupernode, err := s.cfg.beaconDB.UpdateSemiSupernode(s.ctx, flags.Get().SemiSupernode)
-	if err != nil {
-		log.WithError(err).Error("Could not update semi-supernode status")
+	wasSemiSupernode := false
+	if s.cfg.beaconDB != nil {
+		var err error
+		wasSemiSupernode, err = s.cfg.beaconDB.UpdateSemiSupernode(s.ctx, flags.Get().SemiSupernode)
+		if err != nil {
+			log.WithError(err).Error("Could not update semi-supernode status")
+		}
 	}
 	// If we're not a (current or former) semi-supernode, just use requiredSampling.
 	if !flags.Get().SemiSupernode && !wasSemiSupernode {
