@@ -24,12 +24,13 @@ func FlagOptions(c *cli.Context) ([]execution.Option, error) {
 	}
 	headers := strings.Split(c.String(flags.ExecutionEngineHeaders.Name), ",")
 	opts := []execution.Option{
-		execution.WithHttpEndpoint(endpoint),
 		execution.WithEth1HeaderRequestLimit(c.Uint64(flags.Eth1HeaderReqLimit.Name)),
 		execution.WithHeaders(headers),
 	}
 	if len(jwtSecret) > 0 {
 		opts = append(opts, execution.WithHttpEndpointAndJWTSecret(endpoint, jwtSecret))
+	} else {
+		opts = append(opts, execution.WithHttpEndpoint(endpoint))
 	}
 	return opts, nil
 }
