@@ -28,7 +28,7 @@ go_library(
         "//testing/endtoend/types:go_default_library",
         "//testing/middleware/engine-api-proxy:go_default_library",
         "//testing/util:go_default_library",
-        "@com_github_mariusvanderwijden_fuzzyvm//filler:go_default_library",
+        "//third_party/fuzzyvm/filler",
         "//time/slots:go_default_library",
         "@com_github_ethereum_go_ethereum//:go_default_library",
         "@com_github_ethereum_go_ethereum//accounts/abi/bind:go_default_library",

@@ -35,8 +35,8 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/third_party/fuzzyvm/cmd/precompileBench",
     visibility = ["//visibility:private"],
     deps = [
-        "//filler",
-        "//generator",
+        "//third_party/fuzzyvm/filler",
+        "//third_party/fuzzyvm/generator",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_ethereum_go_ethereum//core/vm:go_default_library",
         "@com_github_ethereum_go_ethereum//core/vm/program:go_default_library",
