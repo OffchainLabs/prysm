@@ -371,6 +371,7 @@ go_library(
         "beacon_block.go",
         "cloners.go",
         "eip_7521.go",
+        "gloas.go",
         "log.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
