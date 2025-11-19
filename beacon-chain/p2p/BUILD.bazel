@@ -142,6 +142,7 @@ go_test(
         "topics_test.go",
         "utils_test.go",
     ],
+    data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     flaky = True,
     tags = ["requires-network"],
