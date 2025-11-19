@@ -160,6 +160,18 @@ func (c *columnBisector) OnError(err error) {
 	c.errs = append(c.errs, err)
 	pid := c.pidIter[c.current]
 	c.downscore(pid, "column verification error", err)
+
+	// Track which roots failed by examining columns from the current peer
+	pk := c.peerIdKey(pid)
+	columns := c.bisected[pk]
+	for _, col := range columns {
+		root := col.BlockRoot()
+		rk := c.rootKey(root)
+		if c.failures[rk] == nil {
+			c.failures[rk] = make(peerdas.ColumnIndices)
+		}
+		c.failures[rk][col.Index] = struct{}{}
+	}
 }
 
 var _ das.Bisector = &columnBisector{}
@@ -171,6 +183,7 @@ func newColumnBisector(downscorer peerDownscorer) *columnBisector {
 		pidKeys:      make(map[peer.ID]pidKey),
 		columnSource: make(map[rootKey]map[uint64]pidKey),
 		bisected:     make(map[pidKey][]blocks.RODataColumn),
+		failures:     make(map[rootKey]peerdas.ColumnIndices),
 		downscore:    downscorer,
 	}
 }

@@ -62,10 +62,12 @@ go_test(
         "pool_test.go",
         "service_test.go",
         "status_test.go",
+        "verify_column_test.go",
         "verify_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/das:go_default_library",
         "//beacon-chain/db:go_default_library",
