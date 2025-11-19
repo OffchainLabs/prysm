@@ -60,7 +60,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if ctx.Bool(SemiSupernode.Name) {
 		log.Warning("Operating in semi-supernode mode (64 data columns)")
 		cfg.SemiSupernode = true
-  }
+	}
 
 	// State-diff-exponents
 	cfg.StateDiffExponents = ctx.IntSlice(StateDiffExponents.Name)
