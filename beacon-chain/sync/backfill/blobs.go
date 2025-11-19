@@ -54,7 +54,7 @@ type blobSync struct {
 	next     int
 	bbv      *blobBatchVerifier
 	current  primitives.Slot
-	pid      peer.ID
+	peer     peer.ID
 }
 
 func (bs *blobSync) needed() int {

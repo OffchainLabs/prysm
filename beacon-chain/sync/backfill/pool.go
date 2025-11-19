@@ -127,7 +127,7 @@ func (p *p2pBatchWorkerPool) batchRouter(pa PeerAssigner) {
 			if b.state == batchErrFatal {
 				p.shutdown(b.err)
 			}
-			pid := b.peer
+			pid := b.assignedPeer
 			delete(busy, pid)
 			if b.workComplete() {
 				p.fromRouter <- b
@@ -196,8 +196,8 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 				// Transitioning to batchSequenced means we need to download a new block batch because there was
 				// a problem making or verifying the last block request, so we should try to pick a different peer this time.
 				excludePeers = busyCopy(busy)
-				excludePeers[b.blockPid] = true
-				b.blockPid = "" // reset block peer so we can fail back to it next time if there is an issue with assignment.
+				excludePeers[b.blockPeer] = true
+				b.blockPeer = "" // reset block peer so we can fail back to it next time if there is an issue with assignment.
 			}
 		}
 		pid, cols, err := b.selectPeer(picker, excludePeers)
@@ -207,7 +207,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 			return todo[i:], nil
 		}
 		busy[pid] = true
-		b.peer = pid
+		b.assignedPeer = pid
 		b.nextReqCols = cols
 		backfillBatchTimeWaiting.Observe(float64(time.Since(b.scheduled).Milliseconds()))
 		p.toWorkers <- b

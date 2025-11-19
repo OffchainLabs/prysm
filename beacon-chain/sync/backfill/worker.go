@@ -132,9 +132,9 @@ func resetRetryableColumns(b batch) batch {
 
 func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	current := w.cfg.clock.CurrentSlot()
-	b.blockPid = b.peer
+	b.blockPeer = b.assignedPeer
 	start := time.Now()
-	results, err := sync.SendBeaconBlocksByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blockPid, b.blockRequest(), blockValidationMetrics)
+	results, err := sync.SendBeaconBlocksByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blockPeer, b.blockRequest(), blockValidationMetrics)
 	if err != nil {
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch requesting failed")
 		return b.withRetryableError(err)
@@ -151,7 +151,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	blockVerifyMs.Observe(float64(time.Since(dlt).Milliseconds()))
 	if err != nil {
 		if shouldDownscore(err) {
-			w.cfg.downscore(b.blockPid, "invalid SignedBeaconBlock batch rpc response", err)
+			w.cfg.downscore(b.blockPeer, "invalid SignedBeaconBlock batch rpc response", err)
 		}
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch validation failed")
 		return b.withRetryableError(err)
@@ -186,11 +186,11 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 }
 
 func (w *p2pWorker) handleBlobs(ctx context.Context, b batch) batch {
-	b.blobs.pid = b.peer
+	b.blobs.peer = b.assignedPeer
 	start := time.Now()
 	// we don't need to use the response for anything other than metrics, because blobResponseValidation
 	// adds each of them to a batch AvailabilityStore once it is checked.
-	blobs, err := sync.SendBlobsByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blobs.pid, w.cfg.ctxMap, b.blobRequest(), b.blobs.validateNext, blobValidationMetrics)
+	blobs, err := sync.SendBlobsByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blobs.peer, w.cfg.ctxMap, b.blobRequest(), b.blobs.validateNext, blobValidationMetrics)
 	if err != nil {
 		b.blobs = nil
 		return b.withRetryableError(err)
@@ -214,7 +214,7 @@ func (w *p2pWorker) handleBlobs(ctx context.Context, b batch) batch {
 
 func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	start := time.Now()
-	b.columns.peer = b.peer
+	b.columns.peer = b.assignedPeer
 
 	// Bisector is used to keep track of the peer that provided each column, for scoring purposes.
 	// When verification of a batch of columns fails, bisector is used to retry verification with batches

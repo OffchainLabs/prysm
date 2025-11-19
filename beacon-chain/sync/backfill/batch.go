@@ -14,9 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ErrChainBroken indicates a backfill batch can't be imported to the db because it is not known to be the ancestor
-// of the canonical chain.
-var ErrChainBroken = errors.New("batch is not the ancestor of a known finalized root")
+var errChainBroken = errors.New("batch is not the ancestor of a known finalized root")
 
 type batchState int
 
@@ -75,11 +73,13 @@ type batch struct {
 	blocks         verifiedROBlocks
 	err            error
 	state          batchState
-	peer           peer.ID
-	nextReqCols    []uint64
-	blockPid       peer.ID
-	blobs          *blobSync
-	columns        *columnSync
+	// `assignedPeer`` is used by the worker pool to assign and unassign peer.IDs to serve requests for the current batch state.
+	// Depending on the state it will be copied to blockPeer, columns.Peer, blobs.Peer.
+	assignedPeer peer.ID
+	blockPeer    peer.ID
+	nextReqCols  []uint64
+	blobs        *blobSync
+	columns      *columnSync
 }
 
 func (b batch) logFields() logrus.Fields {
@@ -91,11 +91,11 @@ func (b batch) logFields() logrus.Fields {
 		"retries":   b.retries,
 		"begin":     b.begin,
 		"end":       b.end,
-		"busyPid":   b.peer,
-		"blockPid":  b.blockPid,
+		"busyPid":   b.assignedPeer,
+		"blockPid":  b.blockPeer,
 	}
 	if b.blobs != nil {
-		f["blobPid"] = b.blobs.pid
+		f["blobPid"] = b.blobs.peer
 	}
 	if b.columns != nil {
 		f["colPid"] = b.columns.peer
@@ -132,7 +132,7 @@ func (b batch) id() batchId {
 func (b batch) ensureParent(expected [32]byte) error {
 	tail := b.blocks[len(b.blocks)-1]
 	if tail.Root() != expected {
-		return errors.Wrapf(ErrChainBroken, "last parent_root=%#x, tail root=%#x", expected, tail.Root())
+		return errors.Wrapf(errChainBroken, "last parent_root=%#x, tail root=%#x", expected, tail.Root())
 	}
 	return nil
 }
