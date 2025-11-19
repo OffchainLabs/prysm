@@ -652,6 +652,159 @@ func TestIsDigestValid(t *testing.T) {
 	assert.Equal(t, false, valid)
 }
 
+func TestSamplingSize(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := context.Background()
+	d := db.SetupDB(t)
+	p2pService := p2ptest.NewTestP2P(t)
+
+	t.Run("regular node returns validator requirements", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Disable all special modes
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SubscribeAllDataSubnets = false
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+
+		custodyCount := uint64(16)
+		_, _, err := p2pService.UpdateCustodyInfo(0, custodyCount)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		// Should return max(SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount)
+		// For this test, custodyGroupCount (16) should be the max
+		expectedSize := max(cfg.SamplesPerSlot, custodyCount)
+		require.Equal(t, expectedSize, size)
+	})
+
+	t.Run("supernode mode returns all subnets", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SubscribeAllDataSubnets = true
+		flags.Init(gFlags)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount, size) // Should be 128
+	})
+
+	t.Run("semi-supernode with low validator requirements returns 64", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		// Set custody count to a low value (e.g., 8 for 1 validator)
+		_, _, err := p2pService.UpdateCustodyInfo(0, 8)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount/2, size) // Should be 64
+	})
+
+	t.Run("semi-supernode with high validator requirements returns higher value and warns", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		// Set custody count to a high value (e.g., 100 validators)
+		highCustodyCount := uint64(100)
+		_, _, err := p2pService.UpdateCustodyInfo(0, highCustodyCount)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		// Capture logs
+		hook := logTest.NewGlobal()
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, highCustodyCount, size) // Should return the higher custody count
+
+		// Check for warning log
+		assert.LogsContain(t, hook, "Validator custody requirement exceeds semi-supernode minimum")
+	})
+
+	t.Run("semi-supernode downgrade prevention from database", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// First, enable semi-supernode mode
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		_, _, err := p2pService.UpdateCustodyInfo(0, 8)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		// First call sets semi-supernode in DB
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount/2, size) // Should be 64
+
+		// Now disable the flag
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+
+		// Should still return 64 due to database persistence
+		size, err = s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount/2, size) // Should still be 64
+	})
+}
+
 // Create peer and register them to provided topics.
 func createPeer(t *testing.T, topics ...string) *p2ptest.TestP2P {
 	p := p2ptest.NewTestP2P(t)

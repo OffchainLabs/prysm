@@ -695,4 +695,97 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		require.Equal(t, slot, actualEas)
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
 	})
+
+	t.Run("Supernode downgrade prevented", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SubscribeAllDataSubnets = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+
+		// Try to downgrade by removing flag
+		gFlags.SubscribeAllDataSubnets = false
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should still be supernode
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Still 64, not downgraded
+	})
+
+	t.Run("Semi-supernode downgrade prevented", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc) // Still 4, semi-supernode doesn't change custody
+
+		// Try to downgrade by removing flag
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should still be in semi-supernode mode (verified by checking DB)
+		wasSemiSupernode, err := service.cfg.BeaconDB.UpdateSemiSupernode(service.ctx, false)
+		require.NoError(t, err)
+		require.Equal(t, true, wasSemiSupernode) // Should return true because it was previously set
+
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc)
+	})
+
+	t.Run("Semi-supernode to supernode upgrade allowed", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Start with semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc)
+
+		// Upgrade to full supernode
+		gFlags.SemiSupernode = false
+		gFlags.SubscribeAllDataSubnets = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should upgrade to full supernode
+		upgradeSlot := slot + 2
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(upgradeSlot)
+		require.NoError(t, err)
+		require.Equal(t, upgradeSlot, actualEas) // Earliest slot updates when upgrading
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Upgraded to 64
+	})
 }

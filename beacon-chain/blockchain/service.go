@@ -471,6 +471,7 @@ func (s *Service) removeStartupState() {
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
 	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
+	isSemiSupernode := flags.Get().SemiSupernode
 
 	cfg := params.BeaconConfig()
 	custodyRequirement := cfg.CustodyRequirement
@@ -490,11 +491,32 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		)
 	}
 
+	// Check if the node was previously in semi-supernode mode.
+	wasSemiSupernode, err := s.cfg.BeaconDB.UpdateSemiSupernode(s.ctx, isSemiSupernode)
+	if err != nil {
+		log.WithError(err).Error("Could not update semi-supernode status")
+	}
+
+	// Warn the user if they're trying to downgrade from semi-supernode.
+	if wasSemiSupernode && !isSemiSupernode && !isSubscribedToAllDataSubnets {
+		log.Warnf(
+			"Because the flag `--%s` was previously used, the node will continue operating in semi-supernode mode (64 data column subnets). "+
+				"To disable this, you must start with a fresh database or upgrade to full supernode with `--%s`.",
+			flags.SemiSupernode.Name,
+			flags.SubscribeAllDataSubnets.Name,
+		)
+		// Note: Semi-supernode mode is persisted in the database and will be enforced
+		// by the subscriber service when determining samplingSize()
+	}
+
 	// Compute the custody group count.
+	// Hierarchy: Supernode (128) > Semi-supernode (subscription only) > Regular
 	custodyGroupCount := custodyRequirement
-	if isSubscribedToAllDataSubnets {
+	if isSubscribedToAllDataSubnets || wasSubscribedToAllDataSubnets {
+		// Full supernode: custody all 128 groups
 		custodyGroupCount = cfg.NumberOfCustodyGroups
 	}
+	// Note: Semi-supernode does NOT affect custody count, only subscription count
 
 	// Safely compute the fulu fork slot.
 	fuluForkSlot, err := fuluForkSlot()

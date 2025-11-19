@@ -129,6 +129,7 @@ type NoHeadAccessDatabase interface {
 
 	// Custody operations.
 	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
+	UpdateSemiSupernode(ctx context.Context, enabled bool) (bool, error)
 	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error
 

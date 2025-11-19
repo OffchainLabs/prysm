@@ -697,6 +697,7 @@ func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 func (s *Service) samplingSize() (uint64, error) {
 	cfg := params.BeaconConfig()
 
+	// Supernode subscribes to all subnets.
 	if flags.Get().SubscribeAllDataSubnets {
 		return cfg.DataColumnSidecarSubnetCount, nil
 	}
@@ -712,7 +713,28 @@ func (s *Service) samplingSize() (uint64, error) {
 		return 0, errors.Wrap(err, "custody group count")
 	}
 
-	return max(cfg.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount), nil
+	requiredSampling := max(cfg.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount)
+
+	// Semi-supernode subscribes to at least half (64 subnets - minimum needed to reconstruct),
+	// but will subscribe to more if validator requirements exceed that.
+	// Check database for downgrade prevention.
+	wasSemiSupernode, err := s.cfg.beaconDB.UpdateSemiSupernode(s.ctx, flags.Get().SemiSupernode)
+	if err != nil {
+		log.WithError(err).Error("Could not update semi-supernode status")
+	}
+	if flags.Get().SemiSupernode || wasSemiSupernode {
+		semiSupernodeMin := cfg.DataColumnSidecarSubnetCount / 2
+		if requiredSampling > semiSupernodeMin {
+			log.WithFields(logrus.Fields{
+				"requiredSampling": requiredSampling,
+				"semiSupernodeMin": semiSupernodeMin,
+			}).Warn("Validator custody requirement exceeds semi-supernode minimum. Subscribing to additional subnets.")
+			return requiredSampling, nil
+		}
+		return semiSupernodeMin, nil
+	}
+
+	return requiredSampling, nil
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) map[uint64]bool {
