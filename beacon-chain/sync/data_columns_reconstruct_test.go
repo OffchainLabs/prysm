@@ -203,7 +203,7 @@ func TestSemiSupernodeReconstruction(t *testing.T) {
 
 		// Verify that we have seen at least the minimum number of columns.
 		seenCount := 0
-		for i := uint64(0); i < numberOfColumns; i++ {
+		for i := range numberOfColumns {
 			if service.hasSeenDataColumnIndex(slot, proposerIndex, i) {
 				seenCount++
 			}
