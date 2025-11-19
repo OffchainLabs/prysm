@@ -30,7 +30,7 @@ var versionToString = map[int]string{
 
 // stringToVersion and allVersions are populated in init()
 var stringToVersion = map[string]int{}
-var allKnownVersions []int
+var allVersions []int
 var supportedVersions []int
 
 // unsupportedVersions contains fork versions that exist in the enums but are not yet
@@ -78,14 +78,14 @@ func IsUnsupported(version int) bool {
 }
 
 func init() {
-	allKnownVersions = make([]int, len(versionToString))
+	allVersions = make([]int, len(versionToString))
 	i := 0
 	for v, s := range versionToString {
-		allKnownVersions[i] = v
+		allVersions[i] = v
 		stringToVersion[s] = v
 		i++
 	}
-	sort.Ints(allKnownVersions)
+	sort.Ints(allVersions)
 
 	unsupportedVersionSet = make(map[int]struct{}, len(unsupportedVersions))
 	for _, v := range unsupportedVersions {
@@ -93,8 +93,8 @@ func init() {
 	}
 	sort.Ints(unsupportedVersions)
 
-	supportedVersions = make([]int, 0, len(allKnownVersions))
-	for _, v := range allKnownVersions {
+	supportedVersions = make([]int, 0, len(allVersions))
+	for _, v := range allVersions {
 		if _, skip := unsupportedVersionSet[v]; skip {
 			continue
 		}
