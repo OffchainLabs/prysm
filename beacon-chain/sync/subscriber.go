@@ -720,20 +720,24 @@ func (s *Service) samplingSize() (uint64, error) {
 	// Check database for downgrade prevention.
 	wasSemiSupernode, err := s.cfg.beaconDB.UpdateSemiSupernode(s.ctx, flags.Get().SemiSupernode)
 	if err != nil {
-		log.WithError(err).Error("Could not update semi-supernode status")
+		log.WithError(err).Error("could not update semi-supernode status")
 	}
-	if flags.Get().SemiSupernode || wasSemiSupernode {
-		semiSupernodeMin := cfg.DataColumnSidecarSubnetCount / 2
-		if requiredSampling > semiSupernodeMin {
-			log.WithFields(logrus.Fields{
-				"requiredSampling": requiredSampling,
-				"semiSupernodeMin": semiSupernodeMin,
-			}).Warn("Validator custody requirement exceeds semi-supernode minimum. Subscribing to additional subnets.")
-			return requiredSampling, nil
-		}
+	// If we're not a (current or former) semi-supernode, just use requiredSampling.
+	if !flags.Get().SemiSupernode && !wasSemiSupernode {
+		return requiredSampling, nil
+	}
+
+	// Semi-supernode path.
+	semiSupernodeMin := cfg.DataColumnSidecarSubnetCount / 2
+	if requiredSampling <= semiSupernodeMin {
 		return semiSupernodeMin, nil
 	}
 
+	// If required sampling is higher than semi-supernode target, use it.
+	log.WithFields(logrus.Fields{
+		"requiredSampling": requiredSampling,
+		"semiSupernodeMin": semiSupernodeMin,
+	}).Warn("validator custody requirement exceeds semi-supernode minimum; Subscribing to additional subnets.")
 	return requiredSampling, nil
 }
 
