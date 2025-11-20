@@ -286,8 +286,8 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.DisableLastEpochTargets = true
 	}
 
-	if ctx.IsSet(enableStateDiff.Name) {
-		logEnabled(enableStateDiff)
+	if ctx.IsSet(EnableStateDiff.Name) {
+		logEnabled(EnableStateDiff)
 		cfg.EnableStateDiff = true
 
 		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {
