@@ -242,10 +242,14 @@ var (
 		Help: "The earliest available slot tracked by the database for custody purposes",
 	})
 
-	// Custody group count metric
-	custodyGroupCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "beacon_custody_group_count",
-		Help: "Current custody group count (CGC) for the node",
+	// Custody group count metrics - separate for P2P and DB views
+	custodyGroupCountP2P = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_custody_group_count_p2p",
+		Help: "Current custody group count (CGC) from P2P layer",
+	})
+	custodyGroupCountDB = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_custody_group_count_db",
+		Help: "Current custody group count (CGC) stored in database",
 	})
 )
 

@@ -36,8 +36,8 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "p2p custody group count")
 	}
 
-	// Update the custody group count metric with the current value
-	custodyGroupCount.Set(float64(actualCustodyGrounpCount))
+	// Update the P2P custody group count metric
+	custodyGroupCountP2P.Set(float64(actualCustodyGrounpCount))
 
 	// Get our target custody group count.
 	targetCustodyGroupCount, err := s.custodyGroupCount(s.ctx)
@@ -45,30 +45,75 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "custody group count")
 	}
 
-	// Check if we have a pending CGC change that should be applied
+	// Handle pending CGC changes with proper grace period
 	s.pendingCGCLock.Lock()
 	now := time.Now()
-	if s.pendingCGC > 0 && now.After(s.pendingCGCDeadline) {
-		// Apply the pending change
+
+	switch {
+	case s.pendingCGC > 0 && now.After(s.pendingCGCDeadline):
+		// Grace period expired - check if pending change is still valid
 		targetToApply := s.pendingCGC
 		s.pendingCGC = 0 // Clear the pending change
 		s.pendingCGCDeadline = time.Time{}
 		s.pendingCGCLock.Unlock()
 
-		// Apply the change if it's still higher than current
-		if targetToApply > actualCustodyGrounpCount {
+		// Only apply the pending change if current target still justifies it
+		// This prevents applying stale increases when validators have been removed
+		// or configuration has changed during the grace period
+		if targetToApply <= targetCustodyGroupCount {
+			// Pending value is still valid (at or below current target)
+			// the network still wants at least that many groups
+			// Use the current target to allow for any increases that happened during grace period
+			if targetCustodyGroupCount > actualCustodyGrounpCount {
+				log.WithFields(logrus.Fields{
+					"previousCGC": actualCustodyGrounpCount,
+					"newCGC":      targetCustodyGroupCount,
+					"pendingCGC":  targetToApply,
+				}).Info("Applying custody group count increase after grace period")
+			}
+		} else {
+			// Pending value is higher than current target - drop it as stale
 			log.WithFields(logrus.Fields{
-				"previousCGC": actualCustodyGrounpCount,
-				"newCGC":      targetToApply,
-			}).Info("Applying custody group count increase after grace period")
+				"currentCGC":    actualCustodyGrounpCount,
+				"targetCGC":     targetCustodyGroupCount,
+				"stalePendingCGC": targetToApply,
+			}).Info("Dropping stale pending CGC increase as target has decreased")
 
-			// Proceed to update with the pending value
-			targetCustodyGroupCount = targetToApply
+			// Still check if current target needs an increase (with new grace period)
+			if targetCustodyGroupCount > actualCustodyGrounpCount {
+				// Re-schedule with current target and new grace period
+				s.pendingCGCLock.Lock()
+				s.pendingCGC = targetCustodyGroupCount
+				s.pendingCGCDeadline = now.Add(time.Duration(gracePeriodSeconds) * time.Second)
+				s.pendingCGCLock.Unlock()
+
+				log.WithFields(logrus.Fields{
+					"currentCGC":  actualCustodyGrounpCount,
+					"targetCGC":   targetCustodyGroupCount,
+					"gracePeriod": gracePeriodSeconds,
+				}).Info("Re-scheduling CGC increase with updated target")
+
+				return nil
+			}
 		}
-	} else {
-		// Check if we need to schedule a new increase
-		if targetCustodyGroupCount > actualCustodyGrounpCount && targetCustodyGroupCount > s.pendingCGC {
-			// Schedule the increase for 300 seconds from now
+
+	case s.pendingCGC > 0 && !now.After(s.pendingCGCDeadline):
+		// Pending change exists but grace period not expired - do nothing
+		pending := s.pendingCGC
+		timeRemaining := s.pendingCGCDeadline.Sub(now).Seconds()
+		s.pendingCGCLock.Unlock()
+
+		log.WithFields(logrus.Fields{
+			"pendingCGC":    pending,
+			"timeRemaining": timeRemaining,
+		}).Debug("Grace period still active, skipping CGC update")
+
+		return nil
+
+	default:
+		// No pending change: check if we need to schedule one
+		if targetCustodyGroupCount > actualCustodyGrounpCount {
+			// Schedule the increase with grace period
 			s.pendingCGC = targetCustodyGroupCount
 			s.pendingCGCDeadline = now.Add(time.Duration(gracePeriodSeconds) * time.Second)
 			s.pendingCGCLock.Unlock()
@@ -80,9 +125,9 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 				"effectiveTime": s.pendingCGCDeadline.Format(time.RFC3339),
 			}).Info("Scheduling custody group count increase with grace period")
 
-			// Don't apply the change yet
 			return nil
 		}
+		// No change needed
 		s.pendingCGCLock.Unlock()
 	}
 
@@ -128,7 +173,7 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 	// Update the p2p earliest available slot metric
 	earliestAvailableSlotP2P.Set(float64(storedEarliestSlot))
 
-	dbEarliestSlot, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
+	dbEarliestSlot, dbStoredGroupCount, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
 	if err != nil {
 		return errors.Wrap(err, "beacon db update custody info")
 	}
@@ -136,8 +181,9 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 	// Update the DB earliest available slot metric
 	earliestAvailableSlotDB.Set(float64(dbEarliestSlot))
 
-	// Update the custody group count metric
-	custodyGroupCount.Set(float64(storedGroupCount))
+	// Update both custody group count metrics with their respective values
+	custodyGroupCountP2P.Set(float64(storedGroupCount))
+	custodyGroupCountDB.Set(float64(dbStoredGroupCount))
 
 	return nil
 }
