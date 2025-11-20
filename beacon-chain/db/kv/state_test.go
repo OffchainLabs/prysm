@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -1482,18 +1483,23 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					defer reset()
 					setDefaultStateDiffExponents()
 
+					exponents := flags.Get().StateDiffExponents
+
 					err := setOffsetInDB(db, 0)
 					require.NoError(t, err)
 
-					st1, _ := createState(t, 0, v)
-
-					err = db.saveStateByDiff(context.Background(), st1)
+					st, _ := createState(t, 0, v)
+					err = db.saveStateByDiff(context.Background(), st)
 					require.NoError(t, err)
 
-					slot := primitives.Slot(math.PowerOf2(5))
-					st2, _ := createState(t, slot, v)
+					slot := primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
 
-					err = db.saveStateByDiff(context.Background(), st2)
+					slot = primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])) + math.PowerOf2(uint64(exponents[len(exponents)-1])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
 					require.NoError(t, err)
 
 					r := bytesutil.ToBytes32([]byte{'A'})
@@ -1505,7 +1511,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					require.NoError(t, err)
 					require.NotNil(t, readSt)
 
-					stSSZ, err := st2.MarshalSSZ()
+					stSSZ, err := st.MarshalSSZ()
 					require.NoError(t, err)
 					readStSSZ, err := readSt.MarshalSSZ()
 					require.NoError(t, err)
@@ -1524,18 +1530,24 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					defer reset()
 					setDefaultStateDiffExponents()
 
+					exponents := flags.Get().StateDiffExponents
+
 					err := setOffsetInDB(db, 0)
 					require.NoError(t, err)
 
-					st1, _ := createState(t, 0, v)
+					st, _ := createState(t, 0, v)
 
-					err = db.saveStateByDiff(context.Background(), st1)
+					err = db.saveStateByDiff(context.Background(), st)
 					require.NoError(t, err)
 
-					slot := primitives.Slot(math.PowerOf2(5))
-					st2, _ := createState(t, slot, v)
+					slot := primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
 
-					err = db.saveStateByDiff(context.Background(), st2)
+					slot = primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])) + math.PowerOf2(uint64(exponents[len(exponents)-1])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
 					require.NoError(t, err)
 
 					blk := util.NewBeaconBlock()
@@ -1551,7 +1563,7 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 					require.NoError(t, err)
 					require.NotNil(t, readSt)
 
-					stSSZ, err := st2.MarshalSSZ()
+					stSSZ, err := st.MarshalSSZ()
 					require.NoError(t, err)
 					readStSSZ, err := readSt.MarshalSSZ()
 					require.NoError(t, err)
