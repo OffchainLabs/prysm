@@ -68,15 +68,11 @@ func (a *Assigner) Assign(filter AssignmentFilter) ([]peer.ID, error) {
 	return filter(best), nil
 }
 
-// NotBusy is a filter that returns a list of peer.IDs with len() <= n, which are not in the `busy` map.
-// n == -1 will return all peers that are not busy.
-func NotBusy(busy map[peer.ID]bool, n int) AssignmentFilter {
+// NotBusy is a filter that returns the list of peer.IDs that are not in the `busy` map.
+func NotBusy(busy map[peer.ID]bool) AssignmentFilter {
 	return func(peers []peer.ID) []peer.ID {
-		ps := make([]peer.ID, 0)
+		ps := make([]peer.ID, 0, len(peers))
 		for _, p := range peers {
-			if n > 0 && len(ps) == n {
-				return ps
-			}
 			if !busy[p] {
 				ps = append(ps, p)
 			}

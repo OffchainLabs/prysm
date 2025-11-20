@@ -152,7 +152,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	if len(todo) == 0 {
 		return todo, nil
 	}
-	notBusy, err := pa.Assign(peers.NotBusy(busy, -1))
+	notBusy, err := pa.Assign(peers.NotBusy(busy))
 	if err != nil {
 		if errors.Is(err, peers.ErrInsufficientSuitable) {
 			// Transient error resulting from insufficient number of connected peers. Leave batches in
