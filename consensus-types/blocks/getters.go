@@ -679,7 +679,7 @@ func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	case version.Gloas:
 		pb := &eth.SignedBeaconBlockGloas{}
-		err := pb.UnmarshalSSZ(buf); 
+		err := pb.UnmarshalSSZ(buf)
 		if err != nil {
 			return err
 		}
