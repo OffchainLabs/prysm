@@ -10,8 +10,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/MariusVanDerWijden/FuzzyVM/filler"
-	txfuzz "github.com/MariusVanDerWijden/tx-fuzz"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -102,12 +100,6 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 	if err := ensureMinBalance(ctx, client, backend, mineKey, fundedAccount, minWei); err != nil {
 		return err
 	}
-	rnd := make([]byte, 10000)
-	_, err = mathRand.Read(rnd) // #nosec G404
-	if err != nil {
-		return err
-	}
-	f := filler.NewFiller(rnd)
 	// Broadcast Transactions every slot
 	txPeriod := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 	ticker := time.NewTicker(txPeriod)
@@ -121,7 +113,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendTransaction(client, mineKey.PrivateKey, f, gasPrice, mineKey.Address.String(), txCount, backend, false)
+			err = SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false)
 			if err != nil {
 				return err
 			}
@@ -135,7 +127,7 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 	return s.started
 }
 
-func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool) error {
+func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool) error {
 	sender := common.HexToAddress(addr)
 	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
 	if err != nil {
@@ -153,31 +145,23 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		gasPrice = expectedPrice
 	}
 
-	// Check if we're near or post-Fulu fork
+	// Check if we're post-Fulu fork
 	currentSlot := slots.CurrentSlot(e2e.TestParams.CLGenesisTime)
 	currentEpoch := slots.ToEpoch(currentSlot)
 	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-
-	// Stop sending blob transactions 1 epoch before Fulu fork to avoid execution client bug at fork boundary
-	nearFuluFork := fuluForkEpoch > 0 && currentEpoch == (fuluForkEpoch-1)
 	isPostFulu := currentEpoch >= fuluForkEpoch
 
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
 
-	// Send blob transactions - skip near fork boundary, use different versions pre/post Fulu
-	if nearFuluFork && !isPostFulu {
-		logrus.WithFields(logrus.Fields{
-			"currentEpoch":  currentEpoch,
-			"fuluForkEpoch": fuluForkEpoch,
-		}).Infof("Near Fulu fork boundary: Skipping blob transactions to avoid execution client bug")
-	} else if isPostFulu {
+	// Send blob transactions - use different versions pre/post Fulu
+	if isPostFulu {
 		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
 		for index := range uint64(5) {
 
 			g.Go(func() error {
-				tx, err := RandomBlobCellTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
+				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
 				if err != nil {
 					return errors.Wrap(err, "Could not create blob cell tx")
 				}
@@ -197,7 +181,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 		for index := range uint64(5) {
 
 			g.Go(func() error {
-				tx, err := RandomBlobTx(client, f, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
+				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
 				if err != nil {
 					logrus.WithError(err).Error("Could not create blob tx")
 					// In the event the transaction constructed is not valid, we continue with the routine
@@ -245,7 +229,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler
 	for index := range txCount {
 
 		g.Go(func() error {
-			tx, err := txfuzz.RandomValidTx(client, f, sender, nonce+index, gasPrice, chainid, al)
+			tx, err := randomValidTx(sender, nonce+index, gasPrice, chainid, al)
 			if err != nil {
 				// In the event the transaction constructed is not valid, we continue with the routine
 				// rather than complete stop it.
@@ -300,7 +284,7 @@ func (t *TransactionGenerator) Stop() error {
 	return nil
 }
 
-func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
+func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
@@ -323,19 +307,16 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 
 	gas := uint64(100000)
 	to := randomAddress()
-	code := txfuzz.RandomCode(f)
+	// Generate random EVM bytecode (similar to what tx-fuzz RandomCode did)
+	code := generateRandomEVMCode(mathRand.Intn(128)) // #nosec G404
 	value := big.NewInt(0)
-
-	if len(code) > 128 {
-		code = code[:128]
-	}
 
 	mod := 2
 	if al {
 		mod = 1
 	}
 
-	switch f.Byte() % byte(mod) {
+	switch mathRand.Intn(mod) { // #nosec G404
 	case 0:
 		// Blob transaction with cell proofs (Version 1 sidecar)
 		tip, feecap, err := getCaps(rpc, gasPrice)
@@ -391,7 +372,7 @@ func RandomBlobCellTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, 
 	return nil, nil
 }
 
-func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
+func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
@@ -412,16 +393,14 @@ func RandomBlobTx(rpc *rpc.Client, f *filler.Filler, sender common.Address, nonc
 	}
 	gas := uint64(100000)
 	to := randomAddress()
-	code := txfuzz.RandomCode(f)
+	// Generate random EVM bytecode (similar to what tx-fuzz RandomCode did)
+	code := generateRandomEVMCode(mathRand.Intn(128)) // #nosec G404
 	value := big.NewInt(0)
-	if len(code) > 128 {
-		code = code[:128]
-	}
 	mod := 2
 	if al {
 		mod = 1
 	}
-	switch f.Byte() % byte(mod) {
+	switch mathRand.Intn(mod) { // #nosec G404
 	case 0:
 		// 4844 transaction without AL
 
@@ -745,4 +724,131 @@ func fundAccount(client *rpc.Client, sourceKey, destKey *keystore.Key) error {
 		return err
 	}
 	return backend.SendTransaction(context.Background(), signedTx)
+}
+
+// generateRandomEVMCode generates random but valid-looking EVM bytecode
+// This mimics what tx-fuzz's RandomCode did (which used FuzzyVM's generator)
+func generateRandomEVMCode(maxLen int) []byte {
+	if maxLen == 0 {
+		return []byte{}
+	}
+
+	// Common EVM opcodes that are safe for testing
+	// Including: PUSH, DUP, SWAP, arithmetic, logic, and STOP
+	safeOpcodes := []byte{
+		0x00, // STOP
+		0x01, // ADD
+		0x02, // MUL
+		0x03, // SUB
+		0x04, // DIV
+		0x10, // LT
+		0x11, // GT
+		0x14, // EQ
+		0x16, // AND
+		0x17, // OR
+		0x18, // XOR
+		0x50, // POP
+		0x52, // MSTORE
+		0x54, // SLOAD
+		0x55, // SSTORE
+		0x56, // JUMP
+		0x57, // JUMPI
+		0x58, // PC
+		0x59, // MSIZE
+		0x5A, // GAS
+		0x60, // PUSH1
+		0x80, // DUP1
+		0x90, // SWAP1
+	}
+
+	code := make([]byte, 0, maxLen)
+	for i := 0; i < maxLen; i++ {
+		opcode := safeOpcodes[mathRand.Intn(len(safeOpcodes))] // #nosec G404
+		code = append(code, opcode)
+
+		// If PUSH1, add a random byte
+		if opcode == 0x60 && i+1 < maxLen {
+			code = append(code, byte(mathRand.Intn(256))) // #nosec G404
+			i++
+		}
+	}
+
+	return code
+}
+
+// randomValidTx generates a random valid transaction
+// This replaces tx-fuzz's RandomValidTx functionality
+func randomValidTx(sender common.Address, nonce uint64, gasPrice, chainID *big.Int, forceAccessList bool) (*types.Transaction, error) {
+	gas := uint64(21000 + mathRand.Intn(100000)) // #nosec G404
+	to := randomAddress()
+	code := generateRandomEVMCode(mathRand.Intn(256)) // #nosec G404
+	value := big.NewInt(0)
+
+	// Randomly choose transaction type
+	// 0: Legacy, 1: AccessList, 2: DynamicFee
+	txType := mathRand.Intn(3) // #nosec G404
+	if forceAccessList {
+		txType = 1 // Force AccessList type
+	}
+
+	switch txType {
+	case 0:
+		// Legacy transaction
+		return types.NewTx(&types.LegacyTx{
+			Nonce:    nonce,
+			To:       &to,
+			Value:    value,
+			Gas:      gas,
+			GasPrice: gasPrice,
+			Data:     code,
+		}), nil
+	case 1:
+		// AccessList transaction
+		accessList := make(types.AccessList, 0)
+		// Optionally add some random access list entries
+		if mathRand.Intn(2) == 0 { // #nosec G404
+			numEntries := mathRand.Intn(3) + 1 // #nosec G404
+			for range numEntries {
+				addr := randomAddress()
+				storageKeys := make([]common.Hash, mathRand.Intn(3)) // #nosec G404
+				for j := range storageKeys {
+					b := make([]byte, 32)
+					_, _ = mathRand.Read(b) // #nosec G404
+					storageKeys[j] = common.BytesToHash(b)
+				}
+				accessList = append(accessList, types.AccessTuple{
+					Address:     addr,
+					StorageKeys: storageKeys,
+				})
+			}
+		}
+		return types.NewTx(&types.AccessListTx{
+			ChainID:    chainID,
+			Nonce:      nonce,
+			To:         &to,
+			Value:      value,
+			Gas:        gas,
+			GasPrice:   gasPrice,
+			Data:       code,
+			AccessList: accessList,
+		}), nil
+	case 2:
+		// DynamicFee transaction (EIP-1559)
+		tip := new(big.Int).Div(gasPrice, big.NewInt(10)) // 10% tip
+		feeCap := new(big.Int).Add(gasPrice, tip)
+		accessList := make(types.AccessList, 0)
+		return types.NewTx(&types.DynamicFeeTx{
+			ChainID:    chainID,
+			Nonce:      nonce,
+			To:         &to,
+			Value:      value,
+			Gas:        gas,
+			GasTipCap:  tip,
+			GasFeeCap:  feeCap,
+			Data:       code,
+			AccessList: accessList,
+		}), nil
+	}
+
+	return nil, errors.New("invalid transaction type")
 }

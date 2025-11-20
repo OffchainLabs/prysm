@@ -512,16 +512,16 @@ def prysm_deps():
     go_repository(
         name = "com_github_consensys_bavard",
         importpath = "github.com/consensys/bavard",
-        sum = "h1:i2/ZeLXpp7eblPWzUIWf+dtfBocKQIxuiqy9XZlNSfQ=",
-        version = "v0.2.1",
+        sum = "h1:dTlIwEdFQmldzFf5F6bbTcYWhvnAgZai2g8eq3Wwxqg=",
+        version = "v0.1.31-0.20250406004941-2db259e4b582",
     )
     go_repository(
         name = "com_github_consensys_gnark_crypto",
         importpath = "github.com/consensys/gnark-crypto",
         patch_args = ["-p1"],
         patches = ["//third_party:com_github_consensys_gnark_crypto.patch"],
-        sum = "h1:qrEAIXq3T4egxqiliFFoNrepkIWVEeIYwt3UL0fvS80=",
-        version = "v0.19.2",
+        sum = "h1:vIye/FqI50VeAr0B3dx+YjeIvmc3LWz4yEfbWBpTUf0=",
+        version = "v0.18.0",
     )
     go_repository(
         name = "com_github_containerd_cgroups",
@@ -2112,23 +2112,6 @@ def prysm_deps():
         sum = "h1:3l11YT8tm9MnwGFQ4kETwkzpAwY2Jt9lCrumCUW4+z4=",
         version = "v0.7.0",
     )
-
-    go_repository(
-        name = "com_github_mariusvanderwijden_fuzzyvm",
-        importpath = "github.com/MariusVanDerWijden/FuzzyVM",
-        patches = [
-            "//third_party:com_github_mariusvanderwijden_fuzzyvm.patch",
-        ],
-        patch_args = ["-p1"],
-        sum = "h1:6whPVsgSup3YgoLC6mmfO3ZiTzjMSHGXIPElVFkED8I=",
-        version = "v0.0.0-20250605165815-58523f4fb4b1",
-    )
-    go_repository(
-        name = "com_github_mariusvanderwijden_tx_fuzz",
-        importpath = "github.com/MariusVanDerWijden/tx-fuzz",
-        sum = "h1:Tq4lXivsR8mtoP4RpasUDIUpDLHfN1YhFge/kzrzK78=",
-        version = "v1.4.0",
-    )
     go_repository(
         name = "com_github_marten_seemann_tcp",
         importpath = "github.com/marten-seemann/tcp",
@@ -3526,14 +3509,14 @@ def prysm_deps():
     go_repository(
         name = "com_github_wealdtech_go_eth2_wallet_encryptor_keystorev4",
         importpath = "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4",
-        sum = "h1:9j7bpwjT9wmwBb54ZkBhTm1uNIlFFcCJXefd/YskZPw=",
-        version = "v1.4.1",
+        sum = "h1:SxrDVSr+oXuT1x8kZt4uWqNCvv5xXEGV9zd7cuSrZS8=",
+        version = "v1.1.3",
     )
     go_repository(
         name = "com_github_wealdtech_go_eth2_wallet_types_v2",
         importpath = "github.com/wealdtech/go-eth2-wallet-types/v2",
-        sum = "h1:yX9+FfUXvPDvZ8Q5bhF+64AWrQwh4a3/HpfTx99DnZc=",
-        version = "v2.11.0",
+        sum = "h1:264/meVYWt1wFw6Mtn+xwkZkXjID42gNra4rycoiDXI=",
+        version = "v2.8.2",
     )
     go_repository(
         name = "com_github_wlynxg_anet",
