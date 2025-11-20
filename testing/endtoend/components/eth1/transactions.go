@@ -316,7 +316,8 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 		mod = 1
 	}
 
-	switch mathRand.Intn(mod) { // #nosec G404
+	// #nosec G404 -- Test code uses deterministic randomness
+	switch mathRand.Intn(mod) {
 	case 0:
 		// Blob transaction with cell proofs (Version 1 sidecar)
 		tip, feecap, err := getCaps(rpc, gasPrice)
@@ -400,7 +401,8 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 	if al {
 		mod = 1
 	}
-	switch mathRand.Intn(mod) { // #nosec G404
+	// #nosec G404 -- Test code uses deterministic randomness
+	switch mathRand.Intn(mod) {
 	case 0:
 		// 4844 transaction without AL
 
@@ -806,8 +808,10 @@ func randomValidTx(sender common.Address, nonce uint64, gasPrice, chainID *big.I
 		// AccessList transaction
 		accessList := make(types.AccessList, 0)
 		// Optionally add some random access list entries
-		if mathRand.Intn(2) == 0 { // #nosec G404
-			numEntries := mathRand.Intn(3) + 1 // #nosec G404
+		// #nosec G404 -- Test code uses deterministic randomness
+		if mathRand.Intn(2) == 0 {
+			// #nosec G404 -- Test code uses deterministic randomness
+			numEntries := mathRand.Intn(3) + 1
 			for range numEntries {
 				addr := randomAddress()
 				storageKeys := make([]common.Hash, mathRand.Intn(3)) // #nosec G404
