@@ -158,7 +158,8 @@ func (f *Filler) ByteSlice(items int) []byte {
 // ByteSlice256 returns a byteslice with 0..255 values.
 func (f *Filler) ByteSlice256() []byte {
 	length := f.Byte()
-	return f.ByteSlice(int(length))
+	size := int(uint(length))
+	return f.ByteSlice(size)
 }
 
 // Uint16 returns a new uint16.
