@@ -26,18 +26,18 @@ func (s batchState) String() string {
 		return "init"
 	case batchSequenced:
 		return "sequenced"
-	case batchErrRetryable:
-		return "error_retryable"
+	case batchSyncBlobs:
+		return "sync_blobs"
+	case batchSyncColumns:
+		return "sync_columns"
 	case batchImportable:
 		return "importable"
 	case batchImportComplete:
 		return "import_complete"
 	case batchEndSequence:
 		return "end_sequence"
-	case batchSyncBlobs:
-		return "sync_blobs"
-	case batchSyncColumns:
-		return "sync_columns"
+	case batchErrRetryable:
+		return "error_retryable"
 	case batchErrFatal:
 		return "error_fatal"
 	default:
@@ -49,12 +49,12 @@ const (
 	batchNil batchState = iota
 	batchInit
 	batchSequenced
-	batchErrRetryable
-	batchErrFatal // if this is received in the main loop, the worker pool will be shut down.
 	batchSyncBlobs
 	batchSyncColumns
 	batchImportable
 	batchImportComplete
+	batchErrRetryable
+	batchErrFatal // if this is received in the main loop, the worker pool will be shut down.
 	batchEndSequence
 )
 

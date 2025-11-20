@@ -15,16 +15,42 @@ var log = logrus.WithField("prefix", "backfill")
 // *one specific line of code*.
 type intervalLogger struct {
 	*logrus.Entry
+	base    *logrus.Entry
 	mux     sync.Mutex
 	seconds int64         // seconds is the number of seconds per logging interval
 	last    *atomic.Int64 // last is the quantized representation of the last time a log was emitted
+	now     func() time.Time
 }
 
 func newIntervalLogger(base *logrus.Entry, secondsBetweenLogs int64) *intervalLogger {
 	return &intervalLogger{
 		Entry:   base,
+		base:    base,
 		seconds: secondsBetweenLogs,
 		last:    new(atomic.Int64),
+		now:     time.Now,
+	}
+}
+
+// intervalNumber is a separate pure function because this helps tests determine
+// proposer timestamp alignment.
+func intervalNumber(t time.Time, seconds int64) int64 {
+	return t.Unix() / seconds
+}
+
+// intervalNumber is the integer division of the current unix timestamp
+// divided by the number of seconds per interval.
+func (l *intervalLogger) intervalNumber() int64 {
+	return intervalNumber(l.now(), l.seconds)
+}
+
+func (l *intervalLogger) copy() *intervalLogger {
+	return &intervalLogger{
+		Entry:   l.Entry,
+		base:    l.base,
+		seconds: l.seconds,
+		last:    l.last,
+		now:     l.now,
 	}
 }
 
@@ -32,32 +58,32 @@ func newIntervalLogger(base *logrus.Entry, secondsBetweenLogs int64) *intervalLo
 // when a log-level specific method (like Info(), Warn(), Error()) is invoked.
 // By intercepting this call we can rate limit how often we log.
 func (l *intervalLogger) Log(level logrus.Level, args ...interface{}) {
-	l.mux.Lock()
-	defer l.mux.Unlock()
-	// last is computed as the integer division of the current unix timestamp
-	// divided by the number of seconds per interval.
-	current := time.Now().Unix() / l.seconds
-	// If Swap yields a different value, then we haven't yet logged within
-	// the current window. Swap atomically sets the value so we can just
-	// delegate the call and we're done.
-	if l.last.Swap(current) != current {
+	n := l.intervalNumber()
+	// If Swap returns a different value that the current interval number, we haven't
+	// emitted a log yet this interval, so we can do so now.
+	if l.last.Swap(n) != n {
 		l.Entry.Log(level, args...)
 	}
+	// reset the Entry to the base so that any WithField/WithError calls
+	// don't persist across calls to Log()
 }
 
 func (l *intervalLogger) WithField(key string, value interface{}) *intervalLogger {
-	l.Entry = l.Entry.WithField(key, value)
-	return l
+	cp := l.copy()
+	cp.Entry = cp.Entry.WithField(key, value)
+	return cp
 }
 
 func (l *intervalLogger) WithFields(fields logrus.Fields) *intervalLogger {
-	l.Entry = l.Entry.WithFields(fields)
-	return l
+	cp := l.copy()
+	cp.Entry = cp.Entry.WithFields(fields)
+	return cp
 }
 
 func (l *intervalLogger) WithError(err error) *intervalLogger {
-	l.Entry = l.Entry.WithError(err)
-	return l
+	cp := l.copy()
+	cp.Entry = cp.Entry.WithError(err)
+	return cp
 }
 
 func (l *intervalLogger) Trace(args ...interface{}) {
