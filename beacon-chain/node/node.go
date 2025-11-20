@@ -663,6 +663,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		EnableUPnP:            cliCtx.Bool(cmd.EnableUPnPFlag.Name),
 		StateNotifier:         b,
 		DB:                    b.db,
+		StateGen:              b.stateGen,
 		ClockWaiter:           b.clockWaiter,
 	})
 	if err != nil {
