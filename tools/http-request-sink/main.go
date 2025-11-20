@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 )
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 	}()
 
 	http.HandleFunc("/", func(writer http.ResponseWriter, r *http.Request) {
-		reqContent := map[string]interface{}{}
+		reqContent := map[string]any{}
 		if err = parseRequest(r, &reqContent); err != nil {
 			log.Println(err)
 		}
@@ -59,7 +59,7 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-func captureRequest(f *os.File, m map[string]interface{}) error {
+func captureRequest(f *os.File, m map[string]any) error {
 	enc, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func captureRequest(f *os.File, m map[string]interface{}) error {
 	return err
 }
 
-func parseRequest(req *http.Request, unmarshalStruct interface{}) error {
+func parseRequest(req *http.Request, unmarshalStruct any) error {
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		return err

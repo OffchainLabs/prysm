@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
 	util "github.com/wealdtech/go-eth2-util"
@@ -66,7 +66,7 @@ func (km *Keymanager) RecoverAccountsFromMnemonic(
 	}
 	privKeys := make([][]byte, numAccounts)
 	pubKeys := make([][]byte, numAccounts)
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		privKey, err := util.PrivateKeyFromSeedAndPath(
 			seed, fmt.Sprintf(ValidatingKeyDerivationPathTemplate, i),
 		)
@@ -156,7 +156,7 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 	} else {
 		fmt.Printf("Showing %d validator accounts\n", len(accountNames))
 	}
-	for i := 0; i < len(accountNames); i++ {
+	for i := range accountNames {
 		fmt.Println("")
 		validatingKeyPath := fmt.Sprintf(ValidatingKeyDerivationPathTemplate, i)
 

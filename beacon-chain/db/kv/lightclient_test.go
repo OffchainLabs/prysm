@@ -5,18 +5,18 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	light_client "github.com/OffchainLabs/prysm/v6/consensus-types/light-client"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	light_client "github.com/OffchainLabs/prysm/v7/consensus-types/light-client"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 )
@@ -29,14 +29,14 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	var err error
 
 	sampleRoot := make([]byte, 32)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		sampleRoot[i] = byte(i)
 	}
 
 	sampleExecutionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		sampleExecutionBranch[i] = make([]byte, 32)
-		for j := 0; j < 32; j++ {
+		for j := range 32 {
 			sampleExecutionBranch[i][j] = byte(i + j)
 		}
 	}
@@ -215,8 +215,7 @@ func TestStore_LightClientUpdate_CanSaveRetrieve(t *testing.T) {
 
 	db := setupDB(t)
 	ctx := t.Context()
-
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			update, err := createUpdate(t, testVersion)
 			require.NoError(t, err)
@@ -461,7 +460,7 @@ func createDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
+	for i := range syncCommitteeSize {
 		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	nextSyncCommittee := &pb.SyncCommittee{
@@ -480,7 +479,7 @@ func createDefaultLightClientUpdate(currentSlot primitives.Slot, attestedState s
 	}
 
 	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+	for i := range fieldparams.ExecutionBranchDepth {
 		executionBranch[i] = make([]byte, 32)
 	}
 
@@ -572,8 +571,7 @@ func TestStore_LightClientBootstrap_CanSaveRetrieve(t *testing.T) {
 		require.NoError(t, err)
 		require.IsNil(t, retrievedBootstrap)
 	})
-
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			bootstrap, err := createDefaultLightClientBootstrap(primitives.Slot(uint64(params.BeaconConfig().VersionToForkEpochMap()[testVersion]) * uint64(params.BeaconConfig().SlotsPerEpoch)))
 			require.NoError(t, err)
@@ -733,7 +731,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	currentEpoch := slots.ToEpoch(currentSlot)
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
+	for i := range syncCommitteeSize {
 		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	currentSyncCommittee := &pb.SyncCommittee{
@@ -752,7 +750,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	}
 
 	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+	for i := range fieldparams.ExecutionBranchDepth {
 		executionBranch[i] = make([]byte, 32)
 	}
 

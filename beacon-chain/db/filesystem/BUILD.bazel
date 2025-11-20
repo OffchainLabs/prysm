@@ -17,7 +17,7 @@ go_library(
         "mock.go",
         "pruner.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem",
     visibility = ["//visibility:public"],
     deps = [
         "//async:go_default_library",

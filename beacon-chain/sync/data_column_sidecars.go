@@ -3,24 +3,25 @@ package sync
 import (
 	"bytes"
 	"context"
+	"maps"
 	"slices"
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -129,9 +130,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
 	}
 
-	for root, sidecars := range mergedSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, mergedSidecarsByRoot)
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers")
@@ -150,9 +149,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
 	}
 
-	for root, sidecars := range mergedSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, mergedSidecarsByRoot)
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers using rescue mode")
@@ -165,9 +162,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "assemble available sidecars for incomplete roots")
 	}
 
-	for root, sidecars := range incompleteSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, incompleteSidecarsByRoot)
 
 	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
@@ -1159,9 +1154,7 @@ func copyIndicesByRoot(original map[[fieldparams.RootLength]byte]map[uint64]bool
 	copied := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(original))
 	for root, indexMap := range original {
 		copied[root] = make(map[uint64]bool, len(indexMap))
-		for index, value := range indexMap {
-			copied[root][index] = value
-		}
+		maps.Copy(copied[root], indexMap)
 	}
 	return copied
 }

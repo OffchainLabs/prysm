@@ -44,6 +44,7 @@ const (
 	MaxAttesterSlashingsElectra           = 1                 // Maximum number of attester slashings in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // MaxRandomByte defines max for a random byte using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // MaxRandomValueElectra defines max for a random value using for proposer and sync committee sampling.
+	BuilderPendingWithdrawalsLimit        = 1048576           // Maximum number of builder pending withdrawals.
 
 	// Introduced in Fulu network upgrade.
 	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.

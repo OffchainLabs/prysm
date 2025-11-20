@@ -8,7 +8,7 @@ go_library(
         "type.go",
         "util.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz/query/testutil",
+    importpath = "github.com/OffchainLabs/prysm/v7/encoding/ssz/query/testutil",
     visibility = ["//visibility:public"],
     deps = [
         "//encoding/ssz/query:go_default_library",

@@ -3,7 +3,7 @@ package filesystem
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/pkg/errors"
 )
 

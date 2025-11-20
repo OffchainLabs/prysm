@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/client"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )

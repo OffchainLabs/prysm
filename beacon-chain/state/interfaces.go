@@ -8,14 +8,14 @@ import (
 	"encoding/json"
 	"time"
 
-	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
+	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // BeaconState has read and write access to beacon state methods.
@@ -63,8 +63,8 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
-	ToProtoUnsafe() interface{}
-	ToProto() interface{}
+	ToProtoUnsafe() any
+	ToProto() any
 	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte
 	Slot() primitives.Slot
@@ -266,6 +266,8 @@ type WriteOnlyEth1Data interface {
 	SetEth1DepositIndex(val uint64) error
 	ExitEpochAndUpdateChurn(exitBalance primitives.Gwei) (primitives.Epoch, error)
 	ExitEpochAndUpdateChurnForTotalBal(totalActiveBalance primitives.Gwei, exitBalance primitives.Gwei) (primitives.Epoch, error)
+	SetExitBalanceToConsume(val primitives.Gwei) error
+	SetEarliestExitEpoch(val primitives.Epoch) error
 }
 
 // WriteOnlyValidators defines a struct which only has write access to validators methods.
@@ -333,6 +335,7 @@ type WriteOnlyWithdrawals interface {
 	DequeuePendingPartialWithdrawals(num uint64) error
 	SetNextWithdrawalIndex(i uint64) error
 	SetNextWithdrawalValidatorIndex(i primitives.ValidatorIndex) error
+	SetPendingPartialWithdrawals(val []*ethpb.PendingPartialWithdrawal) error
 }
 
 type WriteOnlyConsolidations interface {

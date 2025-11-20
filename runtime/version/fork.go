@@ -14,6 +14,7 @@ const (
 	Deneb
 	Electra
 	Fulu
+	Gloas
 )
 
 var versionToString = map[int]string{

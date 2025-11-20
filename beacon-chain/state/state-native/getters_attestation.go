@@ -1,8 +1,8 @@
 package state_native
 
 import (
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // PreviousEpochAttestations corresponding to blocks on the beacon chain.
@@ -29,7 +29,7 @@ func (b *BeaconState) previousEpochAttestationsVal() []*ethpb.PendingAttestation
 	}
 
 	res := make([]*ethpb.PendingAttestation, len(b.previousEpochAttestations))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i] = b.previousEpochAttestations[i].Copy()
 	}
 	return res
@@ -59,7 +59,7 @@ func (b *BeaconState) currentEpochAttestationsVal() []*ethpb.PendingAttestation 
 	}
 
 	res := make([]*ethpb.PendingAttestation, len(b.currentEpochAttestations))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i] = b.currentEpochAttestations[i].Copy()
 	}
 	return res

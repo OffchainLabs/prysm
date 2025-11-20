@@ -6,25 +6,25 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assertions"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assertions"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
@@ -279,7 +279,7 @@ func generateProposerSlashings(
 	numSlashings uint64,
 ) ([]*ethpb.ProposerSlashing, error) {
 	proposerSlashings := make([]*ethpb.ProposerSlashing, numSlashings)
-	for i := uint64(0); i < numSlashings; i++ {
+	for i := range numSlashings {
 		proposerIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err
@@ -407,7 +407,7 @@ func generateAttesterSlashings(
 ) ([]ethpb.AttSlashing, error) {
 	attesterSlashings := make([]ethpb.AttSlashing, numSlashings)
 	randGen := rand.NewDeterministicGenerator()
-	for i := uint64(0); i < numSlashings; i++ {
+	for i := range numSlashings {
 		committeeIndex := randGen.Uint64() % helpers.SlotCommitteeCount(uint64(bState.NumValidators()))
 		committee, err := helpers.BeaconCommitteeFromState(context.Background(), bState, bState.Slot(), primitives.CommitteeIndex(committeeIndex))
 		if err != nil {
@@ -625,7 +625,7 @@ func HydrateV1BeaconBlockBody(b *v1.BeaconBlockBody) *v1.BeaconBlockBody {
 	return b
 }
 
-func SaveBlock(tb assertions.AssertionTestingTB, ctx context.Context, db iface.NoHeadAccessDatabase, b interface{}) interfaces.SignedBeaconBlock {
+func SaveBlock(tb assertions.AssertionTestingTB, ctx context.Context, db iface.NoHeadAccessDatabase, b any) interfaces.SignedBeaconBlock {
 	wsb, err := blocks.NewSignedBeaconBlock(b)
 	require.NoError(tb, err)
 	require.NoError(tb, db.SaveBlock(ctx, wsb))
@@ -1293,7 +1293,7 @@ func generateWithdrawals(
 	numWithdrawals uint64,
 ) ([]*enginev1.Withdrawal, error) {
 	withdrawalRequests := make([]*enginev1.Withdrawal, numWithdrawals)
-	for i := uint64(0); i < numWithdrawals; i++ {
+	for i := range numWithdrawals {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err

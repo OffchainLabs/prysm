@@ -3,13 +3,13 @@ package altair
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/pkg/errors"
 )
 
@@ -122,11 +122,8 @@ func ProcessInactivityScores(
 		}
 
 		if !helpers.IsInInactivityLeak(prevEpoch, finalizedEpoch) {
-			score := recoveryRate
 			// Prevents underflow below 0.
-			if score > v.InactivityScore {
-				score = v.InactivityScore
-			}
+			score := min(recoveryRate, v.InactivityScore)
 			v.InactivityScore -= score
 		}
 		inactivityScores[i] = v.InactivityScore
@@ -242,7 +239,7 @@ func ProcessRewardsAndPenaltiesPrecompute(
 	}
 
 	balances := beaconState.Balances()
-	for i := 0; i < numOfVals; i++ {
+	for i := range numOfVals {
 		vals[i].BeforeEpochTransitionBalance = balances[i]
 
 		// Compute the post balance of the validator after accounting for the

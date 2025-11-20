@@ -65,7 +65,7 @@ func (m mode) ErrorFound() error {
 	return nil
 }
 
-func run(pass *analysis.Pass) (interface{}, error) {
+func run(pass *analysis.Pass) (any, error) {
 	inspectResult, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	if !ok {
 		return nil, errors.New("analyzer is not type *inspector.Inspector")
@@ -163,7 +163,7 @@ func stmtSelector(node ast.Node, pass *analysis.Pass, keepTrackOf *tracker, insp
 		}
 	case *ast.IfStmt:
 		stmts := stmt.Body.List
-		for i := 0; i < len(stmts); i++ {
+		for i := range stmts {
 			keepTrackOf = stmtSelector(stmts[i], pass, keepTrackOf, inspect)
 		}
 		keepTrackOf = stmtSelector(stmt.Else, pass, keepTrackOf, inspect)

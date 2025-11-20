@@ -3,12 +3,12 @@ package initialsync
 import (
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 const (
@@ -48,7 +48,7 @@ type stateMachine struct {
 }
 
 // eventHandlerFn is an event handler function's signature.
-type eventHandlerFn func(m *stateMachine, data interface{}) (newState stateID, err error)
+type eventHandlerFn func(m *stateMachine, data any) (newState stateID, err error)
 
 // newStateMachineManager returns fully initialized state machine manager.
 func newStateMachineManager() *stateMachineManager {
@@ -110,9 +110,7 @@ func (smm *stateMachineManager) recalculateMachineAttribs() {
 	for key := range smm.machines {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		return keys[i] < keys[j]
-	})
+	slices.Sort(keys)
 	smm.keys = keys
 }
 
@@ -159,7 +157,7 @@ func (m *stateMachine) setState(name stateID) {
 }
 
 // trigger invokes the event handler on a given state machine.
-func (m *stateMachine) trigger(event eventID, data interface{}) error {
+func (m *stateMachine) trigger(event eventID, data any) error {
 	handlers, ok := m.smm.handlers[m.state]
 	if !ok {
 		return fmt.Errorf("no event handlers registered for event: %v, state: %v", event, m.state)

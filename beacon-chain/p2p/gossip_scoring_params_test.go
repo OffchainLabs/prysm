@@ -3,12 +3,12 @@ package p2p
 import (
 	"testing"
 
-	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
@@ -26,7 +26,7 @@ func TestCorrect_ActiveValidatorsCount(t *testing.T) {
 	}
 	bState, err := util.NewBeaconState(func(state *ethpb.BeaconState) error {
 		validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			validators[i] = &ethpb.Validator{
 				PublicKey:             make([]byte, 48),
 				WithdrawalCredentials: make([]byte, 32),
@@ -43,7 +43,7 @@ func TestCorrect_ActiveValidatorsCount(t *testing.T) {
 	vals, err := s.retrieveActiveValidators()
 	assert.NoError(t, err, "genesis state not retrieved")
 	assert.Equal(t, int(params.BeaconConfig().MinGenesisActiveValidatorCount), int(vals), "mainnet genesis active count isn't accurate")
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		require.NoError(t, bState.AppendValidator(&ethpb.Validator{
 			PublicKey:             make([]byte, 48),
 			WithdrawalCredentials: make([]byte, 32),

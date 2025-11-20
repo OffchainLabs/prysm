@@ -3,8 +3,8 @@ package validators_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 func TestSlashingParamsPerVersion_NoErrors(t *testing.T) {

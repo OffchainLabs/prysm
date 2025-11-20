@@ -3,11 +3,11 @@ package state_native
 import (
 	"errors"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // SetNextWithdrawalIndex sets the index that will be assigned to the next withdrawal.
@@ -97,6 +97,27 @@ func (b *BeaconState) DequeuePendingPartialWithdrawals(n uint64) error {
 
 	b.markFieldAsDirty(types.PendingPartialWithdrawals)
 	b.rebuildTrie[types.PendingPartialWithdrawals] = true
+
+	return nil
+}
+
+// SetPendingPartialWithdrawals sets the pending partial withdrawals. This method mutates the state.
+func (b *BeaconState) SetPendingPartialWithdrawals(pendingPartialWithdrawals []*eth.PendingPartialWithdrawal) error {
+	if b.version < version.Electra {
+		return errNotSupported("SetPendingPartialWithdrawals", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	if pendingPartialWithdrawals == nil {
+		return errors.New("cannot set nil pending partial withdrawals")
+	}
+	b.sharedFieldReferences[types.PendingPartialWithdrawals].MinusRef()
+	b.sharedFieldReferences[types.PendingPartialWithdrawals] = stateutil.NewRef(1)
+
+	b.pendingPartialWithdrawals = pendingPartialWithdrawals
+	b.markFieldAsDirty(types.PendingPartialWithdrawals)
 
 	return nil
 }

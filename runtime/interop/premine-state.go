@@ -4,20 +4,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 )
@@ -28,7 +28,7 @@ type PremineGenesisConfig struct {
 	GenesisTime     time.Time
 	NVals           uint64
 	PregenesisCreds uint64
-	Version         int          // as in "github.com/OffchainLabs/prysm/v6/runtime/version"
+	Version         int          // as in "github.com/OffchainLabs/prysm/v7/runtime/version"
 	GB              *types.Block // geth genesis block
 	depositEntries  *depositEntries
 }
@@ -372,7 +372,7 @@ func (s *PremineGenesisConfig) setInactivityScores(g state.BeaconState) error {
 	}
 	scoresMissing := len(g.Validators()) - len(scores)
 	if scoresMissing > 0 {
-		for i := 0; i < scoresMissing; i++ {
+		for range scoresMissing {
 			scores = append(scores, 0)
 		}
 	}
@@ -390,7 +390,7 @@ func (s *PremineGenesisConfig) setCurrentEpochParticipation(g state.BeaconState)
 	}
 	missing := len(g.Validators()) - len(p)
 	if missing > 0 {
-		for i := 0; i < missing; i++ {
+		for range missing {
 			p = append(p, 0)
 		}
 	}
@@ -408,7 +408,7 @@ func (s *PremineGenesisConfig) setPrevEpochParticipation(g state.BeaconState) er
 	}
 	missing := len(g.Validators()) - len(p)
 	if missing > 0 {
-		for i := 0; i < missing; i++ {
+		for range missing {
 			p = append(p, 0)
 		}
 	}
@@ -755,7 +755,7 @@ func unwrapUint64Ptr(u *uint64) uint64 {
 func nZeroRoots(n uint64) [][]byte {
 	roots := make([][]byte, n)
 	zh := params.BeaconConfig().ZeroHash[:]
-	for i := uint64(0); i < n; i++ {
+	for i := range n {
 		roots[i] = zh
 	}
 	return roots
@@ -763,7 +763,7 @@ func nZeroRoots(n uint64) [][]byte {
 
 func nSetRoots(n uint64, r []byte) [][]byte {
 	roots := make([][]byte, n)
-	for i := uint64(0); i < n; i++ {
+	for i := range n {
 		h := make([]byte, 32)
 		copy(h, r)
 		roots[i] = h
