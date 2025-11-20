@@ -144,7 +144,7 @@ func (b *SignedBeaconBlock) SetSyncAggregate(s *eth.SyncAggregate) error {
 // SetExecution sets the execution payload of the block body.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetExecution(e interfaces.ExecutionData) error {
-	if b.version == version.Phase0 || b.version == version.Altair {
+	if b.version == version.Phase0 || b.version == version.Altair || b.version >= version.Gloas {
 		return consensus_types.ErrNotSupported("Execution", b.version)
 	}
 	if e.IsBlinded() {
@@ -176,7 +176,7 @@ func (b *SignedBeaconBlock) SetBlobKzgCommitments(c [][]byte) error {
 
 // SetExecutionRequests sets the execution requests in the block.
 func (b *SignedBeaconBlock) SetExecutionRequests(req *enginev1.ExecutionRequests) error {
-	if b.version < version.Electra {
+	if b.version < version.Electra || b.version >= version.Gloas {
 		return consensus_types.ErrNotSupported("SetExecutionRequests", b.version)
 	}
 	b.block.body.executionRequests = req

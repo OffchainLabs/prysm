@@ -5,6 +5,7 @@ import (
 
 	bitfield "github.com/OffchainLabs/go-bitfield"
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -68,6 +69,28 @@ func TestSignedBeaconBlock_SetSignedExecutionPayloadBid(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, payloadBid, sb.block.body.signedExecutionPayloadBid)
+	})
+}
+
+func TestSignedBeaconBlock_SetExecution(t *testing.T) {
+	t.Run("rejects Gloas version", func(t *testing.T) {
+		sb := newTestSignedBeaconBlock(version.Gloas)
+		payload := &enginev1.ExecutionPayload{}
+		wrapped, err := WrappedExecutionPayload(payload)
+		require.NoError(t, err)
+
+		err = sb.SetExecution(wrapped)
+		require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
+	})
+}
+
+func TestSignedBeaconBlock_SetExecutionRequests(t *testing.T) {
+	t.Run("rejects Gloas version", func(t *testing.T) {
+		sb := newTestSignedBeaconBlock(version.Gloas)
+		requests := &enginev1.ExecutionRequests{}
+
+		err := sb.SetExecutionRequests(requests)
+		require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
 	})
 }
 

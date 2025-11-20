@@ -571,12 +571,21 @@ func TestBuildSignedBeaconBlockFromExecutionPayload(t *testing.T) {
 		require.DeepEqual(t, uint64(123), payload.ExcessBlobGas)
 		require.DeepEqual(t, uint64(321), payload.BlobGasUsed)
 	})
-	t.Run("gloas unsupported", func(t *testing.T) {
-		blk := &SignedBeaconBlock{
+	t.Run("gloas execution unsupported", func(t *testing.T) {
+		base := &SignedBeaconBlock{
 			version: version.Gloas,
 			block:   &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}},
 		}
-		_, err := BuildSignedBeaconBlockFromExecutionPayload(blk, nil)
-		require.ErrorIs(t, err, errNonBlindedSignedBeaconBlock)
+		blinded := &testBlindedSignedBeaconBlock{SignedBeaconBlock: base}
+		_, err := BuildSignedBeaconBlockFromExecutionPayload(blinded, nil)
+		require.ErrorContains(t, "Execution is not supported for gloas", err)
 	})
+}
+
+type testBlindedSignedBeaconBlock struct {
+	*SignedBeaconBlock
+}
+
+func (b *testBlindedSignedBeaconBlock) IsBlinded() bool {
+	return true
 }

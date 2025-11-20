@@ -57,8 +57,8 @@ type BeaconBlockBody struct {
 	blsToExecutionChanges     []*eth.SignedBLSToExecutionChange
 	blobKzgCommitments        [][]byte
 	executionRequests         *enginev1.ExecutionRequests
-	payloadAttestations       []*eth.PayloadAttestation
 	signedExecutionPayloadBid *eth.SignedExecutionPayloadBid
+	payloadAttestations       []*eth.PayloadAttestation
 }
 
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

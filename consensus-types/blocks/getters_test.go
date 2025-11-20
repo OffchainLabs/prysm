@@ -503,6 +503,32 @@ func Test_BeaconBlockBody_Execution(t *testing.T) {
 	gas, err = eDenebHeader.ExcessBlobGas()
 	require.NoError(t, err)
 	require.DeepEqual(t, gas, uint64(223))
+
+	bb = &SignedBeaconBlock{version: version.Gloas, block: &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}}}
+	_, err = bb.Block().Body().Execution()
+	require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
+}
+
+func Test_BeaconBlockBody_ExecutionRequests(t *testing.T) {
+	t.Run("unsupported before Electra", func(t *testing.T) {
+		bb := &BeaconBlockBody{version: version.Deneb}
+		_, err := bb.ExecutionRequests()
+		require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
+	})
+
+	t.Run("electra returns requests", func(t *testing.T) {
+		reqs := &pb.ExecutionRequests{}
+		bb := &BeaconBlockBody{version: version.Electra, executionRequests: reqs}
+		result, err := bb.ExecutionRequests()
+		require.NoError(t, err)
+		require.Equal(t, reqs, result)
+	})
+
+	t.Run("unsupported for Gloas", func(t *testing.T) {
+		bb := &BeaconBlockBody{version: version.Gloas}
+		_, err := bb.ExecutionRequests()
+		require.ErrorIs(t, err, consensus_types.ErrUnsupportedField)
+	})
 }
 
 func Test_BeaconBlockBody_HashTreeRoot(t *testing.T) {

@@ -1579,8 +1579,8 @@ func initBlockBodyFromProtoGloas(pb *eth.BeaconBlockBodyGloas) (*BeaconBlockBody
 		deposits:                  pb.Deposits,
 		voluntaryExits:            pb.VoluntaryExits,
 		syncAggregate:             pb.SyncAggregate,
-		signedExecutionPayloadBid: pb.SignedExecutionPayloadBid,
 		blsToExecutionChanges:     pb.BlsToExecutionChanges,
+		signedExecutionPayloadBid: pb.SignedExecutionPayloadBid,
 		payloadAttestations:       pb.PayloadAttestations,
 	}
 	return b, nil

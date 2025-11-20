@@ -679,10 +679,10 @@ func (b *SignedBeaconBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	case version.Gloas:
 		pb := &eth.SignedBeaconBlockGloas{}
-		if err := pb.UnmarshalSSZ(buf); err != nil {
+		err := pb.UnmarshalSSZ(buf); 
+		if err != nil {
 			return err
 		}
-		var err error
 		newBlock, err = initSignedBlockFromProtoGloas(pb)
 		if err != nil {
 			return err
@@ -1243,7 +1243,7 @@ func (b *BeaconBlockBody) SyncAggregate() (*eth.SyncAggregate, error) {
 // Execution returns the execution payload of the block body.
 func (b *BeaconBlockBody) Execution() (interfaces.ExecutionData, error) {
 	switch b.version {
-	case version.Phase0, version.Altair:
+	case version.Phase0, version.Altair, version.Gloas:
 		return nil, consensus_types.ErrNotSupported("Execution", b.version)
 	default:
 		if b.IsBlinded() {
@@ -1275,7 +1275,7 @@ func (b *BeaconBlockBody) BlobKzgCommitments() ([][]byte, error) {
 
 // ExecutionRequests returns the execution requests
 func (b *BeaconBlockBody) ExecutionRequests() (*enginev1.ExecutionRequests, error) {
-	if b.version < version.Electra {
+	if b.version < version.Electra || b.version >= version.Gloas {
 		return nil, consensus_types.ErrNotSupported("ExecutionRequests", b.version)
 	}
 	return b.executionRequests, nil
