@@ -21,7 +21,7 @@ linters:
       - .*_test.go
       - proto
       - tools/analyzers
-      - third_party$
+      - third_party/.*
       - builtin$
       - examples$
 
@@ -36,6 +36,6 @@ formatters:
       - .*_test.go
       - proto
       - tools/analyzers
-      - third_party$
+      - third_party/.*
       - builtin$
       - examples$
