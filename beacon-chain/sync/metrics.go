@@ -241,6 +241,12 @@ var (
 		Name: "custody_earliest_available_slot_db",
 		Help: "The earliest available slot tracked by the database for custody purposes",
 	})
+
+	// Custody group count metric
+	custodyGroupCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "beacon_custody_group_count",
+		Help: "Current custody group count (CGC) for the node",
+	})
 )
 
 func (s *Service) updateMetrics() {

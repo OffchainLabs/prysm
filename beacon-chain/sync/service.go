@@ -182,6 +182,10 @@ type Service struct {
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
+	// Grace period fields for CGC changes
+	pendingCGC                       uint64
+	pendingCGCDeadline               time.Time
+	pendingCGCLock                   sync.RWMutex
 }
 
 // NewService initializes new regular sync service.
