@@ -695,9 +695,9 @@ func TestSamplingSize(t *testing.T) {
 		resetFlags := flags.Get()
 		defer flags.Init(resetFlags)
 
-		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
-		flags.Init(gFlags)
+		// Set custody count to all groups (simulating what updateCustodyInfoInDB() does for supernode)
+		_, _, err := p2pService.UpdateCustodyInfo(0, cfg.NumberOfCustodyGroups)
+		require.NoError(t, err)
 
 		s := &Service{
 			ctx: ctx,
@@ -709,19 +709,17 @@ func TestSamplingSize(t *testing.T) {
 
 		size, err := s.samplingSize()
 		require.NoError(t, err)
-		require.Equal(t, cfg.DataColumnSidecarSubnetCount, size) // Should be 128
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount, size) // Should be 128 based on custody count
 	})
 
 	t.Run("semi-supernode with low validator requirements returns 64", func(t *testing.T) {
 		resetFlags := flags.Get()
 		defer flags.Init(resetFlags)
 
-		gFlags := new(flags.GlobalFlags)
-		gFlags.SemiSupernode = true
-		flags.Init(gFlags)
-
-		// Set custody count to a low value (e.g., 8 for 1 validator)
-		_, _, err := p2pService.UpdateCustodyInfo(0, 8)
+		// Set custody count to semi-supernode minimum (64)
+		// This simulates what updateCustodyInfoInDB() does for semi-supernode with low validator count
+		semiSupernodeCustody := cfg.DataColumnSidecarSubnetCount / 2
+		_, _, err := p2pService.UpdateCustodyInfo(0, semiSupernodeCustody)
 		require.NoError(t, err)
 
 		s := &Service{
@@ -734,18 +732,16 @@ func TestSamplingSize(t *testing.T) {
 
 		size, err := s.samplingSize()
 		require.NoError(t, err)
-		require.Equal(t, cfg.DataColumnSidecarSubnetCount/2, size) // Should be 64
+		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
 	})
 
-	t.Run("semi-supernode with high validator requirements returns higher value and warns", func(t *testing.T) {
+	t.Run("semi-supernode with high validator requirements returns higher value", func(t *testing.T) {
 		resetFlags := flags.Get()
 		defer flags.Init(resetFlags)
 
-		gFlags := new(flags.GlobalFlags)
-		gFlags.SemiSupernode = true
-		flags.Init(gFlags)
-
-		// Set custody count to a high value (e.g., 100 validators)
+		// Set custody count to a high value (e.g., 100)
+		// This simulates what updateCustodyInfoInDB() would set after determining
+		// that validator requirements exceed the semi-supernode minimum
 		highCustodyCount := uint64(100)
 		_, _, err := p2pService.UpdateCustodyInfo(0, highCustodyCount)
 		require.NoError(t, err)
@@ -758,27 +754,20 @@ func TestSamplingSize(t *testing.T) {
 			},
 		}
 
-		// Capture logs
-		hook := logTest.NewGlobal()
-
 		size, err := s.samplingSize()
 		require.NoError(t, err)
-		require.Equal(t, highCustodyCount, size) // Should return the higher custody count
-
-		// Check for warning log
-		assert.LogsContain(t, hook, "Validator custody requirement exceeds semi-supernode minimum")
+		require.Equal(t, highCustodyCount, size) // Should return the higher custody count based on custody
+		// Note: Warning is logged in updateCustodyInfoInDB(), not here
 	})
 
-	t.Run("semi-supernode downgrade prevention from database", func(t *testing.T) {
+	t.Run("custody count is source of truth", func(t *testing.T) {
 		resetFlags := flags.Get()
 		defer flags.Init(resetFlags)
 
-		// First, enable semi-supernode mode
-		gFlags := new(flags.GlobalFlags)
-		gFlags.SemiSupernode = true
-		flags.Init(gFlags)
-
-		_, _, err := p2pService.UpdateCustodyInfo(0, 8)
+		// Set custody count directly (simulating what updateCustodyInfoInDB() does)
+		// For semi-supernode mode, this would be 64
+		semiSupernodeCustody := cfg.DataColumnSidecarSubnetCount / 2
+		_, _, err := p2pService.UpdateCustodyInfo(0, semiSupernodeCustody)
 		require.NoError(t, err)
 
 		s := &Service{
@@ -789,19 +778,11 @@ func TestSamplingSize(t *testing.T) {
 			},
 		}
 
-		// First call sets semi-supernode in DB
+		// samplingSize() should use custody count regardless of flags
 		size, err := s.samplingSize()
 		require.NoError(t, err)
-		require.Equal(t, cfg.DataColumnSidecarSubnetCount/2, size) // Should be 64
-
-		// Now disable the flag
-		gFlags.SemiSupernode = false
-		flags.Init(gFlags)
-
-		// Should still return 64 due to database persistence
-		size, err = s.samplingSize()
-		require.NoError(t, err)
-		require.Equal(t, cfg.DataColumnSidecarSubnetCount/2, size) // Should still be 64
+		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
+		// Note: Downgrade prevention is handled in updateCustodyInfoInDB(), not here
 	})
 }
 

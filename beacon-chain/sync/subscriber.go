@@ -692,15 +692,11 @@ func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 }
 
 // samplingSize computes the sampling size based on the samples per slot value,
-// the validators custody requirement, and whether the node is subscribed to all data subnets.
+// the validators custody requirement, and the custody group count.
+// The custody group count is the source of truth and already includes supernode/semi-supernode logic.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
 func (s *Service) samplingSize() (uint64, error) {
 	cfg := params.BeaconConfig()
-
-	// Supernode subscribes to all subnets.
-	if flags.Get().SubscribeAllDataSubnets {
-		return cfg.DataColumnSidecarSubnetCount, nil
-	}
 
 	// Compute the validators custody requirement.
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
@@ -708,41 +704,17 @@ func (s *Service) samplingSize() (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
+	// Get custody group count - this is the source of truth and already reflects:
+	// - Supernode mode: 128 groups
+	// - Semi-supernode mode: 64 groups (or more if validators require)
+	// - Regular mode: validator custody requirement
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "custody group count")
 	}
 
-	requiredSampling := max(cfg.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount)
-
-	// Semi-supernode subscribes to at least half (64 subnets - minimum needed to reconstruct),
-	// but will subscribe to more if validator requirements exceed that.
-	// Check database for downgrade prevention.
-	wasSemiSupernode := false
-	if s.cfg.beaconDB != nil {
-		var err error
-		wasSemiSupernode, err = s.cfg.beaconDB.UpdateSemiSupernode(s.ctx, flags.Get().SemiSupernode)
-		if err != nil {
-			log.WithError(err).Error("Could not update semi-supernode status")
-		}
-	}
-	// If we're not a (current or former) semi-supernode, just use requiredSampling.
-	if !flags.Get().SemiSupernode && !wasSemiSupernode {
-		return requiredSampling, nil
-	}
-
-	// Semi-supernode path.
-	semiSupernodeMin := cfg.DataColumnSidecarSubnetCount / 2
-	if requiredSampling <= semiSupernodeMin {
-		return semiSupernodeMin, nil
-	}
-
-	// If required sampling is higher than semi-supernode target, use it.
-	log.WithFields(logrus.Fields{
-		"requiredSampling": requiredSampling,
-		"semiSupernodeMin": semiSupernodeMin,
-	}).Warn("Validator custody requirement exceeds semi-supernode minimum; Subscribing to additional subnets.")
-	return requiredSampling, nil
+	// Sampling size should match custody to ensure we can serve what we advertise
+	return max(cfg.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount), nil
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) map[uint64]bool {

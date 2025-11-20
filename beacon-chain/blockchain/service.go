@@ -510,13 +510,24 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	}
 
 	// Compute the custody group count.
-	// Hierarchy: Supernode (128) > Semi-supernode (subscription only) > Regular
+	// Hierarchy: Supernode (128) > Semi-supernode (64, or more if validators require) > Regular
 	custodyGroupCount := custodyRequirement
 	if isSubscribedToAllDataSubnets || wasSubscribedToAllDataSubnets {
 		// Full supernode: custody all 128 groups
 		custodyGroupCount = cfg.NumberOfCustodyGroups
+	} else if isSemiSupernode || wasSemiSupernode {
+		// Semi-supernode: custody at least 64 groups (half), but use validator requirements if higher
+		semiSupernodeCustody := cfg.NumberOfCustodyGroups / 2
+		if custodyRequirement > semiSupernodeCustody {
+			log.WithFields(logrus.Fields{
+				"custodyRequirement":   custodyRequirement,
+				"semiSupernodeCustody": semiSupernodeCustody,
+			}).Warn("Validator custody requirement exceeds semi-supernode minimum; Custodying additional groups.")
+			custodyGroupCount = custodyRequirement
+		} else {
+			custodyGroupCount = semiSupernodeCustody
+		}
 	}
-	// Note: Semi-supernode does NOT affect custody count, only subscription count
 
 	// Safely compute the fulu fork slot.
 	fuluForkSlot, err := fuluForkSlot()
