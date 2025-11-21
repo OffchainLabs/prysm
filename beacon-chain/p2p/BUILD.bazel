@@ -133,6 +133,7 @@ go_test(
         "fork_test.go",
         "gossip_scoring_params_test.go",
         "gossip_topic_mappings_test.go",
+        "gossipsub_peer_controller_test.go",
         "gossipsub_peer_crawler_test.go",
         "message_id_test.go",
         "options_test.go",

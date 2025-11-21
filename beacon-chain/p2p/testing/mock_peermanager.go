@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -12,8 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
-
-var _ p2p.PeerManager = (*MockPeerManager)(nil)
 
 // MockPeerManager is mock of the PeerManager interface.
 type MockPeerManager struct {
