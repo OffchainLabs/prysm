@@ -266,7 +266,7 @@ func (s *Service) Start() {
 		s.crawler = crawler
 		// Initialise the gossipsub dialer which will be started
 		// once the sync service is ready to provide subnet topics.
-		s.gossipsubDialer = NewGossipsubPeerDialer(s, s.crawler)
+		s.gossipsubDialer = NewGossipsubPeerDialer(s.crawler, s.PubSub().ListPeers, s.DialPeers)
 	}
 
 	s.started = true

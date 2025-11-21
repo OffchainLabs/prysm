@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
 
@@ -20,7 +21,8 @@ type GossipsubPeerDialer struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	service *Service
+	listPeersFunc func(topic string) []peer.ID
+	dialPeersFunc func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint
 
 	crawler        gossipsubcrawler.Crawler
 	topicsProvider gossipsubcrawler.SubnetTopicsProvider
@@ -29,13 +31,18 @@ type GossipsubPeerDialer struct {
 	once sync.Once
 }
 
-func NewGossipsubPeerDialer(service *Service, crawler gossipsubcrawler.Crawler) *GossipsubPeerDialer {
+func NewGossipsubPeerDialer(
+	crawler gossipsubcrawler.Crawler,
+	listPeers func(topic string) []peer.ID,
+	dialPeers func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint,
+) *GossipsubPeerDialer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &GossipsubPeerDialer{
-		service: service,
-		crawler: crawler,
-		ctx:     ctx,
-		cancel:  cancel,
+		listPeersFunc: listPeers,
+		dialPeersFunc: dialPeers,
+		crawler:       crawler,
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 }
 
@@ -101,7 +108,7 @@ func (g *GossipsubPeerDialer) dialLoop() {
 
 func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error {
 	for {
-		peers := g.service.PubSub().ListPeers(topic)
+		peers := g.listPeersFunc(topic)
 		if len(peers) >= nPeers {
 			return nil
 		}
@@ -114,6 +121,7 @@ func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, top
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+			// some wait here is good after dialing as connections take some time to show up in pubsub
 		case <-time.After(100 * time.Millisecond):
 		case <-g.ctx.Done():
 			return g.ctx.Err()
@@ -122,7 +130,7 @@ func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, top
 }
 
 func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*enode.Node {
-	peers := g.service.PubSub().ListPeers(topic)
+	peers := g.listPeersFunc(topic)
 	peerCount := len(peers)
 	if peerCount >= targetCount {
 		return nil
@@ -142,5 +150,5 @@ func (g *GossipsubPeerDialer) dialPeers(peers []*enode.Node) {
 	if flags.MaxDialIsActive() {
 		maxConcurrentDials = flags.Get().MaxConcurrentDials
 	}
-	g.service.DialPeers(g.ctx, maxConcurrentDials, peers)
+	g.dialPeersFunc(g.ctx, maxConcurrentDials, peers)
 }

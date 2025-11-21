@@ -746,7 +746,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		return []string{topic}, nil
 	})
 	require.NoError(t, err)
-	service.gossipsubDialer = NewGossipsubPeerDialer(service, crawler)
+	service.gossipsubDialer = NewGossipsubPeerDialer(crawler, service.PubSub().ListPeers, service.DialPeers)
 
 	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
 	verifiedRoSidecar := verifiedRoSidecars[0]
