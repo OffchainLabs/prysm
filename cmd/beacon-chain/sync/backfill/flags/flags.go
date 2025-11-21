@@ -22,7 +22,7 @@ var (
 		Usage: "Number of blocks per backfill batch. " +
 			"A larger number will request more blocks at once from peers, but also consume more system memory to " +
 			"hold batches in memory during processing. This has a multiplicative effect with " + backfillWorkerCountName + ".",
-		Value: 4,
+		Value: 32,
 	}
 	// BackfillWorkerCount allows users to tune the number of concurrent backfill batches to download, to maximize
 	// network utilization at the cost of higher memory.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -817,9 +816,6 @@ func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.
 }
 
 func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) *ethpb.DataColumnSidecarsByRangeRequest {
-	sort.Slice(columns, func(i, j int) bool {
-		return columns[i] < columns[j]
-	})
 	return &ethpb.DataColumnSidecarsByRangeRequest{
 		StartSlot: start,
 		Count:     uint64(end-start) + 1,

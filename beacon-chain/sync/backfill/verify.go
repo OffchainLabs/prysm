@@ -20,6 +20,8 @@ var (
 	errUnknownDomain        = errors.Wrap(errInvalidBlocks, "runtime error looking up signing domain for fork")
 	errBatchSignatureFailed = errors.Wrap(errInvalidBlocks, "failed to verify block signature in batch")
 	errInvalidSignatureData = errors.Wrap(errInvalidBlocks, "could not verify signatures in block batch due to invalid signature data")
+
+	errEmptyVerificationSet = errors.New("no blocks to verify in batch")
 )
 
 // verifiedROBlocks represents a slice of blocks that have passed signature verification.
@@ -77,7 +79,11 @@ type verifier struct {
 }
 
 func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
-	var err error
+	if len(blks) == 0 {
+		// Returning an error here simplifies handling in the caller.
+		// errEmptyVerificationSet should not cause the peer to be downscored.
+		return nil, errEmptyVerificationSet
+	}
 	sigSet := bls.NewSet()
 	for i := range blks {
 		if i > 0 && blks[i-1].Root() != blks[i].Block().ParentRoot() {

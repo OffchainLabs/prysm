@@ -89,13 +89,15 @@ func (w *p2pWorker) run(ctx context.Context) {
 			}
 			log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Trace("Backfill worker received batch")
 			switch b.state {
+			case batchSequenced:
+				b = w.handleBlocks(ctx, b)
 			case batchSyncBlobs:
 				b = w.handleBlobs(ctx, b)
 			case batchSyncColumns:
 				b = w.handleColumns(ctx, b)
-			case batchSequenced:
-				b = w.handleBlocks(ctx, b)
 			case batchImportable:
+				// This state indicates the batch got all the way to be imported and failed,
+				// so we need clear out the blocks to go all the way back to the start of the process.
 				b.blocks = nil
 				b = w.handleBlocks(ctx, b)
 			default:
@@ -141,13 +143,13 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	}
 	dlt := time.Now()
 	blockDownloadMs.Observe(float64(dlt.Sub(start).Milliseconds()))
+
 	toVerify, err := blocks.NewROBlockSlice(results)
 	if err != nil {
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch conversion to ROBlock failed")
 		return b.withRetryableError(err)
 	}
-
-	vb, err := w.cfg.verifier.verify(toVerify)
+	verified, err := w.cfg.verifier.verify(toVerify)
 	blockVerifyMs.Observe(float64(time.Since(dlt).Milliseconds()))
 	if err != nil {
 		if shouldDownscore(err) {
@@ -156,27 +158,28 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 		log.WithError(err).WithFields(b.logFields()).Debug("Batch validation failed")
 		return b.withRetryableError(err)
 	}
+
 	// This is a hack to get the rough size of the batch. This helps us approximate the amount of memory needed
 	// to hold batches and relative sizes between batches, but will be inaccurate when it comes to measuring actual
 	// bytes downloaded from peers, mainly because the p2p messages are snappy compressed.
 	bdl := 0
-	for i := range vb {
-		bdl += vb[i].SizeSSZ()
+	for i := range verified {
+		bdl += verified[i].SizeSSZ()
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
 	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Debug("Backfill batch block bytes downloaded")
-	b.blocks = vb
+	b.blocks = verified
 
 	blobRetentionStart, err := sync.BlobRPCMinValidSlot(current)
 	if err != nil {
 		return b.withRetryableError(errors.Wrap(err, "configuration issue, could not compute minimum blob retention slot"))
 	}
 	bscfg := &blobSyncConfig{retentionStart: blobRetentionStart, nbv: w.cfg.newVB, store: w.cfg.blobStore}
-	bs, err := newBlobSync(current, vb, bscfg)
+	bs, err := newBlobSync(current, verified, bscfg)
 	if err != nil {
 		return b.withRetryableError(err)
 	}
-	cs, err := newColumnSync(ctx, b, vb, current, w.p2p, vb, w.cfg)
+	cs, err := newColumnSync(ctx, b, verified, current, w.p2p, verified, w.cfg)
 	if err != nil {
 		return b.withRetryableError(err)
 	}

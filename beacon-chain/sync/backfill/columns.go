@@ -28,6 +28,11 @@ var (
 	errCommitmentValueMismatch   = errors.Wrap(errInvalidDataColumnResponse, "sidecar commitments do not match block")
 )
 
+// tune the amount of columns we try to download from peers at once.
+// The spec limit is 128 * 32, but connection errors are more likely when
+// requesting so much at once.
+const columnRequestLimit = 128 * 4
+
 type columnBatch struct {
 	first         primitives.Slot
 	last          primitives.Slot
@@ -58,6 +63,28 @@ func (cs *columnBatch) needed() peerdas.ColumnIndices {
 		}
 	}
 	return ci
+}
+
+// neededSidecarCount returns the total number of sidecars still needed to complete the batch.
+func (cs *columnBatch) neededSidecarCount() int {
+	count := 0
+	for _, v := range cs.toDownload {
+		count += v.remaining.Count()
+	}
+	return count
+}
+
+// neededSidecarsByColumn counts how many sidecars are still needed for each column index.
+func (cs *columnBatch) neededSidecarsByColumn(peerHas peerdas.ColumnIndices) map[uint64]int {
+	need := make(map[uint64]int, len(peerHas))
+	for _, v := range cs.toDownload {
+		for idx := range v.remaining {
+			if peerHas.Has(idx) {
+				need[idx]++
+			}
+		}
+	}
+	return need
 }
 
 type columnSync struct {
@@ -105,6 +132,21 @@ func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {
 }
 
 func (cs *columnSync) request(reqCols []uint64) *ethpb.DataColumnSidecarsByRangeRequest {
+	// slice b.nextReqCols to limit the size of the request.
+	reqCount := 0
+	peerHas := peerdas.NewColumnIndicesFromSlice(reqCols)
+	needed := cs.neededSidecarsByColumn(peerHas)
+	for i := range reqCols {
+		addSidecars := needed[reqCols[i]] // number of sidecars this column would add to the response
+		if reqCount+addSidecars > columnRequestLimit {
+			reqCols = reqCols[:i]
+			break
+		}
+		reqCount += addSidecars
+	}
+	if len(reqCols) == 0 {
+		return nil
+	}
 	return sync.DataColumnSidecarsByRangeRequest(reqCols, cs.first, cs.last)
 }
 
