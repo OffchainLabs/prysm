@@ -2,6 +2,7 @@ package backfill
 
 import (
 	"io"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -189,6 +190,9 @@ func TestSetColumnSource(t *testing.T) {
 	iter, err := cb.Bisect(allCols)
 	require.NoError(t, err)
 
+	// Sort the pidIter so batch order is deterministic
+	slices.Sort(cb.pidIter)
+
 	// Collect all batches (order is non-deterministic due to map iteration)
 	var batches [][]blocks.RODataColumn
 	for {
@@ -365,6 +369,9 @@ func TestBisectGroupsByMultiplePeers(t *testing.T) {
 	iter, err := cb.Bisect(append(cols1, cols2...))
 	require.NoError(t, err)
 
+	// Sort the pidIter so that batch order is deterministic
+	slices.Sort(cb.pidIter)
+
 	// Should get two separate batches, one from each peer
 	batch1, err := iter.Next()
 	require.NoError(t, err)
@@ -502,7 +509,6 @@ func TestCompleteFailureFlow(t *testing.T) {
 	downscorer := &mockDownscorer{}
 	cb := newColumnBisector(downscorer.downscoreCall)
 
-	// Create multiple roots with columns from different peers
 	root1 := [32]byte{1, 0, 0}
 	root2 := [32]byte{2, 0, 0}
 	root3 := [32]byte{3, 0, 0}
@@ -522,16 +528,16 @@ func TestCompleteFailureFlow(t *testing.T) {
 	cols1, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, params1)
 	cols2, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, params2)
 
-	// Register columns from both peers
 	cb.addPeerColumns(pid1, cols1...)
 	cb.addPeerColumns(pid2, cols2...)
 
-	// Bisect all columns
 	allCols := append(cols1, cols2...)
 	iter, err := cb.Bisect(allCols)
 	require.NoError(t, err)
 
-	// Get first batch (order is non-deterministic due to map iteration)
+	// sort the pidIter so that the test is deterministic
+	slices.Sort(cb.pidIter)
+
 	batch1, err := iter.Next()
 	require.NoError(t, err)
 	require.Equal(t, 2, len(batch1))
@@ -542,7 +548,7 @@ func TestCompleteFailureFlow(t *testing.T) {
 	require.NoError(t, err)
 	expectedPeer := colPeer
 
-	// Manually extract the roots from batch1 to ensure we can track them
+	// Extract the roots from batch1 to ensure we can track them
 	rootsInBatch1 := make(map[[32]byte]bool)
 	for _, col := range batch1 {
 		rootsInBatch1[col.BlockRoot()] = true
