@@ -45,9 +45,10 @@ type Store struct {
 	bs          *dbval.BackfillStatus
 }
 
-// AvailableBlock determines if the given slot is covered by the current chain history.
-// If the slot is <= backfill low slot, or >= backfill high slot, the result is true.
-// If the slot is between the backfill low and high slots, the result is false.
+// AvailableBlock determines if the given slot has been covered by backfill.
+// If the node was synced from genesis, all slots are considered available.
+// The genesis block at slot 0 is always available.
+// Otherwise any slot between 0 and LowSlot are considered unavailable.
 func (s *Store) AvailableBlock(sl primitives.Slot) bool {
 	s.RLock()
 	defer s.RUnlock()

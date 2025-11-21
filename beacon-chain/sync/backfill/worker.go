@@ -30,33 +30,33 @@ type workerCfg struct {
 	downscore peerDownscorer
 }
 
-func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, store *Store) (*workerCfg, error) {
+func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, store *Store) error {
 	vi, err := vw.WaitForInitializer(ctx)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "WaitForInitializer")
 	}
 	cps, err := store.originState(ctx)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "originState")
 	}
 	keys, err := cps.PublicKeys()
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to retrieve public keys for all validators in the origin state")
+		return errors.Wrap(err, "unable to retrieve public keys for all validators in the origin state")
 	}
 	vr := cps.GenesisValidatorsRoot()
 	cm, err := sync.ContextByteVersionsForValRoot(bytesutil.ToBytes32(vr))
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize context version map using genesis validator root %#x", vr)
+		return errors.Wrapf(err, "unable to initialize context version map using genesis validator root %#x", vr)
 	}
 	v, err := newBackfillVerifier(vr, keys)
 	if err != nil {
-		return nil, errors.Wrapf(err, "newBackfillVerifier failed")
+		return errors.Wrapf(err, "newBackfillVerifier failed")
 	}
 	cfg.verifier = v
 	cfg.ctxMap = cm
 	cfg.newVB = newBlobVerifierFromInitializer(vi)
 	cfg.newVC = newDataColumnVerifierFromInitializer(vi)
-	return cfg, nil
+	return nil
 }
 
 type workerId int
@@ -222,7 +222,10 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	// Bisector is used to keep track of the peer that provided each column, for scoring purposes.
 	// When verification of a batch of columns fails, bisector is used to retry verification with batches
 	// grouped by peer, to figure out if the failure is due to a specific peer.
-	vr := b.validatingColumnRequest(b.columns.bisector)
+	vr, err := b.validatingColumnRequest(b.columns.bisector)
+	if err != nil {
+		return b.withRetryableError(errors.Wrap(err, "creating validating column request"))
+	}
 	p := sync.DataColumnSidecarsParams{
 		Ctx:    ctx,
 		Tor:    w.cfg.clock,
@@ -240,7 +243,7 @@ func (w *p2pWorker) handleColumns(ctx context.Context, b batch) batch {
 	}
 	// The return is dropped because the validation code adds the columns
 	// to the columnSync AvailabilityStore under the hood.
-	_, err := sync.SendDataColumnSidecarsByRangeRequest(p, b.columns.peer, vr.req, vr.validate)
+	_, err = sync.SendDataColumnSidecarsByRangeRequest(p, b.columns.peer, vr.req, vr.validate)
 	if err != nil {
 		if shouldDownscore(err) {
 			w.cfg.downscore(b.columns.peer, "invalid DataColumnSidecar rpc response", err)

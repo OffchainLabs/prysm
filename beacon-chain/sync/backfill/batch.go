@@ -207,16 +207,19 @@ func (b batch) withError(err error) batch {
 	return b.withFatalError(err)
 }
 
-func (b batch) validatingColumnRequest(cb *columnBisector) *validatingColumnRequest {
-	req := b.columns.request(b.nextReqCols, columnRequestLimit)
+func (b batch) validatingColumnRequest(cb *columnBisector) (*validatingColumnRequest, error) {
+	req, err := b.columns.request(b.nextReqCols, columnRequestLimit)
+	if err != nil {
+		return nil, errors.Wrap(err, "columns request")
+	}
 	if req == nil {
-		return nil
+		return nil, nil
 	}
 	return &validatingColumnRequest{
 		req:        req,
 		columnSync: b.columns,
 		bisector:   cb,
-	}
+	}, nil
 }
 
 var batchBlockUntil = func(ctx context.Context, untilRetry time.Duration, b batch) error {

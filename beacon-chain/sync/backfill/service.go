@@ -287,8 +287,8 @@ func (s *Service) Start() {
 			colStore:  s.dcStore,
 			downscore: s.downscorePeer,
 		}
-		s.workerCfg, err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store)
-		if err != nil {
+
+		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
 			log.WithError(err).Error("Could not initialize blob verifier in backfill service")
 			return
 		}

@@ -100,7 +100,7 @@ func (c *DASPeerCache) refresh(pid peer.ID, toCustody peerdas.ColumnIndices) (*d
 		if err != nil {
 			// If we can't convert the peer ID to a node ID, remove peer from the cache.
 			delete(c.peers, pid)
-			return nil, err
+			return nil, errors.Wrap(err, "ConvertPeerIDToNodeID")
 		}
 		p = &dasPeer{enid: nodeID, pid: pid}
 	}

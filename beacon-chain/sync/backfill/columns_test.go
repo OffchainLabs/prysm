@@ -1492,7 +1492,8 @@ func TestColumnSyncRequest(t *testing.T) {
 				current:     primitives.Slot(1),
 			}
 
-			result := cs.request(tt.reqCols, tt.limit)
+			result, err := cs.request(tt.reqCols, tt.limit)
+			require.NoError(t, err)
 
 			if tt.expectNil {
 				require.Equal(t, true, result == nil, "expected nil result")

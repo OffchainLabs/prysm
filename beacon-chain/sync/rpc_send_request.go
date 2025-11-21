@@ -815,10 +815,13 @@ func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
-func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) *ethpb.DataColumnSidecarsByRangeRequest {
+func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) (*ethpb.DataColumnSidecarsByRangeRequest, error) {
+	if end < start {
+		return nil, errors.Errorf("end slot %d is before start slot %d", end, start)
+	}
 	return &ethpb.DataColumnSidecarsByRangeRequest{
 		StartSlot: start,
 		Count:     uint64(end-start) + 1,
 		Columns:   columns,
-	}
+	}, nil
 }

@@ -131,9 +131,9 @@ func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {
 	return cs.columnBatch.needed()
 }
 
-func (cs *columnSync) request(reqCols []uint64, limit int) *ethpb.DataColumnSidecarsByRangeRequest {
+func (cs *columnSync) request(reqCols []uint64, limit int) (*ethpb.DataColumnSidecarsByRangeRequest, error) {
 	if len(reqCols) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Use cheaper check to avoid allocating map and counting sidecars if under limit.
