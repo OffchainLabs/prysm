@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -68,7 +69,6 @@ func TestNewColumnBisector(t *testing.T) {
 
 	require.NotNil(t, cb)
 	require.NotNil(t, cb.rootKeys)
-	require.NotNil(t, cb.pidKeys)
 	require.NotNil(t, cb.columnSource)
 	require.NotNil(t, cb.bisected)
 	require.Equal(t, 0, cb.current)
@@ -124,19 +124,6 @@ func TestRootKeyDeduplication(t *testing.T) {
 	require.Equal(t, key1, key2)
 }
 
-// TestPeerIdKeyDeduplication verifies that peerIdKey returns the same pointer for identical peer IDs
-func TestPeerIdKeyDeduplication(t *testing.T) {
-	downscorer := &mockDownscorer{}
-	cb := newColumnBisector(downscorer.downscoreCall)
-
-	pid := createTestPeerID(t, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTSc34pP8r3hidQPQMq")
-	key1 := cb.peerIdKey(pid)
-	key2 := cb.peerIdKey(pid)
-
-	// Should be the same pointer
-	require.Equal(t, key1, key2)
-}
-
 // TestMultipleRootsAndPeers verifies handling of multiple distinct roots and peer IDs
 func TestMultipleRootsAndPeers(t *testing.T) {
 	downscorer := &mockDownscorer{}
@@ -164,7 +151,6 @@ func TestMultipleRootsAndPeers(t *testing.T) {
 
 	// Verify roots and peers are tracked
 	require.Equal(t, 3, len(cb.rootKeys))
-	require.Equal(t, 2, len(cb.pidKeys))
 }
 
 // TestSetColumnSource verifies that columns from different peers are properly tracked
@@ -203,33 +189,55 @@ func TestSetColumnSource(t *testing.T) {
 	iter, err := cb.Bisect(allCols)
 	require.NoError(t, err)
 
-	// Verify peer1's columns
-	batch1, err := iter.Next()
-	require.NoError(t, err)
-	require.Equal(t, 2, len(batch1))
-
-	// Verify each column maps to the correct peer using peerFor
-	for _, col := range batch1 {
-		colPeer, err := cb.peerFor(col)
+	// Collect all batches (order is non-deterministic due to map iteration)
+	var batches [][]blocks.RODataColumn
+	for {
+		batch, err := iter.Next()
+		if err == io.EOF {
+			break
+		}
 		require.NoError(t, err)
-		require.Equal(t, cb.peerIdKey(pid1), colPeer)
+		batches = append(batches, batch)
 	}
 
-	// Verify peer2's columns
-	batch2, err := iter.Next()
-	require.NoError(t, err)
-	require.Equal(t, 2, len(batch2))
+	// Verify we got exactly 2 batches
+	require.Equal(t, 2, len(batches))
 
-	// Verify each column maps to the correct peer
-	for _, col := range batch2 {
+	// Find which batch is from which peer by examining the columns
+	pid1Batch := map[peer.ID][]blocks.RODataColumn{pid1: nil, pid2: nil}
+	for _, batch := range batches {
+		if len(batch) == 0 {
+			continue
+		}
+		// All columns in a batch are from the same peer
+		col := batch[0]
 		colPeer, err := cb.peerFor(col)
 		require.NoError(t, err)
-		require.Equal(t, cb.peerIdKey(pid2), colPeer)
+		// Compare dereferenced peer.ID values rather than pointers
+		if colPeer == pid1 {
+			pid1Batch[pid1] = batch
+		} else if colPeer == pid2 {
+			pid1Batch[pid2] = batch
+		}
 	}
 
-	// Verify we've consumed all batches
-	_, err = iter.Next()
-	require.Equal(t, io.EOF, err)
+	// Verify peer1's batch has 2 columns
+	require.NotNil(t, pid1Batch[pid1])
+	require.Equal(t, 2, len(pid1Batch[pid1]))
+	for _, col := range pid1Batch[pid1] {
+		colPeer, err := cb.peerFor(col)
+		require.NoError(t, err)
+		require.Equal(t, pid1, colPeer)
+	}
+
+	// Verify peer2's batch has 2 columns
+	require.NotNil(t, pid1Batch[pid2])
+	require.Equal(t, 2, len(pid1Batch[pid2]))
+	for _, col := range pid1Batch[pid2] {
+		colPeer, err := cb.peerFor(col)
+		require.NoError(t, err)
+		require.Equal(t, pid2, colPeer)
+	}
 }
 
 // TestClearColumnSource verifies column removal and cleanup of empty maps
@@ -240,10 +248,9 @@ func TestClearColumnSource(t *testing.T) {
 	root := [32]byte{1, 0, 0}
 	rk := cb.rootKey(root)
 	pid := createTestPeerID(t, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTSc34pP8r3hidQPQMq")
-	pk := cb.peerIdKey(pid)
 
-	cb.setColumnSource(rk, 0, pk)
-	cb.setColumnSource(rk, 1, pk)
+	cb.setColumnSource(rk, 0, pid)
+	cb.setColumnSource(rk, 1, pid)
 	require.Equal(t, 2, len(cb.columnSource[rk]))
 
 	// Clear one column
@@ -428,10 +435,9 @@ func TestResetClearsColumnSources(t *testing.T) {
 	root := [32]byte{1, 0, 0}
 	rk := cb.rootKey(root)
 	pid := createTestPeerID(t, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTSc34pP8r3hidQPQMq")
-	pk := cb.peerIdKey(pid)
 
-	cb.setColumnSource(rk, 0, pk)
-	cb.setColumnSource(rk, 1, pk)
+	cb.setColumnSource(rk, 0, pid)
+	cb.setColumnSource(rk, 1, pid)
 
 	cb.failures[rk] = peerdas.ColumnIndices{0: struct{}{}, 1: struct{}{}}
 
@@ -525,23 +531,29 @@ func TestCompleteFailureFlow(t *testing.T) {
 	iter, err := cb.Bisect(allCols)
 	require.NoError(t, err)
 
-	// Get first batch from pid1
+	// Get first batch (order is non-deterministic due to map iteration)
 	batch1, err := iter.Next()
 	require.NoError(t, err)
 	require.Equal(t, 2, len(batch1))
 
-	// Mark pid1 as failed
-	// First, manually extract the roots from batch1 to ensure we can track them
+	// Determine which peer the first batch came from
+	firstBatchPeer := batch1[0]
+	colPeer, err := cb.peerFor(firstBatchPeer)
+	require.NoError(t, err)
+	expectedPeer := colPeer
+
+	// Manually extract the roots from batch1 to ensure we can track them
 	rootsInBatch1 := make(map[[32]byte]bool)
 	for _, col := range batch1 {
 		rootsInBatch1[col.BlockRoot()] = true
 	}
 
-	cb.OnError(errors.New("pid1 verification failed"))
+	// Mark the first batch's peer as failed
+	cb.OnError(errors.New("peer verification failed"))
 
-	// Verify downscorer was called for pid1
+	// Verify downscorer was called for the peer that had the first batch
 	require.Equal(t, 1, len(downscorer.calls))
-	require.Equal(t, pid1, downscorer.calls[0].pid)
+	require.Equal(t, expectedPeer, downscorer.calls[0].pid)
 
 	// Verify that failures contains the roots from batch1
 	require.Equal(t, len(rootsInBatch1), len(cb.failingRoots()))
@@ -554,7 +566,7 @@ func TestCompleteFailureFlow(t *testing.T) {
 	_, err = iter.Next()
 	require.Equal(t, io.EOF, err)
 
-	// Verify failingRoots matches the roots from the failed peer (pid1)
+	// Verify failingRoots matches the roots from the failed batch
 	failingRoots := cb.failingRoots()
 	require.Equal(t, len(rootsInBatch1), len(failingRoots))
 

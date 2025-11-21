@@ -12,9 +12,8 @@ import (
 
 type columnBisector struct {
 	rootKeys     map[[32]byte]rootKey
-	pidKeys      map[peer.ID]pidKey
-	columnSource map[rootKey]map[uint64]pidKey
-	bisected     map[pidKey][]blocks.RODataColumn
+	columnSource map[rootKey]map[uint64]peer.ID
+	bisected     map[peer.ID][]blocks.RODataColumn
 	pidIter      []peer.ID
 	current      int
 	next         int
@@ -23,16 +22,14 @@ type columnBisector struct {
 	failures     map[rootKey]peerdas.ColumnIndices
 }
 
-type pidKey *peer.ID
 type rootKey *[32]byte
 
 var errColumnVerification = errors.New("column verification failed")
 var errBisectInconsistent = errors.New("state of bisector inconsistent with columns to bisect")
 
 func (c *columnBisector) addPeerColumns(pid peer.ID, columns ...blocks.RODataColumn) {
-	pk := c.peerIdKey(pid)
 	for _, col := range columns {
-		c.setColumnSource(c.rootKey(col.BlockRoot()), col.Index, pk)
+		c.setColumnSource(c.rootKey(col.BlockRoot()), col.Index, pid)
 	}
 }
 
@@ -50,14 +47,14 @@ func (c *columnBisector) failingRoots() [][32]byte {
 	return roots
 }
 
-func (c *columnBisector) setColumnSource(rk rootKey, idx uint64, pk pidKey) {
+func (c *columnBisector) setColumnSource(rk rootKey, idx uint64, pid peer.ID) {
 	if c.columnSource == nil {
-		c.columnSource = make(map[rootKey]map[uint64]pidKey)
+		c.columnSource = make(map[rootKey]map[uint64]peer.ID)
 	}
 	if c.columnSource[rk] == nil {
-		c.columnSource[rk] = make(map[uint64]pidKey)
+		c.columnSource[rk] = make(map[uint64]peer.ID)
 	}
-	c.columnSource[rk][idx] = pk
+	c.columnSource[rk][idx] = pid
 }
 
 func (c *columnBisector) clearColumnSource(rk rootKey, idx uint64) {
@@ -82,24 +79,15 @@ func (c *columnBisector) rootKey(root [32]byte) rootKey {
 	return c.rootKeys[root]
 }
 
-func (c *columnBisector) peerIdKey(pid peer.ID) pidKey {
-	ptr, ok := c.pidKeys[pid]
-	if ok {
-		return ptr
-	}
-	c.pidKeys[pid] = &pid
-	return c.pidKeys[pid]
-}
-
-func (c *columnBisector) peerFor(col blocks.RODataColumn) (pidKey, error) {
+func (c *columnBisector) peerFor(col blocks.RODataColumn) (peer.ID, error) {
 	r := c.columnSource[c.rootKey(col.BlockRoot())]
 	if len(r) == 0 {
-		return nil, errors.Wrap(errBisectInconsistent, "root not tracked")
+		return "", errors.Wrap(errBisectInconsistent, "root not tracked")
 	}
-	if ptr, ok := r[col.Index]; ok {
-		return ptr, nil
+	if pid, ok := r[col.Index]; ok {
+		return pid, nil
 	}
-	return nil, errors.Wrap(errBisectInconsistent, "index not tracked for root")
+	return "", errors.Wrap(errBisectInconsistent, "index not tracked for root")
 }
 
 // reset prepares the columnBisector to be used to retry failed columns.
@@ -126,7 +114,7 @@ func (c *columnBisector) Bisect(columns []blocks.RODataColumn) (das.BisectionIte
 	}
 	c.pidIter = make([]peer.ID, 0, len(c.bisected))
 	for pid := range c.bisected {
-		c.pidIter = append(c.pidIter, *pid)
+		c.pidIter = append(c.pidIter, pid)
 	}
 	// The implementation of Next() assumes these are equal in
 	// the base case.
@@ -142,7 +130,7 @@ func (c *columnBisector) Next() ([]blocks.RODataColumn, error) {
 	}
 	c.current = c.next
 	pid := c.pidIter[c.current]
-	cols := c.bisected[c.peerIdKey(pid)]
+	cols := c.bisected[pid]
 	c.next += 1
 	return cols, nil
 }
@@ -162,8 +150,7 @@ func (c *columnBisector) OnError(err error) {
 	c.downscore(pid, "column verification error", err)
 
 	// Track which roots failed by examining columns from the current peer
-	pk := c.peerIdKey(pid)
-	columns := c.bisected[pk]
+	columns := c.bisected[pid]
 	for _, col := range columns {
 		root := col.BlockRoot()
 		rk := c.rootKey(root)
@@ -180,9 +167,8 @@ var _ das.BisectionIterator = &columnBisector{}
 func newColumnBisector(downscorer peerDownscorer) *columnBisector {
 	return &columnBisector{
 		rootKeys:     make(map[[32]byte]rootKey),
-		pidKeys:      make(map[peer.ID]pidKey),
-		columnSource: make(map[rootKey]map[uint64]pidKey),
-		bisected:     make(map[pidKey][]blocks.RODataColumn),
+		columnSource: make(map[rootKey]map[uint64]peer.ID),
+		bisected:     make(map[peer.ID][]blocks.RODataColumn),
 		failures:     make(map[rootKey]peerdas.ColumnIndices),
 		downscore:    downscorer,
 	}
