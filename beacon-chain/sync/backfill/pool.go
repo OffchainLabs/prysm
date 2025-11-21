@@ -35,9 +35,7 @@ func defaultNewWorker(p p2p.P2P) newWorker {
 
 // minRequestInterval is the minimum amount of time between requests.
 // ie a value of 1s means we'll make ~1 req/sec per peer.
-const (
-	minReqInterval = time.Second
-)
+const minReqInterval = time.Second
 
 type p2pBatchWorkerPool struct {
 	maxBatches     int

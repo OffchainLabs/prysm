@@ -131,21 +131,27 @@ func (cs *columnSync) columnsNeeded() peerdas.ColumnIndices {
 	return cs.columnBatch.needed()
 }
 
-func (cs *columnSync) request(reqCols []uint64) *ethpb.DataColumnSidecarsByRangeRequest {
-	// slice b.nextReqCols to limit the size of the request.
+func (cs *columnSync) request(reqCols []uint64, limit int) *ethpb.DataColumnSidecarsByRangeRequest {
+	if len(reqCols) == 0 {
+		return nil
+	}
+
+	// Use cheaper check to avoid allocating map and counting sidecars if under limit.
+	if cs.neededSidecarCount() <= limit {
+		return sync.DataColumnSidecarsByRangeRequest(reqCols, cs.first, cs.last)
+	}
+
+	// Re-slice b.nextReqCols to keep the number of requested sidecars under the limit.
 	reqCount := 0
 	peerHas := peerdas.NewColumnIndicesFromSlice(reqCols)
 	needed := cs.neededSidecarsByColumn(peerHas)
 	for i := range reqCols {
-		addSidecars := needed[reqCols[i]] // number of sidecars this column would add to the response
+		addSidecars := needed[reqCols[i]]
 		if reqCount+addSidecars > columnRequestLimit {
 			reqCols = reqCols[:i]
 			break
 		}
 		reqCount += addSidecars
-	}
-	if len(reqCols) == 0 {
-		return nil
 	}
 	return sync.DataColumnSidecarsByRangeRequest(reqCols, cs.first, cs.last)
 }

@@ -208,7 +208,7 @@ func (b batch) withError(err error) batch {
 }
 
 func (b batch) validatingColumnRequest(cb *columnBisector) *validatingColumnRequest {
-	req := b.columns.request(b.nextReqCols)
+	req := b.columns.request(b.nextReqCols, columnRequestLimit)
 	if req == nil {
 		return nil
 	}

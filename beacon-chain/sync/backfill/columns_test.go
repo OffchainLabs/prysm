@@ -980,6 +980,610 @@ func TestValidatingColumnRequest_Validate(t *testing.T) {
 	})
 }
 
+// TestNeededSidecarsByColumn is a table-driven test that verifies neededSidecarsByColumn
+// correctly counts sidecars needed for each column, considering only columns the peer has.
+func TestNeededSidecarsByColumn(t *testing.T) {
+	cases := []struct {
+		name           string
+		toDownload     map[[32]byte]*toDownload
+		peerHas        peerdas.ColumnIndices
+		expectedCounts map[uint64]int
+	}{
+		{
+			name:           "EmptyBatch",
+			toDownload:     make(map[[32]byte]*toDownload),
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}),
+			expectedCounts: map[uint64]int{},
+		},
+		{
+			name: "EmptyPeer",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndices(),
+			expectedCounts: map[uint64]int{},
+		},
+		{
+			name: "SingleBlockSingleColumn",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0}),
+			expectedCounts: map[uint64]int{0: 1},
+		},
+		{
+			name: "SingleBlockMultipleColumns",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}),
+			expectedCounts: map[uint64]int{0: 1, 1: 1, 2: 1},
+		},
+		{
+			name: "SingleBlockPartialPeer",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 2}),
+			expectedCounts: map[uint64]int{0: 1, 2: 1},
+		},
+		{
+			name: "MultipleBlocksSameColumns",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}),
+			expectedCounts: map[uint64]int{0: 2, 1: 2},
+		},
+		{
+			name: "MultipleBlocksDifferentColumns",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{2, 3}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2, 3}),
+			expectedCounts: map[uint64]int{0: 1, 1: 1, 2: 1, 3: 1},
+		},
+		{
+			name: "PartialBlocksPartialPeer",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{2, 3, 4}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{1, 2, 3}),
+			expectedCounts: map[uint64]int{1: 1, 2: 2, 3: 1},
+		},
+		{
+			name: "AllColumnsDownloaded",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndices(), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}),
+			expectedCounts: map[uint64]int{},
+		},
+		{
+			name: "PeerHasExtraColumns",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2, 3, 4}),
+			expectedCounts: map[uint64]int{0: 1, 1: 1},
+		},
+		{
+			name: "LargeBlockCount",
+			toDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				for i := 0; i < 100; i++ {
+					root := [32]byte{byte(i % 256)}
+					remaining := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1})
+					result[root] = testToDownload(remaining, nil)
+				}
+				return result
+			}(),
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}),
+			expectedCounts: map[uint64]int{0: 100, 1: 100},
+		},
+		{
+			name: "MixedWithEmptyRemaining",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndices(), nil),
+				[32]byte{0x03}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{1, 2}), nil),
+			},
+			peerHas:        peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}),
+			expectedCounts: map[uint64]int{0: 1, 1: 2, 2: 2},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cb := testColumnBatch(peerdas.NewColumnIndices(), tt.toDownload)
+			result := cb.neededSidecarsByColumn(tt.peerHas)
+
+			// Verify result has same number of entries as expected
+			require.Equal(t, len(tt.expectedCounts), len(result),
+				"result map should have %d entries, got %d", len(tt.expectedCounts), len(result))
+
+			// Verify each expected entry
+			for col, expectedCount := range tt.expectedCounts {
+				actualCount, exists := result[col]
+				require.Equal(t, true, exists,
+					"column %d should be in result map", col)
+				require.Equal(t, expectedCount, actualCount,
+					"column %d should have count %d, got %d", col, expectedCount, actualCount)
+			}
+
+			// Verify no unexpected columns in result
+			for col := range result {
+				_, exists := tt.expectedCounts[col]
+				require.Equal(t, true, exists,
+					"column %d should not be in result but was found", col)
+			}
+		})
+	}
+}
+
+// TestNeededSidecarCount is a table-driven test that verifies neededSidecarCount
+// correctly sums the total number of sidecars needed across all blocks in the batch.
+func TestNeededSidecarCount(t *testing.T) {
+	cases := []struct {
+		name       string
+		toDownload map[[32]byte]*toDownload
+		expected   int
+	}{
+		{
+			name:       "EmptyBatch",
+			toDownload: make(map[[32]byte]*toDownload),
+			expected:   0,
+		},
+		{
+			name: "SingleBlockEmpty",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndices(), nil),
+			},
+			expected: 0,
+		},
+		{
+			name: "SingleBlockOneColumn",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil),
+			},
+			expected: 1,
+		},
+		{
+			name: "SingleBlockThreeColumns",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+			},
+			expected: 3,
+		},
+		{
+			name: "TwoBlocksEmptyEach",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndices(), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndices(), nil),
+			},
+			expected: 0,
+		},
+		{
+			name: "TwoBlocksOneEach",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{1}), nil),
+			},
+			expected: 2,
+		},
+		{
+			name: "TwoBlocksSameColumns",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+			},
+			expected: 4,
+		},
+		{
+			name: "TwoBlocksDifferentCounts",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{3, 4}), nil),
+			},
+			expected: 5,
+		},
+		{
+			name: "ThreeBlocksMixed",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndices(), nil),
+				[32]byte{0x03}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{3, 4, 5, 6}), nil),
+			},
+			expected: 7,
+		},
+		{
+			name: "AllBlocksEmpty",
+			toDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				for i := 0; i < 5; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(peerdas.NewColumnIndices(), nil)
+				}
+				return result
+			}(),
+			expected: 0,
+		},
+		{
+			name: "AllBlocksFull",
+			toDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 5 blocks, each with 10 columns = 50 total
+				for i := 0; i < 5; i++ {
+					cols := make([]uint64, 10)
+					for j := 0; j < 10; j++ {
+						cols[j] = uint64(j)
+					}
+					result[[32]byte{byte(i)}] = testToDownload(peerdas.NewColumnIndicesFromSlice(cols), nil)
+				}
+				return result
+			}(),
+			expected: 50,
+		},
+		{
+			name: "ProgressiveIncrease",
+			toDownload: map[[32]byte]*toDownload{
+				[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil),
+				[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+				[32]byte{0x03}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+			},
+			expected: 6, // 1 + 2 + 3 = 6
+		},
+		{
+			name: "LargeBlockCount",
+			toDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 100 blocks, each with 2 columns = 200 total
+				for i := 0; i < 100; i++ {
+					root := [32]byte{byte(i % 256)}
+					remaining := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1})
+					result[root] = testToDownload(remaining, nil)
+				}
+				return result
+			}(),
+			expected: 200,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cb := testColumnBatch(peerdas.NewColumnIndices(), tt.toDownload)
+			result := cb.neededSidecarCount()
+
+			require.Equal(t, tt.expected, result,
+				"neededSidecarCount should return %d, got %d", tt.expected, result)
+		})
+	}
+}
+
+// TestColumnSyncRequest is a table-driven test that verifies the request method
+// correctly applies fast path (no truncation) and slow path (with truncation) logic
+// based on whether the total sidecar count exceeds the limit.
+// Test cases use block counts of 4, 16, 32, and 64 with limits of 64 or 512
+// to efficiently cover various truncation conditions and block/column shapes.
+func TestColumnSyncRequest(t *testing.T) {
+	cases := []struct {
+		name             string
+		buildToDownload  func() map[[32]byte]*toDownload
+		reqCols          []uint64
+		limit            int
+		expectNil        bool
+		expectFastPath   bool
+		expectedColCount int // Number of columns in result
+		expectedMaxCount int // Max sidecar count that should be in result
+	}{
+		{
+			name: "EmptyReqCols",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				return map[[32]byte]*toDownload{
+					[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil),
+				}
+			},
+			reqCols:          []uint64{},
+			limit:            64,
+			expectNil:        true,
+			expectFastPath:   false,
+			expectedColCount: -1, // Not checked when nil
+		},
+		{
+			name: "EmptyBatch",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				return make(map[[32]byte]*toDownload)
+			},
+			reqCols:          []uint64{0, 1, 2},
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 3,
+		},
+		// 4-block tests with limit 64
+		{
+			name: "FastPath_4blocks_1col",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 4 blocks × 1 column = 4 sidecars < 64 (fast path)
+				for i := 0; i < 4; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil)
+				}
+				return result
+			},
+			reqCols:          []uint64{0},
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 1,
+		},
+		{
+			name: "FastPath_4blocks_16cols",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 4 blocks × 16 columns = 64 sidecars = limit (fast path, exactly at)
+				for i := 0; i < 4; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice(makeRange(0, 16)), nil)
+				}
+				return result
+			},
+			reqCols:          makeRange(0, 16),
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 16,
+		},
+		{
+			name: "SlowPath_4blocks_17cols",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 4 blocks × 17 columns = 68 sidecars > 64 (triggers slow path check but no truncation at 512)
+				for i := 0; i < 4; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice(makeRange(0, 17)), nil)
+				}
+				return result
+			},
+			reqCols:          makeRange(0, 17),
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   false,
+			expectedColCount: 17, // 17 cols × 4 blocks = 68 < 512, no actual truncation
+		},
+		// 16-block tests with limit 64
+		{
+			name: "FastPath_16blocks_1col",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 16 blocks × 1 column = 16 sidecars < 64 (fast path)
+				for i := 0; i < 16; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil)
+				}
+				return result
+			},
+			reqCols:          []uint64{0},
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 1,
+		},
+		{
+			name: "FastPath_16blocks_4cols",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 16 blocks × 4 columns = 64 sidecars = limit (fast path, exactly at)
+				for i := 0; i < 16; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice(makeRange(0, 4)), nil)
+				}
+				return result
+			},
+			reqCols:          makeRange(0, 4),
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 4,
+		},
+		{
+			name: "SlowPath_16blocks_5cols_earlytrunc",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 16 blocks × 5 columns = 80 sidecars > 64 (triggers slow path check but no truncation at 512)
+				for i := 0; i < 16; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice(makeRange(0, 5)), nil)
+				}
+				return result
+			},
+			reqCols:          makeRange(0, 5),
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   false,
+			expectedColCount: 5, // 5 cols × 16 blocks = 80 < 512, no actual truncation
+		},
+		// 32-block tests with limit 64
+		{
+			name: "FastPath_32blocks_1col",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 32 blocks × 1 column = 32 sidecars < 64 (fast path)
+				for i := 0; i < 32; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil)
+				}
+				return result
+			},
+			reqCols:          []uint64{0},
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 1,
+		},
+		{
+			name: "FastPath_32blocks_2cols",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 32 blocks × 2 columns = 64 sidecars = limit (fast path, exactly at)
+				for i := 0; i < 32; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil)
+				}
+				return result
+			},
+			reqCols:          []uint64{0, 1},
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 2,
+		},
+		{
+			name: "SlowPath_32blocks_3cols_earlytrunc",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 32 blocks × 3 columns = 96 sidecars > 64 (triggers slow path check but no truncation at 512)
+				for i := 0; i < 32; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil)
+				}
+				return result
+			},
+			reqCols:          []uint64{0, 1, 2},
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   false,
+			expectedColCount: 3, // 3 cols × 32 blocks = 96 < 512, no actual truncation
+		},
+		// 64-block tests with limit 64 - comprehensive test
+		{
+			name: "SlowPath_64blocks_10cols_midtrunc",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				result := make(map[[32]byte]*toDownload)
+				// 64 blocks × 10 columns = 640 sidecars > 512 (slow path)
+				// Each column appears 64 times: 8 cols = 512, 9 cols = 576
+				for i := 0; i < 64; i++ {
+					result[[32]byte{byte(i)}] = testToDownload(
+						peerdas.NewColumnIndicesFromSlice(makeRange(0, 10)), nil)
+				}
+				return result
+			},
+			reqCols:          makeRange(0, 10),
+			limit:            512, // Use 512 for this one as it tests against columnRequestLimit
+			expectNil:        false,
+			expectFastPath:   false,
+			expectedColCount: 8, // 8 cols × 64 blocks = 512 < 512 (exactly at)
+		},
+		// Non-uniform block/column distributions
+		{
+			name: "OverlappingColumns_4blocks",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				return map[[32]byte]*toDownload{
+					[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil),
+					[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{1, 2, 3}), nil),
+					[32]byte{0x03}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{2, 3, 4}), nil),
+					[32]byte{0x04}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{3, 4, 5}), nil),
+				}
+			},
+			reqCols:          makeRange(0, 6),
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 6, // 1+2+3+3+2+1 = 12 sidecars
+		},
+		{
+			name: "NonOverlappingColumns_4blocks",
+			buildToDownload: func() map[[32]byte]*toDownload {
+				return map[[32]byte]*toDownload{
+					[32]byte{0x01}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2, 3}), nil),
+					[32]byte{0x02}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{4, 5, 6, 7}), nil),
+					[32]byte{0x03}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{8, 9, 10, 11}), nil),
+					[32]byte{0x04}: testToDownload(peerdas.NewColumnIndicesFromSlice([]uint64{12, 13, 14, 15}), nil),
+				}
+			},
+			reqCols:          makeRange(0, 16),
+			limit:            64,
+			expectNil:        false,
+			expectFastPath:   true,
+			expectedColCount: 16, // 16 sidecars total (one per column)
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cb := testColumnBatch(peerdas.NewColumnIndices(), tt.buildToDownload())
+			cs := &columnSync{
+				columnBatch: cb,
+				current:     primitives.Slot(1),
+			}
+
+			result := cs.request(tt.reqCols, tt.limit)
+
+			if tt.expectNil {
+				require.Equal(t, true, result == nil, "expected nil result")
+				return
+			}
+
+			require.NotNil(t, result, "expected non-nil result")
+
+			// Verify the returned columns are a prefix of reqCols
+			require.Equal(t, true, len(result.Columns) <= len(tt.reqCols),
+				"result columns should be a prefix of reqCols")
+
+			// Verify returned columns are in same order and from reqCols
+			for i, col := range result.Columns {
+				require.Equal(t, tt.reqCols[i], col,
+					"result column %d should match reqCols[%d]", i, i)
+			}
+
+			// Verify column count matches expectation
+			require.Equal(t, tt.expectedColCount, len(result.Columns),
+				"expected %d columns in result, got %d", tt.expectedColCount, len(result.Columns))
+
+			// For slow path, verify the result doesn't exceed limit
+			if !tt.expectFastPath {
+				peerHas := peerdas.NewColumnIndicesFromSlice(result.Columns)
+				needed := cs.neededSidecarsByColumn(peerHas)
+				totalCount := 0
+				for _, count := range needed {
+					totalCount += count
+				}
+				require.Equal(t, true, totalCount <= columnRequestLimit,
+					"slow path result should not exceed columnRequestLimit: %d <= 512", totalCount)
+
+				// Verify that if we added the next column from reqCols, we'd exceed the limit
+				// We need to recompute with the next column included
+				if len(result.Columns) < len(tt.reqCols) {
+					nextCol := tt.reqCols[len(result.Columns)]
+					// Create a new column set with the next column added
+					nextCols := append([]uint64{}, result.Columns...)
+					nextCols = append(nextCols, nextCol)
+					nextPeerHas := peerdas.NewColumnIndicesFromSlice(nextCols)
+					nextNeeded := cs.neededSidecarsByColumn(nextPeerHas)
+					nextTotalCount := 0
+					for _, count := range nextNeeded {
+						nextTotalCount += count
+					}
+					require.Equal(t, true, nextTotalCount > columnRequestLimit,
+						"adding next column should exceed columnRequestLimit: %d > 512", nextTotalCount)
+				}
+			}
+		})
+	}
+}
+
+// Helper function to create a range of column indices
+func makeRange(start, end uint64) []uint64 {
+	result := make([]uint64, end-start)
+	for i := uint64(0); i < end-start; i++ {
+		result[i] = start + i
+	}
+	return result
+}
+
 // Helper to create a test column verifier
 func testNewDataColumnsVerifier() verification.NewDataColumnsVerifier {
 	return func([]blocks.RODataColumn, []verification.Requirement) verification.DataColumnsVerifier {
