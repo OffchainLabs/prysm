@@ -6,6 +6,7 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 	"time"
 
@@ -606,4 +607,69 @@ func SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uin
 
 func DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
 	return dataColumnSubnets(nodeID, record)
+}
+
+func DataColumnSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func SyncCommitteeSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(SyncCommitteeSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func AttestationSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(AttestationSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func BlobSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(BlobSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func LcOptimisticToTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func LcFinalityToTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func BlockSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(BlockSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func AggregateAndProofSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(AggregateAndProofSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func VoluntaryExitSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(ExitSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func ProposerSlashingSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(ProposerSlashingSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func AttesterSlashingSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(AttesterSlashingSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func SyncContributionAndProofSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(SyncContributionAndProofSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func BlsToExecutionChangeSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(BlsToExecutionChangeSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
 }

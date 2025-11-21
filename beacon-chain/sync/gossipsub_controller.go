@@ -19,7 +19,7 @@ type topicFamilyKey struct {
 }
 
 func topicFamilyKeyFrom(tf GossipsubTopicFamily) topicFamilyKey {
-	return topicFamilyKey{topicName: fmt.Sprintf("%s", tf.Name()), forkDigest: tf.NetworkScheduleEntry().ForkDigest}
+	return topicFamilyKey{topicName: tf.Name(), forkDigest: tf.NetworkScheduleEntry().ForkDigest}
 }
 
 type GossipsubController struct {
@@ -73,6 +73,7 @@ func (g *GossipsubController) controlLoop() {
 }
 
 func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.Epoch) {
+	slot := g.syncService.cfg.clock.CurrentSlot()
 	currentNSE := params.GetNetworkScheduleEntry(currentEpoch)
 
 	families := TopicFamiliesForEpoch(currentEpoch, g.syncService, currentNSE)
@@ -86,18 +87,26 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 	// register topic families for the current NSE -> this is idempotent
 	for _, family := range families {
 		key := topicFamilyKeyFrom(family)
-		if _, ok := g.activeTopicFamilies[key]; ok {
-			continue
+		existing, seen := g.activeTopicFamilies[key]
+		if !seen {
+			g.activeTopicFamilies[key] = family
+			existing = family
+			log.WithFields(logrus.Fields{
+				"topicName":  key.topicName,
+				"forkDigest": fmt.Sprintf("%#x", key.forkDigest),
+				"epoch":      currentEpoch,
+			}).Info("Registered topic family")
 		}
-		g.activeTopicFamilies[key] = family
 
-		family.Subscribe()
-
-		log.WithFields(logrus.Fields{
-			"topicName":  key.topicName,
-			"forkDigest": fmt.Sprintf("%#x", key.forkDigest),
-			"epoch":      currentEpoch,
-		}).Info("Registered topic family")
+		switch tf := existing.(type) {
+		case GossipsubTopicFamilyWithDynamicSubnets:
+			tf.UnsubscribeForSlot(slot)
+			tf.SubscribeForSlot(slot)
+		case GossipsubTopicFamilyWithoutDynamicSubnets:
+			if !seen {
+				tf.Subscribe()
+			}
+		}
 	}
 
 	// remove topic families for the previous NSE -> this is idempotent
@@ -105,9 +114,9 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 		for key, family := range g.activeTopicFamilies {
 			if key.forkDigest == previous.ForkDigest {
 
-				family.Unsubscribe()
-
+				family.UnsubscribeAll()
 				delete(g.activeTopicFamilies, key)
+
 				log.WithFields(logrus.Fields{
 					"topicName":  key.topicName,
 					"forkDigest": fmt.Sprintf("%#x", key.forkDigest),
@@ -120,52 +129,50 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 func (g *GossipsubController) Stop() {
 	g.cancel()
 	g.wg.Wait()
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for _, family := range g.activeTopicFamilies {
+		family.UnsubscribeAll()
+	}
 }
 
-func (g *GossipsubController) GetCurrentSubnetTopics(slot primitives.Slot) []string {
+func (g *GossipsubController) GetCurrentActiveTopics() []string {
 	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	slot := g.syncService.cfg.clock.CurrentSlot()
 	var topics []string
 	for _, f := range g.activeTopicFamilies {
-		if tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets); ok {
-			bsubnets := tfm.GetSubnetsForBroadcast(slot)
-			for subnet := range bsubnets {
-				topics = append(topics, tfm.GetFullTopicString(subnet))
-			}
-			jsubnets := tfm.GetSubnetsToJoin(slot)
-			for subnet := range jsubnets {
-				topics = append(topics, tfm.GetFullTopicString(subnet))
-			}
+		tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets)
+		if !ok {
+			continue
 		}
+		topics = append(topics, tfm.TopicsToSubscribeForSlot(slot)...)
 	}
-	g.mu.RUnlock()
 	return topics
 }
 
-func (g *GossipsubController) ExtractTopics(ctx context.Context, node *enode.Node) ([]string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
+func (g *GossipsubController) ExtractTopics(_ context.Context, node *enode.Node) ([]string, error) {
 	if node == nil {
 		return nil, errors.New("enode is nil")
 	}
 
 	g.mu.RLock()
+	defer g.mu.RUnlock()
+
 	families := make([]GossipsubTopicFamilyWithDynamicSubnets, 0, len(g.activeTopicFamilies))
 	for _, f := range g.activeTopicFamilies {
 		if tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets); ok {
 			families = append(families, tfm)
 		}
 	}
-	g.mu.RUnlock()
 
 	// Collect topics from dynamic families only, de-duplicated.
 	topicSet := make(map[string]struct{})
 	for _, df := range families {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		topics, err := df.GetTopicsForNode(node)
+		topics, err := df.ExtractTopicsForNode(node)
 		if err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"topicFamily": fmt.Sprintf("%T", df),
@@ -177,7 +184,6 @@ func (g *GossipsubController) ExtractTopics(ctx context.Context, node *enode.Nod
 		}
 	}
 
-	// Flatten set to slice with stable but unspecified order.
 	out := make([]string, 0, len(topicSet))
 	for t := range topicSet {
 		out = append(out, t)
@@ -193,7 +199,6 @@ func isNextEpochForkBoundary(currentEpoch primitives.Epoch) (bool, params.Networ
 	}
 	return true, next // there is a fork in the next epoch
 }
-
 func isOneEpochBeyondForkBoundary(currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
 	current := params.GetNetworkScheduleEntry(currentEpoch)
 	previous := params.GetNetworkScheduleEntry(current.Epoch - 1)

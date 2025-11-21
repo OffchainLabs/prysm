@@ -10,7 +10,9 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
@@ -24,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
+	require2 "github.com/stretchr/testify/require"
 )
 
 func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
@@ -177,6 +180,14 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	service.custodyInfo = &custodyInfo{}
 
 	service.Start()
+
+	subnets := map[uint64]bool{1: true, 2: true, 3: true}
+	var topics []string
+	for subnet := range subnets {
+		t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
+		topics = append(topics, t)
+	}
+
 	// start the crawler with a topic extractor that maps ENR attestation subnets
 	// to full attestation topics for the current fork digest and encoding.
 	_ = service.Crawler().Start(func(ctx context.Context, node *enode.Node) ([]string, error) {
@@ -184,7 +195,6 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		var topics []string
 		for subnet := range subs {
 			t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
 			topics = append(topics, t)
@@ -196,12 +206,11 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	subnets := map[uint64]bool{1: true, 2: true, 3: true}
 	builder := func(idx uint64) string {
 		return fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, idx) + service.Encoding().ProtocolSuffix()
 	}
-	defectiveSubnets := service.defectiveSubnets(builder, minimumPeersPerSubnet, subnets)
-	require.Equal(t, subnetCount, len(defectiveSubnets))
+	defectiveSubnetsCount := defectiveSubnets(service, topics, minimumPeersPerSubnet)
+	require.Equal(t, subnetCount, defectiveSubnetsCount)
 
 	var topicsToDial []string
 	for s := range subnets {
@@ -209,12 +218,23 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	}
 
 	for _, topic := range topicsToDial {
-		err = service.GossipsubDialer().DialPeersForTopicBlocking(topic, minimumPeersPerSubnet)
+		err = service.GossipsubDialer().DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnet)
 		require.NoError(t, err)
 	}
 
-	defectiveSubnets = service.defectiveSubnets(builder, minimumPeersPerSubnet, subnets)
-	require.Equal(t, 0, len(defectiveSubnets))
+	defectiveSubnetsCount = defectiveSubnets(service, topics, minimumPeersPerSubnet)
+	require.Equal(t, 0, defectiveSubnetsCount)
+}
+
+func defectiveSubnets(service *Service, topics []string, minimumPeersPerSubnet int) int {
+	count := 0
+	for _, topic := range topics {
+		peers := service.pubsub.ListPeers(topic)
+		if len(peers) < minimumPeersPerSubnet {
+			count++
+		}
+	}
+	return count
 }
 
 func Test_AttSubnets(t *testing.T) {
@@ -610,7 +630,6 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
 	db := testDB.SetupDB(t)
 
 	localNode1 := createTestNodeWithID(t, "node1")
@@ -771,49 +790,13 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 			flags.Init(gFlags)
 			defer flags.Init(new(flags.GlobalFlags))
 
-			fakePeer := testp2p.NewTestP2P(t)
-
-			s := &Service{
-				cfg: &Config{
-					MaxPeers: 30,
-					DB:       db,
-				},
-				genesisTime:           time.Now(),
-				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-				peers: peers.NewStatus(ctx, &peers.StatusConfig{
-					PeerLimit:    30,
-					ScorerParams: &scorers.Config{},
-				}),
-				host: fakePeer.BHost,
-			}
-
+			s := createTestService(t, db)
 			localNode := createTestNodeRandom(t)
-
 			mockIter := testp2p.NewMockIterator(tt.nodes)
 			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
 
-			digest, err := s.currentForkDigest()
-			require.NoError(t, err)
-
-			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-			defer cancel()
-
-			builder := func(idx uint64) string {
-				return fmt.Sprintf(AttestationSubnetTopicFormat, digest, idx) + s.Encoding().ProtocolSuffix()
-			}
-			result, err := s.findPeersWithSubnets(
-				ctxWithTimeout,
-				builder,
-				1,
-				tt.defectiveSubnets,
-			)
-
-			require.NoError(t, err, tt.description)
-			require.Equal(t, tt.expectedCount, len(result), tt.description)
-
-			if tt.eval != nil {
-				tt.eval(t, result)
-			}
+			crawler := startTestCrawler(t, s, s.dv5Listener.(*testp2p.MockListener))
+			verifyCrawlerPeers(t, crawler, s, tt.defectiveSubnets, tt.expectedCount, tt.description, tt.eval)
 		})
 	}
 }
@@ -823,7 +806,6 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
 	db := testDB.SetupDB(t)
 
 	localNode1 := createTestNodeWithID(t, "node1")
@@ -976,23 +958,7 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 			flags.Init(gFlags)
 			defer flags.Init(new(flags.GlobalFlags))
 
-			// Create test P2P instance
-			fakePeer := testp2p.NewTestP2P(t)
-
-			// Create mock service
-			s := &Service{
-				cfg: &Config{
-					MaxPeers: 30,
-					DB:       db,
-				},
-				genesisTime:           time.Now(),
-				genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-				peers: peers.NewStatus(ctx, &peers.StatusConfig{
-					PeerLimit:    30,
-					ScorerParams: &scorers.Config{},
-				}),
-				host: fakePeer.BHost,
-			}
+			s := createTestService(t, db)
 
 			// Mark specific node versions as "bad" to simulate filterPeer failures
 			for _, node := range tt.nodes {
@@ -1010,32 +976,11 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 			}
 
 			localNode := createTestNodeRandom(t)
-
 			mockIter := testp2p.NewMockIterator(tt.nodes)
 			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
 
-			digest, err := s.currentForkDigest()
-			require.NoError(t, err)
-
-			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-			defer cancel()
-
-			builder := func(idx uint64) string {
-				return fmt.Sprintf(AttestationSubnetTopicFormat, digest, idx) + s.Encoding().ProtocolSuffix()
-			}
-			result, err := s.findPeersWithSubnets(
-				ctxWithTimeout,
-				builder,
-				1,
-				tt.defectiveSubnets,
-			)
-
-			require.NoError(t, err, tt.description)
-			require.Equal(t, tt.expectedCount, len(result), tt.description)
-
-			if tt.eval != nil {
-				tt.eval(t, result)
-			}
+			crawler := startTestCrawler(t, s, s.dv5Listener.(*testp2p.MockListener))
+			verifyCrawlerPeers(t, crawler, s, tt.defectiveSubnets, tt.expectedCount, tt.description, tt.eval)
 		})
 	}
 }
@@ -1079,7 +1024,6 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 	cache.SubnetIDs.EmptyAllCaches()
 	defer cache.SubnetIDs.EmptyAllCaches()
 
-	ctx := context.Background()
 	db := testDB.SetupDB(t)
 
 	// Create LocalNode with same ID but different sequences
@@ -1100,21 +1044,7 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 	flags.Init(gFlags)
 	defer flags.Init(new(flags.GlobalFlags))
 
-	fakePeer := testp2p.NewTestP2P(t)
-
-	service := &Service{
-		cfg: &Config{
-			MaxPeers: 30,
-			DB:       db,
-		},
-		genesisTime:           time.Now(),
-		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
-		peers: peers.NewStatus(ctx, &peers.StatusConfig{
-			PeerLimit:    30,
-			ScorerParams: &scorers.Config{},
-		}),
-		host: fakePeer.BHost,
-	}
+	service := createTestService(t, db)
 
 	// Create iterator with callback that marks peer as bad before processing node1_seq2
 	iter := &callbackIteratorForSubnets{
@@ -1138,24 +1068,80 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 	localNode := createTestNodeRandom(t)
 	service.dv5Listener = testp2p.NewMockListener(localNode, iter)
 
-	digest, err := service.currentForkDigest()
-	require.NoError(t, err)
+	crawler := startTestCrawler(t, service, service.dv5Listener.(*testp2p.MockListener))
 
-	// Run findPeersWithSubnets - node1_seq1 gets processed first, then callback marks peer bad, then node1_seq2 fails
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
+	// Verification using verifyCrawlerPeers with a custom eval function
+	verifyCrawlerPeers(t, crawler, service, map[uint64]int{1: 1}, 1, "only node2 should remain", func(t *testing.T, result []*enode.Node) {
+		require.Equal(t, localNode2.Node().ID(), result[0].ID())
+	})
+}
 
-	builder := func(idx uint64) string {
-		return fmt.Sprintf(AttestationSubnetTopicFormat, digest, idx) + service.Encoding().ProtocolSuffix()
+func createTestService(t *testing.T, d db.Database) *Service {
+	fakePeer := testp2p.NewTestP2P(t)
+	s := &Service{
+		cfg: &Config{
+			MaxPeers: 30,
+			DB:       d,
+		},
+		genesisTime:           time.Now(),
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		peers: peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit:    30,
+			ScorerParams: &scorers.Config{},
+		}),
+		host: fakePeer.BHost,
 	}
-	result, err := service.findPeersWithSubnets(
-		ctxWithTimeout,
-		builder,
-		1,
-		map[uint64]int{1: 2}, // Need 2 peers for subnet 1
-	)
+	return s
+}
 
+func startTestCrawler(t *testing.T, s *Service, listener *testp2p.MockListener) *GossipsubPeerCrawler {
+	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	require.Equal(t, 1, len(result))
-	require.Equal(t, localNode2.Node().ID(), result[0].ID()) // only node2 should remain
+	crawler, err := NewGossipsubPeerCrawler(s, listener,
+		1*time.Second, 100*time.Millisecond, 10, gossipsubcrawler.PeerFilterFunc(s.filterPeer),
+		s.Peers().Scorers().Score)
+	require.NoError(t, err)
+	s.crawler = crawler
+	require.NoError(t, crawler.Start(func(ctx context.Context, n *enode.Node) ([]string, error) {
+		subs, err := attestationSubnets(n.Record())
+		if err != nil {
+			return nil, err
+		}
+		var topics []string
+		for subnet := range subs {
+			t := fmt.Sprintf(AttestationSubnetTopicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
+			topics = append(topics, t)
+		}
+		return topics, nil
+	}))
+	return crawler
+}
+
+func verifyCrawlerPeers(t *testing.T, crawler *GossipsubPeerCrawler, s *Service, subnets map[uint64]int, expectedCount int, description string, eval func(t *testing.T, result []*enode.Node)) {
+	digest, err := s.currentForkDigest()
+	require.NoError(t, err)
+	var topics []string
+	for subnet := range subnets {
+		topics = append(topics, fmt.Sprintf(AttestationSubnetTopicFormat, digest, subnet)+s.Encoding().ProtocolSuffix())
+	}
+
+	var results []*enode.Node
+	require2.Eventually(t, func() bool {
+		results = results[:0]
+		seen := make(map[enode.ID]struct{})
+		for _, topic := range topics {
+			peers := crawler.PeersForTopic(gossipsubcrawler.Topic(topic))
+			for _, peer := range peers {
+				if _, ok := seen[peer.ID()]; !ok {
+					seen[peer.ID()] = struct{}{}
+					results = append(results, peer)
+				}
+			}
+		}
+		return len(results) == expectedCount
+	}, 1*time.Second, 100*time.Millisecond, description)
+
+	if eval != nil {
+		eval(t, results)
+	}
 }

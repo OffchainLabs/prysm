@@ -35,6 +35,7 @@ func (s *subTopicHandler) addTopic(topic string, sub *pubsub.Subscription) {
 	s.digestMap[digest] += 1
 }
 
+// topicExists checks if a topic is currently tracked.
 func (s *subTopicHandler) topicExists(topic string) bool {
 	s.RLock()
 	defer s.RUnlock()
@@ -64,6 +65,7 @@ func (s *subTopicHandler) removeTopic(topic string) {
 	}
 }
 
+// digestExists checks if a fork digest is currently tracked.
 func (s *subTopicHandler) digestExists(digest [4]byte) bool {
 	s.RLock()
 	defer s.RUnlock()
@@ -72,6 +74,7 @@ func (s *subTopicHandler) digestExists(digest [4]byte) bool {
 	return ok && count > 0
 }
 
+// allTopics returns all currently tracked topics.
 func (s *subTopicHandler) allTopics() []string {
 	s.RLock()
 	defer s.RUnlock()
@@ -83,6 +86,7 @@ func (s *subTopicHandler) allTopics() []string {
 	return topics
 }
 
+// subForTopic returns the subscription for a given topic.
 func (s *subTopicHandler) subForTopic(topic string) *pubsub.Subscription {
 	s.RLock()
 	defer s.RUnlock()

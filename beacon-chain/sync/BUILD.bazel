@@ -15,6 +15,7 @@ go_library(
         "error.go",
         "fork_watcher.go",
         "fuzz_exports.go",  # keep
+        "gossipsub_base.go",
         "gossipsub_controller.go",
         "gossipsub_topic_family.go",
         "log.go",

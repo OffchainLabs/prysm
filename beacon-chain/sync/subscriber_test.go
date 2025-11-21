@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -30,122 +29,11 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
 )
-
-// testStaticFamily implements a minimal static topic family for tests.
-type testStaticFamily struct {
-	nse            params.NetworkScheduleEntry
-	topicFmt       string
-	protocolSuffix string
-	validator      wrappedVal
-	handler        subHandler
-}
-
-func (t testStaticFamily) Validator() wrappedVal {
-	return t.validator
-}
-
-func (t testStaticFamily) Handler() subHandler {
-	return t.handler
-}
-
-func (t testStaticFamily) NetworkScheduleEntry() params.NetworkScheduleEntry {
-	return t.nse
-}
-
-func (t testStaticFamily) GetFullTopicString() string {
-	return fmt.Sprintf(t.topicFmt, t.nse.ForkDigest) + t.protocolSuffix
-}
-
-func (t testStaticFamily) Subscribe() {}
-
-func (t testStaticFamily) Unsubscribe() {}
-
-func makeTestFamily(nse params.NetworkScheduleEntry, topicFmt, suffix string, validator wrappedVal, handler subHandler) testStaticFamily {
-	return testStaticFamily{
-		nse:            nse,
-		topicFmt:       topicFmt,
-		protocolSuffix: suffix,
-		validator:      validator,
-		handler:        handler,
-	}
-}
-
-func makeFullTopic(topicFmt string, nse params.NetworkScheduleEntry, suffix string) string {
-	return fmt.Sprintf(topicFmt, nse.ForkDigest) + suffix
-}
-
-// testDynamicFamily implements a minimal dynamic topic family for tests.
-type testDynamicFamily struct {
-	nse            params.NetworkScheduleEntry
-	topicFmt       string
-	protocolSuffix string
-	validator      wrappedVal
-	handler        subHandler
-	subnetsToJoin  func(primitives.Slot) map[uint64]bool
-	subnetsForCast func(primitives.Slot) map[uint64]bool
-}
-
-func (t *testDynamicFamily) Name() string {
-	return "TestDynamicFamily"
-}
-
-func (t *testDynamicFamily) Validator() wrappedVal {
-	return t.validator
-}
-
-func (t *testDynamicFamily) Handler() subHandler {
-	return t.handler
-}
-
-func (t *testDynamicFamily) NetworkScheduleEntry() params.NetworkScheduleEntry {
-	return t.nse
-}
-
-func (t *testDynamicFamily) GetFullTopicString(subnet uint64) string {
-	return fmt.Sprintf(t.topicFmt, t.nse.ForkDigest, subnet) + t.protocolSuffix
-}
-
-func (t *testDynamicFamily) GetSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
-	if t.subnetsToJoin != nil {
-		return t.subnetsToJoin(slot)
-	}
-	return nil
-}
-
-func (t *testDynamicFamily) GetSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
-	if t.subnetsForCast != nil {
-		return t.subnetsForCast(slot)
-	}
-	return nil
-}
-
-func (t *testDynamicFamily) Subscribe() {}
-
-func (t *testDynamicFamily) Unsubscribe() {}
-
-func (t *testDynamicFamily) GetTopicsForNode(_ *enode.Node) ([]string, error) {
-	return nil, nil
-}
-
-func makeTestDynamicFamily(nse params.NetworkScheduleEntry, topicFmt, suffix string, validator wrappedVal, handler subHandler,
-	getJoin func(primitives.Slot) map[uint64]bool, getCast func(primitives.Slot) map[uint64]bool) *testDynamicFamily {
-	return &testDynamicFamily{
-		nse:            nse,
-		topicFmt:       topicFmt,
-		protocolSuffix: suffix,
-		validator:      validator,
-		handler:        handler,
-		subnetsToJoin:  getJoin,
-		subnetsForCast: getCast,
-	}
-}
 
 func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	p2pService := p2ptest.NewTestP2P(t)
@@ -170,11 +58,10 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	require.NoError(t, err)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	topic := "/eth2/%x/voluntary_exit"
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	tf := makeTestFamily(nse, topic, r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	handler := func(_ context.Context, msg proto.Message) error {
 		m, ok := msg.(*pb.SignedVoluntaryExit)
 		assert.Equal(t, true, ok, "Object is not of type *pb.SignedVoluntaryExit")
 		if m.Exit == nil || m.Exit.Epoch != 55 {
@@ -182,10 +69,15 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 		}
 		wg.Done()
 		return nil
-	})
-	r.subscribe(tf.GetFullTopicString(), tf.Validator(), tf.Handler())
+	}
+
+	tf := NewVoluntaryExitTopicFamily(&r, nse)
+	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, handler, tf)
+	tf.baseGossipsubTopicFamily = base
+
+	tf.Subscribe()
 	r.markForChainStart()
-	p2pService.ReceivePubSub(tf.GetFullTopicString(), &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	p2pService.ReceivePubSub(tf.getFullTopicString(), &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
@@ -220,17 +112,22 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	p2pService.Digest = nse.ForkDigest
 	topic := "/eth2/%x/voluntary_exit"
 
-	tf := makeTestFamily(nse, topic, r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, func(_ context.Context, msg proto.Message) error { return nil })
-	r.subscribe(tf.GetFullTopicString(), tf.Validator(), tf.Handler())
+	tf := staticTopicFamily{
+		name:   "VoluntaryExitTopicFamily",
+		topics: []string{topic},
+	}
+	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, &tf)
+	tf.baseGossipsubTopicFamily = base
+
+	tf.Subscribe()
 	r.markForChainStart()
-	fullTopic := tf.GetFullTopicString()
-	assert.Equal(t, true, r.subHandler.topicExists(fullTopic))
+	assert.Equal(t, true, r.subHandler.topicExists(topic))
 	topics := p2pService.PubSub().GetTopics()
-	assert.Equal(t, fullTopic, topics[0])
+	assert.Equal(t, topic, topics[0])
 
-	r.unSubscribeFromTopic(fullTopic)
+	tf.UnsubscribeAll()
 
-	assert.Equal(t, false, r.subHandler.topicExists(fullTopic))
+	assert.Equal(t, false, r.subHandler.topicExists(topic))
 	assert.Equal(t, 0, len(p2pService.PubSub().GetTopics()))
 
 }
@@ -265,17 +162,20 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
-	topic := "/eth2/%x/attester_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	tf := makeTestFamily(nse, topic, r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+
+	tf := NewAttesterSlashingTopicFamily(&r, nse)
+	tf.baseGossipsubTopicFamily.validator = r.noopValidator
+	tf.baseGossipsubTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.attesterSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
-	})
-	r.subscribe(tf.GetFullTopicString(), tf.Validator(), tf.Handler())
+	}
+	tf.Subscribe()
+
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	chainService.State = beaconState
 	r.markForChainStart()
@@ -287,7 +187,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	require.NoError(t, err, "Error generating attester slashing")
 	err = r.cfg.beaconDB.SaveState(ctx, beaconState, bytesutil.ToBytes32(attesterSlashing.FirstAttestation().GetData().BeaconBlockRoot))
 	require.NoError(t, err)
-	p2pService.ReceivePubSub(tf.GetFullTopicString(), attesterSlashing)
+	p2pService.ReceivePubSub(tf.getFullTopicString(), attesterSlashing)
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
@@ -319,19 +219,22 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
-	topic := "/eth2/%x/proposer_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	tf := makeTestFamily(nse, topic, r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+
+	tf := NewProposerSlashingTopicFamily(&r, nse)
+	tf.baseGossipsubTopicFamily.validator = r.noopValidator
+	tf.baseGossipsubTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.proposerSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
-	})
-	r.subscribe(tf.GetFullTopicString(), tf.Validator(), tf.Handler())
+	}
+	tf.Subscribe()
+
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	chainService.State = beaconState
 	r.markForChainStart()
@@ -342,7 +245,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	)
 	require.NoError(t, err, "Error generating proposer slashing")
 
-	p2pService.ReceivePubSub(tf.GetFullTopicString(), proposerSlashing)
+	p2pService.ReceivePubSub(tf.getFullTopicString(), proposerSlashing)
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
@@ -372,66 +275,25 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p.Digest = nse.ForkDigest
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.SignedVoluntaryExit{})]
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	tf := makeTestFamily(nse, topic, p.Encoding().ProtocolSuffix(), r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	tf := NewVoluntaryExitTopicFamily(&r, nse)
+	handler := func(_ context.Context, msg proto.Message) error {
 		defer wg.Done()
 		panic("bad")
-	})
-	r.subscribe(tf.GetFullTopicString(), tf.Validator(), tf.Handler())
+	}
+	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, handler, tf)
+	tf.baseGossipsubTopicFamily = base
+
+	tf.Subscribe()
+
 	r.markForChainStart()
-	p.ReceivePubSub(tf.GetFullTopicString(), &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	p.ReceivePubSub(tf.getFullTopicString(), &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
 	}
-}
-
-func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	hook := logTest.NewGlobal()
-	chain := &mockChain.ChainService{
-		Genesis:        time.Now(),
-		ValidatorsRoot: [32]byte{'A'},
-	}
-	r := Service{
-		ctx: t.Context(),
-		cfg: &config{
-			chain: chain,
-			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			p2p:   p,
-		},
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
-	}
-	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
-
-	tfDyn := makeTestDynamicFamily(nse, "/eth2/testing/%#x/committee%d", r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, nil, nil, nil)
-	tracker := newSubnetTracker(tfDyn)
-
-	// committee index 1
-	c1 := uint64(1)
-	fullTopic := tfDyn.GetFullTopicString(c1)
-	_, topVal := r.wrapAndReportValidation(fullTopic, r.noopValidator)
-	require.NoError(t, r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal))
-	sub1, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
-	require.NoError(t, err)
-	tracker.track(c1, sub1)
-
-	// committee index 2
-	c2 := uint64(2)
-	fullTopic = tfDyn.GetFullTopicString(c2)
-	_, topVal = r.wrapAndReportValidation(fullTopic, r.noopValidator)
-	err = r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal)
-	require.NoError(t, err)
-	sub2, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
-	require.NoError(t, err)
-	tracker.track(c2, sub2)
-
-	r.pruneNotWanted(tracker, map[uint64]bool{c2: true})
-	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
 func Test_wrapAndReportValidation(t *testing.T) {
@@ -661,8 +523,12 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	currEpoch := slots.ToEpoch(slot)
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{0, 1}, 10*time.Second)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
-	tfDyn := makeTestDynamicFamily(nse, p2p.SyncCommitteeSubnetTopicFormat, r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, nil, r.activeSyncSubnetIndices, nil)
-	go r.subscribeToDynamicSubnetFamily(tfDyn)
+
+	tfDyn := NewSyncCommitteeTopicFamily(&r, nse)
+	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn)
+	tfDyn.baseGossipsubTopicFamily = base
+	tfDyn.SubscribeForSlot(slot)
+
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
@@ -707,9 +573,11 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), nse.ForkVersion)
 	require.Equal(t, params.BeaconConfig().DenebForkEpoch, nse.Epoch)
 
-	tfDyn2 := makeTestDynamicFamily(nse, p2p.SyncCommitteeSubnetTopicFormat, r.cfg.p2p.Encoding().ProtocolSuffix(), r.noopValidator, nil, r.activeSyncSubnetIndices, nil)
-	sp := newSubnetTracker(tfDyn2)
-	r.trySubscribeSubnets(sp)
+	tfDyn2 := NewSyncCommitteeTopicFamily(&r, nse)
+	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn2)
+	tfDyn2.baseGossipsubTopicFamily = base
+	tfDyn2.SubscribeForSlot(r.cfg.clock.CurrentSlot())
+
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
 	for _, t := range r.cfg.p2p.PubSub().GetTopics() {
@@ -732,7 +600,10 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	// clear the cache and re-subscribe to subnets.
 	// this should result in the subscriptions being removed
 	cache.SyncSubnetIDs.EmptyAllCaches()
-	r.trySubscribeSubnets(sp)
+
+	slot := r.cfg.clock.CurrentSlot()
+	tfDyn2.UnsubscribeForSlot(slot)
+	tfDyn2.SubscribeForSlot(r.cfg.clock.CurrentSlot())
 	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 }
 

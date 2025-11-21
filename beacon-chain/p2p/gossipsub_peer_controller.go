@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
+const (
 	peerPerTopic = 20
 )
 
@@ -51,9 +51,11 @@ func (g *GossipsubPeerDialer) Start(provider gossipsubcrawler.SubnetTopicsProvid
 
 	g.once.Do(func() {
 		g.topicsProvider = provider
-		g.wg.Go(func() {
+		g.wg.Add(1)
+		go func() {
+			defer g.wg.Done()
 			g.dialLoop()
-		})
+		}()
 	})
 
 	return nil
@@ -70,28 +72,26 @@ func (g *GossipsubPeerDialer) dialLoop() {
 			var peersToDial []*enode.Node
 
 			for _, topic := range topics {
-				peers := g.service.PubSub().ListPeers(topic)
-				peerCount := len(peers)
-				if peerCount >= peerPerTopic {
-					continue
-				}
-				missing := peerPerTopic - peerCount
-				// this is fine as "PeersForTopic" does not return peers we are already connected to
-				newPeers := g.crawler.PeersForTopic(gossipsubcrawler.Topic(topic))
-				if len(newPeers) > missing {
-					newPeers = newPeers[:missing]
-				}
+				newPeers := g.peersForTopic(topic, peerPerTopic)
 				peersToDial = append(peersToDial, newPeers...)
 			}
 
-			if len(peersToDial) > 0 {
-				// Dial new peers in batches.
-				maxConcurrentDials := math.MaxInt
-				if flags.MaxDialIsActive() {
-					maxConcurrentDials = flags.Get().MaxConcurrentDials
-				}
-				g.service.DialPeers(g.ctx, maxConcurrentDials, peersToDial)
+			if len(peersToDial) == 0 {
+				continue
 			}
+
+			// Deduplicate peers to avoid dialing the same peer multiple times.
+			uniquePeers := make([]*enode.Node, 0, len(peersToDial))
+			seen := make(map[enode.ID]struct{})
+			for _, p := range peersToDial {
+				if _, ok := seen[p.ID()]; !ok {
+					seen[p.ID()] = struct{}{}
+					uniquePeers = append(uniquePeers, p)
+				}
+			}
+			peersToDial = uniquePeers
+
+			g.dialPeers(peersToDial)
 
 		case <-g.ctx.Done():
 			return
@@ -99,31 +99,48 @@ func (g *GossipsubPeerDialer) dialLoop() {
 	}
 }
 
-func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(topic string, nPeers int) error {
+func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error {
 	for {
 		peers := g.service.PubSub().ListPeers(topic)
 		if len(peers) >= nPeers {
 			return nil
 		}
 
-		missing := nPeers - len(peers)
-		// this is fine as "PeersForTopic" does not return peers we are already connected to
-		newPeers := g.crawler.PeersForTopic(gossipsubcrawler.Topic(topic))
+		newPeers := g.peersForTopic(topic, nPeers)
 		if len(newPeers) > 0 {
-			if len(newPeers) > missing {
-				newPeers = newPeers[:missing]
-			}
-			maxConcurrentDials := math.MaxInt
-			if flags.MaxDialIsActive() {
-				maxConcurrentDials = flags.Get().MaxConcurrentDials
-			}
-			g.service.DialPeers(g.ctx, maxConcurrentDials, newPeers)
+			g.dialPeers(newPeers)
 		}
 
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-time.After(100 * time.Millisecond):
 		case <-g.ctx.Done():
 			return g.ctx.Err()
 		}
 	}
+}
+
+func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*enode.Node {
+	peers := g.service.PubSub().ListPeers(topic)
+	peerCount := len(peers)
+	if peerCount >= targetCount {
+		return nil
+	}
+	missing := targetCount - peerCount
+	// this is fine as "PeersForTopic" does not return peers we are already connected to
+	newPeers := g.crawler.PeersForTopic(gossipsubcrawler.Topic(topic))
+	if len(newPeers) > missing {
+		newPeers = newPeers[:missing]
+	}
+	return newPeers
+}
+
+func (g *GossipsubPeerDialer) dialPeers(peers []*enode.Node) {
+	// Dial new peers in batches.
+	maxConcurrentDials := math.MaxInt
+	if flags.MaxDialIsActive() {
+		maxConcurrentDials = flags.Get().MaxConcurrentDials
+	}
+	g.service.DialPeers(g.ctx, maxConcurrentDials, peers)
 }

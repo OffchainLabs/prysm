@@ -35,5 +35,5 @@ type SubnetTopicsProvider func() []string
 type GossipsubDialer interface {
 	Start(provider SubnetTopicsProvider) error
 	Stop()
-	DialPeersForTopicBlocking(topic string, nPeers int) error
+	DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error
 }

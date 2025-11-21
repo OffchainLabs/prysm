@@ -23,36 +23,27 @@ var noopHandler subHandler = func(ctx context.Context, msg proto.Message) error 
 	return nil
 }
 
-type baseGossipsubTopicFamily struct {
-	syncService    *Service
-	protocolSuffix string
-	nse            params.NetworkScheduleEntry
-}
-
-func (b *baseGossipsubTopicFamily) NetworkScheduleEntry() params.NetworkScheduleEntry {
-	return b.nse
-}
-
 type GossipsubTopicFamily interface {
 	Name() string
-	Validator() wrappedVal
-	Handler() subHandler
 	NetworkScheduleEntry() params.NetworkScheduleEntry
-	Subscribe()
-	Unsubscribe()
+	UnsubscribeAll()
 }
 
 type GossipsubTopicFamilyWithoutDynamicSubnets interface {
 	GossipsubTopicFamily
-	GetFullTopicString() string
+	Subscribe()
 }
 
 type GossipsubTopicFamilyWithDynamicSubnets interface {
 	GossipsubTopicFamily
-	GetFullTopicString(subnet uint64) string
-	GetSubnetsToJoin(slot primitives.Slot) map[uint64]bool
-	GetSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool
-	GetTopicsForNode(node *enode.Node) ([]string, error)
+
+	TopicsToSubscribeForSlot(slot primitives.Slot) []string
+
+	ExtractTopicsForNode(node *enode.Node) ([]string, error)
+
+	SubscribeForSlot(slot primitives.Slot)
+
+	UnsubscribeForSlot(slot primitives.Slot)
 }
 
 type topicFamilyEntry struct {

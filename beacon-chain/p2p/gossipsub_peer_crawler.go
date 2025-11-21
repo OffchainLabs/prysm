@@ -311,12 +311,18 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 	}
 
 	var peerNodes []*peerNode
+	seen := make(map[enode.ID]bool)
 	for peerID := range peerIDs {
 		peerNode, ok := g.crawledPeers.byPeerId[peerID]
 		if !ok {
 			continue
 		}
 		if peerNode.isPinged && g.peerFilter(peerNode.node) {
+			// Skip if we've already seen this enode ID
+			if seen[peerNode.id] {
+				continue
+			}
+			seen[peerNode.id] = true
 			peerNodes = append(peerNodes, peerNode)
 		}
 	}

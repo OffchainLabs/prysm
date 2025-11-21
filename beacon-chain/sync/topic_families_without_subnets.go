@@ -1,8 +1,6 @@
 package sync
 
 import (
-	"fmt"
-
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 )
@@ -11,356 +9,284 @@ import (
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*BlockTopicFamily)(nil)
 
 type BlockTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewBlockTopicFamily(s *Service, nse params.NetworkScheduleEntry) *BlockTopicFamily {
-	return &BlockTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	b := &BlockTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber, b)
+	b.baseGossipsubTopicFamily = base
+	return b
 }
 
 func (b *BlockTopicFamily) Name() string {
 	return "BlockTopicFamily"
 }
 
-func (b *BlockTopicFamily) Validator() wrappedVal {
-	return b.syncService.validateBeaconBlockPubSub
-}
-
-func (b *BlockTopicFamily) Handler() subHandler {
-	return b.syncService.beaconBlockSubscriber
-}
-
-func (b *BlockTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.BlockSubnetTopicFormat, b.nse.ForkDigest) + b.protocolSuffix
-}
-
+// Subscribe subscribes to the topic.
 func (b *BlockTopicFamily) Subscribe() {
-	b.syncService.subscribe(b.GetFullTopicString(), b.Validator(), b.Handler())
+	b.subscribeToTopics([]string{b.getFullTopicString()})
 }
 
-func (b *BlockTopicFamily) Unsubscribe() {
-	b.syncService.unSubscribeFromTopic(b.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (b *BlockTopicFamily) UnsubscribeAll() {
+	b.unsubscribeAll()
+}
+
+func (b *BlockTopicFamily) getFullTopicString() string {
+	return p2p.BlockSubnetTopic(b.nse.ForkDigest)
 }
 
 // Aggregate and Proof
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*AggregateAndProofTopicFamily)(nil)
 
 type AggregateAndProofTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewAggregateAndProofTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AggregateAndProofTopicFamily {
-	return &AggregateAndProofTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	a := &AggregateAndProofTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber, a)
+	a.baseGossipsubTopicFamily = base
+	return a
 }
 
 func (a *AggregateAndProofTopicFamily) Name() string {
 	return "AggregateAndProofTopicFamily"
 }
 
-func (a *AggregateAndProofTopicFamily) Validator() wrappedVal {
-	return a.syncService.validateAggregateAndProof
-}
-
-func (a *AggregateAndProofTopicFamily) Handler() subHandler {
-	return a.syncService.beaconAggregateProofSubscriber
-}
-
-func (a *AggregateAndProofTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.AggregateAndProofSubnetTopicFormat, a.nse.ForkDigest) + a.protocolSuffix
-}
-
+// Subscribe subscribes to the topic.
 func (a *AggregateAndProofTopicFamily) Subscribe() {
-	a.syncService.subscribe(a.GetFullTopicString(), a.Validator(), a.Handler())
+	a.subscribeToTopics([]string{a.getFullTopicString()})
 }
 
-func (a *AggregateAndProofTopicFamily) Unsubscribe() {
-	a.syncService.unSubscribeFromTopic(a.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (a *AggregateAndProofTopicFamily) UnsubscribeAll() {
+	a.unsubscribeAll()
+}
+
+func (a *AggregateAndProofTopicFamily) getFullTopicString() string {
+	return p2p.AggregateAndProofSubnetTopic(a.nse.ForkDigest)
 }
 
 // Voluntary Exit
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*VoluntaryExitTopicFamily)(nil)
 
 type VoluntaryExitTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewVoluntaryExitTopicFamily(s *Service, nse params.NetworkScheduleEntry) *VoluntaryExitTopicFamily {
-	return &VoluntaryExitTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	v := &VoluntaryExitTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateVoluntaryExit, s.voluntaryExitSubscriber, v)
+	v.baseGossipsubTopicFamily = base
+	return v
 }
 
 func (v *VoluntaryExitTopicFamily) Name() string {
 	return "VoluntaryExitTopicFamily"
 }
 
-func (v *VoluntaryExitTopicFamily) Validator() wrappedVal {
-	return v.syncService.validateVoluntaryExit
-}
-
-func (v *VoluntaryExitTopicFamily) Handler() subHandler {
-	return v.syncService.voluntaryExitSubscriber
-}
-
-func (v *VoluntaryExitTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.ExitSubnetTopicFormat, v.nse.ForkDigest) + v.protocolSuffix
-}
-
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (v *VoluntaryExitTopicFamily) Subscribe() {
-	v.syncService.subscribe(v.GetFullTopicString(), v.Validator(), v.Handler())
+	v.subscribeToTopics([]string{v.getFullTopicString()})
 }
 
-func (v *VoluntaryExitTopicFamily) Unsubscribe() {
-	v.syncService.unSubscribeFromTopic(v.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (v *VoluntaryExitTopicFamily) UnsubscribeAll() {
+	v.unsubscribeAll()
+}
+
+func (v *VoluntaryExitTopicFamily) getFullTopicString() string {
+	return p2p.VoluntaryExitSubnetTopic(v.nse.ForkDigest)
 }
 
 // Proposer Slashing
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*ProposerSlashingTopicFamily)(nil)
 
 type ProposerSlashingTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewProposerSlashingTopicFamily(s *Service, nse params.NetworkScheduleEntry) *ProposerSlashingTopicFamily {
-	return &ProposerSlashingTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	p := &ProposerSlashingTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateProposerSlashing, s.proposerSlashingSubscriber, p)
+	p.baseGossipsubTopicFamily = base
+	return p
 }
 
 func (p *ProposerSlashingTopicFamily) Name() string {
 	return "ProposerSlashingTopicFamily"
 }
 
-func (p *ProposerSlashingTopicFamily) Validator() wrappedVal {
-	return p.syncService.validateProposerSlashing
-}
-
-func (p *ProposerSlashingTopicFamily) Handler() subHandler {
-	return p.syncService.proposerSlashingSubscriber
-}
-
-func (p *ProposerSlashingTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.ProposerSlashingSubnetTopicFormat, p.nse.ForkDigest) + p.protocolSuffix
-}
-
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (p *ProposerSlashingTopicFamily) Subscribe() {
-	p.syncService.subscribe(p.GetFullTopicString(), p.Validator(), p.Handler())
+	p.subscribeToTopics([]string{p.getFullTopicString()})
 }
 
-func (p *ProposerSlashingTopicFamily) Unsubscribe() {
-	p.syncService.unSubscribeFromTopic(p.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (p *ProposerSlashingTopicFamily) UnsubscribeAll() {
+	p.unsubscribeAll()
+}
+
+func (p *ProposerSlashingTopicFamily) getFullTopicString() string {
+	return p2p.ProposerSlashingSubnetTopic(p.nse.ForkDigest)
 }
 
 // Attester Slashing
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*AttesterSlashingTopicFamily)(nil)
 
 type AttesterSlashingTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewAttesterSlashingTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AttesterSlashingTopicFamily {
-	return &AttesterSlashingTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	a := &AttesterSlashingTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateAttesterSlashing, s.attesterSlashingSubscriber, a)
+	a.baseGossipsubTopicFamily = base
+	return a
 }
 
 func (a *AttesterSlashingTopicFamily) Name() string {
 	return "AttesterSlashingTopicFamily"
 }
 
-func (a *AttesterSlashingTopicFamily) Validator() wrappedVal {
-	return a.syncService.validateAttesterSlashing
-}
-
-func (a *AttesterSlashingTopicFamily) Handler() subHandler {
-	return a.syncService.attesterSlashingSubscriber
-}
-
-func (a *AttesterSlashingTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.AttesterSlashingSubnetTopicFormat, a.nse.ForkDigest) + a.protocolSuffix
-}
-
-// TODO: Do we really need to spawn go-routines here ?
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (a *AttesterSlashingTopicFamily) Subscribe() {
-	a.syncService.subscribe(a.GetFullTopicString(), a.Validator(), a.Handler())
+	a.subscribeToTopics([]string{a.getFullTopicString()})
 }
 
-func (a *AttesterSlashingTopicFamily) Unsubscribe() {
-	a.syncService.unSubscribeFromTopic(a.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (a *AttesterSlashingTopicFamily) UnsubscribeAll() {
+	a.unsubscribeAll()
+}
+
+func (a *AttesterSlashingTopicFamily) getFullTopicString() string {
+	return p2p.AttesterSlashingSubnetTopic(a.nse.ForkDigest)
 }
 
 // Sync Contribution and Proof (Altair+)
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*SyncContributionAndProofTopicFamily)(nil)
 
-type SyncContributionAndProofTopicFamily struct{ baseGossipsubTopicFamily }
+type SyncContributionAndProofTopicFamily struct{ *baseGossipsubTopicFamily }
 
 func NewSyncContributionAndProofTopicFamily(s *Service, nse params.NetworkScheduleEntry) *SyncContributionAndProofTopicFamily {
-	return &SyncContributionAndProofTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	sc := &SyncContributionAndProofTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateSyncContributionAndProof, s.syncContributionAndProofSubscriber, sc)
+	sc.baseGossipsubTopicFamily = base
+	return sc
 }
 
 func (sc *SyncContributionAndProofTopicFamily) Name() string {
 	return "SyncContributionAndProofTopicFamily"
 }
 
-func (sc *SyncContributionAndProofTopicFamily) Validator() wrappedVal {
-	return sc.syncService.validateSyncContributionAndProof
-}
-
-func (sc *SyncContributionAndProofTopicFamily) Handler() subHandler {
-	return sc.syncService.syncContributionAndProofSubscriber
-}
-
-func (sc *SyncContributionAndProofTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.SyncContributionAndProofSubnetTopicFormat, sc.nse.ForkDigest) + sc.protocolSuffix
-}
-
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (sc *SyncContributionAndProofTopicFamily) Subscribe() {
-	sc.syncService.subscribe(sc.GetFullTopicString(), sc.Validator(), sc.Handler())
+	sc.subscribeToTopics([]string{sc.getFullTopicString()})
 }
 
-func (sc *SyncContributionAndProofTopicFamily) Unsubscribe() {
-	sc.syncService.unSubscribeFromTopic(sc.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (sc *SyncContributionAndProofTopicFamily) UnsubscribeAll() {
+	sc.unsubscribeAll()
+}
+
+func (sc *SyncContributionAndProofTopicFamily) getFullTopicString() string {
+	return p2p.SyncContributionAndProofSubnetTopic(sc.nse.ForkDigest)
 }
 
 // Light Client Optimistic Update (Altair+)
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*LightClientOptimisticUpdateTopicFamily)(nil)
 
 type LightClientOptimisticUpdateTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewLightClientOptimisticUpdateTopicFamily(s *Service, nse params.NetworkScheduleEntry) *LightClientOptimisticUpdateTopicFamily {
-	return &LightClientOptimisticUpdateTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	l := &LightClientOptimisticUpdateTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateLightClientOptimisticUpdate, noopHandler, l)
+	l.baseGossipsubTopicFamily = base
+	return l
 }
 
 func (l *LightClientOptimisticUpdateTopicFamily) Name() string {
 	return "LightClientOptimisticUpdateTopicFamily"
 }
 
-func (l *LightClientOptimisticUpdateTopicFamily) Validator() wrappedVal {
-	return l.syncService.validateLightClientOptimisticUpdate
-}
-
-func (l *LightClientOptimisticUpdateTopicFamily) Handler() subHandler {
-	return noopHandler
-}
-
-func (l *LightClientOptimisticUpdateTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.LightClientOptimisticUpdateTopicFormat, l.nse.ForkDigest) + l.protocolSuffix
-}
-
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (l *LightClientOptimisticUpdateTopicFamily) Subscribe() {
-	l.syncService.subscribe(l.GetFullTopicString(), l.Validator(), l.Handler())
+	l.subscribeToTopics([]string{l.getFullTopicString()})
 }
 
-func (l *LightClientOptimisticUpdateTopicFamily) Unsubscribe() {
-	l.syncService.unSubscribeFromTopic(l.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (l *LightClientOptimisticUpdateTopicFamily) UnsubscribeAll() {
+	l.unsubscribeAll()
+}
+
+func (l *LightClientOptimisticUpdateTopicFamily) getFullTopicString() string {
+	return p2p.LcOptimisticToTopic(l.nse.ForkDigest)
 }
 
 // Light Client Finality Update (Altair+)
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*LightClientFinalityUpdateTopicFamily)(nil)
 
 type LightClientFinalityUpdateTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewLightClientFinalityUpdateTopicFamily(s *Service, nse params.NetworkScheduleEntry) *LightClientFinalityUpdateTopicFamily {
-	return &LightClientFinalityUpdateTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	l := &LightClientFinalityUpdateTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateLightClientFinalityUpdate, noopHandler, l)
+	l.baseGossipsubTopicFamily = base
+	return l
 }
 
 func (l *LightClientFinalityUpdateTopicFamily) Name() string {
 	return "LightClientFinalityUpdateTopicFamily"
 }
 
-func (l *LightClientFinalityUpdateTopicFamily) Validator() wrappedVal {
-	return l.syncService.validateLightClientFinalityUpdate
-}
-
-func (l *LightClientFinalityUpdateTopicFamily) Handler() subHandler {
-	return noopHandler
-}
-
-func (l *LightClientFinalityUpdateTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.LightClientFinalityUpdateTopicFormat, l.nse.ForkDigest) + l.protocolSuffix
-}
-
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (l *LightClientFinalityUpdateTopicFamily) Subscribe() {
-	l.syncService.subscribe(l.GetFullTopicString(), l.Validator(), l.Handler())
+	l.subscribeToTopics([]string{l.getFullTopicString()})
 }
-func (l *LightClientFinalityUpdateTopicFamily) Unsubscribe() {
-	l.syncService.unSubscribeFromTopic(l.GetFullTopicString())
+
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (l *LightClientFinalityUpdateTopicFamily) UnsubscribeAll() {
+	l.unsubscribeAll()
+}
+
+func (l *LightClientFinalityUpdateTopicFamily) getFullTopicString() string {
+	return p2p.LcFinalityToTopic(l.nse.ForkDigest)
 }
 
 // BLS to Execution Change (Capella+)
 var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*BlsToExecutionChangeTopicFamily)(nil)
 
 type BlsToExecutionChangeTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 }
 
 func NewBlsToExecutionChangeTopicFamily(s *Service, nse params.NetworkScheduleEntry) *BlsToExecutionChangeTopicFamily {
-	return &BlsToExecutionChangeTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix()},
-	}
+	b := &BlsToExecutionChangeTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateBlsToExecutionChange, s.blsToExecutionChangeSubscriber, b)
+	b.baseGossipsubTopicFamily = base
+	return b
 }
 
 func (b *BlsToExecutionChangeTopicFamily) Name() string {
 	return "BlsToExecutionChangeTopicFamily"
 }
 
-func (b *BlsToExecutionChangeTopicFamily) Validator() wrappedVal {
-	return b.syncService.validateBlsToExecutionChange
-}
-
-func (b *BlsToExecutionChangeTopicFamily) Handler() subHandler {
-	return b.syncService.blsToExecutionChangeSubscriber
-}
-
-func (b *BlsToExecutionChangeTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.BlsToExecutionChangeSubnetTopicFormat, b.nse.ForkDigest) + b.protocolSuffix
-}
-
+// Subscribe subscribes to the topic. Slot is ignored for this topic family.
 func (b *BlsToExecutionChangeTopicFamily) Subscribe() {
-	b.syncService.subscribe(b.GetFullTopicString(), b.Validator(), b.Handler())
+	b.subscribeToTopics([]string{b.getFullTopicString()})
 }
 
-func (b *BlsToExecutionChangeTopicFamily) Unsubscribe() {
-	b.syncService.unSubscribeFromTopic(b.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (b *BlsToExecutionChangeTopicFamily) UnsubscribeAll() {
+	b.unsubscribeAll()
+}
+
+func (b *BlsToExecutionChangeTopicFamily) getFullTopicString() string {
+	return p2p.BlsToExecutionChangeSubnetTopic(b.nse.ForkDigest)
 }

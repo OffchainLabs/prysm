@@ -1,239 +1,202 @@
 package sync
 
 import (
-	"fmt"
-	"sync"
-
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // AttestationTopicFamily
 var _ GossipsubTopicFamilyWithDynamicSubnets = (*AttestationTopicFamily)(nil)
 
-type baseGossipsubTopicFamilyWithDynamicSubnets struct {
-	baseGossipsubTopicFamily
-
-	mu           sync.Mutex
-	tracker      *subnetTracker
-	unsubscribed bool
-}
-
-func (b *baseGossipsubTopicFamilyWithDynamicSubnets) Subscribe(tf GossipsubTopicFamilyWithDynamicSubnets) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.unsubscribed {
-		log.WithFields(logrus.Fields{
-			"topicFamily": fmt.Sprintf("%T", tf),
-			"digest":      b.nse.ForkDigest,
-			"epoch":       b.nse.Epoch,
-		}).Error("Cannot subscribe after unsubscribing")
-		return
-	}
-	b.tracker = b.syncService.subscribeToDynamicSubnetFamily(tf)
-}
-
-func (b *baseGossipsubTopicFamilyWithDynamicSubnets) Unsubscribe() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.unsubscribed = true
-	b.syncService.pruneNotWanted(b.tracker, nil) // unsubscribe from all subnets
-}
-
 type AttestationTopicFamily struct {
-	baseGossipsubTopicFamilyWithDynamicSubnets
+	*baseGossipsubTopicFamily
 }
 
 // NewAttestationTopicFamily creates a new AttestationTopicFamily.
 func NewAttestationTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AttestationTopicFamily {
-	attestationTopicFamily := &AttestationTopicFamily{
-		baseGossipsubTopicFamilyWithDynamicSubnets: baseGossipsubTopicFamilyWithDynamicSubnets{
-			baseGossipsubTopicFamily: baseGossipsubTopicFamily{
-				syncService:    s,
-				nse:            nse,
-				protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix(),
-			},
-		},
-	}
-	return attestationTopicFamily
+	a := &AttestationTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateCommitteeIndexBeaconAttestation, s.committeeIndexBeaconAttestationSubscriber, a)
+	a.baseGossipsubTopicFamily = base
+	return a
 }
 
 func (a *AttestationTopicFamily) Name() string {
 	return "AttestationTopicFamily"
 }
 
-// Validator returns the validator function for attestation subnets.
-func (a *AttestationTopicFamily) Validator() wrappedVal {
-	return a.syncService.validateCommitteeIndexBeaconAttestation
+// SubscribeForSlot subscribes to the topics for the given slot.
+func (a *AttestationTopicFamily) SubscribeForSlot(slot primitives.Slot) {
+	a.subscribeToTopics(a.TopicsToSubscribeForSlot(slot))
 }
 
-// Handler returns the message handler for attestation subnets.
-func (a *AttestationTopicFamily) Handler() subHandler {
-	return a.syncService.committeeIndexBeaconAttestationSubscriber
+// UnsubscribeForSlot unsubscribes from topics we no longer need for the slot.
+func (a *AttestationTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
+	a.removeUnwantedTopics(a.TopicsToSubscribeForSlot(slot))
 }
 
-// GetFullTopicString builds the full topic string for an attestation subnet.
-func (a *AttestationTopicFamily) GetFullTopicString(subnet uint64) string {
-	return fmt.Sprintf(p2p.AttestationSubnetTopicFormat, a.nse.ForkDigest, subnet) + a.protocolSuffix
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (a *AttestationTopicFamily) UnsubscribeAll() {
+	a.unsubscribeAll()
 }
 
-// GetSubnetsToJoin returns persistent and aggregator subnets.
-func (a *AttestationTopicFamily) GetSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
+// TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
+func (a *AttestationTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
+	return topicsFromSubnets(computeNeededSubnets(a, slot), a)
+}
+
+// getFullTopicString builds the full topic string for an attestation subnet.
+func (a *AttestationTopicFamily) getFullTopicString(subnet uint64) string {
+	return p2p.AttestationSubnetTopic(a.nse.ForkDigest, subnet)
+}
+
+// getSubnetsToJoin returns persistent and aggregator subnets.
+func (a *AttestationTopicFamily) getSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
 	return a.syncService.persistentAndAggregatorSubnetIndices(slot)
 }
 
-// GetSubnetsForBroadcast returns subnets needed for attestation duties.
-func (a *AttestationTopicFamily) GetSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
+// getSubnetsForBroadcast returns subnets needed for attestation duties.
+func (a *AttestationTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
 	return attesterSubnetIndices(slot)
 }
 
-// GetTopicsForNode returns all topics for the given node that are relevant to this topic family.
-func (a *AttestationTopicFamily) GetTopicsForNode(node *enode.Node) ([]string, error) {
+// ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
+func (a *AttestationTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
 	return getTopicsForNode(a.syncService, a, node, p2p.AttestationSubnets)
-}
-
-func (a *AttestationTopicFamily) Subscribe() {
-	a.baseGossipsubTopicFamilyWithDynamicSubnets.Subscribe(a)
-}
-
-func (a *AttestationTopicFamily) Unsubscribe() {
-	a.baseGossipsubTopicFamilyWithDynamicSubnets.Unsubscribe()
 }
 
 // SyncCommitteeTopicFamily
 var _ GossipsubTopicFamilyWithDynamicSubnets = (*SyncCommitteeTopicFamily)(nil)
 
 type SyncCommitteeTopicFamily struct {
-	baseGossipsubTopicFamilyWithDynamicSubnets
+	*baseGossipsubTopicFamily
 }
 
 // NewSyncCommitteeTopicFamily creates a new SyncCommitteeTopicFamily.
 func NewSyncCommitteeTopicFamily(s *Service, nse params.NetworkScheduleEntry) *SyncCommitteeTopicFamily {
-	return &SyncCommitteeTopicFamily{
-		baseGossipsubTopicFamilyWithDynamicSubnets: baseGossipsubTopicFamilyWithDynamicSubnets{
-			baseGossipsubTopicFamily: baseGossipsubTopicFamily{
-				syncService:    s,
-				nse:            nse,
-				protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix(),
-			},
-		},
-	}
+	sc := &SyncCommitteeTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateSyncCommitteeMessage, s.syncCommitteeMessageSubscriber, sc)
+	sc.baseGossipsubTopicFamily = base
+	return sc
 }
 
 func (s *SyncCommitteeTopicFamily) Name() string {
 	return "SyncCommitteeTopicFamily"
 }
 
-// Validator returns the validator function for sync committee subnets.
-func (s *SyncCommitteeTopicFamily) Validator() wrappedVal {
-	return s.syncService.validateSyncCommitteeMessage
+// SubscribeFor subscribes to the topics for the given slot.
+func (s *SyncCommitteeTopicFamily) SubscribeForSlot(slot primitives.Slot) {
+	s.subscribeToTopics(s.TopicsToSubscribeForSlot(slot))
 }
 
-// Handler returns the message handler for sync committee subnets.
-func (s *SyncCommitteeTopicFamily) Handler() subHandler {
-	return s.syncService.syncCommitteeMessageSubscriber
+// UnsubscribeFor unsubscribes from topics we no longer need for the slot.
+func (s *SyncCommitteeTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
+	s.removeUnwantedTopics(s.TopicsToSubscribeForSlot(slot))
 }
 
-// GetFullTopicString builds the full topic string for a sync committee subnet.
-func (s *SyncCommitteeTopicFamily) GetFullTopicString(subnet uint64) string {
-	return fmt.Sprintf(p2p.SyncCommitteeSubnetTopicFormat, s.nse.ForkDigest, subnet) + s.protocolSuffix
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (s *SyncCommitteeTopicFamily) UnsubscribeAll() {
+	s.unsubscribeAll()
 }
 
-// GetSubnetsToJoin returns active sync committee subnets.
-func (s *SyncCommitteeTopicFamily) GetSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
+// TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
+func (s *SyncCommitteeTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
+	return topicsFromSubnets(computeNeededSubnets(s, slot), s)
+}
+
+// getFullTopicString builds the full topic string for a sync committee subnet.
+func (s *SyncCommitteeTopicFamily) getFullTopicString(subnet uint64) string {
+	return p2p.SyncCommitteeSubnetTopic(s.nse.ForkDigest, subnet)
+}
+
+// getSubnetsToJoin returns active sync committee subnets.
+func (s *SyncCommitteeTopicFamily) getSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
 	return s.syncService.activeSyncSubnetIndices(slot)
 }
 
-// GetSubnetsForBroadcast returns nil as there are no separate peer requirements.
-func (s *SyncCommitteeTopicFamily) GetSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
+// getSubnetsForBroadcast returns nil as there are no separate peer requirements.
+func (s *SyncCommitteeTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
 	return nil
 }
 
-// GetTopicsForNode returns all topics for the given node that are relevant to this topic family.
-func (s *SyncCommitteeTopicFamily) GetTopicsForNode(node *enode.Node) ([]string, error) {
+// ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
+func (s *SyncCommitteeTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
 	return getTopicsForNode(s.syncService, s, node, p2p.SyncSubnets)
-}
-
-func (s *SyncCommitteeTopicFamily) Subscribe() {
-	s.baseGossipsubTopicFamilyWithDynamicSubnets.Subscribe(s)
-}
-
-func (s *SyncCommitteeTopicFamily) Unsubscribe() {
-	s.baseGossipsubTopicFamilyWithDynamicSubnets.Unsubscribe()
 }
 
 // DataColumnTopicFamily
 var _ GossipsubTopicFamilyWithDynamicSubnets = (*DataColumnTopicFamily)(nil)
 
 type DataColumnTopicFamily struct {
-	baseGossipsubTopicFamilyWithDynamicSubnets
+	*baseGossipsubTopicFamily
 }
 
 // NewDataColumnTopicFamily creates a new DataColumnTopicFamily.
 func NewDataColumnTopicFamily(s *Service, nse params.NetworkScheduleEntry) *DataColumnTopicFamily {
-	return &DataColumnTopicFamily{
-		baseGossipsubTopicFamilyWithDynamicSubnets: baseGossipsubTopicFamilyWithDynamicSubnets{
-			baseGossipsubTopicFamily: baseGossipsubTopicFamily{
-				syncService:    s,
-				nse:            nse,
-				protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix(),
-			},
-		},
-	}
+	d := &DataColumnTopicFamily{}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateDataColumn, s.dataColumnSubscriber, d)
+	d.baseGossipsubTopicFamily = base
+	return d
 }
 
 func (d *DataColumnTopicFamily) Name() string {
 	return "DataColumnTopicFamily"
 }
 
-// Validator returns the validator function for data column subnets.
-func (d *DataColumnTopicFamily) Validator() wrappedVal {
-	return d.syncService.validateDataColumn
+// SubscribeFor subscribes to the topics for the given slot.
+func (d *DataColumnTopicFamily) SubscribeForSlot(slot primitives.Slot) {
+	d.subscribeToTopics(d.TopicsToSubscribeForSlot(slot))
 }
 
-// Handler returns the message handler for data column subnets.
-func (d *DataColumnTopicFamily) Handler() subHandler {
-	return d.syncService.dataColumnSubscriber
+// UnsubscribeForSlot unsubscribes from topics we no longer need for the slot.
+func (d *DataColumnTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
+	d.removeUnwantedTopics(d.TopicsToSubscribeForSlot(slot))
 }
 
-// GetFullTopicString builds the full topic string for a data column subnet.
-func (d *DataColumnTopicFamily) GetFullTopicString(subnet uint64) string {
-	return fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, d.nse.ForkDigest, subnet) + d.protocolSuffix
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (d *DataColumnTopicFamily) UnsubscribeAll() {
+	d.unsubscribeAll()
 }
 
-// GetSubnetsToJoin returns data column subnets.
-func (d *DataColumnTopicFamily) GetSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
+// TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
+func (d *DataColumnTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
+	return topicsFromSubnets(computeNeededSubnets(d, slot), d)
+}
+
+// getFullTopicString builds the full topic string for a data column subnet.
+func (d *DataColumnTopicFamily) getFullTopicString(subnet uint64) string {
+	return p2p.DataColumnSubnetTopic(d.nse.ForkDigest, subnet)
+}
+
+// getSubnetsToJoin returns data column subnets.
+func (d *DataColumnTopicFamily) getSubnetsToJoin(slot primitives.Slot) map[uint64]bool {
 	return d.syncService.dataColumnSubnetIndices(slot)
 }
 
-// GetSubnetsForBroadcast returns all data column subnets.
-func (d *DataColumnTopicFamily) GetSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
+// getSubnetsForBroadcast returns all data column subnets.
+func (d *DataColumnTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) map[uint64]bool {
 	return d.syncService.allDataColumnSubnets(slot)
 }
 
-// GetTopicsForNode returns all topics for the given node that are relevant to this topic family.
-func (d *DataColumnTopicFamily) GetTopicsForNode(node *enode.Node) ([]string, error) {
+// ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
+func (d *DataColumnTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
 	return getTopicsForNode(d.syncService, d, node, p2p.DataColumnSubnets)
-}
-
-func (d *DataColumnTopicFamily) Subscribe() {
-	d.baseGossipsubTopicFamilyWithDynamicSubnets.Subscribe(d)
-}
-
-func (d *DataColumnTopicFamily) Unsubscribe() {
-	d.baseGossipsubTopicFamilyWithDynamicSubnets.Unsubscribe()
 }
 
 type nodeSubnetExtractor func(id enode.ID, n *enode.Node, r *enr.Record) (map[uint64]bool, error)
 
+type dynamicSubnetFamily interface {
+	getSubnetsToJoin(primitives.Slot) map[uint64]bool
+	getSubnetsForBroadcast(primitives.Slot) map[uint64]bool
+	getFullTopicString(subnet uint64) string
+}
+
 func getTopicsForNode(
 	s *Service,
-	tf GossipsubTopicFamilyWithDynamicSubnets,
+	tf dynamicSubnetFamily,
 	node *enode.Node,
 	extractor nodeSubnetExtractor,
 ) ([]string, error) {
@@ -241,10 +204,8 @@ func getTopicsForNode(
 		return nil, errors.New("enode is nil")
 	}
 	currentSlot := s.cfg.clock.CurrentSlot()
-	neededSubnets := computeAllNeededSubnets(
-		currentSlot,
-		tf,
-	)
+
+	neededSubnets := computeNeededSubnets(tf, currentSlot)
 
 	nodeSubnets, err := extractor(node.ID(), node, node.Record())
 	if err != nil {
@@ -254,8 +215,30 @@ func getTopicsForNode(
 	var topics []string
 	for subnet := range neededSubnets {
 		if nodeSubnets[subnet] {
-			topics = append(topics, tf.GetFullTopicString(subnet))
+			topics = append(topics, tf.getFullTopicString(subnet))
 		}
 	}
 	return topics, nil
+}
+
+func computeNeededSubnets(tf dynamicSubnetFamily, slot primitives.Slot) map[uint64]bool {
+	subnetsToJoin := tf.getSubnetsToJoin(slot)
+	subnetsRequiringPeers := tf.getSubnetsForBroadcast(slot)
+
+	neededSubnets := make(map[uint64]bool, len(subnetsToJoin)+len(subnetsRequiringPeers))
+	for subnet := range subnetsToJoin {
+		neededSubnets[subnet] = true
+	}
+	for subnet := range subnetsRequiringPeers {
+		neededSubnets[subnet] = true
+	}
+	return neededSubnets
+}
+
+func topicsFromSubnets(subnets map[uint64]bool, tf dynamicSubnetFamily) []string {
+	topics := make([]string, 0, len(subnets))
+	for s := range subnets {
+		topics = append(topics, tf.getFullTopicString(s))
+	}
+	return topics
 }

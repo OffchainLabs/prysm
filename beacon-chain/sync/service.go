@@ -233,6 +233,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 			delete(r.seenPendingBlocks, root)
 		}
 	})
+
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 	r.initCaches()
@@ -323,9 +324,6 @@ func (s *Service) Stop() error {
 	// Now safe to remove handlers / unsubscribe.
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
-	}
-	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
-		s.unSubscribeFromTopic(t)
 	}
 
 	// Stop gossipsub dialer and crawler if present.
@@ -440,7 +438,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	// Start the gossipsub dialer if available.
 	if dialer := s.cfg.p2p.GossipsubDialer(); dialer != nil {
 		provider := func() []string {
-			return s.gossipsubController.GetCurrentSubnetTopics(s.cfg.clock.CurrentSlot())
+			return s.gossipsubController.GetCurrentActiveTopics()
 		}
 		if err := dialer.Start(provider); err != nil {
 			log.WithError(err).Warn("Failed to start gossipsub peer dialer")

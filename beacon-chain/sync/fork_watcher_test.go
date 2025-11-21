@@ -42,7 +42,6 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
 		chainStarted:        abool.New(),
-		subHandler:          newSubTopicHandler(),
 		initialSyncComplete: closedChan,
 	}
 	return r

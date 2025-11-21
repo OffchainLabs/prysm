@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
+	require2 "github.com/stretchr/testify/require"
 )
 
 // Helpers for crawledPeers tests
@@ -683,7 +684,7 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 	defer g.Stop()
 
 	// Verify that the peer has been indexed under the topic and marked as pinged
-	require.Eventually(t, func() bool {
+	require2.Eventually(t, func() bool {
 		g.crawledPeers.mu.RLock()
 		defer g.crawledPeers.mu.RUnlock()
 

@@ -773,3 +773,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
 	require.DeepEqual(t, &result, verifiedRoSidecar)
 }
+
+func attestationToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
+	return fmt.Sprintf(AttestationSubnetTopicFormat, forkDigest, subnet)
+}

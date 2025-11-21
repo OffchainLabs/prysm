@@ -39,53 +39,52 @@ func (f *fakeDynFamily) Handler() subHandler {
 	return noopHandler
 }
 
-func (f *fakeDynFamily) Subscribe() {
-
-}
-
-func (f *fakeDynFamily) Unsubscribe() {
-
+func (f *fakeDynFamily) UnsubscribeAll() {
+	f.unsubscribeAll()
 }
 
 func (f *fakeDynFamily) GetFullTopicString(subnet uint64) string {
 	return fmt.Sprintf("topic-%d", subnet)
 }
 
-func (f *fakeDynFamily) GetSubnetsToJoin(_ primitives.Slot) map[uint64]bool {
-	return nil
+func (f *fakeDynFamily) TopicsToSubscribeForSlot(_ primitives.Slot) []string {
+	return f.topics
 }
 
-func (f *fakeDynFamily) GetSubnetsForBroadcast(_ primitives.Slot) map[uint64]bool {
-	return nil
-}
-
-func (f *fakeDynFamily) GetTopicsForNode(_ *enode.Node) ([]string, error) {
+func (f *fakeDynFamily) ExtractTopicsForNode(_ *enode.Node) ([]string, error) {
 	return append([]string{}, f.topics...), nil
 }
 
-type fakeStaticFamily struct {
-	baseGossipsubTopicFamily
-	name string
+func (f *fakeDynFamily) SubscribeForSlot(_ primitives.Slot) {
+	f.baseGossipsubTopicFamily.subscribeToTopics(f.topics)
 }
 
-func (f *fakeStaticFamily) Name() string {
+func (f *fakeDynFamily) UnsubscribeForSlot(_ primitives.Slot) {}
+
+type staticTopicFamily struct {
+	*baseGossipsubTopicFamily
+	name   string
+	topics []string
+}
+
+func (f *staticTopicFamily) Name() string {
 	return f.name
 }
 
-func (f *fakeStaticFamily) Validator() wrappedVal {
-	return nil
+func (f *staticTopicFamily) Validator() wrappedVal {
+	return f.validator
 }
 
-func (f *fakeStaticFamily) Handler() subHandler {
-	return noopHandler
+func (f *staticTopicFamily) Handler() subHandler {
+	return f.handler
 }
 
-func (f *fakeStaticFamily) Subscribe() {
-
+func (f *staticTopicFamily) Subscribe() {
+	f.baseGossipsubTopicFamily.subscribeToTopics(f.topics)
 }
 
-func (f *fakeStaticFamily) Unsubscribe() {
-
+func (f *staticTopicFamily) UnsubscribeAll() {
+	f.baseGossipsubTopicFamily.unsubscribeAll()
 }
 
 func testGossipsubControllerService(t *testing.T, current primitives.Epoch) *Service {
@@ -286,7 +285,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 			name: "static family ignored",
 			setup: func(g *GossipsubController) {
 				g.mu.Lock()
-				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &fakeStaticFamily{name: "StaticFam"}
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
 				g.mu.Unlock()
 			},
 			ctx:     func() context.Context { return context.Background() },
@@ -313,7 +312,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 				f1 := &fakeDynFamily{topics: []string{"t1", "t2"}, name: "Dyn1"}
 				f2 := &fakeDynFamily{topics: []string{"t2", "t3"}, name: "Dyn2"}
 				g.mu.Lock()
-				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &fakeStaticFamily{name: "StaticFam"}
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
 				g.mu.Unlock()
@@ -327,7 +326,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 			name: "mixed static and dynamic",
 			setup: func(g *GossipsubController) {
 				f1 := &fakeDynFamily{topics: []string{"a", "b"}, name: "Dyn"}
-				s1 := &fakeStaticFamily{name: "Static"}
+				s1 := &staticTopicFamily{name: "Static"}
 				g.mu.Lock()
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{9}}] = f1
 				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{9}}] = s1
@@ -337,19 +336,6 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 			node:    dummyNode,
 			want:    []string{"a", "b"},
 			wantErr: false,
-		},
-		{
-			name: "context cancelled short-circuits",
-			setup: func(g *GossipsubController) {
-				f1 := &fakeDynFamily{topics: []string{"x"}, name: "Dyn"}
-				g.mu.Lock()
-				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{0}}] = f1
-				g.mu.Unlock()
-			},
-			ctx:     func() context.Context { c, cancel := context.WithCancel(context.Background()); cancel(); return c },
-			node:    dummyNode,
-			want:    nil,
-			wantErr: true,
 		},
 	}
 

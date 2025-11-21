@@ -11,41 +11,33 @@ var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*BlobTopicFamily)(nil)
 
 // BlobTopicFamily represents a static-subnet family instance for a specific blob subnet index.
 type BlobTopicFamily struct {
-	baseGossipsubTopicFamily
+	*baseGossipsubTopicFamily
 	subnetIndex uint64
 }
 
 func NewBlobTopicFamily(s *Service, nse params.NetworkScheduleEntry, subnetIndex uint64) *BlobTopicFamily {
-	return &BlobTopicFamily{
-		baseGossipsubTopicFamily{
-			syncService:    s,
-			nse:            nse,
-			protocolSuffix: s.cfg.p2p.Encoding().ProtocolSuffix(),
-		},
-		subnetIndex,
+	b := &BlobTopicFamily{
+		subnetIndex: subnetIndex,
 	}
+	base := newBaseGossipsubTopicFamily(s, nse, s.validateBlob, s.blobSubscriber, b)
+	b.baseGossipsubTopicFamily = base
+	return b
 }
 
 func (b *BlobTopicFamily) Name() string {
 	return fmt.Sprintf("BlobTopicFamily-%d", b.subnetIndex)
 }
 
-func (b *BlobTopicFamily) Validator() wrappedVal {
-	return b.syncService.validateBlob
-}
-
-func (b *BlobTopicFamily) Handler() subHandler {
-	return b.syncService.blobSubscriber
-}
-
-func (b *BlobTopicFamily) GetFullTopicString() string {
-	return fmt.Sprintf(p2p.BlobSubnetTopicFormat, b.nse.ForkDigest, b.subnetIndex) + b.protocolSuffix
-}
-
+// Subscribe subscribes to the static subnet topic. Slot is ignored for this topic family.
 func (b *BlobTopicFamily) Subscribe() {
-	b.syncService.subscribe(b.GetFullTopicString(), b.Validator(), b.Handler())
+	b.subscribeToTopics([]string{b.getFullTopicString()})
 }
 
-func (b *BlobTopicFamily) Unsubscribe() {
-	b.syncService.unSubscribeFromTopic(b.GetFullTopicString())
+// UnsubscribeAll unsubscribes from all topics in the family.
+func (b *BlobTopicFamily) UnsubscribeAll() {
+	b.unsubscribeAll()
+}
+
+func (b *BlobTopicFamily) getFullTopicString() string {
+	return p2p.BlobSubnetTopic(b.nse.ForkDigest, b.subnetIndex)
 }
