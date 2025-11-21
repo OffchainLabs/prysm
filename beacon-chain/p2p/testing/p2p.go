@@ -423,11 +423,6 @@ func (p *TestP2P) DialPeers(ctx context.Context, maxConcurrentDials int, nodes [
 	return 0
 }
 
-// FindAndDialPeersWithSubnets mocks the p2p func.
-func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
-	return nil
-}
-
 // RefreshPersistentSubnets mocks the p2p func.
 func (*TestP2P) RefreshPersistentSubnets() {}
 

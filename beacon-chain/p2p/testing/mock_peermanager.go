@@ -57,9 +57,9 @@ func (m *MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 // RefreshPersistentSubnets .
 func (*MockPeerManager) RefreshPersistentSubnets() {}
 
-// FindAndDialPeersWithSubnet .
-func (*MockPeerManager) FindAndDialPeersWithSubnets(ctx context.Context, fullTopicForSubnet func(uint64) string, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
-	return nil
+// DialPeers
+func (p *MockPeerManager) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	return 0
 }
 
 // AddPingMethod .
