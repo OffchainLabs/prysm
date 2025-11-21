@@ -278,6 +278,46 @@ func TestStateDiff_SaveAndReadDiff(t *testing.T) {
 	}
 }
 
+func TestStateDiff_SaveAndReadDiff_WithRepetitiveAnchorSlots(t *testing.T) {
+	globalFlags := flags.GlobalFlags{
+		StateDiffExponents: []int{20, 14, 10, 7, 5},
+	}
+	flags.Init(&globalFlags)
+
+	for v := range version.All() {
+		t.Run(version.String(v), func(t *testing.T) {
+			db := setupDB(t)
+
+			err := setOffsetInDB(db, 0)
+
+			st, _ := createState(t, 0, v)
+			require.NoError(t, err)
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			slot := primitives.Slot(math.PowerOf2(11))
+			st, _ = createState(t, slot, v)
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			slot = primitives.Slot(math.PowerOf2(11) + math.PowerOf2(5))
+			st, _ = createState(t, slot, v)
+			err = db.saveStateByDiff(context.Background(), st)
+			require.NoError(t, err)
+
+			readSt, err := db.stateByDiff(context.Background(), slot)
+			require.NoError(t, err)
+			require.NotNil(t, readSt)
+
+			stSSZ, err := st.MarshalSSZ()
+			require.NoError(t, err)
+			readStSSZ, err := readSt.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepSSZEqual(t, stSSZ, readStSSZ)
+		})
+	}
+}
+
 func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 	setDefaultExponents()
 
