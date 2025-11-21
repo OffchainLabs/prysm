@@ -39,10 +39,20 @@ func (a *Attestations) Save(att ethpb.Att) error {
 
 // SaveMany stores multiple attestation in the map.
 func (a *Attestations) SaveMany(atts []ethpb.Att) error {
+	a.Lock()
+	defer a.Unlock()
+
 	for _, att := range atts {
-		if err := a.Save(att); err != nil {
-			return err
+		if att == nil || att.IsNil() {
+			continue
 		}
+
+		id, err := attestation.NewId(att, attestation.Full)
+		if err != nil {
+			return errors.Wrap(err, "could not create attestation ID")
+		}
+
+		a.atts[id] = att		
 	}
 
 	return nil
