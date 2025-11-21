@@ -52,7 +52,7 @@ func compareForkENR(self, peer *enr.Record) error {
 	peerENRString := func() string {
 		s, err := SerializeENR(peer)
 		if err != nil {
-			return peer.String()
+			return "<enr-serialize-error>"
 		}
 		return s
 	}
