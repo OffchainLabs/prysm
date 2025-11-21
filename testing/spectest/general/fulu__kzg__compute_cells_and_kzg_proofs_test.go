@@ -4,11 +4,11 @@ import (
 	"path"
 	"testing"
 
-	kzgPrysm "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	kzgPrysm "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ghodss/yaml"
 )
@@ -42,18 +42,16 @@ func TestComputeCellsAndKzgProofs(t *testing.T) {
 			}
 			b := kzgPrysm.Blob(blob)
 
-			cellsAndProofsForBlob, err := kzgPrysm.ComputeCellsAndKZGProofs(&b)
+			cells, proofs, err := kzgPrysm.ComputeCellsAndKZGProofs(&b)
 			if test.Output != nil {
 				require.NoError(t, err)
 				var combined [][]string
-				cs := cellsAndProofsForBlob.Cells
-				csRaw := make([]string, 0, len(cs))
-				for _, c := range cs {
+				csRaw := make([]string, 0, len(cells))
+				for _, c := range cells {
 					csRaw = append(csRaw, hexutil.Encode(c[:]))
 				}
-				ps := cellsAndProofsForBlob.Proofs
-				psRaw := make([]string, 0, len(ps))
-				for _, p := range ps {
+				psRaw := make([]string, 0, len(proofs))
+				for _, p := range proofs {
 					psRaw = append(psRaw, hexutil.Encode(p[:]))
 				}
 				combined = append(combined, csRaw)

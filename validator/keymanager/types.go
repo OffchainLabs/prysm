@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
 )
 
 // IKeymanager defines a general keymanager interface for Prysm wallets.
@@ -100,13 +100,13 @@ type AccountLister interface {
 
 // Keystore json file representation as a Go struct.
 type Keystore struct {
-	Crypto      map[string]interface{} `json:"crypto"`
-	ID          string                 `json:"uuid"`
-	Pubkey      string                 `json:"pubkey"`
-	Version     uint                   `json:"version"`
-	Description string                 `json:"description"`
-	Name        string                 `json:"name,omitempty"` // field deprecated in favor of description, EIP2335
-	Path        string                 `json:"path"`
+	Crypto      map[string]any `json:"crypto"`
+	ID          string         `json:"uuid"`
+	Pubkey      string         `json:"pubkey"`
+	Version     uint           `json:"version"`
+	Description string         `json:"description"`
+	Name        string         `json:"name,omitempty"` // field deprecated in favor of description, EIP2335
+	Path        string         `json:"path"`
 }
 
 // Kind defines an enum for either local, derived, or remote-signing

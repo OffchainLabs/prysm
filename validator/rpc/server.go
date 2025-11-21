@@ -9,18 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/httprest"
-	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/io/logs"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v6/validator/client"
-	iface "github.com/OffchainLabs/prysm/v6/validator/client/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/db"
-	"github.com/OffchainLabs/prysm/v6/validator/web"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/httprest"
+	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/client"
+	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/db"
+	"github.com/OffchainLabs/prysm/v7/validator/web"
 	"github.com/pkg/errors"
 )
 
@@ -34,6 +34,7 @@ type Config struct {
 	GRPCHeaders            []string
 	BeaconNodeGRPCEndpoint string
 	BeaconApiEndpoint      string
+	BeaconAPIHeaders       map[string][]string
 	BeaconApiTimeout       time.Duration
 	BeaconNodeCert         string
 	DB                     db.Database
@@ -64,6 +65,7 @@ type Server struct {
 	authTokenPath             string
 	beaconNodeCert            string
 	beaconApiEndpoint         string
+	beaconApiHeaders          map[string][]string
 	beaconNodeEndpoint        string
 	healthClient              ethpb.HealthClient
 	nodeClient                iface.NodeClient
@@ -103,6 +105,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		wallet:                 cfg.Wallet,
 		beaconApiTimeout:       cfg.BeaconApiTimeout,
 		beaconApiEndpoint:      cfg.BeaconApiEndpoint,
+		beaconApiHeaders:       cfg.BeaconAPIHeaders,
 		beaconNodeEndpoint:     cfg.BeaconNodeGRPCEndpoint,
 		router:                 cfg.Router,
 	}

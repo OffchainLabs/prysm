@@ -3,12 +3,12 @@ package blocks
 import (
 	"bytes"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	"github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/protobuf/proto"
@@ -42,6 +42,12 @@ func NewWrappedExecutionData(v proto.Message) (interfaces.ExecutionData, error) 
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
 	case *enginev1.ExecutionBundleFulu:
 		return WrappedExecutionPayloadDeneb(pbStruct.Payload)
+	case *enginev1.ExecutionPayloadHeader:
+		return WrappedExecutionPayloadHeader(pbStruct)
+	case *enginev1.ExecutionPayloadHeaderCapella:
+		return WrappedExecutionPayloadHeaderCapella(pbStruct)
+	case *enginev1.ExecutionPayloadHeaderDeneb:
+		return WrappedExecutionPayloadHeaderDeneb(pbStruct)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedVersion, "type %T", pbStruct)
 	}

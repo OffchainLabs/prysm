@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -80,9 +80,16 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "p2p update custody info")
 	}
 
-	if _, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount); err != nil {
+	// Update the p2p earliest available slot metric
+	earliestAvailableSlotP2P.Set(float64(storedEarliestSlot))
+
+	dbEarliestSlot, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
+	if err != nil {
 		return errors.Wrap(err, "beacon db update custody info")
 	}
+
+	// Update the DB earliest available slot metric
+	earliestAvailableSlotDB.Set(float64(dbEarliestSlot))
 
 	return nil
 }
@@ -90,10 +97,10 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 // custodyGroupCount computes the custody group count based on the custody requirement,
 // the validators custody requirement, and whether the node is subscribed to all data subnets.
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	if flags.Get().SubscribeAllDataSubnets {
-		return beaconConfig.NumberOfCustodyGroups, nil
+		return cfg.NumberOfCustodyGroups, nil
 	}
 
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
@@ -101,7 +108,7 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
+	return max(cfg.CustodyRequirement, validatorsCustodyRequirement), nil
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the

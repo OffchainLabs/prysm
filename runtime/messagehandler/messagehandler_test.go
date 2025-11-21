@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/runtime/messagehandler"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/runtime/messagehandler"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )

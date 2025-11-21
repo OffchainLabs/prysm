@@ -3,16 +3,16 @@ package stateutil_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 )
 
 func BenchmarkUint64ListRootWithRegistryLimit(b *testing.B) {
 	balances := make([]uint64, 100000)
-	for i := 0; i < len(balances); i++ {
+	for i := range balances {
 		balances[i] = uint64(i)
 	}
 	b.Run("100k balances", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := stateutil.Uint64ListRootWithRegistryLimit(balances)
 			if err != nil {
 				b.Fatal(err)

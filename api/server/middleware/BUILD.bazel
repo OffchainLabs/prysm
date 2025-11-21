@@ -6,7 +6,7 @@ go_library(
         "middleware.go",
         "util.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/api/server/middleware",
+    importpath = "github.com/OffchainLabs/prysm/v7/api/server/middleware",
     visibility = ["//visibility:public"],
     deps = [
         "//api:go_default_library",

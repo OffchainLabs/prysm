@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"testing"
 
-	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/go-bitfield"
+	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // FillRootsNaturalOpt is meant to be used as an option when calling NewBeaconState.
@@ -514,7 +514,7 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (st
 // trip testing.
 func filledByteSlice2D(length, innerLen uint64) [][]byte {
 	b := make([][]byte, length)
-	for i := uint64(0); i < length; i++ {
+	for i := range length {
 		b[i] = make([]byte, innerLen)
 	}
 	return b
@@ -524,10 +524,10 @@ func filledByteSlice2D(length, innerLen uint64) [][]byte {
 // Example: 16 becomes 0x00...0f.
 func PrepareRoots(size int) ([][]byte, error) {
 	roots := make([][]byte, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		roots[i] = make([]byte, fieldparams.RootLength)
 	}
-	for j := 0; j < len(roots); j++ {
+	for j := range roots {
 		// Remove '0x' prefix and left-pad '0' to have 64 chars in total.
 		s := fmt.Sprintf("%064s", hexutil.EncodeUint64(uint64(j))[2:])
 		h, err := hexutil.Decode("0x" + s)

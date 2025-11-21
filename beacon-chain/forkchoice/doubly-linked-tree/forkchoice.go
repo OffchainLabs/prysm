@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -239,9 +240,12 @@ func (f *ForkChoice) IsViableForCheckpoint(cp *forkchoicetypes.Checkpoint) (bool
 	if node.slot == epochStart {
 		return true, nil
 	}
-	nodeEpoch := slots.ToEpoch(node.slot)
-	if nodeEpoch >= cp.Epoch {
-		return false, nil
+	if !features.Get().DisableLastEpochTargets {
+		// Allow any node from the checkpoint epoch - 1 to be viable.
+		nodeEpoch := slots.ToEpoch(node.slot)
+		if nodeEpoch+1 == cp.Epoch {
+			return true, nil
+		}
 	}
 	for _, child := range node.children {
 		if child.slot > epochStart {
@@ -622,21 +626,26 @@ func (f *ForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 
 // DependentRoot returns the last root of the epoch prior to the requested ecoch in the canonical chain.
 func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
-	tr, err := f.TargetRootForEpoch(f.CachedHeadRoot(), epoch)
+	return f.DependentRootForEpoch(f.CachedHeadRoot(), epoch)
+}
+
+// DependentRootForEpoch return the last root of the epoch prior to the requested ecoch for the given root.
+func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	tr, err := f.TargetRootForEpoch(root, epoch)
 	if err != nil {
 		return [32]byte{}, err
 	}
 	if tr == [32]byte{} {
 		return [32]byte{}, nil
 	}
-	n, ok := f.store.nodeByRoot[tr]
-	if !ok || n == nil {
+	node, ok := f.store.nodeByRoot[tr]
+	if !ok || node == nil {
 		return [32]byte{}, ErrNilNode
 	}
-	if slots.ToEpoch(n.slot) == epoch && n.parent != nil {
-		n = n.parent
+	if slots.ToEpoch(node.slot) >= epoch && node.parent != nil {
+		node = node.parent
 	}
-	return n.root, nil
+	return node.root, nil
 }
 
 // TargetRootForEpoch returns the root of the target block for a given epoch.

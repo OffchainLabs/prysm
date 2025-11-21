@@ -57,3 +57,8 @@ func (t SSZType) String() string {
 		return fmt.Sprintf("Unknown(%d)", t)
 	}
 }
+
+// isBasic returns true if the SSZType is a basic type.
+func (t SSZType) isBasic() bool {
+	return t == Uint8 || t == Uint16 || t == Uint32 || t == Uint64 || t == Boolean
+}

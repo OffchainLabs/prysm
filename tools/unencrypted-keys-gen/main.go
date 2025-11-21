@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/tools/unencrypted-keys-gen/keygen"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/tools/unencrypted-keys-gen/keygen"
 )
 
 var (
@@ -67,7 +67,7 @@ func generateRandomKeys(num int) (*keygen.UnencryptedKeysContainer, error) {
 		Keys: make([]*keygen.UnencryptedKeys, num),
 	}
 
-	for i := 0; i < num; i++ {
+	for i := range num {
 		sk, err := bls.RandKey()
 		if err != nil {
 			return nil, err

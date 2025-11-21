@@ -3,11 +3,11 @@ package state_native_test
 import (
 	"testing"
 
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func BenchmarkAppendHistoricalRoots(b *testing.B) {
@@ -27,9 +27,7 @@ func BenchmarkAppendHistoricalRoots(b *testing.B) {
 
 	ref := st.Copy()
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := ref.AppendHistoricalRoots(root)
 		require.NoError(b, err)
 		ref = st.Copy()
@@ -52,9 +50,7 @@ func BenchmarkAppendHistoricalSummaries(b *testing.B) {
 
 	ref := st.Copy()
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := ref.AppendHistoricalSummaries(&ethpb.HistoricalSummary{})
 		require.NoError(b, err)
 		ref = st.Copy()
