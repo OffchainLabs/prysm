@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -12,6 +13,8 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+var _ p2p.PeerManager = (*MockPeerManager)(nil)
+
 // MockPeerManager is mock of the PeerManager interface.
 type MockPeerManager struct {
 	Enr               *enr.Record
@@ -19,6 +22,7 @@ type MockPeerManager struct {
 	BHost             host.Host
 	DiscoveryAddr     []multiaddr.Multiaddr
 	FailDiscoveryAddr bool
+	Dialer            gossipsubcrawler.GossipsubDialer
 }
 
 // Disconnect .
@@ -44,6 +48,11 @@ func (m *MockPeerManager) ENR() *enr.Record {
 // NodeID .
 func (m MockPeerManager) NodeID() enode.ID {
 	return enode.ID{}
+}
+
+// GossipsubDialer returns the configured dialer mock, if any.
+func (m MockPeerManager) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+	return m.Dialer
 }
 
 // DiscoveryAddresses .
