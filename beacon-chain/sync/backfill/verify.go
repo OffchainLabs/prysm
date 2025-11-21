@@ -36,9 +36,10 @@ func (v verifiedROBlocks) blobIdents(retentionStart primitives.Slot) ([]blobSumm
 	if latest < retentionStart {
 		return nil, nil
 	}
+	first := v[0].Block().Slot()
 	fuluStart := params.BeaconConfig().FuluForkEpoch
 	// If the batch end slot or last result block are pre-fulu, so are the rest.
-	if slots.ToEpoch(latest) >= fuluStart {
+	if slots.ToEpoch(first) >= fuluStart {
 		return nil, nil
 	}
 

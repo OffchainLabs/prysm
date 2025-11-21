@@ -47,7 +47,7 @@ type Service struct {
 var _ runtime.Service = (*Service)(nil)
 
 // PeerAssigner describes a type that provides an Assign method, which can assign the best peer
-// to service an RPC blockRequest. The Assign method takes a map of peers that should be excluded,
+// to service an RPC blockRequest. The Assign method takes a callback used to filter out peers,
 // allowing the caller to avoid making multiple concurrent requests to the same peer.
 type PeerAssigner interface {
 	Assign(filter peers.AssignmentFilter) ([]peer.ID, error)

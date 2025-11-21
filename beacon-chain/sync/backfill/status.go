@@ -72,9 +72,9 @@ func (s *Store) status() *dbval.BackfillStatus {
 	}
 }
 
-// fillBack saves the slice of blocks and updates the BackfillStatus LowSlot/Root/ParentRoot tracker to the values
-// from the first block in the slice. This method assumes that the block slice has been fully validated and
-// sorted in slot order by the calling function.
+// fillBack saves the slice of blocks and updates the BackfillStatus tracker to match the first block in the slice.
+// This method assumes that the block slice has been fully validated and sorted in slot order by the calling function.
+// It also performs the blob and/or data column availability check, which will persist blobs/DCs to disk once verified.
 func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker) (*dbval.BackfillStatus, error) {
 	status := s.status()
 	if len(blocks) == 0 {
@@ -90,7 +90,7 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 	}
 
 	if err := store.IsDataAvailable(ctx, current, blocks...); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "IsDataAvailable")
 	}
 
 	if err := s.store.SaveROBlocks(ctx, blocks, false); err != nil {
