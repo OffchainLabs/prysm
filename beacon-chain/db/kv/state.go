@@ -823,6 +823,29 @@ func (s *Store) stateBytes(ctx context.Context, blockRoot [32]byte) ([]byte, err
 	return dst, err
 }
 
+// SlotByBlockRoot returns the slot of the input block root, based on state summary or block.
+func (s *Store) SlotByBlockRoot(ctx context.Context, blockRoot [32]byte) (primitives.Slot, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.SlotByBlockRoot")
+	defer span.End()
+
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
+	if err != nil {
+		return 0, err
+	}
+	if stateSummary == nil {
+		blk, err := s.Block(ctx, blockRoot)
+		if err != nil {
+			return 0, err
+		}
+		if blk == nil || blk.IsNil() {
+			return 0, errors.New("neither state summary nor block found")
+		}
+		return blk.Block().Slot(), nil
+	} else {
+		return stateSummary.Slot, nil
+	}
+}
+
 // slotByBlockRoot retrieves the corresponding slot of the input block root.
 func (s *Store) slotByBlockRoot(ctx context.Context, tx *bolt.Tx, blockRoot []byte) (primitives.Slot, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.slotByBlockRoot")
@@ -1044,23 +1067,9 @@ func (s *Store) isStateValidatorMigrationOver() (bool, error) {
 }
 
 func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
-	var slot primitives.Slot
-
-	stateSummary, err := s.StateSummary(ctx, blockRoot)
+	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
 	if err != nil {
 		return nil, err
-	}
-	if stateSummary == nil {
-		blk, err := s.Block(ctx, blockRoot)
-		if err != nil {
-			return nil, err
-		}
-		if blk == nil || blk.IsNil() {
-			return nil, errors.New("neither state summary nor block found")
-		}
-		slot = blk.Block().Slot()
-	} else {
-		slot = stateSummary.Slot
 	}
 
 	st, err := s.stateByDiff(ctx, slot)
