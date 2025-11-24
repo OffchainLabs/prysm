@@ -90,7 +90,7 @@ func IsExecutionEnabled(st state.ReadOnlyBeaconState, body interfaces.ReadOnlyBe
 	if st == nil || body == nil {
 		return false, errors.New("nil state or block body")
 	}
-	if st.Version() >= version.Bellatrix {
+	if st.Version() >= version.Capella {
 		return true, nil
 	}
 	if IsPreBellatrixVersion(st.Version()) {
