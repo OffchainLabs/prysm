@@ -182,7 +182,14 @@ func (v *ValidatorService) Start() {
 	}
 
 	u := strings.ReplaceAll(v.conn.GetBeaconApiUrl(), " ", "")
-	hosts := strings.Split(u, ",")
+	rawHosts := strings.Split(u, ",")
+	hosts := make([]string, 0, len(rawHosts))
+	for _, host := range rawHosts {
+		if host == "" {
+			continue
+		}
+		hosts = append(hosts, host)
+	}
 	if len(hosts) == 0 {
 		log.WithError(err).Error("No API hosts provided")
 		return
