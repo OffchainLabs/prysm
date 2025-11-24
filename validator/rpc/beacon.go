@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net/http"
+	"strings"
 
 	api "github.com/OffchainLabs/prysm/v7/api/client"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
@@ -57,10 +58,22 @@ func (s *Server) registerBeaconClient() error {
 		validatorHelpers.WithBeaconApiTimeout(s.beaconApiTimeout),
 	)
 
+	trimmed := strings.ReplaceAll(s.beaconApiEndpoint, " ", "")
+	rawHosts := strings.Split(trimmed, ",")
+	var hosts []string
+	for _, h := range rawHosts {
+		if h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	if len(hosts) == 0 {
+		return errors.New("no beacon API hosts provided")
+	}
+
 	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, conn.GetBeaconApiHeaders())
 	restHandler := beaconApi.NewBeaconApiRestHandler(
 		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(headersTransport)},
-		s.beaconApiEndpoint,
+		hosts[0],
 	)
 
 	s.chainClient = beaconChainClientFactory.NewChainClient(conn, restHandler)
