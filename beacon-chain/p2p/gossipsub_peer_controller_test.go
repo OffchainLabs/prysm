@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"net"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -265,7 +266,7 @@ func (m *mockCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node 
 		return nil
 	}
 
-	copied := append([]*enode.Node(nil), nodes...)
+	copied := slices.Clone(nodes)
 	if m.consume {
 		m.peers[topic] = nil
 	}

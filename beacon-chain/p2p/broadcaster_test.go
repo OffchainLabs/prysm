@@ -267,7 +267,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 		// Create a new config for each service to avoid shared mutations
 		cfg := &Config{
-			Discv5BootStrapAddrs: append([]string{}, baseCfg.Discv5BootStrapAddrs...),
+			Discv5BootStrapAddrs: baseCfg.Discv5BootStrapAddrs,
 			MaxPeers:             baseCfg.MaxPeers,
 			PingInterval:         baseCfg.PingInterval,
 			DB:                   baseCfg.DB,
