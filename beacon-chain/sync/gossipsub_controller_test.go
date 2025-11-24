@@ -20,46 +20,46 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// fakeDynFamily is a test implementation of a dynamic-subnet topic family.
-type fakeDynFamily struct {
+// testDynFamly is a test implementation of a dynamic-subnet topic family.
+type testDynFamly struct {
 	baseGossipsubTopicFamily
 	topics []string
 	name   string
 }
 
-func (f *fakeDynFamily) Name() string {
+func (f *testDynFamly) Name() string {
 	return f.name
 }
 
-func (f *fakeDynFamily) Validator() wrappedVal {
+func (f *testDynFamly) Validator() wrappedVal {
 	return nil
 }
 
-func (f *fakeDynFamily) Handler() subHandler {
+func (f *testDynFamly) Handler() subHandler {
 	return noopHandler
 }
 
-func (f *fakeDynFamily) UnsubscribeAll() {
+func (f *testDynFamly) UnsubscribeAll() {
 	f.unsubscribeAll()
 }
 
-func (f *fakeDynFamily) GetFullTopicString(subnet uint64) string {
+func (f *testDynFamly) GetFullTopicString(subnet uint64) string {
 	return fmt.Sprintf("topic-%d", subnet)
 }
 
-func (f *fakeDynFamily) TopicsToSubscribeForSlot(_ primitives.Slot) []string {
+func (f *testDynFamly) TopicsToSubscribeForSlot(_ primitives.Slot) []string {
 	return f.topics
 }
 
-func (f *fakeDynFamily) ExtractTopicsForNode(_ *enode.Node) ([]string, error) {
-	return append([]string{}, f.topics...), nil
+func (f *testDynFamly) ExtractTopicsForNode(_ *enode.Node) ([]string, error) {
+	return f.topics, nil
 }
 
-func (f *fakeDynFamily) SubscribeForSlot(_ primitives.Slot) {
+func (f *testDynFamly) SubscribeForSlot(_ primitives.Slot) {
 	f.baseGossipsubTopicFamily.subscribeToTopics(f.topics)
 }
 
-func (f *fakeDynFamily) UnsubscribeForSlot(_ primitives.Slot) {}
+func (f *testDynFamly) UnsubscribeForSlot(_ primitives.Slot) {}
 
 type staticTopicFamily struct {
 	*baseGossipsubTopicFamily
@@ -296,7 +296,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		{
 			name: "single dynamic family topics returned",
 			setup: func(g *GossipsubController) {
-				fam := &fakeDynFamily{topics: []string{"t1", "t2"}, name: "Dyn1"}
+				fam := &testDynFamly{topics: []string{"t1", "t2"}, name: "Dyn1"}
 				g.mu.Lock()
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = fam
 				g.mu.Unlock()
@@ -309,8 +309,8 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		{
 			name: "multiple dynamic families de-dup",
 			setup: func(g *GossipsubController) {
-				f1 := &fakeDynFamily{topics: []string{"t1", "t2"}, name: "Dyn1"}
-				f2 := &fakeDynFamily{topics: []string{"t2", "t3"}, name: "Dyn2"}
+				f1 := &testDynFamly{topics: []string{"t1", "t2"}, name: "Dyn1"}
+				f2 := &testDynFamly{topics: []string{"t2", "t3"}, name: "Dyn2"}
 				g.mu.Lock()
 				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
@@ -325,7 +325,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		{
 			name: "mixed static and dynamic",
 			setup: func(g *GossipsubController) {
-				f1 := &fakeDynFamily{topics: []string{"a", "b"}, name: "Dyn"}
+				f1 := &testDynFamly{topics: []string{"a", "b"}, name: "Dyn"}
 				s1 := &staticTopicFamily{name: "Static"}
 				g.mu.Lock()
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{9}}] = f1
