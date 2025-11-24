@@ -123,14 +123,6 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		return semiSupernodeTarget, nil
 	}
 
-	// If effective requirement is higher than semi-supernode target, use it.
-	log.WithFields(logrus.Fields{
-		"semiSupernodeTarget":          semiSupernodeTarget,
-		"effectiveCustodyRequirement":  effectiveCustodyRequirement,
-		"custodyRequirement":           cfg.CustodyRequirement,
-		"validatorsCustodyRequirement": validatorsCustodyRequirement,
-	}).Debug("Custody requirements exceed semi-supernode mode; using higher custody count to meet requirements.")
-
 	return effectiveCustodyRequirement, nil
 }
 
