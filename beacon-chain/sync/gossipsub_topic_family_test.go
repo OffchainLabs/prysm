@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -68,7 +69,7 @@ func TestTopicFamiliesForEpoch(t *testing.T) {
 		"BlobTopicFamily-5",
 	}
 
-	electraBlobFamilies := append(append([]string{}, denebBlobFamilies...), "BlobTopicFamily-6", "BlobTopicFamily-7")
+	electraBlobFamilies := append(slices.Clone(denebBlobFamilies), "BlobTopicFamily-6", "BlobTopicFamily-7")
 
 	fuluFamilies := []string{
 		"DataColumnTopicFamily",
