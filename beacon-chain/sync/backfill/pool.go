@@ -2,6 +2,7 @@ package backfill
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -69,6 +70,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
 		peerCache:      sync.NewDASPeerCache(p),
 		p2p:            p,
 		peerFailLogger: newIntervalLogger(log, 5),
+		earliest:       primitives.Slot(math.MaxUint64),
 	}
 }
 
