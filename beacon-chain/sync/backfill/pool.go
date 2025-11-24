@@ -75,7 +75,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
 func (p *p2pBatchWorkerPool) spawn(ctx context.Context, n int, a PeerAssigner, cfg *workerCfg) {
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	go p.batchRouter(a)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		go p.newWorker(workerId(i), p.toWorkers, p.fromWorkers, cfg).run(p.ctx)
 	}
 }
