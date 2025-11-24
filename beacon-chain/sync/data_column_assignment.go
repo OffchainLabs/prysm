@@ -13,6 +13,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	// ErrNoPeersCoverNeeded is returned when no peers are able to cover the needed columns.
+	ErrNoPeersCoverNeeded = errors.New("no peers able to cover needed columns")
+	// ErrNoPeersAvailable is returned when no peers are available for block requests.
+	ErrNoPeersAvailable = errors.New("no peers available")
+)
+
 // DASPeerCache caches information about a set of peers DAS peering decisions.
 type DASPeerCache struct {
 	p2pSvc p2p.P2P
@@ -164,7 +171,7 @@ func (m *PeerPicker) ForColumns(needed peerdas.ColumnIndices, busy map[peer.ID]b
 		}
 	}
 
-	return "", nil, errors.New("no peers able to cover needed columns")
+	return "", nil, ErrNoPeersCoverNeeded
 }
 
 // ForBlocks returns the lowest scoring peer in the set. This can be used to pick a peer
@@ -187,7 +194,7 @@ func (m *PeerPicker) ForBlocks(busy map[peer.ID]bool) (peer.ID, error) {
 			return ds.peer.pid, nil
 		}
 	}
-	return "", errors.New("no peers available")
+	return "", ErrNoPeersAvailable
 }
 
 // rarityRanker is initialized with the set of columns this node needs to custody, and the set of

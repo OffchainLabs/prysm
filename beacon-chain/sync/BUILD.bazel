@@ -169,6 +169,7 @@ go_test(
         "block_batcher_test.go",
         "context_test.go",
         "custody_test.go",
+        "data_column_assignment_test.go",
         "data_column_sidecars_test.go",
         "data_columns_reconstruct_test.go",
         "decode_pubsub_test.go",
