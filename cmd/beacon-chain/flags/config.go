@@ -1,6 +1,8 @@
 package flags
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/pkg/errors"
@@ -52,12 +54,20 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		cfg.SubscribeToAllSubnets = true
 	}
 
-	if ctx.Bool(SubscribeAllDataSubnets.Name) {
+	supernodeSet := ctx.Bool(SubscribeAllDataSubnets.Name)
+	semiSupernodeSet := ctx.Bool(SemiSupernode.Name)
+
+	// Ensure mutual exclusivity between supernode and semi-supernode modes
+	if supernodeSet && semiSupernodeSet {
+		return fmt.Errorf("cannot set both --%s and --%s flags; choose one mode", SubscribeAllDataSubnets.Name, SemiSupernode.Name)
+	}
+
+	if supernodeSet {
 		log.Warning("Subscribing to all data subnets")
 		cfg.SubscribeAllDataSubnets = true
 	}
 
-	if ctx.Bool(SemiSupernode.Name) {
+	if semiSupernodeSet {
 		log.Warning("Operating in semi-supernode mode (retain 50% of data columns)")
 		cfg.SemiSupernode = true
 	}
