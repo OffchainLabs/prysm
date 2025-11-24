@@ -117,7 +117,7 @@ func TestEpochStartSlot_OK(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.startSlot, ss, "EpochStart(%d)", tt.epoch)
 		} else {
-			require.ErrorContains(t, "start slot calculation overflow", err)
+			require.ErrorIs(t, err, errOverflow)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func TestEpochEndSlot_OK(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.startSlot, ss, "EpochStart(%d)", tt.epoch)
 		} else {
-			require.ErrorContains(t, "start slot calculation overflow", err)
+			require.ErrorIs(t, err, errOverflow)
 		}
 	}
 }
@@ -699,4 +699,76 @@ func TestSlotTickerReplayBehaviour(t *testing.T) {
 	}
 
 	require.Equal(t, ticks, counter)
+}
+
+func TestSafeEpochStartOrMax(t *testing.T) {
+	farFuture := params.BeaconConfig().FarFutureEpoch
+	// ensure FAR_FUTURE_EPOCH is indeed larger than MaxSafeEpoch
+	require.Equal(t, true, farFuture > MaxSafeEpoch())
+	// demonstrate overflow in naive usage of FAR_FUTURE_EPOCH
+	require.Equal(t, true, farFuture*primitives.Epoch(params.BeaconConfig().SlotsPerEpoch) < farFuture)
+
+	// sanity check that example "ordinary" epoch does not overflow
+	fulu, err := EpochStart(params.BeaconConfig().FuluForkEpoch)
+	require.NoError(t, err)
+	require.Equal(t, primitives.Slot(params.BeaconConfig().FuluForkEpoch)*params.BeaconConfig().SlotsPerEpoch, fulu)
+
+	maxEpochStart := primitives.Slot(math.MaxUint64) - 63
+	tests := []struct {
+		name  string
+		epoch primitives.Epoch
+		want  primitives.Slot
+		err   error
+	}{
+		{
+			name:  "genesis",
+			epoch: 0,
+			want:  0,
+		},
+		{
+			name:  "ordinary epoch",
+			epoch: params.BeaconConfig().FuluForkEpoch,
+			want:  primitives.Slot(params.BeaconConfig().FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
+		},
+		{
+			name:  "max epoch without overflow",
+			epoch: MaxSafeEpoch(),
+			want:  maxEpochStart,
+		},
+		{
+			name:  "max epoch causing overflow",
+			epoch: primitives.Epoch(math.MaxUint64),
+			want:  maxEpochStart,
+			err:   errOverflow,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SafeEpochStartOrMax(tt.epoch)
+			require.Equal(t, tt.want, got)
+			// If we expect an error, it should be present for both start and end calculations
+			_, startErr := EpochStart(tt.epoch)
+			_, endErr := EpochEnd(tt.epoch)
+			if tt.err != nil {
+				require.ErrorIs(t, startErr, tt.err)
+				require.ErrorIs(t, endErr, tt.err)
+			} else {
+				require.NoError(t, startErr)
+				require.NoError(t, endErr)
+			}
+		})
+	}
+}
+
+func TestMaxEpoch(t *testing.T) {
+	maxEpoch := MaxSafeEpoch()
+	_, err := EpochStart(maxEpoch + 2)
+	require.ErrorIs(t, err, errOverflow)
+	_, err = EpochEnd(maxEpoch + 1)
+	require.ErrorIs(t, err, errOverflow)
+	require.Equal(t, primitives.Slot(math.MaxUint64)-63, primitives.Slot(maxEpoch)*params.BeaconConfig().SlotsPerEpoch)
+	_, err = EpochEnd(maxEpoch)
+	require.NoError(t, err)
+	_, err = EpochStart(maxEpoch)
+	require.NoError(t, err)
 }
