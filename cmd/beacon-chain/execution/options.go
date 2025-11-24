@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -41,7 +41,7 @@ func FlagOptions(c *cli.Context) ([]execution.Option, error) {
 //
 // The secret must be stored as a hex-encoded string within a file in the filesystem.
 // If the --jwt-secret flag is provided to Prysm, but the file cannot be read, or does not contain a hex-encoded
-// key of at least 256 bits, the client should treat this as an error and abort the startup.
+// key of 256 bits, the client should treat this as an error and abort the startup.
 func parseJWTSecretFromFile(c *cli.Context) ([]byte, error) {
 	jwtSecretFile := c.String(flags.ExecutionJWTSecretFlag.Name)
 	if jwtSecretFile == "" {
@@ -59,8 +59,8 @@ func parseJWTSecretFromFile(c *cli.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(secret) < 32 {
-		return nil, errors.New("provided JWT secret should be a hex string of at least 32 bytes")
+	if len(secret) != 32 {
+		return nil, errors.New("provided JWT secret should be a hex string of 32 bytes")
 	}
 	log.Infof("Finished reading JWT secret from %s", jwtSecretFile)
 	return secret, nil

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
-	"github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"

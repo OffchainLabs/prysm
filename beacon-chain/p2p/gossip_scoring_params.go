@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -156,29 +156,13 @@ func (s *Service) retrieveActiveValidators() (uint64, error) {
 	if s.activeValidatorCount != 0 {
 		return s.activeValidatorCount, nil
 	}
-	rt := s.cfg.DB.LastArchivedRoot(s.ctx)
-	if rt == params.BeaconConfig().ZeroHash {
-		genState, err := s.cfg.DB.GenesisState(s.ctx)
-		if err != nil {
-			return 0, err
-		}
-		if genState == nil || genState.IsNil() {
-			return 0, errors.New("no genesis state exists")
-		}
-		activeVals, err := helpers.ActiveValidatorCount(context.Background(), genState, coreTime.CurrentEpoch(genState))
-		if err != nil {
-			return 0, err
-		}
-		// Cache active validator count
-		s.activeValidatorCount = activeVals
-		return activeVals, nil
-	}
-	bState, err := s.cfg.DB.State(s.ctx, rt)
+	finalizedCheckpoint, err := s.cfg.DB.FinalizedCheckpoint(s.ctx)
 	if err != nil {
 		return 0, err
 	}
-	if bState == nil || bState.IsNil() {
-		return 0, errors.Errorf("no state with root %#x exists", rt)
+	bState, err := s.cfg.StateGen.StateByRoot(s.ctx, [32]byte(finalizedCheckpoint.Root))
+	if err != nil {
+		return 0, err
 	}
 	activeVals, err := helpers.ActiveValidatorCount(context.Background(), bState, coreTime.CurrentEpoch(bState))
 	if err != nil {
@@ -651,8 +635,8 @@ func logGossipParameters(topic string, params *pubsub.TopicScoreParams) {
 	numOfFields := rawParams.NumField()
 
 	fields := make(logrus.Fields, numOfFields)
-	for i := 0; i < numOfFields; i++ {
-		fields[reflect.TypeOf(params).Elem().Field(i).Name] = rawParams.Field(i).Interface()
+	for i := range numOfFields {
+		fields[reflect.TypeFor[pubsub.TopicScoreParams]().Field(i).Name] = rawParams.Field(i).Interface()
 	}
 	log.WithFields(fields).Debugf("Topic Parameters for %s", topic)
 }

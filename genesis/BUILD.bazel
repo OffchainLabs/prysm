@@ -11,7 +11,7 @@ go_library(
         "storage.go",
         "testing.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/genesis",
+    importpath = "github.com/OffchainLabs/prysm/v7/genesis",
     visibility = ["//visibility:public"],
     deps = [
         "//api/client:go_default_library",

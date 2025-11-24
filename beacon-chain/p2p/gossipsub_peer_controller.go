@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -58,11 +58,9 @@ func (g *GossipsubPeerDialer) Start(provider gossipsubcrawler.SubnetTopicsProvid
 
 	g.once.Do(func() {
 		g.topicsProvider = provider
-		g.wg.Add(1)
-		go func() {
-			defer g.wg.Done()
+		g.wg.Go(func() {
 			g.dialLoop()
-		}()
+		})
 	})
 
 	return nil
@@ -141,6 +139,7 @@ func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*en
 	if len(newPeers) > missing {
 		newPeers = newPeers[:missing]
 	}
+
 	return newPeers
 }
 

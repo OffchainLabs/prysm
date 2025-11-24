@@ -4,11 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestMappingHasNoDuplicates(t *testing.T) {
@@ -18,7 +19,7 @@ func TestMappingHasNoDuplicates(t *testing.T) {
 		if _, ok := m[reflect.TypeOf(v())]; ok {
 			t.Errorf("%T is duplicated in the topic mapping", v)
 		}
-		m[reflect.TypeOf(v)] = true
+		m[reflect.TypeFor[func() proto.Message]()] = true
 	}
 }
 

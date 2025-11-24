@@ -8,18 +8,18 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -35,7 +35,8 @@ func createHost(t *testing.T, port uint) (host.Host, *ecdsa.PrivateKey, net.IP) 
 	ipAddr := net.ParseIP("127.0.0.1")
 	listen, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddr, port))
 	require.NoError(t, err, "Failed to p2p listen")
-	h, err := libp2p.New([]libp2p.Option{privKeyOption(pkey), libp2p.ListenAddrs(listen), libp2p.Security(noise.ID, noise.New)}...)
+	h, err := libp2p.New([]libp2p.Option{privKeyOption(pkey), libp2p.ListenAddrs(listen),
+		libp2p.Security(noise.ID, noise.New)}...)
 	require.NoError(t, err)
 	return h, pkey, ipAddr
 }
@@ -58,14 +59,13 @@ func TestService_Stop_DontPanicIfDv5ListenerIsNotInited(t *testing.T) {
 }
 
 func TestService_Start_OnlyStartsOnce(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
 	hook := logTest.NewGlobal()
 
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
-		UDPPort:     2000,
-		TCPPort:     3000,
-		QUICPort:    3000,
+		UDPPort:     0, // Use 0 to let OS assign an available port
+		TCPPort:     0,
+		QUICPort:    0,
 		ClockWaiter: cs,
 		DB:          testDB.SetupDB(t),
 	}
@@ -73,6 +73,7 @@ func TestService_Start_OnlyStartsOnce(t *testing.T) {
 	require.NoError(t, err)
 	s.dv5Listener = testp2p.NewMockListener(nil, nil)
 	s.custodyInfo = &custodyInfo{}
+	close(s.custodyInfoSet)
 	exitRoutine := make(chan bool)
 	go func() {
 		s.Start()
@@ -111,9 +112,9 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 
 	cs := startup.NewClockSynchronizer()
 	cfg := &Config{
-		UDPPort:       2000,
-		TCPPort:       3000,
-		QUICPort:      3000,
+		UDPPort:       0, // Use 0 to let OS assign an available port
+		TCPPort:       0,
+		QUICPort:      0,
 		StateNotifier: &mock.MockStateNotifier{},
 		NoDiscovery:   true, // <-- no s.dv5Listener is created
 		ClockWaiter:   cs,
@@ -128,7 +129,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 	beaconCfg.AltairForkEpoch = 0
 	beaconCfg.BellatrixForkEpoch = 0
 	beaconCfg.CapellaForkEpoch = 0
-	beaconCfg.SecondsPerSlot = 1
+	beaconCfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(beaconCfg)
 
 	exitRoutine := make(chan bool)
@@ -147,12 +148,11 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 
 func TestListenForNewNodes(t *testing.T) {
 	const (
-		port              = uint(2000)
+		bootPort          = uint(2200) // Use specific port for bootnode ENR
 		testPollingPeriod = 1 * time.Second
 		peerCount         = 5
 	)
 
-	params.SetupTestConfigCleanup(t)
 	db := testDB.SetupDB(t)
 
 	// Setup bootnode.
@@ -160,7 +160,7 @@ func TestListenForNewNodes(t *testing.T) {
 		StateNotifier:        &mock.MockStateNotifier{},
 		PingInterval:         testPingInterval,
 		DisableLivenessCheck: true,
-		UDPPort:              port,
+		UDPPort:              bootPort,
 		DB:                   db,
 	}
 
@@ -171,10 +171,13 @@ func TestListenForNewNodes(t *testing.T) {
 
 	s := &Service{
 		cfg:                   cfg,
+		ctx:                   t.Context(),
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: gvr[:],
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        make(chan struct{}),
 	}
+	close(s.custodyInfoSet)
 
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
@@ -199,25 +202,29 @@ func TestListenForNewNodes(t *testing.T) {
 	hosts := make([]host.Host, 0, peerCount)
 
 	for i := uint(1); i <= peerCount; i++ {
+		peerPort := bootPort + i
 		cfg = &Config{
 			Discv5BootStrapAddrs: []string{bootNode.String()},
 			PingInterval:         testPingInterval,
 			DisableLivenessCheck: true,
 			MaxPeers:             peerCount,
 			ClockWaiter:          cs,
-			UDPPort:              port + i,
-			TCPPort:              port + i,
+			UDPPort:              peerPort,
+			TCPPort:              peerPort,
 			DB:                   db,
 		}
 
-		h, pkey, ipAddr := createHost(t, port+i)
+		h, pkey, ipAddr := createHost(t, peerPort)
 
 		s := &Service{
 			cfg:                   cfg,
+			ctx:                   t.Context(),
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: gvr[:],
 			custodyInfo:           &custodyInfo{},
+			custodyInfoSet:        make(chan struct{}),
 		}
+		close(s.custodyInfoSet)
 
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
 		require.NoError(t, err, "Could not start discovery for node")
@@ -247,6 +254,7 @@ func TestListenForNewNodes(t *testing.T) {
 	s, err = NewService(t.Context(), cfg)
 	require.NoError(t, err)
 	s.custodyInfo = &custodyInfo{}
+	close(s.custodyInfoSet)
 
 	go s.Start()
 
@@ -270,7 +278,6 @@ func TestListenForNewNodes(t *testing.T) {
 }
 
 func TestPeer_Disconnect(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
 	h1, _, _ := createHost(t, 5000)
 	defer func() {
 		if err := h1.Close(); err != nil {
@@ -363,7 +370,7 @@ func TestService_connectWithPeer(t *testing.T) {
 				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
 					ScorerParams: &scorers.Config{},
 				})
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					ps.Scorers().BadResponsesScorer().Increment("bad")
 				}
 				return ps

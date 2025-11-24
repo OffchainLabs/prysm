@@ -3,7 +3,7 @@ package journald
 import "testing"
 
 func TestStringifyEntries(t *testing.T) {
-	input := map[string]interface{}{
+	input := map[string]any{
 		"foo":     "bar",
 		"baz":     123,
 		"foo-foo": "x",

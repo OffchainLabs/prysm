@@ -3,9 +3,9 @@ package sync
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -100,7 +100,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				count := cfg.BlobsidecarSubnetCount
 				families := make([]GossipsubTopicFamily, 0, count)
-				for i := uint64(0); i < count; i++ {
+				for i := range count {
 					families = append(families, NewBlobTopicFamily(s, nse, i))
 				}
 				return families
@@ -112,7 +112,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				count := cfg.BlobsidecarSubnetCountElectra
 				families := make([]GossipsubTopicFamily, 0, count)
-				for i := uint64(0); i < count; i++ {
+				for i := range count {
 					families = append(families, NewBlobTopicFamily(s, nse, i))
 				}
 				return families

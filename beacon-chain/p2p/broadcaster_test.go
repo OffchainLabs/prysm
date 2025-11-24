@@ -10,26 +10,26 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	testpb "github.com/OffchainLabs/prysm/v7/proto/testing"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -61,7 +61,7 @@ func TestService_Broadcast(t *testing.T) {
 
 	topic := "/eth2/%x/testing"
 	// Set a test gossip mapping for testpb.TestSimpleMessage.
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Fork]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest)
@@ -107,7 +107,7 @@ func TestService_Broadcast_ReturnsErr_TopicNotMapped(t *testing.T) {
 }
 
 func TestService_Attestation_Subnet(t *testing.T) {
-	if gtm := GossipTypeMapping[reflect.TypeOf(&ethpb.Attestation{})]; gtm != AttestationSubnetTopicFormat {
+	if gtm := GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]; gtm != AttestationSubnetTopicFormat {
 		t.Errorf("Constant is out of date. Wanted %s, got %s", AttestationSubnetTopicFormat, gtm)
 	}
 
@@ -175,7 +175,7 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	subnet := uint64(5)
 
 	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -219,19 +219,31 @@ func TestService_BroadcastAttestation(t *testing.T) {
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	const port = uint(2000)
 
+	// The DB has to be shared in all peers to avoid the
+	// duplicate metrics collector registration attempted.
+	// However, we don't care for this test.
+	db := testDB.SetupDB(t)
+
 	// Setup bootnode.
-	cfg := &Config{PingInterval: testPingInterval}
+	cfg := &Config{PingInterval: testPingInterval, DB: db}
 	cfg.UDPPort = uint(port)
+	cfg.TCPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
 	genesisValidatorsRoot := make([]byte, 32)
+
 	s := &Service{
 		cfg:                   cfg,
 		genesisTime:           genesisTime,
 		genesisValidatorsRoot: genesisValidatorsRoot,
 		custodyInfo:           &custodyInfo{},
+		ctx:                   t.Context(),
+		custodyInfoSet:        make(chan struct{}),
 	}
+
+	close(s.custodyInfoSet)
+
 	bootListener, err := s.createListener(ipAddr, pkey)
 	require.NoError(t, err)
 	defer bootListener.Close()
@@ -241,39 +253,60 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	var listeners []*listenerWrapper
 	var hosts []host.Host
+	var configs []*Config
 	// setup other nodes.
-	cfg = &Config{
+	baseCfg := &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
 		PingInterval:         testPingInterval,
+		DB:                   db,
 	}
 	// Setup 2 different hosts
 	for i := uint(1); i <= 2; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)
-		cfg.UDPPort = uint(port + i)
-		cfg.TCPPort = uint(port + i)
+
+		// Create a new config for each service to avoid shared mutations
+		cfg := &Config{
+			Discv5BootStrapAddrs: append([]string{}, baseCfg.Discv5BootStrapAddrs...),
+			MaxPeers:             baseCfg.MaxPeers,
+			PingInterval:         baseCfg.PingInterval,
+			DB:                   baseCfg.DB,
+			UDPPort:              uint(port + i),
+			TCPPort:              uint(port + i),
+		}
+
 		if len(listeners) > 0 {
 			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
 		}
+
 		s := &Service{
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
 			genesisValidatorsRoot: genesisValidatorsRoot,
 			custodyInfo:           &custodyInfo{},
+			ctx:                   t.Context(),
+			custodyInfoSet:        make(chan struct{}),
 		}
+
+		close(s.custodyInfoSet)
+
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
-		// Set for 2nd peer
+		assert.NoError(t, err, "Could not start discovery for node")
+
+		// Set listener for the service
+		s.dv5Listener = listener
+		s.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
+
+		// Set subnet for 2nd peer
 		if i == 2 {
-			s.dv5Listener = listener
-			s.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
 			bitV := bitfield.NewBitvector64()
 			bitV.SetBitAt(subnet, true)
 			err := s.updateSubnetRecordWithMetadata(bitV)
 			require.NoError(t, err)
 		}
-		assert.NoError(t, err, "Could not start discovery for node")
 		listeners = append(listeners, listener)
 		hosts = append(hosts, h)
+		configs = append(configs, cfg)
 	}
 	defer func() {
 		// Close down all peers.
@@ -308,7 +341,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		pubsub:                ps1,
 		dv5Listener:           listeners[0],
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   cfg,
+		cfg:                   configs[0],
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
@@ -324,7 +357,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		pubsub:                ps2,
 		dv5Listener:           listeners[1],
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   cfg,
+		cfg:                   configs[1],
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
@@ -338,7 +371,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
 	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -416,7 +449,7 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	subnet := uint64(5)
 
 	topic := SyncCommitteeSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(msg)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -493,7 +526,7 @@ func TestService_BroadcastBlob(t *testing.T) {
 	subnet := uint64(0)
 
 	topic := BlobSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeOf(blobSidecar)] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = topic
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
 	topic = fmt.Sprintf(topic, digest, subnet)
@@ -581,7 +614,7 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 
 		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
 		require.NoError(t, err)
-		expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))
+		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
 			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}
@@ -657,7 +690,7 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 
 		slotStartTime, err := slots.StartTime(p.genesisTime, msg.SignatureSlot())
 		require.NoError(t, err)
-		expectedDelay := slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))
+		expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
 		if time.Now().Before(slotStartTime.Add(expectedDelay)) {
 			tt.Errorf("Message received too early, now %v, expected at least %v", time.Now(), slotStartTime.Add(expectedDelay))
 		}
@@ -712,18 +745,26 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	// Create a host.
 	_, pkey, ipAddr := createHost(t, port)
 
+	// Create a shared DB for the service
+	db := testDB.SetupDB(t)
+
+	// Create and close the custody info channel immediately since custodyInfo is already set
+	custodyInfoSet := make(chan struct{})
+	close(custodyInfoSet)
+
 	service := &Service{
 		ctx:                   ctx,
 		host:                  p1.BHost,
 		pubsub:                p1.PubSub(),
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   &Config{},
+		cfg:                   &Config{DB: db},
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		subnetsLockLock:       sync.Mutex{},
 		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
 		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        custodyInfoSet,
 	}
 
 	// Create a listener.

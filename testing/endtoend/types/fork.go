@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChainConfig {

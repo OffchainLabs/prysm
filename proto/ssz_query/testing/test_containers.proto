@@ -4,7 +4,7 @@ package testing;
 
 import "proto/eth/ext/options.proto";
 
-option go_package = "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing;testing";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/ssz_query/testing;testing";
 
 
 // ===== FIXED-SIZE TEST CONTAINERS =====

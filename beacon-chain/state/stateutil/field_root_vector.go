@@ -1,7 +1,7 @@
 package stateutil
 
 import (
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/pkg/errors"
 )
 

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 
@@ -488,8 +488,6 @@ func (g *GossipsubPeerCrawler) cleanup() {
 	cp.mu.RUnlock()
 
 	for _, p := range peers {
-		p := p
-
 		// Remove peers that no longer pass the filter
 		if !g.peerFilter(p.node) {
 			cp.removePeer(p.id)

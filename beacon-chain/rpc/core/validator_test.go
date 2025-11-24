@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	p2pmock "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -22,7 +22,7 @@ func TestRegisterSyncSubnetProto(t *testing.T) {
 	k := pubKey(3)
 	committee := make([][]byte, 0)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		committee = append(committee, pubKey(uint64(i)))
 	}
 	sCommittee := &ethpb.SyncCommittee{
@@ -44,7 +44,7 @@ func TestRegisterSyncSubnet(t *testing.T) {
 	k := pubKey(3)
 	committee := make([][]byte, 0)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		committee = append(committee, pubKey(uint64(i)))
 	}
 	sCommittee := &ethpb.SyncCommittee{
