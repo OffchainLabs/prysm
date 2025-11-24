@@ -42,7 +42,7 @@ func ProcessRewardsAndPenaltiesPrecompute(
 		return nil, errors.Wrap(err, "could not get proposer attestation delta")
 	}
 	validatorBals := state.Balances()
-	for i := 0; i < numOfVals; i++ {
+	for i := range numOfVals {
 		vp[i].BeforeEpochTransitionBalance = validatorBals[i]
 
 		// Compute the post balance of the validator after accounting for the

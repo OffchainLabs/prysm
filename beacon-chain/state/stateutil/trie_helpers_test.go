@@ -36,8 +36,7 @@ func BenchmarkReturnTrieLayer_NormalAlgorithm(b *testing.B) {
 	require.NoError(b, err)
 	roots := retrieveBlockRoots(newState)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		layers, err := stateutil.ReturnTrieLayer(roots, uint64(len(roots)))
 		assert.NoError(b, err)
 		newRoot := *layers[len(layers)-1][0]
@@ -51,8 +50,7 @@ func BenchmarkReturnTrieLayer_VectorizedAlgorithm(b *testing.B) {
 	require.NoError(b, err)
 	roots := retrieveBlockRoots(newState)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		layers, err := stateutil.ReturnTrieLayer(roots, uint64(len(roots)))
 		assert.NoError(b, err)
 		newRoot := *layers[len(layers)-1][0]
@@ -96,8 +94,8 @@ func BenchmarkReturnTrieLayerVariable_NormalAlgorithm(b *testing.B) {
 		require.NoError(b, err)
 		roots = append(roots, rt)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		layers := stateutil.ReturnTrieLayerVariable(roots, params.BeaconConfig().ValidatorRegistryLimit)
 		newRoot := *layers[len(layers)-1][0]
 		newRoot, err = stateutil.AddInMixin(newRoot, uint64(len(validators)))
@@ -118,8 +116,8 @@ func BenchmarkReturnTrieLayerVariable_VectorizedAlgorithm(b *testing.B) {
 		require.NoError(b, err)
 		roots = append(roots, rt)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		layers := stateutil.ReturnTrieLayerVariable(roots, params.BeaconConfig().ValidatorRegistryLimit)
 		newRoot := *layers[len(layers)-1][0]
 		newRoot, err = stateutil.AddInMixin(newRoot, uint64(len(validators)))

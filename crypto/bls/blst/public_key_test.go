@@ -95,7 +95,7 @@ func TestPublicKey_Aggregate(t *testing.T) {
 
 func TestPublicKey_Aggregation_NoCorruption(t *testing.T) {
 	var pubkeys []common.PublicKey
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		priv, err := blst.RandKey()
 		require.NoError(t, err)
 		pubkey := priv.PublicKey()
@@ -113,54 +113,40 @@ func TestPublicKey_Aggregation_NoCorruption(t *testing.T) {
 	wg := new(sync.WaitGroup)
 
 	// Aggregate different sets of keys.
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys)
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys[:10])
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys[:40])
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys[20:60])
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys[80:])
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys[60:90])
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		_, err := blst.AggregatePublicKeys(compressedKeys[40:99])
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
 	wg.Wait()
 
@@ -185,7 +171,7 @@ func BenchmarkPublicKeyFromBytes(b *testing.B) {
 
 	b.Run("cache on", func(b *testing.B) {
 		blst.EnableCaches()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := blst.PublicKeyFromBytes(pubkeyBytes)
 			require.NoError(b, err)
 		}
@@ -193,7 +179,7 @@ func BenchmarkPublicKeyFromBytes(b *testing.B) {
 
 	b.Run("cache off", func(b *testing.B) {
 		blst.DisableCaches()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := blst.PublicKeyFromBytes(pubkeyBytes)
 			require.NoError(b, err)
 		}

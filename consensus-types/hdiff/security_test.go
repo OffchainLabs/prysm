@@ -63,7 +63,7 @@ func TestReasonablePerformance(t *testing.T) {
 		// Make realistic changes
 		_ = target.SetSlot(source.Slot() + 32) // One epoch
 		validators := target.Validators()
-		for i := 0; i < 100; i++ { // 10% of validators changed
+		for i := range 100 { // 10% of validators changed
 			validators[i].EffectiveBalance += 1000000000 // 1 ETH change
 		}
 		_ = target.SetValidators(validators)
@@ -129,7 +129,7 @@ func TestStateTransitionValidation(t *testing.T) {
 
 		// Some validators get rewards, others get penalties
 		balances := target.Balances()
-		for i := 0; i < len(balances); i++ {
+		for i := range balances {
 			if i%2 == 0 {
 				balances[i] += 100000000 // 0.1 ETH reward
 			} else {
@@ -331,12 +331,12 @@ func TestConcurrencySafety(t *testing.T) {
 		var wg sync.WaitGroup
 		errors := make(chan error, numGoroutines*iterations)
 
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			wg.Add(1)
 			go func(workerID int) {
 				defer wg.Done()
 
-				for j := 0; j < iterations; j++ {
+				for j := range iterations {
 					_, err := Diff(source, target)
 					if err != nil {
 						errors <- fmt.Errorf("worker %d iteration %d: %v", workerID, j, err)
@@ -367,7 +367,7 @@ func TestConcurrencySafety(t *testing.T) {
 		var wg sync.WaitGroup
 		errors := make(chan error, numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			wg.Add(1)
 			go func(workerID int) {
 				defer wg.Done()

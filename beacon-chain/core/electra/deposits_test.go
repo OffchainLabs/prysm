@@ -95,7 +95,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, primitives.Gwei(100), res)
 				// Validators 0..9 should have their balance increased
-				for i := primitives.ValidatorIndex(0); i < 10; i++ {
+				for i := range primitives.ValidatorIndex(10) {
 					b, err := st.BalanceAtIndex(i)
 					require.NoError(t, err)
 					require.Equal(t, params.BeaconConfig().MinActivationBalance+uint64(amountAvailForProcessing)/10, b)
@@ -122,7 +122,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 			check: func(t *testing.T, st state.BeaconState) {
 				amountAvailForProcessing := helpers.ActivationExitChurnLimit(1_000 * 1e9)
 				// Validators 0..9 should have their balance increased
-				for i := primitives.ValidatorIndex(0); i < 2; i++ {
+				for i := range primitives.ValidatorIndex(2) {
 					b, err := st.BalanceAtIndex(i)
 					require.NoError(t, err)
 					require.Equal(t, params.BeaconConfig().MinActivationBalance+uint64(amountAvailForProcessing), b)
@@ -149,7 +149,7 @@ func TestProcessPendingDeposits(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, primitives.Gwei(0), res)
 				// Validators 0..4 should have their balance increased
-				for i := primitives.ValidatorIndex(0); i < 4; i++ {
+				for i := range primitives.ValidatorIndex(4) {
 					b, err := st.BalanceAtIndex(i)
 					require.NoError(t, err)
 					require.Equal(t, params.BeaconConfig().MinActivationBalance+uint64(amountAvailForProcessing)/5, b)
@@ -528,7 +528,7 @@ func stateWithActiveBalanceETH(t *testing.T, balETH uint64) state.BeaconState {
 
 	vals := make([]*eth.Validator, numVals)
 	bals := make([]uint64, numVals)
-	for i := uint64(0); i < numVals; i++ {
+	for i := range numVals {
 		wc := make([]byte, 32)
 		wc[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
 		wc[31] = byte(i)

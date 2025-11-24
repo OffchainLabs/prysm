@@ -473,7 +473,7 @@ func (dv *RODataColumnsVerifier) SidecarKzgProofVerified() (err error) {
 		return columnErrBuilder(errors.Wrap(err, "verify data column commitment"))
 	}
 
-	dataColumnBatchKZGVerificationHistogram.Observe(float64(time.Since(startTime).Milliseconds()))
+	DataColumnBatchKZGVerificationHistogram.WithLabelValues("direct").Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
 }
 

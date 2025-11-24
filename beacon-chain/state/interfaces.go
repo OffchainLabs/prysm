@@ -63,8 +63,8 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
-	ToProtoUnsafe() interface{}
-	ToProto() interface{}
+	ToProtoUnsafe() any
+	ToProto() any
 	GenesisTime() time.Time
 	GenesisValidatorsRoot() []byte
 	Slot() primitives.Slot

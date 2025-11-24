@@ -175,9 +175,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case received := <-done:
@@ -188,7 +186,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 	atts := r.cfg.attPool.UnaggregatedAttestations()
 	assert.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att, atts[0], "Incorrect saved att")
@@ -268,9 +266,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAttElectra(t *testing.T) {
 	r.blkRootToPendingAtts[root] = []any{att}
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), root))
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case received := <-done:
@@ -281,7 +277,7 @@ func TestProcessPendingAtts_HasBlockSaveUnaggregatedAttElectra(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 	atts := r.cfg.attPool.UnaggregatedAttestations()
 	require.Equal(t, 1, len(atts), "Did not save unaggregated att")
 	assert.DeepEqual(t, att.ToAttestationElectra(committee), atts[0], "Incorrect saved att")
@@ -395,9 +391,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 
 	// Verify that the event feed receives the expected attestation.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case received := <-done:
@@ -408,7 +402,7 @@ func TestProcessPendingAtts_HasBlockSaveUnAggregatedAttElectra_VerifyAlreadySeen
 				return
 			}
 		}
-	}()
+	})
 
 	// Verify unaggregated attestations are saved correctly.
 	atts := r.cfg.attPool.UnaggregatedAttestations()
@@ -831,7 +825,7 @@ func TestValidatePendingAtts_CanPruneOldAtts(t *testing.T) {
 	r2 := [32]byte{'B'}
 	r3 := [32]byte{'C'}
 
-	for i := primitives.Slot(0); i < 100; i++ {
+	for i := range primitives.Slot(100) {
 		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r1[:]}})
 		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r2[:]}})
 		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: i, BeaconBlockRoot: r3[:]}})
@@ -877,7 +871,7 @@ func TestSavePendingAtts_BeyondLimit(t *testing.T) {
 		blkRootToPendingAtts: make(map[[32]byte][]any),
 	}
 
-	for i := 0; i < pendingAttsLimit; i++ {
+	for i := range pendingAttsLimit {
 		s.savePendingAtt(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: 1, BeaconBlockRoot: bytesutil.Bytes32(uint64(i))}})
 	}
 	r1 := [32]byte(bytesutil.Bytes32(0))

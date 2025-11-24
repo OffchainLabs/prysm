@@ -18,10 +18,10 @@ import (
 func (s *Server) AuthTokenInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		if err := s.authorize(ctx); err != nil {
 			return nil, err
 		}

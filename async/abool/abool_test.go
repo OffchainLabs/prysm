@@ -93,9 +93,9 @@ func TestToggleMultipleTimes(t *testing.T) {
 
 	v := New()
 	pre := !v.IsSet()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		v.SetTo(false)
-		for j := 0; j < i; j++ {
+		for range i {
 			pre = v.Toggle()
 		}
 
@@ -149,7 +149,7 @@ func TestRace(t *testing.T) {
 
 	// Writer
 	go func() {
-		for i := 0; i < repeat; i++ {
+		for range repeat {
 			v.Set()
 			wg.Done()
 		}
@@ -157,7 +157,7 @@ func TestRace(t *testing.T) {
 
 	// Reader
 	go func() {
-		for i := 0; i < repeat; i++ {
+		for range repeat {
 			v.IsSet()
 			wg.Done()
 		}
@@ -165,7 +165,7 @@ func TestRace(t *testing.T) {
 
 	// Writer
 	go func() {
-		for i := 0; i < repeat; i++ {
+		for range repeat {
 			v.UnSet()
 			wg.Done()
 		}
@@ -173,7 +173,7 @@ func TestRace(t *testing.T) {
 
 	// Reader And Writer
 	go func() {
-		for i := 0; i < repeat; i++ {
+		for range repeat {
 			v.Toggle()
 			wg.Done()
 		}
@@ -198,8 +198,8 @@ func ExampleAtomicBool() {
 func BenchmarkMutexRead(b *testing.B) {
 	var m sync.RWMutex
 	var v bool
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.RLock()
 		_ = v
 		m.RUnlock()
@@ -208,16 +208,16 @@ func BenchmarkMutexRead(b *testing.B) {
 
 func BenchmarkAtomicValueRead(b *testing.B) {
 	var v atomic.Value
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = v.Load() != nil
 	}
 }
 
 func BenchmarkAtomicBoolRead(b *testing.B) {
 	v := New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = v.IsSet()
 	}
 }
@@ -227,8 +227,8 @@ func BenchmarkAtomicBoolRead(b *testing.B) {
 func BenchmarkMutexWrite(b *testing.B) {
 	var m sync.RWMutex
 	var v bool
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.RLock()
 		v = true
 		m.RUnlock()
@@ -239,16 +239,16 @@ func BenchmarkMutexWrite(b *testing.B) {
 
 func BenchmarkAtomicValueWrite(b *testing.B) {
 	var v atomic.Value
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		v.Store(true)
 	}
 }
 
 func BenchmarkAtomicBoolWrite(b *testing.B) {
 	v := New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		v.Set()
 	}
 }
@@ -258,8 +258,8 @@ func BenchmarkAtomicBoolWrite(b *testing.B) {
 func BenchmarkMutexCAS(b *testing.B) {
 	var m sync.RWMutex
 	var v bool
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.Lock()
 		if !v {
 			v = true
@@ -270,8 +270,8 @@ func BenchmarkMutexCAS(b *testing.B) {
 
 func BenchmarkAtomicBoolCAS(b *testing.B) {
 	v := New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		v.SetToIf(false, true)
 	}
 }
@@ -281,8 +281,8 @@ func BenchmarkAtomicBoolCAS(b *testing.B) {
 func BenchmarkMutexToggle(b *testing.B) {
 	var m sync.RWMutex
 	var v bool
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		m.Lock()
 		v = !v
 		m.Unlock()
@@ -291,8 +291,8 @@ func BenchmarkMutexToggle(b *testing.B) {
 
 func BenchmarkAtomicBoolToggle(b *testing.B) {
 	v := New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		v.Toggle()
 	}
 }

@@ -329,10 +329,7 @@ func ProcessEffectiveBalanceUpdates(st state.BeaconState) (state.BeaconState, er
 		balance := bals[idx]
 
 		if balance+downwardThreshold < val.EffectiveBalance() || val.EffectiveBalance()+upwardThreshold < balance {
-			effectiveBal := maxEffBalance
-			if effectiveBal > balance-balance%effBalanceInc {
-				effectiveBal = balance - balance%effBalanceInc
-			}
+			effectiveBal := min(maxEffBalance, balance-balance%effBalanceInc)
 			if effectiveBal != val.EffectiveBalance() {
 				newVal = val.Copy()
 				newVal.EffectiveBalance = effectiveBal

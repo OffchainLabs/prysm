@@ -62,10 +62,7 @@ func (f *blocksFetcher) selectFailOverPeer(excludedPID peer.ID, peers []peer.ID)
 
 // waitForMinimumPeers spins and waits up until enough peers are available.
 func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, error) {
-	required := params.BeaconConfig().MaxPeersToSync
-	if flags.Get().MinimumSyncPeers < required {
-		required = flags.Get().MinimumSyncPeers
-	}
+	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -123,10 +120,7 @@ func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersP
 // trimPeers limits peer list, returning only specified percentage of peers.
 // Takes system constraints into account (min/max peers to sync).
 func trimPeers(peers []peer.ID, peersPercentage float64) []peer.ID {
-	required := params.BeaconConfig().MaxPeersToSync
-	if flags.Get().MinimumSyncPeers < required {
-		required = flags.Get().MinimumSyncPeers
-	}
+	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
 	// Weak/slow peers will be pushed down the list and trimmed since only percentage of peers is selected.
 	limit := uint64(math.Round(float64(len(peers)) * peersPercentage))
 	// Limit cannot be less that minimum peers required by sync mechanism.

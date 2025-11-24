@@ -23,7 +23,7 @@ import (
 func TestGoodByeRPCHandler_Disconnects_With_Peer(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(cfg)
 
 	p1 := p2ptest.NewTestP2P(t)

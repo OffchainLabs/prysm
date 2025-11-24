@@ -15,7 +15,7 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
-type rpcHandler func(context.Context, interface{}, libp2pcore.Stream) error
+type rpcHandler func(context.Context, any, libp2pcore.Stream) error
 
 // registerRPC for a given topic with an expected protobuf message type.
 func (c *client) registerRPCHandler(baseTopic string, handle rpcHandler) {

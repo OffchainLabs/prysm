@@ -55,7 +55,7 @@ func setupBenchmarkData(b *testing.B, numBlobs int) (interfaces.SignedBeaconBloc
 
 	// Create KZG commitments
 	kzgCommitments := make([][]byte, numBlobs)
-	for i := 0; i < numBlobs; i++ {
+	for i := range numBlobs {
 		kzgCommitments[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 	}
 
@@ -70,7 +70,7 @@ func setupBenchmarkData(b *testing.B, numBlobs int) (interfaces.SignedBeaconBloc
 
 	// Create blobs
 	blobs := make([][]byte, numBlobs)
-	for i := 0; i < numBlobs; i++ {
+	for i := range numBlobs {
 		blobs[i] = make([]byte, fieldparams.BlobLength)
 		// Add some variation to the blob data
 		blobs[i][0] = byte(i)
@@ -82,7 +82,7 @@ func setupBenchmarkData(b *testing.B, numBlobs int) (interfaces.SignedBeaconBloc
 		b.Fatal(err)
 	}
 	kzgProofs := make([][]byte, numBlobs)
-	for i := 0; i < numBlobs; i++ {
+	for i := range numBlobs {
 		kzgProofs[i] = proof
 	}
 
@@ -92,8 +92,7 @@ func setupBenchmarkData(b *testing.B, numBlobs int) (interfaces.SignedBeaconBloc
 func BenchmarkBuildBlobSidecars_Original_1Blob(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 1)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecarsOriginal(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -104,8 +103,7 @@ func BenchmarkBuildBlobSidecars_Original_1Blob(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Optimized_1Blob(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 1)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecars(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -116,8 +114,7 @@ func BenchmarkBuildBlobSidecars_Optimized_1Blob(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Original_2Blobs(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 2)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecarsOriginal(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -128,8 +125,7 @@ func BenchmarkBuildBlobSidecars_Original_2Blobs(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Optimized_3Blobs(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 3)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecars(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -140,8 +136,7 @@ func BenchmarkBuildBlobSidecars_Optimized_3Blobs(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Original_3Blobs(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 3)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecarsOriginal(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -152,8 +147,7 @@ func BenchmarkBuildBlobSidecars_Original_3Blobs(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Optimized_4Blobs(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 4)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecars(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -164,8 +158,7 @@ func BenchmarkBuildBlobSidecars_Optimized_4Blobs(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Original_9Blobs(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 9)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecarsOriginal(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -176,8 +169,7 @@ func BenchmarkBuildBlobSidecars_Original_9Blobs(b *testing.B) {
 func BenchmarkBuildBlobSidecars_Optimized_9Blobs(b *testing.B) {
 	blk, blobs, kzgProofs := setupBenchmarkData(b, 9)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := BuildBlobSidecars(blk, blobs, kzgProofs)
 		if err != nil {
 			b.Fatal(err)
@@ -190,9 +182,8 @@ func BenchmarkMerkleProofKZGCommitment_Original(b *testing.B) {
 	blk, _, _ := setupBenchmarkData(b, 4)
 	body := blk.Block().Body()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < 4; j++ {
+	for b.Loop() {
+		for j := range 4 {
 			_, err := blocks.MerkleProofKZGCommitment(body, j)
 			if err != nil {
 				b.Fatal(err)
@@ -205,8 +196,7 @@ func BenchmarkMerkleProofKZGCommitment_Optimized(b *testing.B) {
 	blk, _, _ := setupBenchmarkData(b, 4)
 	body := blk.Block().Body()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Pre-compute components once
 		components, err := blocks.PrecomputeMerkleProofComponents(body)
 		if err != nil {
@@ -214,7 +204,7 @@ func BenchmarkMerkleProofKZGCommitment_Optimized(b *testing.B) {
 		}
 
 		// Generate proofs for each index
-		for j := 0; j < 4; j++ {
+		for j := range 4 {
 			_, err := blocks.MerkleProofKZGCommitmentFromComponents(components, j)
 			if err != nil {
 				b.Fatal(err)

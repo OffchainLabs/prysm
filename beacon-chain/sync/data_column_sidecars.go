@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -129,9 +130,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
 	}
 
-	for root, sidecars := range mergedSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, mergedSidecarsByRoot)
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers")
@@ -150,9 +149,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
 	}
 
-	for root, sidecars := range mergedSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, mergedSidecarsByRoot)
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers using rescue mode")
@@ -165,9 +162,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "assemble available sidecars for incomplete roots")
 	}
 
-	for root, sidecars := range incompleteSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, incompleteSidecarsByRoot)
 
 	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
@@ -1159,9 +1154,7 @@ func copyIndicesByRoot(original map[[fieldparams.RootLength]byte]map[uint64]bool
 	copied := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(original))
 	for root, indexMap := range original {
 		copied[root] = make(map[uint64]bool, len(indexMap))
-		for index, value := range indexMap {
-			copied[root][index] = value
-		}
+		maps.Copy(copied[root], indexMap)
 	}
 	return copied
 }

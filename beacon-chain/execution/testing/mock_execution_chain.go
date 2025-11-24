@@ -147,7 +147,7 @@ type RPCClient struct {
 
 func (*RPCClient) Close() {}
 
-func (r *RPCClient) CallContext(ctx context.Context, obj interface{}, methodName string, args ...interface{}) error {
+func (r *RPCClient) CallContext(ctx context.Context, obj any, methodName string, args ...any) error {
 	if r.BlockNumMap != nil && methodName == "eth_getBlockByNumber" {
 		val, ok := args[0].(string)
 		if !ok {

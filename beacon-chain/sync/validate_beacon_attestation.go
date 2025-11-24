@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -41,6 +42,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	pid peer.ID,
 	msg *pubsub.Message,
 ) (pubsub.ValidationResult, error) {
+	start := time.Now()
+	defer func() {
+		attestationVerificationGossipSummary.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
 	if pid == s.cfg.p2p.PeerID() {
 		return pubsub.ValidationAccept, nil
 	}
@@ -156,7 +162,7 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	var (
 		attForValidation eth.Att // what we'll pass to further validation
 		eventType        feed.EventType
-		eventData        interface{}
+		eventData        any
 	)
 
 	if att.Version() >= version.Electra {
@@ -240,7 +246,7 @@ func (s *Service) validateUnaggregatedAttTopic(ctx context.Context, a eth.Att, b
 		return result, err
 	}
 	subnet := helpers.ComputeSubnetForAttestation(valCount, a)
-	format := p2p.GossipTypeMapping[reflect.TypeOf(&eth.Attestation{})]
+	format := p2p.GossipTypeMapping[reflect.TypeFor[*eth.Attestation]()]
 	digest, err := s.currentForkDigest()
 	if err != nil {
 		tracing.AnnotateError(span, err)

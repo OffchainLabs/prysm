@@ -20,7 +20,7 @@ func (ds *DepositTreeSnapshot) CalculateRoot() ([32]byte, error) {
 	size := ds.depositCount
 	index := len(ds.finalized)
 	root := trie.ZeroHashes[0]
-	for i := 0; i < DepositContractDepth; i++ {
+	for i := range DepositContractDepth {
 		if (size & 1) == 1 {
 			if index == 0 {
 				break

@@ -677,7 +677,7 @@ func TestFillEventData(t *testing.T) {
 func setActiveValidators(t *testing.T, st state.BeaconState, count int) {
 	balances := make([]uint64, count)
 	validators := make([]*eth.Validator, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
 		binary.LittleEndian.PutUint64(pubKey, uint64(i))
 		balances[i] = uint64(i)

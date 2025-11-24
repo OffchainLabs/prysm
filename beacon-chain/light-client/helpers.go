@@ -23,7 +23,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	currentEpoch := slots.ToEpoch(currentSlot)
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
+	for i := range syncCommitteeSize {
 		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	currentSyncCommittee := &pb.SyncCommittee{
@@ -42,7 +42,7 @@ func createDefaultLightClientBootstrap(currentSlot primitives.Slot) (interfaces.
 	}
 
 	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+	for i := range fieldparams.ExecutionBranchDepth {
 		executionBranch[i] = make([]byte, 32)
 	}
 

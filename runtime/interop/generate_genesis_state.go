@@ -79,7 +79,7 @@ func GenerateGenesisStateFromDepositData(
 // GenerateDepositsFromData a list of deposit items by creating proofs for each of them from a sparse Merkle trie.
 func GenerateDepositsFromData(depositDataItems []*ethpb.Deposit_Data, trie *trie.SparseMerkleTrie) ([]*ethpb.Deposit, error) {
 	deposits := make([]*ethpb.Deposit, len(depositDataItems))
-	results, err := async.Scatter(len(depositDataItems), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
+	results, err := async.Scatter(len(depositDataItems), func(offset int, entries int, _ *sync.RWMutex) (any, error) {
 		return generateDepositsFromData(depositDataItems[offset:offset+entries], offset, trie)
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func DepositDataFromKeys(privKeys []bls.SecretKey, pubKeys []bls.PublicKey) ([]*
 	}
 	depositDataItems := make([]*ethpb.Deposit_Data, len(privKeys))
 	depositDataRoots := make([][]byte, len(privKeys))
-	results, err := async.Scatter(len(privKeys), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
+	results, err := async.Scatter(len(privKeys), func(offset int, entries int, _ *sync.RWMutex) (any, error) {
 		items, roots, err := depositDataFromKeys(privKeys[offset:offset+entries], pubKeys[offset:offset+entries], 0)
 		return &depositData{items: items, roots: roots}, err
 	})
@@ -145,7 +145,7 @@ func DepositDataFromKeysWithExecCreds(privKeys []bls.SecretKey, pubKeys []bls.Pu
 func depositDataFromKeys(privKeys []bls.SecretKey, pubKeys []bls.PublicKey, numOfCreds uint64) ([]*ethpb.Deposit_Data, [][]byte, error) {
 	dataRoots := make([][]byte, len(privKeys))
 	depositDataItems := make([]*ethpb.Deposit_Data, len(privKeys))
-	for i := 0; i < len(privKeys); i++ {
+	for i := range privKeys {
 		withCred := uint64(i) < numOfCreds
 		data, err := createDepositData(privKeys[i], pubKeys[i], withCred)
 		if err != nil {

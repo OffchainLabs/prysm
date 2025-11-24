@@ -151,7 +151,7 @@ func TestServer_ListValidatorBalances_DefaultResponse_NoArchive(t *testing.T) {
 	validators := make([]*ethpb.Validator, numItems)
 	balances := make([]uint64, numItems)
 	balancesResponse := make([]*ethpb.ValidatorBalances_Balance, numItems)
-	for i := 0; i < numItems; i++ {
+	for i := range numItems {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             pubKey(uint64(i)),
 			WithdrawalCredentials: make([]byte, 32),
@@ -531,7 +531,7 @@ func TestServer_ListValidators_OnlyActiveValidators(t *testing.T) {
 	balances := make([]uint64, count)
 	validators := make([]*ethpb.Validator, count)
 	activeValidators := make([]*ethpb.Validators_ValidatorContainer, 0)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		pubKey := pubKey(uint64(i))
 		balances[i] = params.BeaconConfig().MaxEffectiveBalance
 
@@ -594,7 +594,7 @@ func TestServer_ListValidators_InactiveInTheMiddle(t *testing.T) {
 	balances := make([]uint64, count)
 	validators := make([]*ethpb.Validator, count)
 	activeValidators := make([]*ethpb.Validators_ValidatorContainer, 0)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		pubKey := pubKey(uint64(i))
 		balances[i] = params.BeaconConfig().MaxEffectiveBalance
 
@@ -708,7 +708,7 @@ func TestServer_ListValidators_NoPagination(t *testing.T) {
 
 	validators, _, headState := setupValidators(t, beaconDB, 100)
 	want := make([]*ethpb.Validators_ValidatorContainer, len(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		want[i] = &ethpb.Validators_ValidatorContainer{
 			Index:     primitives.ValidatorIndex(i),
 			Validator: validators[i],
@@ -741,7 +741,7 @@ func TestServer_ListValidators_StategenNotUsed(t *testing.T) {
 
 	validators, _, headState := setupValidators(t, beaconDB, 100)
 	want := make([]*ethpb.Validators_ValidatorContainer, len(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		want[i] = &ethpb.Validators_ValidatorContainer{
 			Index:     primitives.ValidatorIndex(i),
 			Validator: validators[i],
@@ -991,7 +991,7 @@ func TestServer_ListValidators_DefaultPageSize(t *testing.T) {
 
 	validators, _, headState := setupValidators(t, beaconDB, 1000)
 	want := make([]*ethpb.Validators_ValidatorContainer, len(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		want[i] = &ethpb.Validators_ValidatorContainer{
 			Index:     primitives.ValidatorIndex(i),
 			Validator: validators[i],
@@ -1099,7 +1099,7 @@ func TestServer_ListValidators_ProcessHeadStateSlots(t *testing.T) {
 	numValidators := params.BeaconConfig().MinGenesisActiveValidatorCount
 	validators := make([]*ethpb.Validator, numValidators)
 	balances := make([]uint64, numValidators)
-	for i := uint64(0); i < numValidators; i++ {
+	for i := range numValidators {
 		validators[i] = &ethpb.Validator{
 			ActivationEpoch:       0,
 			PublicKey:             make([]byte, 48),
@@ -1109,7 +1109,7 @@ func TestServer_ListValidators_ProcessHeadStateSlots(t *testing.T) {
 		balances[i] = params.BeaconConfig().MaxEffectiveBalance
 	}
 	want := make([]*ethpb.Validators_ValidatorContainer, len(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		want[i] = &ethpb.Validators_ValidatorContainer{
 			Index:     primitives.ValidatorIndex(i),
 			Validator: validators[i],
@@ -1154,7 +1154,7 @@ func TestServer_ListValidators_ProcessHeadStateSlots(t *testing.T) {
 func TestServer_GetValidator(t *testing.T) {
 	count := primitives.Epoch(30)
 	validators := make([]*ethpb.Validator, count)
-	for i := primitives.Epoch(0); i < count; i++ {
+	for i := range count {
 		validators[i] = &ethpb.Validator{
 			ActivationEpoch:       i,
 			PublicKey:             pubKey(uint64(i)),
@@ -1241,7 +1241,7 @@ func TestServer_GetValidatorActiveSetChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, headState.SetSlot(0))
 	require.NoError(t, headState.SetValidators(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		activationEpoch := params.BeaconConfig().FarFutureEpoch
 		withdrawableEpoch := params.BeaconConfig().FarFutureEpoch
 		exitEpoch := params.BeaconConfig().FarFutureEpoch
@@ -1513,7 +1513,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 
 	validators := make([]*ethpb.Validator, validatorCount)
 	balances := make([]uint64, validatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             bytesutil.ToBytes(uint64(i), 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -1597,7 +1597,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 
 	validators := make([]*ethpb.Validator, validatorCount)
 	balances := make([]uint64, validatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             bytesutil.ToBytes(uint64(i), 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -1823,7 +1823,7 @@ func TestGetValidatorPerformance_OK(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, headState.SetSlot(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epoch+1))))
 	atts := make([]*ethpb.PendingAttestation, 3)
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		atts[i] = &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
 				Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
@@ -2249,7 +2249,7 @@ func TestGetValidatorPerformanceCapella_OK(t *testing.T) {
 func setupValidators(t testing.TB, _ db.Database, count int) ([]*ethpb.Validator, []uint64, state.BeaconState) {
 	balances := make([]uint64, count)
 	validators := make([]*ethpb.Validator, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		pubKey := pubKey(uint64(i))
 		balances[i] = uint64(i)
 		validators = append(validators, &ethpb.Validator{

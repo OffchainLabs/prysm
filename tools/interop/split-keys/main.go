@@ -95,7 +95,7 @@ func generateKeysFromMnemonicList(mnemonicListFile *bufio.Scanner, keysPerMnemon
 		if err != nil {
 			return
 		}
-		for i := 0; i < keysPerMnemonic; i++ {
+		for i := range keysPerMnemonic {
 			if i%250 == 0 && i > 0 {
 				log.Printf("%d/%d keys generated\n", i, keysPerMnemonic)
 			}
@@ -122,7 +122,7 @@ func spreadKeysAcrossLocalWallets(
 	walletPassword string,
 ) error {
 	ctx := context.Background()
-	for i := 0; i < numWallets; i++ {
+	for i := range numWallets {
 		w := wallet.New(&wallet.Config{
 			WalletDir:      path.Join(walletOutputDir, fmt.Sprintf("wallet_%d", i)),
 			KeymanagerKind: keymanager.Local,

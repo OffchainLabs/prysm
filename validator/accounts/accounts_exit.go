@@ -156,7 +156,7 @@ func displayExitInfo(rawExitedKeys [][]byte, trimmedExitedKeys []string) {
 			urlFormattedPubKeys[i] = formatBeaconChaURL(key)
 		}
 
-		ifaceKeys := make([]interface{}, len(urlFormattedPubKeys))
+		ifaceKeys := make([]any, len(urlFormattedPubKeys))
 		for i, k := range urlFormattedPubKeys {
 			ifaceKeys[i] = k
 		}

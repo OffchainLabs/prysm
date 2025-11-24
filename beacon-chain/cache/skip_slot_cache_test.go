@@ -47,15 +47,13 @@ func TestSkipSlotCache_DisabledAndEnabled(t *testing.T) {
 
 	c.Enable()
 	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		// Get call will only terminate when
 		// it is not longer in progress.
 		obj, err := c.Get(ctx, r)
 		require.NoError(t, err)
 		require.IsNil(t, obj)
-		wg.Done()
-	}()
+	})
 
 	c.MarkNotInProgress(r)
 	wg.Wait()

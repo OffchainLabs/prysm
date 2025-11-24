@@ -172,7 +172,7 @@ func TestSlashValidator_OK(t *testing.T) {
 	validatorCount := 100
 	registry := make([]*ethpb.Validator, 0, validatorCount)
 	balances := make([]uint64, 0, validatorCount)
-	for i := 0; i < validatorCount; i++ {
+	for range validatorCount {
 		registry = append(registry, &ethpb.Validator{
 			ActivationEpoch:  0,
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
@@ -226,7 +226,7 @@ func TestSlashValidator_Electra(t *testing.T) {
 	validatorCount := 100
 	registry := make([]*ethpb.Validator, 0, validatorCount)
 	balances := make([]uint64, 0, validatorCount)
-	for i := 0; i < validatorCount; i++ {
+	for range validatorCount {
 		registry = append(registry, &ethpb.Validator{
 			ActivationEpoch:  0,
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,

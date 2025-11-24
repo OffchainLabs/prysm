@@ -52,8 +52,8 @@ type FakeValidator struct {
 	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
 	IndexToPubkeyMap                  map[uint64][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStartCalled           int
-	AttSubmitted                      chan interface{}
-	BlockProposed                     chan interface{}
+	AttSubmitted                      chan any
+	BlockProposed                     chan any
 	AccountsChannel                   chan [][fieldparams.BLSPubkeyLength]byte
 	GenesisT                          time.Time
 	ReceiveBlocksCalled               int

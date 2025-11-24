@@ -42,7 +42,7 @@ func TestServer_AuthenticateUsingExistingToken(t *testing.T) {
 	unaryInfo := &grpc.UnaryServerInfo{
 		FullMethod: "Proto.CreateWallet",
 	}
-	unaryHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	unaryHandler := func(ctx context.Context, req any) (any, error) {
 		return nil, nil
 	}
 	ctxMD := map[string][]string{
