@@ -7,6 +7,7 @@ import (
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/sirupsen/logrus"
 )
 
@@ -49,6 +50,7 @@ type Config struct {
 	IPColocationWhitelist []*net.IPNet
 	StateNotifier         statefeed.Notifier
 	DB                    db.ReadOnlyDatabaseWithSeqNum
+	StateGen              stategen.StateManager
 	ClockWaiter           startup.ClockWaiter
 }
 
