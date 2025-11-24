@@ -137,12 +137,18 @@ func (s *Server) ImportKeystores(w http.ResponseWriter, r *http.Request) {
 		keystores[i] = k
 	}
 	if req.SlashingProtection != "" {
-		if s.db == nil || s.db.ImportStandardProtectionJSON(ctx, bytes.NewBufferString(req.SlashingProtection)) != nil {
+		var impErr error
+		if s.db == nil {
+			impErr = errors.New("could not find validator database")
+		} else {
+			impErr = s.db.ImportStandardProtectionJSON(ctx, bytes.NewBufferString(req.SlashingProtection))
+		}
+		if impErr != nil {
 			statuses := make([]*keymanager.KeyStatus, len(req.Keystores))
 			for i := 0; i < len(req.Keystores); i++ {
 				statuses[i] = &keymanager.KeyStatus{
 					Status:  keymanager.StatusError,
-					Message: fmt.Sprintf("could not import slashing protection: %v", err),
+					Message: fmt.Sprintf("could not import slashing protection: %v", impErr),
 				}
 			}
 			httputil.WriteJson(w, &ImportKeystoresResponse{Data: statuses})
