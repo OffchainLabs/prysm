@@ -67,6 +67,7 @@ func getSubscriptionStatusFromDB(t *testing.T, db *Store) bool {
 	return subscribed
 }
 
+
 func TestUpdateCustodyInfo(t *testing.T) {
 	ctx := t.Context()
 
@@ -274,6 +275,17 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, false, stored)
 	})
 
+	t.Run("initial update with empty database - set to true", func(t *testing.T) {
+		db := setupDB(t)
+
+		prev, err := db.UpdateSubscribedToAllDataSubnets(ctx, true)
+		require.NoError(t, err)
+		require.Equal(t, false, prev)
+
+		stored := getSubscriptionStatusFromDB(t, db)
+		require.Equal(t, true, stored)
+	})
+
 	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
 		db := setupDB(t)
 
@@ -288,7 +300,7 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, true, stored)
 	})
 
-	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
+	t.Run("update from true to true (no change)", func(t *testing.T) {
 		db := setupDB(t)
 
 		_, err := db.UpdateSubscribedToAllDataSubnets(ctx, true)
@@ -299,93 +311,6 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, true, prev)
 
 		stored := getSubscriptionStatusFromDB(t, db)
-		require.Equal(t, true, stored)
-	})
-}
-
-func TestUpdateSemiSupernode(t *testing.T) {
-	ctx := context.Background()
-
-	getSemiSupernodeStatusFromDB := func(t *testing.T, db *Store) bool {
-		var result bool
-		err := db.db.View(func(tx *bolt.Tx) error {
-			bucket := tx.Bucket(custodyBucket)
-			if bucket == nil {
-				return nil
-			}
-			bytes := bucket.Get(semiSupernodeKey)
-			if len(bytes) != 0 && bytes[0] == 1 {
-				result = true
-			}
-			return nil
-		})
-		require.NoError(t, err)
-		return result
-	}
-
-	t.Run("initial update with empty database - set to false", func(t *testing.T) {
-		db := setupDB(t)
-
-		prev, err := db.UpdateSemiSupernode(ctx, false)
-		require.NoError(t, err)
-		require.Equal(t, false, prev)
-
-		stored := getSemiSupernodeStatusFromDB(t, db)
-		require.Equal(t, false, stored)
-	})
-
-	t.Run("initial update with empty database - set to true", func(t *testing.T) {
-		db := setupDB(t)
-
-		prev, err := db.UpdateSemiSupernode(ctx, true)
-		require.NoError(t, err)
-		require.Equal(t, false, prev)
-
-		stored := getSemiSupernodeStatusFromDB(t, db)
-		require.Equal(t, true, stored)
-	})
-
-	t.Run("update from false to true", func(t *testing.T) {
-		db := setupDB(t)
-
-		_, err := db.UpdateSemiSupernode(ctx, false)
-		require.NoError(t, err)
-
-		prev, err := db.UpdateSemiSupernode(ctx, true)
-		require.NoError(t, err)
-		require.Equal(t, false, prev)
-
-		stored := getSemiSupernodeStatusFromDB(t, db)
-		require.Equal(t, true, stored)
-	})
-
-	t.Run("update from true to false (should still return true)", func(t *testing.T) {
-		db := setupDB(t)
-
-		_, err := db.UpdateSemiSupernode(ctx, true)
-		require.NoError(t, err)
-
-		// Try to downgrade - should return previous state (true)
-		prev, err := db.UpdateSemiSupernode(ctx, false)
-		require.NoError(t, err)
-		require.Equal(t, true, prev)
-
-		// Database should still have it set to true (one-way flag)
-		stored := getSemiSupernodeStatusFromDB(t, db)
-		require.Equal(t, true, stored)
-	})
-
-	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
-		db := setupDB(t)
-
-		_, err := db.UpdateSemiSupernode(ctx, true)
-		require.NoError(t, err)
-
-		prev, err := db.UpdateSemiSupernode(ctx, true)
-		require.NoError(t, err)
-		require.Equal(t, true, prev)
-
-		stored := getSemiSupernodeStatusFromDB(t, db)
 		require.Equal(t, true, stored)
 	})
 }

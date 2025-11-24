@@ -146,9 +146,9 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 	return nil
 }
 
-// UpdateSubscribedToAllDataSubnets updates the "subscribed to all data subnets" status in the database
-// only if `subscribed` is `true`.
-// It returns the previous subscription status.
+// UpdateSubscribedToAllDataSubnets updates whether the node is subscribed to all data subnets (supernode mode).
+// This is a one-way flag - once set to true, it cannot be reverted to false.
+// Returns the previous state.
 func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateSubscribedToAllDataSubnets")
 	defer span.End()
@@ -156,13 +156,11 @@ func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed
 	result := false
 	if !subscribed {
 		if err := s.db.View(func(tx *bolt.Tx) error {
-			// Retrieve the custody bucket.
 			bucket := tx.Bucket(custodyBucket)
 			if bucket == nil {
 				return nil
 			}
 
-			// Retrieve the subscribe all data subnets flag.
 			bytes := bucket.Get(subscribeAllDataSubnetsKey)
 			if len(bytes) == 0 {
 				return nil
@@ -181,7 +179,6 @@ func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed
 	}
 
 	if err := s.db.Update(func(tx *bolt.Tx) error {
-		// Retrieve the custody bucket.
 		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
 		if err != nil {
 			return errors.Wrap(err, "create custody bucket")
@@ -194,64 +191,6 @@ func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed
 
 		if err := bucket.Put(subscribeAllDataSubnetsKey, []byte{1}); err != nil {
 			return errors.Wrap(err, "put subscribe all data subnets")
-		}
-
-		return nil
-	}); err != nil {
-		return false, err
-	}
-
-	return result, nil
-}
-
-// UpdateSemiSupernode updates the "semi-supernode" status in the database
-// only if `enabled` is `true`.
-// It returns the previous semi-supernode status.
-func (s *Store) UpdateSemiSupernode(ctx context.Context, enabled bool) (bool, error) {
-	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateSemiSupernode")
-	defer span.End()
-
-	result := false
-	if !enabled {
-		if err := s.db.View(func(tx *bolt.Tx) error {
-			// Retrieve the custody bucket.
-			bucket := tx.Bucket(custodyBucket)
-			if bucket == nil {
-				return nil
-			}
-
-			// Retrieve the semi-supernode flag.
-			bytes := bucket.Get(semiSupernodeKey)
-			if len(bytes) == 0 {
-				return nil
-			}
-
-			if bytes[0] == 1 {
-				result = true
-			}
-
-			return nil
-		}); err != nil {
-			return false, err
-		}
-
-		return result, nil
-	}
-
-	if err := s.db.Update(func(tx *bolt.Tx) error {
-		// Retrieve the custody bucket.
-		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
-		if err != nil {
-			return errors.Wrap(err, "create custody bucket")
-		}
-
-		bytes := bucket.Get(semiSupernodeKey)
-		if len(bytes) != 0 && bytes[0] == 1 {
-			result = true
-		}
-
-		if err := bucket.Put(semiSupernodeKey, []byte{1}); err != nil {
-			return errors.Wrap(err, "put semi-supernode")
 		}
 
 		return nil

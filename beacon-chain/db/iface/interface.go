@@ -128,10 +128,9 @@ type NoHeadAccessDatabase interface {
 	BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBlock, finalizedChildRoot [32]byte) error
 
 	// Custody operations.
-	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
-	UpdateSemiSupernode(ctx context.Context, enabled bool) (bool, error)
 	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
 	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error
+	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
 
 	// P2P Metadata operations.
 	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error

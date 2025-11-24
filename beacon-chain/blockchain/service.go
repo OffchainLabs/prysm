@@ -480,52 +480,25 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	// store the new status accordingly.
 	wasSupernode, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
 	if err != nil {
-		log.WithError(err).Error("Could not update subscription status to all data subnets")
+		return 0, 0, errors.Wrap(err, "update subscribed to all data subnets")
 	}
 
-	// Warn the user if the node was previously subscribed to all data subnets and is not any more.
-	if wasSupernode && !isSupernode {
-		log.Warnf(
-			"Because the flag `--%s` was previously used, the node will still subscribe to all data subnets.",
-			flags.SubscribeAllDataSubnets.Name,
-		)
-	}
-
-	// Check if the node was previously in semi-supernode mode.
-	wasSemiSupernode, err := s.cfg.BeaconDB.UpdateSemiSupernode(s.ctx, isSemiSupernode)
-	if err != nil {
-		log.WithError(err).Error("Could not update semi-supernode status")
-	}
-
-	// Warn the user if they're trying to downgrade from semi-supernode.
-	if wasSemiSupernode && !isSemiSupernode && !isSupernode {
-		log.Warnf(
-			"Because the flag `--%s` was previously used, the node will continue operating in semi-supernode mode (64 data column subnets). "+
-				"To disable this, you must start with a fresh database or upgrade to full supernode with `--%s`.",
-			flags.SemiSupernode.Name,
-			flags.SubscribeAllDataSubnets.Name,
-		)
-		// Note: Semi-supernode mode is persisted in the database and will be enforced
-		// by the subscriber service when determining samplingSize()
-	}
-
-	// Compute the custody group count.
-	// Hierarchy: Supernode > Semi-supernode > Regular
-	custodyGroupCount := custodyRequirement
+	// Compute the target custody group count based on current flag configuration.
+	targetCustodyGroupCount := custodyRequirement
 	if isSupernode || wasSupernode {
-		//  supernode: custody all NUMBER_OF_CUSTODY_GROUPS
-		custodyGroupCount = cfg.NumberOfCustodyGroups
-	} else if isSemiSupernode || wasSemiSupernode {
-		// Semi-supernode: custody at least half of NUMBER_OF_CUSTODY_GROUPS, but use validator requirements if higher
+		// Full supernode: custody all groups (either currently set or previously enabled)
+		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
+	} else if isSemiSupernode {
+		// Semi-supernode: custody minimum needed for reconstruction, or validator requirement if higher
 		semiSupernodeCustody := cfg.NumberOfCustodyGroups / 2
 		if custodyRequirement > semiSupernodeCustody {
 			log.WithFields(logrus.Fields{
 				"custodyRequirement":   custodyRequirement,
 				"semiSupernodeCustody": semiSupernodeCustody,
-			}).Warn("Validator custody requirement exceeds semi-supernode minimum; Custodying additional groups.")
-			custodyGroupCount = custodyRequirement
+			}).Warn("Validator custody requirement exceeds semi-supernode minimum; custodying additional groups.")
+			targetCustodyGroupCount = custodyRequirement
 		} else {
-			custodyGroupCount = semiSupernodeCustody
+			targetCustodyGroupCount = semiSupernodeCustody
 		}
 	}
 
@@ -543,12 +516,38 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		}
 	}
 
-	earliestAvailableSlot, custodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, custodyGroupCount)
+	earliestAvailableSlot, actualCustodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, targetCustodyGroupCount)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "update custody info")
 	}
 
-	return earliestAvailableSlot, custodyGroupCount, nil
+	if !wasSupernode && isSupernode && actualCustodyGroupCount < cfg.NumberOfCustodyGroups {
+		log.WithFields(logrus.Fields{
+			"current":            actualCustodyGroupCount,
+			"target":             cfg.NumberOfCustodyGroups,
+			"numberOfSubnets":    cfg.NumberOfCustodyGroups,
+			"dataColumnsPerSlot": cfg.NumberOfCustodyGroups,
+		}).Info("Supernode mode enabled. Will custody all data columns going forward.")
+	}
+
+	if wasSupernode && !isSupernode {
+		log.WithField("flag", flags.SubscribeAllDataSubnets.Name).Warn(
+			"Because the flag was previously used, the node will still subscribe to all data subnets.",
+		)
+	}
+
+	if actualCustodyGroupCount > targetCustodyGroupCount {
+		log.WithFields(logrus.Fields{
+			"retaining":          actualCustodyGroupCount,
+			"currentTarget":      targetCustodyGroupCount,
+			"numberOfSubnets":    actualCustodyGroupCount,
+			"dataColumnsPerSlot": actualCustodyGroupCount,
+		}).Warn("Retaining higher custody count from prior configuration. " +
+			"Custody count only increases to protect data availability commitments. " +
+			"To reduce custody, start with a fresh database.")
+	}
+
+	return earliestAvailableSlot, actualCustodyGroupCount, nil
 }
 
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {

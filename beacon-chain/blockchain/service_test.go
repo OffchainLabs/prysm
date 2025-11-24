@@ -748,15 +748,11 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		// Should still be in semi-supernode mode (verified by checking DB)
-		wasSemiSupernode, err := service.cfg.BeaconDB.UpdateSemiSupernode(service.ctx, false)
-		require.NoError(t, err)
-		require.Equal(t, true, wasSemiSupernode) // Should return true because it was previously set
-
+		// UpdateCustodyInfo should prevent downgrade - custody count should remain at 64
 		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
 		require.NoError(t, err)
 		require.Equal(t, slot, actualEas)
-		require.Equal(t, semiSupernodeCustody, actualCgc) // Still 64 due to downgrade prevention
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Still 64 due to downgrade prevention by UpdateCustodyInfo
 	})
 
 	t.Run("Semi-supernode to supernode upgrade allowed", func(t *testing.T) {
