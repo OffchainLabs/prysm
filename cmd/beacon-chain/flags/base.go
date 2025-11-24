@@ -341,8 +341,10 @@ var (
 	}
 	// SemiSupernode enables subscription to half of all data subnets and custody of 64 data columns.
 	SemiSupernode = &cli.BoolFlag{
-		Name:  "semi-supernode",
-		Usage: "Enable subscription to half of all data subnets and custody 64 data columns (minimum required for reconstruction). Blobs are reconstructed as needed from the custodied 64 columns. If validators require higher custody (based on total stake), the node automatically scales up to meet those requirements with a warning. This is effectively one-way: once enabled, the node keeps storing and serving these columns even if the flag is later unset.",
+		Name: "semi-supernode",
+		Usage: "Enable subscription to half of all data subnets and custody half of all data columns (minimum required for reconstruction). " +
+			"Blobs are reconstructed as needed from the custodied columns. If validators require higher custody (based on total stake), " +
+			"the node automatically scales up to meet those requirements with a warning. This is effectively one-way: once enabled, the node keeps storing and serving these columns even if the flag is later unset.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{
