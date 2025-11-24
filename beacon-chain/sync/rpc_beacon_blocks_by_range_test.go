@@ -77,7 +77,7 @@ func TestRPCBeaconBlocksByRange_RPCHandlerReturnsBlocks(t *testing.T) {
 			res := util.NewBeaconBlock()
 			assert.NoError(t, r.cfg.p2p.Encoding().DecodeWithMaxLength(stream, res))
 			if res.Block.Slot.SubSlot(req.StartSlot).Mod(1) != 0 {
-				t.Errorf("Received wrong unexpected block slot %d", res.Block.Slot)
+				t.Errorf("Received unexpected block slot %d", res.Block.Slot)
 			}
 		}
 	})
