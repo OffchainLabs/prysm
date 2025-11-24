@@ -2,6 +2,7 @@ package das
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/pkg/errors"
 )
 
 var commitments = [][]byte{
@@ -292,3 +294,412 @@ func (m *mockDataColumnsVerifier) SidecarKzgProofVerified() error {
 }
 
 func (m *mockDataColumnsVerifier) SidecarProposerExpected(ctx context.Context) error { return nil }
+
+// Mock implementations for bisectVerification tests
+
+// mockBisectionIterator simulates a BisectionIterator for testing.
+type mockBisectionIterator struct {
+	chunks           [][]blocks.RODataColumn
+	chunkErrors      []error
+	finalError       error
+	chunkIndex       int
+	nextCallCount    int
+	onErrorCallCount int
+	onErrorErrors    []error
+}
+
+func (m *mockBisectionIterator) Next() ([]blocks.RODataColumn, error) {
+	if m.chunkIndex >= len(m.chunks) {
+		return nil, io.EOF
+	}
+	chunk := m.chunks[m.chunkIndex]
+	var err error
+	if m.chunkIndex < len(m.chunkErrors) {
+		err = m.chunkErrors[m.chunkIndex]
+	}
+	m.chunkIndex++
+	m.nextCallCount++
+	if err != nil {
+		return chunk, err
+	}
+	return chunk, nil
+}
+
+func (m *mockBisectionIterator) OnError(err error) {
+	m.onErrorCallCount++
+	m.onErrorErrors = append(m.onErrorErrors, err)
+}
+
+func (m *mockBisectionIterator) Error() error {
+	return m.finalError
+}
+
+// mockBisector simulates a Bisector for testing.
+type mockBisector struct {
+	shouldError bool
+	bisectErr   error
+	iterator    *mockBisectionIterator
+}
+
+func (m *mockBisector) Bisect(columns []blocks.RODataColumn) (BisectionIterator, error) {
+	if m.shouldError {
+		return nil, m.bisectErr
+	}
+	return m.iterator, nil
+}
+
+// testDataColumnsVerifier implements verification.DataColumnsVerifier for testing.
+type testDataColumnsVerifier struct {
+	t          *testing.T
+	shouldFail bool
+	columns    []blocks.RODataColumn
+}
+
+func (v *testDataColumnsVerifier) VerifiedRODataColumns() ([]blocks.VerifiedRODataColumn, error) {
+	verified := make([]blocks.VerifiedRODataColumn, len(v.columns))
+	for i, col := range v.columns {
+		verified[i] = blocks.NewVerifiedRODataColumn(col)
+	}
+	return verified, nil
+}
+
+func (v *testDataColumnsVerifier) SatisfyRequirement(verification.Requirement) {}
+func (v *testDataColumnsVerifier) ValidFields() error {
+	if v.shouldFail {
+		return errors.New("verification failed")
+	}
+	return nil
+}
+func (v *testDataColumnsVerifier) CorrectSubnet(string, []string) error         { return nil }
+func (v *testDataColumnsVerifier) NotFromFutureSlot() error                     { return nil }
+func (v *testDataColumnsVerifier) SlotAboveFinalized() error                    { return nil }
+func (v *testDataColumnsVerifier) ValidProposerSignature(context.Context) error { return nil }
+func (v *testDataColumnsVerifier) SidecarParentSeen(func([fieldparams.RootLength]byte) bool) error {
+	return nil
+}
+func (v *testDataColumnsVerifier) SidecarParentValid(func([fieldparams.RootLength]byte) bool) error {
+	return nil
+}
+func (v *testDataColumnsVerifier) SidecarParentSlotLower() error                 { return nil }
+func (v *testDataColumnsVerifier) SidecarDescendsFromFinalized() error           { return nil }
+func (v *testDataColumnsVerifier) SidecarInclusionProven() error                 { return nil }
+func (v *testDataColumnsVerifier) SidecarKzgProofVerified() error                { return nil }
+func (v *testDataColumnsVerifier) SidecarProposerExpected(context.Context) error { return nil }
+
+// Helper function to create test data columns
+func makeTestDataColumns(t *testing.T, count int, blockRoot [32]byte, startIndex uint64) []blocks.RODataColumn {
+	columns := make([]blocks.RODataColumn, 0, count)
+	for i := 0; i < count; i++ {
+		params := util.DataColumnParam{
+			Index:          startIndex + uint64(i),
+			KzgCommitments: commitments,
+			Slot:           primitives.Slot(params.BeaconConfig().FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch,
+		}
+		_, verifiedCols := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{params})
+		if len(verifiedCols) > 0 {
+			columns = append(columns, verifiedCols[0].RODataColumn)
+		}
+	}
+	return columns
+}
+
+// Helper function to create test verifier factory with failure pattern
+func makeTestVerifierFactory(failurePattern []bool) verification.NewDataColumnsVerifier {
+	callIndex := 0
+	return func(cols []blocks.RODataColumn, _ []verification.Requirement) verification.DataColumnsVerifier {
+		shouldFail := callIndex < len(failurePattern) && failurePattern[callIndex]
+		callIndex++
+		return &testDataColumnsVerifier{
+			shouldFail: shouldFail,
+			columns:    cols,
+		}
+	}
+}
+
+// TestBisectVerification tests the bisectVerification method with comprehensive table-driven test cases.
+func TestBisectVerification(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+
+	cases := []struct {
+		name                       string
+		inputCount                 int
+		bisectorError              error
+		bisectorNil                bool
+		chunks                     [][]blocks.RODataColumn
+		chunkErrors                []error
+		iteratorFinalError         error
+		verificationFailurePattern []bool
+		storedColumnIndices        []uint64
+		expectedError              bool
+		expectedNextCallCount      int
+		expectedOnErrorCallCount   int
+	}{
+		{
+			name:                     "EmptyColumns",
+			inputCount:               0,
+			expectedError:            false,
+			expectedNextCallCount:    0,
+			expectedOnErrorCallCount: 0,
+		},
+		{
+			name:                     "NilBisector",
+			inputCount:               3,
+			bisectorNil:              true,
+			expectedError:            true,
+			expectedNextCallCount:    0,
+			expectedOnErrorCallCount: 0,
+		},
+		{
+			name:                     "BisectError",
+			inputCount:               5,
+			bisectorError:            errors.New("bisect failed"),
+			expectedError:            true,
+			expectedNextCallCount:    0,
+			expectedOnErrorCallCount: 0,
+		},
+		{
+			name:                       "SingleChunkSuccess",
+			inputCount:                 4,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "SingleChunkFails",
+			inputCount:                 4,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{true},
+			iteratorFinalError:         errors.New("chunk failed"),
+			expectedError:              true,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   1,
+		},
+		{
+			name:                       "TwoChunks_BothPass",
+			inputCount:                 8,
+			chunks:                     [][]blocks.RODataColumn{{}, {}},
+			verificationFailurePattern: []bool{false, false},
+			expectedError:              false,
+			expectedNextCallCount:      3,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "TwoChunks_FirstFails",
+			inputCount:                 8,
+			chunks:                     [][]blocks.RODataColumn{{}, {}},
+			verificationFailurePattern: []bool{true, false},
+			iteratorFinalError:         errors.New("first failed"),
+			expectedError:              true,
+			expectedNextCallCount:      3,
+			expectedOnErrorCallCount:   1,
+		},
+		{
+			name:                       "TwoChunks_SecondFails",
+			inputCount:                 8,
+			chunks:                     [][]blocks.RODataColumn{{}, {}},
+			verificationFailurePattern: []bool{false, true},
+			iteratorFinalError:         errors.New("second failed"),
+			expectedError:              true,
+			expectedNextCallCount:      3,
+			expectedOnErrorCallCount:   1,
+		},
+		{
+			name:                       "TwoChunks_BothFail",
+			inputCount:                 8,
+			chunks:                     [][]blocks.RODataColumn{{}, {}},
+			verificationFailurePattern: []bool{true, true},
+			iteratorFinalError:         errors.New("both failed"),
+			expectedError:              true,
+			expectedNextCallCount:      3,
+			expectedOnErrorCallCount:   2,
+		},
+		{
+			name:                       "ManyChunks_AllPass",
+			inputCount:                 16,
+			chunks:                     [][]blocks.RODataColumn{{}, {}, {}, {}},
+			verificationFailurePattern: []bool{false, false, false, false},
+			expectedError:              false,
+			expectedNextCallCount:      5,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "ManyChunks_MixedFail",
+			inputCount:                 16,
+			chunks:                     [][]blocks.RODataColumn{{}, {}, {}, {}},
+			verificationFailurePattern: []bool{false, true, false, true},
+			iteratorFinalError:         errors.New("mixed failures"),
+			expectedError:              true,
+			expectedNextCallCount:      5,
+			expectedOnErrorCallCount:   2,
+		},
+		{
+			name:                       "FilterStoredColumns_PartialFilter",
+			inputCount:                 6,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			storedColumnIndices:        []uint64{1, 3},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "FilterStoredColumns_AllStored",
+			inputCount:                 6,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			storedColumnIndices:        []uint64{0, 1, 2, 3, 4, 5},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "FilterStoredColumns_MixedAccess",
+			inputCount:                 10,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			storedColumnIndices:        []uint64{1, 5, 9},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "IteratorNextError",
+			inputCount:                 4,
+			chunks:                     [][]blocks.RODataColumn{{}, {}},
+			chunkErrors:                []error{nil, errors.New("next error")},
+			verificationFailurePattern: []bool{false},
+			expectedError:              true,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "IteratorNextEOF",
+			inputCount:                 4,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "LargeChunkSize",
+			inputCount:                 128,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "ManySmallChunks",
+			inputCount:                 32,
+			chunks:                     [][]blocks.RODataColumn{{}, {}, {}, {}, {}, {}, {}, {}},
+			verificationFailurePattern: []bool{false, false, false, false, false, false, false, false},
+			expectedError:              false,
+			expectedNextCallCount:      9,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "ChunkWithSomeStoredColumns",
+			inputCount:                 6,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{false},
+			storedColumnIndices:        []uint64{0, 2, 4},
+			expectedError:              false,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   0,
+		},
+		{
+			name:                       "OnErrorDoesNotStopIteration",
+			inputCount:                 8,
+			chunks:                     [][]blocks.RODataColumn{{}, {}},
+			verificationFailurePattern: []bool{true, false},
+			iteratorFinalError:         errors.New("first failed"),
+			expectedError:              true,
+			expectedNextCallCount:      3,
+			expectedOnErrorCallCount:   1,
+		},
+		{
+			name:                       "VerificationErrorWrapping",
+			inputCount:                 4,
+			chunks:                     [][]blocks.RODataColumn{{}},
+			verificationFailurePattern: []bool{true},
+			iteratorFinalError:         errors.New("verification failed"),
+			expectedError:              true,
+			expectedNextCallCount:      2,
+			expectedOnErrorCallCount:   1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup storage
+			var store *filesystem.DataColumnStorage
+			if len(tc.storedColumnIndices) > 0 {
+				mocker, s := filesystem.NewEphemeralDataColumnStorageWithMocker(t)
+				blockRoot := [32]byte{1, 2, 3}
+				slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch
+				mocker.CreateFakeIndices(blockRoot, slot, tc.storedColumnIndices...)
+				store = s
+			} else {
+				store = filesystem.NewEphemeralDataColumnStorage(t)
+			}
+
+			// Create test columns
+			blockRoot := [32]byte{1, 2, 3}
+			columns := makeTestDataColumns(t, tc.inputCount, blockRoot, 0)
+
+			// Setup iterator with chunks
+			iterator := &mockBisectionIterator{
+				chunks:      tc.chunks,
+				chunkErrors: tc.chunkErrors,
+				finalError:  tc.iteratorFinalError,
+			}
+
+			// Setup bisector
+			var bisector Bisector
+			if tc.bisectorNil || tc.inputCount == 0 {
+				bisector = nil
+			} else if tc.bisectorError != nil {
+				bisector = &mockBisector{
+					shouldError: true,
+					bisectErr:   tc.bisectorError,
+				}
+			} else {
+				bisector = &mockBisector{
+					shouldError: false,
+					iterator:    iterator,
+				}
+			}
+
+			// Create store with verifier
+			verifierFactory := makeTestVerifierFactory(tc.verificationFailurePattern)
+			lazilyPersistentStore := &LazilyPersistentStoreColumn{
+				store:                  store,
+				cache:                  newDataColumnCache(),
+				newDataColumnsVerifier: verifierFactory,
+				custody:                &custodyRequirement{},
+				bisector:               bisector,
+			}
+
+			// Execute
+			err := lazilyPersistentStore.bisectVerification(columns)
+
+			// Assert
+			if tc.expectedError {
+				require.NotNil(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			// Verify iterator interactions for non-error cases
+			if tc.inputCount > 0 && bisector != nil && tc.bisectorError == nil && !tc.expectedError {
+				require.NotEqual(t, 0, iterator.nextCallCount, "iterator Next() should have been called")
+				require.Equal(t, tc.expectedOnErrorCallCount, iterator.onErrorCallCount, "OnError() call count mismatch")
+			}
+		})
+	}
+}
