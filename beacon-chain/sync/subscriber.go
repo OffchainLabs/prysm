@@ -705,8 +705,8 @@ func (s *Service) samplingSize() (uint64, error) {
 	}
 
 	// Get custody group count - this is the source of truth and already reflects:
-	// - Supernode mode: 128 groups
-	// - Semi-supernode mode: 64 groups (or more if validators require)
+	// - Supernode mode: NUMBER_OF_CUSTODY_GROUPS
+	// - Semi-supernode mode: half of NUMBER_OF_CUSTODY_GROUPS (or more if validators require)
 	// - Regular mode: validator custody requirement
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {

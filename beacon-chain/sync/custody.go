@@ -116,7 +116,7 @@ func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 		return effectiveCustodyRequirement, nil
 	}
 
-	// Semi-supernode mode custodies at least half of all custody groups (e.g. 64 out of 128),
+	// Semi-supernode mode custodies at least half of all custody groups,
 	// which is the minimum required for blob reconstruction.
 	semiSupernodeTarget := cfg.NumberOfCustodyGroups / 2
 	if effectiveCustodyRequirement <= semiSupernodeTarget {

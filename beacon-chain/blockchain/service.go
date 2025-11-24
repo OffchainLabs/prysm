@@ -510,13 +510,13 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	}
 
 	// Compute the custody group count.
-	// Hierarchy: Supernode (128) > Semi-supernode (64, or more if validators require) > Regular
+	// Hierarchy: Supernode > Semi-supernode > Regular
 	custodyGroupCount := custodyRequirement
 	if isSubscribedToAllDataSubnets || wasSubscribedToAllDataSubnets {
-		// Full supernode: custody all 128 groups
+		//  supernode: custody all NUMBER_OF_CUSTODY_GROUPS
 		custodyGroupCount = cfg.NumberOfCustodyGroups
 	} else if isSemiSupernode || wasSemiSupernode {
-		// Semi-supernode: custody at least 64 groups (half), but use validator requirements if higher
+		// Semi-supernode: custody at least half of NUMBER_OF_CUSTODY_GROUPS, but use validator requirements if higher
 		semiSupernodeCustody := cfg.NumberOfCustodyGroups / 2
 		if custodyRequirement > semiSupernodeCustody {
 			log.WithFields(logrus.Fields{
