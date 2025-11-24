@@ -46,7 +46,7 @@ func (a *Assigner) freshPeers() ([]peer.ID, error) {
 	if len(peers) < required {
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),
-			"required": required}).Warn("Unable to assign peer while suitable peers < required")
+			"required": required}).Trace("Unable to assign peer while suitable peers < required")
 		return nil, ErrInsufficientSuitable
 	}
 	return peers, nil
