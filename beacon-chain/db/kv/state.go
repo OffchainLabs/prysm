@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/genesis"
@@ -481,7 +480,7 @@ func (s *Store) DeleteState(ctx context.Context, blockRoot [32]byte) error {
 			return nil
 		}
 
-		slot, err := s.slotByBlockRoot(ctx, tx, blockRoot[:])
+		slot, err := s.SlotByBlockRoot(ctx, blockRoot)
 		if err != nil {
 			return err
 		}
@@ -823,50 +822,45 @@ func (s *Store) stateBytes(ctx context.Context, blockRoot [32]byte) ([]byte, err
 	return dst, err
 }
 
-// slotByBlockRoot retrieves the corresponding slot of the input block root.
-func (s *Store) slotByBlockRoot(ctx context.Context, tx *bolt.Tx, blockRoot []byte) (primitives.Slot, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.slotByBlockRoot")
+// SlotByBlockRoot returns the slot of the input block root, based on state summary, block, or state.
+// Check for state is only done if state diff feature is not enabled.
+func (s *Store) SlotByBlockRoot(ctx context.Context, blockRoot [32]byte) (primitives.Slot, error) {
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.SlotByBlockRoot")
 	defer span.End()
 
-	bkt := tx.Bucket(stateSummaryBucket)
-	enc := bkt.Get(blockRoot)
-
-	if enc == nil {
-		// Fall back to check the block.
-		bkt := tx.Bucket(blocksBucket)
-		enc := bkt.Get(blockRoot)
-
-		if enc == nil {
-			// Fallback and check the state.
-			bkt = tx.Bucket(stateBucket)
-			enc = bkt.Get(blockRoot)
-			if enc == nil {
-				return 0, errors.New("state enc can't be nil")
-			}
-			// no need to construct the validator entries as it is not used here.
-			s, err := s.unmarshalState(ctx, enc, nil)
-			if err != nil {
-				return 0, errors.Wrap(err, "could not unmarshal state")
-			}
-			if s == nil || s.IsNil() {
-				return 0, errors.New("state can't be nil")
-			}
-			return s.Slot(), nil
-		}
-		b, err := unmarshalBlock(ctx, enc)
-		if err != nil {
-			return 0, errors.Wrap(err, "could not unmarshal block")
-		}
-		if err := blocks.BeaconBlockIsNil(b); err != nil {
-			return 0, err
-		}
-		return b.Block().Slot(), nil
+	// check state summary first
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
+	if err != nil {
+		return 0, err
 	}
-	stateSummary := &ethpb.StateSummary{}
-	if err := decode(ctx, enc, stateSummary); err != nil {
-		return 0, errors.Wrap(err, "could not unmarshal state summary")
+	if stateSummary != nil {
+		return stateSummary.Slot, nil
 	}
-	return stateSummary.Slot, nil
+
+	// fall back to block if state summary is not found
+	blk, err := s.Block(ctx, blockRoot)
+	if err != nil {
+		return 0, err
+	}
+	if blk != nil && !blk.IsNil() {
+		return blk.Block().Slot(), nil
+	}
+
+	// fall back to state, only if state diff feature is not enabled
+	if features.Get().EnableStateDiff {
+		return 0, errors.New("neither state summary nor block found")
+	}
+
+	st, err := s.State(ctx, blockRoot)
+	if err != nil {
+		return 0, err
+	}
+	if st != nil && !st.IsNil() {
+		return st.Slot(), nil
+	}
+
+	// neither state summary, block nor state found
+	return 0, errors.New("neither state summary, block nor state found")
 }
 
 // HighestSlotStatesBelow returns the states with the highest slot below the input slot
@@ -1044,23 +1038,9 @@ func (s *Store) isStateValidatorMigrationOver() (bool, error) {
 }
 
 func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
-	var slot primitives.Slot
-
-	stateSummary, err := s.StateSummary(ctx, blockRoot)
+	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
 	if err != nil {
 		return nil, err
-	}
-	if stateSummary == nil {
-		blk, err := s.Block(ctx, blockRoot)
-		if err != nil {
-			return nil, err
-		}
-		if blk == nil || blk.IsNil() {
-			return nil, errors.New("neither state summary nor block found")
-		}
-		slot = blk.Block().Slot()
-	} else {
-		slot = stateSummary.Slot
 	}
 
 	st, err := s.stateByDiff(ctx, slot)
