@@ -824,7 +824,7 @@ func TestNewColumnSync(t *testing.T) {
 		}
 
 		// Empty blocks should result in nil columnBatch
-		cs, err := newColumnSync(ctx, batch{}, verifiedROBlocks{}, current, p2p, verifiedROBlocks{}, cfg)
+		cs, err := newColumnSync(ctx, batch{}, verifiedROBlocks{}, current, p2p, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, cs, "columnSync should not be nil")
 		require.Equal(t, true, cs.columnBatch == nil, "columnBatch should be nil for empty blocks")
@@ -848,7 +848,7 @@ func TestNewColumnSync(t *testing.T) {
 			downscore: func(peer.ID, string, error) {},
 		}
 
-		cs, err := newColumnSync(ctx, b, blks, current, p2p, verifiedROBlocks{}, cfg)
+		cs, err := newColumnSync(ctx, b, blks, current, p2p, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, cs)
 		require.NotNil(t, cs.columnBatch, "columnBatch should be initialized")

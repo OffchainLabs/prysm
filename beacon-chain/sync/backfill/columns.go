@@ -95,7 +95,7 @@ type columnSync struct {
 	bisector *columnBisector
 }
 
-func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current primitives.Slot, p p2p.P2P, vbs verifiedROBlocks, cfg *workerCfg) (*columnSync, error) {
+func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current primitives.Slot, p p2p.P2P, cfg *workerCfg) (*columnSync, error) {
 	cgc, err := p.CustodyGroupCount(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "custody group count")

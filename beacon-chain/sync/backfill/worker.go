@@ -179,7 +179,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	if err != nil {
 		return b.withRetryableError(err)
 	}
-	cs, err := newColumnSync(ctx, b, verified, current, w.p2p, verified, w.cfg)
+	cs, err := newColumnSync(ctx, b, verified, current, w.p2p, w.cfg)
 	if err != nil {
 		return b.withRetryableError(err)
 	}
