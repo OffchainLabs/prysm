@@ -470,7 +470,7 @@ func (s *Service) removeStartupState() {
 // UpdateCustodyInfoInDB updates the custody information in the database.
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
-	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
+	isSupernode := flags.Get().SubscribeAllDataSubnets
 	isSemiSupernode := flags.Get().SemiSupernode
 
 	cfg := params.BeaconConfig()
@@ -478,13 +478,13 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 
 	// Check if the node was previously subscribed to all data subnets, and if so,
 	// store the new status accordingly.
-	wasSubscribedToAllDataSubnets, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSubscribedToAllDataSubnets)
+	wasSupernode, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
 	if err != nil {
 		log.WithError(err).Error("Could not update subscription status to all data subnets")
 	}
 
 	// Warn the user if the node was previously subscribed to all data subnets and is not any more.
-	if wasSubscribedToAllDataSubnets && !isSubscribedToAllDataSubnets {
+	if wasSupernode && !isSupernode {
 		log.Warnf(
 			"Because the flag `--%s` was previously used, the node will still subscribe to all data subnets.",
 			flags.SubscribeAllDataSubnets.Name,
@@ -498,7 +498,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	}
 
 	// Warn the user if they're trying to downgrade from semi-supernode.
-	if wasSemiSupernode && !isSemiSupernode && !isSubscribedToAllDataSubnets {
+	if wasSemiSupernode && !isSemiSupernode && !isSupernode {
 		log.Warnf(
 			"Because the flag `--%s` was previously used, the node will continue operating in semi-supernode mode (64 data column subnets). "+
 				"To disable this, you must start with a fresh database or upgrade to full supernode with `--%s`.",
@@ -512,7 +512,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	// Compute the custody group count.
 	// Hierarchy: Supernode > Semi-supernode > Regular
 	custodyGroupCount := custodyRequirement
-	if isSubscribedToAllDataSubnets || wasSubscribedToAllDataSubnets {
+	if isSupernode || wasSupernode {
 		//  supernode: custody all NUMBER_OF_CUSTODY_GROUPS
 		custodyGroupCount = cfg.NumberOfCustodyGroups
 	} else if isSemiSupernode || wasSemiSupernode {
