@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
