@@ -71,3 +71,56 @@ func TestSemiSupernodeCustody(t *testing.T) {
 		}
 	})
 }
+
+func TestMinimumCustodyGroupCountToReconstruct(t *testing.T) {
+	tests := []struct {
+		name           string
+		numberOfColumns uint64
+		numberOfGroups  uint64
+		expectedResult  uint64
+	}{
+		{
+			name:           "Standard 1:1 ratio (128 columns, 128 groups)",
+			numberOfColumns: 128,
+			numberOfGroups:  128,
+			expectedResult:  64, // Need half of 128 groups
+		},
+		{
+			name:           "2 columns per group (128 columns, 64 groups)",
+			numberOfColumns: 128,
+			numberOfGroups:  64,
+			expectedResult:  32, // Need 64 columns, which is 32 groups (64/2)
+		},
+		{
+			name:           "4 columns per group (128 columns, 32 groups)",
+			numberOfColumns: 128,
+			numberOfGroups:  32,
+			expectedResult:  16, // Need 64 columns, which is 16 groups (64/4)
+		},
+		{
+			name:           "More groups than columns (128 columns, 256 groups)",
+			numberOfColumns: 128,
+			numberOfGroups:  256,
+			expectedResult:  64, // Need 64 columns, 0.5 columns per group, so need 64 groups
+		},
+		{
+			name:           "Odd number requiring ceiling division (100 columns, 30 groups)",
+			numberOfColumns: 100,
+			numberOfGroups:  30,
+			expectedResult:  17, // Need 50 columns, 3 columns per group (100/30), ceiling(50/3) = 17
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig()
+			cfg.NumberOfColumns = tt.numberOfColumns
+			cfg.NumberOfCustodyGroups = tt.numberOfGroups
+			params.OverrideBeaconConfig(cfg)
+
+			result := MinimumCustodyGroupCountToReconstruct()
+			require.Equal(t, tt.expectedResult, result)
+		})
+	}
+}

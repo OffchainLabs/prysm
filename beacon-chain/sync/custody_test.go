@@ -8,6 +8,7 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	dbtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -213,7 +214,7 @@ func TestCustodyGroupCount(t *testing.T) {
 
 			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
-			require.Equal(t, config.NumberOfCustodyGroups/2, result)
+			require.Equal(t, peerdas.MinimumCustodyGroupCountToReconstruct(), result)
 		})
 	})
 
@@ -246,7 +247,7 @@ func TestCustodyGroupCount(t *testing.T) {
 
 			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
-			require.Equal(t, config.NumberOfCustodyGroups/2, result)
+			require.Equal(t, peerdas.MinimumCustodyGroupCountToReconstruct(), result)
 		})
 	})
 }
@@ -292,7 +293,7 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 		require.Equal(t, uint64(128), config.NumberOfCustodyGroups)
 
 		// Semi-supernode target should be 64 (half of 128)
-		semiSupernodeTarget := config.NumberOfCustodyGroups / 2
+		semiSupernodeTarget := peerdas.MinimumCustodyGroupCountToReconstruct()
 		require.Equal(t, uint64(64), semiSupernodeTarget)
 	})
 

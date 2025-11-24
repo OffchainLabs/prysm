@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -490,7 +491,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
 	} else if isSemiSupernode {
 		// Semi-supernode: custody minimum needed for reconstruction, or validator requirement if higher
-		semiSupernodeCustody := cfg.NumberOfCustodyGroups / 2
+		semiSupernodeCustody := peerdas.MinimumCustodyGroupCountToReconstruct()
 		if custodyRequirement > semiSupernodeCustody {
 			log.WithFields(logrus.Fields{
 				"custodyRequirement":   custodyRequirement,
