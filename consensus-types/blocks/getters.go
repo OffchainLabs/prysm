@@ -1242,15 +1242,13 @@ func (b *BeaconBlockBody) SyncAggregate() (*eth.SyncAggregate, error) {
 
 // Execution returns the execution payload of the block body.
 func (b *BeaconBlockBody) Execution() (interfaces.ExecutionData, error) {
-	switch b.version {
-	case version.Phase0, version.Altair, version.Gloas:
+	if b.version <= version.Altair || b.version >= version.Gloas {
 		return nil, consensus_types.ErrNotSupported("Execution", b.version)
-	default:
-		if b.IsBlinded() {
-			return b.executionPayloadHeader, nil
-		}
-		return b.executionPayload, nil
 	}
+	if b.IsBlinded() {
+		return b.executionPayloadHeader, nil
+	}
+	return b.executionPayload, nil
 }
 
 func (b *BeaconBlockBody) BLSToExecutionChanges() ([]*eth.SignedBLSToExecutionChange, error) {
