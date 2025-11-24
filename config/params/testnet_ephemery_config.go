@@ -29,16 +29,16 @@ func EphemeryConfig() *BeaconChainConfig {
 	cfg.GenesisDelay = 600
 	cfg.SecondsPerETH1Block = 12
 	cfg.Eth1FollowDistance = 12
-	cfg.Period = 2419200
+	cfg.EphemeryResetPeriod = 2419200
 
 	// Calculate the number of ephemery iterations that have elapsed since genesis 0 to get the latest ChainID
 	genesisZero := int64(1393527600)
 	now := time.Now().Unix()
 	difference := now - genesisZero
-	iteration := difference / int64(cfg.Period)
+	iteration := difference / int64(cfg.EphemeryResetPeriod)
 
 	// Calculate the MinGenesisTime of the iteration
-	cfg.MinGenesisTime = uint64(genesisZero+iteration*int64(cfg.Period)) + cfg.GenesisDelay
+	cfg.MinGenesisTime = uint64(genesisZero+iteration*int64(cfg.EphemeryResetPeriod)) + cfg.GenesisDelay
 
 	// Validator cycle
 	cfg.InactivityScoreBias = 4
@@ -64,14 +64,25 @@ func EphemeryConfig() *BeaconChainConfig {
 	cfg.CapellaForkVersion = []byte{0x40, 0x00, 0x10, 0x1b}
 	cfg.DenebForkEpoch = 0
 	cfg.DenebForkVersion = []byte{0x50, 0x00, 0x10, 0x1b}
-	cfg.ElectraForkEpoch = 10
+	cfg.ElectraForkEpoch = 0
 	cfg.ElectraForkVersion = []byte{0x60, 0x00, 0x10, 0x1b}
-	cfg.FuluForkEpoch = math.MaxUint64
+	cfg.FuluForkEpoch = 0
 	cfg.FuluForkVersion = []byte{0x70, 0x00, 0x10, 0x1b}
 
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.TerminalBlockHash = [32]byte{}
 	cfg.TerminalBlockHashActivationEpoch = math.MaxUint64
+
+	cfg.BlobSchedule = []BlobScheduleEntry{
+		{
+			MaxBlobsPerBlock: 12,
+			Epoch:            2048,
+		},
+		{
+			MaxBlobsPerBlock: 15,
+			Epoch:            4096,
+		},
+	}
 
 	cfg.InitializeForkSchedule()
 	return cfg

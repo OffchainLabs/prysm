@@ -390,13 +390,14 @@ http_archive(
 filegroup(
     name = "configs",
     srcs = [
-        "metadata/config.yaml",
+        "cl-config-genesis-zero.yaml",
     ],
     visibility = ["//visibility:public"],
 )
 """,
-    strip_prefix = "",
-    url = "https://github.com/ephemery-testnet/ephemery-genesis/releases/latest/download/network-config.tar.gz",
+    sha256 = "d6d61967f66be648bfceddd9ba128a2d3083d7383bc3ab7d7e845ecc96f92cd6",
+    strip_prefix = "ephemery-genesis-ephemery-153",
+    url = "https://github.com/ephemery-testnet/ephemery-genesis/archive/refs/tags/ephemery-153.tar.gz",
 )
 
 http_archive(
