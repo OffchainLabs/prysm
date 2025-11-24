@@ -28,6 +28,17 @@ func (s *Store) State(ctx context.Context, blockRoot [32]byte) (state.BeaconStat
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.State")
 	defer span.End()
 	startTime := time.Now()
+
+	// If state diff is enabled, we get the state from the state-diff db.
+	if features.Get().EnableStateDiff {
+		st, err := s.getStateUsingStateDiff(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
+		stateReadingTime.Observe(float64(time.Since(startTime).Milliseconds()))
+		return st, nil
+	}
+
 	enc, err := s.stateBytes(ctx, blockRoot)
 	if err != nil {
 		return nil, err
@@ -1030,4 +1041,35 @@ func (s *Store) isStateValidatorMigrationOver() (bool, error) {
 		return returnFlag, err
 	}
 	return returnFlag, nil
+}
+
+func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	var slot primitives.Slot
+
+	stateSummary, err := s.StateSummary(ctx, blockRoot)
+	if err != nil {
+		return nil, err
+	}
+	if stateSummary == nil {
+		blk, err := s.Block(ctx, blockRoot)
+		if err != nil {
+			return nil, err
+		}
+		if blk == nil || blk.IsNil() {
+			return nil, errors.New("neither state summary nor block found")
+		}
+		slot = blk.Block().Slot()
+	} else {
+		slot = stateSummary.Slot
+	}
+
+	st, err := s.stateByDiff(ctx, slot)
+	if err != nil {
+		return nil, err
+	}
+	if st == nil || st.IsNil() {
+		return nil, errors.New("state not found")
+	}
+
+	return st, nil
 }
