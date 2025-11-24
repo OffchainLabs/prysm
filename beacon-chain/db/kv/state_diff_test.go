@@ -20,7 +20,7 @@ import (
 )
 
 func TestStateDiff_LoadOrInitOffset(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	db := setupDB(t)
 	err := setOffsetInDB(db, 10)
@@ -36,7 +36,7 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 
 func TestStateDiff_ComputeLevel(t *testing.T) {
 	db := setupDB(t)
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	err := setOffsetInDB(db, 0)
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestStateDiff_ComputeLevel(t *testing.T) {
 }
 
 func TestStateDiff_SaveFullSnapshot(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 }
 
 func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -179,7 +179,7 @@ func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 }
 
 func TestStateDiff_SaveDiff(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -245,7 +245,7 @@ func TestStateDiff_SaveDiff(t *testing.T) {
 }
 
 func TestStateDiff_SaveAndReadDiff(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -319,7 +319,7 @@ func TestStateDiff_SaveAndReadDiff_WithRepetitiveAnchorSlots(t *testing.T) {
 }
 
 func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -385,7 +385,7 @@ func TestStateDiff_SaveAndReadDiff_MultipleLevels(t *testing.T) {
 }
 
 func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All()[:len(version.All())-1] {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -419,7 +419,7 @@ func TestStateDiff_SaveAndReadDiffForkTransition(t *testing.T) {
 }
 
 func TestStateDiff_OffsetCache(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	// test for slot numbers 0 and 1 for every version
 	for slotNum := range 2 {
@@ -450,7 +450,7 @@ func TestStateDiff_OffsetCache(t *testing.T) {
 }
 
 func TestStateDiff_AnchorCache(t *testing.T) {
-	setDefaultExponents()
+	setDefaultStateDiffExponents()
 
 	for v := range version.All() {
 		t.Run(version.String(v), func(t *testing.T) {
@@ -654,7 +654,7 @@ func setOffsetInDB(s *Store, offset uint64) error {
 	return nil
 }
 
-func setDefaultExponents() {
+func setDefaultStateDiffExponents() {
 	globalFlags := flags.GlobalFlags{
 		StateDiffExponents: []int{21, 18, 16, 13, 11, 9, 5},
 	}

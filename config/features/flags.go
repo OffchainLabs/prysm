@@ -172,7 +172,7 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
-	enableStateDiff = &cli.BoolFlag{
+	EnableStateDiff = &cli.BoolFlag{
 		Name:  "enable-state-diff",
 		Usage: "Enables the experimental state diff feature.",
 	}
