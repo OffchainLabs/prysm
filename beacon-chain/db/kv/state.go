@@ -427,6 +427,16 @@ func (s *Store) storeValidatorEntriesSeparately(ctx context.Context, tx *bolt.Tx
 func (s *Store) HasState(ctx context.Context, blockRoot [32]byte) bool {
 	_, span := trace.StartSpan(ctx, "BeaconDB.HasState")
 	defer span.End()
+
+	if features.Get().EnableStateDiff {
+		hasState, err := s.hasStateUsingStateDiff(ctx, blockRoot)
+		if err != nil {
+			log.WithError(err).Error(fmt.Sprintf("error checking state existence using state-diff"))
+			return false
+		}
+		return hasState
+	}
+
 	hasState := false
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(stateBucket)
@@ -1052,4 +1062,14 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	}
 
 	return st, nil
+}
+
+func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) (bool, error) {
+	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
+	if err != nil {
+		return false, err
+	}
+
+	stateLvl := computeLevel(s.getOffset(), slot)
+	return stateLvl != -1, nil
 }
