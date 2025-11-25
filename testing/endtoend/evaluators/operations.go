@@ -110,8 +110,8 @@ var SubmitWithdrawal = e2etypes.Evaluator{
 	Name: "submit_withdrawal_epoch_%d",
 	Policy: func(currentEpoch primitives.Epoch) bool {
 		fEpoch := params.BeaconConfig().CapellaForkEpoch
-		// If Capella is disabled (starting at Electra+), run after exit submission
-		if fEpoch == params.BeaconConfig().FarFutureEpoch {
+		// If Capella is disabled (starting at Deneb+), run after exit submission
+		if e2etypes.GenesisFork() >= version.Deneb {
 			return policies.OnEpoch(exitSubmissionEpoch + 1)(currentEpoch)
 		}
 		return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
@@ -129,9 +129,9 @@ var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
 		}
 		// Only run this for minimal setups after capella
 		fEpoch := params.BeaconConfig().CapellaForkEpoch
-		// If Capella is disabled (starting at Electra+), run after withdrawal submission
+		// If Capella is disabled (starting at Deneb+), run after withdrawal submission
 		var validWithdrawnEpoch primitives.Epoch
-		if fEpoch == params.BeaconConfig().FarFutureEpoch {
+		if e2etypes.GenesisFork() >= version.Deneb {
 			validWithdrawnEpoch = exitSubmissionEpoch + 2
 		} else {
 			validWithdrawnEpoch = fEpoch + 1
