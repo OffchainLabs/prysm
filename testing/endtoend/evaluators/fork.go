@@ -22,12 +22,12 @@ var streamDeadline = 1 * time.Minute
 var AltairForkTransition = e2etypes.Evaluator{
 	Name: "altair_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
-		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
 		// Only run if we started before Altair
-		if e2etypes.GenesisFork() < version.Altair {
-			return altair(e)
+		if e2etypes.GenesisFork() > version.Altair {
+			return false
 		}
-		return false
+		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
+		return altair(e)
 	},
 	Evaluation: altairForkOccurs,
 }
