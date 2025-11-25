@@ -492,15 +492,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	} else if isSemiSupernode {
 		// Semi-supernode: custody minimum needed for reconstruction, or validator requirement if higher
 		semiSupernodeCustody := peerdas.MinimumCustodyGroupCountToReconstruct()
-		if custodyRequirement > semiSupernodeCustody {
-			log.WithFields(logrus.Fields{
-				"custodyRequirement":   custodyRequirement,
-				"semiSupernodeCustody": semiSupernodeCustody,
-			}).Warn("Validator custody requirement exceeds semi-supernode minimum; custodying additional groups.")
-			targetCustodyGroupCount = custodyRequirement
-		} else {
-			targetCustodyGroupCount = semiSupernodeCustody
-		}
+		targetCustodyGroupCount = max(custodyRequirement, semiSupernodeCustody)
 	}
 
 	// Safely compute the fulu fork slot.
@@ -522,26 +514,22 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		return 0, 0, errors.Wrap(err, "update custody info")
 	}
 
-	if !wasSupernode && isSupernode && actualCustodyGroupCount < cfg.NumberOfCustodyGroups {
+	if isSupernode {
 		log.WithFields(logrus.Fields{
-			"current":            actualCustodyGroupCount,
-			"target":             cfg.NumberOfCustodyGroups,
-			"numberOfSubnets":    cfg.NumberOfCustodyGroups,
-			"dataColumnsPerSlot": cfg.NumberOfCustodyGroups,
+			"current": actualCustodyGroupCount,
+			"target":  cfg.NumberOfCustodyGroups,
 		}).Info("Supernode mode enabled. Will custody all data columns going forward.")
 	}
 
 	if wasSupernode && !isSupernode {
-		log.Warningf("Because the `--%f` flag was previously used, the node will still subscribe to all data subnets.", flags.SubscribeAllDataSubnets.Name)
+		log.Warningf("Because the `--%s` flag was previously used, the node will still subscribe to all data subnets.", flags.SubscribeAllDataSubnets.Name)
 	}
 
 	if actualCustodyGroupCount > targetCustodyGroupCount {
 		log.WithFields(logrus.Fields{
-			"retaining":          actualCustodyGroupCount,
-			"currentTarget":      targetCustodyGroupCount,
-			"numberOfSubnets":    actualCustodyGroupCount,
-			"dataColumnsPerSlot": actualCustodyGroupCount,
-		}).Warn("Retaining higher custody count from prior configuration. " +
+			"retaining":     actualCustodyGroupCount,
+			"currentTarget": targetCustodyGroupCount,
+		}).Info("Retaining higher custody count from prior configuration. " +
 			"Custody count only increases to protect data availability commitments. " +
 			"To reduce custody, start with a fresh database.")
 	}
