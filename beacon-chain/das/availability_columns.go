@@ -237,7 +237,7 @@ type custodyRequirement struct {
 }
 
 func (c *custodyRequirement) required(current primitives.Epoch) (peerdas.ColumnIndices, error) {
-	peerInfo, _, err := peerdas.Info(c.nodeID, max(c.cgc, params.BeaconConfig().SamplesPerSlot))
+	peerInfo, _, err := peerdas.Info(c.nodeID, c.cgc)
 	if err != nil {
 		return peerdas.NewColumnIndices(), errors.Wrap(err, "peer info")
 	}

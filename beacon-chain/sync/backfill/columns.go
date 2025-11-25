@@ -213,10 +213,7 @@ func currentCustodiedColumns(ctx context.Context, p p2p.P2P) (peerdas.ColumnIndi
 		return nil, errors.Wrap(err, "custody group count")
 	}
 
-	// Note that in the case where custody_group_count is the minimum CUSTODY_REQUIREMENT, we will
-	// still download the extra columns dictated by SAMPLES_PER_SLOT. This is a hack to avoid complexity in the DA check.
-	// We may want to revisit this to reduce bandwidth and storage for nodes with 0 validators attached.
-	peerInfo, _, err := peerdas.Info(p.NodeID(), max(cgc, params.BeaconConfig().SamplesPerSlot))
+	peerInfo, _, err := peerdas.Info(p.NodeID(), cgc)
 	if err != nil {
 		return nil, errors.Wrap(err, "peer info")
 	}

@@ -860,16 +860,52 @@ func TestNewColumnSync(t *testing.T) {
 
 // TestCurrentCustodiedColumns tests the currentCustodiedColumns function
 func TestCurrentCustodiedColumns(t *testing.T) {
-	t.Run("successful column indices retrieval", func(t *testing.T) {
-		ctx := context.Background()
-		p2p := p2ptest.NewTestP2P(t)
+	cases := []struct {
+		name          string
+		custodyAmount uint64
+		expectedCount int
+		err           error
+	}{
+		{
+			name:          "no custody columns",
+			custodyAmount: 0,
+			expectedCount: 0,
+		},
+		{
+			name:          "some custody columns",
+			custodyAmount: 3,
+			expectedCount: 3, // shouldn't be allowed, this is a bug in UpdateCustodyInfo/CustodyGroupCount
+		},
+		{
+			name:          "maximum custody columns",
+			custodyAmount: params.BeaconConfig().NumberOfCustodyGroups,
+			expectedCount: int(params.BeaconConfig().NumberOfCustodyGroups),
+		},
+		{
+			name:          "maximum custody columns",
+			custodyAmount: params.BeaconConfig().NumberOfCustodyGroups + 1,
+			expectedCount: int(params.BeaconConfig().NumberOfCustodyGroups),
+			err:           peerdas.ErrCustodyGroupCountTooLarge,
+		},
+	}
 
-		indices, err := currentCustodiedColumns(ctx, p2p)
-		require.NoError(t, err)
-		require.NotNil(t, indices)
-		// Should have some custody columns based on default settings
-		require.Equal(t, true, indices.Count() > 0, "should have at least some custody columns")
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			p2p := p2ptest.NewTestP2P(t)
+			_, _, err := p2p.UpdateCustodyInfo(0, tc.custodyAmount)
+			require.NoError(t, err)
+
+			indices, err := currentCustodiedColumns(ctx, p2p)
+			if err != nil {
+				require.ErrorIs(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, indices)
+			require.Equal(t, tc.expectedCount, indices.Count())
+		})
+	}
 }
 
 // TestValidatingColumnRequest_Validate tests the validate method
