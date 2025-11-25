@@ -1,3 +1,3 @@
 ### Fixed
 
-- Fix Beacon API host validation in validator service
+- Prevent validator service from starting with empty Beacon API host lists by filtering and validating endpoints.
