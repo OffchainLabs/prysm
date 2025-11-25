@@ -17,15 +17,36 @@ import (
 )
 
 var streamDeadline = 1 * time.Minute
-var startingFork = version.Phase0
+
+// genesisFork returns the fork version at genesis based on the current config.
+// It checks from highest fork to lowest to find which fork is active at epoch 0.
+func genesisFork() int {
+	cfg := params.BeaconConfig()
+	if cfg.ElectraForkEpoch == 0 {
+		return version.Electra
+	}
+	if cfg.DenebForkEpoch == 0 {
+		return version.Deneb
+	}
+	if cfg.CapellaForkEpoch == 0 {
+		return version.Capella
+	}
+	if cfg.BellatrixForkEpoch == 0 {
+		return version.Bellatrix
+	}
+	if cfg.AltairForkEpoch == 0 {
+		return version.Altair
+	}
+	return version.Phase0
+}
 
 // AltairForkTransition ensures that the Altair hard fork has occurred successfully.
 var AltairForkTransition = types.Evaluator{
 	Name: "altair_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
 		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
-		// TODO (11750): modify policies to take an end to end config
-		if startingFork == version.Phase0 {
+		// Only run if we started before Altair
+		if genesisFork() < version.Altair {
 			return altair(e)
 		}
 		return false
@@ -37,6 +58,10 @@ var AltairForkTransition = types.Evaluator{
 var BellatrixForkTransition = types.Evaluator{
 	Name: "bellatrix_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Bellatrix
+		if genesisFork() >= version.Bellatrix {
+			return false
+		}
 		fEpoch := params.BeaconConfig().BellatrixForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -47,6 +72,10 @@ var BellatrixForkTransition = types.Evaluator{
 var CapellaForkTransition = types.Evaluator{
 	Name: "capella_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Capella
+		if genesisFork() >= version.Capella {
+			return false
+		}
 		fEpoch := params.BeaconConfig().CapellaForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -57,6 +86,10 @@ var CapellaForkTransition = types.Evaluator{
 var DenebForkTransition = types.Evaluator{
 	Name: "deneb_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Deneb
+		if genesisFork() >= version.Deneb {
+			return false
+		}
 		fEpoch := params.BeaconConfig().DenebForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -67,6 +100,10 @@ var DenebForkTransition = types.Evaluator{
 var ElectraForkTransition = types.Evaluator{
 	Name: "electra_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Electra
+		if genesisFork() >= version.Electra {
+			return false
+		}
 		fEpoch := params.BeaconConfig().ElectraForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
