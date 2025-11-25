@@ -23,7 +23,7 @@ var AltairForkTransition = e2etypes.Evaluator{
 	Name: "altair_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
 		// Only run if we started before Altair
-		if e2etypes.GenesisFork() > version.Altair {
+		if e2etypes.GenesisFork() >= version.Altair {
 			return false
 		}
 		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
