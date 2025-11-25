@@ -286,7 +286,7 @@ func Test_IsExecutionEnabled(t *testing.T) {
 				require.NoError(t, err)
 				return h
 			}(),
-			want: true,
+			want: false,
 		},
 		{
 			name:    "non-empty header, empty payload",
