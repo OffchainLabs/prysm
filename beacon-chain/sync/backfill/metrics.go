@@ -36,16 +36,16 @@ var (
 
 	backfillBatchTimeWaiting = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_time_waiting",
-			Help:    "Time batch waited for a suitable peer.",
+			Name:    "backfill_batch_waiting_ms",
+			Help:    "Time batch waited for a suitable peer in ms.",
 			Buckets: []float64{50, 100, 300, 1000, 2000},
 		},
 	)
 	backfillBatchTimeRoundtrip = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_time_roundtrip",
+			Name:    "backfill_batch_roundtrip_ms",
 			Help:    "Total time to import batch, from first scheduled to imported.",
-			Buckets: []float64{400, 800, 1600, 3200, 6400, 12800},
+			Buckets: []float64{1000, 2000, 4000, 6000, 10000},
 		},
 	)
 
@@ -57,20 +57,20 @@ var (
 	)
 	blockDownloadBytesApprox = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "backfill_blocks_bytes_downloaded",
+			Name: "backfill_blocks_downloaded_bytes",
 			Help: "BeaconBlock bytes downloaded from peers for backfill.",
 		},
 	)
 	blockDownloadMs = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_blocks_time_download",
+			Name:    "backfill_batch_blocks_download_ms",
 			Help:    "BeaconBlock download time, in ms.",
 			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
 		},
 	)
 	blockVerifyMs = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_time_verify",
+			Name:    "backfill_batch_verify_ms",
 			Help:    "BeaconBlock verification time, in ms.",
 			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
 		},
@@ -84,13 +84,13 @@ var (
 	)
 	blobSidecarDownloadBytesApprox = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "backfill_blobs_bytes_downloaded",
+			Name: "backfill_blobs_downloaded_bytes",
 			Help: "BlobSidecar bytes downloaded from peers for backfill.",
 		},
 	)
 	blobSidecarDownloadMs = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_blobs_time_download",
+			Name:    "backfill_batch_blobs_download_ms",
 			Help:    "BlobSidecar download time, in ms.",
 			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
 		},
@@ -105,22 +105,22 @@ var (
 	)
 	dataColumnSidecarDownloadBytes = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "backfill_data_column_sidecar_bytes_downloaded",
+			Name: "backfill_data_column_sidecar_downloaded_bytes",
 			Help: "DataColumnSidecar bytes downloaded from peers for backfill.",
 		},
 	)
 	dataColumnSidecarDownloadMs = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_columns_time_download",
+			Name:    "backfill_batch_columns_download_ms",
 			Help:    "DataColumnSidecars download time, in ms.",
 			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
 		},
 	)
 	dataColumnSidecarVerifyMs = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "backfill_batch_columns_time_verify",
+			Name:    "backfill_batch_columns_verify_ms",
 			Help:    "DataColumnSidecars verification time, in ms.",
-			Buckets: []float64{100, 300, 1000, 2000, 4000, 8000},
+			Buckets: []float64{3, 5, 10, 20, 100, 200},
 		},
 	)
 )
