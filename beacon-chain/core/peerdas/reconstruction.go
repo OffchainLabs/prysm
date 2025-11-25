@@ -32,22 +32,33 @@ func MinimumColumnCountToReconstruct() uint64 {
 // MinimumCustodyGroupCountToReconstruct returns the minimum number of custody groups needed to
 // custody enough data columns for reconstruction. This accounts for the relationship between
 // custody groups and columns, making it future-proof if these values change.
-func MinimumCustodyGroupCountToReconstruct() uint64 {
+// Returns an error if the configuration values are invalid (zero or would cause division by zero).
+func MinimumCustodyGroupCountToReconstruct() (uint64, error) {
 	cfg := params.BeaconConfig()
+
+	// Validate configuration values
+	if cfg.NumberOfColumns == 0 {
+		return 0, errors.New("NumberOfColumns cannot be zero")
+	}
+	if cfg.NumberOfCustodyGroups == 0 {
+		return 0, errors.New("NumberOfCustodyGroups cannot be zero")
+	}
+
 	minimumColumnCount := MinimumColumnCountToReconstruct()
 
 	// Calculate how many columns each custody group represents
 	columnsPerGroup := cfg.NumberOfColumns / cfg.NumberOfCustodyGroups
 
-	// Special case: if there are more groups than columns (columnsPerGroup = 0),
-	// we need at least as many groups as we need columns
+	// If there are more groups than columns (columnsPerGroup = 0), this is an invalid configuration
+	// for reconstruction purposes as we cannot determine a meaningful custody group count
 	if columnsPerGroup == 0 {
-		return minimumColumnCount
+		return 0, errors.Errorf("invalid configuration: NumberOfCustodyGroups (%d) exceeds NumberOfColumns (%d)",
+			cfg.NumberOfCustodyGroups, cfg.NumberOfColumns)
 	}
 
 	// Use ceiling division to ensure we have enough groups to cover the minimum columns
 	// ceiling(a/b) = (a + b - 1) / b
-	return (minimumColumnCount + columnsPerGroup - 1) / columnsPerGroup
+	return (minimumColumnCount + columnsPerGroup - 1) / columnsPerGroup, nil
 }
 
 // recoverCellsForBlobs reconstructs cells for specified blobs from the given data column sidecars.

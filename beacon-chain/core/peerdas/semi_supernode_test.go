@@ -98,12 +98,6 @@ func TestMinimumCustodyGroupCountToReconstruct(t *testing.T) {
 			expectedResult:  16, // Need 64 columns, which is 16 groups (64/4)
 		},
 		{
-			name:           "More groups than columns (128 columns, 256 groups)",
-			numberOfColumns: 128,
-			numberOfGroups:  256,
-			expectedResult:  64, // Need 64 columns, 0.5 columns per group, so need 64 groups
-		},
-		{
 			name:           "Odd number requiring ceiling division (100 columns, 30 groups)",
 			numberOfColumns: 100,
 			numberOfGroups:  30,
@@ -119,8 +113,48 @@ func TestMinimumCustodyGroupCountToReconstruct(t *testing.T) {
 			cfg.NumberOfCustodyGroups = tt.numberOfGroups
 			params.OverrideBeaconConfig(cfg)
 
-			result := MinimumCustodyGroupCountToReconstruct()
+			result, err := MinimumCustodyGroupCountToReconstruct()
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}
+}
+
+func TestMinimumCustodyGroupCountToReconstruct_ErrorCases(t *testing.T) {
+	t.Run("Returns error when NumberOfColumns is zero", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.NumberOfColumns = 0
+		cfg.NumberOfCustodyGroups = 128
+		params.OverrideBeaconConfig(cfg)
+
+		_, err := MinimumCustodyGroupCountToReconstruct()
+		require.NotNil(t, err)
+		require.Equal(t, true, err.Error() == "NumberOfColumns cannot be zero")
+	})
+
+	t.Run("Returns error when NumberOfCustodyGroups is zero", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.NumberOfColumns = 128
+		cfg.NumberOfCustodyGroups = 0
+		params.OverrideBeaconConfig(cfg)
+
+		_, err := MinimumCustodyGroupCountToReconstruct()
+		require.NotNil(t, err)
+		require.Equal(t, true, err.Error() == "NumberOfCustodyGroups cannot be zero")
+	})
+
+	t.Run("Returns error when NumberOfCustodyGroups exceeds NumberOfColumns", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.NumberOfColumns = 128
+		cfg.NumberOfCustodyGroups = 256
+		params.OverrideBeaconConfig(cfg)
+
+		_, err := MinimumCustodyGroupCountToReconstruct()
+		require.NotNil(t, err)
+		// Just check that we got an error about the configuration
+		require.Equal(t, true, len(err.Error()) > 0)
+	})
 }

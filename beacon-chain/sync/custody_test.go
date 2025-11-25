@@ -214,7 +214,9 @@ func TestCustodyGroupCount(t *testing.T) {
 
 			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
-			require.Equal(t, peerdas.MinimumCustodyGroupCountToReconstruct(), result)
+			expected, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+		require.NoError(t, err)
+		require.Equal(t, expected, result)
 		})
 	})
 
@@ -247,7 +249,9 @@ func TestCustodyGroupCount(t *testing.T) {
 
 			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
-			require.Equal(t, peerdas.MinimumCustodyGroupCountToReconstruct(), result)
+			expected, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+		require.NoError(t, err)
+		require.Equal(t, expected, result)
 		})
 	})
 }
@@ -293,7 +297,8 @@ func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
 		require.Equal(t, uint64(128), config.NumberOfCustodyGroups)
 
 		// Semi-supernode target should be 64 (half of 128)
-		semiSupernodeTarget := peerdas.MinimumCustodyGroupCountToReconstruct()
+		semiSupernodeTarget, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+		require.NoError(t, err)
 		require.Equal(t, uint64(64), semiSupernodeTarget)
 	})
 
