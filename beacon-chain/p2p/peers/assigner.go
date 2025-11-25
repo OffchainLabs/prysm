@@ -4,10 +4,17 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+// StatusProvider describes the minimum capability that Assigner needs from peer status tracking.
+// That is, the ability to retrieve the best peers by finalized checkpoint.
+type StatusProvider interface {
+	BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch, []peer.ID)
+}
 
 // FinalizedCheckpointer describes the minimum capability that Assigner needs from forkchoice.
 // That is, the ability to retrieve the latest finalized checkpoint to help with peer evaluation.
@@ -17,9 +24,9 @@ type FinalizedCheckpointer interface {
 
 // NewAssigner assists in the correct construction of an Assigner by code in other packages,
 // assuring all the important private member fields are given values.
-// The FinalizedCheckpointer is used to retrieve the latest finalized checkpoint each time peers are requested.
+// The StatusProvider is used to retrieve best peers, and FinalizedCheckpointer is used to retrieve the latest finalized checkpoint each time peers are requested.
 // Peers that report an older finalized checkpoint are filtered out.
-func NewAssigner(s *Status, fc FinalizedCheckpointer) *Assigner {
+func NewAssigner(s StatusProvider, fc FinalizedCheckpointer) *Assigner {
 	return &Assigner{
 		ps: s,
 		fc: fc,
@@ -28,7 +35,7 @@ func NewAssigner(s *Status, fc FinalizedCheckpointer) *Assigner {
 
 // Assigner uses the "BestFinalized" peer scoring method to pick the next-best peer to receive rpc requests.
 type Assigner struct {
-	ps *Status
+	ps StatusProvider
 	fc FinalizedCheckpointer
 }
 
