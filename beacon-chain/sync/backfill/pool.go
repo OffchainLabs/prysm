@@ -3,6 +3,7 @@ package backfill
 import (
 	"context"
 	"math"
+	synclib "sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -19,7 +20,7 @@ import (
 type batchWorkerPool interface {
 	spawn(ctx context.Context, n int, a PeerAssigner, cfg *workerCfg)
 	todo(b batch)
-	complete() (batch, error)
+	complete(primitives.Slot) (batch, error)
 }
 
 type worker interface {
@@ -49,7 +50,8 @@ type p2pBatchWorkerPool struct {
 	endSeq         []batch
 	ctx            context.Context
 	cancel         func()
-	earliest       primitives.Slot
+	minChecker     *minChecker
+	earliest       primitives.Slot // earliest is the earliest slot a worker is processing
 	peerCache      *sync.DASPeerCache
 	p2p            p2p.P2P
 	peerFailLogger *intervalLogger
@@ -71,6 +73,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
 		p2p:            p,
 		peerFailLogger: newIntervalLogger(log, 5),
 		earliest:       primitives.Slot(math.MaxUint64),
+		minChecker:     &minChecker{},
 	}
 }
 
@@ -95,7 +98,8 @@ func (p *p2pBatchWorkerPool) todo(b batch) {
 	p.toRouter <- b
 }
 
-func (p *p2pBatchWorkerPool) complete() (batch, error) {
+func (p *p2pBatchWorkerPool) complete(min primitives.Slot) (batch, error) {
+	p.minChecker.updateMin(min)
 	if len(p.endSeq) == p.maxBatches {
 		return p.endSeq[0], errEndSequence
 	}
@@ -164,7 +168,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		return nil, err
 	}
 	if len(notBusy) == 0 {
-		log.Warn("No suitable peers available for batch assignment")
+		log.Debug("No suitable peers available for batch assignment")
 		return todo, nil
 	}
 
@@ -182,6 +186,10 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	}
 
 	for i, b := range todo {
+		if b.expired(p.minChecker.minimum()) {
+			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
+			continue
+		}
 		excludePeers := busy
 		if b.state == batchErrFatal {
 			// Fatal error detected in batch, shut down the pool.
@@ -248,4 +256,22 @@ func (p *p2pBatchWorkerPool) updateEarliest(current primitives.Slot) {
 func (p *p2pBatchWorkerPool) shutdown(err error) {
 	p.cancel()
 	p.shutdownErr <- err
+}
+
+// minChecker synchronizes access to the minimum slot for backfill.
+type minChecker struct {
+	mu  synclib.RWMutex
+	min primitives.Slot
+}
+
+func (m *minChecker) minimum() primitives.Slot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.min
+}
+
+func (m *minChecker) updateMin(min primitives.Slot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.min = min
 }

@@ -250,6 +250,14 @@ func (b batch) workComplete() bool {
 	return b.state == batchImportable
 }
 
+func (b batch) expired(min primitives.Slot) bool {
+	if b.end <= min {
+		log.WithFields(b.logFields()).WithField("retentionStartSlot", min).Debug("Batch outside retention window")
+		return true
+	}
+	return false
+}
+
 func (b batch) selectPeer(picker *sync.PeerPicker, busy map[peer.ID]bool) (peer.ID, []uint64, error) {
 	if b.state == batchSyncColumns {
 		return picker.ForColumns(b.columns.columnsNeeded(), busy)

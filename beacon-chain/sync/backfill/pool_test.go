@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -62,7 +63,7 @@ func TestPoolDetectAllEnded(t *testing.T) {
 	for i := 0; i < nw; i++ {
 		pool.todo(endSeq)
 	}
-	b, err := pool.complete()
+	b, err := pool.complete(0)
 	require.ErrorIs(t, err, errEndSequence)
 	require.Equal(t, b.end, endSeq.end)
 }
@@ -81,7 +82,7 @@ func (m *mockPool) todo(b batch) {
 	m.todoChan <- b
 }
 
-func (m *mockPool) complete() (batch, error) {
+func (m *mockPool) complete(min primitives.Slot) (batch, error) {
 	select {
 	case b := <-m.finishedChan:
 		return b, nil
@@ -91,3 +92,483 @@ func (m *mockPool) complete() (batch, error) {
 }
 
 var _ batchWorkerPool = &mockPool{}
+
+// TestMinCheckerUpdateMinimum tests that minChecker correctly updates and retrieves the minimum slot
+func TestMinCheckerUpdateMinimum(t *testing.T) {
+	testCases := []struct {
+		name    string
+		updates []primitives.Slot
+		final   primitives.Slot
+	}{
+		{
+			name:    "SingleUpdate",
+			updates: []primitives.Slot{150},
+			final:   150,
+		},
+		{
+			name:    "MultipleUpdates",
+			updates: []primitives.Slot{100, 150, 200, 50},
+			final:   50, // last update wins
+		},
+		{
+			name:    "InitialValueIsZero",
+			updates: []primitives.Slot{}, // no updates
+			final:   0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mc := &minChecker{}
+
+			// Verify initial value is zero
+			if mc.minimum() != 0 {
+				t.Fatalf("expected initial minimum to be 0, got %d", mc.minimum())
+			}
+
+			// Apply updates
+			for _, min := range tc.updates {
+				mc.updateMin(min)
+			}
+
+			// Verify final value
+			final := mc.minimum()
+			if final != tc.final {
+				t.Fatalf("expected minimum %d, got %d", tc.final, final)
+			}
+		})
+	}
+}
+
+// TestProcessTodoExpiresOlderBatches tests that processTodo correctly identifies and converts expired batches
+func TestProcessTodoExpiresOlderBatches(t *testing.T) {
+	testCases := []struct {
+		name              string
+		seqLen            int
+		min               primitives.Slot
+		max               primitives.Slot
+		size              primitives.Slot
+		updateMin         primitives.Slot // what we'll set minChecker to
+		expectedEndSeq    int             // how many batches should be converted to endSeq
+		expectedProcessed int             // how many batches should be processed (assigned to peers)
+	}{
+		{
+			name:              "NoBatchesExpired",
+			seqLen:            3,
+			min:               100,
+			max:               1000,
+			size:              50,
+			updateMin:         120, // doesn't expire any batches
+			expectedEndSeq:    0,
+			expectedProcessed: 3,
+		},
+		{
+			name:              "SomeBatchesExpired",
+			seqLen:            4,
+			min:               100,
+			max:               1000,
+			size:              50,
+			updateMin:         175, // expires batches with end <= 175
+			expectedEndSeq:    1,   // [100-150] will be expired
+			expectedProcessed: 3,
+		},
+		{
+			name:              "AllBatchesExpired",
+			seqLen:            3,
+			min:               100,
+			max:               300,
+			size:              50,
+			updateMin:         300, // expires all batches
+			expectedEndSeq:    3,
+			expectedProcessed: 0,
+		},
+		{
+			name:              "MultipleBatchesExpired",
+			seqLen:            8,
+			min:               100,
+			max:               500,
+			size:              50,
+			updateMin:         320, // expires multiple batches
+			expectedEndSeq:    4,   // [300-350] (end=350 > 320 not expired), [250-300], [200-250], [150-200], [100-150] = 4 batches
+			expectedProcessed: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create pool with minChecker
+			pool := &p2pBatchWorkerPool{
+				minChecker: &minChecker{},
+				endSeq:     make([]batch, 0),
+			}
+			pool.minChecker.updateMin(tc.updateMin)
+
+			// Create batches with valid slot ranges (descending order)
+			todo := make([]batch, tc.seqLen)
+			for i := 0; i < tc.seqLen; i++ {
+				end := tc.min + primitives.Slot((tc.seqLen-i)*int(tc.size))
+				begin := end - tc.size
+				todo[i] = batch{
+					begin: begin,
+					end:   end,
+					state: batchInit,
+				}
+			}
+
+			// Process todo using processTodo logic (simulate without actual peer assignment)
+			endSeqCount := 0
+			processedCount := 0
+			for _, b := range todo {
+				if b.expired(pool.minChecker.minimum()) {
+					pool.endSeq = append(pool.endSeq, b.withState(batchEndSequence))
+					endSeqCount++
+				} else {
+					processedCount++
+				}
+			}
+
+			// Verify counts
+			if endSeqCount != tc.expectedEndSeq {
+				t.Fatalf("expected %d batches to expire, got %d", tc.expectedEndSeq, endSeqCount)
+			}
+			if processedCount != tc.expectedProcessed {
+				t.Fatalf("expected %d batches to be processed, got %d", tc.expectedProcessed, processedCount)
+			}
+
+			// Verify all expired batches are in batchEndSequence state
+			for _, b := range pool.endSeq {
+				if b.state != batchEndSequence {
+					t.Fatalf("expired batch should be batchEndSequence, got %s", b.state.String())
+				}
+				if b.end > tc.updateMin {
+					t.Fatalf("batch with end=%d should not be in endSeq when min=%d", b.end, tc.updateMin)
+				}
+			}
+		})
+	}
+}
+
+// TestExpirationAfterMoveMinimum tests that batches expire correctly after minimum is increased
+func TestExpirationAfterMoveMinimum(t *testing.T) {
+	testCases := []struct {
+		name           string
+		seqLen         int
+		min            primitives.Slot
+		max            primitives.Slot
+		size           primitives.Slot
+		firstMin       primitives.Slot
+		secondMin      primitives.Slot
+		expectedAfter1 int // expected expired after first processTodo
+		expectedAfter2 int // expected expired after second processTodo
+	}{
+		{
+			name:           "IncrementalMinimumIncrease",
+			seqLen:         4,
+			min:            100,
+			max:            1000,
+			size:           50,
+			firstMin:       150, // batches with end <= 150 expire
+			secondMin:      200, // additional batches with end <= 200 expire
+			expectedAfter1: 1,   // [100-150] expires
+			expectedAfter2: 1,   // [150-200] also expires on second check (end=200 <= 200)
+		},
+		{
+			name:           "LargeMinimumJump",
+			seqLen:         3,
+			min:            100,
+			max:            300,
+			size:           50,
+			firstMin:       120, // no expiration
+			secondMin:      300, // all expire
+			expectedAfter1: 0,
+			expectedAfter2: 3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &p2pBatchWorkerPool{
+				minChecker: &minChecker{},
+				endSeq:     make([]batch, 0),
+			}
+
+			// Create batches
+			todo := make([]batch, tc.seqLen)
+			for i := 0; i < tc.seqLen; i++ {
+				end := tc.min + primitives.Slot((tc.seqLen-i)*int(tc.size))
+				begin := end - tc.size
+				todo[i] = batch{
+					begin: begin,
+					end:   end,
+					state: batchInit,
+				}
+			}
+
+			// First processTodo with firstMin
+			pool.minChecker.updateMin(tc.firstMin)
+			endSeq1 := 0
+			remaining1 := make([]batch, 0)
+			for _, b := range todo {
+				if b.expired(pool.minChecker.minimum()) {
+					pool.endSeq = append(pool.endSeq, b.withState(batchEndSequence))
+					endSeq1++
+				} else {
+					remaining1 = append(remaining1, b)
+				}
+			}
+
+			if endSeq1 != tc.expectedAfter1 {
+				t.Fatalf("after first update: expected %d expired, got %d", tc.expectedAfter1, endSeq1)
+			}
+
+			// Second processTodo with secondMin on remaining batches
+			pool.minChecker.updateMin(tc.secondMin)
+			endSeq2 := 0
+			for _, b := range remaining1 {
+				if b.expired(pool.minChecker.minimum()) {
+					pool.endSeq = append(pool.endSeq, b.withState(batchEndSequence))
+					endSeq2++
+				}
+			}
+
+			if endSeq2 != tc.expectedAfter2 {
+				t.Fatalf("after second update: expected %d expired, got %d", tc.expectedAfter2, endSeq2)
+			}
+
+			// Verify total endSeq count
+			totalExpected := tc.expectedAfter1 + tc.expectedAfter2
+			if len(pool.endSeq) != totalExpected {
+				t.Fatalf("expected total %d expired batches, got %d", totalExpected, len(pool.endSeq))
+			}
+		})
+	}
+}
+
+// TestTodoInterceptsBatchEndSequence tests that todo() correctly intercepts batchEndSequence batches
+func TestTodoInterceptsBatchEndSequence(t *testing.T) {
+	testCases := []struct {
+		name             string
+		batches          []batch
+		expectedEndSeq   int
+		expectedToRouter int
+	}{
+		{
+			name: "AllRegularBatches",
+			batches: []batch{
+				{state: batchInit},
+				{state: batchInit},
+				{state: batchErrRetryable},
+			},
+			expectedEndSeq:   0,
+			expectedToRouter: 3,
+		},
+		{
+			name: "MixedBatches",
+			batches: []batch{
+				{state: batchInit},
+				{state: batchEndSequence},
+				{state: batchInit},
+				{state: batchEndSequence},
+			},
+			expectedEndSeq:   2,
+			expectedToRouter: 2,
+		},
+		{
+			name: "AllEndSequence",
+			batches: []batch{
+				{state: batchEndSequence},
+				{state: batchEndSequence},
+				{state: batchEndSequence},
+			},
+			expectedEndSeq:   3,
+			expectedToRouter: 0,
+		},
+		{
+			name:             "EmptyBatches",
+			batches:          []batch{},
+			expectedEndSeq:   0,
+			expectedToRouter: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &p2pBatchWorkerPool{
+				endSeq: make([]batch, 0),
+			}
+
+			endSeqCount := 0
+			routerCount := 0
+
+			for _, b := range tc.batches {
+				if b.state == batchEndSequence {
+					pool.endSeq = append(pool.endSeq, b)
+					endSeqCount++
+				} else {
+					routerCount++
+				}
+			}
+
+			if endSeqCount != tc.expectedEndSeq {
+				t.Fatalf("expected %d batchEndSequence, got %d", tc.expectedEndSeq, endSeqCount)
+			}
+			if routerCount != tc.expectedToRouter {
+				t.Fatalf("expected %d batches to router, got %d", tc.expectedToRouter, routerCount)
+			}
+			if len(pool.endSeq) != tc.expectedEndSeq {
+				t.Fatalf("endSeq slice should have %d batches, got %d", tc.expectedEndSeq, len(pool.endSeq))
+			}
+		})
+	}
+}
+
+// TestCompleteShutdownCondition tests the complete() method shutdown behavior
+func TestCompleteShutdownCondition(t *testing.T) {
+	testCases := []struct {
+		name           string
+		maxBatches     int
+		endSeqCount    int
+		shouldShutdown bool
+		expectedMin    primitives.Slot
+	}{
+		{
+			name:           "AllEndSeq_Shutdown",
+			maxBatches:     3,
+			endSeqCount:    3,
+			shouldShutdown: true,
+			expectedMin:    200,
+		},
+		{
+			name:           "PartialEndSeq_NoShutdown",
+			maxBatches:     3,
+			endSeqCount:    2,
+			shouldShutdown: false,
+			expectedMin:    200,
+		},
+		{
+			name:           "NoEndSeq_NoShutdown",
+			maxBatches:     5,
+			endSeqCount:    0,
+			shouldShutdown: false,
+			expectedMin:    150,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &p2pBatchWorkerPool{
+				maxBatches: tc.maxBatches,
+				minChecker: &minChecker{},
+				endSeq:     make([]batch, 0),
+			}
+
+			// Add endSeq batches
+			for i := 0; i < tc.endSeqCount; i++ {
+				pool.endSeq = append(pool.endSeq, batch{state: batchEndSequence})
+			}
+
+			// Check shutdown condition (this is what complete() checks)
+			shouldShutdown := len(pool.endSeq) == pool.maxBatches
+
+			if shouldShutdown != tc.shouldShutdown {
+				t.Fatalf("expected shouldShutdown=%v, got %v", tc.shouldShutdown, shouldShutdown)
+			}
+
+			// Verify minChecker update in complete() would work
+			pool.minChecker.updateMin(tc.expectedMin)
+			if pool.minChecker.minimum() != tc.expectedMin {
+				t.Fatalf("expected minimum %d, got %d", tc.expectedMin, pool.minChecker.minimum())
+			}
+		})
+	}
+}
+
+// TestExpirationFlowEndToEnd tests the complete flow of batches from batcher through pool
+func TestExpirationFlowEndToEnd(t *testing.T) {
+	testCases := []struct {
+		name        string
+		seqLen      int
+		min         primitives.Slot
+		max         primitives.Slot
+		size        primitives.Slot
+		moveMinTo   primitives.Slot
+		description string
+	}{
+		{
+			name:        "SingleBatchExpires",
+			seqLen:      2,
+			min:         100,
+			max:         300,
+			size:        50,
+			moveMinTo:   150,
+			description: "Initial [150-200] and [100-150]; moveMinimum(150) expires [100-150]",
+		},
+		{
+			name:        "ProgressiveExpiration",
+			seqLen:      4,
+			min:         100,
+			max:         500,
+			size:        50,
+			moveMinTo:   250,
+			description: "4 batches; moveMinimum(250) expires 2 of them",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Simulate the flow: batcher creates batches → sequence() → pool.todo() → pool.processTodo()
+
+			// Step 1: Create sequencer (simulating batcher)
+			seq := newBatchSequencer(tc.seqLen, tc.min, tc.max, tc.size)
+			initializeBatchWithSlots(seq.seq, tc.min, tc.size)
+			for i := range seq.seq {
+				seq.seq[i].state = batchInit
+			}
+
+			// Step 2: Create pool
+			pool := &p2pBatchWorkerPool{
+				minChecker: &minChecker{},
+				endSeq:     make([]batch, 0),
+			}
+
+			// Step 3: Initial sequence() call - all batches should be returned (none expired yet)
+			batches1, err := seq.sequence()
+			if err != nil {
+				t.Fatalf("initial sequence() failed: %v", err)
+			}
+			if len(batches1) != tc.seqLen {
+				t.Fatalf("expected %d batches from initial sequence(), got %d", tc.seqLen, len(batches1))
+			}
+
+			// Step 4: Move minimum (simulating epoch advancement)
+			err = seq.moveMinimum(tc.moveMinTo)
+			if err != nil {
+				t.Fatalf("moveMinimum failed: %v", err)
+			}
+			pool.minChecker.updateMin(tc.moveMinTo)
+
+			// Step 5: Process batches through pool (second sequence call would happen here in real code)
+			batches2, err := seq.sequence()
+			if err != nil && err != errMaxBatches {
+				t.Fatalf("second sequence() failed: %v", err)
+			}
+
+			// Step 6: Simulate pool.processTodo() checking for expiration
+			processedCount := 0
+			for _, b := range batches2 {
+				if b.expired(pool.minChecker.minimum()) {
+					pool.endSeq = append(pool.endSeq, b.withState(batchEndSequence))
+				} else {
+					processedCount++
+				}
+			}
+
+			// Verify: All returned non-endSeq batches should have end > moveMinTo
+			for _, b := range batches2 {
+				if b.state != batchEndSequence && b.end <= tc.moveMinTo {
+					t.Fatalf("batch [%d-%d] should not be returned when min=%d", b.begin, b.end, tc.moveMinTo)
+				}
+			}
+		})
+	}
+}

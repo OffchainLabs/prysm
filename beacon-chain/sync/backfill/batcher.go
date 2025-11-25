@@ -22,29 +22,34 @@ func (c *batchSequencer) sequence() ([]batch, error) {
 	s := make([]batch, 0)
 	// batch start slots are in descending order, c.seq[n].begin == c.seq[n+1].end
 	for i := range c.seq {
-		switch c.seq[i].state {
-		case batchInit, batchErrRetryable:
-			c.seq[i] = c.seq[i].withState(batchSequenced)
-			s = append(s, c.seq[i])
-		case batchNil:
+		if c.seq[i].state == batchNil {
 			// batchNil is the zero value of the batch type.
 			// This case means that we are initializing a batch that was created by the
 			// initial allocation of the seq slice, so batcher need to compute its bounds.
-			var b batch
 			if i == 0 {
 				// The first item in the list is a special case, subsequent items are initialized
 				// relative to the preceding batches.
-				b = c.batcher.before(c.batcher.max)
+				c.seq[i] = c.batcher.before(c.batcher.max)
 			} else {
-				b = c.batcher.beforeBatch(c.seq[i-1])
+				c.seq[i] = c.batcher.beforeBatch(c.seq[i-1])
 			}
-			c.seq[i] = b.withState(batchSequenced)
-			s = append(s, c.seq[i])
-		case batchEndSequence:
-			if len(s) == 0 {
+		}
+		if c.seq[i].state == batchInit || c.seq[i].state == batchErrRetryable {
+			// This means the batch has fallen outside the retention window so we no longer need to sync it.
+			// Since we always create batches from high to low, we can assume we've already created the
+			// descendent batches from the batch we're dropping, so there won't be another batch depending on
+			// this one - we can stop adding batches and mark put this one in the batchEndSequence state.
+			// When all batches are in batchEndSequence, worker pool spins down and marks backfill complete.
+			if c.seq[i].expired(c.batcher.min) {
+				c.seq[i] = c.seq[i].withState(batchEndSequence)
+			} else {
+				c.seq[i] = c.seq[i].withState(batchSequenced)
 				s = append(s, c.seq[i])
+				continue
 			}
-		default:
+		}
+		if c.seq[i].state == batchEndSequence && len(s) == 0 {
+			s = append(s, c.seq[i])
 			continue
 		}
 	}
