@@ -181,15 +181,7 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	u := strings.ReplaceAll(v.conn.GetBeaconApiUrl(), " ", "")
-	rawHosts := strings.Split(u, ",")
-	hosts := make([]string, 0, len(rawHosts))
-	for _, host := range rawHosts {
-		if host == "" {
-			continue
-		}
-		hosts = append(hosts, host)
-	}
+	hosts := sanitizeBeaconAPIHosts(v.conn.GetBeaconApiUrl())
 	if len(hosts) == 0 {
 		log.WithError(err).Error("No API hosts provided")
 		return
@@ -381,6 +373,19 @@ func ConstructDialOptions(
 
 	dialOpts = append(dialOpts, extraOpts...)
 	return dialOpts
+}
+
+func sanitizeBeaconAPIHosts(raw string) []string {
+	u := strings.ReplaceAll(raw, " ", "")
+	rawHosts := strings.Split(u, ",")
+	hosts := make([]string, 0, len(rawHosts))
+	for _, host := range rawHosts {
+		if host == "" {
+			continue
+		}
+		hosts = append(hosts, host)
+	}
+	return hosts
 }
 
 func (v *ValidatorService) Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error) {
