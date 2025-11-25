@@ -53,6 +53,7 @@ go_test(
         "roblob_test.go",
         "roblock_test.go",
         "rodatacolumn_test.go",
+        "setters_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

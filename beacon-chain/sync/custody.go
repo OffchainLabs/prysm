@@ -80,16 +80,9 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "p2p update custody info")
 	}
 
-	// Update the p2p earliest available slot metric
-	earliestAvailableSlotP2P.Set(float64(storedEarliestSlot))
-
-	dbEarliestSlot, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
-	if err != nil {
+	if _, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount); err != nil {
 		return errors.Wrap(err, "beacon db update custody info")
 	}
-
-	// Update the DB earliest available slot metric
-	earliestAvailableSlotDB.Set(float64(dbEarliestSlot))
 
 	return nil
 }

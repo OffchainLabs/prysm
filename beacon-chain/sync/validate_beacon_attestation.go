@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -41,6 +42,11 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	pid peer.ID,
 	msg *pubsub.Message,
 ) (pubsub.ValidationResult, error) {
+	start := time.Now()
+	defer func() {
+		attestationVerificationGossipSummary.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
 	if pid == s.cfg.p2p.PeerID() {
 		return pubsub.ValidationAccept, nil
 	}

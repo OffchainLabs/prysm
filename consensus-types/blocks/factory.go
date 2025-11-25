@@ -82,6 +82,8 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 		return initBlindedSignedBlockFromProtoFulu(b)
 	case *eth.GenericSignedBeaconBlock_BlindedFulu:
 		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
+	case *eth.SignedBeaconBlockGloas:
+		return initSignedBlockFromProtoGloas(b)
 	default:
 		return nil, errors.Wrapf(ErrUnsupportedSignedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -138,6 +140,8 @@ func NewBeaconBlock(i any) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoFulu(b)
 	case *eth.GenericBeaconBlock_BlindedFulu:
 		return initBlindedBlockFromProtoFulu(b.BlindedFulu)
+	case *eth.BeaconBlockGloas:
+		return initBlockFromProtoGloas(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlock, "unable to create block from type %T", i)
 	}
@@ -168,6 +172,8 @@ func NewBeaconBlockBody(i any) (interfaces.ReadOnlyBeaconBlockBody, error) {
 		return initBlockBodyFromProtoElectra(b)
 	case *eth.BlindedBeaconBlockBodyElectra:
 		return initBlindedBlockBodyFromProtoElectra(b)
+	case *eth.BeaconBlockBodyGloas:
+		return initBlockBodyFromProtoGloas(b)
 	default:
 		return nil, errors.Wrapf(errUnsupportedBeaconBlockBody, "unable to create block body from type %T", i)
 	}
@@ -260,6 +266,12 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			return nil, errIncorrectBlockVersion
 		}
 		return NewSignedBeaconBlock(&eth.SignedBeaconBlockFulu{Block: pb, Signature: signature})
+	case version.Gloas:
+		pb, ok := pb.(*eth.BeaconBlockGloas)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+		return NewSignedBeaconBlock(&eth.SignedBeaconBlockGloas{Block: pb, Signature: signature})
 	default:
 		return nil, errUnsupportedBeaconBlock
 	}
