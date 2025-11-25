@@ -41,13 +41,7 @@ func (dh deprecatedEncodedAttestingHistory) assertSize() error {
 }
 
 func (dhd *deprecatedHistoryData) isEmpty() bool {
-	if dhd == (*deprecatedHistoryData)(nil) {
-		return true
-	}
-	if dhd.Source == params.BeaconConfig().FarFutureEpoch {
-		return true
-	}
-	return false
+	return dhd == (*deprecatedHistoryData)(nil) || dhd.Source == params.BeaconConfig().FarFutureEpoch
 }
 
 func emptyHistoryData() *deprecatedHistoryData {
