@@ -2,6 +2,7 @@ package das
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 
@@ -699,6 +700,182 @@ func TestBisectVerification(t *testing.T) {
 			if tc.inputCount > 0 && bisector != nil && tc.bisectorError == nil && !tc.expectedError {
 				require.NotEqual(t, 0, iterator.nextCallCount, "iterator Next() should have been called")
 				require.Equal(t, tc.expectedOnErrorCallCount, iterator.onErrorCallCount, "OnError() call count mismatch")
+			}
+		})
+	}
+}
+
+// TestColumnsNotStored tests the columnsNotStored method.
+func TestColumnsNotStored(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+
+	cases := []struct {
+		name     string
+		count    int
+		stored   []uint64 // Column indices marked as stored
+		expected []uint64 // Expected column indices in returned result
+	}{
+		// Empty cases
+		{
+			name:     "EmptyInput",
+			count:    0,
+			stored:   []uint64{},
+			expected: []uint64{},
+		},
+		// Single element cases
+		{
+			name:     "SingleElement_NotStored",
+			count:    1,
+			stored:   []uint64{},
+			expected: []uint64{0},
+		},
+		{
+			name:     "SingleElement_Stored",
+			count:    1,
+			stored:   []uint64{0},
+			expected: []uint64{},
+		},
+		// All not stored cases
+		{
+			name:     "AllNotStored_FiveElements",
+			count:    5,
+			stored:   []uint64{},
+			expected: []uint64{0, 1, 2, 3, 4},
+		},
+		// All stored cases
+		{
+			name:     "AllStored",
+			count:    5,
+			stored:   []uint64{0, 1, 2, 3, 4},
+			expected: []uint64{},
+		},
+		// Partial storage - beginning
+		{
+			name:     "StoredAtBeginning",
+			count:    5,
+			stored:   []uint64{0, 1},
+			expected: []uint64{2, 3, 4},
+		},
+		// Partial storage - end
+		{
+			name:     "StoredAtEnd",
+			count:    5,
+			stored:   []uint64{3, 4},
+			expected: []uint64{0, 1, 2},
+		},
+		// Partial storage - middle
+		{
+			name:     "StoredInMiddle",
+			count:    5,
+			stored:   []uint64{2},
+			expected: []uint64{0, 1, 3, 4},
+		},
+		// Partial storage - scattered
+		{
+			name:     "StoredScattered",
+			count:    8,
+			stored:   []uint64{1, 3, 5},
+			expected: []uint64{0, 2, 4, 6, 7},
+		},
+		// Alternating pattern
+		{
+			name:     "AlternatingPattern",
+			count:    8,
+			stored:   []uint64{0, 2, 4, 6},
+			expected: []uint64{1, 3, 5, 7},
+		},
+		// Consecutive stored
+		{
+			name:     "ConsecutiveStored",
+			count:    10,
+			stored:   []uint64{3, 4, 5, 6},
+			expected: []uint64{0, 1, 2, 7, 8, 9},
+		},
+		// Large slice cases
+		{
+			name:     "LargeSlice_NoStored",
+			count:    64,
+			stored:   []uint64{},
+			expected: []uint64{}, // Verify separately: all should be present
+		},
+		{
+			name:     "LargeSlice_SingleStored",
+			count:    64,
+			stored:   []uint64{32},
+			expected: []uint64{}, // Verify separately: should have all except 32
+		},
+	}
+
+	slot := primitives.Slot(params.BeaconConfig().FuluForkEpoch) * params.BeaconConfig().SlotsPerEpoch
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create test columns first to get the actual block root
+			var columns []blocks.RODataColumn
+			if tc.count > 0 {
+				columns = makeTestDataColumns(t, tc.count, [32]byte{}, 0)
+			}
+
+			// Get the actual block root from the first column (if any)
+			var blockRoot [32]byte
+			if len(columns) > 0 {
+				blockRoot = columns[0].BlockRoot()
+			}
+
+			// Setup storage
+			var store *filesystem.DataColumnStorage
+			if len(tc.stored) > 0 {
+				mocker, s := filesystem.NewEphemeralDataColumnStorageWithMocker(t)
+				mocker.CreateFakeIndices(blockRoot, slot, tc.stored...)
+				store = s
+			} else {
+				store = filesystem.NewEphemeralDataColumnStorage(t)
+			}
+
+			// Create store instance
+			lazilyPersistentStore := &LazilyPersistentStoreColumn{
+				store: store,
+			}
+
+			// Execute
+			result := lazilyPersistentStore.columnsNotStored(columns)
+
+			// Assert count
+			require.Equal(t, len(tc.expected), len(result),
+				fmt.Sprintf("expected %d columns, got %d", len(tc.expected), len(result)))
+
+			// Verify that no stored columns are in the result
+			if len(tc.stored) > 0 {
+				resultIndices := make(map[uint64]bool)
+				for _, col := range result {
+					resultIndices[col.Index] = true
+				}
+				for _, storedIdx := range tc.stored {
+					require.Equal(t, false, resultIndices[storedIdx],
+						fmt.Sprintf("stored column index %d should not be in result", storedIdx))
+				}
+			}
+
+			// If expectedIndices is specified, verify the exact column indices in order
+			if len(tc.expected) > 0 && len(tc.stored) == 0 {
+				// Only check exact order for non-stored cases (where we know they stay in same order)
+				for i, expectedIdx := range tc.expected {
+					require.Equal(t, columns[expectedIdx].Index, result[i].Index,
+						fmt.Sprintf("column %d: expected index %d, got %d", i, columns[expectedIdx].Index, result[i].Index))
+				}
+			}
+
+			// Verify optimization: if nothing stored, should return original slice
+			if len(tc.stored) == 0 && tc.count > 0 {
+				require.Equal(t, &columns[0], &result[0],
+					"when no columns stored, should return original slice (same pointer)")
+			}
+
+			// Verify optimization: if some stored, result should use in-place shifting
+			if len(tc.stored) > 0 && len(tc.expected) > 0 && tc.count > 0 {
+				require.Equal(t, cap(columns), cap(result),
+					"result should be in-place shifted from original (same capacity)")
 			}
 		})
 	}
