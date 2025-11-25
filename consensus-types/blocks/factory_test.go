@@ -161,6 +161,18 @@ func Test_NewSignedBeaconBlock(t *testing.T) {
 		assert.Equal(t, version.Deneb, b.Version())
 		assert.Equal(t, true, b.IsBlinded())
 	})
+	t.Run("SignedBeaconBlockGloas", func(t *testing.T) {
+		pb := &eth.SignedBeaconBlockGloas{
+			Block: &eth.BeaconBlockGloas{
+				Body: &eth.BeaconBlockBodyGloas{},
+			},
+			Signature: []byte("sig"),
+		}
+		b, err := NewSignedBeaconBlock(pb)
+		require.NoError(t, err)
+		assert.Equal(t, version.Gloas, b.Version())
+		assert.Equal(t, false, b.IsBlinded())
+	})
 	t.Run("nil", func(t *testing.T) {
 		_, err := NewSignedBeaconBlock(nil)
 		assert.ErrorContains(t, "received nil object", err)
@@ -276,6 +288,13 @@ func Test_NewBeaconBlock(t *testing.T) {
 		assert.Equal(t, version.Deneb, b.Version())
 		assert.Equal(t, true, b.IsBlinded())
 	})
+	t.Run("BeaconBlockGloas", func(t *testing.T) {
+		pb := &eth.BeaconBlockGloas{Body: &eth.BeaconBlockBodyGloas{}}
+		b, err := NewBeaconBlock(pb)
+		require.NoError(t, err)
+		assert.Equal(t, version.Gloas, b.Version())
+		assert.Equal(t, false, b.IsBlinded())
+	})
 	t.Run("nil", func(t *testing.T) {
 		_, err := NewBeaconBlock(nil)
 		assert.ErrorContains(t, "received nil object", err)
@@ -354,6 +373,15 @@ func Test_NewBeaconBlockBody(t *testing.T) {
 		assert.Equal(t, version.Deneb, b.version)
 		assert.Equal(t, true, b.IsBlinded())
 	})
+	t.Run("BeaconBlockBodyGloas", func(t *testing.T) {
+		pb := &eth.BeaconBlockBodyGloas{}
+		i, err := NewBeaconBlockBody(pb)
+		require.NoError(t, err)
+		b, ok := i.(*BeaconBlockBody)
+		require.Equal(t, true, ok)
+		assert.Equal(t, version.Gloas, b.version)
+		assert.Equal(t, false, b.IsBlinded())
+	})
 	t.Run("nil", func(t *testing.T) {
 		_, err := NewBeaconBlockBody(nil)
 		assert.ErrorContains(t, "received nil object", err)
@@ -424,6 +452,14 @@ func Test_BuildSignedBeaconBlock(t *testing.T) {
 		assert.DeepEqual(t, sig, sb.Signature())
 		assert.Equal(t, version.Deneb, sb.Version())
 		assert.Equal(t, true, sb.IsBlinded())
+	})
+	t.Run("Gloas", func(t *testing.T) {
+		b := &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}}
+		sb, err := BuildSignedBeaconBlock(b, sig[:])
+		require.NoError(t, err)
+		assert.DeepEqual(t, sig, sb.Signature())
+		assert.Equal(t, version.Gloas, sb.Version())
+		assert.Equal(t, false, sb.IsBlinded())
 	})
 }
 
@@ -535,4 +571,21 @@ func TestBuildSignedBeaconBlockFromExecutionPayload(t *testing.T) {
 		require.DeepEqual(t, uint64(123), payload.ExcessBlobGas)
 		require.DeepEqual(t, uint64(321), payload.BlobGasUsed)
 	})
+	t.Run("gloas execution unsupported", func(t *testing.T) {
+		base := &SignedBeaconBlock{
+			version: version.Gloas,
+			block:   &BeaconBlock{version: version.Gloas, body: &BeaconBlockBody{version: version.Gloas}},
+		}
+		blinded := &testBlindedSignedBeaconBlock{SignedBeaconBlock: base}
+		_, err := BuildSignedBeaconBlockFromExecutionPayload(blinded, nil)
+		require.ErrorContains(t, "Execution is not supported for gloas", err)
+	})
+}
+
+type testBlindedSignedBeaconBlock struct {
+	*SignedBeaconBlock
+}
+
+func (b *testBlindedSignedBeaconBlock) IsBlinded() bool {
+	return true
 }
