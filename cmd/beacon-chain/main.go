@@ -237,7 +237,6 @@ func main() {
 		Action: func(ctx *cli.Context) error {
 			if err := startNode(ctx, cancel); err != nil {
 				log.Fatal(err.Error())
-				return err
 			}
 			return nil
 		},
