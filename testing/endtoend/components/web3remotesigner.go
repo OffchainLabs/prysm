@@ -260,7 +260,7 @@ func createTestnetDir() (string, error) {
 	rawYaml := params.ConfigToYaml(configCopy)
 
 	// TODO: remove this when it's removed from web3signer
-	maxBlobsStr := fmt.Sprintf("\nMAX_BLOBS_PER_BLOCK_ELECTRA: %s\n", fmt.Sprintf("%d", params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra))
+	maxBlobsStr := fmt.Sprintf("\nMAX_BLOBS_PER_BLOCK_ELECTRA: %d\n", params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	rawYaml = append(rawYaml, []byte(maxBlobsStr)...)
 
 	if err := file.MkdirAll(testNetDir); err != nil {
