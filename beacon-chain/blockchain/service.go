@@ -529,7 +529,7 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	}
 
 	if wasSupernode && !isSupernode {
-		log.Warningf("Because the `--%s` flag was previously used, the node will still subscribe to all data subnets.", flags.SubscribeAllDataSubnets.Name)
+		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.SubscribeAllDataSubnets.Name)
 	}
 
 	if actualCustodyGroupCount > targetCustodyGroupCount {
