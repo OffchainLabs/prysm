@@ -212,7 +212,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		}
 		pid, cols, err := b.selectPeer(picker, excludePeers)
 		if err != nil {
-			p.peerFailLogger.WithField("notBusy", len(notBusy)).WithError(err).WithFields(b.logFields()).Error("Failed to select peer for batch")
+			p.peerFailLogger.WithField("notBusy", len(notBusy)).WithError(err).WithFields(b.logFields()).Warn("Failed to select peer for batch")
 			// Return the remaining todo items and allow the outer loop to control when we try again.
 			return todo[i:], nil
 		}
