@@ -2,6 +2,7 @@ package peers
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
@@ -33,7 +34,7 @@ func TestPickBest(t *testing.T) {
 		},
 		{
 			name:     "all busy except i=5",
-			busy:     testBusyMap(append(append([]peer.ID{}, best[0:5]...), best[6:]...)),
+			busy:     testBusyMap(slices.Concat(best[0:5], best[6:])),
 			expected: []peer.ID{best[5]},
 		},
 		{

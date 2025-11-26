@@ -182,11 +182,9 @@ func TestService_InitStartStop(t *testing.T) {
 			}
 
 			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				s.Start()
-				wg.Done()
-			}()
+			})
 
 			go func() {
 				// Allow to exit from test (on no head loop waiting for head is started).
@@ -228,11 +226,9 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		s, _ := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			s.Start()
-			wg.Done()
-		}()
+		})
 		go func() {
 			time.AfterFunc(500*time.Millisecond, func() {
 				cancel()
@@ -259,11 +255,9 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		expectedGenesisTime := gt
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			s.Start()
-			wg.Done()
-		}()
+		})
 		rg := func() time.Time { return gt.Add(time.Second * 12) }
 		go func() {
 			time.AfterFunc(200*time.Millisecond, func() {
@@ -290,15 +284,13 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		expectedGenesisTime := time.Now().Add(60 * time.Second)
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			time.AfterFunc(500*time.Millisecond, func() {
 				var vr [32]byte
 				require.NoError(t, gs.SetClock(startup.NewClock(expectedGenesisTime, vr)))
 			})
 			s.Start()
-			wg.Done()
-		}()
+		})
 
 		if util.WaitTimeout(wg, time.Second*5) {
 			t.Fatalf("Test should have exited by now, timed out")

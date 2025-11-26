@@ -26,7 +26,7 @@ func checkColdStateCheckpoint(_ *e2etypes.EvaluationContext, conns ...*grpc.Clie
 	ctx := context.Background()
 	client := eth.NewBeaconChainClient(conns[0])
 
-	for i := primitives.Epoch(0); i < epochToCheck; i++ {
+	for i := range primitives.Epoch(epochToCheck) {
 		res, err := client.ListValidatorAssignments(ctx, &eth.ListValidatorAssignmentsRequest{
 			QueryFilter: &eth.ListValidatorAssignmentsRequest_Epoch{Epoch: i},
 		})

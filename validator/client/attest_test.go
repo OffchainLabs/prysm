@@ -590,7 +590,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 				BeaconBlockRoot: bytesutil.PadTo([]byte("A"), 32),
 				Target:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("B"), 32)},
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 3},
-			}, nil).Do(func(arg0, arg1 interface{}) {
+			}, nil).Do(func(arg0, arg1 any) {
 				wg.Done()
 			})
 
@@ -745,12 +745,10 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		time.Sleep(100 * time.Millisecond)
 		v.slotFeed.Send(currentSlot)
-		wg.Done()
-	}()
+	})
 
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 

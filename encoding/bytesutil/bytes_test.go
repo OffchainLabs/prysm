@@ -235,7 +235,7 @@ func BenchmarkUnsafeCastToString(b *testing.B) {
 	var nilData []byte
 
 	b.Run("string(b)", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_ = string(data)
 			_ = string(empty)
 			_ = string(nilData)
@@ -243,7 +243,7 @@ func BenchmarkUnsafeCastToString(b *testing.B) {
 	})
 
 	b.Run("bytesutil.UnsafeCastToString(b)", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_ = bytesutil.UnsafeCastToString(data)
 			_ = bytesutil.UnsafeCastToString(empty)
 			_ = bytesutil.UnsafeCastToString(nilData)
@@ -263,7 +263,7 @@ func FuzzUnsafeCastToString(f *testing.F) {
 
 func BenchmarkToBytes32(b *testing.B) {
 	x := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bytesutil.ToBytes32(x)
 	}
 }
@@ -318,7 +318,7 @@ func TestSafeCopyBytes_Copy(t *testing.T) {
 
 func BenchmarkSafeCopyBytes(b *testing.B) {
 	dSlice := make([][]byte, 900000)
-	for i := 0; i < 900000; i++ {
+	for i := range 900000 {
 		slice := make([]byte, 32)
 		slice[0] = 'A'
 		dSlice[i] = slice

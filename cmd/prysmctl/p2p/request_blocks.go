@@ -159,12 +159,12 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 	c.registerHandshakeHandlers()
 
 	c.registerRPCHandler(p2p.RPCBlocksByRangeTopicV1, func(
-		ctx context.Context, i interface{}, stream libp2pcore.Stream,
+		ctx context.Context, i any, stream libp2pcore.Stream,
 	) error {
 		return nil
 	})
 	c.registerRPCHandler(p2p.RPCBlocksByRangeTopicV2, func(
-		ctx context.Context, i interface{}, stream libp2pcore.Stream,
+		ctx context.Context, i any, stream libp2pcore.Stream,
 	) error {
 		return nil
 	})

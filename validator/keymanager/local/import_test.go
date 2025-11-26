@@ -41,7 +41,7 @@ func TestLocalKeymanager_NoDuplicates(t *testing.T) {
 	numKeys := 50
 	pubKeys := make([][]byte, numKeys)
 	privKeys := make([][]byte, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		priv, err := bls.RandKey()
 		require.NoError(t, err)
 		privKeys[i] = priv.Marshal()
@@ -111,7 +111,7 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		numKeystores := 5
 		keystores := make([]*keymanager.Keystore, numKeystores)
 		passwords := make([]string, numKeystores)
-		for i := 0; i < numKeystores; i++ {
+		for i := range numKeystores {
 			keystores[i] = createRandomKeystore(t, password)
 			passwords[i] = password
 		}
@@ -131,7 +131,7 @@ func TestLocalKeymanager_ImportKeystores(t *testing.T) {
 		numKeystores := 5
 		keystores := make([]*keymanager.Keystore, numKeystores)
 		passwords := make([]string, numKeystores)
-		for i := 0; i < numKeystores; i++ {
+		for i := range numKeystores {
 			pass := password + strconv.Itoa(i)
 			keystores[i] = createRandomKeystore(t, pass)
 			passwords[i] = pass

@@ -79,7 +79,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(f, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
 	digest, err := r.currentForkDigest()
 	assert.NoError(f, err)
 	topic = r.addDigestToTopic(topic, digest)
@@ -163,7 +163,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(f, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
 	digest, err := r.currentForkDigest()
 	assert.NoError(f, err)
 	topic = r.addDigestToTopic(topic, digest)
@@ -247,7 +247,7 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
 	require.NoError(f, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(msg)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
 	digest, err := r.currentForkDigest()
 	assert.NoError(f, err)
 	topic = r.addDigestToTopic(topic, digest)

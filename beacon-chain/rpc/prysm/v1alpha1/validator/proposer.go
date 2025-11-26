@@ -191,9 +191,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		// Set eth1 data.
 		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
@@ -233,7 +231,7 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
-	}()
+	})
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
@@ -549,11 +547,19 @@ func (vs *Server) PrepareBeaconProposer(
 		vs.TrackedValidatorsCache.Set(val)
 		validatorIndices = append(validatorIndices, r.ValidatorIndex)
 	}
-	if len(validatorIndices) != 0 {
-		log.WithFields(logrus.Fields{
-			"validatorCount": len(validatorIndices),
-		}).Debug("Updated fee recipient addresses for validator indices")
+
+	if len(validatorIndices) == 0 {
+		return &emptypb.Empty{}, nil
+
 	}
+
+	log := log.WithField("validatorCount", len(validatorIndices))
+	if logrus.GetLevel() >= logrus.TraceLevel {
+		log = log.WithField("validatorIndices", validatorIndices)
+	}
+
+	log.Debug("Updated fee recipient addresses")
+
 	return &emptypb.Empty{}, nil
 }
 

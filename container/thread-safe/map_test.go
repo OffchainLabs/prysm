@@ -36,8 +36,8 @@ func BenchmarkMap_Concrete(b *testing.B) {
 	mm := &safeMap{
 		items: make(map[int]string),
 	}
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < 1000; j++ {
+	for b.Loop() {
+		for j := range 1000 {
 			mm.Put(j, "foo")
 			mm.Get(j)
 			mm.Delete(j)
@@ -48,8 +48,8 @@ func BenchmarkMap_Concrete(b *testing.B) {
 func BenchmarkMap_Generic(b *testing.B) {
 	items := make(map[int]string)
 	mm := NewThreadSafeMap(items)
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < 1000; j++ {
+	for b.Loop() {
+		for j := range 1000 {
 			mm.Put(j, "foo")
 			mm.Get(j)
 			mm.Delete(j)
@@ -59,8 +59,8 @@ func BenchmarkMap_Generic(b *testing.B) {
 func BenchmarkMap_GenericTx(b *testing.B) {
 	items := make(map[int]string)
 	mm := NewThreadSafeMap(items)
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < 1000; j++ {
+	for b.Loop() {
+		for j := range 1000 {
 			mm.Do(func(mp map[int]string) {
 				mp[j] = "foo"
 				_ = mp[j]
@@ -85,7 +85,7 @@ func TestMap(t *testing.T) {
 	require.Equal(t, 3, tMap.Len())
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func(w *sync.WaitGroup, scopedMap *Map[int, string]) {
 			defer w.Done()

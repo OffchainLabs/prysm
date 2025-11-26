@@ -16,7 +16,7 @@ func TestFuzzProcessDeposits_10000(t *testing.T) {
 	state := &ethpb.BeaconStateAltair{}
 	deposits := make([]*ethpb.Deposit, 100)
 	ctx := t.Context()
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		for i := range deposits {
 			fuzzer.Fuzz(deposits[i])
@@ -37,7 +37,7 @@ func TestFuzzProcessPreGenesisDeposit_10000(t *testing.T) {
 	deposit := &ethpb.Deposit{}
 	ctx := t.Context()
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
 		s, err := state_native.InitializeFromProtoUnsafeAltair(state)
@@ -56,7 +56,7 @@ func TestFuzzProcessPreGenesisDeposit_Phase0_10000(t *testing.T) {
 	deposit := &ethpb.Deposit{}
 	ctx := t.Context()
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
@@ -74,7 +74,7 @@ func TestFuzzProcessDeposit_Phase0_10000(t *testing.T) {
 	state := &ethpb.BeaconState{}
 	deposit := &ethpb.Deposit{}
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(state)
@@ -92,7 +92,7 @@ func TestFuzzProcessDeposit_10000(t *testing.T) {
 	state := &ethpb.BeaconStateAltair{}
 	deposit := &ethpb.Deposit{}
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(deposit)
 		s, err := state_native.InitializeFromProtoUnsafeAltair(state)

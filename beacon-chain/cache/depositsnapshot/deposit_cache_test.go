@@ -769,7 +769,7 @@ func TestFinalizedDeposits_ReturnsTrieCorrectly(t *testing.T) {
 	}
 
 	var ctrs []*ethpb.DepositContainer
-	for i := 0; i < 2000; i++ {
+	for i := range 2000 {
 		ctrs = append(ctrs, generateCtr(uint64(10+(i/2)), int64(i)))
 	}
 
@@ -948,9 +948,9 @@ func rootCreator(rn byte) []byte {
 func BenchmarkDepositTree_InsertNewImplementation(b *testing.B) {
 	totalDeposits := 10000
 	input := bytesutil.ToBytes32([]byte("foo"))
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		dt := NewDepositTree()
-		for j := 0; j < totalDeposits; j++ {
+		for range totalDeposits {
 			err := dt.Insert(input[:], 0)
 			require.NoError(b, err)
 		}
@@ -959,10 +959,10 @@ func BenchmarkDepositTree_InsertNewImplementation(b *testing.B) {
 func BenchmarkDepositTree_InsertOldImplementation(b *testing.B) {
 	totalDeposits := 10000
 	input := bytesutil.ToBytes32([]byte("foo"))
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		dt, err := trie.NewTrie(33)
 		require.NoError(b, err)
-		for j := 0; j < totalDeposits; j++ {
+		for range totalDeposits {
 			err := dt.Insert(input[:], 0)
 			require.NoError(b, err)
 		}
@@ -980,8 +980,8 @@ func BenchmarkDepositTree_HashTreeRootNewImplementation(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err = tr.HashTreeRoot()
 		require.NoError(b, err)
 	}
@@ -999,8 +999,8 @@ func BenchmarkDepositTree_HashTreeRootOldImplementation(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err = dt.HashTreeRoot()
 		require.NoError(b, err)
 	}

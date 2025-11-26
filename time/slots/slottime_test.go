@@ -598,7 +598,7 @@ func TestCurrentSlot(t *testing.T) {
 	}
 }
 func TestCurrentSlot_iterative(t *testing.T) {
-	for i := primitives.Slot(0); i < 1<<20; i++ {
+	for i := range primitives.Slot(1 << 20) {
 		testCurrentSlot(t, i)
 	}
 }

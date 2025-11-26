@@ -18,7 +18,7 @@ import (
 // closed for writing.
 //
 // When done, the caller must Close or Reset on the stream.
-func (s *Service) Send(ctx context.Context, message interface{}, baseTopic string, pid peer.ID) (network.Stream, error) {
+func (s *Service) Send(ctx context.Context, message any, baseTopic string, pid peer.ID) (network.Stream, error) {
 	ctx, span := trace.StartSpan(ctx, "p2p.Send")
 	defer span.End()
 	if err := VerifyTopicMapping(baseTopic, message); err != nil {

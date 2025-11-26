@@ -88,7 +88,7 @@ func (e *blobCacheEntry) stash(sc *blocks.ROBlob) error {
 // commitments were found in the cache and the sidecar slice return value can be used
 // to perform a DA check against the cached sidecars.
 // filter only returns blobs that need to be checked. Blobs already available on disk will be excluded.
-func (e *blobCacheEntry) filter(root [32]byte, kc [][]byte, slot primitives.Slot) ([]blocks.ROBlob, error) {
+func (e *blobCacheEntry) filter(root [32]byte, kc [][]byte) ([]blocks.ROBlob, error) {
 	count := len(kc)
 	if e.diskSummary.AllAvailable(count) {
 		return nil, nil

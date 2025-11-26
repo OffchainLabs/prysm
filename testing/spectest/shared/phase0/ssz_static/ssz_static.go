@@ -17,10 +17,10 @@ func RunSSZStaticTests(t *testing.T, config string) {
 	common.RunSSZStaticTests(t, config, "phase0", unmarshalledSSZ, customHtr)
 }
 
-func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
+func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	switch object.(type) {
 	case *ethpb.BeaconState:
-		htrs = append(htrs, func(s interface{}) ([32]byte, error) {
+		htrs = append(htrs, func(s any) ([32]byte, error) {
 			beaconState, err := state_native.InitializeFromProtoPhase0(s.(*ethpb.BeaconState))
 			require.NoError(t, err)
 			return beaconState.HashTreeRoot(context.TODO())
@@ -30,8 +30,8 @@ func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR
 }
 
 // unmarshalledSSZ unmarshalls serialized input.
-func unmarshalledSSZ(t *testing.T, serializedBytes []byte, objectName string) (interface{}, error) {
-	var obj interface{}
+func unmarshalledSSZ(t *testing.T, serializedBytes []byte, objectName string) (any, error) {
+	var obj any
 	switch objectName {
 	case "Attestation":
 		obj = &ethpb.Attestation{}

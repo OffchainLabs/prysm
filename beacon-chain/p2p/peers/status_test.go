@@ -183,7 +183,7 @@ func TestPeerCommitteeIndices(t *testing.T) {
 	record.Set(enr.WithEntry("test", []byte{'a'}))
 	p.Add(record, id, address, direction)
 	bitV := bitfield.NewBitvector64()
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		if i == 2 || i == 8 || i == 9 {
 			bitV.SetBitAt(uint64(i), true)
 		}
@@ -218,7 +218,7 @@ func TestPeerSubscribedToSubnet(t *testing.T) {
 	}
 	expectedPeer := p.All()[1]
 	bitV := bitfield.NewBitvector64()
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		if i == 2 || i == 8 || i == 9 {
 			bitV.SetBitAt(uint64(i), true)
 		}
@@ -391,7 +391,7 @@ func TestAddMetaData(t *testing.T) {
 
 	// Add some peers with different states
 	numPeers := 5
-	for i := 0; i < numPeers; i++ {
+	for range numPeers {
 		addPeer(t, p, peers.Connected)
 	}
 	newPeer := p.All()[2]
@@ -420,19 +420,19 @@ func TestPeerConnectionStatuses(t *testing.T) {
 
 	// Add some peers with different states
 	numPeersDisconnected := 11
-	for i := 0; i < numPeersDisconnected; i++ {
+	for range numPeersDisconnected {
 		addPeer(t, p, peers.Disconnected)
 	}
 	numPeersConnecting := 7
-	for i := 0; i < numPeersConnecting; i++ {
+	for range numPeersConnecting {
 		addPeer(t, p, peers.Connecting)
 	}
 	numPeersConnected := 43
-	for i := 0; i < numPeersConnected; i++ {
+	for range numPeersConnected {
 		addPeer(t, p, peers.Connected)
 	}
 	numPeersDisconnecting := 4
-	for i := 0; i < numPeersDisconnecting; i++ {
+	for range numPeersDisconnecting {
 		addPeer(t, p, peers.Disconnecting)
 	}
 
@@ -461,7 +461,7 @@ func TestPeerValidTime(t *testing.T) {
 	})
 
 	numPeersConnected := 6
-	for i := 0; i < numPeersConnected; i++ {
+	for range numPeersConnected {
 		addPeer(t, p, peers.Connected)
 	}
 
@@ -564,7 +564,7 @@ func TestPeerIPTracker(t *testing.T) {
 
 	badIP := "211.227.218.116"
 	var badPeers []peer.ID
-	for i := 0; i < peers.CollocationLimit+10; i++ {
+	for i := range peers.CollocationLimit + 10 {
 		port := strconv.Itoa(3000 + i)
 		addr, err := ma.NewMultiaddr("/ip4/" + badIP + "/tcp/" + port)
 		if err != nil {
@@ -686,12 +686,12 @@ func TestAtInboundPeerLimit(t *testing.T) {
 			},
 		},
 	})
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
 	assert.Equal(t, false, p.IsAboveInboundLimit(), "Inbound limit exceeded")
-	for i := 0; i < 31; i++ {
+	for range 31 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -711,7 +711,7 @@ func TestPrunePeers(t *testing.T) {
 			},
 		},
 	})
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -719,7 +719,7 @@ func TestPrunePeers(t *testing.T) {
 	peersToPrune := p.PeersToPrune()
 	assert.Equal(t, 0, len(peersToPrune))
 
-	for i := 0; i < 18; i++ {
+	for range 18 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -729,7 +729,7 @@ func TestPrunePeers(t *testing.T) {
 	assert.Equal(t, 3, len(peersToPrune))
 
 	// Add in more peers.
-	for i := 0; i < 13; i++ {
+	for range 13 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -739,7 +739,7 @@ func TestPrunePeers(t *testing.T) {
 	for i, pid := range inboundPeers {
 		modulo := i % 5
 		// Increment bad scores for peers.
-		for j := 0; j < modulo; j++ {
+		for range modulo {
 			p.Scorers().BadResponsesScorer().Increment(pid)
 		}
 	}
@@ -773,7 +773,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 		},
 	})
 
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -781,7 +781,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	peersToPrune := p.PeersToPrune()
 	assert.Equal(t, 0, len(peersToPrune))
 
-	for i := 0; i < 18; i++ {
+	for range 18 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -791,7 +791,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	assert.Equal(t, 3, len(peersToPrune))
 
 	// Add in more peers.
-	for i := 0; i < 13; i++ {
+	for range 13 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -802,7 +802,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	for i, pid := range inboundPeers {
 		modulo := i % 5
 		// Increment bad scores for peers.
-		for j := 0; j < modulo; j++ {
+		for range modulo {
 			p.Scorers().BadResponsesScorer().Increment(pid)
 		}
 		if modulo == 4 {
@@ -827,7 +827,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	}
 
 	// Add more peers to check if trusted peers can be pruned after they are deleted from trusted peer set.
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}

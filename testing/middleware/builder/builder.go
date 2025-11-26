@@ -67,18 +67,18 @@ var (
 )
 
 type jsonRPCObject struct {
-	Jsonrpc string        `json:"jsonrpc"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-	ID      uint64        `json:"id"`
-	Result  interface{}   `json:"result"`
+	Jsonrpc string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  []any  `json:"params"`
+	ID      uint64 `json:"id"`
+	Result  any    `json:"result"`
 }
 
 type ForkchoiceUpdatedResponse struct {
-	Jsonrpc string        `json:"jsonrpc"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-	ID      uint64        `json:"id"`
+	Jsonrpc string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  []any  `json:"params"`
+	ID      uint64 `json:"id"`
 	Result  struct {
 		Status    *v1.PayloadStatus  `json:"payloadStatus"`
 		PayloadId *v1.PayloadIDBytes `json:"payloadId"`
@@ -728,7 +728,7 @@ var errInvalidTypeConversion = errors.New("unable to translate between api and f
 // This involves serializing the execution payload value so that the abstract payload envelope can be used.
 func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
 	pb := ed.Proto()
-	var data interface{}
+	var data any
 	var err error
 	ver := version.String(v)
 	switch pbStruct := pb.(type) {

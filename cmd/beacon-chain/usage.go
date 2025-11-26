@@ -107,7 +107,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
 			flags.SubscribeToAllSubnets,
-			flags.SubscribeAllDataSubnets,
+			flags.Supernode,
+			flags.SemiSupernode,
 		},
 	},
 	{ // Flags relevant to storing data on disk and configuring the beacon chain database.
@@ -235,12 +236,12 @@ func init() {
 	cli.AppHelpTemplate = appHelpTemplate
 
 	type helpData struct {
-		App        interface{}
+		App        any
 		FlagGroups []flagGroup
 	}
 
 	originalHelpPrinter := cli.HelpPrinter
-	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
+	cli.HelpPrinter = func(w io.Writer, tmpl string, data any) {
 		if tmpl == appHelpTemplate {
 			for _, group := range appHelpFlagGroups {
 				sort.Sort(cli.FlagsByName(group.Flags))

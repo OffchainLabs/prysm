@@ -72,7 +72,7 @@ func (s *BeaconNodeSet) Start(ctx context.Context) error {
 	// Once nodes are ready passed in handler function will be called.
 	return helpers.WaitOnNodes(ctx, nodes, func() {
 		if s.config.UseFixedPeerIDs {
-			for i := 0; i < len(nodes); i++ {
+			for i := range nodes {
 				s.ids = append(s.ids, nodes[i].(*BeaconNode).peerID)
 			}
 			s.config.PeerIDs = s.ids

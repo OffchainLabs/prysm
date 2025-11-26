@@ -42,7 +42,7 @@ func Test_diffToState(t *testing.T) {
 
 func Test_kmpIndex(t *testing.T) {
 	intSlice := make([]*int, 10)
-	for i := 0; i < len(intSlice); i++ {
+	for i := range intSlice {
 		intSlice[i] = new(int)
 		*intSlice[i] = i
 	}
@@ -544,7 +544,7 @@ func Test_diffToBalances(t *testing.T) {
 		}
 
 		targetBals := target.Balances()
-		for i := 0; i < len(sourceBals); i++ {
+		for i := range sourceBals {
 			require.Equal(t, targetBals[i], sourceBals[i], "balance mismatch at index %d", i)
 		}
 	})
@@ -665,7 +665,7 @@ func Test_applyStateDiff(t *testing.T) {
 // Test_computeLPS tests the LPS array computation for KMP algorithm
 func Test_computeLPS(t *testing.T) {
 	intSlice := make([]*int, 10)
-	for i := 0; i < len(intSlice); i++ {
+	for i := range intSlice {
 		intSlice[i] = new(int)
 		*intSlice[i] = i
 	}
@@ -955,8 +955,7 @@ func BenchmarkGetDiff(b *testing.B) {
 	source, target, err := getMainnetStates()
 	require.NoError(b, err)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		hdiff, err := Diff(source, target)
 		b.Log("Diff size:", len(hdiff.StateDiff)+len(hdiff.BalancesDiff)+len(hdiff.ValidatorDiffs))
 		require.NoError(b, err)
@@ -971,8 +970,8 @@ func BenchmarkApplyDiff(b *testing.B) {
 	require.NoError(b, err)
 	hdiff, err := Diff(source, target)
 	require.NoError(b, err)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		source, err = ApplyDiff(b.Context(), source, hdiff)
 		require.NoError(b, err)
 	}
@@ -998,7 +997,7 @@ func BenchmarkDiffCreation(b *testing.B) {
 			_ = target.SetValidators(validators)
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := Diff(source, target)
 				if err != nil {
 					b.Fatal(err)
@@ -1026,7 +1025,7 @@ func BenchmarkDiffApplication(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				// Need fresh source for each iteration
 				freshSource := source.Copy()
 				_, err := ApplyDiff(ctx, freshSource, diff)
@@ -1049,8 +1048,7 @@ func BenchmarkSerialization(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = hdiff.serialize()
 	}
 }
@@ -1067,8 +1065,7 @@ func BenchmarkDeserialization(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := newHdiff(diff)
 		if err != nil {
 			b.Fatal(err)
@@ -1093,7 +1090,7 @@ func BenchmarkBalanceDiff(b *testing.B) {
 			_ = target.SetBalances(balances)
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := diffToBalances(source, target)
 				if err != nil {
 					b.Fatal(err)
@@ -1123,7 +1120,7 @@ func BenchmarkValidatorDiff(b *testing.B) {
 			_ = target.SetValidators(validators)
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := diffToVals(source, target)
 				if err != nil {
 					b.Fatal(err)
@@ -1172,7 +1169,7 @@ func BenchmarkKMPAlgorithm(b *testing.B) {
 				}
 
 				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					_ = kmpIndex(len(pattern), text, intEquals)
 				}
 			})
@@ -1201,7 +1198,7 @@ func BenchmarkCompressionRatio(b *testing.B) {
 			name: "balance_changes",
 			modifier: func(target state.BeaconState) {
 				balances := target.Balances()
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					if i < len(balances) {
 						balances[i] += 1000
 					}
@@ -1213,7 +1210,7 @@ func BenchmarkCompressionRatio(b *testing.B) {
 			name: "validator_changes",
 			modifier: func(target state.BeaconState) {
 				validators := target.Validators()
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					if i < len(validators) {
 						validators[i].EffectiveBalance += 1000
 					}
@@ -1235,7 +1232,7 @@ func BenchmarkCompressionRatio(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for i := 0; b.Loop(); i++ {
 				diff, err := Diff(source, testTarget)
 				if err != nil {
 					b.Fatal(err)
@@ -1262,7 +1259,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 	// Modify some data
 	validators := target.Validators()
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		if i < len(validators) {
 			validators[i].EffectiveBalance += 1000
 		}
@@ -1270,9 +1267,8 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	_ = target.SetValidators(validators)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		diff, err := Diff(source, target)
 		if err != nil {
 			b.Fatal(err)

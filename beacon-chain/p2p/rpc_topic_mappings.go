@@ -129,7 +129,7 @@ const (
 
 // RPCTopicMappings map the base message type to the rpc request.
 var (
-	RPCTopicMappings = map[string]interface{}{
+	RPCTopicMappings = map[string]any{
 		// RPC Status Message
 		RPCStatusTopicV1: new(pb.Status),
 		RPCStatusTopicV2: new(pb.StatusV2),
@@ -149,9 +149,9 @@ var (
 		RPCPingTopicV1: new(primitives.SSZUint64),
 
 		// RPC Metadata Message
-		RPCMetaDataTopicV1: new(interface{}),
-		RPCMetaDataTopicV2: new(interface{}),
-		RPCMetaDataTopicV3: new(interface{}),
+		RPCMetaDataTopicV1: new(any),
+		RPCMetaDataTopicV2: new(any),
+		RPCMetaDataTopicV3: new(any),
 
 		// BlobSidecarsByRange v1 Message
 		RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
@@ -162,8 +162,8 @@ var (
 		// Light client
 		RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
 		RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
-		RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
-		RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
+		RPCLightClientFinalityUpdateTopicV1:   new(any),
+		RPCLightClientOptimisticUpdateTopicV1: new(any),
 
 		// DataColumnSidecarsByRange v1 Message
 		RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
@@ -230,7 +230,7 @@ var (
 
 // VerifyTopicMapping verifies that the topic and its accompanying
 // message type is correct.
-func VerifyTopicMapping(topic string, msg interface{}) error {
+func VerifyTopicMapping(topic string, msg any) error {
 	msgType, ok := RPCTopicMappings[topic]
 	if !ok {
 		return errors.New("rpc topic is not registered currently")

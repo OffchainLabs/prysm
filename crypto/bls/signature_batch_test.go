@@ -90,7 +90,7 @@ func TestVerifyVerbosely_VerificationThrowsError(t *testing.T) {
 
 func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 	var keys []SecretKey
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		key, err := RandKey()
 		assert.NoError(t, err)
 		keys = append(keys, key)
@@ -379,7 +379,7 @@ func TestSignatureBatch_RemoveDuplicates(t *testing.T) {
 
 func TestSignatureBatch_AggregateBatch(t *testing.T) {
 	var keys []SecretKey
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		key, err := RandKey()
 		assert.NoError(t, err)
 		keys = append(keys, key)
@@ -654,7 +654,7 @@ func NewValidSignatureSet(t *testing.T, msgBody string, num int) *SignatureBatch
 		Descriptions: make([]string, num),
 	}
 
-	for i := 0; i < num; i++ {
+	for i := range num {
 		priv, err := RandKey()
 		require.NoError(t, err)
 		pubkey := priv.PublicKey()
@@ -679,7 +679,7 @@ func NewInvalidSignatureSet(t *testing.T, msgBody string, num int, throwErr bool
 		Descriptions: make([]string, num),
 	}
 
-	for i := 0; i < num; i++ {
+	for i := range num {
 		priv, err := RandKey()
 		require.NoError(t, err)
 		pubkey := priv.PublicKey()

@@ -17,7 +17,7 @@ func New(size int) *lru.Cache {
 
 // NewWithEvict constructs a fixed size cache with the given eviction
 // callback.
-func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) *lru.Cache {
+func NewWithEvict(size int, onEvicted func(key any, value any)) *lru.Cache {
 	cache, err := lru.NewWithEvict(size, onEvicted)
 	if err != nil {
 		panic(fmt.Errorf("lru new with evict failed: %w", err)) // lint:nopanic -- This should never panic.

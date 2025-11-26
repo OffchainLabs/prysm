@@ -153,7 +153,7 @@ func EncryptKey(key *Key, password string, scryptN, scryptP int) ([]byte, error)
 
 	mac := Keccak256(derivedKey[16:32], cipherText)
 
-	scryptParamsJSON := make(map[string]interface{}, 5)
+	scryptParamsJSON := make(map[string]any, 5)
 	scryptParamsJSON["n"] = scryptN
 	scryptParamsJSON["r"] = scryptR
 	scryptParamsJSON["p"] = scryptP

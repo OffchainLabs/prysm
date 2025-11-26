@@ -109,7 +109,7 @@ func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primit
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filter(root, blockCommitments, b.Block().Slot())
+	sidecars, err := entry.filter(root, blockCommitments)
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}

@@ -1,6 +1,7 @@
 package blstoexec
 
 import (
+	"maps"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -54,9 +55,7 @@ func NewPool() *Pool {
 // Copies the internal map and returns a new one.
 func (p *Pool) cycleMap() {
 	newMap := make(map[primitives.ValidatorIndex]*doublylinkedlist.Node[*ethpb.SignedBLSToExecutionChange])
-	for k, v := range p.m {
-		newMap[k] = v
-	}
+	maps.Copy(newMap, p.m)
 	p.m = newMap
 }
 

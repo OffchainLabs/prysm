@@ -21,7 +21,7 @@ import (
 func TestSyncCommitteeIndices_CanGet(t *testing.T) {
 	getState := func(t *testing.T, count uint64, vers int) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			validators[i] = &ethpb.Validator{
 				ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
@@ -113,7 +113,7 @@ func TestSyncCommitteeIndices_DifferentPeriods(t *testing.T) {
 	helpers.ClearCache()
 	getState := func(t *testing.T, count uint64) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			validators[i] = &ethpb.Validator{
 				ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 				EffectiveBalance: params.BeaconConfig().MinDepositAmount,
@@ -147,7 +147,7 @@ func TestSyncCommitteeIndices_DifferentPeriods(t *testing.T) {
 func TestSyncCommittee_CanGet(t *testing.T) {
 	getState := func(t *testing.T, count uint64) state.BeaconState {
 		validators := make([]*ethpb.Validator, count)
-		for i := 0; i < len(validators); i++ {
+		for i := range validators {
 			blsKey, err := bls.RandKey()
 			require.NoError(t, err)
 			validators[i] = &ethpb.Validator{
@@ -394,7 +394,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 
 func getState(t *testing.T, count uint64) state.BeaconState {
 	validators := make([]*ethpb.Validator, count)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		blsKey, err := bls.RandKey()
 		require.NoError(t, err)
 		validators[i] = &ethpb.Validator{

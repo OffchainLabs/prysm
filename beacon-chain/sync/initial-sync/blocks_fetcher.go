@@ -267,14 +267,12 @@ func (f *blocksFetcher) loop() {
 			log.Debug("Context closed, exiting goroutine (blocks fetcher)")
 			return
 		case req := <-f.fetchRequests:
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				select {
 				case <-f.ctx.Done():
 				case f.fetchResponses <- f.handleRequest(req.ctx, req.start, req.count):
 				}
-			}()
+			})
 		}
 	}
 }

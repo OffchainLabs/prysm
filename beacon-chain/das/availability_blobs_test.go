@@ -26,7 +26,7 @@ func Test_commitmentsToCheck(t *testing.T) {
 	windowSlots = windowSlots + primitives.Slot(params.BeaconConfig().FuluForkEpoch)
 	maxBlobs := params.LastNetworkScheduleEntry().MaxBlobsPerBlock
 	commits := make([][]byte, maxBlobs+1)
-	for i := 0; i < len(commits); i++ {
+	for i := range commits {
 		commits[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 	}
 	cases := []struct {

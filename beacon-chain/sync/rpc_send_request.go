@@ -492,7 +492,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 
 	// Build the logs.
-	var columnsLog interface{} = "all"
+	var columnsLog any = "all"
 	if columnsCount < numberOfColumns {
 		columns := request.Columns
 		slices.Sort(columns)

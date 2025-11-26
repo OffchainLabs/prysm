@@ -45,7 +45,7 @@ func TestGetDuties_OK(t *testing.T) {
 
 	pubKeys := make([][]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 		indices[i] = uint64(i)
 	}
@@ -123,7 +123,7 @@ func TestGetAltairDuties_SyncCommitteeOK(t *testing.T) {
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	pubKeys := make([][]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 		indices[i] = uint64(i)
 	}
@@ -227,7 +227,7 @@ func TestGetBellatrixDuties_SyncCommitteeOK(t *testing.T) {
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	pubKeys := make([][]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 		indices[i] = uint64(i)
 	}
@@ -391,7 +391,7 @@ func TestGetDuties_CurrentEpoch_ShouldNotFail(t *testing.T) {
 
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = bytesutil.ToBytes48(deposits[i].Data.PublicKey)
 		indices[i] = uint64(i)
 	}
@@ -431,7 +431,7 @@ func TestGetDuties_MultipleKeys_OK(t *testing.T) {
 
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = bytesutil.ToBytes48(deposits[i].Data.PublicKey)
 		indices[i] = uint64(i)
 	}
@@ -484,7 +484,7 @@ func BenchmarkCommitteeAssignment(b *testing.B) {
 
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = bytesutil.ToBytes48(deposits[i].Data.PublicKey)
 		indices[i] = uint64(i)
 	}
@@ -505,8 +505,8 @@ func BenchmarkCommitteeAssignment(b *testing.B) {
 		PublicKeys: pks,
 		Epoch:      0,
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := vs.GetDuties(b.Context(), req)
 		assert.NoError(b, err)
 	}

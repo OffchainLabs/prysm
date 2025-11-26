@@ -164,10 +164,7 @@ func spanAction(cliCtx *cli.Context) error {
 			b := chunk.Chunk()
 			c := uint64(0)
 			for z := uint64(0); z < uint64(len(b)); z += params.ChunkSize() {
-				end := z + params.ChunkSize()
-				if end > uint64(len(b)) {
-					end = uint64(len(b))
-				}
+				end := min(z+params.ChunkSize(), uint64(len(b)))
 				subChunk := b[z:end]
 
 				row := make(table.Row, params.ChunkSize()+1)
@@ -191,10 +188,7 @@ func spanAction(cliCtx *cli.Context) error {
 			b := chunk.Chunk()
 			c := uint64(0)
 			for z := uint64(0); z < uint64(len(b)); z += params.ChunkSize() {
-				end := z + params.ChunkSize()
-				if end > uint64(len(b)) {
-					end = uint64(len(b))
-				}
+				end := min(z+params.ChunkSize(), uint64(len(b)))
 				subChunk := b[z:end]
 
 				row := make(table.Row, 2)

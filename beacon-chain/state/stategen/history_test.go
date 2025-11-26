@@ -530,7 +530,7 @@ func (m *mockCanonicalChecker) IsCanonical(_ context.Context, root [32]byte) (bo
 
 func TestReverseChain(t *testing.T) {
 	// test 0,1,2,3 elements to handle: zero case; single element; even number; odd number
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		t.Run(fmt.Sprintf("reverseChain with %d elements", i), func(t *testing.T) {
 			actual := mockBlocks(i, incrFwd)
 			expected := mockBlocks(i, incrBwd)
@@ -538,7 +538,7 @@ func TestReverseChain(t *testing.T) {
 			if len(actual) != len(expected) {
 				t.Errorf("different list lengths")
 			}
-			for i := 0; i < len(actual); i++ {
+			for i := range actual {
 				sblockA, ok := actual[i].(*mock.SignedBeaconBlock)
 				require.Equal(t, true, ok)
 				blockA, ok := sblockA.BeaconBlock.(*mock.BeaconBlock)
@@ -561,7 +561,7 @@ func incrBwd(n int, c chan uint32) {
 }
 
 func incrFwd(n int, c chan uint32) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		c <- uint32(i)
 	}
 	close(c)

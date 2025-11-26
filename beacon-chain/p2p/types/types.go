@@ -78,7 +78,7 @@ func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
 	}
 	numOfRoots := bufLen / fieldparams.RootLength
 	roots := make([][fieldparams.RootLength]byte, 0, numOfRoots)
-	for i := 0; i < numOfRoots; i++ {
+	for i := range numOfRoots {
 		var rt [fieldparams.RootLength]byte
 		copy(rt[:], buf[i*fieldparams.RootLength:(i+1)*fieldparams.RootLength])
 		roots = append(roots, rt)
@@ -175,7 +175,7 @@ func (b *BlobSidecarsByRootReq) UnmarshalSSZ(buf []byte) error {
 	}
 	count := bufLen / blobIdSize
 	*b = make([]*eth.BlobIdentifier, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		id := &eth.BlobIdentifier{}
 		err := id.UnmarshalSSZ(buf[i*blobIdSize : (i+1)*blobIdSize])
 		if err != nil {
@@ -323,7 +323,7 @@ func (d DataColumnsByRootIdentifiers) MarshalSSZTo(dst []byte) ([]byte, error) {
 // SizeSSZ implements ssz.Marshaler. It returns the size of the serialized representation.
 func (d DataColumnsByRootIdentifiers) SizeSSZ() int {
 	size := 0
-	for i := 0; i < len(d); i++ {
+	for i := range d {
 		size += 4
 		size += (d)[i].SizeSSZ()
 	}
