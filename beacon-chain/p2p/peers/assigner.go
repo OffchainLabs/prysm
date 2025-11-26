@@ -45,10 +45,7 @@ type Assigner struct {
 var ErrInsufficientSuitable = errors.New("no suitable peers")
 
 func (a *Assigner) freshPeers() ([]peer.ID, error) {
-	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
-	if flags.Get().MinimumSyncPeers < required {
-		required = flags.Get().MinimumSyncPeers
-	}
+	required := min(flags.Get().MinimumSyncPeers, min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync))
 	_, peers := a.ps.BestFinalized(a.fc.FinalizedCheckpoint().Epoch)
 	if len(peers) < required {
 		log.WithFields(logrus.Fields{

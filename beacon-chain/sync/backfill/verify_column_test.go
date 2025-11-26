@@ -38,7 +38,7 @@ func createTestDataColumn(t *testing.T, root [32]byte, index uint64, nBlobs int)
 	cells := make([][]byte, nBlobs)
 	proofs := make([][]byte, nBlobs)
 
-	for i := 0; i < nBlobs; i++ {
+	for i := range nBlobs {
 		commitments[i] = make([]byte, 48)
 		cells[i] = make([]byte, 0)
 		proofs[i] = make([]byte, 48)

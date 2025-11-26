@@ -57,7 +57,7 @@ func (l *intervalLogger) copy() *intervalLogger {
 // Log overloads the Log() method of logrus.Entry, which is called under the hood
 // when a log-level specific method (like Info(), Warn(), Error()) is invoked.
 // By intercepting this call we can rate limit how often we log.
-func (l *intervalLogger) Log(level logrus.Level, args ...interface{}) {
+func (l *intervalLogger) Log(level logrus.Level, args ...any) {
 	n := l.intervalNumber()
 	// If Swap returns a different value that the current interval number, we haven't
 	// emitted a log yet this interval, so we can do so now.
@@ -68,7 +68,7 @@ func (l *intervalLogger) Log(level logrus.Level, args ...interface{}) {
 	// don't persist across calls to Log()
 }
 
-func (l *intervalLogger) WithField(key string, value interface{}) *intervalLogger {
+func (l *intervalLogger) WithField(key string, value any) *intervalLogger {
 	cp := l.copy()
 	cp.Entry = cp.Entry.WithField(key, value)
 	return cp
@@ -86,30 +86,30 @@ func (l *intervalLogger) WithError(err error) *intervalLogger {
 	return cp
 }
 
-func (l *intervalLogger) Trace(args ...interface{}) {
+func (l *intervalLogger) Trace(args ...any) {
 	l.Log(logrus.TraceLevel, args...)
 }
 
-func (l *intervalLogger) Debug(args ...interface{}) {
+func (l *intervalLogger) Debug(args ...any) {
 	l.Log(logrus.DebugLevel, args...)
 }
 
-func (l *intervalLogger) Print(args ...interface{}) {
+func (l *intervalLogger) Print(args ...any) {
 	l.Info(args...)
 }
 
-func (l *intervalLogger) Info(args ...interface{}) {
+func (l *intervalLogger) Info(args ...any) {
 	l.Log(logrus.InfoLevel, args...)
 }
 
-func (l *intervalLogger) Warn(args ...interface{}) {
+func (l *intervalLogger) Warn(args ...any) {
 	l.Log(logrus.WarnLevel, args...)
 }
 
-func (l *intervalLogger) Warning(args ...interface{}) {
+func (l *intervalLogger) Warning(args ...any) {
 	l.Warn(args...)
 }
 
-func (l *intervalLogger) Error(args ...interface{}) {
+func (l *intervalLogger) Error(args ...any) {
 	l.Log(logrus.ErrorLevel, args...)
 }

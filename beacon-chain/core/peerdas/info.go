@@ -1,6 +1,7 @@
 package peerdas
 
 import (
+	"maps"
 	"encoding/binary"
 	"sync"
 
@@ -136,9 +137,7 @@ func (ci ColumnIndices) Unset(index uint64) {
 // Copy creates a copy of the ColumnIndices.
 func (ci ColumnIndices) Copy() ColumnIndices {
 	newCi := make(ColumnIndices, len(ci))
-	for index, set := range ci {
-		newCi[index] = set
-	}
+	maps.Copy(newCi, ci)
 	return newCi
 }
 

@@ -228,7 +228,7 @@ func TestNewCheckMultiplexer(t *testing.T) {
 
 func testBlocksWithCommitments(t *testing.T, startSlot primitives.Slot, count int) []blocks.ROBlock {
 	blks := make([]blocks.ROBlock, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, startSlot+primitives.Slot(i), 1)
 		blks[i] = blk
 	}
@@ -416,7 +416,7 @@ func testDenebAndFuluSlots(t *testing.T) (primitives.Slot, primitives.Slot) {
 // Uses 0 commitments instead of 1 like testBlocksWithCommitments
 func testBlocksWithoutCommitments(t *testing.T, startSlot primitives.Slot, count int) []blocks.ROBlock {
 	blks := make([]blocks.ROBlock, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, startSlot+primitives.Slot(i), 0)
 		blks[i] = blk
 	}

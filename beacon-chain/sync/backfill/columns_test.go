@@ -1,6 +1,7 @@
 package backfill
 
 import (
+	"slices"
 	"context"
 	"testing"
 
@@ -1082,7 +1083,7 @@ func TestNeededSidecarsByColumn(t *testing.T) {
 			name: "LargeBlockCount",
 			toDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					root := [32]byte{byte(i % 256)}
 					remaining := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1})
 					result[root] = testToDownload(remaining, nil)
@@ -1211,7 +1212,7 @@ func TestNeededSidecarCount(t *testing.T) {
 			name: "AllBlocksEmpty",
 			toDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
-				for i := 0; i < 5; i++ {
+				for i := range 5 {
 					result[[32]byte{byte(i)}] = testToDownload(peerdas.NewColumnIndices(), nil)
 				}
 				return result
@@ -1223,9 +1224,9 @@ func TestNeededSidecarCount(t *testing.T) {
 			toDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 5 blocks, each with 10 columns = 50 total
-				for i := 0; i < 5; i++ {
+				for i := range 5 {
 					cols := make([]uint64, 10)
-					for j := 0; j < 10; j++ {
+					for j := range 10 {
 						cols[j] = uint64(j)
 					}
 					result[[32]byte{byte(i)}] = testToDownload(peerdas.NewColumnIndicesFromSlice(cols), nil)
@@ -1248,7 +1249,7 @@ func TestNeededSidecarCount(t *testing.T) {
 			toDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 100 blocks, each with 2 columns = 200 total
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					root := [32]byte{byte(i % 256)}
 					remaining := peerdas.NewColumnIndicesFromSlice([]uint64{0, 1})
 					result[root] = testToDownload(remaining, nil)
@@ -1316,7 +1317,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 4 blocks × 1 column = 4 sidecars < 64 (fast path)
-				for i := 0; i < 4; i++ {
+				for i := range 4 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil)
 				}
@@ -1333,7 +1334,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 4 blocks × 16 columns = 64 sidecars = limit (fast path, exactly at)
-				for i := 0; i < 4; i++ {
+				for i := range 4 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice(makeRange(0, 16)), nil)
 				}
@@ -1350,7 +1351,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 4 blocks × 17 columns = 68 sidecars > 64 (triggers slow path check but no truncation at 512)
-				for i := 0; i < 4; i++ {
+				for i := range 4 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice(makeRange(0, 17)), nil)
 				}
@@ -1368,7 +1369,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 16 blocks × 1 column = 16 sidecars < 64 (fast path)
-				for i := 0; i < 16; i++ {
+				for i := range 16 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil)
 				}
@@ -1385,7 +1386,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 16 blocks × 4 columns = 64 sidecars = limit (fast path, exactly at)
-				for i := 0; i < 16; i++ {
+				for i := range 16 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice(makeRange(0, 4)), nil)
 				}
@@ -1402,7 +1403,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 16 blocks × 5 columns = 80 sidecars > 64 (triggers slow path check but no truncation at 512)
-				for i := 0; i < 16; i++ {
+				for i := range 16 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice(makeRange(0, 5)), nil)
 				}
@@ -1420,7 +1421,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 32 blocks × 1 column = 32 sidecars < 64 (fast path)
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice([]uint64{0}), nil)
 				}
@@ -1437,7 +1438,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 32 blocks × 2 columns = 64 sidecars = limit (fast path, exactly at)
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice([]uint64{0, 1}), nil)
 				}
@@ -1454,7 +1455,7 @@ func TestColumnSyncRequest(t *testing.T) {
 			buildToDownload: func() map[[32]byte]*toDownload {
 				result := make(map[[32]byte]*toDownload)
 				// 32 blocks × 3 columns = 96 sidecars > 64 (triggers slow path check but no truncation at 512)
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice([]uint64{0, 1, 2}), nil)
 				}
@@ -1473,7 +1474,7 @@ func TestColumnSyncRequest(t *testing.T) {
 				result := make(map[[32]byte]*toDownload)
 				// 64 blocks × 10 columns = 640 sidecars > 512 (slow path)
 				// Each column appears 64 times: 8 cols = 512, 9 cols = 576
-				for i := 0; i < 64; i++ {
+				for i := range 64 {
 					result[[32]byte{byte(i)}] = testToDownload(
 						peerdas.NewColumnIndicesFromSlice(makeRange(0, 10)), nil)
 				}
@@ -1568,7 +1569,7 @@ func TestColumnSyncRequest(t *testing.T) {
 				if len(result.Columns) < len(tt.reqCols) {
 					nextCol := tt.reqCols[len(result.Columns)]
 					// Create a new column set with the next column added
-					nextCols := append([]uint64{}, result.Columns...)
+					nextCols := slices.Clone(result.Columns)
 					nextCols = append(nextCols, nextCol)
 					nextPeerHas := peerdas.NewColumnIndicesFromSlice(nextCols)
 					nextNeeded := cs.neededSidecarsByColumn(nextPeerHas)

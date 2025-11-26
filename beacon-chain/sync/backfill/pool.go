@@ -1,6 +1,7 @@
 package backfill
 
 import (
+	"maps"
 	"context"
 	"math"
 	synclib "sync"
@@ -228,9 +229,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 
 func busyCopy(busy map[peer.ID]bool) map[peer.ID]bool {
 	busyCp := make(map[peer.ID]bool, len(busy))
-	for k, v := range busy {
-		busyCp[k] = v
-	}
+	maps.Copy(busyCp, busy)
 	return busyCp
 }
 

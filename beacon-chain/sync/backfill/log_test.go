@@ -255,7 +255,7 @@ func TestConcurrentLogging(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wait := make(chan struct{})
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			<-wait
