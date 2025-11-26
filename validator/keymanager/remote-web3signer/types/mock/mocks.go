@@ -527,7 +527,7 @@ func GetMockSignRequest(t string) *validatorpb.SignRequest {
 					FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
 					GasLimit:     uint64(0),
 					Timestamp:    uint64(0),
-					Pubkey:       make([]byte, fieldparams.BLSSignatureLength),
+					Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
 				},
 			},
 			SigningSlot: 0,
@@ -709,7 +709,7 @@ func ValidatorRegistrationSignRequest() *types.ValidatorRegistrationSignRequest 
 			FeeRecipient: make([]byte, fieldparams.FeeRecipientLength),
 			GasLimit:     fmt.Sprint(0),
 			Timestamp:    fmt.Sprint(0),
-			Pubkey:       make([]byte, fieldparams.BLSSignatureLength),
+			Pubkey:       make([]byte, fieldparams.BLSPubkeyLength),
 		},
 	}
 }
