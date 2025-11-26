@@ -532,15 +532,6 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.Supernode.Name)
 	}
 
-	if actualCustodyGroupCount > targetCustodyGroupCount {
-		log.WithFields(logrus.Fields{
-			"retaining":     actualCustodyGroupCount,
-			"currentTarget": targetCustodyGroupCount,
-		}).Info("Retaining higher custody count from prior configuration. " +
-			"Custody count only increases to protect data availability commitments. " +
-			"To reduce custody, start with a fresh database.")
-	}
-
 	return earliestAvailableSlot, actualCustodyGroupCount, nil
 }
 
