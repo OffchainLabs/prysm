@@ -30,7 +30,6 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var ErrNilState = errors.New("nil state")
@@ -267,7 +266,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 		if err := s.DB.SaveBlock(ctx, block); err != nil {
 			return err
 		}
-		logrus.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
+		log.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
 	}
 	s.Root = signingRoot[:]
 	s.Block = block
@@ -296,7 +295,7 @@ func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBl
 			if err := s.DB.SaveBlock(ctx, b); err != nil {
 				return err
 			}
-			logrus.Infof("Saved block with root: %#x at slot %d", signingRoot, b.Block().Slot())
+			log.Infof("Saved block with root: %#x at slot %d", signingRoot, b.Block().Slot())
 		}
 		s.Root = signingRoot[:]
 		s.Block = b
@@ -328,7 +327,7 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 		if err := s.DB.SaveBlock(ctx, block); err != nil {
 			return err
 		}
-		logrus.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
+		log.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
 	}
 	s.Root = signingRoot[:]
 	s.Block = block
@@ -585,11 +584,11 @@ func (s *ChainService) UpdateHead(ctx context.Context, slot primitives.Slot) {
 	ojc := &ethpb.Checkpoint{}
 	st, root, err := prepareForkchoiceState(ctx, slot, bytesutil.ToBytes32(s.Root), [32]byte{}, [32]byte{}, ojc, ojc)
 	if err != nil {
-		logrus.WithError(err).Error("Could not update head")
+		log.WithError(err).Error("Could not update head")
 	}
 	err = s.ForkChoiceStore.InsertNode(ctx, st, root)
 	if err != nil {
-		logrus.WithError(err).Error("Could not insert node to forkchoice")
+		log.WithError(err).Error("Could not insert node to forkchoice")
 	}
 }
 

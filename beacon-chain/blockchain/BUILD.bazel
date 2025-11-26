@@ -14,6 +14,7 @@ go_library(
         "head_sync_committee_info.go",
         "init_sync_process_block.go",
         "log.go",
+        "log_helpers.go",
         "merge_ascii_art.go",
         "metrics.go",
         "options.go",

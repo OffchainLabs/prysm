@@ -9,7 +9,6 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api"
-	log "github.com/sirupsen/logrus"
 )
 
 type HasStatusCode interface {

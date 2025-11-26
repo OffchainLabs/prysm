@@ -7,6 +7,7 @@ go_library(
         "errors.go",
         "forkchoice.go",
         "last_root.go",
+        "log.go",
         "metrics.go",
         "node.go",
         "on_tick.go",
