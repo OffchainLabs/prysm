@@ -63,12 +63,12 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	}
 
 	if supernodeSet {
-		log.Warning("Operating in supernode mode")
+		log.Info("Operating in supernode mode")
 		cfg.Supernode = true
 	}
 
 	if semiSupernodeSet {
-		log.Warning("Operating in semi-supernode mode (custody just enough data to serve the blobs and blob sidecars beacon API)")
+		log.Info("Operating in semi-supernode mode (custody just enough data to serve the blobs and blob sidecars beacon API)")
 		cfg.SemiSupernode = true
 	}
 
