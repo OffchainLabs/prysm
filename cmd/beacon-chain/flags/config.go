@@ -68,7 +68,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	}
 
 	if semiSupernodeSet {
-		log.Warning("Operating in semi-supernode mode (retain 50% of data columns)")
+		log.Warning("Operating in semi-supernode mode (custody just enough data to serve the blobs and blob sidecars beacon API)")
 		cfg.SemiSupernode = true
 	}
 
