@@ -1,8 +1,8 @@
 package peerdas
 
 import (
-	"maps"
 	"encoding/binary"
+	"maps"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
