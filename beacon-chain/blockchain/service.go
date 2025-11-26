@@ -471,7 +471,7 @@ func (s *Service) removeStartupState() {
 // UpdateCustodyInfoInDB updates the custody information in the database.
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
-	isSupernode := flags.Get().SubscribeAllDataSubnets
+	isSupernode := flags.Get().Supernode
 	isSemiSupernode := flags.Get().SemiSupernode
 
 	cfg := params.BeaconConfig()

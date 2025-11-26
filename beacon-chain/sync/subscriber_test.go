@@ -667,7 +667,7 @@ func TestSamplingSize(t *testing.T) {
 
 		// Disable all special modes
 		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = false
+		gFlags.Supernode = false
 		gFlags.SemiSupernode = false
 		flags.Init(gFlags)
 

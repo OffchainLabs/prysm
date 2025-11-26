@@ -107,11 +107,11 @@ func (ts *testSetup) assertCustodyInfo(t *testing.T, expectedSlot primitives.Slo
 }
 
 func withSubscribeAllDataSubnets(t *testing.T, fn func()) {
-	originalFlag := flags.Get().SubscribeAllDataSubnets
+	originalFlag := flags.Get().Supernode
 	defer func() {
-		flags.Get().SubscribeAllDataSubnets = originalFlag
+		flags.Get().Supernode = originalFlag
 	}()
-	flags.Get().SubscribeAllDataSubnets = true
+	flags.Get().Supernode = true
 	fn()
 }
 
@@ -215,20 +215,20 @@ func TestCustodyGroupCount(t *testing.T) {
 			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
 			expected, err := peerdas.MinimumCustodyGroupCountToReconstruct()
-		require.NoError(t, err)
-		require.Equal(t, expected, result)
+			require.NoError(t, err)
+			require.Equal(t, expected, result)
 		})
 	})
 
 	t.Run("Supernode takes precedence over SemiSupernode", func(t *testing.T) {
 		// Test that when both flags are set, supernode takes precedence
-		originalSupernode := flags.Get().SubscribeAllDataSubnets
+		originalSupernode := flags.Get().Supernode
 		originalSemiSupernode := flags.Get().SemiSupernode
 		defer func() {
-			flags.Get().SubscribeAllDataSubnets = originalSupernode
+			flags.Get().Supernode = originalSupernode
 			flags.Get().SemiSupernode = originalSemiSupernode
 		}()
-		flags.Get().SubscribeAllDataSubnets = true
+		flags.Get().Supernode = true
 		flags.Get().SemiSupernode = true
 
 		service := &Service{
@@ -250,8 +250,8 @@ func TestCustodyGroupCount(t *testing.T) {
 			result, err := service.custodyGroupCount(ctx)
 			require.NoError(t, err)
 			expected, err := peerdas.MinimumCustodyGroupCountToReconstruct()
-		require.NoError(t, err)
-		require.Equal(t, expected, result)
+			require.NoError(t, err)
+			require.Equal(t, expected, result)
 		})
 	})
 }

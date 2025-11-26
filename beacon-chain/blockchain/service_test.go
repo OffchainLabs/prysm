@@ -642,7 +642,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
+		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
@@ -680,7 +680,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		// ----------
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
+		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
@@ -704,7 +704,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		// Enable supernode
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
+		gFlags.Supernode = true
 		flags.Init(gFlags)
 
 		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
@@ -714,7 +714,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
 
 		// Try to downgrade by removing flag
-		gFlags.SubscribeAllDataSubnets = false
+		gFlags.Supernode = false
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
@@ -775,7 +775,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 
 		// Upgrade to full supernode
 		gFlags.SemiSupernode = false
-		gFlags.SubscribeAllDataSubnets = true
+		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
@@ -783,7 +783,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		upgradeSlot := slot + 2
 		actualEas, actualCgc, err = service.updateCustodyInfoInDB(upgradeSlot)
 		require.NoError(t, err)
-		require.Equal(t, upgradeSlot, actualEas) // Earliest slot updates when upgrading
+		require.Equal(t, upgradeSlot, actualEas)           // Earliest slot updates when upgrading
 		require.Equal(t, numberOfCustodyGroups, actualCgc) // Upgraded to 128
 	})
 

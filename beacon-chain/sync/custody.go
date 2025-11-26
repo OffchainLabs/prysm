@@ -99,7 +99,7 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 	cfg := params.BeaconConfig()
 
-	if flags.Get().SubscribeAllDataSubnets {
+	if flags.Get().Supernode {
 		return cfg.NumberOfCustodyGroups, nil
 	}
 

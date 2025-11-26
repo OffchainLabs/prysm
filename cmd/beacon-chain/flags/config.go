@@ -15,7 +15,7 @@ const maxStateDiffExponents = 30
 // beacon node.
 type GlobalFlags struct {
 	SubscribeToAllSubnets           bool
-	SubscribeAllDataSubnets         bool
+	Supernode                       bool
 	SemiSupernode                   bool
 	MinimumSyncPeers                int
 	MinimumPeersPerSubnet           int
@@ -64,7 +64,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 
 	if supernodeSet {
 		log.Warning("Operating in supernode mode")
-		cfg.SubscribeAllDataSubnets = true
+		cfg.Supernode = true
 	}
 
 	if semiSupernodeSet {
