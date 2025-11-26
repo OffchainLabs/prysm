@@ -39,7 +39,7 @@ func TestServiceInit(t *testing.T) {
 	su, err := NewUpdater(ctx, db)
 	require.NoError(t, err)
 	nWorkers := 5
-	var batchSize uint64 = 100
+	var batchSize uint64 = 4
 	nBatches := nWorkers * 2
 	var high uint64 = 11235
 	originRoot := [32]byte{}
@@ -74,6 +74,11 @@ func TestServiceInit(t *testing.T) {
 		if b.state == batchSequenced {
 			b.state = batchImportable
 		}
+		for i := b.begin; i < b.end; i++ {
+			blk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, primitives.Slot(i), 0)
+			b.blocks = append(b.blocks, blk)
+		}
+		require.Equal(t, int(batchSize), len(b.blocks))
 		pool.finishedChan <- b
 		todo = testReadN(ctx, t, pool.todoChan, 1, todo)
 	}

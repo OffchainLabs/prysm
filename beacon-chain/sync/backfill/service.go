@@ -172,19 +172,15 @@ func (s *Service) updateComplete() bool {
 }
 
 func (s *Service) importBatches(ctx context.Context) {
-	importable := s.batchSeq.importable()
-	imported := 0
-	defer func() {
-		if imported == 0 {
-			return
-		}
-		batchesImported.Add(float64(imported))
-	}()
 	current := s.clock.CurrentSlot()
-	for i := range importable {
-		ib := importable[i]
+	imported := 0
+	importable := s.batchSeq.importable()
+	for _, ib := range importable {
 		if len(ib.blocks) == 0 {
 			log.WithFields(ib.logFields()).Error("Batch with no results, skipping importer")
+			s.batchSeq.update(ib.withError(errors.New("batch has no blocks")))
+			// This batch needs to be retried before we can continue importing subsequent batches.
+			break
 		}
 		_, err := s.batchImporter(ctx, current, ib, s.store)
 		if err != nil {
@@ -193,17 +189,19 @@ func (s *Service) importBatches(ctx context.Context) {
 			// If a batch fails, the subsequent batches are no longer considered importable.
 			break
 		}
+		// Calling update with state=batchImportComplete will advance the batch list.
 		s.batchSeq.update(ib.withState(batchImportComplete))
 		imported += 1
-		// Calling update with state=batchImportComplete will advance the batch list.
 	}
 
 	nt := s.batchSeq.numTodo()
-	log.WithField("imported", imported).WithField("importable", len(importable)).
-		WithField("batchesRemaining", nt).
-		Info("Backfill batches processed")
-
 	batchesRemaining.Set(float64(nt))
+	if imported > 0 {
+		log.WithField("imported", imported).WithField("importable", len(importable)).
+			WithField("batchesRemaining", nt).
+			Info("Backfill batches imported")
+		batchesImported.Add(float64(imported))
+	}
 }
 
 func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.Slot, b batch, su *Store) (*dbval.BackfillStatus, error) {
