@@ -60,11 +60,10 @@ func (s *Server) initializeAuthToken() error {
 				log.Error(err)
 			}
 		}()
-		secret, token, err := readAuthTokenFile(f)
+		_, token, err := readAuthTokenFile(f)
 		if err != nil {
 			return err
 		}
-		s.jwtSecret = secret
 		s.authToken = token
 		return nil
 	}
