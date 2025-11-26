@@ -37,7 +37,7 @@ type testDASSetup struct {
 // These keys are compatible with ConvertPeerIDToNodeID.
 func createSecp256k1Key(offset int) crypto.PrivKey {
 	privateKeyBytes := make([]byte, 32)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		privateKeyBytes[i] = byte(offset + i)
 	}
 	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes)
@@ -63,7 +63,7 @@ func setupDASTest(t *testing.T, peerCount int, custodyGroupCount uint64) *testDA
 	peers := make([]*p2ptest.TestP2P, peerCount)
 	peerIDs := make([]peer.ID, peerCount)
 
-	for i := 0; i < peerCount; i++ {
+	for i := range peerCount {
 		// Use offset starting at 100 to avoid collision with main p2p service
 		peers[i] = p2ptest.NewTestP2P(t, libp2p.Identity(createSecp256k1Key(100+i*50)))
 		peers[i].Connect(testP2P)

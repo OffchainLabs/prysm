@@ -229,7 +229,7 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 	}
 }
 
-func newSignedRoBlock(t *testing.T, signedBeaconBlock interface{}) blocks.ROBlock {
+func newSignedRoBlock(t *testing.T, signedBeaconBlock any) blocks.ROBlock {
 	sb, err := blocks.NewSignedBeaconBlock(signedBeaconBlock)
 	require.NoError(t, err)
 
@@ -390,7 +390,7 @@ func (v *testDataColumnsVerifier) SidecarProposerExpected(context.Context) error
 // Helper function to create test data columns
 func makeTestDataColumns(t *testing.T, count int, blockRoot [32]byte, startIndex uint64) []blocks.RODataColumn {
 	columns := make([]blocks.RODataColumn, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		params := util.DataColumnParam{
 			Index:          startIndex + uint64(i),
 			KzgCommitments: commitments,
