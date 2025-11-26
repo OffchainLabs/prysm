@@ -63,7 +63,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	}
 
 	if supernodeSet {
-		log.Warning("Subscribing to all data subnets")
+		log.Warning("Operating in supernode mode")
 		cfg.SubscribeAllDataSubnets = true
 	}
 
