@@ -486,15 +486,19 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 
 	// Compute the target custody group count based on current flag configuration.
 	targetCustodyGroupCount := custodyRequirement
-	if isSupernode || wasSupernode {
-		// Full supernode: custody all groups (either currently set or previously enabled)
+
+	// Supernode: custody all groups (either currently set or previously enabled)
+	if isSupernode {
 		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
-	} else if isSemiSupernode {
-		// Semi-supernode: custody minimum needed for reconstruction, or validator requirement if higher
+	}
+
+	// Semi-supernode: custody minimum needed for reconstruction, or custody requirement if higher
+	if isSemiSupernode {
 		semiSupernodeCustody, err := peerdas.MinimumCustodyGroupCountToReconstruct()
 		if err != nil {
 			return 0, 0, errors.Wrap(err, "minimum custody group count")
 		}
+
 		targetCustodyGroupCount = max(custodyRequirement, semiSupernodeCustody)
 	}
 
