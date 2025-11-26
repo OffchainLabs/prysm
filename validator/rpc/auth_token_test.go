@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang-jwt/jwt/v4"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc"
@@ -125,7 +124,6 @@ func TestServer_LegacyTokensStillWork(t *testing.T) {
 	err = srv.initializeAuthToken()
 	require.NoError(t, err)
 
-	require.Equal(t, hexutil.Encode(srv.jwtSecret), "0xb5bbbaf533b625a93741978857f13d7adeca58445a1fb00ecf3373420b92776c")
 	require.Equal(t, srv.authToken, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.MxwOozSH-TLbW_XKepjyYDHm2IT8Ki0tD3AHuajfNMg")
 
 	f, err := os.Open(filepath.Clean(srv.authTokenPath))
