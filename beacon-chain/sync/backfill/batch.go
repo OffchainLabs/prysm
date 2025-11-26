@@ -16,6 +16,12 @@ import (
 
 var errChainBroken = errors.New("batch is not the ancestor of a known finalized root")
 
+// retryLogMod defines how often retryable errors are logged at debug level instead of trace.
+const retryLogMod = 5
+
+// retryDelay defines the delay between retry attempts for a batch.
+const retryDelay = time.Second
+
 type batchState int
 
 func (s batchState) String() string {
@@ -58,8 +64,6 @@ const (
 	batchEndSequence
 )
 
-var retryDelay = time.Second
-
 type batchId string
 
 type batch struct {
@@ -84,15 +88,16 @@ type batch struct {
 
 func (b batch) logFields() logrus.Fields {
 	f := map[string]interface{}{
-		"batchId":   b.id(),
-		"state":     b.state.String(),
-		"scheduled": b.scheduled.String(),
-		"seq":       b.seq,
-		"retries":   b.retries,
-		"begin":     b.begin,
-		"end":       b.end,
-		"busyPid":   b.assignedPeer,
-		"blockPid":  b.blockPeer,
+		"batchId":    b.id(),
+		"state":      b.state.String(),
+		"scheduled":  b.scheduled.String(),
+		"seq":        b.seq,
+		"retries":    b.retries,
+		"retryAfter": b.retryAfter.String(),
+		"begin":      b.begin,
+		"end":        b.end,
+		"busyPid":    b.assignedPeer,
+		"blockPid":   b.blockPeer,
 	}
 	if b.blobs != nil {
 		f["blobPid"] = b.blobs.peer
@@ -171,10 +176,6 @@ func (b batch) withState(s batchState) batch {
 	if s == batchSequenced {
 		b.scheduled = time.Now()
 		switch b.state {
-		case batchErrRetryable:
-			b.retries += 1
-			b.retryAfter = time.Now().Add(retryDelay)
-			log.WithFields(b.logFields()).Info("Sequencing batch for retry after delay")
 		case batchInit, batchNil:
 			b.firstScheduled = b.scheduled
 		}
@@ -189,8 +190,19 @@ func (b batch) withState(s batchState) batch {
 }
 
 func (b batch) withRetryableError(err error) batch {
-	log.WithFields(b.logFields()).WithError(err).Warn("Could not proceed with batch processing due to error")
 	b.err = err
+	b.retries += 1
+	b.retryAfter = time.Now().Add(retryDelay)
+
+	msg := "Could not proceed with batch processing due to error"
+	logBase := log.WithFields(b.logFields()).WithError(err)
+	// Log at trace level to limit log noise,
+	// but escalate to debug level every nth attempt for batches that have some peristent issue.
+	if b.retries&retryLogMod != 0 {
+		logBase.Trace(msg)
+	} else {
+		logBase.Debug(msg)
+	}
 	return b.withState(batchErrRetryable)
 }
 
