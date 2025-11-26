@@ -42,11 +42,11 @@ func TestValidateStateDiffExponents(t *testing.T) {
 
 func TestConfigureGlobalFlags_SupernodeMutualExclusivity(t *testing.T) {
 	tests := []struct {
-		name              string
-		supernodeSet      bool
-		semiSupernodeSet  bool
-		wantErr           bool
-		errMsg            string
+		name             string
+		supernodeSet     bool
+		semiSupernodeSet bool
+		wantErr          bool
+		errMsg           string
 	}{
 		{
 			name:             "both flags not set",
@@ -80,7 +80,7 @@ func TestConfigureGlobalFlags_SupernodeMutualExclusivity(t *testing.T) {
 			// Create a flag set and app for testing
 			app := cli.NewApp()
 			set := flag.NewFlagSet("test", 0)
-			set.Bool(SubscribeAllDataSubnets.Name, tt.supernodeSet, "")
+			set.Bool(Supernode.Name, tt.supernodeSet, "")
 			set.Bool(SemiSupernode.Name, tt.semiSupernodeSet, "")
 			ctx := cli.NewContext(app, set, nil)
 

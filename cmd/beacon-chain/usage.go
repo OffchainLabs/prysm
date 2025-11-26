@@ -107,7 +107,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
 			flags.SubscribeToAllSubnets,
-			flags.SubscribeAllDataSubnets,
+			flags.Supernode,
 			flags.SemiSupernode,
 		},
 	},
