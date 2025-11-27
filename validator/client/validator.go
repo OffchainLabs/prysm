@@ -1417,6 +1417,8 @@ func (v *validator) buildSignedRegReqs(
 		return signedValRegRequests
 	}
 
+	cfg := params.BeaconConfig()
+
 	if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig == nil && v.ProposerSettings().DefaultConfig.BuilderConfig != nil {
 		log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
 	}
@@ -1428,8 +1430,8 @@ func (v *validator) buildSignedRegReqs(
 			continue
 		}
 
-		feeRecipient := common.HexToAddress(params.BeaconConfig().EthBurnAddressHex)
-		gasLimit := params.BeaconConfig().DefaultBuilderGasLimit
+		feeRecipient := common.HexToAddress(cfg.EthBurnAddressHex)
+		gasLimit := cfg.DefaultBuilderGasLimit
 		enabled := false
 
 		if v.ProposerSettings().DefaultConfig != nil && v.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
@@ -1479,7 +1481,7 @@ func (v *validator) buildSignedRegReqs(
 			continue
 		}
 
-		if hexutil.Encode(feeRecipient.Bytes()) == params.BeaconConfig().EthBurnAddressHex {
+		if hexutil.Encode(feeRecipient.Bytes()) == cfg.EthBurnAddressHex {
 			log.WithFields(logrus.Fields{
 				"pubkey":       fmt.Sprintf("%#x", req.Pubkey),
 				"feeRecipient": feeRecipient,
