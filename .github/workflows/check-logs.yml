@@ -1,0 +1,22 @@
+name: Check log.go files
+on: [ pull_request ]
+
+jobs:
+  check-logs:
+    runs-on: ubuntu-4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go 1.25.1
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+
+      - name: Check log.go files
+        run: |
+          chmod +x hack/gen-logs.sh hack/check-logs.sh
+          ./hack/check-logs.sh
