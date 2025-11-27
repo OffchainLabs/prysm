@@ -3,15 +3,15 @@ package state_native_test
 import (
 	"testing"
 
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
 )
 
@@ -92,7 +92,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 
 				vals := make([]*ethpb.Validator, 100)
 				balances := make([]uint64, 100)
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					balances[i] = params.BeaconConfig().MaxEffectiveBalance
 					val := &ethpb.Validator{
 						WithdrawalCredentials: make([]byte, 32),
@@ -124,7 +124,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 
 				vals := make([]*ethpb.Validator, 100)
 				balances := make([]uint64, 100)
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					balances[i] = params.BeaconConfig().MaxEffectiveBalance
 					val := &ethpb.Validator{
 						WithdrawalCredentials: make([]byte, 32),

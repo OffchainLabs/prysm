@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/minio/sha256-simd"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const (
@@ -83,12 +83,10 @@ func PackByChunk(serializedItems [][]byte) ([][BytesPerChunk]byte, error) {
 	numItems := len(orderedItems)
 	var chunks [][BytesPerChunk]byte
 	for i := 0; i < numItems; i += BytesPerChunk {
-		j := i + BytesPerChunk
-		// We create our upper bound index of the chunk, if it is greater than numItems,
-		// we set it as numItems itself.
-		if j > numItems {
-			j = numItems
-		}
+		j := min(
+			// We create our upper bound index of the chunk, if it is greater than numItems,
+			// we set it as numItems itself.
+			i+BytesPerChunk, numItems)
 		// We create chunks from the list of items based on the
 		// indices determined above.
 		// Right-pad the last chunk with zero bytes if it does not

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/time/mclock"
+	"github.com/OffchainLabs/prysm/v7/time/mclock"
 )
 
 // waitQuotient is divided against the max backoff time, in order to have N requests based on the full

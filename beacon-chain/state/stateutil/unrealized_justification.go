@@ -1,9 +1,9 @@
 package stateutil
 
 import (
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +22,7 @@ func UnrealizedCheckpointBalances(cp, pp []byte, validators ValReader, currentEp
 	}
 
 	valLength := validators.Len()
-	for i := 0; i < valLength; i++ {
+	for i := range valLength {
 		v, err := validators.At(i)
 		if err != nil {
 			return 0, 0, 0, err

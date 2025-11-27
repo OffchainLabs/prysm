@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -66,6 +66,7 @@ func getSubscriptionStatusFromDB(t *testing.T, db *Store) bool {
 
 	return subscribed
 }
+
 
 func TestUpdateCustodyInfo(t *testing.T) {
 	ctx := t.Context()
@@ -274,6 +275,17 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, false, stored)
 	})
 
+	t.Run("initial update with empty database - set to true", func(t *testing.T) {
+		db := setupDB(t)
+
+		prev, err := db.UpdateSubscribedToAllDataSubnets(ctx, true)
+		require.NoError(t, err)
+		require.Equal(t, false, prev)
+
+		stored := getSubscriptionStatusFromDB(t, db)
+		require.Equal(t, true, stored)
+	})
+
 	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
 		db := setupDB(t)
 
@@ -288,7 +300,7 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, true, stored)
 	})
 
-	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
+	t.Run("update from true to true (no change)", func(t *testing.T) {
 		db := setupDB(t)
 
 		_, err := db.UpdateSubscribedToAllDataSubnets(ctx, true)

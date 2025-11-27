@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/contracts/deposit/mock"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -254,7 +254,7 @@ func TestProcessETH2GenesisLog_8DuplicatePubkeys(t *testing.T) {
 	// 64 Validators are used as size required for beacon-chain to start. This number
 	// is defined in the deposit contract as the number required for the testnet. The actual number
 	// is 2**14
-	for i := 0; i < depositsReqForChainStart; i++ {
+	for range depositsReqForChainStart {
 		testAcc.TxOpts.Value = mock.Amount32Eth()
 		_, err = testAcc.Contract.Deposit(testAcc.TxOpts, data.PublicKey, data.WithdrawalCredentials, data.Signature, depositRoots[0])
 		require.NoError(t, err, "Could not deposit to deposit contract")
@@ -325,7 +325,7 @@ func TestProcessETH2GenesisLog(t *testing.T) {
 	// 64 Validators are used as size required for beacon-chain to start. This number
 	// is defined in the deposit contract as the number required for the testnet. The actual number
 	// is 2**14
-	for i := 0; i < depositsReqForChainStart; i++ {
+	for i := range depositsReqForChainStart {
 		data := deposits[i].Data
 		testAcc.TxOpts.Value = mock.Amount32Eth()
 		testAcc.TxOpts.GasLimit = 1000000
@@ -429,7 +429,7 @@ func TestProcessETH2GenesisLog_CorrectNumOfDeposits(t *testing.T) {
 	// 64 Validators are used as size required for beacon-chain to start. This number
 	// is defined in the deposit contract as the number required for the testnet. The actual number
 	// is 2**14
-	for i := 0; i < totalNumOfDeposits; i++ {
+	for i := range totalNumOfDeposits {
 		data := deposits[i].Data
 		testAcc.TxOpts.Value = mock.Amount32Eth()
 		testAcc.TxOpts.GasLimit = 1000000
@@ -530,7 +530,7 @@ func TestProcessLogs_DepositRequestsStarted(t *testing.T) {
 	// 64 Validators are used as size required for beacon-chain to start. This number
 	// is defined in the deposit contract as the number required for the testnet. The actual number
 	// is 2**14
-	for i := 0; i < totalNumOfDeposits; i++ {
+	for i := range totalNumOfDeposits {
 		data := deposits[i].Data
 		testAcc.TxOpts.Value = mock.Amount32Eth()
 		testAcc.TxOpts.GasLimit = 1000000
@@ -616,7 +616,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 	// 64 Validators are used as size required for beacon-chain to start. This number
 	// is defined in the deposit contract as the number required for the testnet. The actual number
 	// is 2**14
-	for i := 0; i < totalNumOfDeposits; i++ {
+	for i := range totalNumOfDeposits {
 		data := deposits[i].Data
 		testAcc.TxOpts.Value = mock.Amount32Eth()
 		testAcc.TxOpts.GasLimit = 1000000
@@ -629,7 +629,7 @@ func TestProcessETH2GenesisLog_LargePeriodOfNoLogs(t *testing.T) {
 		}
 	}
 	// Forward the chain to 'mine' blocks without logs
-	for i := uint64(0); i < 1500; i++ {
+	for range uint64(1500) {
 		testAcc.Backend.Commit()
 	}
 	genesisBlock, err := testAcc.Backend.Client().BlockByNumber(t.Context(), nil)

@@ -17,12 +17,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/dustin/go-humanize"
 	log "github.com/sirupsen/logrus"
 	"github.com/status-im/keycard-go/hexutils"
@@ -270,7 +270,7 @@ func readStates(ctx context.Context, db *kv.Store, stateC chan<- *modifiedState,
 		stateMap[uint64(st.Slot())] = mst
 	}
 
-	for i := uint64(0); i < maxSlotsToDisplay; i++ {
+	for i := range uint64(maxSlotsToDisplay) {
 		if _, ok := stateMap[i]; ok {
 			stateC <- stateMap[i]
 		}
@@ -502,14 +502,14 @@ func sizeAndCountOfByteList(list [][]byte) (uint64, uint64) {
 func sizeAndCountOfUin64List(list []uint64) (uint64, uint64) {
 	size := uint64(0)
 	count := uint64(0)
-	for i := 0; i < len(list); i++ {
+	for range list {
 		size += uint64(8)
 		count += 1
 	}
 	return size, count
 }
 
-func sizeAndCountGeneric(genericItems interface{}, err error) (uint64, uint64) {
+func sizeAndCountGeneric(genericItems any, err error) (uint64, uint64) {
 	size := uint64(0)
 	count := uint64(0)
 	if err != nil {

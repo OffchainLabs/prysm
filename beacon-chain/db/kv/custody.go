@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
@@ -146,9 +146,9 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 	return nil
 }
 
-// UpdateSubscribedToAllDataSubnets updates the "subscribed to all data subnets" status in the database
-// only if `subscribed` is `true`.
-// It returns the previous subscription status.
+// UpdateSubscribedToAllDataSubnets updates whether the node is subscribed to all data subnets (supernode mode).
+// This is a one-way flag - once set to true, it cannot be reverted to false.
+// Returns the previous state.
 func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateSubscribedToAllDataSubnets")
 	defer span.End()
@@ -156,13 +156,11 @@ func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed
 	result := false
 	if !subscribed {
 		if err := s.db.View(func(tx *bolt.Tx) error {
-			// Retrieve the custody bucket.
 			bucket := tx.Bucket(custodyBucket)
 			if bucket == nil {
 				return nil
 			}
 
-			// Retrieve the subscribe all data subnets flag.
 			bytes := bucket.Get(subscribeAllDataSubnetsKey)
 			if len(bytes) == 0 {
 				return nil
@@ -181,7 +179,6 @@ func (s *Store) UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed
 	}
 
 	if err := s.db.Update(func(tx *bolt.Tx) error {
-		// Retrieve the custody bucket.
 		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
 		if err != nil {
 			return errors.Wrap(err, "create custody bucket")

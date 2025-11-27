@@ -3,7 +3,7 @@ package validator
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 

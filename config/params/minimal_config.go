@@ -3,7 +3,7 @@ package params
 import (
 	"math"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 // MinimalSpecConfig retrieves the minimal config used in spec tests.
@@ -34,6 +34,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 
 	// Time parameters
 	minimalConfig.SecondsPerSlot = 6
+	minimalConfig.SlotDurationMilliseconds = 6000
 	minimalConfig.MinAttestationInclusionDelay = 1
 	minimalConfig.SlotsPerEpoch = 8
 	minimalConfig.SqrRootSlotsPerEpoch = 2

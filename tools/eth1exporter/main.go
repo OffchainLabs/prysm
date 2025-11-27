@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
+	_ "github.com/OffchainLabs/prysm/v7/runtime/maxprocs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/params"

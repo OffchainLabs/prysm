@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"strings"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -80,7 +80,7 @@ type ExecutionBlock struct {
 }
 
 func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
-	decoded := make(map[string]interface{})
+	decoded := make(map[string]any)
 	encodedHeader, err := e.Header.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	if err := e.Header.UnmarshalJSON(enc); err != nil {
 		return err
 	}
-	decoded := make(map[string]interface{})
+	decoded := make(map[string]any)
 	if err := json.Unmarshal(enc, &decoded); err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 		// Exit early if there are no transactions stored in the json payload.
 		return nil
 	}
-	txsList, ok := rawTxList.([]interface{})
+	txsList, ok := rawTxList.([]any)
 	if !ok {
 		return errors.Errorf("expected transaction list to be of a slice interface type.")
 	}
@@ -186,7 +186,7 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 // UnmarshalJSON --
 func (b *PayloadIDBytes) UnmarshalJSON(enc []byte) error {
 	var res [8]byte
-	if err := hexutil.UnmarshalFixedJSON(reflect.TypeOf(b), enc, res[:]); err != nil {
+	if err := hexutil.UnmarshalFixedJSON(reflect.TypeFor[*PayloadIDBytes](), enc, res[:]); err != nil {
 		return err
 	}
 	*b = res
