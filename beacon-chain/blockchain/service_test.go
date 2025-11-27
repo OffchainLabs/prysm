@@ -642,7 +642,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
+		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
@@ -680,7 +680,7 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		// ----------
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
-		gFlags.SubscribeAllDataSubnets = true
+		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
@@ -694,5 +694,122 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, slot, actualEas)
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
+	})
+
+	t.Run("Supernode downgrade prevented", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+
+		// Try to downgrade by removing flag
+		gFlags.Supernode = false
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should still be supernode
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Still 64, not downgraded
+	})
+
+	t.Run("Semi-supernode downgrade prevented", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Semi-supernode custodies 64 groups
+
+		// Try to downgrade by removing flag
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// UpdateCustodyInfo should prevent downgrade - custody count should remain at 64
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Still 64 due to downgrade prevention by UpdateCustodyInfo
+	})
+
+	t.Run("Semi-supernode to supernode upgrade allowed", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Start with semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Semi-supernode custodies 64 groups
+
+		// Upgrade to full supernode
+		gFlags.SemiSupernode = false
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should upgrade to full supernode
+		upgradeSlot := slot + 2
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(upgradeSlot)
+		require.NoError(t, err)
+		require.Equal(t, upgradeSlot, actualEas)           // Earliest slot updates when upgrading
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Upgraded to 128
+	})
+
+	t.Run("Semi-supernode with high validator requirements uses higher custody", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Mock a high custody requirement (simulating many validators)
+		// We need to override the custody requirement calculation
+		// For this test, we'll verify the logic by checking if custodyRequirement > 64
+		// Since custodyRequirement in minimalTestService is 4, we can't test the high case here
+		// This would require a different test setup with actual validators
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
+		// With low validator requirements (4), should use semi-supernode minimum (64)
+		require.Equal(t, semiSupernodeCustody, actualCgc)
 	})
 }

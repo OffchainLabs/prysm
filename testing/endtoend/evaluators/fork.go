@@ -10,33 +10,36 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
-	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
 var streamDeadline = 1 * time.Minute
-var startingFork = version.Phase0
 
 // AltairForkTransition ensures that the Altair hard fork has occurred successfully.
-var AltairForkTransition = types.Evaluator{
+var AltairForkTransition = e2etypes.Evaluator{
 	Name: "altair_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
-		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
-		// TODO (11750): modify policies to take an end to end config
-		if startingFork == version.Phase0 {
-			return altair(e)
+		// Only run if we started before Altair
+		if e2etypes.GenesisFork() >= version.Altair {
+			return false
 		}
-		return false
+		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
+		return altair(e)
 	},
 	Evaluation: altairForkOccurs,
 }
 
 // BellatrixForkTransition ensures that the Bellatrix hard fork has occurred successfully.
-var BellatrixForkTransition = types.Evaluator{
+var BellatrixForkTransition = e2etypes.Evaluator{
 	Name: "bellatrix_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Bellatrix
+		if e2etypes.GenesisFork() >= version.Bellatrix {
+			return false
+		}
 		fEpoch := params.BeaconConfig().BellatrixForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -44,9 +47,13 @@ var BellatrixForkTransition = types.Evaluator{
 }
 
 // CapellaForkTransition ensures that the Capella hard fork has occurred successfully.
-var CapellaForkTransition = types.Evaluator{
+var CapellaForkTransition = e2etypes.Evaluator{
 	Name: "capella_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Capella
+		if e2etypes.GenesisFork() >= version.Capella {
+			return false
+		}
 		fEpoch := params.BeaconConfig().CapellaForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -54,9 +61,13 @@ var CapellaForkTransition = types.Evaluator{
 }
 
 // DenebForkTransition ensures that the Deneb hard fork has occurred successfully
-var DenebForkTransition = types.Evaluator{
+var DenebForkTransition = e2etypes.Evaluator{
 	Name: "deneb_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Deneb
+		if e2etypes.GenesisFork() >= version.Deneb {
+			return false
+		}
 		fEpoch := params.BeaconConfig().DenebForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -64,16 +75,20 @@ var DenebForkTransition = types.Evaluator{
 }
 
 // ElectraForkTransition ensures that the electra hard fork has occurred successfully
-var ElectraForkTransition = types.Evaluator{
+var ElectraForkTransition = e2etypes.Evaluator{
 	Name: "electra_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Electra
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
 		fEpoch := params.BeaconConfig().ElectraForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
 	Evaluation: electraForkOccurs,
 }
 
-func altairForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func altairForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -115,7 +130,7 @@ func altairForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) err
 	return nil
 }
 
-func bellatrixForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func bellatrixForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -160,7 +175,7 @@ func bellatrixForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) 
 	return nil
 }
 
-func capellaForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func capellaForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -203,7 +218,7 @@ func capellaForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 	return nil
 }
 
-func denebForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func denebForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -246,7 +261,7 @@ func denebForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) erro
 	return nil
 }
 
-func electraForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func electraForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)

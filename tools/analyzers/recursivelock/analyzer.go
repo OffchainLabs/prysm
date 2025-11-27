@@ -525,6 +525,9 @@ func hasNestedlock(fullRLockSelector *selIdentList, goPos token.Pos, compareMap 
 		if node == (*ast.FuncDecl)(nil) {
 			return ""
 		} else if castedNode, ok := node.(*ast.FuncDecl); ok && castedNode.Recv != nil {
+			if len(castedNode.Recv.List) == 0 || len(castedNode.Recv.List[0].Names) == 0 {
+				return ""
+			}
 			recv = castedNode.Recv.List[0].Names[0]
 			rLockSelector.changeRoot(recv, pass.TypesInfo.ObjectOf(recv))
 		}
