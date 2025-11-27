@@ -8,6 +8,7 @@ import (
 
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	dbtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -106,11 +107,20 @@ func (ts *testSetup) assertCustodyInfo(t *testing.T, expectedSlot primitives.Slo
 }
 
 func withSubscribeAllDataSubnets(t *testing.T, fn func()) {
-	originalFlag := flags.Get().SubscribeAllDataSubnets
+	originalFlag := flags.Get().Supernode
 	defer func() {
-		flags.Get().SubscribeAllDataSubnets = originalFlag
+		flags.Get().Supernode = originalFlag
 	}()
-	flags.Get().SubscribeAllDataSubnets = true
+	flags.Get().Supernode = true
+	fn()
+}
+
+func withSemiSupernode(t *testing.T, fn func()) {
+	originalFlag := flags.Get().SemiSupernode
+	defer func() {
+		flags.Get().SemiSupernode = originalFlag
+	}()
+	flags.Get().SemiSupernode = true
 	fn()
 }
 
@@ -194,5 +204,151 @@ func TestCustodyGroupCount(t *testing.T) {
 		result, err := service.custodyGroupCount(ctx)
 		require.NoError(t, err)
 		require.Equal(t, config.CustodyRequirement, result)
+	})
+
+	t.Run("SemiSupernode enabled returns half of NumberOfCustodyGroups", func(t *testing.T) {
+		withSemiSupernode(t, func() {
+			service := &Service{
+				ctx: context.Background(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+			expected, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+			require.NoError(t, err)
+			require.Equal(t, expected, result)
+		})
+	})
+
+	t.Run("Supernode takes precedence over SemiSupernode", func(t *testing.T) {
+		// Test that when both flags are set, supernode takes precedence
+		originalSupernode := flags.Get().Supernode
+		originalSemiSupernode := flags.Get().SemiSupernode
+		defer func() {
+			flags.Get().Supernode = originalSupernode
+			flags.Get().SemiSupernode = originalSemiSupernode
+		}()
+		flags.Get().Supernode = true
+		flags.Get().SemiSupernode = true
+
+		service := &Service{
+			ctx: context.Background(),
+		}
+
+		result, err := service.custodyGroupCount(ctx)
+		require.NoError(t, err)
+		require.Equal(t, config.NumberOfCustodyGroups, result)
+	})
+
+	t.Run("SemiSupernode with no tracked validators returns semi-supernode target", func(t *testing.T) {
+		withSemiSupernode(t, func() {
+			service := &Service{
+				ctx:                    context.Background(),
+				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+			expected, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+			require.NoError(t, err)
+			require.Equal(t, expected, result)
+		})
+	})
+}
+
+func TestSemiSupernodeValidatorCustodyOverride(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	config := params.BeaconConfig()
+	config.NumberOfCustodyGroups = 128
+	config.CustodyRequirement = 4
+	config.ValidatorCustodyRequirement = 8
+	config.BalancePerAdditionalCustodyGroup = 1000000000 // 1 ETH in Gwei
+	params.OverrideBeaconConfig(config)
+
+	ctx := t.Context()
+
+	t.Run("Semi-supernode returns target when validator requirement is lower", func(t *testing.T) {
+		// When validators require less custody than semi-supernode provides,
+		// use the semi-supernode target (64)
+		withSemiSupernode(t, func() {
+			// Setup with validators requiring only 32 groups (less than 64)
+			service := &Service{
+				ctx:                    context.Background(),
+				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+
+			// Should return semi-supernode target (64) since it's higher than validator requirement
+			require.Equal(t, uint64(64), result)
+		})
+	})
+
+	t.Run("Validator requirement calculation respects minimum and maximum bounds", func(t *testing.T) {
+		// Verify that the validator custody requirement respects:
+		// - Minimum: ValidatorCustodyRequirement (8 in our config)
+		// - Maximum: NumberOfCustodyGroups (128 in our config)
+
+		// This ensures the formula works correctly:
+		// result = min(max(count, ValidatorCustodyRequirement), NumberOfCustodyGroups)
+
+		require.Equal(t, uint64(8), config.ValidatorCustodyRequirement)
+		require.Equal(t, uint64(128), config.NumberOfCustodyGroups)
+
+		// Semi-supernode target should be 64 (half of 128)
+		semiSupernodeTarget, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+		require.NoError(t, err)
+		require.Equal(t, uint64(64), semiSupernodeTarget)
+	})
+
+	t.Run("Semi-supernode respects base CustodyRequirement", func(t *testing.T) {
+		// Test that semi-supernode respects max(CustodyRequirement, validatorsCustodyRequirement)
+		// even when both are below the semi-supernode target
+		params.SetupTestConfigCleanup(t)
+		// Setup with high base custody requirement (but still less than 64)
+		testConfig := params.BeaconConfig()
+		testConfig.NumberOfCustodyGroups = 128
+		testConfig.CustodyRequirement = 32 // Higher than validator requirement
+		testConfig.ValidatorCustodyRequirement = 8
+		params.OverrideBeaconConfig(testConfig)
+
+		withSemiSupernode(t, func() {
+			service := &Service{
+				ctx:                    context.Background(),
+				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+
+			// Should return semi-supernode target (64) since
+			// max(CustodyRequirement=32, validatorsCustodyRequirement=0) = 32 < 64
+			require.Equal(t, uint64(64), result)
+		})
+	})
+
+	t.Run("Semi-supernode uses higher custody when base requirement exceeds target", func(t *testing.T) {
+		// Set CustodyRequirement higher than semi-supernode target (64)
+		params.SetupTestConfigCleanup(t)
+		testConfig := params.BeaconConfig()
+		testConfig.NumberOfCustodyGroups = 128
+		testConfig.CustodyRequirement = 80 // Higher than semi-supernode target of 64
+		testConfig.ValidatorCustodyRequirement = 8
+		params.OverrideBeaconConfig(testConfig)
+
+		withSemiSupernode(t, func() {
+			service := &Service{
+				ctx:                    context.Background(),
+				trackedValidatorsCache: cache.NewTrackedValidatorsCache(),
+			}
+
+			result, err := service.custodyGroupCount(ctx)
+			require.NoError(t, err)
+
+			// Should return CustodyRequirement (80) since it's higher than semi-supernode target (64)
+			// effectiveCustodyRequirement = max(80, 0) = 80 > 64
+			require.Equal(t, uint64(80), result)
+		})
 	})
 }

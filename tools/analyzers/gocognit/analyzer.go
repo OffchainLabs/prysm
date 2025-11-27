@@ -34,7 +34,7 @@ var Analyzer = &analysis.Analyzer{
 // This threshold should be lowered to 50 over time.
 const over = 100
 
-func run(pass *analysis.Pass) (interface{}, error) {
+func run(pass *analysis.Pass) (any, error) {
 	inspectResult, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	if !ok {
 		return nil, errors.New("analyzer is not type *inspector.Inspector")

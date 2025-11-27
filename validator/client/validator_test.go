@@ -63,7 +63,7 @@ var unknownIndex = primitives.ValidatorIndex(^uint64(0))
 
 func genMockKeymanager(t *testing.T, numKeys int) *mockKeymanager {
 	pairs := make([]keypair, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		pairs[i] = randKeypair(t)
 	}
 
@@ -859,7 +859,7 @@ type doppelGangerRequestMatcher struct {
 
 var _ gomock.Matcher = (*doppelGangerRequestMatcher)(nil)
 
-func (m *doppelGangerRequestMatcher) Matches(x interface{}) bool {
+func (m *doppelGangerRequestMatcher) Matches(x any) bool {
 	r, ok := x.(*ethpb.DoppelGangerRequest)
 	if !ok {
 		panic("Invalid match type")
@@ -1011,7 +1011,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 					attLimit := 5
 					for i, k := range keys {
 						pkey := k
-						for j := 0; j < attLimit; j++ {
+						for j := range attLimit {
 							att := createAttestation(10+primitives.Epoch(j), 12+primitives.Epoch(j))
 							rt, err := att.Data.HashTreeRoot()
 							assert.NoError(t, err)
@@ -1362,7 +1362,7 @@ type PrepareBeaconProposerRequestMatcher struct {
 	expectedRecipients []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 }
 
-func (m *PrepareBeaconProposerRequestMatcher) Matches(x interface{}) bool {
+func (m *PrepareBeaconProposerRequestMatcher) Matches(x any) bool {
 	req, ok := x.(*ethpb.PrepareBeaconProposerRequest)
 	if !ok {
 		return false

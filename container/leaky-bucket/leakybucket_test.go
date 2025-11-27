@@ -48,7 +48,7 @@ func TestNewLeakyBucket(t *testing.T) {
 type actionSet struct {
 	count  int64
 	action string
-	value  interface{}
+	value  any
 }
 
 type testSet struct {

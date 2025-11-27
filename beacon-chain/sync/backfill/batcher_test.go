@@ -112,7 +112,7 @@ func TestBatchSequencer(t *testing.T) {
 	}
 	got, err := seq.sequence()
 	require.Equal(t, seqLen, len(got))
-	for i := 0; i < seqLen; i++ {
+	for i := range seqLen {
 		g := got[i]
 		exp := expected[i]
 		require.NoError(t, err)

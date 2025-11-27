@@ -122,11 +122,8 @@ func ProcessInactivityScores(
 		}
 
 		if !helpers.IsInInactivityLeak(prevEpoch, finalizedEpoch) {
-			score := recoveryRate
 			// Prevents underflow below 0.
-			if score > v.InactivityScore {
-				score = v.InactivityScore
-			}
+			score := min(recoveryRate, v.InactivityScore)
 			v.InactivityScore -= score
 		}
 		inactivityScores[i] = v.InactivityScore
@@ -242,7 +239,7 @@ func ProcessRewardsAndPenaltiesPrecompute(
 	}
 
 	balances := beaconState.Balances()
-	for i := 0; i < numOfVals; i++ {
+	for i := range numOfVals {
 		vals[i].BeforeEpochTransitionBalance = balances[i]
 
 		// Compute the post balance of the validator after accounting for the

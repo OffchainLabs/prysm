@@ -99,7 +99,7 @@ func (*FakeP2P) PublishToTopic(_ context.Context, _ string, _ []byte, _ ...pubsu
 }
 
 // Send -- fake.
-func (*FakeP2P) Send(_ context.Context, _ interface{}, _ string, _ peer.ID) (network.Stream, error) {
+func (*FakeP2P) Send(_ context.Context, _ any, _ string, _ peer.ID) (network.Stream, error) {
 	return nil, nil
 }
 

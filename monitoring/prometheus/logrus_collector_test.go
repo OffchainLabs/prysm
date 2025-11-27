@@ -17,9 +17,9 @@ import (
 )
 
 type logger interface {
-	Info(args ...interface{})
-	Warn(args ...interface{})
-	Error(args ...interface{})
+	Info(args ...any)
+	Warn(args ...any)
+	Error(args ...any)
 }
 
 func TestLogrusCollector(t *testing.T) {

@@ -60,7 +60,7 @@ func AggregateDisjointOneBitAtts(atts []ethpb.Att) (ethpb.Att, error) {
 		}
 	}
 	keys := make([]int, len(atts))
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		keys[i] = i
 	}
 	idx, err := aggregateAttestations(atts, keys, coverage)

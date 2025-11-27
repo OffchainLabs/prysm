@@ -56,7 +56,7 @@ func (RPCClientBad) BatchCall([]rpc.BatchElem) error {
 	return errors.New("rpc client is not initialized")
 }
 
-func (RPCClientBad) CallContext(context.Context, interface{}, string, ...interface{}) error {
+func (RPCClientBad) CallContext(context.Context, any, string, ...any) error {
 	return ethereum.NotFound
 }
 
@@ -192,7 +192,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -238,7 +238,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -291,7 +291,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -346,7 +346,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -428,7 +428,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -939,7 +939,7 @@ func TestClient_HTTP(t *testing.T) {
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -977,7 +977,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, fmt.Sprintf("%#x", arg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -1039,7 +1039,7 @@ func TestReconstructFullBellatrixBlock(t *testing.T) {
 		payload, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 
-		jsonPayload := make(map[string]interface{})
+		jsonPayload := make(map[string]any)
 		tx := gethtypes.NewTransaction(
 			0,
 			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -1064,10 +1064,10 @@ func TestReconstructFullBellatrixBlock(t *testing.T) {
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			respJSON := map[string]interface{}{
+			respJSON := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  []map[string]interface{}{jsonPayload},
+				"result":  []map[string]any{jsonPayload},
 			}
 			require.NoError(t, json.NewEncoder(w).Encode(respJSON))
 		}))
@@ -1131,7 +1131,7 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 		payload, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 
-		jsonPayload := make(map[string]interface{})
+		jsonPayload := make(map[string]any)
 		tx := gethtypes.NewTransaction(
 			0,
 			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -1168,10 +1168,10 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 				require.NoError(t, r.Body.Close())
 			}()
 
-			respJSON := map[string]interface{}{
+			respJSON := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  []map[string]interface{}{jsonPayload},
+				"result":  []map[string]any{jsonPayload},
 			}
 			require.NoError(t, json.NewEncoder(w).Encode(respJSON))
 
@@ -1206,7 +1206,7 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 		payload, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 
-		jsonPayload := make(map[string]interface{})
+		jsonPayload := make(map[string]any)
 		tx := gethtypes.NewTransaction(
 			0,
 			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -1241,10 +1241,10 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 				require.NoError(t, r.Body.Close())
 			}()
 
-			respJSON := map[string]interface{}{
+			respJSON := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  []map[string]interface{}{},
+				"result":  []map[string]any{},
 			}
 			require.NoError(t, json.NewEncoder(w).Encode(respJSON))
 
@@ -1473,7 +1473,7 @@ func (c *customError) Timeout() bool {
 
 type dataError struct {
 	code int
-	data interface{}
+	data any
 }
 
 func (c *dataError) ErrorCode() int {
@@ -1484,7 +1484,7 @@ func (*dataError) Error() string {
 	return "something went wrong"
 }
 
-func (c *dataError) ErrorData() interface{} {
+func (c *dataError) ErrorData() any {
 	return c.data
 }
 
@@ -1576,9 +1576,9 @@ func newTestIPCServer(t *testing.T) *rpc.Server {
 	return server
 }
 
-func fixtures() map[string]interface{} {
+func fixtures() map[string]any {
 	s := fixturesStruct()
-	return map[string]interface{}{
+	return map[string]any{
 		"ExecutionBlock":                    s.ExecutionBlock,
 		"ExecutionPayloadBody":              s.ExecutionPayloadBody,
 		"ExecutionPayload":                  s.ExecutionPayload,
@@ -2173,7 +2173,7 @@ func forkchoiceUpdateSetup(t *testing.T, fcs *pb.ForkchoiceState, att *pb.Payloa
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(payloadAttrsReq),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  res,
@@ -2212,7 +2212,7 @@ func forkchoiceUpdateSetupV2(t *testing.T, fcs *pb.ForkchoiceState, att *pb.Payl
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(payloadAttrsReq),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  res,
@@ -2246,7 +2246,7 @@ func newPayloadSetup(t *testing.T, status *pb.PayloadStatus, payload *pb.Executi
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(reqArg),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2280,7 +2280,7 @@ func newPayloadV2Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(reqArg),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2314,7 +2314,7 @@ func newPayloadV3Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(reqArg),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2362,7 +2362,7 @@ func newPayloadV4Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 			jsonRequestString, string(jsonRequests),
 		))
 
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2418,7 +2418,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  []string{},
@@ -2451,7 +2451,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 				require.NoError(t, r.Body.Close())
 			}()
 
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  []string{"A", "B", "C"},
@@ -2509,7 +2509,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
 
-	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
 
 	t.Run("recovered 6 missing blobs", func(t *testing.T) {
 		srv := createBlobServer(t, 6)
@@ -2652,10 +2652,10 @@ func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *http
 
 		blobs := make([]pb.BlobAndProofJson, numBlobs)
 		for i := range blobs {
-			blobs[i] = pb.BlobAndProofJson{Blob: []byte(fmt.Sprintf("blob%d", i+1)), KzgProof: []byte(fmt.Sprintf("proof%d", i+1))}
+			blobs[i] = pb.BlobAndProofJson{Blob: fmt.Appendf(nil, "blob%d", i+1), KzgProof: fmt.Appendf(nil, "proof%d", i+1)}
 		}
 
-		respJSON := map[string]interface{}{
+		respJSON := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  blobs,
@@ -2689,7 +2689,7 @@ func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.
 			}
 		}
 
-		respJSON := map[string]interface{}{
+		respJSON := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  blobAndCellProofs,
@@ -2705,7 +2705,7 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 	require.NoError(t, err)
 
 	client.rpcClient = rpcClient
-	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
 	client.blobVerifier = testNewBlobVerifier()
 
 	return rpcClient, client
@@ -2713,7 +2713,7 @@ func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Se
 
 func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, client := setupRpcClient(t, url, client)
-	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV2: nil}}
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV2: nil}}
 	return rpcClient, client
 }
 

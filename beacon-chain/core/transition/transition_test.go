@@ -754,8 +754,7 @@ func BenchmarkProcessSlots_Capella(b *testing.B) {
 
 	var err error
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		st, err = transition.ProcessSlots(b.Context(), st, st.Slot()+1)
 		if err != nil {
 			b.Fatalf("Failed to process slot %v", err)
@@ -768,8 +767,7 @@ func BenchmarkProcessSlots_Deneb(b *testing.B) {
 
 	var err error
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		st, err = transition.ProcessSlots(b.Context(), st, st.Slot()+1)
 		if err != nil {
 			b.Fatalf("Failed to process slot %v", err)
@@ -782,8 +780,7 @@ func BenchmarkProcessSlots_Electra(b *testing.B) {
 
 	var err error
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		st, err = transition.ProcessSlots(b.Context(), st, st.Slot()+1)
 		if err != nil {
 			b.Fatalf("Failed to process slot %v", err)

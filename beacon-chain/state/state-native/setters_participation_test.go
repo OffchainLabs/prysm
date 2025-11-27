@@ -18,9 +18,8 @@ func BenchmarkParticipationBits(b *testing.B) {
 	}
 
 	ref := st.Copy()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.NoError(b, ref.AppendCurrentParticipationBits(byte(2)))
 		ref = st.Copy()
 	}

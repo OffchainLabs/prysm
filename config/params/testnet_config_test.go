@@ -58,6 +58,7 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.GenesisDelay, actual.GenesisDelay)
 	require.DeepEqual(t, expected.MinAttestationInclusionDelay, actual.MinAttestationInclusionDelay)
 	require.DeepEqual(t, expected.SecondsPerSlot, actual.SecondsPerSlot)
+	require.DeepEqual(t, expected.SlotDurationMilliseconds, actual.SlotDurationMilliseconds)
 	require.DeepEqual(t, expected.SlotsPerEpoch, actual.SlotsPerEpoch)
 	require.DeepEqual(t, expected.SqrRootSlotsPerEpoch, actual.SqrRootSlotsPerEpoch)
 	require.DeepEqual(t, expected.MinSeedLookahead, actual.MinSeedLookahead)

@@ -85,7 +85,7 @@ func TestServer_GetValidatorParticipation_CurrentAndPrevEpoch(t *testing.T) {
 
 	validators := make([]*ethpb.Validator, validatorCount)
 	balances := make([]uint64, validatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             bytesutil.ToBytes(uint64(i), 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -189,7 +189,7 @@ func TestServer_GetValidatorParticipation_OrphanedUntilGenesis(t *testing.T) {
 
 	validators := make([]*ethpb.Validator, validatorCount)
 	balances := make([]uint64, validatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             bytesutil.ToBytes(uint64(i), 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -446,7 +446,7 @@ func TestServer_GetValidatorActiveSetChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, headState.SetSlot(0))
 	require.NoError(t, headState.SetValidators(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		activationEpoch := params.BeaconConfig().FarFutureEpoch
 		withdrawableEpoch := params.BeaconConfig().FarFutureEpoch
 		exitEpoch := params.BeaconConfig().FarFutureEpoch

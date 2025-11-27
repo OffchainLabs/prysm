@@ -1,2 +1,0 @@
-### Ignored 
-- `BeaconBlockContainerToSignedBeaconBlock`: Add Fulu.

@@ -475,7 +475,7 @@ func (s *Service) ExecutionBlocksByHashes(ctx context.Context, hashes []common.H
 		newH := h
 		elems = append(elems, gethRPC.BatchElem{
 			Method: BlockByHashMethod,
-			Args:   []interface{}{newH, withTxs},
+			Args:   []any{newH, withTxs},
 			Result: blk,
 			Error:  error(nil),
 		})

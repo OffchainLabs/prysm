@@ -127,7 +127,7 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		return
 	}
 
-	v.waitToSlotTwoThirds(ctx, slot)
+	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().ContributionDueBPS)
 
 	coveredSubnets := make(map[uint64]bool)
 	for i, comIdx := range indexRes.Indices {

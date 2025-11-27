@@ -221,7 +221,7 @@ func (p *Service) pruneBatches(pruneUpto primitives.Slot) (int, error) {
 		case <-ctx.Done():
 			return numBatches, nil
 		default:
-			for i := 0; i < defaultNumBatchesToPrune; i++ {
+			for range defaultNumBatchesToPrune {
 				slotsDeleted, err := p.db.DeleteHistoricalDataBeforeSlot(ctx, pruneUpto, defaultPrunableBatchSize)
 				if err != nil {
 					return 0, errors.Wrapf(err, "could not delete upto slot %d", pruneUpto)

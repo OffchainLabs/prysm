@@ -19,7 +19,7 @@ func TestProcessJustificationAndFinalizationPreCompute_ConsecutiveEpochs(t *test
 	e := params.BeaconConfig().FarFutureEpoch
 	a := params.BeaconConfig().MaxEffectiveBalance
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerEpoch*2+1)
-	for i := 0; i < len(blockRoots); i++ {
+	for i := range blockRoots {
 		blockRoots[i] = []byte{byte(i)}
 	}
 	base := &ethpb.BeaconState{
@@ -56,7 +56,7 @@ func TestProcessJustificationAndFinalizationPreCompute_JustifyCurrentEpoch(t *te
 	e := params.BeaconConfig().FarFutureEpoch
 	a := params.BeaconConfig().MaxEffectiveBalance
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerEpoch*2+1)
-	for i := 0; i < len(blockRoots); i++ {
+	for i := range blockRoots {
 		blockRoots[i] = []byte{byte(i)}
 	}
 	base := &ethpb.BeaconState{
@@ -93,7 +93,7 @@ func TestProcessJustificationAndFinalizationPreCompute_JustifyPrevEpoch(t *testi
 	e := params.BeaconConfig().FarFutureEpoch
 	a := params.BeaconConfig().MaxEffectiveBalance
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerEpoch*2+1)
-	for i := 0; i < len(blockRoots); i++ {
+	for i := range blockRoots {
 		blockRoots[i] = []byte{byte(i)}
 	}
 	base := &ethpb.BeaconState{
@@ -128,7 +128,7 @@ func TestProcessJustificationAndFinalizationPreCompute_JustifyPrevEpoch(t *testi
 func TestUnrealizedCheckpoints(t *testing.T) {
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
 	balances := make([]uint64, len(validators))
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,

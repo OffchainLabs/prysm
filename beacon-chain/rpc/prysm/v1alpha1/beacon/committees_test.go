@@ -95,7 +95,7 @@ func TestServer_ListBeaconCommittees_PreviousEpoch(t *testing.T) {
 	headState := setupActiveValidators(t, numValidators)
 
 	mixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(mixes); i++ {
+	for i := range mixes {
 		mixes[i] = make([]byte, fieldparams.RootLength)
 	}
 	require.NoError(t, headState.SetRandaoMixes(mixes))
@@ -216,7 +216,7 @@ func TestRetrieveCommitteesForRoot(t *testing.T) {
 func setupActiveValidators(t *testing.T, count int) state.BeaconState {
 	balances := make([]uint64, count)
 	validators := make([]*ethpb.Validator, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
 		binary.LittleEndian.PutUint64(pubKey, uint64(i))
 		balances[i] = uint64(i)

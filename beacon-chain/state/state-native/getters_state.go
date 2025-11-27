@@ -9,7 +9,7 @@ import (
 
 // ToProtoUnsafe returns the pointer value of the underlying
 // beacon state proto object, bypassing immutability. Use with care.
-func (b *BeaconState) ToProtoUnsafe() interface{} {
+func (b *BeaconState) ToProtoUnsafe() any {
 	if b == nil {
 		return nil
 	}
@@ -259,13 +259,64 @@ func (b *BeaconState) ToProtoUnsafe() interface{} {
 			PendingConsolidations:         b.pendingConsolidations,
 			ProposerLookahead:             lookahead,
 		}
+	case version.Gloas:
+		lookahead := make([]uint64, len(b.proposerLookahead))
+		for i, v := range b.proposerLookahead {
+			lookahead[i] = uint64(v)
+		}
+
+		return &ethpb.BeaconStateGloas{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.fork,
+			LatestBlockHeader:             b.latestBlockHeader,
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1Data,
+			Eth1DataVotes:                 b.eth1DataVotes,
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    vals,
+			Balances:                      bals,
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashings,
+			PreviousEpochParticipation:    b.previousEpochParticipation,
+			CurrentEpochParticipation:     b.currentEpochParticipation,
+			JustificationBits:             b.justificationBits,
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpoint,
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpoint,
+			FinalizedCheckpoint:           b.finalizedCheckpoint,
+			InactivityScores:              inactivityScores,
+			CurrentSyncCommittee:          b.currentSyncCommittee,
+			NextSyncCommittee:             b.nextSyncCommittee,
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid,
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummaries,
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDeposits,
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawals,
+			PendingConsolidations:         b.pendingConsolidations,
+			ProposerLookahead:             lookahead,
+			ExecutionPayloadAvailability:  b.executionPayloadAvailability,
+			BuilderPendingPayments:        b.builderPendingPayments,
+			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
+			LatestBlockHash:               b.latestBlockHash,
+			LatestWithdrawalsRoot:         b.latestWithdrawalsRoot,
+		}
 	default:
 		return nil
 	}
 }
 
 // ToProto the beacon state into a protobuf for usage.
-func (b *BeaconState) ToProto() interface{} {
+func (b *BeaconState) ToProto() any {
 	if b == nil {
 		return nil
 	}
@@ -510,6 +561,57 @@ func (b *BeaconState) ToProto() interface{} {
 			PendingConsolidations:         b.pendingConsolidationsVal(),
 			ProposerLookahead:             lookahead,
 		}
+	case version.Gloas:
+		lookahead := make([]uint64, len(b.proposerLookahead))
+		for i, v := range b.proposerLookahead {
+			lookahead[i] = uint64(v)
+		}
+
+		return &ethpb.BeaconStateGloas{
+			GenesisTime:                   b.genesisTime,
+			GenesisValidatorsRoot:         gvrCopy[:],
+			Slot:                          b.slot,
+			Fork:                          b.forkVal(),
+			LatestBlockHeader:             b.latestBlockHeaderVal(),
+			BlockRoots:                    br,
+			StateRoots:                    sr,
+			HistoricalRoots:               b.historicalRoots.Slice(),
+			Eth1Data:                      b.eth1DataVal(),
+			Eth1DataVotes:                 b.eth1DataVotesVal(),
+			Eth1DepositIndex:              b.eth1DepositIndex,
+			Validators:                    b.validatorsVal(),
+			Balances:                      b.balancesVal(),
+			RandaoMixes:                   rm,
+			Slashings:                     b.slashingsVal(),
+			PreviousEpochParticipation:    b.previousEpochParticipationVal(),
+			CurrentEpochParticipation:     b.currentEpochParticipationVal(),
+			JustificationBits:             b.justificationBitsVal(),
+			PreviousJustifiedCheckpoint:   b.previousJustifiedCheckpointVal(),
+			CurrentJustifiedCheckpoint:    b.currentJustifiedCheckpointVal(),
+			FinalizedCheckpoint:           b.finalizedCheckpointVal(),
+			InactivityScores:              b.inactivityScoresVal(),
+			CurrentSyncCommittee:          b.currentSyncCommitteeVal(),
+			NextSyncCommittee:             b.nextSyncCommitteeVal(),
+			LatestExecutionPayloadBid:     b.latestExecutionPayloadBid.Copy(),
+			NextWithdrawalIndex:           b.nextWithdrawalIndex,
+			NextWithdrawalValidatorIndex:  b.nextWithdrawalValidatorIndex,
+			HistoricalSummaries:           b.historicalSummariesVal(),
+			DepositRequestsStartIndex:     b.depositRequestsStartIndex,
+			DepositBalanceToConsume:       b.depositBalanceToConsume,
+			ExitBalanceToConsume:          b.exitBalanceToConsume,
+			EarliestExitEpoch:             b.earliestExitEpoch,
+			ConsolidationBalanceToConsume: b.consolidationBalanceToConsume,
+			EarliestConsolidationEpoch:    b.earliestConsolidationEpoch,
+			PendingDeposits:               b.pendingDepositsVal(),
+			PendingPartialWithdrawals:     b.pendingPartialWithdrawalsVal(),
+			PendingConsolidations:         b.pendingConsolidationsVal(),
+			ProposerLookahead:             lookahead,
+			ExecutionPayloadAvailability:  b.executionPayloadAvailabilityVal(),
+			BuilderPendingPayments:        b.builderPendingPaymentsVal(),
+			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
+			LatestBlockHash:               b.latestBlockHashVal(),
+			LatestWithdrawalsRoot:         b.latestWithdrawalsRootVal(),
+		}
 	default:
 		return nil
 	}
@@ -552,7 +654,7 @@ func (b *BeaconState) StateRootAtIndex(idx uint64) ([]byte, error) {
 
 // ProtobufBeaconStatePhase0 transforms an input into beacon state in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStatePhase0(s interface{}) (*ethpb.BeaconState, error) {
+func ProtobufBeaconStatePhase0(s any) (*ethpb.BeaconState, error) {
 	pbState, ok := s.(*ethpb.BeaconState)
 	if !ok {
 		return nil, errors.New("input is not type ethpb.BeaconState")
@@ -562,7 +664,7 @@ func ProtobufBeaconStatePhase0(s interface{}) (*ethpb.BeaconState, error) {
 
 // ProtobufBeaconStateAltair transforms an input into beacon state Altair in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateAltair(s interface{}) (*ethpb.BeaconStateAltair, error) {
+func ProtobufBeaconStateAltair(s any) (*ethpb.BeaconStateAltair, error) {
 	pbState, ok := s.(*ethpb.BeaconStateAltair)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateAltair")
@@ -572,7 +674,7 @@ func ProtobufBeaconStateAltair(s interface{}) (*ethpb.BeaconStateAltair, error) 
 
 // ProtobufBeaconStateBellatrix transforms an input into beacon state Bellatrix in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateBellatrix(s interface{}) (*ethpb.BeaconStateBellatrix, error) {
+func ProtobufBeaconStateBellatrix(s any) (*ethpb.BeaconStateBellatrix, error) {
 	pbState, ok := s.(*ethpb.BeaconStateBellatrix)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateBellatrix")
@@ -582,7 +684,7 @@ func ProtobufBeaconStateBellatrix(s interface{}) (*ethpb.BeaconStateBellatrix, e
 
 // ProtobufBeaconStateCapella transforms an input into beacon state Capella in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateCapella(s interface{}) (*ethpb.BeaconStateCapella, error) {
+func ProtobufBeaconStateCapella(s any) (*ethpb.BeaconStateCapella, error) {
 	pbState, ok := s.(*ethpb.BeaconStateCapella)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateCapella")
@@ -592,7 +694,7 @@ func ProtobufBeaconStateCapella(s interface{}) (*ethpb.BeaconStateCapella, error
 
 // ProtobufBeaconStateDeneb transforms an input into beacon state Deneb in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateDeneb(s interface{}) (*ethpb.BeaconStateDeneb, error) {
+func ProtobufBeaconStateDeneb(s any) (*ethpb.BeaconStateDeneb, error) {
 	pbState, ok := s.(*ethpb.BeaconStateDeneb)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateDeneb")
@@ -602,7 +704,7 @@ func ProtobufBeaconStateDeneb(s interface{}) (*ethpb.BeaconStateDeneb, error) {
 
 // ProtobufBeaconStateElectra transforms an input into beacon state Electra in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateElectra(s interface{}) (*ethpb.BeaconStateElectra, error) {
+func ProtobufBeaconStateElectra(s any) (*ethpb.BeaconStateElectra, error) {
 	pbState, ok := s.(*ethpb.BeaconStateElectra)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateElectra")
@@ -612,7 +714,7 @@ func ProtobufBeaconStateElectra(s interface{}) (*ethpb.BeaconStateElectra, error
 
 // ProtobufBeaconStateFulu transforms an input into beacon state Fulu in the form of protobuf.
 // Error is returned if the input is not type protobuf beacon state.
-func ProtobufBeaconStateFulu(s interface{}) (*ethpb.BeaconStateFulu, error) {
+func ProtobufBeaconStateFulu(s any) (*ethpb.BeaconStateFulu, error) {
 	pbState, ok := s.(*ethpb.BeaconStateFulu)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateFulu")

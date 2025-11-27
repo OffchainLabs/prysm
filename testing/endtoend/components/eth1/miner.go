@@ -191,7 +191,7 @@ func (m *Miner) Start(ctx context.Context) error {
 	// give the miner start a couple of tries, since the p2p networking check is flaky
 	var retryErr error
 	var minerLog *os.File
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		minerLog, retryErr = m.initAttempt(ctx, attempt)
 		if retryErr == nil {
 			log.Infof("Miner started after %d retries", attempt)

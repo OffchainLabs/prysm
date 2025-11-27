@@ -96,7 +96,7 @@ func callWithdrawalEndpoints(ctx context.Context, host string, request []*struct
 	if err != nil {
 		return err
 	}
-	data, ok := spec.Data.(map[string]interface{})
+	data, ok := spec.Data.(map[string]any)
 	if !ok {
 		return errors.New("config has incorrect structure")
 	}

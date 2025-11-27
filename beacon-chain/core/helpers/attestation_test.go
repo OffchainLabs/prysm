@@ -54,7 +54,7 @@ func TestAttestation_ComputeSubnetForAttestation(t *testing.T) {
 	validatorCount := committeeCount * params.BeaconConfig().TargetCommitteeSize
 	validators := make([]*ethpb.Validator, validatorCount)
 
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		k := make([]byte, 48)
 		copy(k, strconv.Itoa(i))
 		validators[i] = &ethpb.Validator{

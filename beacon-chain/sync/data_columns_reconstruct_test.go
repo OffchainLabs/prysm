@@ -2,10 +2,9 @@ package sync
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
-
-	"math/rand"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
@@ -13,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
@@ -135,4 +135,118 @@ func TestComputeRandomDelay(t *testing.T) {
 	waitingTime := service.computeRandomDelay(slotStartTime)
 	fmt.Print(waitingTime)
 	require.Equal(t, expected, waitingTime)
+}
+
+func TestSemiSupernodeReconstruction(t *testing.T) {
+	const blobCount = 4
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
+
+	ctx := t.Context()
+
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	roBlock, _, verifiedRoDataColumns := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+	require.Equal(t, numberOfColumns, uint64(len(verifiedRoDataColumns)))
+
+	minimumCount := peerdas.MinimumColumnCountToReconstruct()
+
+	t.Run("semi-supernode reconstruction with exactly 64 columns", func(t *testing.T) {
+		// Test that reconstruction works with exactly the minimum number of columns (64).
+		// This simulates semi-supernode mode which custodies exactly 64 columns.
+		require.Equal(t, uint64(64), minimumCount, "Expected minimum column count to be 64")
+
+		chainService := &mockChain.ChainService{}
+		p2p := p2ptest.NewTestP2P(t)
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		service := NewService(
+			ctx,
+			WithP2P(p2p),
+			WithDataColumnStorage(storage),
+			WithChainService(chainService),
+			WithOperationNotifier(chainService.OperationNotifier()),
+		)
+
+		// Use exactly 64 columns (minimum for reconstruction) to simulate semi-supernode mode.
+		// Select the first 64 columns.
+		semiSupernodeColumns := verifiedRoDataColumns[:minimumCount]
+
+		err = service.receiveDataColumnSidecars(ctx, semiSupernodeColumns)
+		require.NoError(t, err)
+
+		err = storage.Save(semiSupernodeColumns)
+		require.NoError(t, err)
+
+		require.Equal(t, false, p2p.BroadcastCalled.Load())
+
+		// Check received indices before reconstruction.
+		require.Equal(t, minimumCount, uint64(len(chainService.DataColumns)))
+		for i, actual := range chainService.DataColumns {
+			require.Equal(t, uint64(i), actual.Index)
+		}
+
+		// Run the reconstruction.
+		err = service.processDataColumnSidecarsFromReconstruction(ctx, verifiedRoDataColumns[0])
+		require.NoError(t, err)
+
+		// Verify we can reconstruct all columns from just 64.
+		// The node should have received the initial 64 columns.
+		if len(chainService.DataColumns) < int(minimumCount) {
+			t.Fatalf("Expected at least %d columns but got %d", minimumCount, len(chainService.DataColumns))
+		}
+
+		block := roBlock.Block()
+		slot := block.Slot()
+		proposerIndex := block.ProposerIndex()
+
+		// Verify that we have seen at least the minimum number of columns.
+		seenCount := 0
+		for i := range numberOfColumns {
+			if service.hasSeenDataColumnIndex(slot, proposerIndex, i) {
+				seenCount++
+			}
+		}
+		if seenCount < int(minimumCount) {
+			t.Fatalf("Expected to see at least %d columns but saw %d", minimumCount, seenCount)
+		}
+	})
+
+	t.Run("semi-supernode reconstruction with random 64 columns", func(t *testing.T) {
+		// Test reconstruction with 64 non-contiguous columns to simulate a real scenario.
+		chainService := &mockChain.ChainService{}
+		p2p := p2ptest.NewTestP2P(t)
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		service := NewService(
+			ctx,
+			WithP2P(p2p),
+			WithDataColumnStorage(storage),
+			WithChainService(chainService),
+			WithOperationNotifier(chainService.OperationNotifier()),
+		)
+
+		// Select every other column to get 64 non-contiguous columns.
+		semiSupernodeColumns := make([]blocks.VerifiedRODataColumn, 0, minimumCount)
+		for i := uint64(0); i < numberOfColumns && uint64(len(semiSupernodeColumns)) < minimumCount; i += 2 {
+			semiSupernodeColumns = append(semiSupernodeColumns, verifiedRoDataColumns[i])
+		}
+		require.Equal(t, minimumCount, uint64(len(semiSupernodeColumns)))
+
+		err = service.receiveDataColumnSidecars(ctx, semiSupernodeColumns)
+		require.NoError(t, err)
+
+		err = storage.Save(semiSupernodeColumns)
+		require.NoError(t, err)
+
+		// Run the reconstruction.
+		err = service.processDataColumnSidecarsFromReconstruction(ctx, semiSupernodeColumns[0])
+		require.NoError(t, err)
+
+		// Verify we received the columns.
+		if len(chainService.DataColumns) < int(minimumCount) {
+			t.Fatalf("Expected at least %d columns but got %d", minimumCount, len(chainService.DataColumns))
+		}
+	})
 }

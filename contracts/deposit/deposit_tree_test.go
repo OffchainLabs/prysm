@@ -34,7 +34,7 @@ func TestDepositTrieRoot_OK(t *testing.T) {
 
 	testAcc.TxOpts.Value = depositcontract.Amount32Eth()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		data := depositDataItems[i]
 		var dataRoot [32]byte
 		copy(dataRoot[:], depositDataRoots[i])
@@ -75,7 +75,7 @@ func TestDepositTrieRoot_Fail(t *testing.T) {
 	require.NoError(t, err)
 	testAcc.TxOpts.Value = depositcontract.Amount32Eth()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		data := depositDataItems[i]
 		var dataRoot [32]byte
 		copy(dataRoot[:], depositDataRoots[i])

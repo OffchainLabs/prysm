@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server"
@@ -133,9 +133,7 @@ func (s *Service) ComputeValidatorPerformance(
 		}
 	}
 	// Depending on the indices and public keys given, results might not be sorted.
-	sort.Slice(validatorIndices, func(i, j int) bool {
-		return validatorIndices[i] < validatorIndices[j]
-	})
+	slices.Sort(validatorIndices)
 
 	currentEpoch := coreTime.CurrentEpoch(headState)
 	responseCap = len(validatorIndices)
@@ -239,9 +237,7 @@ func (s *Service) IndividualVotes(
 			filteredIndices = append(filteredIndices, index)
 		}
 	}
-	sort.Slice(filteredIndices, func(i, j int) bool {
-		return filteredIndices[i] < filteredIndices[j]
-	})
+	slices.Sort(filteredIndices)
 
 	var v []*precompute.Validator
 	var bal *precompute.Balance

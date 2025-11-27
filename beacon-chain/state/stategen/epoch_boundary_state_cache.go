@@ -26,7 +26,7 @@ type slotRootInfo struct {
 
 // slotKeyFn takes the string representation of the slot to be used as key
 // to retrieve root.
-func slotKeyFn(obj interface{}) (string, error) {
+func slotKeyFn(obj any) (string, error) {
 	s, ok := obj.(*slotRootInfo)
 	if !ok {
 		return "", errNotSlotRootInfo
@@ -42,7 +42,7 @@ type rootStateInfo struct {
 
 // rootKeyFn takes the string representation of the block root to be used as key
 // to retrieve epoch boundary state.
-func rootKeyFn(obj interface{}) (string, error) {
+func rootKeyFn(obj any) (string, error) {
 	s, ok := obj.(*rootStateInfo)
 	if !ok {
 		return "", errNotRootStateInfo
@@ -184,7 +184,7 @@ func trim(queue *cache.FIFO, maxSize uint64) {
 }
 
 // popProcessNoopFunc is a no-op function that never returns an error.
-func popProcessNoopFunc(_ interface{}, _ bool) error {
+func popProcessNoopFunc(_ any, _ bool) error {
 	return nil
 }
 

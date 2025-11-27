@@ -15,7 +15,7 @@ var errExcessMaxLength = errors.Errorf("provided header exceeds the max varint l
 // the length of the remaining bytes in the reader.
 func readVarint(r io.Reader) (uint64, error) {
 	b := make([]byte, 0, maxVarintLength)
-	for i := 0; i < maxVarintLength; i++ {
+	for i := range maxVarintLength {
 		b1 := make([]byte, 1)
 		n, err := r.Read(b1)
 		if err != nil {

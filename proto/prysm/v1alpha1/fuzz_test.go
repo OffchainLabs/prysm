@@ -13,7 +13,7 @@ func fuzzCopies[T any, C eth.Copier[T]](t *testing.T, obj C) {
 	fuzzer := fuzz.NewWithSeed(0)
 	amount := 1000
 	t.Run(fmt.Sprintf("%T", obj), func(t *testing.T) {
-		for i := 0; i < amount; i++ {
+		for range amount {
 			fuzzer.Fuzz(obj) // Populate thing with random values
 
 			got := obj.Copy()

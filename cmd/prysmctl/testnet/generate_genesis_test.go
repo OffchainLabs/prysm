@@ -33,7 +33,7 @@ func Test_genesisStateFromJSONValidators(t *testing.T) {
 func createGenesisDepositData(t *testing.T, numKeys int) []*depositDataJSON {
 	pubKeys := make([]bls.PublicKey, numKeys)
 	privKeys := make([]bls.SecretKey, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		randKey, err := bls.RandKey()
 		require.NoError(t, err)
 		privKeys[i] = randKey
@@ -42,7 +42,7 @@ func createGenesisDepositData(t *testing.T, numKeys int) []*depositDataJSON {
 	dataList, _, err := interop.DepositDataFromKeys(privKeys, pubKeys)
 	require.NoError(t, err)
 	jsonData := make([]*depositDataJSON, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		dataRoot, err := dataList[i].HashTreeRoot()
 		require.NoError(t, err)
 		jsonData[i] = &depositDataJSON{

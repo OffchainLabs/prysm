@@ -35,7 +35,7 @@ func TestPool_InsertProposerSlashing(t *testing.T) {
 
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	slashings := make([]*ethpb.ProposerSlashing, 20)
-	for i := 0; i < len(slashings); i++ {
+	for i := range slashings {
 		sl, err := util.GenerateProposerSlashingForValidator(beaconState, privKeys[i], primitives.ValidatorIndex(i))
 		require.NoError(t, err)
 		slashings[i] = sl
@@ -185,7 +185,7 @@ func TestPool_InsertProposerSlashing_SigFailsVerify_ClearPool(t *testing.T) {
 	params.OverrideBeaconConfig(conf)
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	slashings := make([]*ethpb.ProposerSlashing, 2)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		sl, err := util.GenerateProposerSlashingForValidator(beaconState, privKeys[i], primitives.ValidatorIndex(i))
 		require.NoError(t, err)
 		slashings[i] = sl
@@ -328,7 +328,7 @@ func TestPool_PendingProposerSlashings(t *testing.T) {
 	}
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	slashings := make([]*ethpb.ProposerSlashing, 20)
-	for i := 0; i < len(slashings); i++ {
+	for i := range slashings {
 		sl, err := util.GenerateProposerSlashingForValidator(beaconState, privKeys[i], primitives.ValidatorIndex(i))
 		require.NoError(t, err)
 		slashings[i] = sl
@@ -395,7 +395,7 @@ func TestPool_PendingProposerSlashings_Slashed(t *testing.T) {
 	slashings := make([]*ethpb.ProposerSlashing, 32)
 	slashings2 := make([]*ethpb.ProposerSlashing, 32)
 	result := make([]*ethpb.ProposerSlashing, 32)
-	for i := 0; i < len(slashings); i++ {
+	for i := range slashings {
 		sl, err := util.GenerateProposerSlashingForValidator(beaconState, privKeys[i], primitives.ValidatorIndex(i))
 		require.NoError(t, err)
 		slashings[i] = sl

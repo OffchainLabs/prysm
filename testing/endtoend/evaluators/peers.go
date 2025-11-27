@@ -55,7 +55,7 @@ func peersTest(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	return baseErr
 }
 
-func wrapError(err error, format string, args ...interface{}) error {
+func wrapError(err error, format string, args ...any) error {
 	if err == nil {
 		err = errors.New("")
 	}

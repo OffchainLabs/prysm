@@ -18,9 +18,8 @@ func BenchmarkAppendBalance(b *testing.B) {
 	}
 
 	ref := st.Copy()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		require.NoError(b, ref.AppendBalance(uint64(i)))
 		ref = st.Copy()
 	}
@@ -36,9 +35,8 @@ func BenchmarkAppendInactivityScore(b *testing.B) {
 	}
 
 	ref := st.Copy()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		require.NoError(b, ref.AppendInactivityScore(uint64(i)))
 		ref = st.Copy()
 	}

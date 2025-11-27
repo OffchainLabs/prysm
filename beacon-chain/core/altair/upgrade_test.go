@@ -33,7 +33,7 @@ func TestTranslateParticipation(t *testing.T) {
 	r, err := helpers.BlockRootAtSlot(s, 0)
 	require.NoError(t, err)
 	var pendingAtts []*ethpb.PendingAttestation
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		pendingAtts = append(pendingAtts, &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
 				CommitteeIndex:  primitives.CommitteeIndex(i),

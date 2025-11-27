@@ -69,7 +69,7 @@ func TestServiceInit(t *testing.T) {
 	todo := make([]batch, 0)
 	todo = testReadN(ctx, t, pool.todoChan, nWorkers, todo)
 	require.Equal(t, nWorkers, len(todo))
-	for i := 0; i < remaining; i++ {
+	for i := range remaining {
 		b := todo[i]
 		if b.state == batchSequenced {
 			b.state = batchImportable
@@ -96,7 +96,7 @@ func TestMinimumBackfillSlot(t *testing.T) {
 }
 
 func testReadN(ctx context.Context, t *testing.T, c chan batch, n int, into []batch) []batch {
-	for i := 0; i < n; i++ {
+	for range n {
 		select {
 		case b := <-c:
 			into = append(into, b)

@@ -51,7 +51,7 @@ type CommitteeCache struct {
 }
 
 // committeeKeyFn takes the seed as the key to retrieve shuffled indices of a committee in a given epoch.
-func committeeKeyFn(obj interface{}) (string, error) {
+func committeeKeyFn(obj any) (string, error) {
 	info, ok := obj.(*Committees)
 	if !ok {
 		return "", ErrNotCommittee

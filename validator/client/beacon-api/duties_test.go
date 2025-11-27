@@ -656,7 +656,7 @@ func TestGetDutiesForEpoch_Error(t *testing.T) {
 			).AnyTimes()
 
 			vals := make([]validatorForDuty, len(pubkeys))
-			for i := 0; i < len(pubkeys); i++ {
+			for i := range pubkeys {
 				vals[i] = validatorForDuty{
 					pubkey: pubkeys[i],
 					index:  validatorIndices[i],
@@ -883,7 +883,7 @@ func TestGetDutiesForEpoch_Valid(t *testing.T) {
 
 			validatorClient := &beaconApiValidatorClient{dutiesProvider: dutiesProvider}
 			vals := make([]validatorForDuty, len(pubkeys))
-			for i := 0; i < len(pubkeys); i++ {
+			for i := range pubkeys {
 				vals[i] = validatorForDuty{
 					pubkey: pubkeys[i],
 					index:  validatorIndices[i],
@@ -933,7 +933,7 @@ func TestGetDuties_Valid(t *testing.T) {
 			pubkeys := make([][]byte, valCount)
 			validatorIndices := make([]primitives.ValidatorIndex, valCount)
 			vals := make([]validatorForDuty, valCount)
-			for i := 0; i < valCount; i++ {
+			for i := range valCount {
 				pubkeys[i] = []byte(strconv.Itoa(i))
 				validatorIndices[i] = primitives.ValidatorIndex(i)
 				vals[i] = validatorForDuty{
@@ -1399,7 +1399,7 @@ func generateValidSyncDuties(pubkeys [][]byte, validatorIndices []primitives.Val
 
 // We will use a reverse function to easily make sure that the current epoch and next epoch data returned by dutiesForEpoch
 // are not the same
-func reverseSlice[T interface{}](slice []T) []T {
+func reverseSlice[T any](slice []T) []T {
 	reversedSlice := make([]T, len(slice))
 	for i := range slice {
 		reversedSlice[len(reversedSlice)-1-i] = slice[i]

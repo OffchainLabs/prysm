@@ -46,7 +46,7 @@ func TestProposeAttestation(t *testing.T) {
 	require.NoError(t, err)
 
 	validators := make([]*ethpb.Validator, 64)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -253,12 +253,11 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 		Slot:           3*params.BeaconConfig().SlotsPerEpoch + 1,
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var wg sync.WaitGroup
 		wg.Add(5000) // for 5000 concurrent accesses
 
-		for j := 0; j < 5000; j++ {
+		for range 5000 {
 			go func() {
 				defer wg.Done()
 				_, err := attesterServer.GetAttestationData(b.Context(), req)
@@ -577,7 +576,7 @@ func TestServer_SubscribeCommitteeSubnets_MultipleSlots(t *testing.T) {
 	randGen := rand.New(s)
 
 	validators := make([]*ethpb.Validator, 64)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,

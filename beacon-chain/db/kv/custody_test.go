@@ -67,6 +67,7 @@ func getSubscriptionStatusFromDB(t *testing.T, db *Store) bool {
 	return subscribed
 }
 
+
 func TestUpdateCustodyInfo(t *testing.T) {
 	ctx := t.Context()
 
@@ -274,6 +275,17 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, false, stored)
 	})
 
+	t.Run("initial update with empty database - set to true", func(t *testing.T) {
+		db := setupDB(t)
+
+		prev, err := db.UpdateSubscribedToAllDataSubnets(ctx, true)
+		require.NoError(t, err)
+		require.Equal(t, false, prev)
+
+		stored := getSubscriptionStatusFromDB(t, db)
+		require.Equal(t, true, stored)
+	})
+
 	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
 		db := setupDB(t)
 
@@ -288,7 +300,7 @@ func TestUpdateSubscribedToAllDataSubnets(t *testing.T) {
 		require.Equal(t, true, stored)
 	})
 
-	t.Run("attempt to update from true to false (should not change)", func(t *testing.T) {
+	t.Run("update from true to true (no change)", func(t *testing.T) {
 		db := setupDB(t)
 
 		_, err := db.UpdateSubscribedToAllDataSubnets(ctx, true)

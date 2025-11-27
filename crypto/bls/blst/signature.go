@@ -144,7 +144,7 @@ func (s *Signature) AggregateVerify(pubKeys []common.PublicKey, msgs [][32]byte)
 	}
 	msgSlices := make([][]byte, len(msgs))
 	rawKeys := make([]*blstPublicKey, len(msgs))
-	for i := 0; i < size; i++ {
+	for i := range size {
 		msgSlices[i] = msgs[i][:]
 		rawKeys[i] = pubKeys[i].(*PublicKey).p
 	}
@@ -168,7 +168,7 @@ func (s *Signature) FastAggregateVerify(pubKeys []common.PublicKey, msg [32]byte
 		return false
 	}
 	rawKeys := make([]*blstPublicKey, len(pubKeys))
-	for i := 0; i < len(pubKeys); i++ {
+	for i := range pubKeys {
 		rawKeys[i] = pubKeys[i].(*PublicKey).p
 	}
 	return s.s.FastAggregateVerify(true, rawKeys, msg[:], dst)
@@ -206,7 +206,7 @@ func AggregateSignatures(sigs []common.Signature) common.Signature {
 	}
 
 	rawSigs := make([]*blstSignature, len(sigs))
-	for i := 0; i < len(sigs); i++ {
+	for i := range sigs {
 		rawSigs[i] = sigs[i].(*Signature).s
 	}
 
@@ -246,7 +246,7 @@ func VerifyMultipleSignatures(sigs [][]byte, msgs [][32]byte, pubKeys []common.P
 	mulP1Aff := make([]*blstPublicKey, length)
 	rawMsgs := make([]blst.Message, length)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		mulP1Aff[i] = pubKeys[i].(*PublicKey).p
 		rawMsgs[i] = msgs[i][:]
 	}

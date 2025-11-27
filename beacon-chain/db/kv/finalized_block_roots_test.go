@@ -161,7 +161,7 @@ func TestStore_IsFinalizedChildBlock(t *testing.T) {
 		require.NoError(t, db.SaveFinalizedCheckpoint(ctx, cp))
 
 		// All blocks up to slotsPerEpoch should have a finalized child block.
-		for i := uint64(0); i < slotsPerEpoch; i++ {
+		for i := range slotsPerEpoch {
 			root, err := blks[i].Block().HashTreeRoot()
 			require.NoError(t, err)
 			assert.Equal(t, true, db.IsFinalizedBlock(ctx, root), "Block at index %d was not considered finalized in the index", i)

@@ -89,7 +89,7 @@ func TestDeepEqualProto(t *testing.T) {
 func Test_IsProto(t *testing.T) {
 	tests := []struct {
 		name string
-		item interface{}
+		item any
 		want bool
 	}{
 		{

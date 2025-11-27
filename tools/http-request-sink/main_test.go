@@ -31,7 +31,7 @@ func Test_parseAndCaptureRequest(t *testing.T) {
 	httpReq, err := http.NewRequest("GET", "/", bytes.NewBuffer(enc))
 	require.NoError(t, err)
 
-	reqContent := map[string]interface{}{}
+	reqContent := map[string]any{}
 	err = parseRequest(httpReq, &reqContent)
 	require.NoError(t, err)
 
@@ -52,7 +52,7 @@ func Test_parseAndCaptureRequest(t *testing.T) {
 	fileContents, err := io.ReadAll(f)
 	require.NoError(t, err)
 
-	receivedContent := map[string]interface{}{}
+	receivedContent := map[string]any{}
 	err = json.Unmarshal(fileContents, &receivedContent)
 	require.NoError(t, err)
 

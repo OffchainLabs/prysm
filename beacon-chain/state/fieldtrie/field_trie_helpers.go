@@ -31,7 +31,7 @@ func (f *FieldTrie) validateIndices(idxs []uint64) error {
 	return nil
 }
 
-func validateElements(field types.FieldIndex, fieldInfo types.DataType, elements interface{}, length uint64) error {
+func validateElements(field types.FieldIndex, fieldInfo types.DataType, elements any, length uint64) error {
 	if fieldInfo == types.CompressedArray {
 		comLength, err := field.ElemsInChunk()
 		if err != nil {
@@ -54,7 +54,7 @@ func validateElements(field types.FieldIndex, fieldInfo types.DataType, elements
 }
 
 // fieldConverters converts the corresponding field and the provided elements to the appropriate roots.
-func fieldConverters(field types.FieldIndex, indices []uint64, elements interface{}, convertAll bool) ([][32]byte, error) {
+func fieldConverters(field types.FieldIndex, indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch field {
 	case types.BlockRoots, types.StateRoots, types.RandaoMixes:
 		return convertRoots(indices, elements, convertAll)
@@ -71,7 +71,7 @@ func fieldConverters(field types.FieldIndex, indices []uint64, elements interfac
 	}
 }
 
-func convertRoots(indices []uint64, elements interface{}, convertAll bool) ([][32]byte, error) {
+func convertRoots(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch castedType := elements.(type) {
 	case customtypes.BlockRoots:
 		return handle32ByteMVslice(multi_value_slice.BuildEmptyCompositeSlice[[32]byte](castedType), indices, convertAll)
@@ -86,7 +86,7 @@ func convertRoots(indices []uint64, elements interface{}, convertAll bool) ([][3
 	}
 }
 
-func convertEth1DataVotes(indices []uint64, elements interface{}, convertAll bool) ([][32]byte, error) {
+func convertEth1DataVotes(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	val, ok := elements.([]*ethpb.Eth1Data)
 	if !ok {
 		return nil, errors.Errorf("Wanted type of %T but got %T", []*ethpb.Eth1Data{}, elements)
@@ -94,7 +94,7 @@ func convertEth1DataVotes(indices []uint64, elements interface{}, convertAll boo
 	return handleEth1DataSlice(val, indices, convertAll)
 }
 
-func convertValidators(indices []uint64, elements interface{}, convertAll bool) ([][32]byte, error) {
+func convertValidators(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
 	case []*ethpb.Validator:
 		return handleValidatorMVSlice(multi_value_slice.BuildEmptyCompositeSlice[*ethpb.Validator](casted), indices, convertAll)
@@ -105,7 +105,7 @@ func convertValidators(indices []uint64, elements interface{}, convertAll bool) 
 	}
 }
 
-func convertAttestations(indices []uint64, elements interface{}, convertAll bool) ([][32]byte, error) {
+func convertAttestations(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	val, ok := elements.([]*ethpb.PendingAttestation)
 	if !ok {
 		return nil, errors.Errorf("Wanted type of %T but got %T", []*ethpb.PendingAttestation{}, elements)
@@ -113,7 +113,7 @@ func convertAttestations(indices []uint64, elements interface{}, convertAll bool
 	return handlePendingAttestationSlice(val, indices, convertAll)
 }
 
-func convertBalances(indices []uint64, elements interface{}, convertAll bool) ([][32]byte, error) {
+func convertBalances(indices []uint64, elements any, convertAll bool) ([][32]byte, error) {
 	switch casted := elements.(type) {
 	case []uint64:
 		return handleBalanceMVSlice(multi_value_slice.BuildEmptyCompositeSlice[uint64](casted), indices, convertAll)

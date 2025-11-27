@@ -122,7 +122,7 @@ func TestBLSToExecChangesForInclusion(t *testing.T) {
 	})
 	t.Run("more than MaxBlsToExecutionChanges in pool", func(t *testing.T) {
 		pool := NewPool()
-		for i := uint64(0); i < numValidators; i++ {
+		for i := range numValidators {
 			pool.InsertBLSToExecChange(signedChanges[i])
 		}
 		changes, err := pool.BLSToExecChangesForInclusion(st)
@@ -137,7 +137,7 @@ func TestBLSToExecChangesForInclusion(t *testing.T) {
 		pool := NewPool()
 		saveByte := signedChanges[1].Message.FromBlsPubkey[5]
 		signedChanges[1].Message.FromBlsPubkey[5] = 0xff
-		for i := uint64(0); i < numValidators; i++ {
+		for i := range numValidators {
 			pool.InsertBLSToExecChange(signedChanges[i])
 		}
 		changes, err := pool.BLSToExecChangesForInclusion(st)
@@ -149,7 +149,7 @@ func TestBLSToExecChangesForInclusion(t *testing.T) {
 	t.Run("One Bad Signature", func(t *testing.T) {
 		pool := NewPool()
 		copy(signedChanges[30].Signature, signedChanges[31].Signature)
-		for i := uint64(0); i < numValidators; i++ {
+		for i := range numValidators {
 			pool.InsertBLSToExecChange(signedChanges[i])
 		}
 		changes, err := pool.BLSToExecChangesForInclusion(st)
