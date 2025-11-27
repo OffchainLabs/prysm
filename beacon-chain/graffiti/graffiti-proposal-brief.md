@@ -1,7 +1,8 @@
 # Graffiti Version Info Implementation
 
 ## Summary
-Add automatic EL+CL version info to block graffiti following [ethereum/execution-apis#517](https://github.com/ethereum/execution-apis/pull/517). Format: `GE168dPR63af` (Geth commit 168d + Prysm commit 63af). User graffiti always takes precedence.
+Add automatic EL+CL version info to block graffiti following [ethereum/execution-apis#517](https://github.com/ethereum/execution-apis/pull/517). Uses the [flexible standard](https://hackmd.io/@wmoBhF17RAOH2NZ5bNXJVg/BJX2c9gja) to pack client info into leftover space after user graffiti.
+
 More details: https://github.com/ethereum/execution-apis/blob/main/src/engine/identification.md 
 
 ## Implementation
@@ -20,21 +21,45 @@ type GraffitiInfo struct {
 ```
 
 ### Flow
-1. **Startup**: Parse flags, create GraffitiInfo with user graffiti and CL info. If user graffiti is set, log an informational message that custom graffiti overrides automatic client version reporting which helps track client diversity.
+1. **Startup**: Parse flags, create GraffitiInfo with user graffiti and CL info.
 2. **Wiring**: Pass struct to both execution service and RPC validator server
 3. **Runtime**: Execution service goroutine periodically calls `engine_getClientVersionV1` and updates EL fields
 4. **Block Proposal**: RPC validator server calls `GenerateGraffiti()` to get formatted graffiti
 
-### Priority Order
+### Flexible Graffiti Format
+Packs as much client info as space allows (after user graffiti):
+
+| Available Space | Format | Example |
+|----------------|--------|---------|
+| ≥12 bytes | `EL(2)+commit(4)+CL(2)+commit(4)+user` | `GE168dPR63afBob` |
+| 8-11 bytes | `EL(2)+commit(2)+CL(2)+commit(2)+user` | `GE16PR63my node here` |
+| 4-7 bytes | `EL(2)+CL(2)+user` | `GEPRthis is my graffiti msg` |
+| 2-3 bytes | `EL(2)+user` | `GEalmost full graffiti message` |
+| <2 bytes | user only | `full 32 byte user graffiti here` |
+
 ```go
 func (g *GraffitiInfo) GenerateGraffiti() [32]byte {
-    if userGraffiti != "" {
-        return userGraffiti           // User graffiti always wins
+    available := 32 - len(userGraffiti)
+
+    if elCode == "" {
+        if userGraffiti != "" {
+            return userGraffiti
+        }
+        return "Prysm/" + version  // Fallback if no EL info
     }
-    if elCode != "" {
-        return elCode + elCommit + clCode + clCommit  // "GE168dPR63af"
+
+    switch {
+    case available >= 12:
+        return elCode + elCommit4 + clCode + clCommit4 + userGraffiti
+    case available >= 8:
+        return elCode + elCommit2 + clCode + clCommit2 + userGraffiti
+    case available >= 4:
+        return elCode + clCode + userGraffiti
+    case available >= 2:
+        return elCode + userGraffiti
+    default:
+        return userGraffiti
     }
-    return "Prysm/" + version       // Fallback if no EL info
 }
 ```
 
