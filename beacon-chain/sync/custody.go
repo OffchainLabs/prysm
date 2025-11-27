@@ -27,6 +27,24 @@ func (s *Service) maintainCustodyInfo() {
 	})
 }
 
+// refreshCustodyMetrics refreshes both P2P and DB custody metrics with current values.
+// This is used in early return paths to ensure metrics are populated even when no update occurs.
+func (s *Service) refreshCustodyMetrics() {
+	ctx, cancel := context.WithTimeout(s.ctx, 1*time.Second)
+	defer cancel()
+
+	// Refresh P2P metric
+	if slot, err := s.cfg.p2p.EarliestAvailableSlot(ctx); err == nil {
+		custody.UpdateP2PMetric(slot)
+	}
+
+	// Refresh DB metric using read-only operation
+	if _, _, err := s.cfg.beaconDB.GetCustodyInfo(ctx); err != nil {
+		// GetCustodyInfo already updates the metric internally
+		log.WithError(err).Debug("Failed to get custody info for metrics")
+	}
+}
+
 func (s *Service) updateCustodyInfoIfNeeded() error {
 	const minimumPeerCount = 1
 
@@ -45,21 +63,7 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 	// If the actual custody group count is already equal to the target, skip the update.
 	if actualCustodyGrounpCount >= targetCustodyGroupCount {
 		// Refresh metrics when no update is needed (e.g., after restart)
-		// This ensures metrics are populated even when custody info doesn't need updating
-		ctx, cancel := context.WithTimeout(s.ctx, 1*time.Second)
-		defer cancel()
-
-		// Refresh P2P metric
-		if slot, err := s.cfg.p2p.EarliestAvailableSlot(ctx); err == nil {
-			custody.UpdateP2PMetric(slot)
-		}
-
-		// Refresh DB metric using read-only operation
-		if _, _, err := s.cfg.beaconDB.GetCustodyInfo(ctx); err != nil {
-			// GetCustodyInfo already updates the metric internally
-			log.WithError(err).Debug("Failed to get custody info for metrics")
-		}
-
+		s.refreshCustodyMetrics()
 		return nil
 	}
 
@@ -84,21 +88,7 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 
 	if !enoughPeers {
 		// Refresh metrics when insufficient peers (e.g., after restart)
-		// This ensures metrics are populated even when we can't update due to peer constraints
-		ctx, cancel := context.WithTimeout(s.ctx, 1*time.Second)
-		defer cancel()
-
-		// Refresh P2P metric
-		if slot, err := s.cfg.p2p.EarliestAvailableSlot(ctx); err == nil {
-			custody.UpdateP2PMetric(slot)
-		}
-
-		// Refresh DB metric using read-only operation
-		if _, _, err := s.cfg.beaconDB.GetCustodyInfo(ctx); err != nil {
-			// GetCustodyInfo already updates the metric internally
-			log.WithError(err).Debug("Failed to get custody info for metrics")
-		}
-
+		s.refreshCustodyMetrics()
 		return nil
 	}
 
