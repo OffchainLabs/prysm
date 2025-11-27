@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/custody"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -21,6 +22,9 @@ func (s *Service) EarliestAvailableSlot(ctx context.Context) (primitives.Slot, e
 	if err != nil {
 		return 0, errors.Wrap(err, "wait for custody info")
 	}
+
+	// Update metric whenever the value is accessed
+	custody.UpdateP2PMetric(custodyInfo.earliestAvailableSlot)
 
 	return custodyInfo.earliestAvailableSlot, nil
 }
@@ -80,11 +84,15 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 		close(s.custodyInfoSet)
 
+		// Update P2P metric when initializing custody info
+		custody.UpdateP2PMetric(earliestAvailableSlot)
+
 		return earliestAvailableSlot, custodyGroupCount, nil
 	}
 
 	inMemory := s.custodyInfo
 	if custodyGroupCount <= inMemory.groupCount {
+		custody.UpdateP2PMetric(inMemory.earliestAvailableSlot)
 		return inMemory.earliestAvailableSlot, inMemory.groupCount, nil
 	}
 
@@ -97,6 +105,7 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 	if custodyGroupCount <= samplesPerSlot {
 		inMemory.groupCount = custodyGroupCount
+		custody.UpdateP2PMetric(inMemory.earliestAvailableSlot)
 		return inMemory.earliestAvailableSlot, custodyGroupCount, nil
 	}
 
@@ -107,11 +116,15 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 	if earliestAvailableSlot < fuluForkSlot {
 		inMemory.groupCount = custodyGroupCount
+		custody.UpdateP2PMetric(inMemory.earliestAvailableSlot)
 		return inMemory.earliestAvailableSlot, custodyGroupCount, nil
 	}
 
 	inMemory.earliestAvailableSlot = earliestAvailableSlot
 	inMemory.groupCount = custodyGroupCount
+
+	custody.UpdateP2PMetric(earliestAvailableSlot)
+
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
@@ -133,6 +146,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
 		s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
+		custody.UpdateP2PMetric(earliestAvailableSlot)
 		return nil
 	}
 
@@ -163,6 +177,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	}
 
 	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
+	custody.UpdateP2PMetric(earliestAvailableSlot)
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/custody"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -13,6 +14,44 @@ import (
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
+
+// GetCustodyInfo retrieves the current custody info without updating it.
+// This is a read-only operation that also updates the DB metric.
+func (s *Store) GetCustodyInfo(ctx context.Context) (primitives.Slot, uint64, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.GetCustodyInfo")
+	defer span.End()
+
+	var storedGroupCount uint64
+	var storedEarliestAvailableSlot primitives.Slot
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(custodyBucket)
+		if bucket == nil {
+			return nil
+		}
+
+		// Retrieve the stored custody group count.
+		storedGroupCountBytes := bucket.Get(groupCountKey)
+		if len(storedGroupCountBytes) != 0 {
+			storedGroupCount = bytesutil.BytesToUint64BigEndian(storedGroupCountBytes)
+		}
+
+		// Retrieve the stored earliest available slot.
+		storedEarliestAvailableSlotBytes := bucket.Get(earliestAvailableSlotKey)
+		if len(storedEarliestAvailableSlotBytes) != 0 {
+			storedEarliestAvailableSlot = primitives.Slot(bytesutil.BytesToUint64BigEndian(storedEarliestAvailableSlotBytes))
+		}
+
+		return nil
+	}); err != nil {
+		return 0, 0, err
+	}
+
+	// Update the DB metric with the current value
+	custody.UpdateDBMetric(storedEarliestAvailableSlot)
+
+	return storedEarliestAvailableSlot, storedGroupCount, nil
+}
 
 // UpdateCustodyInfo atomically updates the custody group count only if it is greater than the stored one.
 // In this case, it also updates the earliest available slot with the provided value.
@@ -69,6 +108,10 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 		"earliestAvailableSlot": storedEarliestAvailableSlot,
 		"groupCount":            storedGroupCount,
 	}).Debug("Custody info")
+
+	// Update the DB metric whenever we log the custody info
+	// This ensures the metric is always in sync with what we log
+	custody.UpdateDBMetric(storedEarliestAvailableSlot)
 
 	return storedEarliestAvailableSlot, storedGroupCount, nil
 }
@@ -142,6 +185,9 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 	}
 
 	log.WithField("earliestAvailableSlot", storedEarliestAvailableSlot).Debug("Updated earliest available slot")
+
+	// Update DB metric after successfully updating the earliest available slot
+	custody.UpdateDBMetric(storedEarliestAvailableSlot)
 
 	return nil
 }

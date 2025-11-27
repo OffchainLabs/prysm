@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/custody"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
@@ -495,6 +496,8 @@ func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 	s.earliestAvailableSlot = earliestAvailableSlot
 	s.custodyGroupCount = custodyGroupCount
+
+	custody.UpdateP2PMetric(earliestAvailableSlot)
 
 	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }

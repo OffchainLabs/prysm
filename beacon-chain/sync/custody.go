@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/custody"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -43,6 +44,22 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 
 	// If the actual custody group count is already equal to the target, skip the update.
 	if actualCustodyGrounpCount >= targetCustodyGroupCount {
+		// Refresh metrics when no update is needed (e.g., after restart)
+		// This ensures metrics are populated even when custody info doesn't need updating
+		ctx, cancel := context.WithTimeout(s.ctx, 1*time.Second)
+		defer cancel()
+
+		// Refresh P2P metric
+		if slot, err := s.cfg.p2p.EarliestAvailableSlot(ctx); err == nil {
+			custody.UpdateP2PMetric(slot)
+		}
+
+		// Refresh DB metric using read-only operation
+		if _, _, err := s.cfg.beaconDB.GetCustodyInfo(ctx); err != nil {
+			// GetCustodyInfo already updates the metric internally
+			log.WithError(err).Debug("Failed to get custody info for metrics")
+		}
+
 		return nil
 	}
 
@@ -66,6 +83,22 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 	}
 
 	if !enoughPeers {
+		// Refresh metrics when insufficient peers (e.g., after restart)
+		// This ensures metrics are populated even when we can't update due to peer constraints
+		ctx, cancel := context.WithTimeout(s.ctx, 1*time.Second)
+		defer cancel()
+
+		// Refresh P2P metric
+		if slot, err := s.cfg.p2p.EarliestAvailableSlot(ctx); err == nil {
+			custody.UpdateP2PMetric(slot)
+		}
+
+		// Refresh DB metric using read-only operation
+		if _, _, err := s.cfg.beaconDB.GetCustodyInfo(ctx); err != nil {
+			// GetCustodyInfo already updates the metric internally
+			log.WithError(err).Debug("Failed to get custody info for metrics")
+		}
+
 		return nil
 	}
 
@@ -80,16 +113,12 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "p2p update custody info")
 	}
 
-	// Update the p2p earliest available slot metric
-	earliestAvailableSlotP2P.Set(float64(storedEarliestSlot))
 
-	dbEarliestSlot, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
+	_, _, err = s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
 	if err != nil {
 		return errors.Wrap(err, "beacon db update custody info")
 	}
 
-	// Update the DB earliest available slot metric
-	earliestAvailableSlotDB.Set(float64(dbEarliestSlot))
 
 	return nil
 }

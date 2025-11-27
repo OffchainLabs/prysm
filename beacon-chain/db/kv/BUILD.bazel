@@ -40,6 +40,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/blocks:go_default_library",
+        "//beacon-chain/custody:go_default_library",
         "//beacon-chain/db/filters:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/state:go_default_library",
