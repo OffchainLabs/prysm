@@ -261,10 +261,18 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		// set timestamps for genesis and shanghai fork
 		gen.Timestamp = f.GenesisTime
 		genesis := time.Unix(int64(f.GenesisTime), 0)
-		gen.Config.ShanghaiTime = interop.GethShanghaiTime(genesis, params.BeaconConfig())
-		gen.Config.CancunTime = interop.GethCancunTime(genesis, params.BeaconConfig())
-		gen.Config.PragueTime = interop.GethPragueTime(genesis, params.BeaconConfig())
-		gen.Config.OsakaTime = interop.GethOsakaTime(genesis, params.BeaconConfig())
+		if gen.Config.ShanghaiTime == nil {
+			gen.Config.ShanghaiTime = interop.GethShanghaiTime(genesis, params.BeaconConfig())
+		}
+		if gen.Config.CancunTime == nil {
+			gen.Config.CancunTime = interop.GethCancunTime(genesis, params.BeaconConfig())
+		}
+		if gen.Config.PragueTime == nil {
+			gen.Config.PragueTime = interop.GethPragueTime(genesis, params.BeaconConfig())
+		}
+		if gen.Config.OsakaTime == nil {
+			gen.Config.OsakaTime = interop.GethOsakaTime(genesis, params.BeaconConfig())
+		}
 
 		fields := logrus.Fields{}
 		if gen.Config.ShanghaiTime != nil {
