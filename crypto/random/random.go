@@ -19,16 +19,15 @@ func DeterministicRandomness(seed int64) [32]byte {
 		logrus.WithError(err).Error("Failed to write int64 to bytes buffer")
 		return [32]byte{}
 	}
-	bytes := buf.Bytes()
 
-	return sha256.Sum256(bytes)
+	return sha256.Sum256(buf.Bytes())
 }
 
 // GetRandFieldElement returns a serialized random field element in big-endian
 func GetRandFieldElement(seed int64) [32]byte {
-	bytes := DeterministicRandomness(seed)
+	randomness := DeterministicRandomness(seed)
 	var r fr.Element
-	r.SetBytes(bytes[:])
+	r.SetBytes(randomness[:])
 
 	return GoKZG.SerializeScalar(r)
 }
