@@ -54,6 +54,7 @@ go_library(
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
+        "//beacon-chain/custody:go_default_library",
         "//beacon-chain/das:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
