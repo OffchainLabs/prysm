@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
@@ -20,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
@@ -359,7 +358,7 @@ type NetworkScheduleEntry struct {
 	isFork           bool                            `yaml:"-" json:"-"`
 }
 
-func (e NetworkScheduleEntry) LogFields() log.Fields {
+func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 	gvr := BeaconConfig().GenesisValidatorsRoot
 	root, err := computeForkDataRoot(e.ForkVersion, gvr)
 	if err != nil {
@@ -367,7 +366,7 @@ func (e NetworkScheduleEntry) LogFields() log.Fields {
 			WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
 			WithError(err).Error("Failed to compute fork data root")
 	}
-	fields := log.Fields{
+	fields := logrus.Fields{
 		"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
 		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 		"maxBlobsPerBlock": e.MaxBlobsPerBlock,

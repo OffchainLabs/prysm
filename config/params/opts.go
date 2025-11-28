@@ -2,8 +2,6 @@ package params
 
 import (
 	"fmt"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type Option func(*BeaconChainConfig)
