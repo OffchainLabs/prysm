@@ -322,7 +322,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Values related to fulu
 	MaxRequestDataColumnSidecars:          16384,
 	DataColumnSidecarSubnetCount:          128,
-	NumberOfColumns:                       128,
 	SamplesPerSlot:                        8,
 	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,

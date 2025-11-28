@@ -17,41 +17,9 @@ import (
 )
 
 func TestMinimumColumnsCountToReconstruct(t *testing.T) {
-	testCases := []struct {
-		name            string
-		numberOfColumns uint64
-		expected        uint64
-	}{
-		{
-			name:            "numberOfColumns=128",
-			numberOfColumns: 128,
-			expected:        64,
-		},
-		{
-			name:            "numberOfColumns=129",
-			numberOfColumns: 129,
-			expected:        65,
-		},
-		{
-			name:            "numberOfColumns=130",
-			numberOfColumns: 130,
-			expected:        65,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Set the total number of columns.
-			params.SetupTestConfigCleanup(t)
-			cfg := params.BeaconConfig().Copy()
-			cfg.NumberOfColumns = tc.numberOfColumns
-			params.OverrideBeaconConfig(cfg)
-
-			// Compute the minimum number of columns needed to reconstruct.
-			actual := peerdas.MinimumColumnCountToReconstruct()
-			require.Equal(t, tc.expected, actual)
-		})
-	}
+	const expected = uint64(64)
+	actual := peerdas.MinimumColumnCountToReconstruct()
+	require.Equal(t, expected, actual)
 }
 
 func TestReconstructDataColumnSidecars(t *testing.T) {
@@ -200,7 +168,6 @@ func TestReconstructBlobSidecars(t *testing.T) {
 
 	t.Run("nominal", func(t *testing.T) {
 		const blobCount = 3
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		roBlock, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)
 
@@ -236,7 +203,7 @@ func TestReconstructBlobSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Flatten proofs.
-		cellProofs := make([][]byte, 0, blobCount*numberOfColumns)
+		cellProofs := make([][]byte, 0, blobCount*fieldparams.NumberOfColumns)
 		for _, proofs := range inputProofsPerBlob {
 			for _, proof := range proofs {
 				cellProofs = append(cellProofs, proof[:])
@@ -428,13 +395,12 @@ func TestReconstructBlobs(t *testing.T) {
 }
 
 func TestComputeCellsAndProofsFromFlat(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
 	// Start the trusted setup.
 	err := kzg.Start()
 	require.NoError(t, err)
 
 	t.Run("mismatched blob and proof counts", func(t *testing.T) {
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
-
 		// Create one blob but proofs for two blobs
 		blobs := [][]byte{{}}
 
@@ -447,7 +413,6 @@ func TestComputeCellsAndProofsFromFlat(t *testing.T) {
 
 	t.Run("nominal", func(t *testing.T) {
 		const blobCount = 2
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		// Generate test blobs
 		_, roBlobSidecars := util.GenerateTestElectraBlockWithSidecar(t, [fieldparams.RootLength]byte{}, 42, blobCount)

@@ -206,7 +206,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 176, len(data))
+	assert.Equal(t, 175, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -499,8 +499,6 @@ func TestGetSpec(t *testing.T) {
 			case "MAX_REQUEST_BLOCKS":
 				assert.Equal(t, "1024", v)
 			case "MAX_REQUEST_BLOCKS_DENEB":
-				assert.Equal(t, "128", v)
-			case "NUMBER_OF_COLUMNS":
 				assert.Equal(t, "128", v)
 			case "MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA":
 				assert.Equal(t, "128000000000", v)

@@ -270,7 +270,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 	// Check the number of columns is the one expected.
 	// While implementing this, we expect the number of columns won't change.
 	// If it does, we will need to create a new version of the data column sidecar file.
-	if params.BeaconConfig().NumberOfColumns != mandatoryNumberOfColumns {
+	if fieldparams.NumberOfColumns != mandatoryNumberOfColumns {
 		return errWrongNumberOfColumns
 	}
 
@@ -964,8 +964,7 @@ func (si *storageIndices) set(dataColumnIndex uint64, position uint8) error {
 
 // pullChan pulls data column sidecars from the input channel until it is empty.
 func pullChan(inputRoDataColumns chan []blocks.VerifiedRODataColumn) []blocks.VerifiedRODataColumn {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	dataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, numberOfColumns)
+	dataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, fieldparams.NumberOfColumns)
 
 	for {
 		select {

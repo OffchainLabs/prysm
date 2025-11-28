@@ -26,7 +26,7 @@ var (
 func MinimumColumnCountToReconstruct() uint64 {
 	// If the number of columns is odd, then we need total / 2 + 1 columns to reconstruct.
 	// If the number of columns is even, then we need total / 2 columns to reconstruct.
-	return (params.BeaconConfig().NumberOfColumns + 1) / 2
+	return (fieldparams.NumberOfColumns + 1) / 2
 }
 
 // MinimumCustodyGroupCountToReconstruct returns the minimum number of custody groups needed to
@@ -34,10 +34,11 @@ func MinimumColumnCountToReconstruct() uint64 {
 // custody groups and columns, making it future-proof if these values change.
 // Returns an error if the configuration values are invalid (zero or would cause division by zero).
 func MinimumCustodyGroupCountToReconstruct() (uint64, error) {
+	const numberOfColumns = fieldparams.NumberOfColumns
 	cfg := params.BeaconConfig()
 
 	// Validate configuration values
-	if cfg.NumberOfColumns == 0 {
+	if numberOfColumns == 0 {
 		return 0, errors.New("NumberOfColumns cannot be zero")
 	}
 	if cfg.NumberOfCustodyGroups == 0 {
@@ -47,13 +48,13 @@ func MinimumCustodyGroupCountToReconstruct() (uint64, error) {
 	minimumColumnCount := MinimumColumnCountToReconstruct()
 
 	// Calculate how many columns each custody group represents
-	columnsPerGroup := cfg.NumberOfColumns / cfg.NumberOfCustodyGroups
+	columnsPerGroup := numberOfColumns / cfg.NumberOfCustodyGroups
 
 	// If there are more groups than columns (columnsPerGroup = 0), this is an invalid configuration
 	// for reconstruction purposes as we cannot determine a meaningful custody group count
 	if columnsPerGroup == 0 {
 		return 0, errors.Errorf("invalid configuration: NumberOfCustodyGroups (%d) exceeds NumberOfColumns (%d)",
-			cfg.NumberOfCustodyGroups, cfg.NumberOfColumns)
+			cfg.NumberOfCustodyGroups, numberOfColumns)
 	}
 
 	// Use ceiling division to ensure we have enough groups to cover the minimum columns
@@ -285,7 +286,8 @@ func ReconstructBlobSidecars(block blocks.ROBlock, verifiedDataColumnSidecars []
 
 // ComputeCellsAndProofsFromFlat computes the cells and proofs from blobs and cell flat proofs.
 func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg.Cell, [][]kzg.Proof, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	blobCount := uint64(len(blobs))
 	cellProofsCount := uint64(len(cellProofs))
 
@@ -327,8 +329,6 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([][]kzg.Cell, [][]kzg.Proof, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
 	cellsPerBlob := make([][]kzg.Cell, 0, len(blobsAndProofs))
 	proofsPerBlob := make([][]kzg.Proof, 0, len(blobsAndProofs))
 	for _, blobAndProof := range blobsAndProofs {
@@ -347,7 +347,7 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 			return nil, nil, errors.Wrap(err, "compute cells")
 		}
 
-		kzgProofs := make([]kzg.Proof, 0, numberOfColumns)
+		kzgProofs := make([]kzg.Proof, 0, fieldparams.NumberOfColumns)
 		for _, kzgProofBytes := range blobAndProof.KzgProofs {
 			if len(kzgProofBytes) != kzg.BytesPerProof {
 				return nil, nil, errors.New("wrong KZG proof size - should never happen")
