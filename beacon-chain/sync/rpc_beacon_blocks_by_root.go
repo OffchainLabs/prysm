@@ -174,7 +174,7 @@ func (s *Service) requestAndSaveMissingBlobSidecars(block interfaces.ReadOnlySig
 }
 
 // beaconBlocksRootRPCHandler looks up the request blocks from the database from the given block roots.
-func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)

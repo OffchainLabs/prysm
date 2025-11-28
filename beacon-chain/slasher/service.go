@@ -99,7 +99,7 @@ func (s *Service) run() {
 	}
 	numVals := headState.NumValidators()
 	validatorIndices := make([]primitives.ValidatorIndex, numVals)
-	for i := 0; i < numVals; i++ {
+	for i := range numVals {
 		validatorIndices[i] = primitives.ValidatorIndex(i)
 	}
 	start := time.Now()

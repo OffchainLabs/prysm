@@ -67,7 +67,7 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
-	var respSt interface{}
+	var respSt any
 
 	switch st.Version() {
 	case version.Phase0:

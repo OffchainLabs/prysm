@@ -19,7 +19,7 @@ func TestVerifyRPCMappings(t *testing.T) {
 	assert.NoError(t, VerifyTopicMapping(RPCStatusTopicV1, &pb.Status{}), "Failed to verify status rpc topic")
 	assert.NotNil(t, VerifyTopicMapping(RPCStatusTopicV1, new([]byte)), "Incorrect message type verified for status rpc topic")
 
-	assert.NoError(t, VerifyTopicMapping(RPCMetaDataTopicV1, new(interface{})), "Failed to verify metadata rpc topic")
+	assert.NoError(t, VerifyTopicMapping(RPCMetaDataTopicV1, new(any)), "Failed to verify metadata rpc topic")
 	assert.NotNil(t, VerifyTopicMapping(RPCStatusTopicV1, new([]byte)), "Incorrect message type verified for metadata rpc topic")
 
 	assert.NoError(t, VerifyTopicMapping(RPCBlocksByRootTopicV1, new(types.BeaconBlockByRootsReq)), "Failed to verify blocks by root rpc topic")

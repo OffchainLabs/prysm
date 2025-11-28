@@ -85,7 +85,7 @@ func TestService_CanSubscribe(t *testing.T) {
 
 	// Ensure all gossip topic mappings pass validation.
 	for _, topic := range AllTopics() {
-		formatting := []interface{}{digest}
+		formatting := []any{digest}
 
 		// Special case for attestation subnets which have a second formatting placeholder.
 		topics := map[string]bool{

@@ -25,7 +25,7 @@ const (
 	msgSSZUnmarshalFailed = "failed to unmarshal SSZ"
 )
 
-func doJSONGETRequest(template, requestPath string, beaconNodeIdx int, resp interface{}, bnType ...string) error {
+func doJSONGETRequest(template, requestPath string, beaconNodeIdx int, resp any, bnType ...string) error {
 	if len(bnType) == 0 {
 		bnType = []string{"Prysm"}
 	}
@@ -46,7 +46,7 @@ func doJSONGETRequest(template, requestPath string, beaconNodeIdx int, resp inte
 		return errors.Wrap(err, "request failed")
 	}
 
-	var body interface{}
+	var body any
 	if httpResp.StatusCode != http.StatusOK {
 		if httpResp.Header.Get("Content-Type") == api.JsonMediaType {
 			if err = json.NewDecoder(httpResp.Body).Decode(&body); err != nil {
@@ -95,7 +95,7 @@ func doSSZGETRequest(template, requestPath string, beaconNodeIdx int, bnType ...
 		return nil, errors.Wrap(err, "request failed")
 	}
 	if resp.StatusCode != http.StatusOK {
-		var body interface{}
+		var body any
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			return nil, errors.Wrap(err, "failed to decode response body")
 		}
@@ -110,7 +110,7 @@ func doSSZGETRequest(template, requestPath string, beaconNodeIdx int, bnType ...
 	return body, nil
 }
 
-func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj, resp interface{}, bnType ...string) error {
+func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj, resp any, bnType ...string) error {
 	if len(bnType) == 0 {
 		bnType = []string{"Prysm"}
 	}
@@ -139,7 +139,7 @@ func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj,
 		return errors.Wrap(err, "request failed")
 	}
 
-	var body interface{}
+	var body any
 	if httpResp.StatusCode != http.StatusOK {
 		if httpResp.Header.Get("Content-Type") == api.JsonMediaType {
 			if err = json.NewDecoder(httpResp.Body).Decode(&body); err != nil {
@@ -161,7 +161,7 @@ func doJSONPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj,
 	return nil
 }
 
-func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj interface{}, bnType ...string) ([]byte, error) {
+func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj any, bnType ...string) ([]byte, error) {
 	if len(bnType) == 0 {
 		bnType = []string{"Prysm"}
 	}
@@ -193,7 +193,7 @@ func doSSZPOSTRequest(template, requestPath string, beaconNodeIdx int, postObj i
 		return nil, errors.Wrap(err, "request failed")
 	}
 	if resp.StatusCode != http.StatusOK {
-		var body interface{}
+		var body any
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			return nil, errors.Wrap(err, "failed to decode response body")
 		}

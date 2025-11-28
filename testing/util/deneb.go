@@ -194,7 +194,7 @@ func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blo
 		blks = append(blks, blk)
 	}
 
-	for i := 0; i < size; i++ {
+	for range size {
 		prev := blks[len(blks)-1]
 		blk, blb := GenerateTestDenebBlockWithSidecar(t, prev.Root(), prev.Block().Slot()+1, 6)
 		blobs = append(blobs, blb...)

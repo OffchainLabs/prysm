@@ -216,13 +216,11 @@ func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		wsb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		require.NoError(t, s.ReceiveBlock(ctx, wsb, root, nil))
-		wg.Done()
-	}()
+	})
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
 	if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {

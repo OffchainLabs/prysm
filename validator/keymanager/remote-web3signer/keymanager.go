@@ -756,7 +756,7 @@ func (km *Keymanager) ListKeymanagerAccounts(ctx context.Context, cfg keymanager
 // DisplayRemotePublicKeys prints remote public keys to stdout.
 func DisplayRemotePublicKeys(validatingPubKeys [][48]byte) {
 	au := aurora.NewAurora(true)
-	for i := 0; i < len(validatingPubKeys); i++ {
+	for i := range validatingPubKeys {
 		fmt.Println("")
 		fmt.Printf(
 			"%s\n", au.BrightGreen(petnames.DeterministicName(validatingPubKeys[i][:], "-")).Bold(),

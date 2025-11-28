@@ -92,7 +92,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 
 				vals := make([]*ethpb.Validator, 100)
 				balances := make([]uint64, 100)
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					balances[i] = params.BeaconConfig().MaxEffectiveBalance
 					val := &ethpb.Validator{
 						WithdrawalCredentials: make([]byte, 32),
@@ -124,7 +124,7 @@ func TestExpectedWithdrawals(t *testing.T) {
 
 				vals := make([]*ethpb.Validator, 100)
 				balances := make([]uint64, 100)
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					balances[i] = params.BeaconConfig().MaxEffectiveBalance
 					val := &ethpb.Validator{
 						WithdrawalCredentials: make([]byte, 32),

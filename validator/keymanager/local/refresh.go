@@ -53,13 +53,13 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	fileChangesChan := make(chan interface{}, 100)
+	fileChangesChan := make(chan any, 100)
 	defer close(fileChangesChan)
 
 	// We debounce events sent over the file changes channel by an interval
 	// to ensure we are not overwhelmed by a ton of events fired over the channel in
 	// a short span of time.
-	go async.Debounce(ctx, debounceFileChangesInterval, fileChangesChan, func(event interface{}) {
+	go async.Debounce(ctx, debounceFileChangesInterval, fileChangesChan, func(event any) {
 		ev, ok := event.(fsnotify.Event)
 		if !ok {
 			log.Errorf("Type %T is not a valid file system event", event)

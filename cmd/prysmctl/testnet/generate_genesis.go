@@ -188,7 +188,7 @@ func cliActionGenerateGenesisState(cliCtx *cli.Context) error {
 		type MinimumSSZMarshal interface {
 			MarshalSSZ() ([]byte, error)
 		}
-		marshalFn := func(o interface{}) ([]byte, error) {
+		marshalFn := func(o any) ([]byte, error) {
 			marshaler, ok := o.(MinimumSSZMarshal)
 			if !ok {
 				return nil, errors.New("not a marshaler")
@@ -397,8 +397,8 @@ func depositJSONToDepositData(input *depositDataJSON) ([]byte, *ethpb.Deposit_Da
 
 func writeToOutputFile(
 	fPath string,
-	data interface{},
-	marshalFn func(o interface{}) ([]byte, error),
+	data any,
+	marshalFn func(o any) ([]byte, error),
 ) error {
 	encoded, err := marshalFn(data)
 	if err != nil {

@@ -270,7 +270,7 @@ func generateWithdrawalRequests(
 	numRequests uint64,
 ) ([]*v1.WithdrawalRequest, error) {
 	withdrawalRequests := make([]*v1.WithdrawalRequest, numRequests)
-	for i := uint64(0); i < numRequests; i++ {
+	for i := range numRequests {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err
@@ -310,7 +310,7 @@ func generateDepositRequests(
 	numRequests uint64,
 ) ([]*v1.DepositRequest, error) {
 	depositRequests := make([]*v1.DepositRequest, numRequests)
-	for i := uint64(0); i < numRequests; i++ {
+	for i := range numRequests {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err
@@ -362,7 +362,7 @@ func generateConsolidationRequests(
 	numRequests uint64,
 ) ([]*v1.ConsolidationRequest, error) {
 	consolidationRequests := make([]*v1.ConsolidationRequest, numRequests)
-	for i := uint64(0); i < numRequests; i++ {
+	for i := range numRequests {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err

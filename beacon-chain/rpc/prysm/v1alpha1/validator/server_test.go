@@ -268,14 +268,12 @@ func TestWaitForChainStart_HeadStateDoesNotExist(t *testing.T) {
 	mockStream.EXPECT().Context().Return(t.Context())
 
 	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		err := Server.WaitForChainStart(&emptypb.Empty{}, mockStream)
 		if s, _ := status.FromError(err); s.Code() != codes.Canceled {
 			assert.NoError(t, err)
 		}
-		wg.Done()
-	}()
+	})
 
 	util.WaitTimeout(wg, time.Second)
 }

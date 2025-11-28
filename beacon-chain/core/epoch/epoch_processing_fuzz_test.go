@@ -14,7 +14,7 @@ func TestFuzzFinalUpdates_10000(t *testing.T) {
 	fuzzer := gofuzz.NewWithSeed(0)
 	base := &ethpb.BeaconState{}
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		fuzzer.Fuzz(base)
 		s, err := state_native.InitializeFromProtoUnsafePhase0(base)
 		require.NoError(t, err)

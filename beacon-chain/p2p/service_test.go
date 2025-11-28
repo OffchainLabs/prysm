@@ -128,7 +128,7 @@ func TestService_Start_NoDiscoverFlag(t *testing.T) {
 	beaconCfg.AltairForkEpoch = 0
 	beaconCfg.BellatrixForkEpoch = 0
 	beaconCfg.CapellaForkEpoch = 0
-	beaconCfg.SecondsPerSlot = 1
+	beaconCfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(beaconCfg)
 
 	exitRoutine := make(chan bool)
@@ -369,7 +369,7 @@ func TestService_connectWithPeer(t *testing.T) {
 				ps := peers.NewStatus(t.Context(), &peers.StatusConfig{
 					ScorerParams: &scorers.Config{},
 				})
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					ps.Scorers().BadResponsesScorer().Increment("bad")
 				}
 				return ps

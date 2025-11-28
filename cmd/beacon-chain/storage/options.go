@@ -146,10 +146,8 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 		}
 		return "", errors.Wrap(err, "reading blob storage directory")
 	}
-	for _, entry := range entries {
-		if filesystem.IsBlockRootDir(entry) {
-			return filesystem.LayoutNameFlat, nil
-		}
+	if slices.ContainsFunc(entries, filesystem.IsBlockRootDir) {
+		return filesystem.LayoutNameFlat, nil
 	}
 	return filesystem.LayoutNameByEpoch, nil
 }

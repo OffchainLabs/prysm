@@ -16,7 +16,7 @@ import (
 
 func TestRandaoMix_OK(t *testing.T) {
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(randaoMixes); i++ {
+	for i := range randaoMixes {
 		intInBytes := make([]byte, 32)
 		binary.LittleEndian.PutUint64(intInBytes, uint64(i))
 		randaoMixes[i] = intInBytes
@@ -52,7 +52,7 @@ func TestRandaoMix_OK(t *testing.T) {
 
 func TestRandaoMix_CopyOK(t *testing.T) {
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(randaoMixes); i++ {
+	for i := range randaoMixes {
 		intInBytes := make([]byte, 32)
 		binary.LittleEndian.PutUint64(intInBytes, uint64(i))
 		randaoMixes[i] = intInBytes
@@ -96,7 +96,7 @@ func TestGenerateSeed_OK(t *testing.T) {
 	helpers.ClearCache()
 
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(randaoMixes); i++ {
+	for i := range randaoMixes {
 		intInBytes := make([]byte, 32)
 		binary.LittleEndian.PutUint64(intInBytes, uint64(i))
 		randaoMixes[i] = intInBytes

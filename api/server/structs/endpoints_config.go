@@ -14,5 +14,5 @@ type GetForkScheduleResponse struct {
 }
 
 type GetSpecResponse struct {
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }

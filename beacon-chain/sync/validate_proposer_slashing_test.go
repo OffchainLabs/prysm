@@ -31,7 +31,7 @@ import (
 
 func setupValidProposerSlashing(t *testing.T) (*ethpb.ProposerSlashing, state.BeaconState) {
 	validators := make([]*ethpb.Validator, 100)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			EffectiveBalance:  params.BeaconConfig().MaxEffectiveBalance,
 			Slashed:           false,
@@ -41,7 +41,7 @@ func setupValidProposerSlashing(t *testing.T) (*ethpb.ProposerSlashing, state.Be
 		}
 	}
 	validatorBalances := make([]uint64, len(validators))
-	for i := 0; i < len(validatorBalances); i++ {
+	for i := range validatorBalances {
 		validatorBalances[i] = params.BeaconConfig().MaxEffectiveBalance
 	}
 
@@ -129,7 +129,7 @@ func TestValidateProposerSlashing_ValidSlashing(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashing]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -172,7 +172,7 @@ func TestValidateProposerSlashing_ValidOldSlashing(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashing]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -213,7 +213,7 @@ func TestValidateProposerSlashing_ContextTimeout(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashing]()]
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -243,7 +243,7 @@ func TestValidateProposerSlashing_Syncing(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, slashing)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(slashing)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashing]()]
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),

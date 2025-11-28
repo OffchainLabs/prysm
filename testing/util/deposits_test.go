@@ -103,7 +103,7 @@ func TestDepositsWithBalance_MatchesDeterministic(t *testing.T) {
 	entries := 64
 	resetCache()
 	balances := make([]uint64, entries)
-	for i := 0; i < entries; i++ {
+	for i := range entries {
 		balances[i] = params.BeaconConfig().MaxEffectiveBalance
 	}
 	deposits, depositTrie, err := DepositsWithBalance(balances)
@@ -116,7 +116,7 @@ func TestDepositsWithBalance_MatchesDeterministic(t *testing.T) {
 	_, determDepositDataRoots, err := DeterministicDepositTrie(entries)
 	require.NoError(t, err)
 
-	for i := 0; i < entries; i++ {
+	for i := range entries {
 		if !proto.Equal(deposits[i], determDeposits[i]) {
 			t.Errorf("Expected deposit %d to match", i)
 		}

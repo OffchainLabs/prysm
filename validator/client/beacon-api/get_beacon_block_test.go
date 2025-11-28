@@ -43,7 +43,7 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 func TestGetBeaconBlock_Error(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		beaconBlock          interface{}
+		beaconBlock          any
 		expectedErrorMessage string
 		consensusVersion     string
 		blinded              bool

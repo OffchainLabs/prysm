@@ -15,7 +15,7 @@ func TestState_UnrealizedCheckpointBalances(t *testing.T) {
 	expectedActive := params.BeaconConfig().MinGenesisActiveValidatorCount * params.BeaconConfig().MaxEffectiveBalance
 
 	balances := make([]uint64, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
@@ -100,7 +100,7 @@ func TestState_MVSlice_UnrealizedCheckpointBalances(t *testing.T) {
 	expectedActive := params.BeaconConfig().MinGenesisActiveValidatorCount * params.BeaconConfig().MaxEffectiveBalance
 
 	balances := make([]uint64, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,

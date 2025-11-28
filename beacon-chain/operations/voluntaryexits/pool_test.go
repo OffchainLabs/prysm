@@ -124,7 +124,7 @@ func TestExitsForInclusion(t *testing.T) {
 	})
 	t.Run("more than MaxVoluntaryExits in pool", func(t *testing.T) {
 		pool := NewPool()
-		for i := uint64(0); i < numValidators; i++ {
+		for i := range numValidators {
 			pool.InsertVoluntaryExit(signedExits[i])
 		}
 		exits, err := pool.ExitsForInclusion(st, stateSlot)

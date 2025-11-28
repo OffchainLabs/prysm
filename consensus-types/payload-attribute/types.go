@@ -30,7 +30,7 @@ var (
 )
 
 // New returns a new payload attribute with the given input object.
-func New(i interface{}) (Attributer, error) {
+func New(i any) (Attributer, error) {
 	switch a := i.(type) {
 	case nil:
 		return nil, blocks.ErrNilObject

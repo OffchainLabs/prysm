@@ -56,7 +56,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 					Slot:                5 * params.BeaconConfig().SlotsPerEpoch,
 					FinalizedCheckpoint: &eth.Checkpoint{Epoch: finalizedEpoch, Root: make([]byte, fieldparams.RootLength)},
 				}
-				for i := uint64(0); i < 10; i++ {
+				for range uint64(10) {
 					base.Validators = append(base.Validators, &eth.Validator{
 						ActivationEligibilityEpoch: finalizedEpoch,
 						EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
@@ -82,7 +82,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 					Slot:                5 * params.BeaconConfig().SlotsPerEpoch,
 					FinalizedCheckpoint: &eth.Checkpoint{Epoch: finalizedEpoch, Root: make([]byte, fieldparams.RootLength)},
 				}
-				for i := uint64(0); i < 10; i++ {
+				for range uint64(10) {
 					base.Validators = append(base.Validators, &eth.Validator{
 						EffectiveBalance:  params.BeaconConfig().EjectionBalance - 1,
 						ExitEpoch:         params.BeaconConfig().FarFutureEpoch,
@@ -108,7 +108,7 @@ func TestProcessRegistryUpdates(t *testing.T) {
 					Slot:                5 * params.BeaconConfig().SlotsPerEpoch,
 					FinalizedCheckpoint: &eth.Checkpoint{Epoch: finalizedEpoch, Root: make([]byte, fieldparams.RootLength)},
 				}
-				for i := uint64(0); i < 10; i++ {
+				for range uint64(10) {
 					base.Validators = append(base.Validators, &eth.Validator{
 						EffectiveBalance:  params.BeaconConfig().EjectionBalance - 1,
 						ExitEpoch:         10,
@@ -157,7 +157,7 @@ func Benchmark_ProcessRegistryUpdates_MassEjection(b *testing.B) {
 	st, err := util.NewBeaconStateElectra()
 	require.NoError(b, err)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		if err := st.SetValidators(genValidators(100000)); err != nil {
 			panic(err)

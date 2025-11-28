@@ -101,7 +101,7 @@ func TestValidateVoluntaryExit_ValidExit(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, exit)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(exit)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -158,7 +158,7 @@ func TestValidateVoluntaryExit_InvalidExitSlot(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, exit)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(exit)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -189,7 +189,7 @@ func TestValidateVoluntaryExit_ValidExit_Syncing(t *testing.T) {
 	buf := new(bytes.Buffer)
 	_, err := p.Encoding().EncodeGossip(buf, exit)
 	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(exit)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedVoluntaryExit]()]
 	m := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),

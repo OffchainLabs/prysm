@@ -23,15 +23,15 @@ func TestNew_ZeroOrNegativeSize(t *testing.T) {
 
 func TestNewWithEvict(t *testing.T) {
 	assert.NotPanics(t, func() {
-		NewWithEvict(10, func(key interface{}, value interface{}) {})
+		NewWithEvict(10, func(key any, value any) {})
 	})
 }
 
 func TestNewWithEvict_ZeroOrNegativeSize(t *testing.T) {
 	assert.Panics(t, func() {
-		NewWithEvict(0, func(key interface{}, value interface{}) {})
+		NewWithEvict(0, func(key any, value any) {})
 	})
 	assert.Panics(t, func() {
-		NewWithEvict(-1, func(key interface{}, value interface{}) {})
+		NewWithEvict(-1, func(key any, value any) {})
 	})
 }

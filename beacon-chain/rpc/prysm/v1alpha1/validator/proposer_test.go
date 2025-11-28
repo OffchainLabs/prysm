@@ -53,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -1121,7 +1122,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				numberOfColumns := uint64(128)
 				// For Fulu, we have cell proofs (blobs * numberOfColumns)
 				cellProofs := make([][]byte, numberOfColumns)
-				for i := uint64(0); i < numberOfColumns; i++ {
+				for i := range numberOfColumns {
 					cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 				}
 				// Blob must be exactly 131072 bytes
@@ -1155,7 +1156,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				}
 				// Create properly sized blobs (131072 bytes each)
 				blobs := make([][]byte, blobCount)
-				for i := 0; i < blobCount; i++ {
+				for i := range blobCount {
 					blob := make([]byte, 131072)
 					blob[0] = byte(i + 1)
 					blobs[i] = blob
@@ -1244,7 +1245,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			// Create cell proofs for Fulu blocks (128 proofs per blob)
 			numberOfColumns := uint64(128)
 			cellProofs := make([][]byte, numberOfColumns)
-			for i := uint64(0); i < numberOfColumns; i++ {
+			for i := range numberOfColumns {
 				cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 			}
 			// Create properly sized blob for mock builder
@@ -2908,7 +2909,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 			name: "invalid attestations",
 			inputAtts: func() []ethpb.Att {
 				atts := make([]ethpb.Att, 10)
-				for i := 0; i < len(atts); i++ {
+				for i := range atts {
 					atts[i] = util.HydrateAttestation(&ethpb.Attestation{
 						Data: &ethpb.AttestationData{
 							CommitteeIndex: primitives.CommitteeIndex(i),
@@ -2925,7 +2926,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 			name: "filter aggregates ok",
 			inputAtts: func() []ethpb.Att {
 				atts := make([]ethpb.Att, 10)
-				for i := 0; i < len(atts); i++ {
+				for i := range atts {
 					atts[i] = util.HydrateAttestation(&ethpb.Attestation{
 						Data: &ethpb.AttestationData{
 							CommitteeIndex: primitives.CommitteeIndex(i),
@@ -3162,6 +3163,8 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
+	logrus.SetLevel(logrus.DebugLevel)
+
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
@@ -3178,13 +3181,13 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err := proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validator
 	hook.Reset()
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validator with different fee recipient
 	hook.Reset()
@@ -3196,7 +3199,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// More than one validator
 	hook.Reset()
@@ -3209,13 +3212,13 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validators
 	hook.Reset()
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 }
 
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
@@ -3227,15 +3230,15 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		recipients = append(recipients, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{FeeRecipient: f, ValidatorIndex: primitives.ValidatorIndex(i)})
 	}
 
 	req := &ethpb.PrepareBeaconProposerRequest{
 		Recipients: recipients,
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := proposerServer.PrepareBeaconProposer(ctx, req)
 		if err != nil {
 			b.Fatal(err)

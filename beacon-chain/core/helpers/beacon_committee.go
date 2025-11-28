@@ -5,7 +5,7 @@ package helpers
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
@@ -515,9 +515,7 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	// used for failing verify signature fallback.
 	sortedIndices := make([]primitives.ValidatorIndex, len(shuffledIndices))
 	copy(sortedIndices, shuffledIndices)
-	sort.Slice(sortedIndices, func(i, j int) bool {
-		return sortedIndices[i] < sortedIndices[j]
-	})
+	slices.Sort(sortedIndices)
 
 	if err := committeeCache.AddCommitteeShuffledList(ctx, &cache.Committees{
 		ShuffledIndices: shuffledIndices,

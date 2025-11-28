@@ -100,7 +100,7 @@ func Test_VerifyKZGInclusionProofColumn(t *testing.T) {
 	// Generate random KZG commitments `blobCount` blobs.
 	kzgCommitments := make([][]byte, blobCount)
 
-	for i := 0; i < blobCount; i++ {
+	for i := range blobCount {
 		kzgCommitments[i] = make([]byte, 48)
 		_, err := rand.Read(kzgCommitments[i])
 		require.NoError(t, err)

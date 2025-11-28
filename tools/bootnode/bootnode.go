@@ -179,7 +179,7 @@ func (h *handler) httpHandler(w http.ResponseWriter, _ *http.Request) {
 	allNodes := h.listener.AllNodes()
 	write(w, []byte("Nodes stored in the table:\n"))
 	for i, n := range allNodes {
-		write(w, []byte(fmt.Sprintf("Node %d\n", i)))
+		write(w, fmt.Appendf(nil, "Node %d\n", i))
 		write(w, []byte(n.String()+"\n"))
 		write(w, []byte("Node ID: "+n.ID().String()+"\n"))
 		write(w, []byte("IP: "+n.IP().String()+"\n"))

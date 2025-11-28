@@ -59,7 +59,7 @@ func (s *LighthouseValidatorNodeSet) Start(ctx context.Context) error {
 
 	// Create validator nodes.
 	nodes := make([]types.ComponentRunner, lighthouseBeaconNum)
-	for i := 0; i < lighthouseBeaconNum; i++ {
+	for i := range lighthouseBeaconNum {
 		offsetIdx := i + prysmBeaconNum
 		nodes[i] = NewLighthouseValidatorNode(s.config, validatorsPerNode, i, validatorsPerNode*offsetIdx)
 	}
@@ -240,6 +240,10 @@ func (v *LighthouseValidatorNode) Stop() error {
 	return v.cmd.Process.Kill()
 }
 
+func (v *LighthouseValidatorNode) UnderlyingProcess() *os.Process {
+	return v.cmd.Process
+}
+
 var _ types.ComponentRunner = &KeystoreGenerator{}
 
 type KeystoreGenerator struct {
@@ -260,7 +264,7 @@ func (k *KeystoreGenerator) Start(_ context.Context) error {
 	}
 	validatorsPerNode := validatorNum / beaconNodeNum
 
-	for i := 0; i < lighthouseBeaconNum; i++ {
+	for i := range lighthouseBeaconNum {
 		offsetIdx := i + prysmBeaconNum
 		_, err := setupKeystores(i, validatorsPerNode*offsetIdx, validatorsPerNode)
 		if err != nil {

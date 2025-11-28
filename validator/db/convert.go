@@ -212,7 +212,7 @@ func ConvertDatabase(ctx context.Context, sourceDataDir string, targetDataDir st
 
 	// Initialize the progress bar.
 	bar = common.InitializeProgressBar(
-		len(attestedPublicKeys),
+		len(proposedPublicKeys),
 		"Processing proposals:",
 	)
 

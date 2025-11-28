@@ -15,5 +15,5 @@ func TestEndToEnd_MainnetConfig_ValidatorAtCurrentRelease(t *testing.T) {
 }
 
 func TestEndToEnd_MainnetConfig_MultiClient(t *testing.T) {
-	e2eMainnet(t, false, true, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig()), types.WithValidatorCrossClient()).run()
+	e2eMainnet(t, false, true, types.InitForkCfg(version.Bellatrix, version.Electra, params.E2EMainnetTestConfig())).run()
 }

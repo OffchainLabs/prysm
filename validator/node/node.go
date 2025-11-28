@@ -641,8 +641,8 @@ func clearDB(ctx context.Context, dataDir string, force bool, isDatabaseMinimal 
 
 func parseBeaconApiHeaders(rawHeaders string) map[string][]string {
 	result := make(map[string][]string)
-	pairs := strings.Split(rawHeaders, ",")
-	for _, pair := range pairs {
+	pairs := strings.SplitSeq(rawHeaders, ",")
+	for pair := range pairs {
 		key, value, found := strings.Cut(pair, "=")
 		if !found {
 			// Skip malformed pairs
