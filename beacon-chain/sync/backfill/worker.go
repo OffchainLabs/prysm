@@ -20,14 +20,15 @@ var errInvalidBatchState = errors.New("invalid batch state")
 type peerDownscorer func(peer.ID, string, error)
 
 type workerCfg struct {
-	clock     *startup.Clock
-	verifier  *verifier
-	ctxMap    sync.ContextByteVersions
-	newVB     verification.NewBlobVerifier
-	newVC     verification.NewDataColumnsVerifier
-	blobStore *filesystem.BlobStorage
-	colStore  *filesystem.DataColumnStorage
-	downscore peerDownscorer
+	clock        *startup.Clock
+	verifier     *verifier
+	ctxMap       sync.ContextByteVersions
+	newVB        verification.NewBlobVerifier
+	newVC        verification.NewDataColumnsVerifier
+	blobStore    *filesystem.BlobStorage
+	colStore     *filesystem.DataColumnStorage
+	downscore    peerDownscorer
+	currentNeeds func() currentNeeds
 }
 
 func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, store *Store) error {
@@ -170,11 +171,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Debug("Backfill batch block bytes downloaded")
 	b.blocks = verified
 
-	blobRetentionStart, err := sync.BlobRPCMinValidSlot(current)
-	if err != nil {
-		return b.withRetryableError(errors.Wrap(err, "configuration issue, could not compute minimum blob retention slot"))
-	}
-	bscfg := &blobSyncConfig{retentionStart: blobRetentionStart, nbv: w.cfg.newVB, store: w.cfg.blobStore}
+	bscfg := &blobSyncConfig{currentNeeds: w.cfg.currentNeeds, nbv: w.cfg.newVB, store: w.cfg.blobStore}
 	bs, err := newBlobSync(current, verified, bscfg)
 	if err != nil {
 		return b.withRetryableError(err)

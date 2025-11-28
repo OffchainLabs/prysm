@@ -17,6 +17,25 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+func mockCurrentNeeds(begin, end primitives.Slot) func() currentNeeds {
+	return func() currentNeeds {
+		return currentNeeds{
+			block: needSpan{
+				begin: begin,
+				end:   end,
+			},
+			blob: needSpan{
+				begin: begin,
+				end:   end,
+			},
+			col: needSpan{
+				begin: begin,
+				end:   end,
+			},
+		}
+	}
+}
+
 func TestDomainCache(t *testing.T) {
 	cfg := params.MainnetConfig()
 	// This hack is needed not to have both Electra and Fulu fork epoch both set to the future max epoch.

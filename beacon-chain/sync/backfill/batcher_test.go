@@ -17,7 +17,7 @@ func TestBatcherBefore(t *testing.T) {
 	}{
 		{
 			name: "size 10",
-			b:    batcher{min: 0, size: 10},
+			b:    batcher{currentNeeds: mockCurrentNeeds(0, 100), size: 10},
 			upTo: []primitives.Slot{33, 30, 10, 6},
 			expect: []batch{
 				{begin: 23, end: 33, state: batchInit},
@@ -28,7 +28,7 @@ func TestBatcherBefore(t *testing.T) {
 		},
 		{
 			name: "size 4",
-			b:    batcher{min: 0, size: 4},
+			b:    batcher{currentNeeds: mockCurrentNeeds(0, 100), size: 4},
 			upTo: []primitives.Slot{33, 6, 4},
 			expect: []batch{
 				{begin: 29, end: 33, state: batchInit},
@@ -38,7 +38,7 @@ func TestBatcherBefore(t *testing.T) {
 		},
 		{
 			name: "trigger end",
-			b:    batcher{min: 20, size: 10},
+			b:    batcher{currentNeeds: mockCurrentNeeds(20, 100), size: 10},
 			upTo: []primitives.Slot{33, 30, 25, 21, 20, 19},
 			expect: []batch{
 				{begin: 23, end: 33, state: batchInit},
@@ -71,7 +71,7 @@ func TestBatchSingleItem(t *testing.T) {
 	min = 0
 	max = 11235
 	size = 64
-	seq := newBatchSequencer(seqLen, min, max, size)
+	seq := newBatchSequencer(seqLen, max, size, mockCurrentNeeds(min, max+1))
 	got, err := seq.sequence()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(got))
@@ -99,7 +99,7 @@ func TestBatchSequencer(t *testing.T) {
 	min = 0
 	max = 11235
 	size = 64
-	seq := newBatchSequencer(seqLen, min, max, size)
+	seq := newBatchSequencer(seqLen, max, size, mockCurrentNeeds(min, max+1))
 	expected := []batch{
 		{begin: 11171, end: 11235},
 		{begin: 11107, end: 11171},
@@ -212,7 +212,10 @@ func TestBatchSequencer(t *testing.T) {
 	// set the min for the batcher close to the lowest slot. This will force the next batch to be partial and the batch
 	// after that to be the final batch.
 	newMin := seq.seq[len(seq.seq)-1].begin - 30
-	seq.batcher.min = newMin
+	seq.currentNeeds = func() currentNeeds {
+		return currentNeeds{block: needSpan{begin: newMin, end: seq.batcher.max}}
+	}
+	seq.batcher.currentNeeds = seq.currentNeeds
 	first = seq.seq[0]
 	first.state = batchImportComplete
 	// update() with a complete state will cause the sequence to be extended with an additional batch
@@ -369,7 +372,7 @@ func TestSequence(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, tc.min, tc.max, tc.size)
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
 
 			// Initialize batches with valid slot ranges
 			initializeBatchWithSlots(seq.seq, tc.min, tc.size)
@@ -475,7 +478,7 @@ func TestUpdate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, 0, 1000, 64)
+			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeeds(0, 1000+1))
 
 			// Initialize batches with proper slot ranges
 			for i := range seq.seq {
@@ -594,7 +597,7 @@ func TestImportable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, 0, 1000, 64)
+			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeeds(0, 1000+1))
 
 			for i, state := range tc.states {
 				seq.seq[i] = batch{
@@ -610,83 +613,18 @@ func TestImportable(t *testing.T) {
 	}
 }
 
-// TestMoveMinimum tests minimum slot updates and error cases
-func TestMoveMinimum(t *testing.T) {
-	testCases := []struct {
-		name        string
-		initialMin  primitives.Slot
-		newMin      primitives.Slot
-		shouldError bool
-		expectedMin primitives.Slot
-	}{
-		{
-			name:        "IncreaseMinimum",
-			initialMin:  100,
-			newMin:      150,
-			shouldError: false,
-			expectedMin: 150,
-		},
-		{
-			name:        "SetEqualToMin",
-			initialMin:  100,
-			newMin:      100,
-			shouldError: false,
-			expectedMin: 100,
-		},
-		{
-			name:        "DecreaseMinimum",
-			initialMin:  100,
-			newMin:      50,
-			shouldError: true,
-			expectedMin: 100,
-		},
-		{
-			name:        "IncreaseLarge",
-			initialMin:  100,
-			newMin:      1000,
-			shouldError: false,
-			expectedMin: 1000,
-		},
-		{
-			name:        "IncreaseByOne",
-			initialMin:  100,
-			newMin:      101,
-			shouldError: false,
-			expectedMin: 101,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(3, tc.initialMin, 500, 64)
-
-			err := seq.moveMinimum(tc.newMin)
-
-			if tc.shouldError {
-				require.ErrorIs(t, err, errCannotDecreaseMinimum)
-			} else {
-				require.NoError(t, err)
-			}
-
-			require.Equal(t, tc.expectedMin, seq.batcher.min)
-		})
-	}
-}
-
 // TestMoveMinimumWithNonImportableUpdate tests integration of moveMinimum with update()
 func TestMoveMinimumWithNonImportableUpdate(t *testing.T) {
 	t.Run("UpdateBatchAfterMinimumChange", func(t *testing.T) {
-		seq := newBatchSequencer(3, 100, 300, 50)
+		seq := newBatchSequencer(3, 300, 50, mockCurrentNeeds(100, 300+1))
 
 		// Initialize with batches
 		seq.seq[0] = batch{begin: 200, end: 250, state: batchInit}
 		seq.seq[1] = batch{begin: 150, end: 200, state: batchInit}
 		seq.seq[2] = batch{begin: 100, end: 150, state: batchInit}
 
-		// Move minimum
-		err := seq.moveMinimum(150)
-		require.NoError(t, err)
-		require.Equal(t, primitives.Slot(150), seq.batcher.min)
+		seq.currentNeeds = mockCurrentNeeds(150, 300+1)
+		seq.batcher.currentNeeds = seq.currentNeeds
 
 		// Update non-importable batch above new minimum
 		batchToUpdate := batch{begin: 200, end: 250, state: batchSequenced}
@@ -784,7 +722,7 @@ func TestCountWithState(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, 0, 1000, 64)
+			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeeds(0, 1000+1))
 
 			for i, state := range tc.states {
 				seq.seq[i].state = state
@@ -847,7 +785,7 @@ func TestNumTodo(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, tc.min, tc.max, tc.size)
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
 
 			for i, state := range tc.states {
 				seq.seq[i] = batch{
@@ -939,14 +877,15 @@ func TestBatcherRemaining(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			b := batcher{min: tc.min, size: tc.size}
+			needs := func() currentNeeds {
+				return currentNeeds{block: needSpan{begin: tc.min, end: tc.upTo + 1}}
+			}
+			b := batcher{size: tc.size, currentNeeds: needs}
 			result := b.remaining(tc.upTo)
 			require.Equal(t, tc.expected, result)
 		})
 	}
 }
-
-// Helper functions for moveMinimum fix testing
 
 // assertAllBatchesAboveMinimum verifies all returned batches have end > minimum
 func assertAllBatchesAboveMinimum(t *testing.T, batches []batch, min primitives.Slot) {
@@ -1120,7 +1059,7 @@ func TestMoveMinimumFiltersOutOfRangeBatches(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, tc.min, tc.max, tc.size)
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
 
 			// Initialize batches with valid slot ranges
 			initializeBatchWithSlots(seq.seq, tc.min, tc.size)
@@ -1130,11 +1069,9 @@ func TestMoveMinimumFiltersOutOfRangeBatches(t *testing.T) {
 				seq.seq[i].state = state
 			}
 
-			// Apply moveMinimum
-			err := seq.moveMinimum(tc.newMinimum)
-			require.NoError(t, err)
-
-			// Call sequence after moveMinimum
+			// move minimum and call sequence to update set of batches
+			seq.currentNeeds = mockCurrentNeeds(tc.newMinimum, tc.max+1)
+			seq.batcher.currentNeeds = seq.currentNeeds
 			got, err := seq.sequence()
 			require.NoError(t, err)
 

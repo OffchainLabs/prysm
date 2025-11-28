@@ -25,6 +25,7 @@ type Service struct {
 	enabled        bool // service is disabled by default
 	clock          *startup.Clock
 	store          *Store
+	syncNeeds      syncNeeds
 	ms             minimumSlotter
 	cw             startup.ClockWaiter
 	verifierWaiter InitializerWaiter
@@ -112,18 +113,18 @@ func WithVerifierWaiter(viw InitializerWaiter) ServiceOption {
 
 // WithMinimumSlot allows the user to specify a different backfill minimum slot than the spec default of current - MIN_EPOCHS_FOR_BLOCK_REQUESTS.
 // If this value is greater than current - MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored with a warning log.
-func WithMinimumSlot(s primitives.Slot) ServiceOption {
-	ms := func(current primitives.Slot) primitives.Slot {
-		specMin := minimumBackfillSlot(current)
-		if s < specMin {
-			return s
-		}
-		log.WithField("userSlot", s).WithField("specMinSlot", specMin).
-			Warn("Ignoring user-specified slot > MIN_EPOCHS_FOR_BLOCK_REQUESTS.")
-		return specMin
-	}
+func WithMinimumSlot(oldest primitives.Slot) ServiceOption {
 	return func(s *Service) error {
-		s.ms = ms
+		s.syncNeeds.oldestSlotFlagPtr = &oldest
+		return nil
+	}
+}
+
+// WithBlobRetentionEpoch is used to pass through the value of the
+// --blob-retention-epochs flag to the backfill service.
+func WithBlobRetentionEpoch(epoch primitives.Epoch) ServiceOption {
+	return func(s *Service) error {
+		s.syncNeeds.blobRetentionFlag = epoch
 		return nil
 	}
 }
@@ -137,13 +138,13 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 		blobStore:  bStore,
 		dcStore:    dcStore,
 		cw:         cw,
-		ms:         minimumBackfillSlot,
 		p2p:        p,
 		pa:         pa,
 		complete:   make(chan struct{}),
 		fuluStart:  slots.SafeEpochStartOrMax(params.BeaconConfig().FuluForkEpoch),
 		denebStart: slots.SafeEpochStartOrMax(params.BeaconConfig().DenebForkEpoch),
 	}
+
 	s.batchImporter = s.defaultBatchImporter
 	for _, o := range opts {
 		if err := o(s); err != nil {
@@ -151,14 +152,11 @@ func NewService(ctx context.Context, su *Store, bStore *filesystem.BlobStorage, 
 		}
 	}
 
-	s.pool = newP2PBatchWorkerPool(p, s.nWorkers)
-
 	return s, nil
 }
 
 func (s *Service) updateComplete() bool {
-	min := s.ms(s.clock.CurrentSlot())
-	b, err := s.pool.complete(min)
+	b, err := s.pool.complete()
 	if err != nil {
 		if errors.Is(err, errEndSequence) {
 			log.WithField("backfillSlot", b.begin).Info("Backfill is complete")
@@ -261,10 +259,14 @@ func (s *Service) Start() {
 		return
 	}
 	s.clock = clock
+
+	// initialize() updates syncNeeds with validated values once we've got the clock
+	s.syncNeeds = syncNeeds{}.initialize(s.clock.CurrentSlot, s.denebStart, s.fuluStart)
 	status := s.store.status()
+	needs := s.syncNeeds.currently()
 	// Exit early if there aren't going to be any batches to backfill.
-	if primitives.Slot(status.LowSlot) <= s.ms(s.clock.CurrentSlot()) {
-		log.WithField("minimumRequiredSlot", s.ms(s.clock.CurrentSlot())).
+	if !needs.block.at(primitives.Slot(status.LowSlot)) {
+		log.WithField("minimumSlot", needs.block.begin).
 			WithField("backfillLowestSlot", status.LowSlot).
 			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
 		s.markComplete()
@@ -281,10 +283,11 @@ func (s *Service) Start() {
 
 	if s.workerCfg == nil {
 		s.workerCfg = &workerCfg{
-			clock:     s.clock,
-			blobStore: s.blobStore,
-			colStore:  s.dcStore,
-			downscore: s.downscorePeer,
+			clock:        s.clock,
+			blobStore:    s.blobStore,
+			colStore:     s.dcStore,
+			downscore:    s.downscorePeer,
+			currentNeeds: s.syncNeeds.currently,
 		}
 
 		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
@@ -293,8 +296,12 @@ func (s *Service) Start() {
 		}
 	}
 
+	// Allow tests to inject a mock pool.
+	if s.pool == nil {
+		s.pool = newP2PBatchWorkerPool(s.p2p, s.nWorkers, s.syncNeeds.currently)
+	}
 	s.pool.spawn(ctx, s.nWorkers, s.pa, s.workerCfg)
-	s.batchSeq = newBatchSequencer(s.nWorkers, s.ms(s.clock.CurrentSlot()), primitives.Slot(status.LowSlot), primitives.Slot(s.batchSize))
+	s.batchSeq = newBatchSequencer(s.nWorkers, primitives.Slot(status.LowSlot), primitives.Slot(s.batchSize), s.syncNeeds.currently)
 	if err = s.initBatches(); err != nil {
 		log.WithError(err).Error("Non-recoverable error in backfill service")
 		return
@@ -310,9 +317,6 @@ func (s *Service) Start() {
 		}
 		s.importBatches(ctx)
 		batchesWaiting.Set(float64(s.batchSeq.countWithState(batchImportable)))
-		if err := s.batchSeq.moveMinimum(s.ms(s.clock.CurrentSlot())); err != nil {
-			log.WithError(err).Error("Non-recoverable error while adjusting backfill minimum slot")
-		}
 		s.scheduleTodos()
 	}
 }
@@ -336,14 +340,16 @@ func (*Service) Status() error {
 	return nil
 }
 
-// minimumBackfillSlot determines the lowest slot that backfill needs to download based on looking back
-// MIN_EPOCHS_FOR_BLOCK_REQUESTS from the current slot.
-func minimumBackfillSlot(current primitives.Slot) primitives.Slot {
-	oe := min(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests), slots.MaxSafeEpoch())
-	offset := slots.UnsafeEpochStart(oe)
+// syncEpochOffset subtracts a number of epochs as slots from the current slot, with underflow checks.
+// It returns slot 1 if the result would be 0 or underflow. It doesn't return slot 0 because the
+// genesis block needs to be specially synced (it doesn't have a valid signature).
+func syncEpochOffset(current primitives.Slot, subtract primitives.Epoch) primitives.Slot {
+	minEpoch := min(subtract, slots.MaxSafeEpoch())
+	// compute slot offset - offset is a number of slots to go back from current (not an absolute slot).
+	offset := slots.UnsafeEpochStart(minEpoch)
+	// Undeflow protection: slot 0 is the genesis block, therefore the signature in it is invalid.
+	// To prevent us from rejecting a batch, we restrict the minimum backfill batch till only slot 1
 	if offset >= current {
-		// Slot 0 is the genesis block, therefore the signature in it is invalid.
-		// To prevent us from rejecting a batch, we restrict the minimum backfill batch till only slot 1
 		return 1
 	}
 	return current - offset

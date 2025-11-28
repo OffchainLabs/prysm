@@ -31,13 +31,13 @@ type blobSummary struct {
 }
 
 type blobSyncConfig struct {
-	retentionStart primitives.Slot
-	nbv            verification.NewBlobVerifier
-	store          *filesystem.BlobStorage
+	nbv          verification.NewBlobVerifier
+	store        *filesystem.BlobStorage
+	currentNeeds func() currentNeeds
 }
 
 func newBlobSync(current primitives.Slot, vbs verifiedROBlocks, cfg *blobSyncConfig) (*blobSync, error) {
-	expected, err := vbs.blobIdents(cfg.retentionStart)
+	expected, err := vbs.blobIdents(cfg.currentNeeds)
 	if err != nil {
 		return nil, err
 	}

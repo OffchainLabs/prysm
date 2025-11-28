@@ -262,9 +262,9 @@ func (b batch) workComplete() bool {
 	return b.state == batchImportable
 }
 
-func (b batch) expired(min primitives.Slot) bool {
-	if b.end <= min {
-		log.WithFields(b.logFields()).WithField("retentionStartSlot", min).Debug("Batch outside retention window")
+func (b batch) expired(needs currentNeeds) bool {
+	if !needs.block.at(b.end - 1) {
+		log.WithFields(b.logFields()).WithField("retentionStartSlot", needs.block.begin).Debug("Batch outside retention window")
 		return true
 	}
 	return false

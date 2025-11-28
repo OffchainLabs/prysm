@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -27,36 +26,18 @@ var (
 // verifiedROBlocks represents a slice of blocks that have passed signature verification.
 type verifiedROBlocks []blocks.ROBlock
 
-func (v verifiedROBlocks) blobIdents(retentionStart primitives.Slot) ([]blobSummary, error) {
+func (v verifiedROBlocks) blobIdents(needed func() currentNeeds) ([]blobSummary, error) {
 	if len(v) == 0 {
 		return nil, nil
 	}
-	latest := v[len(v)-1].Block().Slot()
-	// early return if the newest block is outside the retention window
-	if latest < retentionStart {
-		return nil, nil
-	}
-	first := v[0].Block().Slot()
-	fuluStart := params.BeaconConfig().FuluForkEpoch
-	// If the batch end slot or last result block are pre-fulu, so are the rest.
-	if slots.ToEpoch(first) >= fuluStart {
-		return nil, nil
-	}
 
+	needs := needed()
 	bs := make([]blobSummary, 0)
 	for i := range v {
 		slot := v[i].Block().Slot()
-		if slot < retentionStart {
+		if !needs.blob.at(slot) {
 			continue
 		}
-		if v[i].Block().Version() < version.Deneb {
-			continue
-		}
-		// Assuming blocks are sorted, as soon as we see 1 fulu block we know the rest will also be fulu.
-		if slots.ToEpoch(slot) >= fuluStart {
-			return bs, nil
-		}
-
 		c, err := v[i].Block().Body().BlobKzgCommitments()
 		if err != nil {
 			return nil, errors.Wrapf(err, "unexpected error checking commitments for block root %#x", v[i].Root())
