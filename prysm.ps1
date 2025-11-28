@@ -111,10 +111,9 @@ If you must wish to continue running an unverified binary, use:
 }
 
 # Finally, start the process.
+$argumentList = @($args | Select-Object -Skip 1);
 do {
     Write-Host "Starting: prysm $($args -join ' ')";
-
-    $argumentList = $args | Select-Object -Skip 1;
 
     if ($argumentList.Length -gt 0) {
         $process = Start-Process -FilePath $folderBin -ArgumentList $argumentList -NoNewWindow -PassThru -Wait;
