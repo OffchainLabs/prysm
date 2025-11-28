@@ -61,6 +61,7 @@ go_test(
         "columns_test.go",
         "fulu_transition_test.go",
         "log_test.go",
+        "needs_test.go",
         "pool_test.go",
         "service_test.go",
         "status_test.go",
