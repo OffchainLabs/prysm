@@ -109,7 +109,7 @@ func SetUint64(a []uint64) []uint64 {
 
 // IsUint64Sorted verifies if a uint64 slice is sorted in ascending order.
 func IsUint64Sorted(a []uint64) bool {
-	if len(a) == 0 || len(a) == 1 {
+	if len(a) < 2 {
 		return true
 	}
 	for i := 1; i < len(a); i++ {
