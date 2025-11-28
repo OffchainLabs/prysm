@@ -478,7 +478,7 @@ func TestExpirationFlowEndToEnd(t *testing.T) {
 			// Simulate the flow: batcher creates batches → sequence() → pool.todo() → pool.processTodo()
 
 			// Step 1: Create sequencer (simulating batcher)
-			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeedsFunc(tc.min, tc.max+1))
 			initializeBatchWithSlots(seq.seq, tc.min, tc.size)
 			for i := range seq.seq {
 				seq.seq[i].state = batchInit
@@ -499,7 +499,7 @@ func TestExpirationFlowEndToEnd(t *testing.T) {
 			}
 
 			// Step 4: Move minimum (simulating epoch advancement)
-			seq.currentNeeds = mockCurrentNeeds(tc.moveMinTo, tc.max+1)
+			seq.currentNeeds = mockCurrentNeedsFunc(tc.moveMinTo, tc.max+1)
 			seq.batcher.currentNeeds = seq.currentNeeds
 			pool.needs = seq.currentNeeds
 

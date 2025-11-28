@@ -14,25 +14,50 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func mockCurrentNeeds(begin, end primitives.Slot) func() currentNeeds {
+func mockCurrentNeeds(begin, end primitives.Slot) currentNeeds {
+	return currentNeeds{
+		block: needSpan{
+			begin: begin,
+			end:   end,
+		},
+		blob: needSpan{
+			begin: begin,
+			end:   end,
+		},
+		col: needSpan{
+			begin: begin,
+			end:   end,
+		},
+	}
+}
+
+func mockCurrentSpecNeeds() currentNeeds {
+	cfg := params.BeaconConfig()
+	fuluSlot := slots.UnsafeEpochStart(cfg.FuluForkEpoch)
+	denebSlot := slots.UnsafeEpochStart(cfg.DenebForkEpoch)
+	return currentNeeds{
+		block: needSpan{
+			begin: 0,
+			end:   primitives.Slot(math.MaxUint64),
+		},
+		blob: needSpan{
+			begin: denebSlot,
+			end:   fuluSlot,
+		},
+		col: needSpan{
+			begin: fuluSlot,
+			end:   primitives.Slot(math.MaxUint64),
+		},
+	}
+}
+
+func mockCurrentNeedsFunc(begin, end primitives.Slot) func() currentNeeds {
 	return func() currentNeeds {
-		return currentNeeds{
-			block: needSpan{
-				begin: begin,
-				end:   end,
-			},
-			blob: needSpan{
-				begin: begin,
-				end:   end,
-			},
-			col: needSpan{
-				begin: begin,
-				end:   end,
-			},
-		}
+		return mockCurrentNeeds(begin, end)
 	}
 }
 

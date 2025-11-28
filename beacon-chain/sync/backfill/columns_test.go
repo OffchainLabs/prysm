@@ -1,8 +1,8 @@
 package backfill
 
 import (
-	"slices"
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -323,6 +323,13 @@ func TestColumnBatchNeeded(t *testing.T) {
 	})
 }
 
+func nilIshColumnBatch(t *testing.T, cb *columnBatch) {
+	if cb == nil {
+		return
+	}
+	require.Equal(t, 0, len(cb.toDownload), "expected toDownload to be empty for nil-ish columnBatch")
+}
+
 // TestBuildColumnBatch tests the buildColumnBatch function
 func TestBuildColumnBatch(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -338,15 +345,15 @@ func TestBuildColumnBatch(t *testing.T) {
 	require.NoError(t, err)
 	denebSlot, err := slots.EpochStart(denebEpoch)
 	require.NoError(t, err)
-
+	specNeeds := mockCurrentSpecNeeds()
 	t.Run("empty blocks returns nil", func(t *testing.T) {
 		ctx := context.Background()
 		p := p2ptest.NewTestP2P(t)
 		store := filesystem.NewEphemeralDataColumnStorage(t)
 
-		cb, err := buildColumnBatch(ctx, batch{}, verifiedROBlocks{}, p, store)
+		cb, err := buildColumnBatch(ctx, batch{}, verifiedROBlocks{}, p, store, specNeeds)
 		require.NoError(t, err)
-		require.Equal(t, true, cb == nil)
+		nilIshColumnBatch(t, cb)
 	})
 
 	t.Run("pre-Fulu batch end returns nil", func(t *testing.T) {
@@ -361,9 +368,9 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   denebSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
-		require.Equal(t, true, cb == nil)
+		nilIshColumnBatch(t, cb)
 	})
 
 	t.Run("pre-Fulu last block returns nil", func(t *testing.T) {
@@ -378,9 +385,9 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
-		require.Equal(t, true, cb == nil)
+		nilIshColumnBatch(t, cb)
 	})
 
 	t.Run("boundary: batch end exactly at Fulu epoch", func(t *testing.T) {
@@ -395,7 +402,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "batch at Fulu boundary should not be nil")
 	})
@@ -408,13 +415,29 @@ func TestBuildColumnBatch(t *testing.T) {
 		// Create blocks at Fulu start
 		blks, _ := testBlobGen(t, fuluSlot, 1)
 		b := batch{
-			begin: fuluSlot,
-			end:   fuluSlot + 100,
+			begin: fuluSlot - 31,
+			end:   fuluSlot + 1,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "last block at Fulu boundary should not be nil")
+	})
+	t.Run("boundary: batch ends at fulu, block is pre-fulu", func(t *testing.T) {
+		ctx := context.Background()
+		p := p2ptest.NewTestP2P(t)
+		store := filesystem.NewEphemeralDataColumnStorage(t)
+
+		// Create blocks at Fulu start
+		blks, _ := testBlobGen(t, fuluSlot-1, 1)
+		b := batch{
+			begin: fuluSlot - 31,
+			end:   fuluSlot,
+		}
+
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
+		require.NoError(t, err)
+		nilIshColumnBatch(t, cb)
 	})
 
 	t.Run("mixed epochs: first block pre-Fulu, last block post-Fulu", func(t *testing.T) {
@@ -438,7 +461,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + primitives.Slot(postFuluCount),
 		}
 
-		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store)
+		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "mixed epoch batch should not be nil")
 		// Should only include Fulu blocks
@@ -457,7 +480,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 100,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb, "first block at Fulu should not be nil")
 		require.Equal(t, 3, len(cb.toDownload), "should include all 3 blocks")
@@ -474,7 +497,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		require.Equal(t, fuluSlot, cb.first, "first slot should be set")
@@ -493,7 +516,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, blks, p, store)
+		cb, err := buildColumnBatch(ctx, b, blks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		require.Equal(t, fuluSlot, cb.first, "first should be slot of first block with commitments")
@@ -523,7 +546,7 @@ func TestBuildColumnBatch(t *testing.T) {
 			end:   fuluSlot + 10,
 		}
 
-		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store)
+		cb, err := buildColumnBatch(ctx, b, allBlocks, p, store, specNeeds)
 		require.NoError(t, err)
 		require.NotNil(t, cb)
 		// Should only have 2 blocks (those with commitments)
@@ -820,8 +843,9 @@ func TestNewColumnSync(t *testing.T) {
 		current := primitives.Slot(100)
 
 		cfg := &workerCfg{
-			colStore:  colStore,
-			downscore: func(peer.ID, string, error) {},
+			colStore:     colStore,
+			downscore:    func(peer.ID, string, error) {},
+			currentNeeds: mockCurrentNeedsFunc(0, 0),
 		}
 
 		// Empty blocks should result in nil columnBatch
@@ -845,8 +869,9 @@ func TestNewColumnSync(t *testing.T) {
 		}
 
 		cfg := &workerCfg{
-			colStore:  colStore,
-			downscore: func(peer.ID, string, error) {},
+			colStore:     colStore,
+			downscore:    func(peer.ID, string, error) {},
+			currentNeeds: func() currentNeeds { return mockCurrentSpecNeeds() },
 		}
 
 		cs, err := newColumnSync(ctx, b, blks, current, p2p, cfg)

@@ -152,10 +152,10 @@ func (ci ColumnIndices) Intersection(other ColumnIndices) ColumnIndices {
 	return result
 }
 
-// Union mutates the receiver so that any index that is set in either of
+// Merge mutates the receiver so that any index that is set in either of
 // the two ColumnIndices is set in the receiver after the function finishes.
 // It does not mutate the other ColumnIndices given as a function argument.
-func (ci ColumnIndices) Union(other ColumnIndices) {
+func (ci ColumnIndices) Merge(other ColumnIndices) {
 	for index := range other {
 		ci.Set(index)
 	}

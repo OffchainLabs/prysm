@@ -234,6 +234,34 @@ func (b batch) validatingColumnRequest(cb *columnBisector) (*validatingColumnReq
 	}, nil
 }
 
+// resetToRetryColumns is called after a partial batch failure. It adds column indices back
+// to the toDownload structure for any blocks where those columns failed, and resets the bisector state.
+// Note that this method will also prune any columns that have expired, meaning we no longer need them
+// per spec and/or our backfill & retention settings.
+func resetToRetryColumns(b batch, needs currentNeeds) batch {
+	// return the given batch as-is if it isn't in a state that this func should handle.
+	if b.columns == nil || b.columns.bisector == nil || len(b.columns.bisector.errs) == 0 {
+		return b.transitionToNext()
+	}
+	pruned := make(map[[32]byte]struct{})
+	b.columns.pruneExpired(needs, pruned)
+
+	// clear out failed column state in the bisector and add back to
+	bisector := b.columns.bisector
+	roots := bisector.failingRoots()
+	// Add all the failed columns back to the toDownload structure and reset the bisector state.
+	for _, root := range roots {
+		if _, rm := pruned[root]; rm {
+			continue
+		}
+		bc := b.columns.toDownload[root]
+		bc.remaining.Merge(bisector.failuresFor(root))
+	}
+	b.columns.bisector.reset()
+
+	return b.transitionToNext()
+}
+
 var batchBlockUntil = func(ctx context.Context, untilRetry time.Duration, b batch) error {
 	log.WithFields(b.logFields()).WithField("untilRetry", untilRetry.String()).
 		Debug("Sleeping for retry backoff delay")

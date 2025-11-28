@@ -42,7 +42,7 @@ func TestValidateNext_happy(t *testing.T) {
 	cfg := &blobSyncConfig{
 		nbv:          testNewBlobVerifier(),
 		store:        filesystem.NewEphemeralBlobStorage(t),
-		currentNeeds: mockCurrentNeeds(0, current+1),
+		currentNeeds: mockCurrentNeedsFunc(0, current+1),
 	}
 	//expected :=
 	expected, err := verifiedROBlocks(blks).blobIdents(cfg.currentNeeds)
@@ -97,7 +97,7 @@ func TestValidateNext_errorsFromVerifier(t *testing.T) {
 	current := primitives.Slot(ds + 96)
 	blks, blobs := testBlobGen(t, ds+31, 1)
 
-	cn := mockCurrentNeeds(0, current+1)
+	cn := mockCurrentNeedsFunc(0, current+1)
 	cases := []struct {
 		name string
 		err  error

@@ -114,25 +114,6 @@ func (w *p2pWorker) run(ctx context.Context) {
 	}
 }
 
-func resetRetryableColumns(b batch) batch {
-	// return the given batch as-is if it isn't in a state that this func should handle.
-	if b.columns == nil || b.columns.bisector == nil || len(b.columns.bisector.errs) == 0 {
-		return b
-	}
-	bisector := b.columns.bisector
-	roots := bisector.failingRoots()
-	if len(roots) == 0 {
-		return b
-	}
-	// Add all the failed columns back to the toDownload structure.
-	for _, root := range roots {
-		bc := b.columns.toDownload[root]
-		bc.remaining.Union(bisector.failuresFor(root))
-	}
-	b.columns.bisector.reset()
-	return b
-}
-
 func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	current := w.cfg.clock.CurrentSlot()
 	b.blockPeer = b.assignedPeer

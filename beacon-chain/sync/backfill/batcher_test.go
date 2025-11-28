@@ -17,7 +17,7 @@ func TestBatcherBefore(t *testing.T) {
 	}{
 		{
 			name: "size 10",
-			b:    batcher{currentNeeds: mockCurrentNeeds(0, 100), size: 10},
+			b:    batcher{currentNeeds: mockCurrentNeedsFunc(0, 100), size: 10},
 			upTo: []primitives.Slot{33, 30, 10, 6},
 			expect: []batch{
 				{begin: 23, end: 33, state: batchInit},
@@ -28,7 +28,7 @@ func TestBatcherBefore(t *testing.T) {
 		},
 		{
 			name: "size 4",
-			b:    batcher{currentNeeds: mockCurrentNeeds(0, 100), size: 4},
+			b:    batcher{currentNeeds: mockCurrentNeedsFunc(0, 100), size: 4},
 			upTo: []primitives.Slot{33, 6, 4},
 			expect: []batch{
 				{begin: 29, end: 33, state: batchInit},
@@ -38,7 +38,7 @@ func TestBatcherBefore(t *testing.T) {
 		},
 		{
 			name: "trigger end",
-			b:    batcher{currentNeeds: mockCurrentNeeds(20, 100), size: 10},
+			b:    batcher{currentNeeds: mockCurrentNeedsFunc(20, 100), size: 10},
 			upTo: []primitives.Slot{33, 30, 25, 21, 20, 19},
 			expect: []batch{
 				{begin: 23, end: 33, state: batchInit},
@@ -71,7 +71,7 @@ func TestBatchSingleItem(t *testing.T) {
 	min = 0
 	max = 11235
 	size = 64
-	seq := newBatchSequencer(seqLen, max, size, mockCurrentNeeds(min, max+1))
+	seq := newBatchSequencer(seqLen, max, size, mockCurrentNeedsFunc(min, max+1))
 	got, err := seq.sequence()
 	require.NoError(t, err)
 	require.Equal(t, 1, len(got))
@@ -99,7 +99,7 @@ func TestBatchSequencer(t *testing.T) {
 	min = 0
 	max = 11235
 	size = 64
-	seq := newBatchSequencer(seqLen, max, size, mockCurrentNeeds(min, max+1))
+	seq := newBatchSequencer(seqLen, max, size, mockCurrentNeedsFunc(min, max+1))
 	expected := []batch{
 		{begin: 11171, end: 11235},
 		{begin: 11107, end: 11171},
@@ -372,7 +372,7 @@ func TestSequence(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeedsFunc(tc.min, tc.max+1))
 
 			// Initialize batches with valid slot ranges
 			initializeBatchWithSlots(seq.seq, tc.min, tc.size)
@@ -478,7 +478,7 @@ func TestUpdate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeeds(0, 1000+1))
+			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeedsFunc(0, 1000+1))
 
 			// Initialize batches with proper slot ranges
 			for i := range seq.seq {
@@ -597,7 +597,7 @@ func TestImportable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeeds(0, 1000+1))
+			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeedsFunc(0, 1000+1))
 
 			for i, state := range tc.states {
 				seq.seq[i] = batch{
@@ -616,14 +616,14 @@ func TestImportable(t *testing.T) {
 // TestMoveMinimumWithNonImportableUpdate tests integration of moveMinimum with update()
 func TestMoveMinimumWithNonImportableUpdate(t *testing.T) {
 	t.Run("UpdateBatchAfterMinimumChange", func(t *testing.T) {
-		seq := newBatchSequencer(3, 300, 50, mockCurrentNeeds(100, 300+1))
+		seq := newBatchSequencer(3, 300, 50, mockCurrentNeedsFunc(100, 300+1))
 
 		// Initialize with batches
 		seq.seq[0] = batch{begin: 200, end: 250, state: batchInit}
 		seq.seq[1] = batch{begin: 150, end: 200, state: batchInit}
 		seq.seq[2] = batch{begin: 100, end: 150, state: batchInit}
 
-		seq.currentNeeds = mockCurrentNeeds(150, 300+1)
+		seq.currentNeeds = mockCurrentNeedsFunc(150, 300+1)
 		seq.batcher.currentNeeds = seq.currentNeeds
 
 		// Update non-importable batch above new minimum
@@ -722,7 +722,7 @@ func TestCountWithState(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeeds(0, 1000+1))
+			seq := newBatchSequencer(tc.seqLen, 1000, 64, mockCurrentNeedsFunc(0, 1000+1))
 
 			for i, state := range tc.states {
 				seq.seq[i].state = state
@@ -785,7 +785,7 @@ func TestNumTodo(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeedsFunc(tc.min, tc.max+1))
 
 			for i, state := range tc.states {
 				seq.seq[i] = batch{
@@ -1059,7 +1059,7 @@ func TestMoveMinimumFiltersOutOfRangeBatches(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeeds(tc.min, tc.max+1))
+			seq := newBatchSequencer(tc.seqLen, tc.max, tc.size, mockCurrentNeedsFunc(tc.min, tc.max+1))
 
 			// Initialize batches with valid slot ranges
 			initializeBatchWithSlots(seq.seq, tc.min, tc.size)
@@ -1070,7 +1070,7 @@ func TestMoveMinimumFiltersOutOfRangeBatches(t *testing.T) {
 			}
 
 			// move minimum and call sequence to update set of batches
-			seq.currentNeeds = mockCurrentNeeds(tc.newMinimum, tc.max+1)
+			seq.currentNeeds = mockCurrentNeedsFunc(tc.newMinimum, tc.max+1)
 			seq.batcher.currentNeeds = seq.currentNeeds
 			got, err := seq.sequence()
 			require.NoError(t, err)

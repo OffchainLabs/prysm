@@ -185,7 +185,8 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 	}
 
 	for i, b := range todo {
-		if b.expired(p.needs()) {
+		needs := p.needs()
+		if b.expired(needs) {
 			p.endSeq = append(p.endSeq, b.withState(batchEndSequence))
 			continue
 		}
@@ -194,13 +195,12 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 			// Fatal error detected in batch, shut down the pool.
 			return nil, b.err
 		}
+
 		if b.state == batchErrRetryable {
 			// Columns can fail in a partial fashion, so we nee to reset
 			// components that track peer interactions for multiple columns
 			// to enable partial retries.
-			b = resetRetryableColumns(b)
-			// Set the next correct state after retryable error
-			b = b.transitionToNext()
+			b = resetToRetryColumns(b, needs)
 			if b.state == batchSequenced {
 				// Transitioning to batchSequenced means we need to download a new block batch because there was
 				// a problem making or verifying the last block request, so we should try to pick a different peer this time.
@@ -209,6 +209,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 				b.blockPeer = "" // reset block peer so we can fail back to it next time if there is an issue with assignment.
 			}
 		}
+
 		pid, cols, err := b.selectPeer(picker, excludePeers)
 		if err != nil {
 			p.peerFailLogger.WithField("notBusy", len(notBusy)).WithError(err).WithFields(b.logFields()).Warn("Failed to select peer for batch")
@@ -218,6 +219,7 @@ func (p *p2pBatchWorkerPool) processTodo(todo []batch, pa PeerAssigner, busy map
 		busy[pid] = true
 		b.assignedPeer = pid
 		b.nextReqCols = cols
+
 		backfillBatchTimeWaiting.Observe(float64(time.Since(b.scheduled).Milliseconds()))
 		p.toWorkers <- b
 		p.updateEarliest(b.begin)
