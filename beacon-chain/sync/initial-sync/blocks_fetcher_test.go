@@ -601,7 +601,7 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 		// p3 responded w/o waiting for rate limiter's lock (on which p2 spins).
 	}
 	// Make sure that p2 has been rate limited.
-	require.LogsContain(t, hook, fmt.Sprintf("msg=\"Slowing down for rate limit\" peer=%s", p2.PeerID()))
+	require.LogsContain(t, hook, fmt.Sprintf("msg=\"Slowing down for rate limit\" package=beacon-chain/sync/initial-sync peer=%s", p2.PeerID()))
 }
 
 func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
