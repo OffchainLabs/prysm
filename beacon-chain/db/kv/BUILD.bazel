@@ -19,6 +19,7 @@ go_library(
         "kv.go",
         "lightclient.go",
         "log.go",
+        "metrics.go",
         "migration.go",
         "migration_archived_index.go",
         "migration_block_slot_index.go",
@@ -40,7 +41,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/blocks:go_default_library",
-        "//beacon-chain/custody:go_default_library",
         "//beacon-chain/db/filters:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//beacon-chain/state:go_default_library",

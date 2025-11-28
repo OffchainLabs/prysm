@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/custody"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -48,7 +47,7 @@ func (s *Store) GetCustodyInfo(ctx context.Context) (primitives.Slot, uint64, er
 	}
 
 	// Update the DB metric with the current value
-	custody.UpdateDBMetric(storedEarliestAvailableSlot)
+	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
 
 	return storedEarliestAvailableSlot, storedGroupCount, nil
 }
@@ -111,7 +110,7 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 
 	// Update the DB metric whenever we log the custody info
 	// This ensures the metric is always in sync with what we log
-	custody.UpdateDBMetric(storedEarliestAvailableSlot)
+	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
 
 	return storedEarliestAvailableSlot, storedGroupCount, nil
 }
@@ -187,7 +186,7 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 	log.WithField("earliestAvailableSlot", storedEarliestAvailableSlot).Debug("Updated earliest available slot")
 
 	// Update DB metric after successfully updating the earliest available slot
-	custody.UpdateDBMetric(storedEarliestAvailableSlot)
+	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
 
 	return nil
 }
