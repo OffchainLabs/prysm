@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -131,19 +130,12 @@ func logValidatorWebAuth(validatorWebAddr, token, tokenPath string) {
 	log.Infof("Validator Client auth token for gRPC and REST authentication set at %s", tokenPath)
 }
 
-func saveAuthToken(tokenPath string, token string) error {
-	bytesBuf := new(bytes.Buffer)
-	if _, err := bytesBuf.WriteString(token); err != nil {
-		return err
-	}
-	if _, err := bytesBuf.WriteString("\n"); err != nil {
-		return err
-	}
-
+func saveAuthToken(tokenPath, token string) error {
+	data := append([]byte(token), '\n')
 	if err := file.MkdirAll(filepath.Dir(tokenPath)); err != nil {
 		return errors.Wrapf(err, "could not create directory %s", filepath.Dir(tokenPath))
 	}
-	if err := file.WriteFile(tokenPath, bytesBuf.Bytes()); err != nil {
+	if err := file.WriteFile(tokenPath, data); err != nil {
 		return errors.Wrapf(err, "could not write to file %s", tokenPath)
 	}
 
