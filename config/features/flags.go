@@ -206,6 +206,17 @@ var (
 		Name:  "disable-last-epoch-targets",
 		Usage: "Disables processing of last epoch targets.",
 	}
+	// Activate ZKVM execution proof mode
+	EnableZkvmFlag = &cli.BoolFlag{
+		Name: "activate-zkvm",
+		Usage: `
+			Activates ZKVM execution proof mode. Enables the node to subscribe to the
+        	execution_proof gossip topic, receive and verify execution proofs from peers,
+        	and advertise zkVM support in its ENR for peer discovery.
+        	Use --zkvm-generation-proof-types to specify which proof types this node
+        	should generate (optional - nodes can verify without generating).
+		`,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.

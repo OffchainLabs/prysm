@@ -433,6 +433,13 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		}
 	}
 
+	if features.Get().EnableZkvm {
+		log.Debugln("Registering Proof Generation Service")
+		if err := beacon.registerProofGenerationService(cliCtx); err != nil {
+			return errors.Wrap(err, "could not register proof generation service")
+		}
+	}
+
 	return nil
 }
 
@@ -1139,6 +1146,11 @@ func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.
 func (b *BeaconNode) registerLightClientStore() {
 	lcs := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
 	b.lcStore = lcs
+}
+
+func (b *BeaconNode) registerProofGenerationService(cliCtx *cli.Context) error {
+	// TODO
+	return nil
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
