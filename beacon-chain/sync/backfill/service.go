@@ -211,7 +211,7 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
-	checker := newCheckMultiplexer(s.fuluStart, s.denebStart, b)
+	checker := newCheckMultiplexer(s.syncNeeds.currently(), b)
 	return su.fillBack(ctx, current, b.blocks, checker)
 }
 

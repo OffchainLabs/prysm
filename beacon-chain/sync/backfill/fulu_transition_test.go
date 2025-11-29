@@ -23,9 +23,9 @@ var mockBlobFailure = errors.Wrap(mockAvailabilityFailure, "blob checker failure
 
 // trackingAvailabilityChecker wraps a das.AvailabilityChecker and tracks calls
 type trackingAvailabilityChecker struct {
-	checker            das.AvailabilityChecker
-	callCount          int
-	blocksSeenPerCall  [][]blocks.ROBlock // Track blocks passed in each call
+	checker           das.AvailabilityChecker
+	callCount         int
+	blocksSeenPerCall [][]blocks.ROBlock // Track blocks passed in each call
 }
 
 // NewTrackingAvailabilityChecker creates a wrapper that tracks calls to the underlying checker
@@ -208,11 +208,12 @@ func TestNewCheckMultiplexer(t *testing.T) {
 		},
 	}
 
+	needs := mockCurrentSpecNeeds()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			b := tc.batch()
 			var checker *checkMultiplexer
-			checker = newCheckMultiplexer(fuluSlot, denebSlot, b)
+			checker = newCheckMultiplexer(needs, b)
 			if tc.setupChecker != nil {
 				tc.setupChecker(checker)
 			}
@@ -237,56 +238,53 @@ func testBlocksWithCommitments(t *testing.T, startSlot primitives.Slot, count in
 
 func TestDaNeeds(t *testing.T) {
 	denebSlot, fuluSlot := testDenebAndFuluSlots(t)
-	mux := &checkMultiplexer{
-		denebStart: denebSlot,
-		fuluStart:  fuluSlot,
-	}
+	mux := &checkMultiplexer{currentNeeds: mockCurrentSpecNeeds()}
 
 	cases := []struct {
 		name   string
-		setup  func() (daNeeds, []blocks.ROBlock)
-		expect daNeeds
+		setup  func() (daGroups, []blocks.ROBlock)
+		expect daGroups
 		err    error
 	}{
 		{
 			name: "empty range",
-			setup: func() (daNeeds, []blocks.ROBlock) {
-				return daNeeds{}, testBlocksWithCommitments(t, 10, 5)
+			setup: func() (daGroups, []blocks.ROBlock) {
+				return daGroups{}, testBlocksWithCommitments(t, 10, 5)
 			},
 		},
 		{
 			name: "single deneb block",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				blks := testBlocksWithCommitments(t, denebSlot, 1)
-				return daNeeds{
+				return daGroups{
 					blobs: []blocks.ROBlock{blks[0]},
 				}, blks
 			},
 		},
 		{
 			name: "single fulu block",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				blks := testBlocksWithCommitments(t, fuluSlot, 1)
-				return daNeeds{
+				return daGroups{
 					cols: []blocks.ROBlock{blks[0]},
 				}, blks
 			},
 		},
 		{
 			name: "deneb range",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				blks := testBlocksWithCommitments(t, denebSlot, 3)
-				return daNeeds{
+				return daGroups{
 					blobs: blks,
 				}, blks
 			},
 		},
 		{
 			name: "one deneb one fulu",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				deneb := testBlocksWithCommitments(t, denebSlot, 1)
 				fulu := testBlocksWithCommitments(t, fuluSlot, 1)
-				return daNeeds{
+				return daGroups{
 					blobs: []blocks.ROBlock{deneb[0]},
 					cols:  []blocks.ROBlock{fulu[0]},
 				}, append(deneb, fulu...)
@@ -294,10 +292,10 @@ func TestDaNeeds(t *testing.T) {
 		},
 		{
 			name: "deneb and fulu range",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				deneb := testBlocksWithCommitments(t, denebSlot, 3)
 				fulu := testBlocksWithCommitments(t, fuluSlot, 3)
-				return daNeeds{
+				return daGroups{
 					blobs: deneb,
 					cols:  fulu,
 				}, append(deneb, fulu...)
@@ -307,7 +305,7 @@ func TestDaNeeds(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			expectNeeds, blks := tc.setup()
-			needs, err := mux.blockDaNeeds(blks)
+			needs, err := mux.divideByChecker(blks)
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
@@ -338,66 +336,6 @@ func TestDaNeeds(t *testing.T) {
 	}
 }
 
-func TestSafeRange(t *testing.T) {
-	cases := []struct {
-		name     string
-		sr       safeRange
-		err      error
-		slice    []int
-		expected []int
-	}{
-		{
-			name:  "zero range",
-			sr:    safeRange{},
-			slice: []int{0, 1, 2},
-		},
-		{
-			name:     "valid range",
-			sr:       safeRange{start: 1, end: 3},
-			expected: []int{1, 2},
-			slice:    []int{0, 1, 2},
-		},
-		{
-			name:  "start greater than end",
-			sr:    safeRange{start: 3, end: 2},
-			err:   errUnsafeRange,
-			slice: []int{0, 1, 2},
-		},
-		{
-			name:  "end out of bounds",
-			sr:    safeRange{start: 1, end: 5},
-			err:   errUnsafeRange,
-			slice: []int{0, 1, 2},
-		},
-		{
-			name:  "start out of bounds",
-			sr:    safeRange{start: 5, end: 6},
-			err:   errUnsafeRange,
-			slice: []int{0, 1, 2},
-		},
-		{
-			name:  "no error for empty slice",
-			sr:    safeRange{start: 6, end: 5},
-			slice: []int{},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			sub, err := subSlice(tc.slice, tc.sr)
-			if tc.err != nil {
-				require.ErrorIs(t, err, tc.err)
-				return
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, len(tc.expected), len(sub))
-			for i := range tc.expected {
-				require.Equal(t, tc.expected[i], sub[i])
-			}
-		})
-	}
-}
-
 func testDenebAndFuluSlots(t *testing.T) (primitives.Slot, primitives.Slot) {
 	params.SetupTestConfigCleanup(t)
 	denebEpoch := params.BeaconConfig().DenebForkEpoch
@@ -423,93 +361,47 @@ func testBlocksWithoutCommitments(t *testing.T, startSlot primitives.Slot, count
 	return blks
 }
 
-// TestSafeRangeIsZero verifies the isZero method works correctly
-func TestSafeRangeIsZero(t *testing.T) {
-	cases := []struct {
-		name   string
-		sr     safeRange
-		expect bool
-	}{
-		{
-			name:   "zero range (0, 0)",
-			sr:     safeRange{start: 0, end: 0},
-			expect: true,
-		},
-		{
-			name:   "non-zero range (1, 2)",
-			sr:     safeRange{start: 1, end: 2},
-			expect: false,
-		},
-		{
-			name:   "non-zero range (0, 1)",
-			sr:     safeRange{start: 0, end: 1},
-			expect: false,
-		},
-		{
-			name:   "non-zero range (5, 10)",
-			sr:     safeRange{start: 5, end: 10},
-			expect: false,
-		},
-		{
-			name:   "invalid range (5, 3)",
-			sr:     safeRange{start: 5, end: 3},
-			expect: false, // start != end, so isZero returns false
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := tc.sr.isZero()
-			require.Equal(t, tc.expect, result,
-				"safeRange{%d, %d}.isZero() should return %v, got %v", tc.sr.start, tc.sr.end, tc.expect, result)
-		})
-	}
-}
-
 // TestBlockDaNeedsWithoutCommitments verifies blocks without commitments are skipped
 func TestBlockDaNeedsWithoutCommitments(t *testing.T) {
 	denebSlot, fuluSlot := testDenebAndFuluSlots(t)
-	mux := &checkMultiplexer{
-		denebStart: denebSlot,
-		fuluStart:  fuluSlot,
-	}
+	mux := &checkMultiplexer{currentNeeds: mockCurrentSpecNeeds()}
 
 	cases := []struct {
 		name   string
-		setup  func() (daNeeds, []blocks.ROBlock)
-		expect daNeeds
+		setup  func() (daGroups, []blocks.ROBlock)
+		expect daGroups
 		err    error
 	}{
 		{
 			name: "deneb blocks without commitments",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				blks := testBlocksWithoutCommitments(t, denebSlot, 3)
-				return daNeeds{}, blks // Expect empty daNeeds
+				return daGroups{}, blks // Expect empty daNeeds
 			},
 		},
 		{
 			name: "fulu blocks without commitments",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				blks := testBlocksWithoutCommitments(t, fuluSlot, 3)
-				return daNeeds{}, blks // Expect empty daNeeds
+				return daGroups{}, blks // Expect empty daNeeds
 			},
 		},
 		{
 			name: "mixed: some deneb with commitments, some without",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				withCommit := testBlocksWithCommitments(t, denebSlot, 2)
 				withoutCommit := testBlocksWithoutCommitments(t, denebSlot+2, 2)
 				blks := append(withCommit, withoutCommit...)
-				return daNeeds{
+				return daGroups{
 					blobs: withCommit, // Only the ones with commitments
 				}, blks
 			},
 		},
 		{
 			name: "pre-deneb blocks are skipped",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				blks := testBlocksWithCommitments(t, denebSlot-10, 5)
-				return daNeeds{}, blks // All pre-deneb, expect empty
+				return daGroups{}, blks // All pre-deneb, expect empty
 			},
 		},
 	}
@@ -517,7 +409,7 @@ func TestBlockDaNeedsWithoutCommitments(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			expectNeeds, blks := tc.setup()
-			needs, err := mux.blockDaNeeds(blks)
+			needs, err := mux.divideByChecker(blks)
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
@@ -536,34 +428,31 @@ func TestBlockDaNeedsWithoutCommitments(t *testing.T) {
 // TestBlockDaNeedsAcrossEras verifies blocks spanning pre-deneb/deneb/fulu boundaries
 func TestBlockDaNeedsAcrossEras(t *testing.T) {
 	denebSlot, fuluSlot := testDenebAndFuluSlots(t)
-	mux := &checkMultiplexer{
-		denebStart: denebSlot,
-		fuluStart:  fuluSlot,
-	}
+	mux := &checkMultiplexer{currentNeeds: mockCurrentSpecNeeds()}
 
 	cases := []struct {
-		name         string
-		setup        func() (daNeeds, []blocks.ROBlock)
+		name            string
+		setup           func() (daGroups, []blocks.ROBlock)
 		expectBlobCount int
 		expectColCount  int
 	}{
 		{
 			name: "pre-deneb, deneb, fulu sequence",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				preDeneb := testBlocksWithCommitments(t, denebSlot-1, 1)
 				deneb := testBlocksWithCommitments(t, denebSlot, 2)
 				fulu := testBlocksWithCommitments(t, fuluSlot, 2)
 				blks := append(preDeneb, append(deneb, fulu...)...)
-				return daNeeds{}, blks
+				return daGroups{}, blks
 			},
 			expectBlobCount: 2, // Only deneb blocks
 			expectColCount:  2, // Only fulu blocks
 		},
 		{
 			name: "blocks at exact deneb boundary",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				atBoundary := testBlocksWithCommitments(t, denebSlot, 1)
-				return daNeeds{
+				return daGroups{
 					blobs: atBoundary,
 				}, atBoundary
 			},
@@ -572,9 +461,9 @@ func TestBlockDaNeedsAcrossEras(t *testing.T) {
 		},
 		{
 			name: "blocks at exact fulu boundary",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				atBoundary := testBlocksWithCommitments(t, fuluSlot, 1)
-				return daNeeds{
+				return daGroups{
 					cols: atBoundary,
 				}, atBoundary
 			},
@@ -583,11 +472,11 @@ func TestBlockDaNeedsAcrossEras(t *testing.T) {
 		},
 		{
 			name: "many deneb blocks before fulu transition",
-			setup: func() (daNeeds, []blocks.ROBlock) {
+			setup: func() (daGroups, []blocks.ROBlock) {
 				deneb := testBlocksWithCommitments(t, denebSlot, 10)
 				fulu := testBlocksWithCommitments(t, fuluSlot, 5)
 				blks := append(deneb, fulu...)
-				return daNeeds{}, blks
+				return daGroups{}, blks
 			},
 			expectBlobCount: 10,
 			expectColCount:  5,
@@ -597,7 +486,7 @@ func TestBlockDaNeedsAcrossEras(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, blks := tc.setup()
-			needs, err := mux.blockDaNeeds(blks)
+			needs, err := mux.divideByChecker(blks)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectBlobCount, len(needs.blobs),
 				"expected %d blob blocks, got %d", tc.expectBlobCount, len(needs.blobs))
@@ -648,8 +537,8 @@ func TestDoAvailabilityCheckEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:    "valid checker error is propagated",
-			checker: &das.MockAvailabilityStore{ErrIsDataAvailable: checkerErr},
+			name:      "valid checker error is propagated",
+			checker:   &das.MockAvailabilityStore{ErrIsDataAvailable: checkerErr},
 			expectErr: checkerErr,
 			setupTestBlocks: func() []blocks.ROBlock {
 				return testBlocksWithCommitments(t, denebSlot, 1)
@@ -674,80 +563,16 @@ func TestDoAvailabilityCheckEdgeCases(t *testing.T) {
 	}
 }
 
-// TestSubSliceEdgeCases verifies additional edge cases for subSlice
-func TestSubSliceEdgeCases(t *testing.T) {
-	cases := []struct {
-		name     string
-		sr       safeRange
-		slice    []int
-		expected []int
-		err      error
-	}{
-		{
-			name:  "full range extraction",
-			sr:    safeRange{start: 0, end: 5},
-			slice: []int{0, 1, 2, 3, 4},
-			expected: []int{0, 1, 2, 3, 4},
-		},
-		{
-			name:  "single element extraction",
-			sr:    safeRange{start: 2, end: 3},
-			slice: []int{0, 1, 2, 3, 4},
-			expected: []int{2},
-		},
-		{
-			name:  "last element extraction",
-			sr:    safeRange{start: 4, end: 5},
-			slice: []int{0, 1, 2, 3, 4},
-			expected: []int{4},
-		},
-		{
-			name:  "start equals end (zero range)",
-			sr:    safeRange{start: 2, end: 2},
-			slice: []int{0, 1, 2, 3, 4},
-			// Zero range should return nil, not error
-		},
-		{
-			name:  "large slice extraction",
-			sr:    safeRange{start: 0, end: 100},
-			slice: make([]int, 100),
-			expected: make([]int, 100),
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := subSlice(tc.slice, tc.sr)
-			if tc.err != nil {
-				require.ErrorIs(t, err, tc.err)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, len(tc.expected), len(result),
-				"expected slice of length %d, got %d", len(tc.expected), len(result))
-			if len(tc.expected) > 0 {
-				for i := range tc.expected {
-					require.Equal(t, tc.expected[i], result[i],
-						"element at index %d should be %d, got %d", i, tc.expected[i], result[i])
-				}
-			}
-		})
-	}
-}
-
 // TestBlockDaNeedsErrorWrapping verifies error messages are properly wrapped
 func TestBlockDaNeedsErrorWrapping(t *testing.T) {
-	denebSlot, fuluSlot := testDenebAndFuluSlots(t)
-	mux := &checkMultiplexer{
-		denebStart: denebSlot,
-		fuluStart:  fuluSlot,
-	}
+	denebSlot, _ := testDenebAndFuluSlots(t)
+	mux := &checkMultiplexer{currentNeeds: mockCurrentSpecNeeds()}
 
 	// Test with a block that has commitments but in deneb range
 	blks := testBlocksWithCommitments(t, denebSlot, 2)
 
 	// This should succeed without errors
-	needs, err := mux.blockDaNeeds(blks)
+	needs, err := mux.divideByChecker(blks)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(needs.blobs))
 	require.Equal(t, 0, len(needs.cols))
@@ -759,12 +584,12 @@ func TestIsDataAvailableCallRouting(t *testing.T) {
 	denebSlot, fuluSlot := testDenebAndFuluSlots(t)
 
 	cases := []struct {
-		name              string
-		buildBlocks       func() []blocks.ROBlock
-		expectedBlobCalls int
+		name               string
+		buildBlocks        func() []blocks.ROBlock
+		expectedBlobCalls  int
 		expectedBlobBlocks int
-		expectedColCalls  int
-		expectedColBlocks int
+		expectedColCalls   int
+		expectedColBlocks  int
 	}{
 		{
 			name: "PreDenebOnly",
@@ -967,10 +792,9 @@ func TestIsDataAvailableCallRouting(t *testing.T) {
 
 			// Create multiplexer with tracked checkers
 			mux := &checkMultiplexer{
-				blobCheck:  blobTracker,
-				colCheck:   colTracker,
-				denebStart: denebSlot,
-				fuluStart:  fuluSlot,
+				blobCheck:    blobTracker,
+				colCheck:     colTracker,
+				currentNeeds: mockCurrentSpecNeeds(),
 			}
 
 			// Build blocks and run availability check

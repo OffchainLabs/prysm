@@ -13,10 +13,9 @@ var errMissingAvailabilityChecker = errors.Wrap(errUnrecoverable, "batch is miss
 var errUnsafeRange = errors.Wrap(errUnrecoverable, "invalid slice indices")
 
 type checkMultiplexer struct {
-	blobCheck  das.AvailabilityChecker
-	colCheck   das.AvailabilityChecker
-	denebStart primitives.Slot
-	fuluStart  primitives.Slot
+	blobCheck    das.AvailabilityChecker
+	colCheck     das.AvailabilityChecker
+	currentNeeds currentNeeds
 }
 
 // Persist implements das.AvailabilityStore.
@@ -24,8 +23,8 @@ var _ das.AvailabilityChecker = &checkMultiplexer{}
 
 // newCheckMultiplexer initializes an AvailabilityChecker that multiplexes to the BlobSidecar and DataColumnSidecar
 // AvailabilityCheckers present in the batch.
-func newCheckMultiplexer(fuluStart, denebStart primitives.Slot, b batch) *checkMultiplexer {
-	s := &checkMultiplexer{fuluStart: fuluStart, denebStart: denebStart}
+func newCheckMultiplexer(needs currentNeeds, b batch) *checkMultiplexer {
+	s := &checkMultiplexer{currentNeeds: needs}
 	if b.blobs != nil && b.blobs.store != nil {
 		s.blobCheck = b.blobs.store
 	}
@@ -38,7 +37,7 @@ func newCheckMultiplexer(fuluStart, denebStart primitives.Slot, b batch) *checkM
 
 // IsDataAvailable implements the das.AvailabilityStore interface.
 func (m *checkMultiplexer) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
-	needs, err := m.blockDaNeeds(blks)
+	needs, err := m.divideByChecker(blks)
 	if err != nil {
 		return errors.Wrap(errUnrecoverable, "failed to slice blocks by DA type")
 	}
@@ -62,8 +61,8 @@ func doAvailabilityCheck(ctx context.Context, check das.AvailabilityChecker, cur
 	return check.IsDataAvailable(ctx, current, blks...)
 }
 
-// daNeeds is a helper type that groups blocks by their DA type.
-type daNeeds struct {
+// daGroups is a helper type that groups blocks by their DA type.
+type daGroups struct {
 	blobs []blocks.ROBlock
 	cols  []blocks.ROBlock
 }
@@ -71,15 +70,12 @@ type daNeeds struct {
 // blocksByDaType slices the given blocks into two slices: one for deneb blocks (BlobSidecar)
 // and one for fulu blocks (DataColumnSidecar). Blocks that are pre-deneb or have no
 // blob commitments are skipped.
-func (m *checkMultiplexer) blockDaNeeds(blks []blocks.ROBlock) (daNeeds, error) {
-	needs := daNeeds{}
-	blobs, cols := safeRange{}, safeRange{}
-	for i, blk := range blks {
-		ui := uint(i)
+func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, error) {
+	needs := daGroups{}
+	for _, blk := range blks {
 		slot := blk.Block().Slot()
 
-		// Skip blocks that are pre-deneb or with no commitments.
-		if slot < m.denebStart {
+		if !m.currentNeeds.blob.at(slot) && !m.currentNeeds.col.at(slot) {
 			continue
 		}
 		cmts, err := blk.Block().Body().BlobKzgCommitments()
@@ -89,30 +85,16 @@ func (m *checkMultiplexer) blockDaNeeds(blks []blocks.ROBlock) (daNeeds, error) 
 		if len(cmts) == 0 {
 			continue
 		}
-
-		if slot >= m.fuluStart {
-			if cols.isZero() {
-				cols.start = ui
-			}
-			cols.end = ui + 1
+		if m.currentNeeds.col.at(slot) {
+			needs.cols = append(needs.cols, blk)
 			continue
 		}
-		// slot is >= deneb and < fulu.
-		if blobs.isZero() {
-			blobs.start = ui
+		if m.currentNeeds.blob.at(slot) {
+			needs.blobs = append(needs.blobs, blk)
+			continue
 		}
-		blobs.end = ui + 1
 	}
 
-	var err error
-	needs.blobs, err = subSlice(blks, blobs)
-	if err != nil {
-		return needs, errors.Wrap(err, "slicing deneb blocks")
-	}
-	needs.cols, err = subSlice(blks, cols)
-	if err != nil {
-		return needs, errors.Wrap(err, "slicing fulu blocks")
-	}
 	return needs, nil
 }
 
