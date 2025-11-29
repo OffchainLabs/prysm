@@ -3,9 +3,9 @@ package peerdas_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -30,7 +30,6 @@ func TestComputeColumnsForCustodyGroup(t *testing.T) {
 func TestComputeCustodyGroupForColumn(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
-	config.NumberOfColumns = 128
 	config.NumberOfCustodyGroups = 64
 	params.OverrideBeaconConfig(config)
 

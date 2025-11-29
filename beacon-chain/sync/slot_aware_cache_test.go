@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestSlotAwareCache(t *testing.T) {
@@ -109,7 +109,7 @@ func TestSlotAwareCache(t *testing.T) {
 		cache := newSlotAwareCache(200000) // Large cache to avoid LRU eviction
 
 		// Add entries for 1005 slots, each with one key
-		for i := 0; i < 1005; i++ {
+		for i := range 1005 {
 			slot := primitives.Slot(i)
 			key := fmt.Sprintf("key%d", i)
 			cache.Add(slot, key, fmt.Sprintf("value%d", i))

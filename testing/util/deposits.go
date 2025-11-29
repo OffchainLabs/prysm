@@ -4,16 +4,16 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/pkg/errors"
 )
 
@@ -55,7 +55,7 @@ func DeterministicDepositsAndKeys(numDeposits uint64) ([]*ethpb.Deposit, []bls.S
 		privKeys = append(privKeys, secretKeys[:len(secretKeys)-1]...)
 
 		// Create the new deposits and add them to the trie.
-		for i := uint64(0); i < numRequired; i++ {
+		for i := range numRequired {
 			balance := params.BeaconConfig().MaxEffectiveBalance
 			deposit, err := signedDeposit(secretKeys[i], publicKeys[i].Marshal(), publicKeys[i+1].Marshal(), balance)
 			if err != nil {
@@ -123,7 +123,7 @@ func DepositsWithBalance(balances []uint64) ([]*ethpb.Deposit, *trie.SparseMerkl
 
 	deposits := make([]*ethpb.Deposit, numDeposits)
 	// Create the new deposits and add them to the trie.
-	for i := uint64(0); i < numDeposits; i++ {
+	for i := range numDeposits {
 		balance := params.BeaconConfig().MaxEffectiveBalance
 		// lint:ignore uintcast -- test code
 		if len(balances) == int(numDeposits) {
@@ -275,7 +275,7 @@ func DeterministicGenesisState(t testing.TB, numValidators uint64) (state.Beacon
 func DepositTrieFromDeposits(deposits []*ethpb.Deposit) (*trie.SparseMerkleTrie, [][32]byte, error) {
 	encodedDeposits := make([][]byte, len(deposits))
 	roots := make([][32]byte, len(deposits))
-	for i := 0; i < len(encodedDeposits); i++ {
+	for i := range encodedDeposits {
 		hashedDeposit, err := deposits[i].Data.HashTreeRoot()
 		if err != nil {
 			return nil, [][32]byte{}, errors.Wrap(err, "could not tree hash deposit data")
@@ -330,7 +330,7 @@ func DeterministicDepositsAndKeysSameValidator(numDeposits uint64) ([]*ethpb.Dep
 		privKeys = append(privKeys, secretKeys[:len(secretKeys)-1]...)
 
 		// Create the new deposits and add them to the trie. Always use the first validator to create deposit
-		for i := uint64(0); i < numRequired; i++ {
+		for i := range numRequired {
 			withdrawalCreds := hash.Hash(publicKeys[1].Marshal())
 			withdrawalCreds[0] = params.BeaconConfig().BLSWithdrawalPrefixByte
 

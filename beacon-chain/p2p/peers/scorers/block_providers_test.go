@@ -6,13 +6,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -178,7 +178,7 @@ func TestScorers_BlockProvider_WeightSorted(t *testing.T) {
 	}
 
 	var pids []peer.ID
-	for i := uint64(0); i < 10; i++ {
+	for i := range uint64(10) {
 		pid := peer.ID(strconv.FormatUint(i, 10))
 		scorer.IncrementProcessedBlocks(pid, i*batchSize)
 		pids = append(pids, pid)
@@ -190,7 +190,7 @@ func TestScorers_BlockProvider_WeightSorted(t *testing.T) {
 	// Run weighted sort lots of time, to get accurate statistics of whether more heavy items
 	// are indeed preferred when sorting.
 	scores := make(map[peer.ID]int, len(pids))
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		score := len(pids) - 1
 		// The earlier in the list the item is, the more of a score will it get.
 		for _, pid := range scorer.WeightSorted(r, shuffle(pids), nil) {

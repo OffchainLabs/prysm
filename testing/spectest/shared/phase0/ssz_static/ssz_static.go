@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	common "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/ssz_static"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	common "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
 	fssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -17,10 +17,10 @@ func RunSSZStaticTests(t *testing.T, config string) {
 	common.RunSSZStaticTests(t, config, "phase0", unmarshalledSSZ, customHtr)
 }
 
-func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR {
+func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
 	switch object.(type) {
 	case *ethpb.BeaconState:
-		htrs = append(htrs, func(s interface{}) ([32]byte, error) {
+		htrs = append(htrs, func(s any) ([32]byte, error) {
 			beaconState, err := state_native.InitializeFromProtoPhase0(s.(*ethpb.BeaconState))
 			require.NoError(t, err)
 			return beaconState.HashTreeRoot(context.TODO())
@@ -30,8 +30,8 @@ func customHtr(t *testing.T, htrs []common.HTR, object interface{}) []common.HTR
 }
 
 // unmarshalledSSZ unmarshalls serialized input.
-func unmarshalledSSZ(t *testing.T, serializedBytes []byte, objectName string) (interface{}, error) {
-	var obj interface{}
+func unmarshalledSSZ(t *testing.T, serializedBytes []byte, objectName string) (any, error) {
+	var obj any
 	switch objectName {
 	case "Attestation":
 		obj = &ethpb.Attestation{}

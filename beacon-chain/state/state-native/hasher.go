@@ -5,14 +5,14 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -43,6 +43,8 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateElectraFieldCount)
 	case version.Fulu:
 		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateFuluFieldCount)
+	case version.Gloas:
+		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
 	default:
 		return nil, fmt.Errorf("unknown state version %s", version.String(state.version))
 	}
@@ -245,13 +247,23 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.LatestExecutionPayloadHeaderCapella.RealPosition()] = executionPayloadRoot[:]
 	}
 
-	if state.version >= version.Deneb {
+	if state.version >= version.Deneb && state.version < version.Gloas {
 		// Execution payload root.
 		executionPayloadRoot, err := state.latestExecutionPayloadHeaderDeneb.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}
 		fieldRoots[types.LatestExecutionPayloadHeaderDeneb.RealPosition()] = executionPayloadRoot[:]
+	}
+
+	if state.version >= version.Gloas {
+		// Execution payload bid root for Gloas.
+		bidRoot, err := state.latestExecutionPayloadBid.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+
+		fieldRoots[types.LatestExecutionPayloadBid.RealPosition()] = bidRoot[:]
 	}
 
 	if state.version >= version.Capella {
@@ -327,6 +339,35 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 			return nil, errors.Wrap(err, "could not compute proposer lookahead merkleization")
 		}
 		fieldRoots[types.ProposerLookahead.RealPosition()] = proposerLookaheadRoot[:]
+	}
+
+	if state.version >= version.Gloas {
+		epaRoot, err := stateutil.ExecutionPayloadAvailabilityRoot(state.executionPayloadAvailability)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute execution payload availability merkleization")
+		}
+
+		fieldRoots[types.ExecutionPayloadAvailability.RealPosition()] = epaRoot[:]
+
+		bppRoot, err := stateutil.BuilderPendingPaymentsRoot(state.builderPendingPayments)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute builder pending payments merkleization")
+		}
+
+		fieldRoots[types.BuilderPendingPayments.RealPosition()] = bppRoot[:]
+
+		bpwRoot, err := stateutil.BuilderPendingWithdrawalsRoot(state.builderPendingWithdrawals)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute builder pending withdrawals merkleization")
+		}
+
+		fieldRoots[types.BuilderPendingWithdrawals.RealPosition()] = bpwRoot[:]
+
+		lbhRoot := bytesutil.ToBytes32(state.latestBlockHash)
+		fieldRoots[types.LatestBlockHash.RealPosition()] = lbhRoot[:]
+
+		lwrRoot := bytesutil.ToBytes32(state.latestWithdrawalsRoot)
+		fieldRoots[types.LatestWithdrawalsRoot.RealPosition()] = lwrRoot[:]
 	}
 	return fieldRoots, nil
 }

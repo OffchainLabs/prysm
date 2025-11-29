@@ -4,6 +4,87 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.0.0](https://github.com/prysmaticlabs/prysm/compare/v6.1.4...v7.0.0) - 2025-11-10
+
+This is our initial mainnet release for the Ethereum mainnet Fulu fork on December 3rd, 2025. All operators MUST update to v7.0.0 or later release prior to the fulu fork epoch `411392`. See the [Ethereum Foundation blog post](https://blog.ethereum.org/2025/11/06/fusaka-mainnet-announcement) for more information on Fulu.
+
+Other than the mainnet fulu fork schedule, there are a few callouts in this release:
+- `by-epoch` blob storage format is the default for new installations. Users that haven't migrated will see a warning to migrate to the new format. Existing deployments may set `--blob-storage-layout=by-epoch` to perform the migration.
+- Several deprecated flags have been deleted! Please review the "removed" section of this changelog carefully. If you are referencing a removed flag, Prysm will not start! All of these flags had no effect for at least one release.
+- Several deprecated API endpoints have been deleted. Please review the "removed" section of this changelog carefully. 
+- Backfill is not supported in Fulu. This is expected to be fixed in the next release and should be delivered prior to the mainnet activation fork.
+- The builder default gas limit is raised from `45000000` (45 MGas) to `60000000` (60 MGas).
+- Several bug fixes and improvements.
+
+### Added
+
+- Allow custom headers in validator client HTTP requests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15884)
+- Metric to track data columns recovered from execution layer. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15924)
+- Metrics: Add count of peers per direction and type (inbound/outbound), (TCP/QUIC). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15922)
+- `p2p_subscribed_topic_peer_total`: Reset to avoid dangling values. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15922)
+- Add `p2p_minimum_peers_per_subnet` metric. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15922)
+- Added GeneralizedIndicesFromPath function to calculate the GIs for a given sszInfo object and a PathElement. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15873)
+- Add Gloas protobuf definitions with spec tests and SSZ serialization support. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15601)
+- Fulu fork epoch for mainnet configurations set for December 3, 2025, 09:49:11pm UTC. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15975)
+- Added BPO schedules for December 9, 2025, 02:21:11pm UTC and January 7, 2026, 01:01:11am UTC. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15975)
+
+### Changed
+
+- Updated consensus spec tests to v1.6.0-beta.1 with new hashes and URL template. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15918)
+- Use the `by-epoch' blob storage layout by default and log a warning to users who continue to use the flat layout, encouraging them to switch. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15904)
+- Update go-netroute to `v0.3.0`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15934)
+- Introduced Path type for SSZ-QL queries and updated PathElement (removed Length field, kept Index) enforcing that len queries are terminal (at most one per path). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15935)
+- Changed length query syntax from `block.payload.len(transactions)` to `len(block.payload.transactions)`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15935)
+- Update `go-netroute` to `v0.4.0`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15949)
+- Updated consensus spec tests to v1.6.0-beta.2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15960)
+- Updated go bitfield from prysmaticlabs to offchainlabs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15968)
+- Bump builder default gas limit from `45000000` (45 MGas) to `60000000` (60 MGas). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15979)
+- Use head state for block pubsub validation when possible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15972)
+- updated consensus spec to 1.6.0 from 1.6.0-beta.2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15975)
+- Upgrade Prysm v6 to v7. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15989)
+- Use head state readonly when possible to validate data column sidecars. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15977)
+
+### Removed
+
+- log mentioning removed flag `--show-deposit-data`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15926)
+- Remove Beacon API endpoints that were deprecated in Electra: `GET /eth/v1/beacon/deposit_snapshot`, `GET /eth/v1/beacon/blocks/{block_id}/attestations`, `GET /eth/v1/beacon/pool/attestations`, `POST /eth/v1/beacon/pool/attestations`, `GET /eth/v1/beacon/pool/attester_slashings`, `POST /eth/v1/beacon/pool/attester_slashings`, `GET /eth/v1/validator/aggregate_attestation`, `POST /eth/v1/validator/aggregate_and_proofs`, `POST /eth/v1/beacon/blocks`, `POST /eth/v1/beacon/blinded_blocks`, `GET /eth/v1/builder/states/{state_id}/expected_withdrawals`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15962)
+- Deprecated flag `--enable-optional-engine-methods` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-build-block-parallel` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-reorg-late-blocks` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-optional-engine-methods` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-aggregate-parallel` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--enable-eip-4881` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-eip-4881` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--enable-verbose-sig-verification` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--enable-debug-rpc-endpoints` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--beacon-rpc-gateway-provider` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-grpc-gateway` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--enable-experimental-state` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--enable-committee-aware-packing` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--interop-genesis-time` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--interop-num-validators` has been removed (from beacon-chain only; still available in validator client). [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--enable-quic` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--attest-timely` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--disable-experimental-state` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+- Deprecated flag `--p2p-metadata` has been removed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15986)
+
+### Fixed
+
+- Remove `Reading static P2P private key from a file.` log if Fulu is enabled. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15913)
+- `blobSidecarByRootRPCHandler`: Do not serve a sidecar if the corresponding block is not available. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15933)
+- `dataColumnSidecarByRootRPCHandler`: Do not serve a sidecar if the corresponding block is not available. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15933)
+- Fix incorrect version used when sending attestation version in Fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15950)
+- Changed the behavior of topic subscriptions such that only topics that require the active validator count will compute that value. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15955)
+- Added a Mutex to the computation of active validator count during topic subscription to avoid a race condition where multiple goroutines are computing the same work. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15955)
+- `RODataColumnsVerifier.ValidProposerSignature`: Ensure the expensive signature verification is only performed once for concurrent requests for the same signature data. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15954)
+- use filepath for path operations (clean, join, etc.) to ensure correct behavior on Windows. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15953)
+- Fix #15969: Handle addition overflow in `/eth/v1/beacon/rewards/attestations/{epoch}`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15970)
+- `SidecarProposerExpected`: Add the slot in the single flight key. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15976)
+- Ensures the rate limitation is respected for by root blob and data column sidecars requests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15981)
+- Use head only if its compatible with target for attestation validation. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15965)
+- Backfill disabled if checkpoint sync origin is after fulu fork due to lack of DataColumnSidecar support in backfill. To track the availability of fulu-compatible backfill please watch https://github.com/OffchainLabs/prysm/issues/15982. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15987)
+- `SidecarProposerExpected`: Use the correct value of proposer index in the singleflight group. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15993)
+
 ## [v6.1.4](https://github.com/prysmaticlabs/prysm/compare/v6.1.3...v6.1.4) - 2025-10-24
 
 This release includes a bug fix affecting block proposals in rare cases, along with an important update for Windows users running post-Fusaka fork.

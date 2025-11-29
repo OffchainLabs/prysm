@@ -10,20 +10,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -842,7 +842,7 @@ func TestGetValidatorBalances(t *testing.T) {
 	count := uint64(4)
 	st, _ = util.DeterministicGenesisState(t, count)
 	balances := make([]uint64, count)
-	for i := uint64(0); i < count; i++ {
+	for i := range count {
 		balances[i] = i
 	}
 	require.NoError(t, st.SetBalances(balances))
@@ -1189,7 +1189,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 	count := uint64(4)
 	genesisState, _ := util.DeterministicGenesisState(t, count)
 	st := genesisState.ToProtoUnsafe().(*eth.BeaconState)
-	for i := uint64(0); i < count; i++ {
+	for i := range count {
 		st.Validators[i].ActivationEpoch = primitives.Epoch(i)
 	}
 
@@ -1218,7 +1218,7 @@ func TestGetValidatorIdentities(t *testing.T) {
 			resp := &structs.GetValidatorIdentitiesResponse{}
 			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 			require.Equal(t, 4, len(resp.Data))
-			for i := uint64(0); i < count; i++ {
+			for i := range count {
 				assert.Equal(t, fmt.Sprintf("%d", i), resp.Data[i].Index)
 				assert.DeepEqual(t, hexutil.Encode(st.Validators[i].PublicKey), resp.Data[i].Pubkey)
 				assert.Equal(t, fmt.Sprintf("%d", st.Validators[i].ActivationEpoch), resp.Data[i].ActivationEpoch)

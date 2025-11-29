@@ -1,7 +1,7 @@
 package state_native
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/pkg/errors"
 )
 

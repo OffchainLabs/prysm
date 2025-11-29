@@ -8,13 +8,13 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	slashertypes "github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -429,7 +429,7 @@ func (s *Store) SaveSlasherChunks(
 	encodedKeys := make([][]byte, chunksCount)
 	encodedChunks := make([][]byte, chunksCount)
 
-	for i := 0; i < chunksCount; i++ {
+	for i := range chunksCount {
 		chunkKey, chunk := chunkKeys[i], chunks[i]
 		encodedKey := append(encodedKind, chunkKey...)
 
@@ -452,7 +452,7 @@ func (s *Store) SaveSlasherChunks(
 		if err := s.db.Update(func(tx *bolt.Tx) error {
 			bkt := tx.Bucket(slasherChunksBucket)
 
-			for i := 0; i < batchSize; i++ {
+			for i := range batchSize {
 				if err := bkt.Put(encodedKeysBatch[i], encodedChunksBatch[i]); err != nil {
 					return err
 				}
@@ -617,7 +617,7 @@ func (s *Store) HighestAttestations(
 	err = s.db.View(func(tx *bolt.Tx) error {
 		signingRootsBkt := tx.Bucket(attestationDataRootsBucket)
 		attRecordsBkt := tx.Bucket(attestationRecordsBucket)
-		for i := 0; i < len(encodedIndices); i++ {
+		for i := range encodedIndices {
 			c := signingRootsBkt.Cursor()
 			for k, v := c.Last(); k != nil; k, v = c.Prev() {
 				if suffixForAttestationRecordsKey(k, encodedIndices[i]) {
@@ -659,7 +659,7 @@ func keyForValidatorProposal(slot primitives.Slot, proposerIndex primitives.Vali
 
 func encodeSlasherChunk(chunk []uint16) ([]byte, error) {
 	val := make([]byte, 0)
-	for i := 0; i < len(chunk); i++ {
+	for i := range chunk {
 		val = append(val, ssz.MarshalUint16(make([]byte, 0), chunk[i])...)
 	}
 	if len(val) == 0 {

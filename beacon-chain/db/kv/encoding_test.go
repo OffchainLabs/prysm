@@ -3,8 +3,8 @@ package kv
 import (
 	"testing"
 
-	testpb "github.com/OffchainLabs/prysm/v6/proto/testing"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	testpb "github.com/OffchainLabs/prysm/v7/proto/testing"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func Test_encode_handlesNilFromFunction(t *testing.T) {

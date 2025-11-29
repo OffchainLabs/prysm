@@ -30,24 +30,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	pmath "github.com/OffchainLabs/prysm/v6/math"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	pmath "github.com/OffchainLabs/prysm/v7/math"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const (
@@ -646,10 +646,7 @@ func (p *Status) Prune() {
 		return peersToPrune[i].score > peersToPrune[j].score
 	})
 
-	limitDiff := len(p.store.Peers()) - p.store.Config().MaxPeers
-	if limitDiff > len(peersToPrune) {
-		limitDiff = len(peersToPrune)
-	}
+	limitDiff := min(len(p.store.Peers())-p.store.Config().MaxPeers, len(peersToPrune))
 
 	peersToPrune = peersToPrune[:limitDiff]
 
@@ -698,10 +695,7 @@ func (p *Status) deprecatedPrune() {
 		return peersToPrune[i].badResp < peersToPrune[j].badResp
 	})
 
-	limitDiff := len(p.store.Peers()) - p.store.Config().MaxPeers
-	if limitDiff > len(peersToPrune) {
-		limitDiff = len(peersToPrune)
-	}
+	limitDiff := min(len(p.store.Peers())-p.store.Config().MaxPeers, len(peersToPrune))
 	peersToPrune = peersToPrune[:limitDiff]
 	// Delete peers from map.
 	for _, peerData := range peersToPrune {
@@ -1129,7 +1123,7 @@ func sameIP(firstAddr, secondAddr ma.Multiaddr) bool {
 
 func indicesFromBitfield(bitV bitfield.Bitvector64) []uint64 {
 	committeeIdxs := make([]uint64, 0, bitV.Count())
-	for i := uint64(0); i < 64; i++ {
+	for i := range uint64(64) {
 		if bitV.BitAt(i) {
 			committeeIdxs = append(committeeIdxs, i)
 		}

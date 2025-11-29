@@ -1,11 +1,11 @@
 package peerdas
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 )
@@ -33,8 +33,7 @@ func (Cgc) ENRKey() string { return params.BeaconNetworkConfig().CustodyGroupCou
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar
 func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	// The sidecar index must be within the valid range.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	if sidecar.Index >= numberOfColumns {
+	if sidecar.Index >= fieldparams.NumberOfColumns {
 		return ErrIndexTooLarge
 	}
 

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
-	sszquerypb "github.com/OffchainLabs/prysm/v6/proto/ssz_query/testing"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
+	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query/testing"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestGetIndicesFromPath_FixedNestedContainer(t *testing.T) {
