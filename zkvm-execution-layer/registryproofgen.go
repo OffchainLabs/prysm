@@ -1,6 +1,8 @@
 package zkvmexecutionlayer
 
-import executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
+import (
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+)
 
 // GeneratorRegistry maps subnet IDs to proof generators.
 //
@@ -8,22 +10,22 @@ import executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/executio
 // maintains the mapping from subnet ID to the appropriate generator implementation.
 // Not all subnets need generators - nodes can verify without generating.
 type GeneratorRegistry struct {
-	generators map[executionproof.ExecutionProofId]ProofGenerator
+	generators map[primitives.ExecutionProofId]ProofGenerator
 }
 
 // NewGeneratorRegistry creates a new empty generator registry.
 // This is equivalent to `default()` or `new()`.
 func NewGeneratorRegistry() *GeneratorRegistry {
 	return &GeneratorRegistry{
-		generators: make(map[executionproof.ExecutionProofId]ProofGenerator),
+		generators: make(map[primitives.ExecutionProofId]ProofGenerator),
 	}
 }
 
 // NewGeneratorRegistryWithDummyGenerators creates a registry with dummy generators
 // for the specified subnets. This is useful for testing.
 // The `enabledSubnets` map acts as a HashSet.
-func NewGeneratorRegistryWithDummyGenerators(enabledSubnets map[executionproof.ExecutionProofId]struct{}) *GeneratorRegistry {
-	generators := make(map[executionproof.ExecutionProofId]ProofGenerator, len(enabledSubnets))
+func NewGeneratorRegistryWithDummyGenerators(enabledSubnets map[primitives.ExecutionProofId]struct{}) *GeneratorRegistry {
+	generators := make(map[primitives.ExecutionProofId]ProofGenerator, len(enabledSubnets))
 	for subnetId := range enabledSubnets {
 		// NewDummyProofGenerator is defined in dummy_proof_generator.go
 		generators[subnetId] = NewDummyProofGenerator(subnetId)
@@ -39,13 +41,13 @@ func (r *GeneratorRegistry) RegisterGenerator(generator ProofGenerator) {
 
 // GetGenerator retrieves a generator by its subnet ID.
 // The boolean return value indicates if the generator was found.
-func (r *GeneratorRegistry) GetGenerator(subnetId executionproof.ExecutionProofId) (ProofGenerator, bool) {
+func (r *GeneratorRegistry) GetGenerator(subnetId primitives.ExecutionProofId) (ProofGenerator, bool) {
 	gen, ok := r.generators[subnetId]
 	return gen, ok
 }
 
 // HasGenerator checks if a generator is registered for a subnet.
-func (r *GeneratorRegistry) HasGenerator(subnetId executionproof.ExecutionProofId) bool {
+func (r *GeneratorRegistry) HasGenerator(subnetId primitives.ExecutionProofId) bool {
 	_, ok := r.generators[subnetId]
 	return ok
 }
@@ -61,8 +63,8 @@ func (r *GeneratorRegistry) IsEmpty() bool {
 }
 
 // SubnetIds returns a slice of all registered subnet IDs.
-func (r *GeneratorRegistry) SubnetIds() []executionproof.ExecutionProofId {
-	ids := make([]executionproof.ExecutionProofId, 0, len(r.generators))
+func (r *GeneratorRegistry) SubnetIds() []primitives.ExecutionProofId {
+	ids := make([]primitives.ExecutionProofId, 0, len(r.generators))
 	for id := range r.generators {
 		ids = append(ids, id)
 	}

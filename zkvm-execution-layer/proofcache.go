@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"github.com/ethereum/go-ethereum/common"
-	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
+
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -34,29 +35,28 @@ func NewProofCache(capacity int) (*ProofCache, error) {
 // Insert a proof into the cache.
 // If a proof from the same subnet already exists for this block hash,
 // it will be replaced.
-func (c *ProofCache) Insert(proof executionproof.ExecutionProof) {
+func (c *ProofCache) Insert(proof *ethpb.ExecutionProof) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	blockHash := proof.BlockHash
-	var existingProofs []executionproof.ExecutionProof
+	var existingProofs []ethpb.ExecutionProof
 
 	// Get existing proofs, if any.
 	// We use Get() here to promote the entry
 	if val, ok := c.cache.Get(blockHash); ok {
-		existingProofs = val.([]executionproof.ExecutionProof)
+		existingProofs = val.([]ethpb.ExecutionProof)
 	}
 
 	// Filter out any existing proof from the same subnet
-	newProofs := make([]executionproof.ExecutionProof, 0, len(existingProofs)+1)
-	for _, p := range existingProofs {
-		if p.ProofId != proof.ProofId {
-			newProofs = append(newProofs, p)
+	newProofs := make([]ethpb.ExecutionProof, 0, len(existingProofs)+1)
+	for i := range existingProofs {
+		if existingProofs[i].ProofId != proof.ProofId {
+			newProofs = append(newProofs, *existingProofs[i].Copy())
 		}
 	}
-
 	// Add the new proof
-	newProofs = append(newProofs, proof)
+	newProofs = append(newProofs, *proof.Copy())
 
 	// Add the new slice back to the cache
 	c.cache.Add(blockHash, newProofs)
@@ -64,7 +64,7 @@ func (c *ProofCache) Insert(proof executionproof.ExecutionProof) {
 
 // Get all proofs for a specific block hash.
 // It uses Peek to avoid promoting the entry in the LRU order.
-func (c *ProofCache) Get(blockHash common.Hash) ([]executionproof.ExecutionProof, bool) {
+func (c *ProofCache) Get(blockHash []byte) ([]ethpb.ExecutionProof, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -73,35 +73,37 @@ func (c *ProofCache) Get(blockHash common.Hash) ([]executionproof.ExecutionProof
 		return nil, false
 	}
 
-	proofs := val.([]executionproof.ExecutionProof)
-	// Return a copy to prevent concurrent modification by the caller
-	proofsCopy := make([]executionproof.ExecutionProof, len(proofs))
-	copy(proofsCopy, proofs)
+	proofs := val.([]ethpb.ExecutionProof)
+	// Return a deep copy to prevent concurrent modification by the caller
+	proofsCopy := make([]ethpb.ExecutionProof, len(proofs))
+	for i := range proofs {
+		proofsCopy[i] = *proofs[i].Copy()
+	}
 
 	return proofsCopy, true
 }
 
 // GetFromSubnets gets proofs for a specific block hash from specific subnets.
-func (c *ProofCache) GetFromSubnets(blockHash common.Hash, subnetIds []executionproof.ExecutionProofId) []executionproof.ExecutionProof {
+func (c *ProofCache) GetFromSubnets(blockHash []byte, subnetIds []primitives.ExecutionProofId) []ethpb.ExecutionProof {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	val, ok := c.cache.Peek(blockHash)
 	if !ok {
-		return []executionproof.ExecutionProof{}
+		return []ethpb.ExecutionProof{}
 	}
 
-	proofs := val.([]executionproof.ExecutionProof)
+	proofs := val.([]ethpb.ExecutionProof)
 	// Create a map for quick lookup
-	subnetSet := make(map[executionproof.ExecutionProofId]struct{}, len(subnetIds))
+	subnetSet := make(map[primitives.ExecutionProofId]struct{}, len(subnetIds))
 	for _, id := range subnetIds {
 		subnetSet[id] = struct{}{}
 	}
 
-	filteredProofs := make([]executionproof.ExecutionProof, 0)
-	for _, p := range proofs {
-		if _, exists := subnetSet[p.ProofId]; exists {
-			filteredProofs = append(filteredProofs, p) // appends a copy
+	filteredProofs := make([]ethpb.ExecutionProof, 0)
+	for i := range proofs {
+		if _, exists := subnetSet[proofs[i].ProofId]; exists {
+			filteredProofs = append(filteredProofs, *proofs[i].Copy())
 		}
 	}
 	return filteredProofs
@@ -109,7 +111,7 @@ func (c *ProofCache) GetFromSubnets(blockHash common.Hash, subnetIds []execution
 
 // HasRequiredProofs checks if we have the minimum required number of proofs
 // from _different_ subnets.
-func (c *ProofCache) HasRequiredProofs(blockHash common.Hash, minRequired int) bool {
+func (c *ProofCache) HasRequiredProofs(blockHash []byte, minRequired int) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -118,12 +120,12 @@ func (c *ProofCache) HasRequiredProofs(blockHash common.Hash, minRequired int) b
 		return false
 	}
 
-	return len(val.([]executionproof.ExecutionProof)) >= minRequired
+	return len(val.([]ethpb.ExecutionProof)) >= minRequired
 }
 
 // SubnetCount gets the number of unique subnets/proofs we have for a
 // particular execution payload.
-func (c *ProofCache) SubnetCount(blockHash common.Hash) int {
+func (c *ProofCache) SubnetCount(blockHash []byte) int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -131,11 +133,11 @@ func (c *ProofCache) SubnetCount(blockHash common.Hash) int {
 	if !ok {
 		return 0
 	}
-	return len(val.([]executionproof.ExecutionProof))
+	return len(val.([]ethpb.ExecutionProof))
 }
 
 // HasProofFromSubnet checks if a proof exists from a specific subnet for a block.
-func (c *ProofCache) HasProofFromSubnet(blockHash common.Hash, subnetId executionproof.ExecutionProofId) bool {
+func (c *ProofCache) HasProofFromSubnet(blockHash []byte, subnetId primitives.ExecutionProofId) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -144,9 +146,9 @@ func (c *ProofCache) HasProofFromSubnet(blockHash common.Hash, subnetId executio
 		return false
 	}
 
-	proofs := val.([]executionproof.ExecutionProof)
-	for _, p := range proofs {
-		if p.ProofId == subnetId {
+	proofs := val.([]ethpb.ExecutionProof)
+	for i := range proofs {
+		if proofs[i].ProofId == subnetId {
 			return true
 		}
 	}
@@ -154,7 +156,7 @@ func (c *ProofCache) HasProofFromSubnet(blockHash common.Hash, subnetId executio
 }
 
 // Remove all proofs for a specific block hash.
-func (c *ProofCache) Remove(blockHash common.Hash) ([]executionproof.ExecutionProof, bool) {
+func (c *ProofCache) Remove(blockHash []byte) ([]ethpb.ExecutionProof, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -166,10 +168,12 @@ func (c *ProofCache) Remove(blockHash common.Hash) ([]executionproof.ExecutionPr
 
 	c.cache.Remove(blockHash)
 
-	// Return a copy
-	proofs := val.([]executionproof.ExecutionProof)
-	proofsCopy := make([]executionproof.ExecutionProof, len(proofs))
-	copy(proofsCopy, proofs)
+	// Return a deep copy
+	proofs := val.([]ethpb.ExecutionProof)
+	proofsCopy := make([]ethpb.ExecutionProof, len(proofs))
+	for i := range proofs {
+		proofsCopy[i] = *proofs[i].Copy()
+	}
 	return proofsCopy, true
 }
 

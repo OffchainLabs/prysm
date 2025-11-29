@@ -1,0 +1,40 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    testonly = True,
+    srcs = [
+        "config.go",
+        "dummyproofgen.go",
+        "dummyproofverifier.go",
+        "proofcache.go",
+        "proofgenerator.go",
+        "proofverification.go",
+        "registryproofgen.go",
+        "registryproofverification.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/zkvm-execution-layer",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "@com_github_hashicorp_golang_lru//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "dummyproofgen_test.go",
+        "dummyproofverifier_test.go",
+        "registryproofgen_test.go",
+        "registryproofverification_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//consensus-types/primitives:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/assert:go_default_library",
+        "//testing/require:go_default_library",
+    ],
+)

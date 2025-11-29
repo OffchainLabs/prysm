@@ -1,9 +1,8 @@
 package zkvmexecutionlayer
 
 import (
-	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // Each proof system (e.g., RISC Zero, SP1) implements this interface
@@ -14,10 +13,10 @@ type ProofGenerator interface {
 	// in a background task (goroutine) by the caller.
 	Generate(
 		slot primitives.Slot,
-		payloadHash common.Hash,
-		blockRoot common.Hash,
-	) (*executionproof.ExecutionProof, error)
+		payloadHash []byte,
+		blockRoot []byte,
+	) (*ethpb.ExecutionProof, error)
 
 	// GetProofId gets the subnet ID this generator produces proofs for.
-	GetProofId() executionproof.ExecutionProofId
+	GetProofId() primitives.ExecutionProofId
 }

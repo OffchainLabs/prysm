@@ -1,14 +1,11 @@
 package zkvmexecutionlayer
 
 import (
-	"fmt"
 	"time"
 
-	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
-
 
 const (
 	// defaultGenerationDelay simulates some proof generation work.
@@ -19,24 +16,24 @@ const (
 // It simulates the proof generation process with a configurable delay
 // and creates dummy proofs.
 type DummyProofGenerator struct {
-	ProofId        executionproof.ExecutionProofId
+	ProofId         primitives.ExecutionProofId
 	GenerationDelay time.Duration
 }
 
 // NewDummyProofGenerator creates a new dummy generator for the specified subnet
 // with a default delay.
-func NewDummyProofGenerator(proofId executionproof.ExecutionProofId) *DummyProofGenerator {
+func NewDummyProofGenerator(proofId primitives.ExecutionProofId) *DummyProofGenerator {
 	return &DummyProofGenerator{
-		ProofId:        proofId,
+		ProofId:         proofId,
 		GenerationDelay: defaultGenerationDelay,
 	}
 }
 
 // NewDummyProofGeneratorWithDelay creates a new dummy generator with a custom
 // generation delay.
-func NewDummyProofGeneratorWithDelay(proofId executionproof.ExecutionProofId, delay time.Duration) *DummyProofGenerator {
+func NewDummyProofGeneratorWithDelay(proofId primitives.ExecutionProofId, delay time.Duration) *DummyProofGenerator {
 	return &DummyProofGenerator{
-		ProofId:        proofId,
+		ProofId:         proofId,
 		GenerationDelay: delay,
 	}
 }
@@ -46,9 +43,9 @@ func NewDummyProofGeneratorWithDelay(proofId executionproof.ExecutionProofId, de
 // This method fulfills the ProofGenerator interface.
 func (d *DummyProofGenerator) Generate(
 	slot primitives.Slot,
-	payloadHash common.Hash,
-	blockRoot common.Hash,
-) (*executionproof.ExecutionProof, error) {
+	payloadHash []byte,
+	blockRoot []byte,
+) (*ethpb.ExecutionProof, error) {
 	// Simulate proof generation work
 	if d.GenerationDelay > 0 {
 		time.Sleep(d.GenerationDelay)
@@ -57,7 +54,7 @@ func (d *DummyProofGenerator) Generate(
 	// Create a dummy proof with some deterministic data
 	proofData := []byte{
 		0xFF, // Magic byte for dummy proof
-		d.ProofId.AsU8(),
+		byte(d.ProofId),
 		// Include some payload hash bytes
 		payloadHash[0],
 		payloadHash[1],
@@ -65,15 +62,17 @@ func (d *DummyProofGenerator) Generate(
 		payloadHash[3],
 	}
 
-	proof, err := executionproof.NewExecutionProof(d.ProofId, slot, payloadHash, blockRoot, proofData)
-	if err != nil {
-		return nil, fmt.Errorf("proof generation failed: %v", err)
-	}
-	return proof, nil
+	return &ethpb.ExecutionProof{
+		ProofId:   d.ProofId,
+		Slot:      slot,
+		BlockHash: payloadHash,
+		BlockRoot: blockRoot,
+		ProofData: proofData,
+	}, nil
 }
 
 // SubnetId returns the subnet ID this generator produces proofs for.
 // This method fulfills the ProofGenerator interface.
-func (d *DummyProofGenerator) GetProofId() executionproof.ExecutionProofId {
+func (d *DummyProofGenerator) GetProofId() primitives.ExecutionProofId {
 	return d.ProofId
 }

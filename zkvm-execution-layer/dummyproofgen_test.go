@@ -1,80 +1,60 @@
 package zkvmexecutionlayer
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
-	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 // newBlockHashOrRoot is a helper to create an ExecutionBlockHash or BlockRoot for tests.
-func newBlockHashOrRoot(b byte) common.Hash {
-	var hash common.Hash
-	for i := range hash {
-		hash[i] = b
+func newBlockHashOrRoot(b byte) []byte {
+	bytes := make([]byte, 32)
+	for i := range bytes {
+		bytes[i] = b
 	}
-	return hash
+	return bytes
 }
 
 // TestDummyGeneratorSuccess translates test_dummy_generator_success.
 func TestDummyGeneratorSuccess(t *testing.T) {
-	subnet, _ := executionproof.NewExecutionProofId(0)
+	subnet := primitives.ExecutionProofId(0)
 	generator := NewDummyProofGenerator(subnet)
 	blockHash := newBlockHashOrRoot(1)
 	blockRoot := newBlockHashOrRoot(2)
 	slot := primitives.Slot(0)
 
 	result, err := generator.Generate(slot, blockHash, blockRoot)
+	assert.NoError(t, err)
 
-	if err != nil {
-		t.Fatalf("Expected result to be ok, but got error: %v", err)
-	}
-
-	if result.ProofId != subnet {
-		t.Errorf("Expected subnet %s, got %s", subnet, result.ProofId)
-	}
-	if result.BlockHash != blockHash {
-		t.Errorf("Expected block hash %s, got %s", blockHash, result.BlockHash)
-	}
-	if result.BlockRoot != blockRoot {
-		t.Errorf("Expected block root %s, got %s", blockRoot, result.BlockRoot)
-	}
-	if result.ProofDataSize() <= 0 {
-		t.Error("Expected proof data size to be > 0")
-	}
+	require.Equal(t, subnet, result.ProofId, "ProofId mismatch")
+	require.DeepEqual(t, blockHash, result.BlockHash, "BlockHash mismatch")
+	require.DeepEqual(t, blockRoot, result.BlockRoot, "BlockRoot mismatch")
+	require.Equal(t, len(result.ProofData) > 0, true, "ProofData should be non-empty")
 }
 
 // TestDummyGeneratorDeterministic translates test_dummy_generator_deterministic.
 func TestDummyGeneratorDeterministic(t *testing.T) {
-	subnet, _ := executionproof.NewExecutionProofId(1)
+	subnet := primitives.ExecutionProofId(1)
 	generator := NewDummyProofGenerator(subnet)
 	blockHash := newBlockHashOrRoot(42)
 	blockRoot := newBlockHashOrRoot(99)
 	slot := primitives.Slot(0)
 
 	// Generate twice
-	proof1, err1 := generator.Generate(slot, blockHash, blockRoot)
-	if err1 != nil {
-		t.Fatalf("First generation failed: %v", err1)
-	}
+	proof1, err := generator.Generate(slot, blockHash, blockRoot)
+	assert.NoError(t, err)
+	proof2, err := generator.Generate(slot, blockHash, blockRoot)
+	assert.NoError(t, err)
 
-	proof2, err2 := generator.Generate(slot, blockHash, blockRoot)
-	if err2 != nil {
-		t.Fatalf("Second generation failed: %v", err2)
-	}
-
-	// Should be identical
-	if !bytes.Equal(proof1.ProofDataSlice(), proof2.ProofDataSlice()) {
-		t.Error("Expected proof data to be identical, but it differed")
-	}
+	require.DeepEqual(t, proof1.ProofData, proof2.ProofData, "Proof data should be identical on repeated generation")
 }
 
 // TestDummyGeneratorCustomDelay translates test_dummy_generator_custom_delay.
 func TestDummyGeneratorCustomDelay(t *testing.T) {
-	subnet, _ := executionproof.NewExecutionProofId(0)
+	subnet := primitives.ExecutionProofId(2)
 	delay := 10 * time.Millisecond // Use a small but measurable delay
 	generator := NewDummyProofGeneratorWithDelay(subnet, delay)
 	blockHash := newBlockHashOrRoot(1)
@@ -83,15 +63,10 @@ func TestDummyGeneratorCustomDelay(t *testing.T) {
 
 	start := time.Now()
 	result, err := generator.Generate(slot, blockHash, blockRoot)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
 	elapsed := time.Since(start)
-
-	if err != nil {
-		t.Fatalf("Generate failed: %v", err)
-	}
-	if result == nil {
-		t.Fatal("Got nil proof")
-	}
-
 	if elapsed < delay {
 		t.Errorf("Expected elapsed time to be >= %s, but got %s", delay, elapsed)
 	}

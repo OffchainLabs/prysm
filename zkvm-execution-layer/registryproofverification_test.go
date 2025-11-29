@@ -2,56 +2,43 @@ package zkvmexecutionlayer
 
 import (
 	"testing"
-	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
+
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
 
 // TestEmptyRegistry translates test_empty_registry.
 func TestEmptyRegistry(t *testing.T) {
 	registry := NewVerifierRegistry()
-	if !registry.IsEmpty() {
-		t.Fatal("Expected registry to be empty, but it was not")
-	}
-	if registry.Len() != 0 {
-		t.Errorf("Expected registry len 0, got %d", registry.Len())
-	}
+
+	assert.Equal(t, registry.IsEmpty(), true, "Registry should be empty")
+	assert.Equal(t, registry.Len(), 0, "Registry length should be 0")
 }
 
 // TestDummyVerifiersRegistry translates test_dummy_verifiers_registry.
 func TestDummyVerifiersRegistry(t *testing.T) {
 	registry := NewVerifierRegistryWithDummyVerifiers()
-	if registry.IsEmpty() {
-		t.Fatal("Expected registry to not be empty, but it was")
-	}
-	if registry.Len() != int(executionproof.EXECUTION_PROOF_TYPE_COUNT) {
-		t.Errorf("Expected registry len %d, got %d", executionproof.EXECUTION_PROOF_TYPE_COUNT, registry.Len())
-	}
+	assert.Equal(t, registry.IsEmpty(), false, "Registry should not be empty")
 
 	// Check all subnets are registered
-	for id := range executionproof.EXECUTION_PROOF_TYPE_COUNT {
-		subnetId, _ := executionproof.NewExecutionProofId(id)
-		if !registry.HasVerifier(subnetId) {
-			t.Errorf("Expected registry to have verifier for subnet %d", id)
-		}
-		if _, ok := registry.GetVerifier(subnetId); !ok {
-			t.Errorf("Expected to get verifier for subnet %d", id)
-		}
+	for id := range primitives.EXECUTION_PROOF_TYPE_COUNT {
+		subnetId := primitives.ExecutionProofId(id)
+		assert.Equal(t, registry.HasVerifier(subnetId), true, "Registry missing verifier for subnet %d", id)
+		_, ok := registry.GetVerifier(subnetId)
+		assert.Equal(t, ok, true, "Expected to get verifier for subnet %d", id)
 	}
 }
 
 // TestRegisterVerifier translates test_register_verifier.
 func TestRegisterVerifier(t *testing.T) {
 	registry := NewVerifierRegistry()
-	subnetId, _ := executionproof.NewExecutionProofId(0)
+	subnetId := primitives.ExecutionProofId(0)
 	verifier := NewDummyVerifier(subnetId) // From dummy_proof_verifier.go
 
 	registry.RegisterVerifier(verifier)
 
-	if registry.Len() != 1 {
-		t.Errorf("Expected registry len 1, got %d", registry.Len())
-	}
-	if !registry.HasVerifier(subnetId) {
-		t.Error("Expected registry to have verifier for subnet 0")
-	}
+	assert.Equal(t, registry.Len(), 1, "Registry length mismatch")
+	assert.Equal(t, registry.HasVerifier(subnetId), true)
 }
 
 // TestVerifierProofIds translates test_subnet_ids (for verifiers).
@@ -59,20 +46,16 @@ func TestVerifierProofIds(t *testing.T) {
 	registry := NewVerifierRegistryWithDummyVerifiers()
 	subnetIds := registry.ProofIds()
 
-	if len(subnetIds) != int(executionproof.EXECUTION_PROOF_TYPE_COUNT) {
-		t.Fatalf("Expected %d subnet IDs, got %d", executionproof.EXECUTION_PROOF_TYPE_COUNT, len(subnetIds))
-	}
+	assert.Equal(t, len(subnetIds), int(primitives.EXECUTION_PROOF_TYPE_COUNT), "SubnetIds length mismatch")
 
 	// Check that all returned IDs are valid subnets
-	foundMap := make(map[executionproof.ExecutionProofId]bool)
+	foundMap := make(map[primitives.ExecutionProofId]bool)
 	for _, id := range subnetIds {
 		foundMap[id] = true
 	}
 
-	for id := range executionproof.EXECUTION_PROOF_TYPE_COUNT {
-		subnet, _ := executionproof.NewExecutionProofId(id)
-		if !foundMap[subnet] {
-			t.Errorf("Missing subnet ID %s from ProofIds() result", subnet)
-		}
+	for id := range primitives.EXECUTION_PROOF_TYPE_COUNT {
+		subnet := primitives.ExecutionProofId(id)
+		assert.Equal(t, true, foundMap[subnet], "Missing subnet ID %s from ProofIds() result", subnet)
 	}
 }

@@ -3,7 +3,9 @@ package zkvmexecutionlayer
 import (
 	"fmt"
 	"time"
-	executionproof "github.com/OffchainLabs/prysm/v6/consensus-types/execution-proof"
+
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 const (
@@ -15,34 +17,34 @@ const (
 // It simulates the verification process with a configurable delay
 // and always returns successful verification if the subnet and block hash match.
 type DummyVerifier struct {
-	ProofId          executionproof.ExecutionProofId
+	ProofId           primitives.ExecutionProofId
 	verificationDelay time.Duration
 }
 
 // NewDummyVerifier creates a new dummy verifier for the specified subnet
 // with a default delay.
-func NewDummyVerifier(subnetId executionproof.ExecutionProofId) *DummyVerifier {
+func NewDummyVerifier(subnetId primitives.ExecutionProofId) *DummyVerifier {
 	return &DummyVerifier{
-		ProofId:          subnetId,
+		ProofId:           subnetId,
 		verificationDelay: defaultVerificationDelay,
 	}
 }
 
 // NewDummyVerifierWithDelay creates a new dummy verifier with a custom
 // verification delay.
-func NewDummyVerifierWithDelay(subnetId executionproof.ExecutionProofId, delay time.Duration) *DummyVerifier {
+func NewDummyVerifierWithDelay(subnetId primitives.ExecutionProofId, delay time.Duration) *DummyVerifier {
 	return &DummyVerifier{
-		ProofId:          subnetId,
+		ProofId:           subnetId,
 		verificationDelay: delay,
 	}
 }
 
-// Verifier checks if a proof is valid.
+// Verify checks if a proof is valid.
 // It simulates verification by sleeping and then returns true if
 // the subnet ID and payload hash match.
 // This method fulfills the ProofVerifier interface.
-func (d *DummyVerifier) Verifier(
-	proof executionproof.ExecutionProof,
+func (d *DummyVerifier) Verify(
+	proof *ethpb.ExecutionProof,
 ) (bool, error) {
 	// Check that the proof is for the correct subnet
 	if proof.ProofId != d.ProofId {
@@ -60,6 +62,6 @@ func (d *DummyVerifier) Verifier(
 
 // GetProofId returns the subnet ID this verifier can handle.
 // This method fulfills the ProofVerifier interface.
-func (d *DummyVerifier) GetProofId() executionproof.ExecutionProofId {
+func (d *DummyVerifier) GetProofId() primitives.ExecutionProofId {
 	return d.ProofId
 }
