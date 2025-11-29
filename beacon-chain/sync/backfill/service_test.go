@@ -41,7 +41,10 @@ func TestServiceInit(t *testing.T) {
 	nWorkers := 5
 	var batchSize uint64 = 4
 	nBatches := nWorkers * 2
-	var high uint64 = 1 + batchSize*uint64(nBatches) // extra 1 because upper bound is exclusive
+	// With WithMinimumSlot(0), we backfill from high down to slot 0.
+	// To get exactly nBatches, we need: high = nBatches * batchSize
+	// (slot 0 is excluded since genesis block has invalid signature)
+	var high uint64 = batchSize * uint64(nBatches)
 	originRoot := [32]byte{}
 	origin, err := util.NewBeaconState()
 	require.NoError(t, err)
