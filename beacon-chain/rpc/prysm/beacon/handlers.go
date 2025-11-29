@@ -90,7 +90,7 @@ func (s *Server) GetWeakSubjectivity(w http.ResponseWriter, r *http.Request) {
 // GetIndividualVotes returns a list of validators individual vote status of a given epoch.
 //
 // @Summary Get individual validator votes
-// @Description Returns detailed voting information for specified validators in a given epoch
+// @Description Returns detailed voting information for specified validators in a given epoch. In each vote object, the public key is returned in the public_keys field for backward compatibility.
 // @Tags Prysm Beacon
 // @Accept json
 // @Produce json

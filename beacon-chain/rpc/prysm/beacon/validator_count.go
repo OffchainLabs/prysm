@@ -54,7 +54,7 @@ import (
 // @Tags Prysm Beacon
 // @Produce json
 // @Param state_id path string true "State identifier (head, genesis, finalized, justified, slot number, or hex root)"
-// @Param status query []string false "Validator status filter (can be repeated). If omitted, returns counts for all statuses. Valid values: pending_initialized, pending_queued, active_ongoing, active_exiting, active_slashed, exited_unslashed, exited_slashed, withdrawal_possible, withdrawal_done, active, pending, exited, withdrawal"
+// @Param status query []string false "Validator status filter. Repeat the parameter to pass multiple values (for example: ?status=active&status=pending). If omitted, returns counts for all statuses. Valid values: pending_initialized, pending_queued, active_ongoing, active_exiting, active_slashed, exited_unslashed, exited_slashed, withdrawal_possible, withdrawal_done, active, pending, exited, withdrawal" collectionFormat(multi)
 // @Success 200 {object} structs.GetValidatorCountResponse
 // @Failure 400 {object} httputil.DefaultJsonError
 // @Failure 404 {object} httputil.DefaultJsonError

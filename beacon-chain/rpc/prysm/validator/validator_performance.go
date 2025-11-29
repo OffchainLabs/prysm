@@ -16,11 +16,11 @@ import (
 // GetPerformance is an HTTP handler for GetPerformance.
 //
 // @Summary Get validator performance metrics
-// @Description Returns detailed performance metrics for specified validators including voting accuracy, balances before and after epoch transitions, and inactivity scores
+// @Description Returns detailed performance metrics for specified validators including voting accuracy, balances before and after epoch transitions, and inactivity scores. Byte array fields (for example public_keys and missing_validators) are JSON byte slices and are typically encoded as base64 strings.
 // @Tags Prysm Validator
 // @Accept json
 // @Produce json
-// @Param request body structs.GetValidatorPerformanceRequest true "Validator public keys and/or indices to query"
+// @Param request body structs.GetValidatorPerformanceRequest true "Validator public keys and/or indices to query. public_keys is a byte-array field and is typically provided as base64 strings."
 // @Success 200 {object} structs.GetValidatorPerformanceResponse
 // @Failure 400 {object} httputil.DefaultJsonError
 // @Failure 500 {object} httputil.DefaultJsonError
