@@ -261,7 +261,7 @@ func (s *Service) Start() {
 	s.clock = clock
 
 	// initialize() updates syncNeeds with validated values once we've got the clock
-	s.syncNeeds = syncNeeds{}.initialize(s.clock.CurrentSlot, s.denebStart, s.fuluStart)
+	s.syncNeeds = s.syncNeeds.initialize(s.clock.CurrentSlot, s.denebStart, s.fuluStart)
 	status := s.store.status()
 	needs := s.syncNeeds.currently()
 	// Exit early if there aren't going to be any batches to backfill.
