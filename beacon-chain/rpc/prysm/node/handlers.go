@@ -19,6 +19,14 @@ import (
 )
 
 // ListTrustedPeer retrieves data about the node's trusted peers.
+//
+// @Summary List trusted peers
+// @Description Returns a list of all trusted peers configured on this beacon node, including their connection state, direction, ENR, and last seen address
+// @Tags Prysm Node
+// @Produce json
+// @Success 200 {object} structs.PeersResponse
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/node/trusted_peers [get]
 func (s *Server) ListTrustedPeer(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.ListTrustedPeer")
 	defer span.End()
@@ -53,6 +61,16 @@ func (s *Server) ListTrustedPeer(w http.ResponseWriter, r *http.Request) {
 }
 
 // AddTrustedPeer adds a new peer into node's trusted peer set by Multiaddr
+//
+// @Summary Add a trusted peer
+// @Description Adds a peer to the beacon node's trusted peer set using its multiaddress. Trusted peers are given priority in peer connections.
+// @Tags Prysm Node
+// @Accept json
+// @Param request body structs.AddrRequest true "Peer multiaddress (e.g., /ip4/127.0.0.1/tcp/13000/p2p/16Uiu2...)"
+// @Success 200 "Peer successfully added to trusted set"
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/node/trusted_peers [post]
 func (s *Server) AddTrustedPeer(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.AddTrustedPeer")
 	defer span.End()
@@ -101,6 +119,14 @@ func (s *Server) AddTrustedPeer(w http.ResponseWriter, r *http.Request) {
 }
 
 // RemoveTrustedPeer removes peer from our trusted peer set but does not close connection.
+//
+// @Summary Remove a trusted peer
+// @Description Removes a peer from the beacon node's trusted peer set by peer ID. Does not disconnect the peer if already connected.
+// @Tags Prysm Node
+// @Param peer_id path string true "Peer ID to remove from trusted set"
+// @Success 200 "Peer successfully removed from trusted set"
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Router /prysm/node/trusted_peers/{peer_id} [delete]
 func (s *Server) RemoveTrustedPeer(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "node.RemoveTrustedPeer")
 	defer span.End()

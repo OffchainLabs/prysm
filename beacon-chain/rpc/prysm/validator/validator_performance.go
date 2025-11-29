@@ -14,6 +14,17 @@ import (
 )
 
 // GetPerformance is an HTTP handler for GetPerformance.
+//
+// @Summary Get validator performance metrics
+// @Description Returns detailed performance metrics for specified validators including voting accuracy, balances before and after epoch transitions, and inactivity scores
+// @Tags Prysm Validator
+// @Accept json
+// @Produce json
+// @Param request body structs.GetValidatorPerformanceRequest true "Validator public keys and/or indices to query"
+// @Success 200 {object} structs.GetValidatorPerformanceResponse
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/validators/performance [post]
 func (s *Server) GetPerformance(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetPerformance")
 	defer span.End()

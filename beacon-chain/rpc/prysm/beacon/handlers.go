@@ -26,6 +26,15 @@ import (
 
 // GetWeakSubjectivity computes the starting epoch of the current weak subjectivity period, and then also
 // determines the best block root and state root to use for a Checkpoint Sync starting from that point.
+//
+// @Summary Get weak subjectivity checkpoint
+// @Description Computes the weak subjectivity checkpoint for safe checkpoint sync initialization
+// @Tags Prysm Beacon
+// @Produce json
+// @Success 200 {object} structs.GetWeakSubjectivityResponse
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Failure 503 {object} httputil.DefaultJsonError "Beacon node is currently syncing"
+// @Router /prysm/v1/beacon/weak_subjectivity [get]
 func (s *Server) GetWeakSubjectivity(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetWeakSubjectivity")
 	defer span.End()
@@ -79,6 +88,17 @@ func (s *Server) GetWeakSubjectivity(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetIndividualVotes returns a list of validators individual vote status of a given epoch.
+//
+// @Summary Get individual validator votes
+// @Description Returns detailed voting information for specified validators in a given epoch
+// @Tags Prysm Beacon
+// @Accept json
+// @Produce json
+// @Param request body structs.GetIndividualVotesRequest true "Validator indices/public keys and epoch"
+// @Success 200 {object} structs.GetIndividualVotesResponse
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/beacon/individual_votes [post]
 func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetIndividualVotes")
 	defer span.End()
@@ -159,6 +179,14 @@ func (s *Server) GetIndividualVotes(w http.ResponseWriter, r *http.Request) {
 
 // GetChainHead retrieves information about the head of the beacon chain from
 // the view of the beacon chain node.
+//
+// @Summary Get chain head information
+// @Description Returns detailed information about the current head, finalized, and justified checkpoints of the beacon chain
+// @Tags Prysm Beacon
+// @Produce json
+// @Success 200 {object} structs.ChainHead
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Router /prysm/v1/beacon/chain_head [get]
 func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetChainHead")
 	defer span.End()
@@ -186,7 +214,20 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
+// PublishBlobs publishes blob sidecars to the network.
 // Warning: no longer supported post Fulu blobs
+//
+// @Summary Publish blob sidecars (DEPRECATED post-Fulu)
+// @Description Publishes blob sidecars to the beacon network. Only supported for Deneb through Fulu epochs.
+// @Tags Prysm Beacon
+// @Accept json
+// @Param request body structs.PublishBlobsRequest true "Blob sidecars to publish"
+// @Success 200 "Blobs successfully published"
+// @Failure 400 {object} httputil.DefaultJsonError
+// @Failure 500 {object} httputil.DefaultJsonError
+// @Failure 503 {object} httputil.DefaultJsonError "Beacon node is currently syncing"
+// @Deprecated
+// @Router /prysm/v1/beacon/blobs [post]
 func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlobs")
 	defer span.End()
