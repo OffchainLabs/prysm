@@ -44,6 +44,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	proofgen "github.com/OffchainLabs/prysm/v7/beacon-chain/proof-generation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -433,7 +434,7 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		}
 	}
 
-	if features.Get().EnableZkvm {
+	if features.Get().EnableZkvm && len(flags.Get().ProofGenerationTypes) > 0 {
 		log.Debugln("Registering Proof Generation Service")
 		if err := beacon.registerProofGenerationService(cliCtx); err != nil {
 			return errors.Wrap(err, "could not register proof generation service")
@@ -1149,8 +1150,11 @@ func (b *BeaconNode) registerLightClientStore() {
 }
 
 func (b *BeaconNode) registerProofGenerationService(cliCtx *cli.Context) error {
-	// TODO
-	return nil
+	pgs, err := proofgen.NewService(cliCtx.Context)
+	if err != nil {
+		return errors.Wrap(err, "could not create proof generation service")
+	}
+	return b.services.RegisterService(pgs)
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
