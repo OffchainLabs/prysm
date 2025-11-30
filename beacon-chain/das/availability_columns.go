@@ -15,6 +15,9 @@ import (
 	errors "github.com/pkg/errors"
 )
 
+// RetentionChecker is a callback that determines whether blobs at the given slot are within the retention period.
+type RetentionChecker func(primitives.Slot) bool
+
 // LazilyPersistentStoreColumn is an implementation of AvailabilityStore to be used when batch syncing data columns.
 // This implementation will hold any data columns passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
@@ -24,6 +27,7 @@ type LazilyPersistentStoreColumn struct {
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	custody                *custodyRequirement
 	bisector               Bisector
+	shouldRetain           RetentionChecker
 }
 
 var _ AvailabilityChecker = &LazilyPersistentStoreColumn{}
@@ -44,6 +48,7 @@ func NewLazilyPersistentStoreColumn(
 	nodeID enode.ID,
 	cgc uint64,
 	bisector Bisector,
+	shouldRetain RetentionChecker,
 ) *LazilyPersistentStoreColumn {
 	return &LazilyPersistentStoreColumn{
 		store:                  store,
@@ -51,6 +56,7 @@ func NewLazilyPersistentStoreColumn(
 		newDataColumnsVerifier: newDataColumnsVerifier,
 		custody:                &custodyRequirement{nodeID: nodeID, cgc: cgc},
 		bisector:               bisector,
+		shouldRetain:           shouldRetain,
 	}
 }
 
@@ -107,9 +113,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 
 // required returns the set of column indices to check for a given block.
 func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock, current primitives.Epoch) (peerdas.ColumnIndices, error) {
-	eBlk := slots.ToEpoch(block.Block().Slot())
-	eFulu := params.BeaconConfig().FuluForkEpoch
-	if current < eFulu || eBlk < eFulu || !params.WithinDAPeriod(eBlk, current) {
+	if !s.shouldRetain(block.Block().Slot()) {
 		return peerdas.NewColumnIndices(), nil
 	}
 
@@ -129,6 +133,9 @@ func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock, current pri
 
 // verifyAndSave calls Save on the column store if the columns pass verification.
 func (s *LazilyPersistentStoreColumn) verifyAndSave(columns []blocks.RODataColumn) error {
+	if len(columns) == 0 {
+		return nil
+	}
 	verified, err := s.verifyColumns(columns)
 	if err != nil {
 		return errors.Wrap(err, "verify columns")
@@ -141,6 +148,9 @@ func (s *LazilyPersistentStoreColumn) verifyAndSave(columns []blocks.RODataColum
 }
 
 func (s *LazilyPersistentStoreColumn) verifyColumns(columns []blocks.RODataColumn) ([]blocks.VerifiedRODataColumn, error) {
+	if len(columns) == 0 {
+		return nil, nil
+	}
 	verifier := s.newDataColumnsVerifier(columns, verification.ByRangeRequestDataColumnSidecarRequirements)
 	if err := verifier.ValidFields(); err != nil {
 		return nil, errors.Wrap(err, "valid fields")

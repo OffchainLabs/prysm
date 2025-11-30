@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -786,6 +787,9 @@ func TestValidatingColumnRequest_CountedValidation(t *testing.T) {
 		remaining := peerdas.NewColumnIndicesFromSlice([]uint64{0})
 		bisector := newColumnBisector(func(peer.ID, string, error) {})
 
+		sr := func(slot primitives.Slot) bool {
+			return true
+		}
 		vcr := &validatingColumnRequest{
 			columnSync: &columnSync{
 				columnBatch: &columnBatch{
@@ -796,7 +800,7 @@ func TestValidatingColumnRequest_CountedValidation(t *testing.T) {
 						},
 					},
 				},
-				store:   das.NewLazilyPersistentStoreColumn(colStore, testNewDataColumnsVerifier(), p2p.NodeID(), 1, bisector),
+				store:   das.NewLazilyPersistentStoreColumn(colStore, testNewDataColumnsVerifier(), p2p.NodeID(), 1, bisector, sr),
 				current: currentSlot,
 				peer:    mockPeer,
 			},
@@ -1624,4 +1628,145 @@ func testNewDataColumnsVerifier() verification.NewDataColumnsVerifier {
 	return func([]blocks.RODataColumn, []verification.Requirement) verification.DataColumnsVerifier {
 		return &verification.MockDataColumnsVerifier{}
 	}
+}
+
+// Helper to create a verifier that marks all columns as verified
+func markAllVerified(m *verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
+	return func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		m.AppendRODataColumns(cols...)
+		return m
+	}
+}
+
+func TestRetentionCheckWithOverride(t *testing.T) {
+	require.NoError(t, kzg.Start())
+	denebEpoch := params.BeaconConfig().DenebForkEpoch
+	denebSlot, err := slots.EpochStart(denebEpoch)
+	require.NoError(t, err)
+	fuluEpoch := params.BeaconConfig().FuluForkEpoch
+	fuluSlot, err := slots.EpochStart(fuluEpoch)
+	require.NoError(t, err)
+	colRetention := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
+	savedSlotRange := func(start, end primitives.Slot) map[primitives.Slot]struct{} {
+		m := make(map[primitives.Slot]struct{})
+		for s := start; s < end; s++ {
+			m[s] = struct{}{}
+		}
+		return m
+	}
+	cases := []struct {
+		name          string
+		span          needSpan
+		savedSlots    map[primitives.Slot]struct{}
+		currentEpoch  primitives.Epoch
+		retentionFlag primitives.Epoch
+		cgc           uint64
+		oldestSlot    *primitives.Slot
+	}{
+		{
+			name:         "Before retention period, none saved",
+			span:         needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			currentEpoch: fuluEpoch + colRetention + 1,
+			cgc:          4,
+		},
+		{
+			name:         "At retention period boundary, all saved",
+			span:         needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			currentEpoch: fuluEpoch + colRetention,
+			savedSlots:   savedSlotRange(fuluSlot, fuluSlot+5),
+			cgc:          4,
+		},
+		{
+			name:         "Across boundary, saved after",
+			span:         needSpan{begin: fuluSlot + 30, end: fuluSlot + 35},
+			currentEpoch: fuluEpoch + colRetention + 1,
+			savedSlots:   savedSlotRange(fuluSlot+32, fuluSlot+35),
+			cgc:          4,
+		},
+		{
+			name:          "Before retention period with override, all saved",
+			span:          needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			currentEpoch:  fuluEpoch + colRetention*2, // well past retention without override
+			savedSlots:    savedSlotRange(fuluSlot, fuluSlot+5),
+			retentionFlag: fuluEpoch + colRetention*2, // flag covers all slots
+		},
+		{
+			name:          "Before retention period and just before override, none saved",
+			span:          needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			currentEpoch:  1 + fuluEpoch + colRetention*2, // current slot is beyond base retention
+			retentionFlag: fuluEpoch + colRetention*2,     // stops 1 short flag coverage
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			colStore := filesystem.NewEphemeralDataColumnStorage(t)
+			p2p := p2ptest.NewTestP2P(t)
+			bisector := newColumnBisector(func(peer.ID, string, error) {})
+			current, err := slots.EpochStart(tc.currentEpoch)
+			require.NoError(t, err)
+			sn := syncNeeds{
+				oldestSlotFlagPtr: tc.oldestSlot,
+				blobRetentionFlag: tc.retentionFlag,
+			}.initialize(func() primitives.Slot { return current }, denebSlot, fuluSlot)
+
+			sr := func(slot primitives.Slot) bool {
+				current := sn.currently()
+				return current.col.at(slot)
+			}
+
+			nodeId := p2p.NodeID()
+			peerInfo, _, err := peerdas.Info(nodeId, tc.cgc)
+			require.NoError(t, err)
+			indices := peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns)
+			// note that markAllVerified considers all columns that get through the rest of the da check as verified,
+			// not all columns in the test.
+			verifier := markAllVerified(&verification.MockDataColumnsVerifier{})
+			avs := das.NewLazilyPersistentStoreColumn(colStore, verifier, p2p.NodeID(), tc.cgc, bisector, sr)
+			fixtures := testBlockWithColumnSpan(t, tc.span.begin, tc.span, 3)
+			blocks := make([]blocks.ROBlock, 0, len(fixtures))
+			for _, fix := range fixtures {
+				for _, col := range fix.cols {
+					if indices.Has(col.Index) {
+						require.NoError(t, avs.Persist(current, col))
+					}
+				}
+				blocks = append(blocks, fix.block)
+			}
+			require.NoError(t, avs.IsDataAvailable(t.Context(), current, blocks...))
+			for _, block := range blocks {
+				slot := block.Block().Slot()
+				sum := colStore.Summary(block.Root())
+				stored := sum.Stored()
+				// If we don't expect storage for the slot, verify none are stored
+				if _, exists := tc.savedSlots[slot]; !exists {
+					require.Equal(t, 0, len(stored), "expected no columns stored for slot %d", slot)
+					continue
+				}
+				// If we expect storage, verify all stored columns are expected, and that all expected columns are stored.
+				missing := indices.Copy()
+				for idx := range stored {
+					require.Equal(t, true, missing.Has(idx), "unexpected stored column %d for slot %d", idx, slot)
+					missing.Unset(idx)
+				}
+				require.Equal(t, 0, missing.Count(), "expected all columns to be stored for slot %d, missing %v", slot, missing.ToSlice())
+			}
+		})
+	}
+}
+
+type blockFixture struct {
+	block blocks.ROBlock
+	cols  []blocks.RODataColumn
+	vcols []blocks.VerifiedRODataColumn
+}
+
+func testBlockWithColumnSpan(t *testing.T, slot primitives.Slot, colSpan needSpan, numBlobs int) []blockFixture {
+	res := make([]blockFixture, 0, colSpan.end-colSpan.begin)
+	parent := [32]byte{0x00}
+	for bs := colSpan.begin; bs < colSpan.end; bs++ {
+		blk, c, vc := util.GenerateTestFuluBlockWithSidecars(t, numBlobs, util.WithSlot(bs), util.WithParentRoot(parent))
+		res = append(res, blockFixture{block: blk, cols: c, vcols: vc})
+		parent = blk.Root()
+	}
+	return res
 }

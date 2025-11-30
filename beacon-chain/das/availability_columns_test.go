@@ -20,6 +20,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+func mockShouldRetain(current primitives.Epoch) RetentionChecker {
+	return func(slot primitives.Slot) bool {
+		return params.WithinDAPeriod(slots.ToEpoch(slot), current)
+	}
+}
+
 var commitments = [][]byte{
 	bytesutil.PadTo([]byte("a"), 48),
 	bytesutil.PadTo([]byte("b"), 48),
@@ -30,7 +36,7 @@ var commitments = [][]byte{
 func TestPersist(t *testing.T) {
 	t.Run("no sidecars", func(t *testing.T) {
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, nil, enode.ID{}, 0, nil)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, nil, enode.ID{}, 0, nil, mockShouldRetain(0))
 		err := lazilyPersistentStoreColumns.Persist(0)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
@@ -43,10 +49,12 @@ func TestPersist(t *testing.T) {
 			{Slot: 1, Index: 1},
 		}
 
+		var current primitives.Slot = 1_000_000
+		sr := mockShouldRetain(slots.ToEpoch(current))
 		roSidecars, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, nil, enode.ID{}, 0, nil)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, nil, enode.ID{}, 0, nil, sr)
 
-		err := lazilyPersistentStoreColumns.Persist(1_000_000, roSidecars...)
+		err := lazilyPersistentStoreColumns.Persist(current, roSidecars...)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
 	})
@@ -61,7 +69,7 @@ func TestPersist(t *testing.T) {
 		}
 
 		roSidecars, roDataColumns := util.CreateTestVerifiedRoDataColumnSidecars(t, dataColumnParamsByBlockRoot)
-		avs := NewLazilyPersistentStoreColumn(store, nil, enode.ID{}, 0, nil)
+		avs := NewLazilyPersistentStoreColumn(store, nil, enode.ID{}, 0, nil, mockShouldRetain(slots.ToEpoch(slot)))
 
 		err := avs.Persist(slot, roSidecars...)
 		require.NoError(t, err)
@@ -106,9 +114,9 @@ func TestIsDataAvailable(t *testing.T) {
 		signedRoBlock := newSignedRoBlock(t, signedBeaconBlockFulu)
 
 		dataColumnStorage := filesystem.NewEphemeralDataColumnStorage(t)
-		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, newDataColumnsVerifier, enode.ID{}, 0, nil)
+		lazilyPersistentStoreColumns := NewLazilyPersistentStoreColumn(dataColumnStorage, newDataColumnsVerifier, enode.ID{}, 0, nil, mockShouldRetain(0))
 
-		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0 /*current slot*/, signedRoBlock)
+		err := lazilyPersistentStoreColumns.IsDataAvailable(ctx, 0, signedRoBlock)
 		require.NoError(t, err)
 	})
 
@@ -130,7 +138,7 @@ func TestIsDataAvailable(t *testing.T) {
 		storage := filesystem.NewEphemeralDataColumnStorage(t)
 
 		indices := []uint64{1, 17, 19, 42, 75, 87, 102, 117}
-		avs := NewLazilyPersistentStoreColumn(storage, newDataColumnsVerifier, enode.ID{}, uint64(len(indices)), nil)
+		avs := NewLazilyPersistentStoreColumn(storage, newDataColumnsVerifier, enode.ID{}, uint64(len(indices)), nil, mockShouldRetain(slots.ToEpoch(slot)))
 		dcparams := make([]util.DataColumnParam, 0, len(indices))
 		for _, index := range indices {
 			dataColumnParams := util.DataColumnParam{
@@ -171,15 +179,19 @@ func TestIsDataAvailable(t *testing.T) {
 	})
 }
 
-func TestFullCommitmentsToCheck(t *testing.T) {
+func TestRetentionWindow(t *testing.T) {
 	windowSlots, err := slots.EpochEnd(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
 	require.NoError(t, err)
+	fuluSlot, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	require.NoError(t, err)
 
+	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	testCases := []struct {
 		name        string
 		commitments [][]byte
 		block       func(*testing.T) blocks.ROBlock
 		slot        primitives.Slot
+		wantedCols  int
 	}{
 		{
 			name: "Pre-Fulu block",
@@ -197,35 +209,33 @@ func TestFullCommitmentsToCheck(t *testing.T) {
 
 				return newSignedRoBlock(t, beaconBlockElectra)
 			},
-			slot: windowSlots + 1,
+			slot: fuluSlot + windowSlots,
 		},
 		{
 			name: "Commitments within data availability window",
 			block: func(t *testing.T) blocks.ROBlock {
 				signedBeaconBlockFulu := util.NewBeaconBlockFulu()
 				signedBeaconBlockFulu.Block.Body.BlobKzgCommitments = commitments
-				signedBeaconBlockFulu.Block.Slot = 100
+				signedBeaconBlockFulu.Block.Slot = fuluSlot + windowSlots - 1
 
 				return newSignedRoBlock(t, signedBeaconBlockFulu)
 			},
 			commitments: commitments,
-			slot:        100,
+			slot:        fuluSlot + windowSlots,
+			wantedCols:  int(numberOfColumns),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 			b := tc.block(t)
-			s := NewLazilyPersistentStoreColumn(nil, nil, enode.ID{}, numberOfColumns, nil)
+			s := NewLazilyPersistentStoreColumn(nil, nil, enode.ID{}, numberOfColumns, nil, mockShouldRetain(slots.ToEpoch(tc.slot)))
 
-			commitmentsArray, err := s.required(b, slots.ToEpoch(tc.slot))
+			indices, err := s.required(b, slots.ToEpoch(tc.slot))
 			require.NoError(t, err)
 
-			for _, commitments := range commitmentsArray {
-				require.DeepEqual(t, tc.commitments, commitments)
-			}
+			require.Equal(t, tc.wantedCols, len(indices))
 		})
 	}
 }

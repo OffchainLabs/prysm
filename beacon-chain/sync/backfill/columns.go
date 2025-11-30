@@ -118,12 +118,16 @@ func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current 
 	if cb == nil {
 		return &columnSync{}, nil
 	}
+	shouldRetain := func(sl primitives.Slot) bool {
+		needs := cfg.currentNeeds()
+		return needs.col.at(sl)
+	}
 
 	bisector := newColumnBisector(cfg.downscore)
 	return &columnSync{
 		columnBatch: cb,
 		current:     current,
-		store:       das.NewLazilyPersistentStoreColumn(cfg.colStore, cfg.newVC, p.NodeID(), cgc, bisector),
+		store:       das.NewLazilyPersistentStoreColumn(cfg.colStore, cfg.newVC, p.NodeID(), cgc, bisector, shouldRetain),
 		bisector:    bisector,
 	}, nil
 }
