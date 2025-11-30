@@ -281,8 +281,11 @@ func BenchmarkVerifyDataColumnSidecarKZGProofs_SameCommitments_NoBatch(b *testin
 }
 
 func BenchmarkVerifyDataColumnSidecarKZGProofs_DiffCommitments_Batch(b *testing.B) {
-	const blobCount = 12
-	numberOfColumns := int64(params.BeaconConfig().NumberOfColumns)
+	const (
+		blobCount       = 12
+		numberOfColumns = fieldparams.NumberOfColumns
+	)
+
 	err := kzg.Start()
 	require.NoError(b, err)
 

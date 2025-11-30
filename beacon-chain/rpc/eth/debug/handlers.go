@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -308,7 +309,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 
 // parseDataColumnIndices filters out invalid and duplicate data column indices
 func parseDataColumnIndices(url *url.URL) ([]int, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = fieldparams.NumberOfColumns
 	rawIndices := url.Query()["indices"]
 	indices := make([]int, 0, numberOfColumns)
 	invalidIndices := make([]string, 0)

@@ -465,8 +465,6 @@ func SendDataColumnSidecarsByRangeRequest(
 		return nil, nil
 	}
 
-	cfg := params.BeaconConfig()
-	numberOfColumns := cfg.NumberOfColumns
 	maxRequestDataColumnSidecars := params.BeaconConfig().MaxRequestDataColumnSidecars
 
 	// Check if we do not request too many sidecars.
@@ -486,7 +484,7 @@ func SendDataColumnSidecarsByRangeRequest(
 
 	// Build the logs.
 	var columnsLog any = "all"
-	if columnsCount < numberOfColumns {
+	if columnsCount < fieldparams.NumberOfColumns {
 		columns := request.Columns
 		slices.Sort(columns)
 		columnsLog = columns
