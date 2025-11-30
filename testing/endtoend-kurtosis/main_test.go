@@ -2,6 +2,8 @@ package endtoend_kurtosis
 
 import (
 	"testing"
+
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 const (
@@ -12,5 +14,16 @@ func TestEndToEnd_Minimal(t *testing.T) {
 	ctx := t.Context()
 
 	LoadPrysmDockerImages(t)
-	_ = CreateKurtosisEnclave(t, ctx, MINIMAL_ENCLAVE_NAME)
+
+	kurtosisWrapper, err := NewKurtosisWrapper(t, ctx)
+	require.NoError(t, err, "Failed to create Kurtosis wrapper")
+
+	err = kurtosisWrapper.CreateEnclave(MINIMAL_ENCLAVE_NAME)
+	require.NoError(t, err, "Failed to create Kurtosis enclave")
+
+	t.Cleanup(func() {
+		if err := kurtosisWrapper.DestroyEnclave(MINIMAL_ENCLAVE_NAME); err != nil {
+			t.Logf("Failed to cleanup enclave: %v", err)
+		}
+	})
 }
