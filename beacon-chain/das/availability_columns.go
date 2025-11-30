@@ -13,9 +13,6 @@ import (
 	errors "github.com/pkg/errors"
 )
 
-// RetentionChecker is a callback that determines whether blobs at the given slot are within the retention period.
-type RetentionChecker func(primitives.Slot) bool
-
 // LazilyPersistentStoreColumn is an implementation of AvailabilityStore to be used when batch syncing data columns.
 // This implementation will hold any data columns passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.

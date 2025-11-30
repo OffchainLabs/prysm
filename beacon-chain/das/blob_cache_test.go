@@ -34,7 +34,8 @@ type filterTestCaseSetupFunc func(t *testing.T) (*blobCacheEntry, [][]byte, []bl
 func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpected int) filterTestCaseSetupFunc {
 	return func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
 		blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, nBlobs)
-		commits, err := commitmentsToCheck(blk, blk.Block().Slot())
+		shouldRetain := func(s primitives.Slot) bool { return true }
+		commits, err := commitmentsToCheck(blk, shouldRetain)
 		require.NoError(t, err)
 		entry := &blobCacheEntry{}
 		if len(onDisk) > 0 {

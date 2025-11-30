@@ -11,6 +11,7 @@ go_library(
         "iface.go",
         "log.go",
         "mock.go",
+        "needs.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/das",
     visibility = ["//visibility:public"],
@@ -38,6 +39,7 @@ go_test(
         "availability_columns_test.go",
         "blob_cache_test.go",
         "data_column_cache_test.go",
+        "needs_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

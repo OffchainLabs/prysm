@@ -14,3 +14,6 @@ import (
 type AvailabilityChecker interface {
 	IsDataAvailable(ctx context.Context, current primitives.Slot, b ...blocks.ROBlock) error
 }
+
+// RetentionChecker is a callback that determines whether blobs at the given slot are within the retention period.
+type RetentionChecker func(primitives.Slot) bool
