@@ -3,15 +3,15 @@ package verification
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func testSignedBlockBlobKeys(t *testing.T, valRoot []byte, slot primitives.Slot, nblobs int) (blocks.ROBlock, []blocks.ROBlob, bls.SecretKey, bls.PublicKey) {

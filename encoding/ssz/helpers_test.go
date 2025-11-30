@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 const merkleizingListLimitError = "merkleizing list that is too large, over limit"

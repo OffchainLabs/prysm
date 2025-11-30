@@ -4,19 +4,19 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
-	chainmock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	chainmock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestProposer_GetSyncAggregate_OK(t *testing.T) {
@@ -271,14 +271,14 @@ func TestGetSyncAggregate_CorrectStateAtSyncCommitteePeriodBoundary(t *testing.T
 	wrongStateHasValidators := false
 	correctStateHasValidators := false
 
-	for i := 0; i < len(wrongStateBits); i++ {
+	for i := range wrongStateBits {
 		if wrongStateBits[i] != 0 {
 			wrongStateHasValidators = true
 			break
 		}
 	}
 
-	for i := 0; i < len(correctStateBits); i++ {
+	for i := range correctStateBits {
 		if correctStateBits[i] != 0 {
 			correctStateHasValidators = true
 			break

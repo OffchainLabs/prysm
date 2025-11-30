@@ -1,10 +1,10 @@
 package util
 
 import (
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // HydrateSyncCommittee hydrates the provided sync committee message.

@@ -3,14 +3,14 @@ package grpc_api
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	mock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	mock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"go.uber.org/mock/gomock"
 )
 

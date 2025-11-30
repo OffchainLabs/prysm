@@ -7,18 +7,19 @@ import (
 	"path"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -165,11 +166,9 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
 	key := fmt.Sprintf("%#x", source.Root())
-	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
 		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		commitments, err := source.Commitments()
 		if err != nil {
@@ -214,8 +213,8 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// Boundary check.
-			if sidecarCount != numberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+			if sidecarCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, fieldparams.NumberOfColumns)
 			}
 
 			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), source.ProposerIndex(), columnIndicesToSample, constructedSidecars)

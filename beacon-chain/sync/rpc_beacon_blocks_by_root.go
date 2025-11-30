@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/verify"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/verify"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -174,7 +174,7 @@ func (s *Service) requestAndSaveMissingBlobSidecars(block interfaces.ReadOnlySig
 }
 
 // beaconBlocksRootRPCHandler looks up the request blocks from the database from the given block roots.
-func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) beaconBlocksRootRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)

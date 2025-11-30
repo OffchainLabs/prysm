@@ -5,24 +5,24 @@ package helpers
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -515,9 +515,7 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	// used for failing verify signature fallback.
 	sortedIndices := make([]primitives.ValidatorIndex, len(shuffledIndices))
 	copy(sortedIndices, shuffledIndices)
-	sort.Slice(sortedIndices, func(i, j int) bool {
-		return sortedIndices[i] < sortedIndices[j]
-	})
+	slices.Sort(sortedIndices)
 
 	if err := committeeCache.AddCommitteeShuffledList(ctx, &cache.Committees{
 		ShuffledIndices: shuffledIndices,

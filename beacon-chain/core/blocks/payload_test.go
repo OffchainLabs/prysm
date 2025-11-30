@@ -4,21 +4,21 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func Test_IsMergeComplete(t *testing.T) {
@@ -260,11 +260,12 @@ func Test_IsExecutionBlockCapella(t *testing.T) {
 
 func Test_IsExecutionEnabled(t *testing.T) {
 	tests := []struct {
-		name        string
-		payload     *enginev1.ExecutionPayload
-		header      interfaces.ExecutionData
-		useAltairSt bool
-		want        bool
+		name         string
+		payload      *enginev1.ExecutionPayload
+		header       interfaces.ExecutionData
+		useAltairSt  bool
+		useCapellaSt bool
+		want         bool
 	}{
 		{
 			name:    "use older than bellatrix state",
@@ -331,6 +332,17 @@ func Test_IsExecutionEnabled(t *testing.T) {
 			}(),
 			want: true,
 		},
+		{
+			name:    "capella state always enabled",
+			payload: emptyPayload(),
+			header: func() interfaces.ExecutionData {
+				h, err := emptyPayloadHeader()
+				require.NoError(t, err)
+				return h
+			}(),
+			useCapellaSt: true,
+			want:         true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -342,6 +354,8 @@ func Test_IsExecutionEnabled(t *testing.T) {
 			require.NoError(t, err)
 			if tt.useAltairSt {
 				st, _ = util.DeterministicGenesisStateAltair(t, 1)
+			} else if tt.useCapellaSt {
+				st, _ = util.DeterministicGenesisStateCapella(t, 1)
 			}
 			got, err := blocks.IsExecutionEnabled(st, body)
 			require.NoError(t, err)
@@ -851,8 +865,7 @@ func BenchmarkBellatrixComplete(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, st.SetLatestExecutionPayloadHeader(h))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := blocks.IsMergeTransitionComplete(st)
 		require.NoError(b, err)
 	}

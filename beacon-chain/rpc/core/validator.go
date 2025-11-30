@@ -4,32 +4,32 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -133,9 +133,7 @@ func (s *Service) ComputeValidatorPerformance(
 		}
 	}
 	// Depending on the indices and public keys given, results might not be sorted.
-	sort.Slice(validatorIndices, func(i, j int) bool {
-		return validatorIndices[i] < validatorIndices[j]
-	})
+	slices.Sort(validatorIndices)
 
 	currentEpoch := coreTime.CurrentEpoch(headState)
 	responseCap = len(validatorIndices)
@@ -239,9 +237,7 @@ func (s *Service) IndividualVotes(
 			filteredIndices = append(filteredIndices, index)
 		}
 	}
-	sort.Slice(filteredIndices, func(i, j int) bool {
-		return filteredIndices[i] < filteredIndices[j]
-	})
+	slices.Sort(filteredIndices)
 
 	var v []*precompute.Validator
 	var bal *precompute.Balance

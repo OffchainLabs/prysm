@@ -5,12 +5,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -133,6 +133,12 @@ var (
 			Help: "Time to verify gossiped attestations",
 		},
 	)
+	attestationVerificationGossipSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "gossip_attestation_verification_milliseconds",
+			Help: "Time to verify gossiped attestations",
+		},
+	)
 	blockVerificationGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "gossip_block_verification_milliseconds",
@@ -245,8 +251,8 @@ func (s *Service) updateMetrics() {
 	}
 	indices := aggregatorSubnetIndices(s.cfg.clock.CurrentSlot())
 	syncIndices := cache.SyncSubnetIDs.GetAllSubnets(slots.ToEpoch(s.cfg.clock.CurrentSlot()))
-	attTopic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.Attestation{})]
-	syncTopic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.SyncCommitteeMessage{})]
+	attTopic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.Attestation]()]
+	syncTopic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.SyncCommitteeMessage]()]
 	attTopic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	syncTopic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	if flags.Get().SubscribeToAllSubnets {

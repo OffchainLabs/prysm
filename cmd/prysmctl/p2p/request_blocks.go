@@ -5,15 +5,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	corenet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
@@ -159,12 +159,12 @@ func cliActionRequestBlocks(cliCtx *cli.Context) error {
 	c.registerHandshakeHandlers()
 
 	c.registerRPCHandler(p2p.RPCBlocksByRangeTopicV1, func(
-		ctx context.Context, i interface{}, stream libp2pcore.Stream,
+		ctx context.Context, i any, stream libp2pcore.Stream,
 	) error {
 		return nil
 	})
 	c.registerRPCHandler(p2p.RPCBlocksByRangeTopicV2, func(
-		ctx context.Context, i interface{}, stream libp2pcore.Stream,
+		ctx context.Context, i any, stream libp2pcore.Stream,
 	) error {
 		return nil
 	})

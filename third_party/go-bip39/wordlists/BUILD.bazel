@@ -1,0 +1,20 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+# gazelle:prefix github.com/tyler-smith/go-bip39/wordlists
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "chinese_simplified.go",
+        "chinese_traditional.go",
+        "czech.go",
+        "english.go",
+        "french.go",
+        "italian.go",
+        "japanese.go",
+        "korean.go",
+        "spanish.go",
+    ],
+    importpath = "github.com/tyler-smith/go-bip39/wordlists",
+    visibility = ["//visibility:public"],
+)

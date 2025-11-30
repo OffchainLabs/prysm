@@ -9,28 +9,28 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -388,7 +388,7 @@ func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 
 	t.Run("unblock on context cancellation", func(t *testing.T) {
 		fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
-		for i := 0; i < maxPendingRequests; i++ {
+		for range maxPendingRequests {
 			assert.NoError(t, fetcher.scheduleRequest(t.Context(), 1, blockBatchLimit))
 		}
 
@@ -1366,8 +1366,8 @@ func TestFetchSidecars(t *testing.T) {
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
+		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 		cfg := params.BeaconConfig()
-		numberOfColumns := cfg.NumberOfColumns
 		samplesPerSlot := cfg.SamplesPerSlot
 
 		// Define "now" to be one epoch after genesis time + retention period.

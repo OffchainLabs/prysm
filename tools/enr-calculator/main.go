@@ -9,9 +9,9 @@ import (
 	"flag"
 	"net"
 
-	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	_ "github.com/OffchainLabs/prysm/v7/runtime/maxprocs"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"

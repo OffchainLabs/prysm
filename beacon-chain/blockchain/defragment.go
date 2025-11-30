@@ -1,8 +1,8 @@
 package blockchain
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/time"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )

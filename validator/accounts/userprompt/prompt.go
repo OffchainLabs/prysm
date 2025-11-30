@@ -1,9 +1,9 @@
 package userprompt
 
 import (
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/io/prompt"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/io/prompt"
 	"github.com/logrusorgru/aurora"
 	"github.com/manifoldco/promptui"
 	"github.com/pkg/errors"

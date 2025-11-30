@@ -3,24 +3,25 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/holiman/uint256"
@@ -165,9 +166,7 @@ func (s *Service) findPeersWithSubnets(
 ) ([]*enode.Node, error) {
 	// Copy the defective subnets map to avoid modifying the original map.
 	defectiveSubnets := make(map[uint64]int, len(defectiveSubnetsOrigin))
-	for k, v := range defectiveSubnetsOrigin {
-		defectiveSubnets[k] = v
-	}
+	maps.Copy(defectiveSubnets, defectiveSubnetsOrigin)
 
 	// Create an discovery iterator to find new peers.
 	iterator := s.dv5Listener.RandomNodes()
@@ -302,9 +301,7 @@ func (s *Service) dialPeers(ctx context.Context, maxConcurrentDials int, nodes [
 				continue
 			}
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := s.connectWithPeer(ctx, *info); err != nil {
 					log.WithError(err).WithField("info", info.String()).Debug("Could not connect with peer")
 					return
@@ -313,7 +310,7 @@ func (s *Service) dialPeers(ctx context.Context, maxConcurrentDials int, nodes [
 				mut.Lock()
 				defer mut.Unlock()
 				counter++
-			}()
+			})
 		}
 
 		wg.Wait()

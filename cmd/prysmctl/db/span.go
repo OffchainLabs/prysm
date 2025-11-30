@@ -3,9 +3,9 @@ package db
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
@@ -164,10 +164,7 @@ func spanAction(cliCtx *cli.Context) error {
 			b := chunk.Chunk()
 			c := uint64(0)
 			for z := uint64(0); z < uint64(len(b)); z += params.ChunkSize() {
-				end := z + params.ChunkSize()
-				if end > uint64(len(b)) {
-					end = uint64(len(b))
-				}
+				end := min(z+params.ChunkSize(), uint64(len(b)))
 				subChunk := b[z:end]
 
 				row := make(table.Row, params.ChunkSize()+1)
@@ -191,10 +188,7 @@ func spanAction(cliCtx *cli.Context) error {
 			b := chunk.Chunk()
 			c := uint64(0)
 			for z := uint64(0); z < uint64(len(b)); z += params.ChunkSize() {
-				end := z + params.ChunkSize()
-				if end > uint64(len(b)) {
-					end = uint64(len(b))
-				}
+				end := min(z+params.ChunkSize(), uint64(len(b)))
 				subChunk := b[z:end]
 
 				row := make(table.Row, 2)

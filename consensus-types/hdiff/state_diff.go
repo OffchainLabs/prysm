@@ -7,21 +7,21 @@ import (
 	"slices"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/capella"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/deneb"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/fulu"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/helpers"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/capella"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/deneb"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/helpers"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -752,7 +752,7 @@ func (ret *stateDiff) readProposerLookahead(data *[]byte) error {
 	// Read the proposer lookahead (2 * SlotsPerEpoch uint64 values)
 	numProposers := 2 * fieldparams.SlotsPerEpoch
 	ret.proposerLookahead = make([]uint64, numProposers)
-	for i := 0; i < numProposers; i++ {
+	for i := range numProposers {
 		ret.proposerLookahead[i] = binary.LittleEndian.Uint64((*data)[i*8 : (i+1)*8])
 	}
 	*data = (*data)[proposerLookaheadLength:]

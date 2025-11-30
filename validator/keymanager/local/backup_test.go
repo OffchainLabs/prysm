@@ -4,18 +4,18 @@ import (
 	"encoding/hex"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestLocalKeymanager_ExtractKeystores(t *testing.T) {
 	secretKeysCache = make(map[[fieldparams.BLSPubkeyLength]byte]bls.SecretKey)
 	dr := &Keymanager{}
 	validatingKeys := make([]bls.SecretKey, 10)
-	for i := 0; i < len(validatingKeys); i++ {
+	for i := range validatingKeys {
 		secretKey, err := bls.RandKey()
 		require.NoError(t, err)
 		validatingKeys[i] = secretKey

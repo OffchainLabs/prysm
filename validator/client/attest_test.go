@@ -11,18 +11,18 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -590,7 +590,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 				BeaconBlockRoot: bytesutil.PadTo([]byte("A"), 32),
 				Target:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("B"), 32)},
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 3},
-			}, nil).Do(func(arg0, arg1 interface{}) {
+			}, nil).Do(func(arg0, arg1 any) {
 				wg.Done()
 			})
 
@@ -745,12 +745,10 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		time.Sleep(100 * time.Millisecond)
 		v.slotFeed.Send(currentSlot)
-		wg.Done()
-	}()
+	})
 
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 

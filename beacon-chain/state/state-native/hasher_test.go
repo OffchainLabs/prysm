@@ -5,15 +5,15 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestComputeFieldRootsWithHasher_Phase0(t *testing.T) {

@@ -343,7 +343,7 @@ func extractPrefix(msg string) (string, string) {
 	return prefix, msg
 }
 
-func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interface{}, appendSpace bool) error {
+func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value any, appendSpace bool) error {
 	b.WriteString(key)
 	b.WriteByte('=')
 	if err := f.appendValue(b, value); err != nil {
@@ -356,7 +356,7 @@ func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interf
 	return nil
 }
 
-func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) (err error) {
+func (f *TextFormatter) appendValue(b *bytes.Buffer, value any) (err error) {
 	switch value := value.(type) {
 	case string:
 		if !f.needsQuoting(value) {

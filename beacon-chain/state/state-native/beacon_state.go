@@ -5,13 +5,13 @@ import (
 	"sync"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/fieldtrie"
-	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/fieldtrie"
+	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // BeaconState defines a struct containing utilities for the Ethereum Beacon Chain state, defining
@@ -70,6 +70,14 @@ type BeaconState struct {
 	pendingConsolidations         []*ethpb.PendingConsolidation     // pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
 	proposerLookahead             []primitives.ValidatorIndex       // proposer_look_ahead: List[uint64, (MIN_LOOKAHEAD + 1)*SLOTS_PER_EPOCH]
 
+	// Gloas fields
+	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
+	executionPayloadAvailability []byte
+	builderPendingPayments       []*ethpb.BuilderPendingPayment
+	builderPendingWithdrawals    []*ethpb.BuilderPendingWithdrawal
+	latestBlockHash              []byte
+	latestWithdrawalsRoot        []byte
+
 	id                    uint64
 	lock                  sync.RWMutex
 	dirtyFields           map[types.FieldIndex]bool
@@ -125,6 +133,12 @@ type beaconStateMarshalable struct {
 	PendingPartialWithdrawals           []*ethpb.PendingPartialWithdrawal       `json:"pending_partial_withdrawals" yaml:"pending_partial_withdrawals"`
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
+	LatestExecutionPayloadBid           *ethpb.ExecutionPayloadBid              `json:"latest_execution_payload_bid" yaml:"latest_execution_payload_bid"`
+	ExecutionPayloadAvailability        []byte                                  `json:"execution_payload_availability" yaml:"execution_payload_availability"`
+	BuilderPendingPayments              []*ethpb.BuilderPendingPayment          `json:"builder_pending_payments" yaml:"builder_pending_payments"`
+	BuilderPendingWithdrawals           []*ethpb.BuilderPendingWithdrawal       `json:"builder_pending_withdrawals" yaml:"builder_pending_withdrawals"`
+	LatestBlockHash                     []byte                                  `json:"latest_block_hash" yaml:"latest_block_hash"`
+	LatestWithdrawalsRoot               []byte                                  `json:"latest_withdrawals_root" yaml:"latest_withdrawals_root"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -179,6 +193,12 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingPartialWithdrawals:           b.pendingPartialWithdrawals,
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
+		LatestExecutionPayloadBid:           b.latestExecutionPayloadBid,
+		ExecutionPayloadAvailability:        b.executionPayloadAvailability,
+		BuilderPendingPayments:              b.builderPendingPayments,
+		BuilderPendingWithdrawals:           b.builderPendingWithdrawals,
+		LatestBlockHash:                     b.latestBlockHash,
+		LatestWithdrawalsRoot:               b.latestWithdrawalsRoot,
 	}
 	return json.Marshal(marshalable)
 }

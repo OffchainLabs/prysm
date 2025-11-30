@@ -5,13 +5,13 @@ import (
 	"math"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
@@ -65,7 +65,7 @@ func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int) *p2pBatchWorkerPool {
 func (p *p2pBatchWorkerPool) spawn(ctx context.Context, n int, c *startup.Clock, a PeerAssigner, v *verifier, cm sync.ContextByteVersions, nbv verification.NewBlobVerifier, bfs *filesystem.BlobStorage) {
 	p.ctx, p.cancel = context.WithCancel(ctx)
 	go p.batchRouter(a)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		go p.newWorker(workerId(i), p.toWorkers, p.fromWorkers, c, v, cm, nbv, bfs).run(p.ctx)
 	}
 }

@@ -25,8 +25,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 )
 
 func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
@@ -41,7 +41,7 @@ func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
 	return outText, err
 }
 
-func ensureInt(x interface{}) int {
+func ensureInt(x any) int {
 	res, ok := x.(int)
 	if !ok {
 		res = int(x.(float64))

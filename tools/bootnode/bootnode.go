@@ -24,16 +24,16 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/io/logs"
-	"github.com/OffchainLabs/prysm/v6/network"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/network"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	_ "github.com/OffchainLabs/prysm/v7/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	gcrypto "github.com/ethereum/go-ethereum/crypto"
 	gethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -179,7 +179,7 @@ func (h *handler) httpHandler(w http.ResponseWriter, _ *http.Request) {
 	allNodes := h.listener.AllNodes()
 	write(w, []byte("Nodes stored in the table:\n"))
 	for i, n := range allNodes {
-		write(w, []byte(fmt.Sprintf("Node %d\n", i)))
+		write(w, fmt.Appendf(nil, "Node %d\n", i))
 		write(w, []byte(n.String()+"\n"))
 		write(w, []byte("Node ID: "+n.ID().String()+"\n"))
 		write(w, []byte("IP: "+n.IP().String()+"\n"))

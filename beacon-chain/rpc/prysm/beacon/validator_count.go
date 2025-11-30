@@ -7,17 +7,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // GetValidatorCount is a HTTP handler that serves the GET /eth/v1/beacon/states/{state_id}/validator_count endpoint.

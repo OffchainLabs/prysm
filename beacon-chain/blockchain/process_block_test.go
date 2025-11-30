@@ -10,43 +10,43 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations/kv"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/kv"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
@@ -147,7 +147,7 @@ func TestStore_OnBlockBatch(t *testing.T) {
 	bState := st.Copy()
 
 	var blks []consensusblocks.ROBlock
-	for i := 0; i < 97; i++ {
+	for i := range 97 {
 		b, err := util.GenerateFullBlock(bState, keys, util.DefaultBlockGenConfig(), primitives.Slot(i))
 		require.NoError(t, err)
 		wsb, err := consensusblocks.NewSignedBeaconBlock(b)
@@ -1323,7 +1323,7 @@ func TestOnBlock_ProcessBlocksParallel(t *testing.T) {
 	require.NoError(t, err)
 
 	logHook := logTest.NewGlobal()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		fc := &ethpb.Checkpoint{}
 		st, blkRoot, err := prepareForkchoiceState(ctx, 0, wsb1.Block().ParentRoot(), [32]byte{}, [32]byte{}, fc, fc)
 		require.NoError(t, err)
@@ -1949,7 +1949,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 	require.Equal(t, true, optimistic)
 
 	// Check that the invalid blocks are not in database
-	for i := 0; i < 19-13; i++ {
+	for i := range 19 - 13 {
 		require.Equal(t, false, service.cfg.BeaconDB.HasBlock(ctx, invalidRoots[i]))
 	}
 
@@ -2495,7 +2495,8 @@ func TestMissingBlobIndices(t *testing.T) {
 }
 
 func TestMissingDataColumnIndices(t *testing.T) {
-	countPlusOne := params.BeaconConfig().NumberOfColumns + 1
+	const countPlusOne = fieldparams.NumberOfColumns + 1
+
 	tooManyColumns := make(map[uint64]bool, countPlusOne)
 	for i := range countPlusOne {
 		tooManyColumns[uint64(i)] = true
@@ -2804,7 +2805,11 @@ func TestProcessLightClientUpdate(t *testing.T) {
 	require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, headState, [32]byte{1, 2}))
 	require.NoError(t, s.cfg.BeaconDB.SaveHeadBlockRoot(ctx, [32]byte{1, 2}))
 
-	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -2879,7 +2884,7 @@ func TestProcessLightClientUpdate(t *testing.T) {
 
 				// set a better sync aggregate
 				scb := make([]byte, 64)
-				for i := 0; i < 5; i++ {
+				for i := range 5 {
 					scb[i] = 0x01
 				}
 				oldUpdate.SetSyncAggregate(&ethpb.SyncAggregate{
