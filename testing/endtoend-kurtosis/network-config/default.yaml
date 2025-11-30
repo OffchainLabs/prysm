@@ -5,4 +5,5 @@ participants:
     vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
     count: 2
 additional_services:
+  # TODO: Dora is added for testing purpose, remove it later
   - dora

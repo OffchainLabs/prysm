@@ -9,6 +9,7 @@ go_test(
         "main_test.go",
         "setup_test.go",
     ],
+    args = ["-test.v"],
     data = [
         "network-config/default.yaml",
         "//cmd/beacon-chain:oci_image_tarball",
@@ -21,7 +22,9 @@ go_test(
     deps = [
         "//testing/require:go_default_library",
         "@com_github_kurtosis_tech_kurtosis_api_golang//core/lib/enclaves:go_default_library",
+        "@com_github_kurtosis_tech_kurtosis_api_golang//core/lib/starlark_run_config:go_default_library",
         "@com_github_kurtosis_tech_kurtosis_api_golang//engine/lib/kurtosis_context:go_default_library",
+        "@in_gopkg_yaml_v3//:go_default_library",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
     ],
 )

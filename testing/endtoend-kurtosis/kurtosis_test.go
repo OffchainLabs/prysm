@@ -2,11 +2,16 @@ package endtoend_kurtosis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 
+	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/kurtosis-tech/kurtosis/api/golang/core/lib/enclaves"
+	"github.com/kurtosis-tech/kurtosis/api/golang/core/lib/starlark_run_config"
 	"github.com/kurtosis-tech/kurtosis/api/golang/engine/lib/kurtosis_context"
+	"gopkg.in/yaml.v3"
 )
 
 type KurtosisWrapper struct {
@@ -68,6 +73,59 @@ func (kw *KurtosisWrapper) DestroyEnclave(enclaveName string) error {
 	return nil
 }
 
-func (kw *KurtosisWrapper) RunPackageWithNetworkConfig() {
-	panic("TODO")
+func (kw *KurtosisWrapper) RunPackageWithNetworkConfig(enclaveName string, packageId string, networkConfigPath string) error {
+	enclaveCtx, exists := kw.enclaves[enclaveName]
+	if !exists {
+		return fmt.Errorf("enclave not found in wrapper: %s", enclaveName)
+	}
+
+	jsonParams, err := kw.readYamlConfigAsJson(networkConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to process config file: %w", err)
+	}
+	kw.t.Logf("Running package '%s' with params: %s", packageId, jsonParams)
+
+	runConfig := starlark_run_config.NewRunStarlarkConfig(
+		starlark_run_config.WithSerializedParams(jsonParams),
+	)
+
+	runResult, err := enclaveCtx.RunStarlarkRemotePackageBlocking(kw.ctx, packageId, runConfig)
+	if err != nil {
+		return fmt.Errorf("failed to run remote package: %w", err)
+	}
+
+	if runResult.InterpretationError != nil {
+		return fmt.Errorf("starlark interpretation error: %v", runResult.InterpretationError)
+	}
+
+	if len(runResult.ValidationErrors) > 0 {
+		return fmt.Errorf("starlark validation errors: %v", runResult.ValidationErrors)
+	}
+
+	kw.t.Log("Starlark package executed successfully")
+	return nil
+}
+
+func (kw *KurtosisWrapper) readYamlConfigAsJson(networkConfigPath string) (string, error) {
+	realPath, err := bazel.Runfile(networkConfigPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to find runfile '%s': %w", networkConfigPath, err)
+	}
+
+	yamlData, err := os.ReadFile(realPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var body any
+	if err := yaml.Unmarshal(yamlData, &body); err != nil {
+		return "", fmt.Errorf("failed to unmarshal yaml: %w", err)
+	}
+
+	jsonData, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal to json: %w", err)
+	}
+
+	return string(jsonData), nil
 }
