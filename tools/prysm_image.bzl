@@ -88,7 +88,8 @@ def prysm_image_upload(
 
     oci_tarball(
         name = "oci_image_tarball",
-        image = ":oci_image",
+        format = "oci",
+        image = ":oci_image_index",
         repo_tags = [repository + ":latest"],
         visibility = ["//visibility:public"],
     )
