@@ -1,0 +1,20 @@
+load("@prysm//tools/go:def.bzl", "go_test")
+
+go_test(
+    name = "go_default_test",
+    size = "large",
+    testonly = True,
+    srcs = ["main_test.go"],
+    data = [
+        "//cmd/beacon-chain:oci_image_tarball",
+        "//cmd/validator:oci_image_tarball",
+    ],
+    tags = [
+        "manual",
+        "requires-network",
+    ],
+    deps = [
+        "//testing/require:go_default_library",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+    ],
+)
