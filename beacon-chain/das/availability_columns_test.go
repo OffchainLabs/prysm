@@ -56,7 +56,7 @@ func TestPersist(t *testing.T) {
 
 		err := lazilyPersistentStoreColumns.Persist(current, roSidecars...)
 		require.NoError(t, err)
-		require.Equal(t, 0, len(lazilyPersistentStoreColumns.cache.entries))
+		require.Equal(t, len(roSidecars), len(lazilyPersistentStoreColumns.cache.entries))
 	})
 
 	t.Run("nominal", func(t *testing.T) {
@@ -232,7 +232,7 @@ func TestRetentionWindow(t *testing.T) {
 			b := tc.block(t)
 			s := NewLazilyPersistentStoreColumn(nil, nil, enode.ID{}, numberOfColumns, nil, mockShouldRetain(slots.ToEpoch(tc.slot)))
 
-			indices, err := s.required(b, slots.ToEpoch(tc.slot))
+			indices, err := s.required(b)
 			require.NoError(t, err)
 
 			require.Equal(t, tc.wantedCols, len(indices))

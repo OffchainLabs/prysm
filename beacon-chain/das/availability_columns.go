@@ -7,10 +7,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	errors "github.com/pkg/errors"
 )
@@ -63,12 +61,8 @@ func NewLazilyPersistentStoreColumn(
 // PersistColumns adds columns to the working column cache. Columns stored in this cache will be persisted
 // for at least as long as the node is running. Once IsDataAvailable succeeds, all columns referenced
 // by the given block are guaranteed to be persisted for the remainder of the retention period.
-func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars ...blocks.RODataColumn) error {
-	currentEpoch := slots.ToEpoch(current)
+func (s *LazilyPersistentStoreColumn) Persist(_ primitives.Slot, sidecars ...blocks.RODataColumn) error {
 	for _, sidecar := range sidecars {
-		if !params.WithinDAPeriod(slots.ToEpoch(sidecar.Slot()), currentEpoch) {
-			continue
-		}
 		if err := s.cache.stash(sidecar); err != nil {
 			return errors.Wrap(err, "stash DataColumnSidecar")
 		}
@@ -79,14 +73,12 @@ func (s *LazilyPersistentStoreColumn) Persist(current primitives.Slot, sidecars 
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // DataColumnsSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
-	currentEpoch := slots.ToEpoch(current)
-
+func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, _ primitives.Slot, blks ...blocks.ROBlock) error {
 	toVerify := make([]blocks.RODataColumn, 0)
 	for _, block := range blks {
-		indices, err := s.required(block, currentEpoch)
+		indices, err := s.required(block)
 		if err != nil {
-			return errors.Wrapf(err, "full commitments to check with block root `%#x` and current slot `%d`", block.Root(), current)
+			return errors.Wrapf(err, "full commitments to check with block root `%#x`", block.Root())
 		}
 		if indices.Count() == 0 {
 			continue
@@ -112,7 +104,7 @@ func (s *LazilyPersistentStoreColumn) IsDataAvailable(ctx context.Context, curre
 }
 
 // required returns the set of column indices to check for a given block.
-func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock, current primitives.Epoch) (peerdas.ColumnIndices, error) {
+func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock) (peerdas.ColumnIndices, error) {
 	if !s.shouldRetain(block.Block().Slot()) {
 		return peerdas.NewColumnIndices(), nil
 	}
@@ -128,7 +120,7 @@ func (s *LazilyPersistentStoreColumn) required(block blocks.ROBlock, current pri
 		return peerdas.NewColumnIndices(), nil
 	}
 
-	return s.custody.required(current)
+	return s.custody.required()
 }
 
 // verifyAndSave calls Save on the column store if the columns pass verification.
@@ -246,7 +238,7 @@ type custodyRequirement struct {
 	indices peerdas.ColumnIndices
 }
 
-func (c *custodyRequirement) required(current primitives.Epoch) (peerdas.ColumnIndices, error) {
+func (c *custodyRequirement) required() (peerdas.ColumnIndices, error) {
 	peerInfo, _, err := peerdas.Info(c.nodeID, c.cgc)
 	if err != nil {
 		return peerdas.NewColumnIndices(), errors.Wrap(err, "peer info")
