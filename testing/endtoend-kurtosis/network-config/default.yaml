@@ -1,0 +1,8 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
+    vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
+    count: 2
+additional_services:
+  - dora

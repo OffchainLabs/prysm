@@ -10,6 +10,7 @@ go_test(
         "setup_test.go",
     ],
     data = [
+        "network-config/default.yaml",
         "//cmd/beacon-chain:oci_image_tarball",
         "//cmd/validator:oci_image_tarball",
     ],
