@@ -1,4 +1,4 @@
-package backfill
+package das
 
 import (
 	"fmt"
@@ -14,31 +14,31 @@ import (
 func TestNeedSpanAt(t *testing.T) {
 	cases := []struct {
 		name     string
-		span     needSpan
+		span     NeedSpan
 		slots    []primitives.Slot
 		expected bool
 	}{
 		{
 			name:     "within bounds",
-			span:     needSpan{begin: 100, end: 200},
+			span:     NeedSpan{Begin: 100, End: 200},
 			slots:    []primitives.Slot{101, 150, 199},
 			expected: true,
 		},
 		{
 			name:     "before begin / at end boundary (exclusive)",
-			span:     needSpan{begin: 100, end: 200},
+			span:     NeedSpan{Begin: 100, End: 200},
 			slots:    []primitives.Slot{99, 200, 201},
 			expected: false,
 		},
 		{
 			name:     "empty span (begin == end)",
-			span:     needSpan{begin: 100, end: 100},
+			span:     NeedSpan{Begin: 100, End: 100},
 			slots:    []primitives.Slot{100},
 			expected: false,
 		},
 		{
 			name:     "slot 0 with span starting at 0",
-			span:     needSpan{begin: 0, end: 100},
+			span:     NeedSpan{Begin: 0, End: 100},
 			slots:    []primitives.Slot{0},
 			expected: true,
 		},
@@ -47,7 +47,7 @@ func TestNeedSpanAt(t *testing.T) {
 	for _, tc := range cases {
 		for _, sl := range tc.slots {
 			t.Run(fmt.Sprintf("%s at slot %d, ", tc.name, sl), func(t *testing.T) {
-				result := tc.span.at(sl)
+				result := tc.span.At(sl)
 				require.Equal(t, tc.expected, result)
 			})
 		}
@@ -131,120 +131,103 @@ func TestSyncNeedsInitialize(t *testing.T) {
 
 	currentSlot := primitives.Slot(10000)
 	currentFunc := func() primitives.Slot { return currentSlot }
-	denebSlot := primitives.Slot(1000)
-	fuluSlot := primitives.Slot(2000)
 
 	cases := []struct {
-		name              string
-		input             syncNeeds
+		invalidOldestFlag bool
 		expectValidOldest bool
+		oldestSlotFlagPtr *primitives.Slot
+		blobRetentionFlag primitives.Epoch
 		expectedBlob      primitives.Epoch
 		expectedCol       primitives.Epoch
+		name              string
+		input             SyncNeeds
 	}{
 		{
-			name: "basic initialization with no flags",
-			input: syncNeeds{
-				blobRetentionFlag: 0,
-			},
+			name:              "basic initialization with no flags",
+			expectValidOldest: false,
+			expectedBlob:      minBlobEpochs,
+			expectedCol:       minColEpochs,
+			blobRetentionFlag: 0,
+		},
+		{
+			name:              "blob retention flag less than spec minimum",
+			blobRetentionFlag: minBlobEpochs - 1,
 			expectValidOldest: false,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
 		},
 		{
-			name: "blob retention flag less than spec minimum",
-			input: syncNeeds{
-				blobRetentionFlag: minBlobEpochs - 1,
-			},
-			expectValidOldest: false,
-			expectedBlob:      minBlobEpochs,
-			expectedCol:       minColEpochs,
-		},
-		{
-			name: "blob retention flag greater than spec minimum",
-			input: syncNeeds{
-				blobRetentionFlag: minBlobEpochs + 10,
-			},
+			name:              "blob retention flag greater than spec minimum",
+			blobRetentionFlag: minBlobEpochs + 10,
 			expectValidOldest: false,
 			expectedBlob:      minBlobEpochs + 10,
 			expectedCol:       minBlobEpochs + 10,
 		},
 		{
-			name: "oldestSlotFlagPtr is nil",
-			input: syncNeeds{
-				blobRetentionFlag: 0,
-				oldestSlotFlagPtr: nil,
-			},
+			name:              "oldestSlotFlagPtr is nil",
+			blobRetentionFlag: 0,
+			oldestSlotFlagPtr: nil,
 			expectValidOldest: false,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
 		},
 		{
-			name: "valid oldestSlotFlagPtr (earlier than spec minimum)",
-			input: syncNeeds{
-				blobRetentionFlag: 0,
-				oldestSlotFlagPtr: func() *primitives.Slot {
-					slot := primitives.Slot(10)
-					return &slot
-				}(),
-			},
+			name:              "valid oldestSlotFlagPtr (earlier than spec minimum)",
+			blobRetentionFlag: 0,
+			oldestSlotFlagPtr: func() *primitives.Slot {
+				slot := primitives.Slot(10)
+				return &slot
+			}(),
 			expectValidOldest: true,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
 		},
 		{
-			name: "invalid oldestSlotFlagPtr (later than spec minimum)",
-			input: syncNeeds{
-				blobRetentionFlag: 0,
-				oldestSlotFlagPtr: func() *primitives.Slot {
-					// Make it way past the spec minimum
-					slot := currentSlot - primitives.Slot(params.BeaconConfig().MinEpochsForBlockRequests-1)*slotsPerEpoch
-					return &slot
-				}(),
-			},
+			name:              "invalid oldestSlotFlagPtr (later than spec minimum)",
+			blobRetentionFlag: 0,
+			oldestSlotFlagPtr: func() *primitives.Slot {
+				// Make it way past the spec minimum
+				slot := currentSlot - primitives.Slot(params.BeaconConfig().MinEpochsForBlockRequests-1)*slotsPerEpoch
+				return &slot
+			}(),
 			expectValidOldest: false,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
+			invalidOldestFlag: true,
 		},
 		{
-			name: "oldestSlotFlagPtr at boundary (exactly at spec minimum)",
-			input: syncNeeds{
-				blobRetentionFlag: 0,
-				oldestSlotFlagPtr: func() *primitives.Slot {
-					slot := currentSlot - primitives.Slot(params.BeaconConfig().MinEpochsForBlockRequests)*slotsPerEpoch
-					return &slot
-				}(),
-			},
+			name:              "oldestSlotFlagPtr at boundary (exactly at spec minimum)",
+			blobRetentionFlag: 0,
+			oldestSlotFlagPtr: func() *primitives.Slot {
+				slot := currentSlot - primitives.Slot(params.BeaconConfig().MinEpochsForBlockRequests)*slotsPerEpoch
+				return &slot
+			}(),
 			expectValidOldest: false,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
+			invalidOldestFlag: true,
 		},
 		{
-			name: "both blob retention flag and oldest slot set",
-			input: syncNeeds{
-				blobRetentionFlag: minBlobEpochs + 5,
-				oldestSlotFlagPtr: func() *primitives.Slot {
-					slot := primitives.Slot(100)
-					return &slot
-				}(),
-			},
+			name:              "both blob retention flag and oldest slot set",
+			blobRetentionFlag: minBlobEpochs + 5,
+			oldestSlotFlagPtr: func() *primitives.Slot {
+				slot := primitives.Slot(100)
+				return &slot
+			}(),
 			expectValidOldest: true,
 			expectedBlob:      minBlobEpochs + 5,
 			expectedCol:       minBlobEpochs + 5,
 		},
 		{
-			name: "zero blob retention uses spec minimum",
-			input: syncNeeds{
-				blobRetentionFlag: 0,
-			},
+			name:              "zero blob retention uses spec minimum",
+			blobRetentionFlag: 0,
 			expectValidOldest: false,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
 		},
 		{
-			name: "large blob retention value",
-			input: syncNeeds{
-				blobRetentionFlag: 5000,
-			},
+			name:              "large blob retention value",
+			blobRetentionFlag: 5000,
 			expectValidOldest: false,
 			expectedBlob:      5000,
 			expectedCol:       5000,
@@ -253,22 +236,20 @@ func TestSyncNeedsInitialize(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := tc.input.initialize(currentFunc, denebSlot, fuluSlot)
+			result, err := NewSyncNeeds(currentFunc, tc.oldestSlotFlagPtr, tc.blobRetentionFlag)
+			require.NoError(t, err)
 
 			// Check that current, deneb, fulu are set correctly
 			require.Equal(t, currentSlot, result.current())
-			require.Equal(t, denebSlot, result.deneb)
-			require.Equal(t, fuluSlot, result.fulu)
 
 			// Check retention calculations
 			require.Equal(t, tc.expectedBlob, result.blobRetention)
 			require.Equal(t, tc.expectedCol, result.colRetention)
 
-			// Check validOldestSlotPtr
-			if tc.expectValidOldest {
-				require.NotNil(t, result.validOldestSlotPtr)
+			if tc.invalidOldestFlag {
+				require.IsNil(t, result.validOldestSlotPtr)
 			} else {
-				require.Equal(t, (*primitives.Slot)(nil), result.validOldestSlotPtr)
+				require.Equal(t, tc.oldestSlotFlagPtr, result.validOldestSlotPtr)
 			}
 
 			// Check blockRetention is always spec minimum
@@ -334,13 +315,13 @@ func TestSyncNeedsBlockSpan(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sn := syncNeeds{
+			sn := SyncNeeds{
 				validOldestSlotPtr: tc.validOldest,
 				blockRetention:     tc.blockRetention,
 			}
 			result := sn.blockSpan(tc.current)
-			require.Equal(t, tc.expectedBegin, result.begin)
-			require.Equal(t, tc.expectedEnd, result.end)
+			require.Equal(t, tc.expectedBegin, result.Begin)
+			require.Equal(t, tc.expectedEnd, result.End)
 		})
 	}
 }
@@ -556,7 +537,7 @@ func TestSyncNeedsCurrently(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sn := syncNeeds{
+			sn := SyncNeeds{
 				current:            func() primitives.Slot { return tc.current },
 				deneb:              denebSlot,
 				fulu:               fuluSlot,
@@ -566,24 +547,24 @@ func TestSyncNeedsCurrently(t *testing.T) {
 				colRetention:       tc.colRetention,
 			}
 
-			result := sn.currently()
+			result := sn.Currently()
 
 			// Verify block span
-			require.Equal(t, tc.expectBlockBegin, result.block.begin,
+			require.Equal(t, tc.expectBlockBegin, result.Block.Begin,
 				"block.begin mismatch")
-			require.Equal(t, tc.expectBlockEnd, result.block.end,
+			require.Equal(t, tc.expectBlockEnd, result.Block.End,
 				"block.end mismatch")
 
 			// Verify blob span
-			require.Equal(t, tc.expectBlobBegin, result.blob.begin,
+			require.Equal(t, tc.expectBlobBegin, result.Blob.Begin,
 				"blob.begin mismatch")
-			require.Equal(t, tc.expectBlobEnd, result.blob.end,
+			require.Equal(t, tc.expectBlobEnd, result.Blob.End,
 				"blob.end mismatch")
 
 			// Verify column span
-			require.Equal(t, tc.expectColBegin, result.col.begin,
+			require.Equal(t, tc.expectColBegin, result.Col.Begin,
 				"col.begin mismatch")
-			require.Equal(t, tc.expectColEnd, result.col.end,
+			require.Equal(t, tc.expectColEnd, result.Col.End,
 				"col.end mismatch")
 		})
 	}
@@ -660,7 +641,7 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sn := syncNeeds{
+			sn := SyncNeeds{
 				current:        func() primitives.Slot { return tc.current },
 				deneb:          denebSlot,
 				fulu:           fuluSlot,
@@ -669,24 +650,24 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 				colRetention:   tc.colRetention,
 			}
 
-			cn := sn.currently()
+			cn := sn.Currently()
 
 			// Verify block.end == current
-			require.Equal(t, tc.current, cn.block.end, "block.end should equal current")
+			require.Equal(t, tc.current, cn.Block.End, "block.end should equal current")
 
 			// Verify blob.end == fulu
-			require.Equal(t, fuluSlot, cn.blob.end, "blob.end should equal fulu")
+			require.Equal(t, fuluSlot, cn.Blob.End, "blob.end should equal fulu")
 
 			// Verify col.end == current
-			require.Equal(t, tc.current, cn.col.end, "col.end should equal current")
+			require.Equal(t, tc.current, cn.Col.End, "col.end should equal current")
 
 			// Test each slot
 			for i, slot := range tc.testSlots {
-				require.Equal(t, tc.expectBlockAt[i], cn.block.at(slot),
+				require.Equal(t, tc.expectBlockAt[i], cn.Block.At(slot),
 					"block.at(%d) mismatch at index %d", slot, i)
-				require.Equal(t, tc.expectBlobAt[i], cn.blob.at(slot),
+				require.Equal(t, tc.expectBlobAt[i], cn.Blob.At(slot),
 					"blob.at(%d) mismatch at index %d", slot, i)
-				require.Equal(t, tc.expectColAt[i], cn.col.at(slot),
+				require.Equal(t, tc.expectColAt[i], cn.Col.At(slot),
 					"col.at(%d) mismatch at index %d", slot, i)
 			}
 		})

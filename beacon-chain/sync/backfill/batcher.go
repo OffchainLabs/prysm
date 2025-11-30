@@ -1,6 +1,7 @@
 package backfill
 
 import (
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
@@ -12,7 +13,7 @@ var errCannotDecreaseMinimum = errors.New("the minimum backfill slot can only be
 type batchSequencer struct {
 	batcher      batcher
 	seq          []batch
-	currentNeeds func() currentNeeds
+	currentNeeds func() das.CurrentNeeds
 }
 
 // sequence() is meant as a verb "arrange in a particular order".
@@ -161,24 +162,24 @@ func (c *batchSequencer) numTodo() int {
 	return todo
 }
 
-func newBatchSequencer(seqLen int, max, size primitives.Slot, needsCb func() currentNeeds) *batchSequencer {
+func newBatchSequencer(seqLen int, max, size primitives.Slot, needsCb func() das.CurrentNeeds) *batchSequencer {
 	b := batcher{currentNeeds: needsCb, max: max, size: size}
 	seq := make([]batch, seqLen)
 	return &batchSequencer{batcher: b, seq: seq, currentNeeds: needsCb}
 }
 
 type batcher struct {
-	currentNeeds func() currentNeeds
+	currentNeeds func() das.CurrentNeeds
 	max          primitives.Slot
 	size         primitives.Slot
 }
 
 func (r batcher) remaining(upTo primitives.Slot) int {
 	needs := r.currentNeeds()
-	if !needs.block.at(upTo) {
+	if !needs.Block.At(upTo) {
 		return 0
 	}
-	delta := upTo - needs.block.begin
+	delta := upTo - needs.Block.Begin
 	if delta%r.size != 0 {
 		return int(delta/r.size) + 1
 	}
@@ -196,12 +197,12 @@ func (r batcher) before(upTo primitives.Slot) batch {
 	// The upper bound is exclusive, so we shouldn't return in this case where the previous
 	// batch beginning sits at the exact slot of the start of the retention window. In that case
 	// we've actually hit the end of the sync sequence.
-	if !needs.block.at(upTo) || needs.block.begin == upTo {
+	if !needs.Block.At(upTo) || needs.Block.Begin == upTo {
 		return batch{begin: upTo, end: upTo, state: batchEndSequence}
 	}
 
-	begin := needs.block.begin
-	if upTo > r.size+needs.block.begin {
+	begin := needs.Block.Begin
+	if upTo > r.size+needs.Block.Begin {
 		begin = upTo - r.size
 	}
 

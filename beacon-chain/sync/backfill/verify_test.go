@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -18,45 +19,45 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func mockCurrentNeeds(begin, end primitives.Slot) currentNeeds {
-	return currentNeeds{
-		block: needSpan{
-			begin: begin,
-			end:   end,
+func mockCurrentNeeds(begin, end primitives.Slot) das.CurrentNeeds {
+	return das.CurrentNeeds{
+		Block: das.NeedSpan{
+			Begin: begin,
+			End:   end,
 		},
-		blob: needSpan{
-			begin: begin,
-			end:   end,
+		Blob: das.NeedSpan{
+			Begin: begin,
+			End:   end,
 		},
-		col: needSpan{
-			begin: begin,
-			end:   end,
+		Col: das.NeedSpan{
+			Begin: begin,
+			End:   end,
 		},
 	}
 }
 
-func mockCurrentSpecNeeds() currentNeeds {
+func mockCurrentSpecNeeds() das.CurrentNeeds {
 	cfg := params.BeaconConfig()
 	fuluSlot := slots.UnsafeEpochStart(cfg.FuluForkEpoch)
 	denebSlot := slots.UnsafeEpochStart(cfg.DenebForkEpoch)
-	return currentNeeds{
-		block: needSpan{
-			begin: 0,
-			end:   primitives.Slot(math.MaxUint64),
+	return das.CurrentNeeds{
+		Block: das.NeedSpan{
+			Begin: 0,
+			End:   primitives.Slot(math.MaxUint64),
 		},
-		blob: needSpan{
-			begin: denebSlot,
-			end:   fuluSlot,
+		Blob: das.NeedSpan{
+			Begin: denebSlot,
+			End:   fuluSlot,
 		},
-		col: needSpan{
-			begin: fuluSlot,
-			end:   primitives.Slot(math.MaxUint64),
+		Col: das.NeedSpan{
+			Begin: fuluSlot,
+			End:   primitives.Slot(math.MaxUint64),
 		},
 	}
 }
 
-func mockCurrentNeedsFunc(begin, end primitives.Slot) func() currentNeeds {
-	return func() currentNeeds {
+func mockCurrentNeedsFunc(begin, end primitives.Slot) func() das.CurrentNeeds {
+	return func() das.CurrentNeeds {
 		return mockCurrentNeeds(begin, end)
 	}
 }

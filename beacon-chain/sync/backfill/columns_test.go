@@ -875,7 +875,7 @@ func TestNewColumnSync(t *testing.T) {
 		cfg := &workerCfg{
 			colStore:     colStore,
 			downscore:    func(peer.ID, string, error) {},
-			currentNeeds: func() currentNeeds { return mockCurrentSpecNeeds() },
+			currentNeeds: func() das.CurrentNeeds { return mockCurrentSpecNeeds() },
 		}
 
 		cs, err := newColumnSync(ctx, b, blks, current, p2p, cfg)
@@ -1640,9 +1640,6 @@ func markAllVerified(m *verification.MockDataColumnsVerifier) verification.NewDa
 
 func TestRetentionCheckWithOverride(t *testing.T) {
 	require.NoError(t, kzg.Start())
-	denebEpoch := params.BeaconConfig().DenebForkEpoch
-	denebSlot, err := slots.EpochStart(denebEpoch)
-	require.NoError(t, err)
 	fuluEpoch := params.BeaconConfig().FuluForkEpoch
 	fuluSlot, err := slots.EpochStart(fuluEpoch)
 	require.NoError(t, err)
@@ -1656,7 +1653,7 @@ func TestRetentionCheckWithOverride(t *testing.T) {
 	}
 	cases := []struct {
 		name          string
-		span          needSpan
+		span          das.NeedSpan
 		savedSlots    map[primitives.Slot]struct{}
 		currentEpoch  primitives.Epoch
 		retentionFlag primitives.Epoch
@@ -1665,34 +1662,34 @@ func TestRetentionCheckWithOverride(t *testing.T) {
 	}{
 		{
 			name:         "Before retention period, none saved",
-			span:         needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			span:         das.NeedSpan{Begin: fuluSlot, End: fuluSlot + 5},
 			currentEpoch: fuluEpoch + colRetention + 1,
 			cgc:          4,
 		},
 		{
 			name:         "At retention period boundary, all saved",
-			span:         needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			span:         das.NeedSpan{Begin: fuluSlot, End: fuluSlot + 5},
 			currentEpoch: fuluEpoch + colRetention,
 			savedSlots:   savedSlotRange(fuluSlot, fuluSlot+5),
 			cgc:          4,
 		},
 		{
 			name:         "Across boundary, saved after",
-			span:         needSpan{begin: fuluSlot + 30, end: fuluSlot + 35},
+			span:         das.NeedSpan{Begin: fuluSlot + 30, End: fuluSlot + 35},
 			currentEpoch: fuluEpoch + colRetention + 1,
 			savedSlots:   savedSlotRange(fuluSlot+32, fuluSlot+35),
 			cgc:          4,
 		},
 		{
 			name:          "Before retention period with override, all saved",
-			span:          needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			span:          das.NeedSpan{Begin: fuluSlot, End: fuluSlot + 5},
 			currentEpoch:  fuluEpoch + colRetention*2, // well past retention without override
 			savedSlots:    savedSlotRange(fuluSlot, fuluSlot+5),
 			retentionFlag: fuluEpoch + colRetention*2, // flag covers all slots
 		},
 		{
 			name:          "Before retention period and just before override, none saved",
-			span:          needSpan{begin: fuluSlot, end: fuluSlot + 5},
+			span:          das.NeedSpan{Begin: fuluSlot, End: fuluSlot + 5},
 			currentEpoch:  1 + fuluEpoch + colRetention*2, // current slot is beyond base retention
 			retentionFlag: fuluEpoch + colRetention*2,     // stops 1 short flag coverage
 		},
@@ -1704,14 +1701,13 @@ func TestRetentionCheckWithOverride(t *testing.T) {
 			bisector := newColumnBisector(func(peer.ID, string, error) {})
 			current, err := slots.EpochStart(tc.currentEpoch)
 			require.NoError(t, err)
-			sn := syncNeeds{
-				oldestSlotFlagPtr: tc.oldestSlot,
-				blobRetentionFlag: tc.retentionFlag,
-			}.initialize(func() primitives.Slot { return current }, denebSlot, fuluSlot)
+			cs := func() primitives.Slot { return current }
+			sn, err := das.NewSyncNeeds(cs, tc.oldestSlot, tc.retentionFlag)
+			require.NoError(t, err)
 
 			sr := func(slot primitives.Slot) bool {
-				current := sn.currently()
-				return current.col.at(slot)
+				current := sn.Currently()
+				return current.Col.At(slot)
 			}
 
 			nodeId := p2p.NodeID()
@@ -1722,7 +1718,7 @@ func TestRetentionCheckWithOverride(t *testing.T) {
 			// not all columns in the test.
 			verifier := markAllVerified(&verification.MockDataColumnsVerifier{})
 			avs := das.NewLazilyPersistentStoreColumn(colStore, verifier, p2p.NodeID(), tc.cgc, bisector, sr)
-			fixtures := testBlockWithColumnSpan(t, tc.span.begin, tc.span, 3)
+			fixtures := testBlockWithColumnSpan(t, tc.span.Begin, tc.span, 3)
 			blocks := make([]blocks.ROBlock, 0, len(fixtures))
 			for _, fix := range fixtures {
 				for _, col := range fix.cols {
@@ -1760,10 +1756,10 @@ type blockFixture struct {
 	vcols []blocks.VerifiedRODataColumn
 }
 
-func testBlockWithColumnSpan(t *testing.T, slot primitives.Slot, colSpan needSpan, numBlobs int) []blockFixture {
-	res := make([]blockFixture, 0, colSpan.end-colSpan.begin)
+func testBlockWithColumnSpan(t *testing.T, slot primitives.Slot, colSpan das.NeedSpan, numBlobs int) []blockFixture {
+	res := make([]blockFixture, 0, colSpan.End-colSpan.Begin)
 	parent := [32]byte{0x00}
-	for bs := colSpan.begin; bs < colSpan.end; bs++ {
+	for bs := colSpan.Begin; bs < colSpan.End; bs++ {
 		blk, c, vc := util.GenerateTestFuluBlockWithSidecars(t, numBlobs, util.WithSlot(bs), util.WithParentRoot(parent))
 		res = append(res, blockFixture{block: blk, cols: c, vcols: vc})
 		parent = blk.Root()

@@ -33,7 +33,7 @@ type blobSummary struct {
 type blobSyncConfig struct {
 	nbv          verification.NewBlobVerifier
 	store        *filesystem.BlobStorage
-	currentNeeds func() currentNeeds
+	currentNeeds func() das.CurrentNeeds
 }
 
 func newBlobSync(current primitives.Slot, vbs verifiedROBlocks, cfg *blobSyncConfig) (*blobSync, error) {
@@ -42,7 +42,12 @@ func newBlobSync(current primitives.Slot, vbs verifiedROBlocks, cfg *blobSyncCon
 		return nil, err
 	}
 	bbv := newBlobBatchVerifier(cfg.nbv)
-	as := das.NewLazilyPersistentStore(cfg.store, bbv)
+	shouldRetain := func(slot primitives.Slot) bool {
+		needs := cfg.currentNeeds()
+		return needs.Blob.At(slot)
+	}
+	as := das.NewLazilyPersistentStore(cfg.store, bbv, shouldRetain)
+
 	return &blobSync{current: current, expected: expected, bbv: bbv, store: as}, nil
 }
 

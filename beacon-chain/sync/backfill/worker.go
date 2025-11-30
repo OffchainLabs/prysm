@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -28,7 +29,7 @@ type workerCfg struct {
 	blobStore    *filesystem.BlobStorage
 	colStore     *filesystem.DataColumnStorage
 	downscore    peerDownscorer
-	currentNeeds func() currentNeeds
+	currentNeeds func() das.CurrentNeeds
 }
 
 func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, store *Store) error {

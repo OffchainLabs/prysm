@@ -3,6 +3,7 @@ package backfill
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -29,11 +30,11 @@ func newDynamicNeeds(blockBegin, blockEnd primitives.Slot) *dynamicNeeds {
 	}
 }
 
-func (d *dynamicNeeds) get() currentNeeds {
-	return currentNeeds{
-		block: needSpan{begin: d.blockBegin, end: d.blockEnd},
-		blob:  needSpan{begin: d.blobBegin, end: d.blobEnd},
-		col:   needSpan{begin: d.colBegin, end: d.colEnd},
+func (d *dynamicNeeds) get() das.CurrentNeeds {
+	return das.CurrentNeeds{
+		Block: das.NeedSpan{Begin: d.blockBegin, End: d.blockEnd},
+		Blob:  das.NeedSpan{Begin: d.blobBegin, End: d.blobEnd},
+		Col:   das.NeedSpan{Begin: d.colBegin, End: d.colEnd},
 	}
 }
 

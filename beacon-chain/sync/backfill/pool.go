@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -54,12 +55,12 @@ type p2pBatchWorkerPool struct {
 	peerCache      *sync.DASPeerCache
 	p2p            p2p.P2P
 	peerFailLogger *intervalLogger
-	needs          func() currentNeeds
+	needs          func() das.CurrentNeeds
 }
 
 var _ batchWorkerPool = &p2pBatchWorkerPool{}
 
-func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int, needs func() currentNeeds) *p2pBatchWorkerPool {
+func newP2PBatchWorkerPool(p p2p.P2P, maxBatches int, needs func() das.CurrentNeeds) *p2pBatchWorkerPool {
 	nw := defaultNewWorker(p)
 	return &p2pBatchWorkerPool{
 		newWorker:      nw,

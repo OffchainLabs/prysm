@@ -15,7 +15,7 @@ var errUnsafeRange = errors.Wrap(errUnrecoverable, "invalid slice indices")
 type checkMultiplexer struct {
 	blobCheck    das.AvailabilityChecker
 	colCheck     das.AvailabilityChecker
-	currentNeeds currentNeeds
+	currentNeeds das.CurrentNeeds
 }
 
 // Persist implements das.AvailabilityStore.
@@ -23,7 +23,7 @@ var _ das.AvailabilityChecker = &checkMultiplexer{}
 
 // newCheckMultiplexer initializes an AvailabilityChecker that multiplexes to the BlobSidecar and DataColumnSidecar
 // AvailabilityCheckers present in the batch.
-func newCheckMultiplexer(needs currentNeeds, b batch) *checkMultiplexer {
+func newCheckMultiplexer(needs das.CurrentNeeds, b batch) *checkMultiplexer {
 	s := &checkMultiplexer{currentNeeds: needs}
 	if b.blobs != nil && b.blobs.store != nil {
 		s.blobCheck = b.blobs.store
@@ -75,7 +75,7 @@ func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, err
 	for _, blk := range blks {
 		slot := blk.Block().Slot()
 
-		if !m.currentNeeds.blob.at(slot) && !m.currentNeeds.col.at(slot) {
+		if !m.currentNeeds.Blob.At(slot) && !m.currentNeeds.Col.At(slot) {
 			continue
 		}
 		cmts, err := blk.Block().Body().BlobKzgCommitments()
@@ -85,11 +85,11 @@ func (m *checkMultiplexer) divideByChecker(blks []blocks.ROBlock) (daGroups, err
 		if len(cmts) == 0 {
 			continue
 		}
-		if m.currentNeeds.col.at(slot) {
+		if m.currentNeeds.Col.At(slot) {
 			needs.cols = append(needs.cols, blk)
 			continue
 		}
-		if m.currentNeeds.blob.at(slot) {
+		if m.currentNeeds.Blob.At(slot) {
 			needs.blobs = append(needs.blobs, blk)
 			continue
 		}

@@ -175,7 +175,7 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 	blocksWithDataColumns := bwb[fistDataColumnIndex:]
 
 	blobBatchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier)
+	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier, s.syncNeeds.BlobRetentionChecker())
 
 	log := log.WithField("firstSlot", data.bwb[0].Block.Block().Slot())
 	logBlobs, logDataColumns := log, log
@@ -404,7 +404,7 @@ func (s *Service) processBlocksWithBlobs(ctx context.Context, bwbs []blocks.Bloc
 	}
 
 	batchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-	persistentStore := das.NewLazilyPersistentStore(s.cfg.BlobStorage, batchVerifier)
+	persistentStore := das.NewLazilyPersistentStore(s.cfg.BlobStorage, batchVerifier, s.syncNeeds.BlobRetentionChecker())
 	s.logBatchSyncStatus(firstBlock, bwbCount)
 
 	for _, bwb := range bwbs {

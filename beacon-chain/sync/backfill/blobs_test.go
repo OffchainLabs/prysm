@@ -3,6 +3,7 @@ package backfill
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -27,12 +28,11 @@ func testBlobGen(t *testing.T, start primitives.Slot, n int) ([]blocks.ROBlock, 
 	return blks, blobs
 }
 
-func setupCurrentNeeds(t *testing.T, current primitives.Slot) syncNeeds {
-	return syncNeeds{
-		current: func() primitives.Slot { return current },
-		deneb:   slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch),
-		fulu:    slots.UnsafeEpochStart(params.BeaconConfig().FuluForkEpoch),
-	}
+func setupCurrentNeeds(t *testing.T, current primitives.Slot) das.SyncNeeds {
+	cs := func() primitives.Slot { return current }
+	sn, err := das.NewSyncNeeds(cs, nil, 0)
+	require.NoError(t, err)
+	return sn
 }
 
 func TestValidateNext_happy(t *testing.T) {
@@ -64,28 +64,32 @@ func TestValidateNext_happy(t *testing.T) {
 }
 
 func TestValidateNext_cheapErrors(t *testing.T) {
+	denebSlot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
+	require.NoError(t, err)
 	current := primitives.Slot(128)
 	syncNeeds := setupCurrentNeeds(t, current)
 	cfg := &blobSyncConfig{
 		nbv:          testNewBlobVerifier(),
 		store:        filesystem.NewEphemeralBlobStorage(t),
-		currentNeeds: syncNeeds.currently,
+		currentNeeds: syncNeeds.Currently,
 	}
-	blks, blobs := testBlobGen(t, syncNeeds.deneb, 2)
+	blks, blobs := testBlobGen(t, denebSlot, 2)
 	bsync, err := newBlobSync(current, blks, cfg)
 	require.NoError(t, err)
 	require.ErrorIs(t, bsync.validateNext(blobs[len(blobs)-1][0]), errUnexpectedResponseContent)
 }
 
 func TestValidateNext_sigMatch(t *testing.T) {
+	denebSlot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
+	require.NoError(t, err)
 	current := primitives.Slot(128)
 	syncNeeds := setupCurrentNeeds(t, current)
 	cfg := &blobSyncConfig{
 		nbv:          testNewBlobVerifier(),
 		store:        filesystem.NewEphemeralBlobStorage(t),
-		currentNeeds: syncNeeds.currently,
+		currentNeeds: syncNeeds.Currently,
 	}
-	blks, blobs := testBlobGen(t, syncNeeds.deneb, 1)
+	blks, blobs := testBlobGen(t, denebSlot, 1)
 	bsync, err := newBlobSync(current, blks, cfg)
 	require.NoError(t, err)
 	blobs[0][0].SignedBlockHeader.Signature = bytesutil.PadTo([]byte("derp"), 48)

@@ -65,9 +65,9 @@ func (cs *columnBatch) needed() peerdas.ColumnIndices {
 
 // pruneExpired removes any columns from the batch that are no longer needed.
 // If `pruned` is non-nil, it is populated with the roots that were removed.
-func (cs *columnBatch) pruneExpired(needs currentNeeds, pruned map[[32]byte]struct{}) {
+func (cs *columnBatch) pruneExpired(needs das.CurrentNeeds, pruned map[[32]byte]struct{}) {
 	for root, td := range cs.toDownload {
-		if !needs.col.at(td.slot) {
+		if !needs.Col.At(td.slot) {
 			delete(cs.toDownload, root)
 			if pruned != nil {
 				pruned[root] = struct{}{}
@@ -120,7 +120,7 @@ func newColumnSync(ctx context.Context, b batch, blks verifiedROBlocks, current 
 	}
 	shouldRetain := func(sl primitives.Slot) bool {
 		needs := cfg.currentNeeds()
-		return needs.col.at(sl)
+		return needs.Col.At(sl)
 	}
 
 	bisector := newColumnBisector(cfg.downscore)
@@ -235,12 +235,12 @@ func currentCustodiedColumns(ctx context.Context, p p2p.P2P) (peerdas.ColumnIndi
 	return peerdas.NewColumnIndicesFromMap(peerInfo.CustodyColumns), nil
 }
 
-func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage, needs currentNeeds) (*columnBatch, error) {
+func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p.P2P, store *filesystem.DataColumnStorage, needs das.CurrentNeeds) (*columnBatch, error) {
 	if len(blks) == 0 {
 		return nil, nil
 	}
 
-	if !needs.col.at(b.begin) && !needs.col.at(b.end-1) {
+	if !needs.Col.At(b.begin) && !needs.Col.At(b.end-1) {
 		return nil, nil
 	}
 
@@ -254,7 +254,7 @@ func buildColumnBatch(ctx context.Context, b batch, blks verifiedROBlocks, p p2p
 	}
 	for _, b := range blks {
 		slot := b.Block().Slot()
-		if !needs.col.at(slot) {
+		if !needs.Col.At(slot) {
 			continue
 		}
 		cmts, err := b.Block().Body().BlobKzgCommitments()

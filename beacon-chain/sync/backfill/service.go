@@ -3,6 +3,7 @@ package backfill
 import (
 	"context"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -21,28 +22,29 @@ import (
 )
 
 type Service struct {
-	ctx            context.Context
-	enabled        bool // service is disabled by default
-	clock          *startup.Clock
-	store          *Store
-	syncNeeds      syncNeeds
-	ms             minimumSlotter
-	cw             startup.ClockWaiter
-	verifierWaiter InitializerWaiter
-	nWorkers       int
-	batchSeq       *batchSequencer
-	batchSize      uint64
-	pool           batchWorkerPool
-	p2p            p2p.P2P
-	pa             PeerAssigner
-	batchImporter  batchImporter
-	blobStore      *filesystem.BlobStorage
-	dcStore        *filesystem.DataColumnStorage
-	initSyncWaiter func() error
-	complete       chan struct{}
-	workerCfg      *workerCfg
-	fuluStart      primitives.Slot
-	denebStart     primitives.Slot
+	ctx             context.Context
+	enabled         bool // service is disabled by default
+	clock           *startup.Clock
+	store           *Store
+	syncNeeds       das.SyncNeeds
+	syncNeedsWaiter func() (das.SyncNeeds, error)
+	ms              minimumSlotter
+	cw              startup.ClockWaiter
+	verifierWaiter  InitializerWaiter
+	nWorkers        int
+	batchSeq        *batchSequencer
+	batchSize       uint64
+	pool            batchWorkerPool
+	p2p             p2p.P2P
+	pa              PeerAssigner
+	batchImporter   batchImporter
+	blobStore       *filesystem.BlobStorage
+	dcStore         *filesystem.DataColumnStorage
+	initSyncWaiter  func() error
+	complete        chan struct{}
+	workerCfg       *workerCfg
+	fuluStart       primitives.Slot
+	denebStart      primitives.Slot
 }
 
 var _ runtime.Service = (*Service)(nil)
@@ -111,20 +113,11 @@ func WithVerifierWaiter(viw InitializerWaiter) ServiceOption {
 	}
 }
 
-// WithMinimumSlot allows the user to specify a different backfill minimum slot than the spec default of current - MIN_EPOCHS_FOR_BLOCK_REQUESTS.
-// If this value is greater than current - MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored with a warning log.
-func WithMinimumSlot(oldest primitives.Slot) ServiceOption {
+func WithSyncNeedsWaiter(f func() (das.SyncNeeds, error)) ServiceOption {
 	return func(s *Service) error {
-		s.syncNeeds.oldestSlotFlagPtr = &oldest
-		return nil
-	}
-}
-
-// WithBlobRetentionEpoch is used to pass through the value of the
-// --blob-retention-epochs flag to the backfill service.
-func WithBlobRetentionEpoch(epoch primitives.Epoch) ServiceOption {
-	return func(s *Service) error {
-		s.syncNeeds.blobRetentionFlag = epoch
+		if f != nil {
+			s.syncNeedsWaiter = f
+		}
 		return nil
 	}
 }
@@ -211,7 +204,7 @@ func (s *Service) defaultBatchImporter(ctx context.Context, current primitives.S
 	// Other parts of the beacon node may use the same StatusUpdater instance
 	// via the coverage.AvailableBlocker interface to safely determine if a given slot has been backfilled.
 
-	checker := newCheckMultiplexer(s.syncNeeds.currently(), b)
+	checker := newCheckMultiplexer(s.syncNeeds.Currently(), b)
 	return su.fillBack(ctx, current, b.blocks, checker)
 }
 
@@ -260,13 +253,22 @@ func (s *Service) Start() {
 	}
 	s.clock = clock
 
-	// initialize() updates syncNeeds with validated values once we've got the clock
-	s.syncNeeds = s.syncNeeds.initialize(s.clock.CurrentSlot, s.denebStart, s.fuluStart)
+	if s.syncNeedsWaiter == nil {
+		log.Error("Backfill service missing sync needs waiter; cannot start")
+		return
+	}
+	syncNeeds, err := s.syncNeedsWaiter()
+	if err != nil {
+		log.WithError(err).Error("Backfill service failed to start while waiting for sync needs")
+		return
+	}
+	s.syncNeeds = syncNeeds
+
 	status := s.store.status()
-	needs := s.syncNeeds.currently()
+	needs := s.syncNeeds.Currently()
 	// Exit early if there aren't going to be any batches to backfill.
-	if !needs.block.at(primitives.Slot(status.LowSlot)) {
-		log.WithField("minimumSlot", needs.block.begin).
+	if !needs.Block.At(primitives.Slot(status.LowSlot)) {
+		log.WithField("minimumSlot", needs.Block.Begin).
 			WithField("backfillLowestSlot", status.LowSlot).
 			Info("Exiting backfill service; minimum block retention slot > lowest backfilled block")
 		s.markComplete()
@@ -287,7 +289,7 @@ func (s *Service) Start() {
 			blobStore:    s.blobStore,
 			colStore:     s.dcStore,
 			downscore:    s.downscorePeer,
-			currentNeeds: s.syncNeeds.currently,
+			currentNeeds: s.syncNeeds.Currently,
 		}
 
 		if err = initWorkerCfg(ctx, s.workerCfg, s.verifierWaiter, s.store); err != nil {
@@ -298,10 +300,10 @@ func (s *Service) Start() {
 
 	// Allow tests to inject a mock pool.
 	if s.pool == nil {
-		s.pool = newP2PBatchWorkerPool(s.p2p, s.nWorkers, s.syncNeeds.currently)
+		s.pool = newP2PBatchWorkerPool(s.p2p, s.nWorkers, s.syncNeeds.Currently)
 	}
 	s.pool.spawn(ctx, s.nWorkers, s.pa, s.workerCfg)
-	s.batchSeq = newBatchSequencer(s.nWorkers, primitives.Slot(status.LowSlot), primitives.Slot(s.batchSize), s.syncNeeds.currently)
+	s.batchSeq = newBatchSequencer(s.nWorkers, primitives.Slot(status.LowSlot), primitives.Slot(s.batchSize), s.syncNeeds.Currently)
 	if err = s.initBatches(); err != nil {
 		log.WithError(err).Error("Non-recoverable error in backfill service")
 		return

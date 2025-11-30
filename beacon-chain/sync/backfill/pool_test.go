@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -44,7 +45,7 @@ func TestPoolDetectAllEnded(t *testing.T) {
 	p2p := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
 	ma := &mockAssigner{}
-	needs := func() currentNeeds { return currentNeeds{block: needSpan{begin: 10, end: 10}} }
+	needs := func() das.CurrentNeeds { return das.CurrentNeeds{Block: das.NeedSpan{Begin: 10, End: 10}} }
 	pool := newP2PBatchWorkerPool(p2p, nw, needs)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
@@ -154,7 +155,7 @@ func TestProcessTodoExpiresOlderBatches(t *testing.T) {
 			pool := &p2pBatchWorkerPool{
 				endSeq: make([]batch, 0),
 			}
-			needs := currentNeeds{block: needSpan{begin: tc.updateMin, end: tc.max + 1}}
+			needs := das.CurrentNeeds{Block: das.NeedSpan{Begin: tc.updateMin, End: tc.max + 1}}
 
 			// Create batches with valid slot ranges (descending order)
 			todo := make([]batch, tc.seqLen)
@@ -255,7 +256,7 @@ func TestExpirationAfterMoveMinimum(t *testing.T) {
 					state: batchInit,
 				}
 			}
-			needs := currentNeeds{block: needSpan{begin: tc.firstMin, end: tc.max + 1}}
+			needs := das.CurrentNeeds{Block: das.NeedSpan{Begin: tc.firstMin, End: tc.max + 1}}
 
 			// First processTodo with firstMin
 			endSeq1 := 0
@@ -274,7 +275,7 @@ func TestExpirationAfterMoveMinimum(t *testing.T) {
 			}
 
 			// Second processTodo with secondMin on remaining batches
-			needs.block.begin = tc.secondMin
+			needs.Block.Begin = tc.secondMin
 			endSeq2 := 0
 			for _, b := range remaining1 {
 				if b.expired(needs) {
@@ -411,8 +412,8 @@ func TestCompleteShutdownCondition(t *testing.T) {
 			pool := &p2pBatchWorkerPool{
 				maxBatches: tc.maxBatches,
 				endSeq:     make([]batch, 0),
-				needs: func() currentNeeds {
-					return currentNeeds{block: needSpan{begin: tc.expectedMin}}
+				needs: func() das.CurrentNeeds {
+					return das.CurrentNeeds{Block: das.NeedSpan{Begin: tc.expectedMin}}
 				},
 			}
 
@@ -428,11 +429,11 @@ func TestCompleteShutdownCondition(t *testing.T) {
 				t.Fatalf("expected shouldShutdown=%v, got %v", tc.shouldShutdown, shouldShutdown)
 			}
 
-			pool.needs = func() currentNeeds {
-				return currentNeeds{block: needSpan{begin: tc.expectedMin}}
+			pool.needs = func() das.CurrentNeeds {
+				return das.CurrentNeeds{Block: das.NeedSpan{Begin: tc.expectedMin}}
 			}
-			if pool.needs().block.begin != tc.expectedMin {
-				t.Fatalf("expected minimum %d, got %d", tc.expectedMin, pool.needs().block.begin)
+			if pool.needs().Block.Begin != tc.expectedMin {
+				t.Fatalf("expected minimum %d, got %d", tc.expectedMin, pool.needs().Block.Begin)
 			}
 		})
 	}

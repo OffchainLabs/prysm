@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
@@ -212,8 +213,8 @@ func TestBatchSequencer(t *testing.T) {
 	// set the min for the batcher close to the lowest slot. This will force the next batch to be partial and the batch
 	// after that to be the final batch.
 	newMin := seq.seq[len(seq.seq)-1].begin - 30
-	seq.currentNeeds = func() currentNeeds {
-		return currentNeeds{block: needSpan{begin: newMin, end: seq.batcher.max}}
+	seq.currentNeeds = func() das.CurrentNeeds {
+		return das.CurrentNeeds{Block: das.NeedSpan{Begin: newMin, End: seq.batcher.max}}
 	}
 	seq.batcher.currentNeeds = seq.currentNeeds
 	first = seq.seq[0]
@@ -877,8 +878,8 @@ func TestBatcherRemaining(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			needs := func() currentNeeds {
-				return currentNeeds{block: needSpan{begin: tc.min, end: tc.upTo + 1}}
+			needs := func() das.CurrentNeeds {
+				return das.CurrentNeeds{Block: das.NeedSpan{Begin: tc.min, End: tc.upTo + 1}}
 			}
 			b := batcher{size: tc.size, currentNeeds: needs}
 			result := b.remaining(tc.upTo)

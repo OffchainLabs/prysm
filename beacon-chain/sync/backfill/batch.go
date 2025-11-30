@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -238,7 +239,7 @@ func (b batch) validatingColumnRequest(cb *columnBisector) (*validatingColumnReq
 // to the toDownload structure for any blocks where those columns failed, and resets the bisector state.
 // Note that this method will also prune any columns that have expired, meaning we no longer need them
 // per spec and/or our backfill & retention settings.
-func resetToRetryColumns(b batch, needs currentNeeds) batch {
+func resetToRetryColumns(b batch, needs das.CurrentNeeds) batch {
 	// return the given batch as-is if it isn't in a state that this func should handle.
 	if b.columns == nil || b.columns.bisector == nil || len(b.columns.bisector.errs) == 0 {
 		return b.transitionToNext()
@@ -290,9 +291,9 @@ func (b batch) workComplete() bool {
 	return b.state == batchImportable
 }
 
-func (b batch) expired(needs currentNeeds) bool {
-	if !needs.block.at(b.end - 1) {
-		log.WithFields(b.logFields()).WithField("retentionStartSlot", needs.block.begin).Debug("Batch outside retention window")
+func (b batch) expired(needs das.CurrentNeeds) bool {
+	if !needs.Block.At(b.end - 1) {
+		log.WithFields(b.logFields()).WithField("retentionStartSlot", needs.Block.Begin).Debug("Batch outside retention window")
 		return true
 	}
 	return false

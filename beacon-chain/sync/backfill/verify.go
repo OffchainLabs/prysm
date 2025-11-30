@@ -2,6 +2,7 @@ package backfill
 
 import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -26,7 +27,7 @@ var (
 // verifiedROBlocks represents a slice of blocks that have passed signature verification.
 type verifiedROBlocks []blocks.ROBlock
 
-func (v verifiedROBlocks) blobIdents(needed func() currentNeeds) ([]blobSummary, error) {
+func (v verifiedROBlocks) blobIdents(needed func() das.CurrentNeeds) ([]blobSummary, error) {
 	if len(v) == 0 {
 		return nil, nil
 	}
@@ -35,7 +36,7 @@ func (v verifiedROBlocks) blobIdents(needed func() currentNeeds) ([]blobSummary,
 	bs := make([]blobSummary, 0)
 	for i := range v {
 		slot := v[i].Block().Slot()
-		if !needs.blob.at(slot) {
+		if !needs.Blob.At(slot) {
 			continue
 		}
 		c, err := v[i].Block().Body().BlobKzgCommitments()
