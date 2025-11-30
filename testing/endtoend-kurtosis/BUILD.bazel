@@ -4,7 +4,10 @@ go_test(
     name = "go_default_test",
     size = "large",
     testonly = True,
-    srcs = ["main_test.go"],
+    srcs = [
+        "main_test.go",
+        "setup_test.go",
+    ],
     data = [
         "//cmd/beacon-chain:oci_image_tarball",
         "//cmd/validator:oci_image_tarball",
