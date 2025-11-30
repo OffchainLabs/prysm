@@ -709,15 +709,6 @@ func TestDataColumnSidecars(t *testing.T) {
 }
 
 func TestParseDataColumnIndices(t *testing.T) {
-	// Save the original config
-	originalConfig := params.BeaconConfig()
-	defer func() { params.OverrideBeaconConfig(originalConfig) }()
-
-	// Set NumberOfColumns to 128 for testing
-	config := params.BeaconConfig().Copy()
-	config.NumberOfColumns = 128
-	params.OverrideBeaconConfig(config)
-
 	tests := []struct {
 		name        string
 		queryParams map[string][]string

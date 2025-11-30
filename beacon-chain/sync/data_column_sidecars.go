@@ -327,7 +327,7 @@ func requestIndirectSidecarsFromPeers(
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
 	// Create a new random source for peer selection.

@@ -33,8 +33,7 @@ func (Cgc) ENRKey() string { return params.BeaconNetworkConfig().CustodyGroupCou
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar
 func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	// The sidecar index must be within the valid range.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	if sidecar.Index >= numberOfColumns {
+	if sidecar.Index >= fieldparams.NumberOfColumns {
 		return ErrIndexTooLarge
 	}
 
