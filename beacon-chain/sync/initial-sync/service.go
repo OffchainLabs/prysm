@@ -74,7 +74,7 @@ type Service struct {
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	ctxMap                 sync.ContextByteVersions
 	genesisTime            time.Time
-	syncNeeds              das.SyncNeeds
+	blobRetentionChecker   das.RetentionChecker
 }
 
 // Option is a functional option for the initial-sync Service.
@@ -141,16 +141,18 @@ func (s *Service) Start() {
 	}
 	s.clock = clock
 
-	if s.cfg.SyncNeedsWaiter == nil {
-		log.Error("Initial-sync service missing sync needs waiter; cannot start")
-		return
+	if s.blobRetentionChecker == nil {
+		if s.cfg.SyncNeedsWaiter == nil {
+			log.Error("Initial-sync service missing sync needs waiter; cannot start")
+			return
+		}
+		syncNeeds, err := s.cfg.SyncNeedsWaiter()
+		if err != nil {
+			log.WithError(err).Error("Initial-sync failed to receive sync needs")
+			return
+		}
+		s.blobRetentionChecker = syncNeeds.BlobRetentionChecker()
 	}
-	syncNeeds, err := s.cfg.SyncNeedsWaiter()
-	if err != nil {
-		log.WithError(err).Error("Initial-sync failed to receive sync needs")
-		return
-	}
-	s.syncNeeds = syncNeeds
 
 	log.Info("Received state initialized event")
 	ctxMap, err := sync.ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
@@ -396,7 +398,7 @@ func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) er
 			continue
 		}
 		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv, s.syncNeeds.BlobRetentionChecker())
+		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv, s.blobRetentionChecker)
 		current := s.clock.CurrentSlot()
 		if err := avs.Persist(current, blobSidecars...); err != nil {
 			return err

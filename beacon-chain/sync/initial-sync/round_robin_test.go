@@ -317,6 +317,9 @@ func TestService_roundRobinSync(t *testing.T) {
 				clock:        clock,
 			}
 			s.genesisTime = makeGenesisTime(tt.currentSlot)
+			s.blobRetentionChecker = func(primitives.Slot) bool {
+				return true
+			}
 			assert.NoError(t, s.roundRobinSync())
 			if s.cfg.Chain.HeadSlot() < tt.currentSlot {
 				t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), tt.currentSlot)
