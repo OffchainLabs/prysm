@@ -496,7 +496,6 @@ func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	s.earliestAvailableSlot = earliestAvailableSlot
 	s.custodyGroupCount = custodyGroupCount
 
-
 	return s.earliestAvailableSlot, s.custodyGroupCount, nil
 }
 
