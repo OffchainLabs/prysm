@@ -185,7 +185,7 @@ func TestRetentionWindow(t *testing.T) {
 	fuluSlot, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
 	require.NoError(t, err)
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	numberOfColumns := fieldparams.NumberOfColumns
 	testCases := []struct {
 		name        string
 		commitments [][]byte
