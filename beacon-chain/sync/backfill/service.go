@@ -155,7 +155,7 @@ func (s *Service) updateComplete() bool {
 			log.WithField("backfillSlot", b.begin).Info("Backfill is complete")
 			return true
 		}
-		log.WithError(err).Error("Backfill service received unhandled error from worker pool")
+		log.WithError(err).Error("Service received unhandled error from worker pool")
 		return true
 	}
 	s.batchSeq.update(b)
@@ -183,7 +183,7 @@ func (s *Service) importBatches(ctx context.Context) {
 		// Calling update with state=batchImportComplete will advance the batch list.
 		s.batchSeq.update(ib.withState(batchImportComplete))
 		imported += 1
-		log.WithFields(ib.logFields()).WithField("batchesRemaining", s.batchSeq.numTodo()).Debug("Batch imported")
+		log.WithFields(ib.logFields()).WithField("batchesRemaining", s.batchSeq.numTodo()).Debug("Imported batch")
 	}
 
 	nt := s.batchSeq.numTodo()
@@ -216,7 +216,7 @@ func (s *Service) scheduleTodos() {
 		// and then we'll have the parent_root expected by 90 to ensure it matches the root for 89,
 		// at which point we know we can process [80..90).
 		if errors.Is(err, errMaxBatches) {
-			log.Debug("Backfill batches waiting for descendent batch to complete")
+			log.Debug("Waiting for descendent batch to complete")
 			return
 		}
 	}
@@ -228,36 +228,36 @@ func (s *Service) scheduleTodos() {
 // Start begins the runloop of backfill.Service in the current goroutine.
 func (s *Service) Start() {
 	if !s.enabled {
-		log.Info("Backfill service not enabled")
+		log.Info("Service not enabled")
 		s.markComplete()
 		return
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer func() {
-		log.Info("Backfill service is shutting down")
+		log.Info("Service is shutting down")
 		cancel()
 	}()
 
 	if s.store.isGenesisSync() {
-		log.Info("Backfill short-circuit; node synced from genesis")
+		log.Info("Node synced from genesis, shutting down backfill")
 		s.markComplete()
 		return
 	}
 
 	clock, err := s.cw.WaitForClock(ctx)
 	if err != nil {
-		log.WithError(err).Error("Backfill service failed to start while waiting for genesis data")
+		log.WithError(err).Error("Service failed to start while waiting for genesis data")
 		return
 	}
 	s.clock = clock
 
 	if s.syncNeedsWaiter == nil {
-		log.Error("Backfill service missing sync needs waiter; cannot start")
+		log.Error("Service missing sync needs waiter; cannot start")
 		return
 	}
 	syncNeeds, err := s.syncNeedsWaiter()
 	if err != nil {
-		log.WithError(err).Error("Backfill service failed to start while waiting for sync needs")
+		log.WithError(err).Error("Service failed to start while waiting for sync needs")
 		return
 	}
 	s.syncNeeds = syncNeeds
@@ -274,7 +274,7 @@ func (s *Service) Start() {
 	}
 
 	if s.initSyncWaiter != nil {
-		log.Info("Backfill service waiting for initial-sync to reach head before starting")
+		log.Info("Service waiting for initial-sync to reach head before starting")
 		if err := s.initSyncWaiter(); err != nil {
 			log.WithError(err).Error("Error waiting for init-sync to complete")
 			return
@@ -369,7 +369,7 @@ func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verific
 
 func (s *Service) markComplete() {
 	close(s.complete)
-	log.Info("Backfill service marked as complete")
+	log.Info("Marked as complete")
 }
 
 func (s *Service) WaitForCompletion() error {

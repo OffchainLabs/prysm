@@ -89,7 +89,7 @@ func (w *p2pWorker) run(ctx context.Context) {
 				log.WithField("batchId", b.id()).WithError(ctx.Err()).Info("Worker context canceled while waiting to retry")
 				continue
 			}
-			log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Trace("Backfill worker received batch")
+			log.WithFields(b.logFields()).WithField("backfillWorker", w.id).Trace("Worker received batch")
 			switch b.state {
 			case batchSequenced:
 				b = w.handleBlocks(ctx, b)
@@ -109,7 +109,7 @@ func (w *p2pWorker) run(ctx context.Context) {
 			}
 			w.done <- b
 		case <-ctx.Done():
-			log.WithField("backfillWorker", w.id).Info("Backfill worker exiting after context canceled")
+			log.WithField("backfillWorker", w.id).Info("Worker exiting after context canceled")
 			return
 		}
 	}
@@ -121,7 +121,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 	start := time.Now()
 	results, err := sync.SendBeaconBlocksByRangeRequest(ctx, w.cfg.clock, w.p2p, b.blockPeer, b.blockRequest(), blockValidationMetrics)
 	if err != nil {
-		log.WithError(err).WithFields(b.logFields()).Debug("Batch requesting failed")
+		log.WithError(err).WithFields(b.logFields()).Debug("Failed to request SignedBeaconBlocks by range")
 		return b.withRetryableError(err)
 	}
 	dlt := time.Now()
@@ -129,7 +129,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 
 	toVerify, err := blocks.NewROBlockSlice(results)
 	if err != nil {
-		log.WithError(err).WithFields(b.logFields()).Debug("Batch conversion to ROBlock failed")
+		log.WithError(err).WithFields(b.logFields()).Debug("Failed to convert blocks to ROBlock slice")
 		return b.withRetryableError(err)
 	}
 	verified, err := w.cfg.verifier.verify(toVerify)
@@ -138,7 +138,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 		if shouldDownscore(err) {
 			w.cfg.downscore(b.blockPeer, "invalid SignedBeaconBlock batch rpc response", err)
 		}
-		log.WithError(err).WithFields(b.logFields()).Debug("Batch validation failed")
+		log.WithError(err).WithFields(b.logFields()).Debug("Validation failed")
 		return b.withRetryableError(err)
 	}
 
@@ -150,7 +150,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 		bdl += verified[i].SizeSSZ()
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
-	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Trace("Backfill batch block bytes downloaded")
+	log.WithFields(b.logFields()).WithField("bytesDownloaded", bdl).Trace("Blocks downloaded")
 	b.blocks = verified
 
 	bscfg := &blobSyncConfig{currentNeeds: w.cfg.currentNeeds, nbv: w.cfg.newVB, store: w.cfg.blobStore}
@@ -183,7 +183,7 @@ func (w *p2pWorker) handleBlobs(ctx context.Context, b batch) batch {
 		// All blobs are the same size, so we can compute 1 and use it for all in the batch.
 		sz := blobs[0].SizeSSZ() * len(blobs)
 		blobSidecarDownloadBytesApprox.Add(float64(sz))
-		log.WithFields(b.logFields()).WithField("dlbytes", sz).Debug("Backfill batch blob bytes downloaded")
+		log.WithFields(b.logFields()).WithField("bytesDownloaded", sz).Debug("Blobs downloaded")
 	}
 	if b.blobs.needed() > 0 {
 		// If we are missing blobs after processing the blob step, this is an error and we need to scrap the batch and start over.
