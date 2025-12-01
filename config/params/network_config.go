@@ -16,6 +16,9 @@ type NetworkConfig struct {
 	// Chain Network Config
 	ContractDeploymentBlock uint64   // ContractDeploymentBlock is the eth1 block in which the deposit contract is deployed.
 	BootstrapNodes          []string // BootstrapNodes are the addresses of the bootnodes.
+	
+	// zkVM mode config
+	ZkvmKey string // ZkvmKey is the ENR key of the zkVM subnet bitfield.
 }
 
 var networkConfig = mainnetNetworkConfig

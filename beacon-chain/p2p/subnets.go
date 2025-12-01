@@ -36,6 +36,7 @@ var (
 	attSubnetEnrKey         = params.BeaconNetworkConfig().AttSubnetKey
 	syncCommsSubnetEnrKey   = params.BeaconNetworkConfig().SyncCommsSubnetKey
 	custodyGroupCountEnrKey = params.BeaconNetworkConfig().CustodyGroupCountKey
+	zkvmKeyEnrKey           = params.BeaconNetworkConfig().ZkvmKey
 )
 
 // The value used with the subnet, in order
@@ -455,16 +456,19 @@ func (s *Service) updateSubnetRecordWithMetadataV2(
 func (s *Service) updateSubnetRecordWithMetadataV3(
 	bitVAtt bitfield.Bitvector64,
 	bitVSync bitfield.Bitvector4,
+	bitVZkvm bitfield.Bitvector4,
 	custodyGroupCount uint64,
 ) error {
 	attSubnetsEntry := enr.WithEntry(attSubnetEnrKey, &bitVAtt)
 	syncSubnetsEntry := enr.WithEntry(syncCommsSubnetEnrKey, &bitVSync)
 	custodyGroupCountEntry := enr.WithEntry(custodyGroupCountEnrKey, custodyGroupCount)
+	zkvmKeyEntry := enr.WithEntry(zkvmKeyEnrKey, bitVZkvm)
 
 	localNode := s.dv5Listener.LocalNode()
 	localNode.Set(attSubnetsEntry)
 	localNode.Set(syncSubnetsEntry)
 	localNode.Set(custodyGroupCountEntry)
+	localNode.Set(zkvmKeyEntry)
 
 	s.metaData = wrapper.WrappedMetadataV2(&pb.MetaDataV2{
 		SeqNumber:         s.metaData.SequenceNumber() + 1,
