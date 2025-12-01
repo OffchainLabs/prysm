@@ -22,7 +22,6 @@ func (s *Service) EarliestAvailableSlot(ctx context.Context) (primitives.Slot, e
 		return 0, errors.Wrap(err, "wait for custody info")
 	}
 
-	// Update metric whenever the value is accessed
 	EarliestAvailableSlotMetric.Set(float64(custodyInfo.earliestAvailableSlot))
 
 	return custodyInfo.earliestAvailableSlot, nil

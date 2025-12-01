@@ -70,8 +70,6 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 		"groupCount":            storedGroupCount,
 	}).Debug("Custody info")
 
-	// Update the DB metric whenever we log the custody info
-	// This ensures the metric is always in sync with what we log
 	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
 
 	return storedEarliestAvailableSlot, storedGroupCount, nil
@@ -147,7 +145,6 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 
 	log.WithField("earliestAvailableSlot", storedEarliestAvailableSlot).Debug("Updated earliest available slot")
 
-	// Update DB metric after successfully updating the earliest available slot
 	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
 
 	return nil
