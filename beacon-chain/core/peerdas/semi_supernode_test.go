@@ -3,16 +3,18 @@ package peerdas
 import (
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 func TestSemiSupernodeCustody(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig()
 	cfg.NumberOfCustodyGroups = 128
-	cfg.NumberOfColumns = 128
 	params.OverrideBeaconConfig(cfg)
 
 	// Create a test node ID
@@ -34,8 +36,8 @@ func TestSemiSupernodeCustody(t *testing.T) {
 
 		// Verify the columns are valid (within 0-127 range)
 		for columnIndex := range custodyColumns {
-			if columnIndex >= cfg.NumberOfColumns {
-				t.Fatalf("Invalid column index %d, should be less than %d", columnIndex, cfg.NumberOfColumns)
+			if columnIndex >= numberOfColumns {
+				t.Fatalf("Invalid column index %d, should be less than %d", columnIndex, numberOfColumns)
 			}
 		}
 	})
@@ -75,33 +77,23 @@ func TestSemiSupernodeCustody(t *testing.T) {
 func TestMinimumCustodyGroupCountToReconstruct(t *testing.T) {
 	tests := []struct {
 		name           string
-		numberOfColumns uint64
-		numberOfGroups  uint64
-		expectedResult  uint64
+		numberOfGroups uint64
+		expectedResult uint64
 	}{
 		{
 			name:           "Standard 1:1 ratio (128 columns, 128 groups)",
-			numberOfColumns: 128,
-			numberOfGroups:  128,
-			expectedResult:  64, // Need half of 128 groups
+			numberOfGroups: 128,
+			expectedResult: 64, // Need half of 128 groups
 		},
 		{
 			name:           "2 columns per group (128 columns, 64 groups)",
-			numberOfColumns: 128,
-			numberOfGroups:  64,
-			expectedResult:  32, // Need 64 columns, which is 32 groups (64/2)
+			numberOfGroups: 64,
+			expectedResult: 32, // Need 64 columns, which is 32 groups (64/2)
 		},
 		{
 			name:           "4 columns per group (128 columns, 32 groups)",
-			numberOfColumns: 128,
-			numberOfGroups:  32,
-			expectedResult:  16, // Need 64 columns, which is 16 groups (64/4)
-		},
-		{
-			name:           "Odd number requiring ceiling division (100 columns, 30 groups)",
-			numberOfColumns: 100,
-			numberOfGroups:  30,
-			expectedResult:  17, // Need 50 columns, 3 columns per group (100/30), ceiling(50/3) = 17
+			numberOfGroups: 32,
+			expectedResult: 16, // Need 64 columns, which is 16 groups (64/4)
 		},
 	}
 
@@ -109,7 +101,6 @@ func TestMinimumCustodyGroupCountToReconstruct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
 			cfg := params.BeaconConfig()
-			cfg.NumberOfColumns = tt.numberOfColumns
 			cfg.NumberOfCustodyGroups = tt.numberOfGroups
 			params.OverrideBeaconConfig(cfg)
 
@@ -121,22 +112,9 @@ func TestMinimumCustodyGroupCountToReconstruct(t *testing.T) {
 }
 
 func TestMinimumCustodyGroupCountToReconstruct_ErrorCases(t *testing.T) {
-	t.Run("Returns error when NumberOfColumns is zero", func(t *testing.T) {
-		params.SetupTestConfigCleanup(t)
-		cfg := params.BeaconConfig()
-		cfg.NumberOfColumns = 0
-		cfg.NumberOfCustodyGroups = 128
-		params.OverrideBeaconConfig(cfg)
-
-		_, err := MinimumCustodyGroupCountToReconstruct()
-		require.NotNil(t, err)
-		require.Equal(t, true, err.Error() == "NumberOfColumns cannot be zero")
-	})
-
 	t.Run("Returns error when NumberOfCustodyGroups is zero", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
-		cfg.NumberOfColumns = 128
 		cfg.NumberOfCustodyGroups = 0
 		params.OverrideBeaconConfig(cfg)
 
@@ -148,7 +126,6 @@ func TestMinimumCustodyGroupCountToReconstruct_ErrorCases(t *testing.T) {
 	t.Run("Returns error when NumberOfCustodyGroups exceeds NumberOfColumns", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
 		cfg := params.BeaconConfig()
-		cfg.NumberOfColumns = 128
 		cfg.NumberOfCustodyGroups = 256
 		params.OverrideBeaconConfig(cfg)
 

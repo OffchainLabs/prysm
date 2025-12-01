@@ -27,6 +27,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -3756,6 +3757,7 @@ func Test_validateBlobs(t *testing.T) {
 	})
 
 	t.Run("Fulu block with valid cell proofs", func(t *testing.T) {
+		const numberOfColumns = fieldparams.NumberOfColumns
 		blk := util.NewBeaconBlockFulu()
 		blk.Block.Slot = fs
 
@@ -3783,14 +3785,13 @@ func Test_validateBlobs(t *testing.T) {
 		require.NoError(t, err)
 
 		// Generate cell proofs for the blobs (flattened format like execution client)
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		cellProofs := make([][]byte, uint64(blobCount)*numberOfColumns)
 		for blobIdx := range blobCount {
 			_, proofs, err := kzg.ComputeCellsAndKZGProofs(&kzgBlobs[blobIdx])
 			require.NoError(t, err)
 
 			for colIdx := range numberOfColumns {
-				cellProofIdx := uint64(blobIdx)*numberOfColumns + colIdx
+				cellProofIdx := blobIdx*numberOfColumns + colIdx
 				cellProofs[cellProofIdx] = proofs[colIdx][:]
 			}
 		}

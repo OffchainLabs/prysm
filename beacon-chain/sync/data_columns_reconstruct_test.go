@@ -11,7 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v7/config/params"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -19,7 +19,6 @@ import (
 
 func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 	const blobCount = 4
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	ctx := t.Context()
 
@@ -28,7 +27,7 @@ func TestProcessDataColumnSidecarsFromReconstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	roBlock, _, verifiedRoDataColumns := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
-	require.Equal(t, numberOfColumns, uint64(len(verifiedRoDataColumns)))
+	require.Equal(t, fieldparams.NumberOfColumns, len(verifiedRoDataColumns))
 
 	minimumCount := peerdas.MinimumColumnCountToReconstruct()
 
@@ -138,8 +137,10 @@ func TestComputeRandomDelay(t *testing.T) {
 }
 
 func TestSemiSupernodeReconstruction(t *testing.T) {
-	const blobCount = 4
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const (
+		blobCount       = 4
+		numberOfColumns = uint64(fieldparams.NumberOfColumns)
+	)
 
 	ctx := t.Context()
 
@@ -148,7 +149,7 @@ func TestSemiSupernodeReconstruction(t *testing.T) {
 	require.NoError(t, err)
 
 	roBlock, _, verifiedRoDataColumns := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
-	require.Equal(t, numberOfColumns, uint64(len(verifiedRoDataColumns)))
+	require.Equal(t, fieldparams.NumberOfColumns, len(verifiedRoDataColumns))
 
 	minimumCount := peerdas.MinimumColumnCountToReconstruct()
 
