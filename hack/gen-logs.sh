@@ -25,6 +25,7 @@ EXCLUDED_PATH_PREFIXES=(
   "bazel-prysm"
   "bazel-testlogs"
   "build"
+  ".git"
   ".github"
   ".jj"
   ".idea"
@@ -34,6 +35,12 @@ EXCLUDED_PATH_PREFIXES=(
 # The logrus import path
 LOGRUS_IMPORT="github.com/sirupsen/logrus"
 # ----------------------------
+
+# Require ripgrep
+if ! command -v rg >/dev/null 2>&1; then
+  echo "Error: ripgrep (rg) is required but not installed." >&2
+  exit 1
+fi
 
 # Find project root (git repo root if available, else current dir)
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -52,30 +59,28 @@ is_excluded() {
   return 1
 }
 
-# Build a find command that:
-# - starts at .
-# - prunes all EXCLUDED_PATH_PREFIXES
-# - returns only *.go files that are NOT *_test.go
-find_cmd=(find .)
-
-find_cmd+=( \( -path './.git' )
-
-# Add all excluded prefixes to prune group
-for ex in "${EXCLUDED_PATH_PREFIXES[@]}"; do
-  find_cmd+=( -o -path "./$ex" )
-done
-
-# Close prune group, then search for go files
-find_cmd+=( \) -prune -o -type f -name '*.go' ! -name '*_test.go' -print0 )
-
-# Find all non-test .go files that import logrus, respecting exclusions
-mapfile -t FILES < <(
-  "${find_cmd[@]}" \
-    | xargs -0 -r grep -Il "$LOGRUS_IMPORT" \
-    || true
+# Build rg command:
+# - respects .gitignore automatically
+# - searches only *.go, excluding *_test.go
+# - excludes EXCLUDED_PATH_PREFIXES via negative globs so rg doesn't even enter them
+rg_args=(
+  rg -F "$LOGRUS_IMPORT"
+  --glob '*.go'
+  --glob '!*_test.go'
+  -l    # list matching files
+  -0    # NUL-delimited output
 )
 
-# Collect unique directories containing such files
+for ex in "${EXCLUDED_PATH_PREFIXES[@]}"; do
+  rg_args+=( --glob "!$ex/**" )
+done
+
+# 1) Use ripgrep to find all non-test .go files that import logrus.
+mapfile -d '' -t FILES < <(
+  "${rg_args[@]}" . || true
+)
+
+# 2) Collect unique directories containing such files (is_excluded is now redundant but harmless)
 declare -A DIRS=()
 for f in "${FILES[@]}"; do
   dir="$(dirname "$f")"
@@ -85,6 +90,7 @@ for f in "${FILES[@]}"; do
   DIRS["$dir"]=1
 done
 
+# 3) For each directory, (re)generate log.go
 for dir in "${!DIRS[@]}"; do
   # Collect Go files in this directory
   shopt -s nullglob
