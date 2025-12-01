@@ -183,7 +183,6 @@ func (b batch) withState(s batchState) batch {
 	}
 	if s == batchImportComplete {
 		backfillBatchTimeRoundtrip.Observe(float64(time.Since(b.firstScheduled).Milliseconds()))
-		log.WithFields(b.logFields()).Debug("Backfill batch imported")
 	}
 	b.state = s
 	b.seq += 1

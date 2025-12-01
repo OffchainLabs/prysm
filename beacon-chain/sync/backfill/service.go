@@ -183,14 +183,12 @@ func (s *Service) importBatches(ctx context.Context) {
 		// Calling update with state=batchImportComplete will advance the batch list.
 		s.batchSeq.update(ib.withState(batchImportComplete))
 		imported += 1
+		log.WithFields(ib.logFields()).WithField("batchesRemaining", s.batchSeq.numTodo()).Debug("Batch imported")
 	}
 
 	nt := s.batchSeq.numTodo()
 	batchesRemaining.Set(float64(nt))
 	if imported > 0 {
-		log.WithField("imported", imported).WithField("importable", len(importable)).
-			WithField("batchesRemaining", nt).
-			Info("Backfill batches imported")
 		batchesImported.Add(float64(imported))
 	}
 }

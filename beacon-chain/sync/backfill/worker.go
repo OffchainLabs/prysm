@@ -150,7 +150,7 @@ func (w *p2pWorker) handleBlocks(ctx context.Context, b batch) batch {
 		bdl += verified[i].SizeSSZ()
 	}
 	blockDownloadBytesApprox.Add(float64(bdl))
-	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Debug("Backfill batch block bytes downloaded")
+	log.WithFields(b.logFields()).WithField("dlbytes", bdl).Trace("Backfill batch block bytes downloaded")
 	b.blocks = verified
 
 	bscfg := &blobSyncConfig{currentNeeds: w.cfg.currentNeeds, nbv: w.cfg.newVB, store: w.cfg.blobStore}
