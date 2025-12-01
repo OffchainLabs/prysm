@@ -222,7 +222,7 @@ func TestRetentionWindow(t *testing.T) {
 			},
 			commitments: commitments,
 			slot:        fuluSlot + windowSlots,
-			wantedCols:  int(numberOfColumns),
+			wantedCols:  numberOfColumns,
 		},
 	}
 
@@ -230,7 +230,7 @@ func TestRetentionWindow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			b := tc.block(t)
-			s := NewLazilyPersistentStoreColumn(nil, nil, enode.ID{}, numberOfColumns, nil, mockShouldRetain(slots.ToEpoch(tc.slot)))
+			s := NewLazilyPersistentStoreColumn(nil, nil, enode.ID{}, uint64(numberOfColumns), nil, mockShouldRetain(slots.ToEpoch(tc.slot)))
 
 			indices, err := s.required(b)
 			require.NoError(t, err)
