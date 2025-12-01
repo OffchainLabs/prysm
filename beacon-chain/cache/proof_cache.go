@@ -1,13 +1,12 @@
-package zkvmexecutionlayer
+package cache
 
 import (
 	"errors"
 	"fmt"
 	"sync"
-
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	lru "github.com/hashicorp/golang-lru"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // ProofCache is a thread-safe, synchronous LRU cache for execution proofs,
@@ -16,6 +15,7 @@ type ProofCache struct {
 	cache *lru.Cache
 	lock  sync.RWMutex
 }
+
 
 // NewProofCache creates a new proof cache with the specified capacity.
 func NewProofCache(capacity int) (*ProofCache, error) {
@@ -32,10 +32,31 @@ func NewProofCache(capacity int) (*ProofCache, error) {
 	}, nil
 }
 
+// Get all proofs for a specific block hash.
+// It uses Peek to avoid promoting the entry in the LRU order.
+func (c *ProofCache) Get(blockHash []byte) ([]ethpb.ExecutionProof, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	val, ok := c.cache.Peek(blockHash)
+	if !ok {
+		return nil, false
+	}
+
+	proofs := val.([]ethpb.ExecutionProof)
+	// Return a deep copy to prevent concurrent modification by the caller
+	proofsCopy := make([]ethpb.ExecutionProof, len(proofs))
+	for i := range proofs {
+		proofsCopy[i] = *proofs[i].Copy()
+	}
+
+	return proofsCopy, true
+}
+
 // Insert a proof into the cache.
 // If a proof from the same subnet already exists for this block hash,
 // it will be replaced.
-func (c *ProofCache) Insert(proof *ethpb.ExecutionProof) {
+func (c *ProofCache) Put(proof *ethpb.ExecutionProof) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -60,27 +81,6 @@ func (c *ProofCache) Insert(proof *ethpb.ExecutionProof) {
 
 	// Add the new slice back to the cache
 	c.cache.Add(blockHash, newProofs)
-}
-
-// Get all proofs for a specific block hash.
-// It uses Peek to avoid promoting the entry in the LRU order.
-func (c *ProofCache) Get(blockHash []byte) ([]ethpb.ExecutionProof, bool) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	val, ok := c.cache.Peek(blockHash)
-	if !ok {
-		return nil, false
-	}
-
-	proofs := val.([]ethpb.ExecutionProof)
-	// Return a deep copy to prevent concurrent modification by the caller
-	proofsCopy := make([]ethpb.ExecutionProof, len(proofs))
-	for i := range proofs {
-		proofsCopy[i] = *proofs[i].Copy()
-	}
-
-	return proofsCopy, true
 }
 
 // GetFromSubnets gets proofs for a specific block hash from specific subnets.
@@ -185,7 +185,7 @@ func (c *ProofCache) Clear() {
 }
 
 // Len gets the current number of entries (block hashes) in the cache.
-func (c *ProofCache) Len() int {
+func (c *ProofCache) Count() int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.cache.Len()
