@@ -50,7 +50,8 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "deneb fork slot")
 	}
-	fulu, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	fuluBoundary := min(params.BeaconConfig().FuluForkEpoch, slots.MaxSafeEpoch())
+	fulu, err := slots.EpochStart(fuluBoundary)
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "fulu fork slot")
 	}
