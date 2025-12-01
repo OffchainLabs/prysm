@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -113,15 +112,13 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 
 // shouldReconstruct returns true if we should attempt to reconstruct the data columns for the given block root.
 func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
 	// Get the columns we store.
 	storedDataColumns := s.cfg.dataColumnStorage.Summary(root)
 	storedColumnsCount := storedDataColumns.Count()
 
 	// Reconstruct only if we have at least the minimum number of columns to reconstruct, but not all the columns.
 	// (If we have not enough columns, reconstruction is impossible. If we have all the columns, reconstruction is unnecessary.)
-	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != numberOfColumns
+	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != fieldparams.NumberOfColumns
 }
 
 // computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.

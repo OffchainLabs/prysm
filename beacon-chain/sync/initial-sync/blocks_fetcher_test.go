@@ -1369,8 +1369,8 @@ func TestFetchSidecars(t *testing.T) {
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
+		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 		cfg := params.BeaconConfig()
-		numberOfColumns := cfg.NumberOfColumns
 		samplesPerSlot := cfg.SamplesPerSlot
 
 		// Define "now" to be one epoch after genesis time + retention period.

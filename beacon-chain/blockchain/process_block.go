@@ -634,9 +634,7 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 		return nil, nil
 	}
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	if uint64(len(expected)) > numberOfColumns {
+	if len(expected) > fieldparams.NumberOfColumns {
 		return nil, errMaxDataColumnsExceeded
 	}
 
@@ -818,10 +816,9 @@ func (s *Service) areDataColumnsAvailable(
 
 		case <-ctx.Done():
 			var missingIndices any = "all"
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			missingIndicesCount := uint64(len(missing))
+			missingIndicesCount := len(missing)
 
-			if missingIndicesCount < numberOfColumns {
+			if missingIndicesCount < fieldparams.NumberOfColumns {
 				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
