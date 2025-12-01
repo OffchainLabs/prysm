@@ -105,15 +105,15 @@ func (n SyncNeeds) blockSpan(current primitives.Slot) NeedSpan {
 }
 
 func (n SyncNeeds) BlobRetentionChecker() RetentionChecker {
-	current := n.Currently()
 	return func(slot primitives.Slot) bool {
+		current := n.Currently()
 		return current.Blob.At(slot)
 	}
 }
 
 func (n SyncNeeds) DataColumnRetentionChecker() RetentionChecker {
-	current := n.Currently()
 	return func(slot primitives.Slot) bool {
+		current := n.Currently()
 		return current.Col.At(slot)
 	}
 }

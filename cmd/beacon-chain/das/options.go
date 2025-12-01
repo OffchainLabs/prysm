@@ -11,12 +11,12 @@ import (
 
 func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 	var oldestBackfillSlot *primitives.Slot
-	var retentionEpochs primitives.Epoch
 	if c.IsSet(flags.BackfillOldestSlot.Name) {
 		uv := c.Uint64(flags.BackfillOldestSlot.Name)
 		sv := primitives.Slot(uv)
 		oldestBackfillSlot = &sv
 	}
+	blobRetentionEpochs := primitives.Epoch(c.Uint64(flags.BlobRetentionEpochFlag.Name))
 	opt := func(n *node.BeaconNode) error {
 		n.SyncNeedsWaiter = func() (das.SyncNeeds, error) {
 			clock, err := n.ClockWaiter.WaitForClock(c.Context)
@@ -26,7 +26,7 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 			return das.NewSyncNeeds(
 				clock.CurrentSlot,
 				oldestBackfillSlot,
-				retentionEpochs,
+				blobRetentionEpochs,
 			)
 		}
 		return nil

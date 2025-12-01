@@ -188,7 +188,10 @@ func (w *p2pWorker) handleBlobs(ctx context.Context, b batch) batch {
 	if b.blobs.needed() > 0 {
 		// If we are missing blobs after processing the blob step, this is an error and we need to scrap the batch and start over.
 		b.blobs = nil
-		b.blocks = []blocks.ROBlock{}
+		// Wipe retries periodically to avoid getting stuck on a bad block batch
+		if b.retries%3 == 0 {
+			b.blocks = []blocks.ROBlock{}
+		}
 		return b.withRetryableError(errors.New("missing blobs after blob download"))
 	}
 	return b.transitionToNext()
