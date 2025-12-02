@@ -94,49 +94,14 @@ minimal = {
     "builder_pending_payments.size": "16"  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
 }
 
-e2e = {
-    "block_roots.size": "64,32",
-    "state_roots.size": "64,32",
+# e2e is minimal with a few overrides for e2e-specific settings
+e2e = dict(minimal)
+e2e.update({
     "eth1_data_votes.size": "12",  # SLOTS_PER_ETH1_VOTING_PERIOD for e2e (2 epochs * 6 slots)
-    "randao_mixes.size": "64,32",
     "previous_epoch_attestations.max": "768",  # MAX_ATTESTATIONS * SLOTS_PER_EPOCH (128 * 6)
     "current_epoch_attestations.max": "768",  # MAX_ATTESTATIONS * SLOTS_PER_EPOCH (128 * 6)
-    "slashings.size": "64",
-    "sync_committee_bits.size": "32",
-    "sync_committee_bytes.size": "4",
-    "sync_committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector32",
-    "sync_committee_aggregate_bytes.size": "1",
-    "sync_committee_aggregate_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector8",
-    "withdrawal.size": "4",
-    "blob.size": "131072",
-    "logs_bloom.size": "256",
-    "extra_data.size": "32",
-    "max_blobs_per_block.size": "6",
-    "max_blob_commitments.size": "4096",
-    "max_cell_proofs_length.size": "33554432",  # FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
-    "kzg_commitment_inclusion_proof_depth.size": "17",
-    "max_withdrawal_requests_per_payload.size": "16",
-    "max_deposit_requests_per_payload.size": "8192",
-    "max_attesting_indices.size": "8192",
-    "max_committees_per_slot.size": "4",
-    "committee_bits.size": "1",
-    "committee_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector4",
-    "pending_deposits_limit": "134217728",
-    "pending_partial_withdrawals_limit": "64",
-    "pending_consolidations_limit": "64",
-    "max_consolidation_requests_per_payload.size": "2",
-    "field_elements_per_cell.size": "64",
-    "field_elements_per_ext_blob.size": "8192",
-    "bytes_per_cell.size": "2048",  # FIELD_ELEMENTS_PER_CELL * BYTES_PER_FIELD_ELEMENT
-    "cells_per_blob.size": "128",
-    "kzg_commitments_inclusion_proof_depth.size": "4",
     "proposer_lookahead_size": "12",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH for e2e (2 * 6)
-    "ptc.size": "1",  # Gloas: Payload Timeliness Committee aggregation bits
-    "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector2",
-    "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
-    "execution_payload_availability.size": "8",  # Gloas: SLOTS_PER_HISTORICAL_ROOT
-    "builder_pending_payments.size": "16"  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
-}
+})
 
 ###### Rules definitions #######
 
