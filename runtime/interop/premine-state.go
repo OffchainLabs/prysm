@@ -156,12 +156,16 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Electra:
-		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+			DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		})
 		if err != nil {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{
+			DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		})
 		if err != nil {
 			return nil, err
 		}

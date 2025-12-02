@@ -155,20 +155,19 @@ func TestGetSpec(t *testing.T) {
 	config.MaxAttesterSlashingsElectra = 88
 	config.MaxAttestationsElectra = 89
 	config.MaxWithdrawalRequestsPerPayload = 90
-	config.MaxCellsInExtendedMatrix = 91
-	config.UnsetDepositRequestsStartIndex = 92
-	config.MaxDepositRequestsPerPayload = 93
-	config.MaxPendingDepositsPerEpoch = 94
-	config.MaxBlobCommitmentsPerBlock = 95
-	config.MaxBytesPerTransaction = 96
-	config.MaxExtraDataBytes = 97
-	config.BytesPerLogsBloom = 98
-	config.MaxTransactionsPerPayload = 99
-	config.FieldElementsPerBlob = 100
-	config.KzgCommitmentInclusionProofDepth = 101
-	config.BlobsidecarSubnetCount = 102
-	config.BlobsidecarSubnetCountElectra = 103
-	config.SyncMessageDueBPS = 104
+	config.UnsetDepositRequestsStartIndex = 91
+	config.MaxDepositRequestsPerPayload = 92
+	config.MaxPendingDepositsPerEpoch = 93
+	config.MaxBlobCommitmentsPerBlock = 94
+	config.MaxBytesPerTransaction = 95
+	config.MaxExtraDataBytes = 96
+	config.BytesPerLogsBloom = 97
+	config.MaxTransactionsPerPayload = 98
+	config.FieldElementsPerBlob = 99
+	config.KzgCommitmentInclusionProofDepth = 100
+	config.BlobsidecarSubnetCount = 101
+	config.BlobsidecarSubnetCountElectra = 102
+	config.SyncMessageDueBPS = 103
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -206,7 +205,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 176, len(data))
+	assert.Equal(t, 175, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -500,8 +499,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "1024", v)
 			case "MAX_REQUEST_BLOCKS_DENEB":
 				assert.Equal(t, "128", v)
-			case "NUMBER_OF_COLUMNS":
-				assert.Equal(t, "128", v)
 			case "MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA":
 				assert.Equal(t, "128000000000", v)
 			case "MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT":
@@ -538,14 +535,12 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "89", v)
 			case "MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD":
 				assert.Equal(t, "90", v)
-			case "MAX_CELLS_IN_EXTENDED_MATRIX":
-				assert.Equal(t, "91", v)
 			case "UNSET_DEPOSIT_REQUESTS_START_INDEX":
-				assert.Equal(t, "92", v)
+				assert.Equal(t, "91", v)
 			case "MAX_DEPOSIT_REQUESTS_PER_PAYLOAD":
-				assert.Equal(t, "93", v)
+				assert.Equal(t, "92", v)
 			case "MAX_PENDING_DEPOSITS_PER_EPOCH":
-				assert.Equal(t, "94", v)
+				assert.Equal(t, "93", v)
 			case "MAX_BLOBS_PER_BLOCK_ELECTRA":
 				assert.Equal(t, "9", v)
 			case "MAX_REQUEST_BLOB_SIDECARS_ELECTRA":
@@ -563,25 +558,25 @@ func TestGetSpec(t *testing.T) {
 			case "MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS":
 				assert.Equal(t, "4096", v)
 			case "MAX_BLOB_COMMITMENTS_PER_BLOCK":
-				assert.Equal(t, "95", v)
+				assert.Equal(t, "94", v)
 			case "MAX_BYTES_PER_TRANSACTION":
-				assert.Equal(t, "96", v)
+				assert.Equal(t, "95", v)
 			case "MAX_EXTRA_DATA_BYTES":
-				assert.Equal(t, "97", v)
+				assert.Equal(t, "96", v)
 			case "BYTES_PER_LOGS_BLOOM":
-				assert.Equal(t, "98", v)
+				assert.Equal(t, "97", v)
 			case "MAX_TRANSACTIONS_PER_PAYLOAD":
-				assert.Equal(t, "99", v)
+				assert.Equal(t, "98", v)
 			case "FIELD_ELEMENTS_PER_BLOB":
-				assert.Equal(t, "100", v)
+				assert.Equal(t, "99", v)
 			case "KZG_COMMITMENT_INCLUSION_PROOF_DEPTH":
-				assert.Equal(t, "101", v)
+				assert.Equal(t, "100", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT":
-				assert.Equal(t, "102", v)
+				assert.Equal(t, "101", v)
 			case "BLOB_SIDECAR_SUBNET_COUNT_ELECTRA":
-				assert.Equal(t, "103", v)
+				assert.Equal(t, "102", v)
 			case "SYNC_MESSAGE_DUE_BPS":
-				assert.Equal(t, "104", v)
+				assert.Equal(t, "103", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)

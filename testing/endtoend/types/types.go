@@ -94,6 +94,13 @@ type E2EConfig struct {
 
 func GenesisFork() int {
 	cfg := params.BeaconConfig()
+	// Check from highest fork to lowest to find the genesis fork.
+	if cfg.ElectraForkEpoch == 0 {
+		return version.Electra
+	}
+	if cfg.DenebForkEpoch == 0 {
+		return version.Deneb
+	}
 	if cfg.CapellaForkEpoch == 0 {
 		return version.Capella
 	}

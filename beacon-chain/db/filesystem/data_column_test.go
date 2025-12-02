@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -88,22 +87,6 @@ func TestWarmCache(t *testing.T) {
 }
 
 func TestSaveDataColumnsSidecars(t *testing.T) {
-	t.Run("wrong numbers of columns", func(t *testing.T) {
-		cfg := params.BeaconConfig().Copy()
-		cfg.NumberOfColumns = 0
-		params.OverrideBeaconConfig(cfg)
-		params.SetupTestConfigCleanup(t)
-
-		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
-			t,
-			[]util.DataColumnParam{{Index: 12}, {Index: 1_000_000}, {Index: 48}},
-		)
-
-		_, dataColumnStorage := NewEphemeralDataColumnStorageAndFs(t)
-		err := dataColumnStorage.Save(verifiedRoDataColumnSidecars)
-		require.ErrorIs(t, err, errWrongNumberOfColumns)
-	})
-
 	t.Run("one of the column index is too large", func(t *testing.T) {
 		_, verifiedRoDataColumnSidecars := util.CreateTestVerifiedRoDataColumnSidecars(
 			t,

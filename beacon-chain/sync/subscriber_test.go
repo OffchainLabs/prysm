@@ -652,6 +652,140 @@ func TestIsDigestValid(t *testing.T) {
 	assert.Equal(t, false, valid)
 }
 
+func TestSamplingSize(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := context.Background()
+	d := db.SetupDB(t)
+	p2pService := p2ptest.NewTestP2P(t)
+
+	t.Run("regular node returns validator requirements", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Disable all special modes
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = false
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+
+		custodyCount := uint64(16)
+		_, _, err := p2pService.UpdateCustodyInfo(0, custodyCount)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		// Should return max(SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount)
+		// For this test, custodyGroupCount (16) should be the max
+		expectedSize := max(cfg.SamplesPerSlot, custodyCount)
+		require.Equal(t, expectedSize, size)
+	})
+
+	t.Run("supernode mode returns all subnets", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count to all groups (simulating what updateCustodyInfoInDB() does for supernode)
+		_, _, err := p2pService.UpdateCustodyInfo(0, cfg.NumberOfCustodyGroups)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount, size) // Should be 128 based on custody count
+	})
+
+	t.Run("semi-supernode with low validator requirements returns 64", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count to semi-supernode minimum (64)
+		// This simulates what updateCustodyInfoInDB() does for semi-supernode with low validator count
+		semiSupernodeCustody := cfg.DataColumnSidecarSubnetCount / 2
+		_, _, err := p2pService.UpdateCustodyInfo(0, semiSupernodeCustody)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
+	})
+
+	t.Run("semi-supernode with high validator requirements returns higher value", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count to a high value (e.g., 100)
+		// This simulates what updateCustodyInfoInDB() would set after determining
+		// that validator requirements exceed the semi-supernode minimum
+		highCustodyCount := uint64(100)
+		_, _, err := p2pService.UpdateCustodyInfo(0, highCustodyCount)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, highCustodyCount, size) // Should return the higher custody count based on custody
+		// Note: Warning is logged in updateCustodyInfoInDB(), not here
+	})
+
+	t.Run("custody count is source of truth", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count directly (simulating what updateCustodyInfoInDB() does)
+		// For semi-supernode mode, this would be 64
+		semiSupernodeCustody := cfg.DataColumnSidecarSubnetCount / 2
+		_, _, err := p2pService.UpdateCustodyInfo(0, semiSupernodeCustody)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		// samplingSize() should use custody count regardless of flags
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
+		// Note: Downgrade prevention is handled in updateCustodyInfoInDB(), not here
+	})
+}
+
 // Create peer and register them to provided topics.
 func createPeer(t *testing.T, topics ...string) *p2ptest.TestP2P {
 	p := p2ptest.NewTestP2P(t)

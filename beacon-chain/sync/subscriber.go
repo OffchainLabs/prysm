@@ -692,14 +692,11 @@ func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 }
 
 // samplingSize computes the sampling size based on the samples per slot value,
-// the validators custody requirement, and whether the node is subscribed to all data subnets.
+// the validators custody requirement, and the custody group count.
+// The custody group count is the source of truth and already includes supernode/semi-supernode logic.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
 func (s *Service) samplingSize() (uint64, error) {
 	cfg := params.BeaconConfig()
-
-	if flags.Get().SubscribeAllDataSubnets {
-		return cfg.DataColumnSidecarSubnetCount, nil
-	}
 
 	// Compute the validators custody requirement.
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
@@ -707,11 +704,16 @@ func (s *Service) samplingSize() (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
+	// Get custody group count - this is the source of truth and already reflects:
+	// - Supernode mode: NUMBER_OF_CUSTODY_GROUPS
+	// - Semi-supernode mode: half of NUMBER_OF_CUSTODY_GROUPS (or more if validators require)
+	// - Regular mode: validator custody requirement
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "custody group count")
 	}
 
+	// Sampling size should match custody to ensure we can serve what we advertise
 	return max(cfg.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount), nil
 }
 
