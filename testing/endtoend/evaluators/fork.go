@@ -330,7 +330,7 @@ func electraForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 	return nil
 }
 
-func fuluForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func fuluForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 
