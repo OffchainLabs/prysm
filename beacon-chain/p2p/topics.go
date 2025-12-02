@@ -46,6 +46,8 @@ const (
 	GossipLightClientOptimisticUpdateMessage = "light_client_optimistic_update"
 	// GossipDataColumnSidecarMessage is the name for the data column sidecar message type.
 	GossipDataColumnSidecarMessage = "data_column_sidecar"
+	// GossipExecutionProofMessage is the name for the execution proof message type.
+	GossipExecutionProofMessage = "execution_proof"
 
 	// Topic Formats
 	//
@@ -75,6 +77,8 @@ const (
 	LightClientOptimisticUpdateTopicFormat = GossipProtocolAndDigest + GossipLightClientOptimisticUpdateMessage
 	// DataColumnSubnetTopicFormat is the topic format for the data column subnet.
 	DataColumnSubnetTopicFormat = GossipProtocolAndDigest + GossipDataColumnSidecarMessage + "_%d"
+	// ExecutionProofSubnetTopicFormat is the topic format for the execution proof subnet.
+	ExecutionProofSubnetTopicFormat = GossipProtocolAndDigest + GossipExecutionProofMessage + "_%d"
 )
 
 // topic is a struct representing a single gossipsub topic.
