@@ -176,7 +176,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 			})
 		}
 	} else {
-		logrus.Info("Pre-Fulu: Sending standard blob transactions with Version 0 sidecars")
+		logrus.Info("Sending blob transactions with sidecars")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
 		for index := range uint64(5) {
 
