@@ -156,7 +156,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 
 	// Send blob transactions - use different versions pre/post Fulu
 	if isPostFulu {
-		logrus.Info("Post-Fulu: Sending blob transactions with Version 1 sidecars (cell proofs)")
+		logrus.Info("Sending blob transactions with cell proofs")
 		// Reduced from 10 to 5 to conserve funds during extended test runs
 		for index := range uint64(5) {
 
