@@ -218,7 +218,7 @@ type GossipsubPeerCrawler struct {
 	// Discovery interface for finding peers
 	dv5 ListenerRebooter
 
-	service *Service
+	p2pSvc *Service
 
 	topicExtractor gossipsubcrawler.TopicExtractor
 
@@ -242,7 +242,7 @@ const cleanupInterval = 5 * time.Minute
 type PeerScoreFunc func(peer.ID) float64
 
 func NewGossipsubPeerCrawler(
-	service *Service,
+	p2pSvc *Service,
 	dv5 ListenerRebooter,
 	crawlTimeout time.Duration,
 	crawlInterval time.Duration,
@@ -250,8 +250,8 @@ func NewGossipsubPeerCrawler(
 	peerFilter gossipsubcrawler.PeerFilterFunc,
 	scorer PeerScoreFunc,
 ) (*GossipsubPeerCrawler, error) {
-	if service == nil {
-		return nil, errors.New("service is nil")
+	if p2pSvc == nil {
+		return nil, errors.New("p2pSvc is nil")
 	}
 	if dv5 == nil {
 		return nil, errors.New("dv5 is nil")
@@ -278,7 +278,7 @@ func NewGossipsubPeerCrawler(
 		cancel:             cancel,
 		crawlInterval:      crawlInterval,
 		crawlTimeout:       crawlTimeout,
-		service:            service,
+		p2pSvc:             p2pSvc,
 		dv5:                dv5,
 		maxConcurrentPings: maxConcurrentPings,
 		peerFilter:         peerFilter,
