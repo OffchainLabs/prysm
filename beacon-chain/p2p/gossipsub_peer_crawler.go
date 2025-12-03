@@ -330,9 +330,9 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 		return scoreI > scoreJ
 	})
 
-	nodes := make([]*enode.Node, len(peerNodes))
-	for i, pn := range peerNodes {
-		nodes[i] = pn.node
+	nodes := make([]*enode.Node, 0, len(peerNodes))
+	for _, pn := range peerNodes {
+		nodes = append(nodes, pn.node)
 	}
 
 	return nodes
@@ -353,15 +353,9 @@ func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
 	}
 	g.once.Do(func() {
 		g.topicExtractor = te
-		g.wg.Go(func() {
-			g.crawlLoop()
-		})
-		g.wg.Go(func() {
-			g.pingLoop()
-		})
-		g.wg.Go(func() {
-			g.cleanupLoop()
-		})
+		g.wg.Go(g.crawlLoop)
+		g.wg.Go(g.pingLoop)
+		g.wg.Go(g.cleanupLoop)
 	})
 
 	return nil
