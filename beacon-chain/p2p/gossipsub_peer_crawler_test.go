@@ -201,7 +201,7 @@ func TestRemovePeer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cp := newTestCrawledPeers()
 			tc.prep(cp)
-			cp.removePeer(tc.target)
+			cp.removePeerByNodeId(tc.target)
 			cp.mu.RLock()
 			defer cp.mu.RUnlock()
 			require.Len(t, cp.pidsByTopic, tc.wantTopics)
@@ -261,7 +261,7 @@ func TestRemovePeerId(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cp := newTestCrawledPeers()
 			tc.prep(cp)
-			cp.removePeerId(tc.target)
+			cp.removePeerByPeerId(tc.target)
 			cp.mu.RLock()
 			defer cp.mu.RUnlock()
 			require.Len(t, cp.pidsByTopic, tc.wantTopics)

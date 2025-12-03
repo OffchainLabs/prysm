@@ -226,7 +226,7 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 				}
 
 				if s.crawler != nil {
-					s.crawler.RemovePeerId(peerID)
+					s.crawler.RemovePeerByPeerId(peerID)
 				}
 
 				priorState, err := s.peers.ConnectionState(peerID)

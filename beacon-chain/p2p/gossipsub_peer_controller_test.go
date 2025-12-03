@@ -255,7 +255,7 @@ func (m *mockCrawler) Start(gossipsubcrawler.TopicExtractor) error {
 }
 
 func (m *mockCrawler) Stop()                              {}
-func (m *mockCrawler) RemovePeerId(peer.ID)               {}
+func (m *mockCrawler) RemovePeerByPeerId(peer.ID)         {}
 func (m *mockCrawler) RemoveTopic(gossipsubcrawler.Topic) {}
 func (m *mockCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node {
 	m.mu.Lock()

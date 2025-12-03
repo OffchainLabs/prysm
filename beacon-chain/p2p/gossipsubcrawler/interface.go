@@ -20,7 +20,7 @@ type PeerFilterFunc func(*enode.Node) bool
 type Crawler interface {
 	Start(te TopicExtractor) error
 	Stop()
-	RemovePeerId(peerID peer.ID)
+	RemovePeerByPeerId(peerID peer.ID)
 	RemoveTopic(topic Topic)
 	PeersForTopic(topic Topic) []*enode.Node
 }

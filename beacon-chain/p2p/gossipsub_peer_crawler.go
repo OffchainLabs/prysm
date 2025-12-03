@@ -135,7 +135,7 @@ func (cp *crawledPeers) removeTopic(topic gossipsubcrawler.Topic) {
 	delete(cp.pidsByTopic, topic)
 }
 
-func (cp *crawledPeers) removePeerId(peerID peer.ID) {
+func (cp *crawledPeers) removePeerByPeerId(peerID peer.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -148,7 +148,7 @@ func (cp *crawledPeers) removePeerId(peerID peer.ID) {
 	cp.updateTopicsUnlocked(pnode, nil)
 }
 
-func (cp *crawledPeers) removePeer(enodeID enode.ID) {
+func (cp *crawledPeers) removePeerByNodeId(enodeID enode.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	pnode, ok := cp.peerNodeByEnode[enodeID]
@@ -335,8 +335,8 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 	return nodes
 }
 
-func (g *GossipsubPeerCrawler) RemovePeerId(peerID peer.ID) {
-	g.crawledPeers.removePeerId(peerID)
+func (g *GossipsubPeerCrawler) RemovePeerByPeerId(peerID peer.ID) {
+	g.crawledPeers.removePeerByPeerId(peerID)
 }
 
 func (g *GossipsubPeerCrawler) RemoveTopic(topic gossipsubcrawler.Topic) {
@@ -381,7 +381,7 @@ func (g *GossipsubPeerCrawler) pingLoop() {
 				defer g.pingSemaphore.Release(1)
 
 				if err := g.dv5.Ping(node); err != nil {
-					g.crawledPeers.removePeer(node.ID())
+					g.crawledPeers.removePeerByNodeId(node.ID())
 					return
 				}
 
@@ -432,7 +432,7 @@ func (g *GossipsubPeerCrawler) crawl() {
 		}
 
 		if !g.peerFilter(node) {
-			g.crawledPeers.removePeer(node.ID())
+			g.crawledPeers.removePeerByNodeId(node.ID())
 			continue
 		}
 
@@ -486,14 +486,14 @@ func (g *GossipsubPeerCrawler) cleanup() {
 	for _, p := range peers {
 		// Remove peers that no longer pass the filter
 		if !g.peerFilter(p.node) {
-			cp.removePeer(p.node.ID())
+			cp.removePeerByNodeId(p.node.ID())
 			continue
 		}
 
 		// Re-extract topics; if the extractor errors or yields none, drop the peer.
 		topics, err := g.topicExtractor(g.ctx, p.node)
 		if err != nil || len(topics) == 0 {
-			cp.removePeer(p.node.ID())
+			cp.removePeerByNodeId(p.node.ID())
 		}
 	}
 }
