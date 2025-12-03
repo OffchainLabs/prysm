@@ -132,7 +132,13 @@ var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
 		// If Capella is disabled (starting at Deneb+), run after withdrawal submission
 		var validWithdrawnEpoch primitives.Epoch
 		if e2etypes.GenesisFork() >= version.Deneb {
-			validWithdrawnEpoch = exitSubmissionEpoch + 2
+			// Exit submitted at exitSubmissionEpoch (7)
+			// Exit epoch = exitSubmissionEpoch + 1 + MAX_SEED_LOOKAHEAD
+			// Withdrawable epoch = exit epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+			// Add 1 more epoch for the sweep to process
+			exitEpoch := exitSubmissionEpoch + 1 + primitives.Epoch(params.BeaconConfig().MaxSeedLookahead)
+			withdrawableEpoch := exitEpoch + primitives.Epoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
+			validWithdrawnEpoch = withdrawableEpoch + 1
 		} else {
 			validWithdrawnEpoch = fEpoch + 1
 		}
@@ -652,8 +658,12 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 	}
 	changes := make([]*structs.SignedBLSToExecutionChange, 0)
 	// Only send half the number of changes each time, to allow us to test
-	// at the fork boundary.
+	// at the fork boundary. When starting from Deneb+ at genesis, there's no
+	// fork boundary to test so we send all changes.
 	wantedChanges := numOfExits / 2
+	if e2etypes.GenesisFork() >= version.Deneb {
+		wantedChanges = numOfExits
+	}
 	for _, idx := range exitedIndices {
 		// Exit sending more change messages.
 		if len(changes) >= wantedChanges {
