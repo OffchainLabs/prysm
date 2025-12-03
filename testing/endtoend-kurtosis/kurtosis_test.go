@@ -38,11 +38,13 @@ func NewKurtosisWrapper(t *testing.T, ctx context.Context) (*KurtosisWrapper, er
 func (kw *KurtosisWrapper) CreateEnclave(enclaveName string) error {
 	// Before creation, destroy any existing enclave with the same name
 	// for idempotency
-	enclaveInfo, err := kw.kurtosisCtx.GetEnclave(kw.ctx, enclaveName)
+	enclavesInfo, err := kw.kurtosisCtx.GetEnclaves(kw.ctx)
 	if err != nil {
-		return fmt.Errorf("failed to check for existing Kurtosis enclave: %s: %w", enclaveName, err)
+		return fmt.Errorf("failed to check for pre-existing Kurtosis enclaves: %s: %w", enclaveName, err)
 	}
-	if enclaveInfo != nil {
+	enclaveInfoMap := enclavesInfo.GetEnclavesByName()
+	_, exists := enclaveInfoMap[enclaveName]
+	if exists {
 		kw.t.Logf("Enclave with name '%s' already exists; destroying it for idempotency", enclaveName)
 		if err := kw.kurtosisCtx.DestroyEnclave(kw.ctx, enclaveName); err != nil {
 			return fmt.Errorf("failed to destroy pre-existing Kurtosis enclave: %s: %w", enclaveName, err)
