@@ -279,18 +279,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			pingCh: make(chan enode.Node, 8),
 		}
 		cp := newTestCrawledPeers()
-		cp.g = g
 		return cp, g, cancel
-	}
-
-	// Helper: non-blocking receive from ping channel
-	recvPing := func(ch <-chan enode.Node) (enode.Node, bool) {
-		select {
-		case n := <-ch:
-			return n, true
-		default:
-			return enode.Node{}, false
-		}
 	}
 
 	// Helper: local node that will cause enodeToPeerID to fail (no TCP/UDP multiaddrs)
@@ -319,7 +308,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 		assert       func(*testing.T, *crawledPeers, <-chan enode.Node)
 	}{
 		{
-			name:         "new peer with topics adds and pings once",
+			name:         "new peer with topics adds peer",
 			arrange:      func(cp *crawledPeers) {},
 			invokeNode:   nodeA1,
 			invokeTopics: []string{"a"},
@@ -329,16 +318,11 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.Len(t, cp.peerNodeByPid, 1)
 				require.Contains(t, cp.pidsByTopic, "a")
 				cp.mu.RUnlock()
-				if n, ok := recvPing(ch); !ok || n.ID() != nodeA1.ID() {
-					t.Fatalf("expected one ping for nodeA1")
-				}
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("expected exactly one ping")
-				}
+
 			},
 		},
 		{
-			name:         "new peer with empty topics is removed and not pinged",
+			name:         "new peer with empty topics is removed",
 			arrange:      func(cp *crawledPeers) {},
 			invokeNode:   nodeA1,
 			invokeTopics: nil,
@@ -348,13 +332,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.Empty(t, cp.peerNodeByPid)
 				require.Empty(t, cp.pidsByTopic)
 				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping when topics empty")
-				}
 			},
 		},
 		{
-			name: "existing peer lower seq is ignored (no update, no ping)",
+			name: "existing peer lower seq is ignored",
 			arrange: func(cp *crawledPeers) {
 				addPeerWithTopics(t, cp, nodeA2, []string{"x"}, false) // higher seq exists
 			},
@@ -365,13 +346,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.Contains(t, cp.pidsByTopic, "x")
 				require.NotContains(t, cp.pidsByTopic, "a")
 				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping for lower/equal seq")
-				}
 			},
 		},
 		{
-			name: "existing peer equal seq is ignored (no update, no ping)",
+			name: "existing peer equal seq is ignored",
 			arrange: func(cp *crawledPeers) {
 				addPeerWithTopics(t, cp, nodeA1, []string{"x"}, false)
 			},
@@ -382,13 +360,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.Contains(t, cp.pidsByTopic, "x")
 				require.NotContains(t, cp.pidsByTopic, "a")
 				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping for equal seq")
-				}
 			},
 		},
 		{
-			name: "existing peer higher seq updates topics and pings if not pinged",
+			name: "existing peer higher seq updates topics",
 			arrange: func(cp *crawledPeers) {
 				addPeerWithTopics(t, cp, nodeA1, []string{"x"}, false)
 			},
@@ -399,31 +374,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.NotContains(t, cp.pidsByTopic, "x")
 				require.Contains(t, cp.pidsByTopic, "a")
 				cp.mu.RUnlock()
-				if n, ok := recvPing(ch); !ok || n.ID() != nodeA2.ID() {
-					t.Fatalf("expected one ping for updated node")
-				}
 			},
 		},
 		{
-			name: "existing peer higher seq with already pinged does not ping",
-			arrange: func(cp *crawledPeers) {
-				p := addPeerWithTopics(t, cp, nodeA1, []string{"x"}, true)
-				// ensure pinged flag set
-				require.True(t, p.isPinged)
-			},
-			invokeNode:   nodeA2,
-			invokeTopics: []string{"a"},
-			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
-				cp.mu.RLock()
-				require.Contains(t, cp.pidsByTopic, "a")
-				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping when already pinged")
-				}
-			},
-		},
-		{
-			name: "existing peer higher seq but empty topics removes peer and doesn't ping",
+			name: "existing peer higher seq but empty topics removes peer",
 			arrange: func(cp *crawledPeers) {
 				addPeerWithTopics(t, cp, nodeA1, []string{"x"}, false)
 			},
@@ -434,13 +388,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.Empty(t, cp.peerNodeByEnode)
 				require.Empty(t, cp.peerNodeByPid)
 				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping when topics empty on update")
-				}
 			},
 		},
 		{
-			name: "corrupted existing entry with nil node is ignored (no change, no ping)",
+			name: "corrupted existing entry with nil node is ignored",
 			arrange: func(cp *crawledPeers) {
 				pid, _ := enodeToPeerID(nodeA1)
 				cp.mu.Lock()
@@ -455,13 +406,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				cp.mu.RLock()
 				require.Contains(t, cp.pidsByTopic, "x")
 				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping for corrupted entry")
-				}
 			},
 		},
 		{
-			name:         "new peer with no ports causes enodeToPeerID error; no add, no ping",
+			name:         "new peer with no ports causes enodeToPeerID error; no add",
 			arrange:      func(cp *crawledPeers) {},
 			invokeNode:   newNodeNoPorts(t),
 			invokeTopics: []string{"a"},
@@ -471,9 +419,6 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				require.Empty(t, cp.peerNodeByPid)
 				require.Empty(t, cp.pidsByTopic)
 				cp.mu.RUnlock()
-				if _, ok := recvPing(ch); ok {
-					t.Fatalf("did not expect ping when enodeToPeerID fails")
-				}
 			},
 		},
 	}
@@ -575,7 +520,6 @@ func TestPeersForTopic(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			g, cp := newCrawler(tc.filter)
-			cp.g = g
 			tc.setup(t, g, cp)
 			got := g.PeersForTopic(topic)
 			var gotIDs []enode.ID

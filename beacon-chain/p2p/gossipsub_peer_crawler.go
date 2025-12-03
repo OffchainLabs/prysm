@@ -24,8 +24,6 @@ type peerNode struct {
 }
 
 type crawledPeers struct {
-	g *GossipsubPeerCrawler
-
 	mu              sync.RWMutex
 	peerNodeByEnode map[enode.ID]*peerNode
 	peerNodeByPid   map[peer.ID]*peerNode
@@ -46,25 +44,12 @@ func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
 	existingPNode.isPinged = true
 }
 
-func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) error {
+func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) (shouldPing bool, err error) {
 	if node == nil {
-		return errors.New("node is nil")
+		return false, errors.New("node is nil")
 	}
 
-	shouldPing, err := cp.updatePeer(node, topics)
-	if err != nil {
-		return errors.Wrap(err, "failed to update peer")
-	}
-	if !shouldPing {
-		return nil
-	}
-
-	select {
-	case cp.g.pingCh <- *node:
-	case <-cp.g.ctx.Done():
-		return cp.g.ctx.Err()
-	}
-	return nil
+	return cp.updatePeer(node, topics)
 }
 
 func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (shouldPing bool, err error) {
@@ -226,8 +211,7 @@ type GossipsubPeerCrawler struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	crawlInterval time.Duration
-	crawlTimeout  time.Duration
+	crawlInterval, crawlTimeout time.Duration
 
 	crawledPeers *crawledPeers
 
@@ -303,7 +287,6 @@ func NewGossipsubPeerCrawler(
 	g.pingCh = make(chan enode.Node, 4*g.maxConcurrentPings)
 	g.pingSemaphore = semaphore.NewWeighted(int64(g.maxConcurrentPings))
 	g.crawledPeers = &crawledPeers{
-		g:               g,
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
 		pidsByTopic:     make(map[string]map[peer.ID]struct{}),
@@ -459,9 +442,17 @@ func (g *GossipsubPeerCrawler) crawl() {
 			continue
 		}
 
-		err = g.crawledPeers.updateCrawledIfNewer(node, topics)
+		shouldPing, err := g.crawledPeers.updateCrawledIfNewer(node, topics)
 		if err != nil {
 			log.WithError(err).WithField("node", node.ID()).Error("Failed to update crawled peers")
+		}
+		if !shouldPing {
+			continue
+		}
+		select {
+		case g.pingCh <- *node:
+		case <-g.ctx.Done():
+			return
 		}
 	}
 }
