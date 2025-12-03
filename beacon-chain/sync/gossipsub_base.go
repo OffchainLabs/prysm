@@ -6,7 +6,6 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -180,7 +179,7 @@ func (b *baseGossipsubTopicFamily) cleanupSubscription(topic string, sub *pubsub
 	}
 
 	if crawler := s.cfg.p2p.Crawler(); crawler != nil {
-		crawler.RemoveTopic(gossipsubcrawler.Topic(topic))
+		crawler.RemoveTopic(topic)
 	}
 	delete(b.subscriptions, topic)
 	s.subHandler.removeTopic(topic)
