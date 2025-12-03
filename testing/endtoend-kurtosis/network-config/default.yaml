@@ -4,6 +4,11 @@ participants:
     cl_image: "gcr.io/offchainlabs/prysm/beacon-chain:latest"
     vc_image: "gcr.io/offchainlabs/prysm/validator:latest"
     count: 2
+network_params:
+  preset: minimal
 additional_services:
+  - assertoor
   # TODO: Dora is added for testing purpose, remove it later
   - dora
+assertoor_params:
+  run_transaction_test: true

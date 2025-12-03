@@ -15,8 +15,10 @@ go_test(
         "//cmd/beacon-chain:oci_image_tarball",
         "//cmd/validator:oci_image_tarball",
     ],
+    eth_network = "minimal",
     tags = [
         "manual",
+        "minimal",
         "requires-network",
     ],
     deps = [
