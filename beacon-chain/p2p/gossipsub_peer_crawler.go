@@ -207,6 +207,34 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	pnode.topics = newTopics
 }
 
+func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipsubcrawler.PeerFilterFunc) []*peerNode {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+
+	peerIDs, ok := cp.pidsByTopic[topic]
+	if !ok {
+		return nil
+	}
+
+	var peerNodes []*peerNode
+	seen := make(map[enode.ID]bool)
+	for peerID := range peerIDs {
+		peerNode, ok := cp.peerNodeByPid[peerID]
+		if !ok || peerNode.node == nil {
+			continue
+		}
+		if peerNode.isPinged && filter(peerNode.node) {
+			// Skip if we've already seen this enode ID
+			if seen[peerNode.node.ID()] {
+				continue
+			}
+			seen[peerNode.node.ID()] = true
+			peerNodes = append(peerNodes, peerNode)
+		}
+	}
+	return peerNodes
+}
+
 type GossipsubPeerCrawler struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -245,7 +273,7 @@ func NewGossipsubPeerCrawler(
 	dv5 ListenerRebooter,
 	crawlTimeout time.Duration,
 	crawlInterval time.Duration,
-	maxConcurrentPings uint,
+	maxConcurrentPings int64,
 	peerFilter gossipsubcrawler.PeerFilterFunc,
 	scorer PeerScoreFunc,
 ) (*GossipsubPeerCrawler, error) {
@@ -261,7 +289,7 @@ func NewGossipsubPeerCrawler(
 	if crawlInterval <= 0 {
 		return nil, errors.New("crawl interval must be greater than 0")
 	}
-	if maxConcurrentPings == 0 {
+	if maxConcurrentPings <= 0 {
 		return nil, errors.New("max concurrent pings must be greater than 0")
 	}
 	if peerFilter == nil {
@@ -283,7 +311,7 @@ func NewGossipsubPeerCrawler(
 		scorer:        scorer,
 	}
 	g.pingCh = make(chan enode.Node, 4*maxConcurrentPings)
-	g.pingSemaphore = semaphore.NewWeighted(int64(maxConcurrentPings))
+	g.pingSemaphore = semaphore.NewWeighted(maxConcurrentPings)
 	g.crawledPeers = &crawledPeers{
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
@@ -293,30 +321,7 @@ func NewGossipsubPeerCrawler(
 }
 
 func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
-	g.crawledPeers.mu.RLock()
-	defer g.crawledPeers.mu.RUnlock()
-
-	peerIDs, ok := g.crawledPeers.pidsByTopic[topic]
-	if !ok {
-		return nil
-	}
-
-	var peerNodes []*peerNode
-	seen := make(map[enode.ID]bool)
-	for peerID := range peerIDs {
-		peerNode, ok := g.crawledPeers.peerNodeByPid[peerID]
-		if !ok {
-			continue
-		}
-		if peerNode.isPinged && g.peerFilter(peerNode.node) {
-			// Skip if we've already seen this enode ID
-			if seen[peerNode.node.ID()] {
-				continue
-			}
-			seen[peerNode.node.ID()] = true
-			peerNodes = append(peerNodes, peerNode)
-		}
-	}
+	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
 
 	// Sort peerNodes in descending order of their scores.
 	sort.Slice(peerNodes, func(i, j int) bool {

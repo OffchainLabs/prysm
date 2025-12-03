@@ -66,7 +66,7 @@ var (
 
 	crawlTimeout       = 30 * time.Second
 	crawlInterval      = 1 * time.Second
-	maxConcurrentDials = uint(256)
+	maxConcurrentDials = int64(256)
 )
 
 // Service for managing peer to peer (p2p) networking.
@@ -255,7 +255,7 @@ func (s *Service) Start() {
 			crawlTimeout,
 			crawlInterval,
 			maxConcurrentDials,
-			gossipsubcrawler.PeerFilterFunc(s.filterPeer),
+			s.filterPeer,
 			s.Peers().Scorers().Score,
 		)
 		if err != nil {
