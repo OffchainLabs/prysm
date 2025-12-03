@@ -2495,7 +2495,8 @@ func TestMissingBlobIndices(t *testing.T) {
 }
 
 func TestMissingDataColumnIndices(t *testing.T) {
-	countPlusOne := params.BeaconConfig().NumberOfColumns + 1
+	const countPlusOne = fieldparams.NumberOfColumns + 1
+
 	tooManyColumns := make(map[uint64]bool, countPlusOne)
 	for i := range countPlusOne {
 		tooManyColumns[uint64(i)] = true
