@@ -1141,7 +1141,7 @@ func verifyCrawlerPeers(t *testing.T, crawler *GossipsubPeerCrawler, s *Service,
 		results = results[:0]
 		seen := make(map[enode.ID]struct{})
 		for _, topic := range topics {
-			peers := crawler.PeersForTopic(gossipsubcrawler.Topic(topic))
+			peers := crawler.PeersForTopic(topic)
 			for _, peer := range peers {
 				if _, ok := seen[peer.ID()]; !ok {
 					seen[peer.ID()] = struct{}{}

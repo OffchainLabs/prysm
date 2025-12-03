@@ -39,7 +39,7 @@ func TestGossipsubPeerDialer_Start(t *testing.T) {
 				nodeB := newTestNode(t, "127.0.0.1", 30102)
 				return &mockCrawler{
 					consume: true,
-					peers: map[gossipsubcrawler.Topic][]*enode.Node{
+					peers: map[string][]*enode.Node{
 						"topic/a": {nodeA, nodeB},
 						"topic/b": {nodeA},
 					},
@@ -104,7 +104,7 @@ func TestGossipsubPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
 				nodeA := newTestNode(t, "127.0.0.1", 30201)
 				nodeB := newTestNode(t, "127.0.0.1", 30202)
 				return &mockCrawler{
-					peers: map[gossipsubcrawler.Topic][]*enode.Node{
+					peers: map[string][]*enode.Node{
 						"topic/a": {nodeA, nodeB},
 					},
 				}
@@ -224,7 +224,7 @@ func TestGossipsubPeerDialer_peersForTopic(t *testing.T) {
 
 			crawlerPeers, expected := tt.buildPeers(t)
 			crawler := &mockCrawler{
-				peers:   map[gossipsubcrawler.Topic][]*enode.Node{gossipsubcrawler.Topic("topic/test"): crawlerPeers},
+				peers:   map[string][]*enode.Node{"topic/test": crawlerPeers},
 				consume: false,
 			}
 			dialer := NewGossipsubPeerDialer(crawler, listPeers, func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint { return 0 })
@@ -246,7 +246,7 @@ func TestGossipsubPeerDialer_peersForTopic(t *testing.T) {
 
 type mockCrawler struct {
 	mu      sync.Mutex
-	peers   map[gossipsubcrawler.Topic][]*enode.Node
+	peers   map[string][]*enode.Node
 	consume bool
 }
 
@@ -254,10 +254,10 @@ func (m *mockCrawler) Start(gossipsubcrawler.TopicExtractor) error {
 	return nil
 }
 
-func (m *mockCrawler) Stop()                              {}
-func (m *mockCrawler) RemovePeerByPeerId(peer.ID)         {}
-func (m *mockCrawler) RemoveTopic(gossipsubcrawler.Topic) {}
-func (m *mockCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node {
+func (m *mockCrawler) Stop()                      {}
+func (m *mockCrawler) RemovePeerByPeerId(peer.ID) {}
+func (m *mockCrawler) RemoveTopic(string)         {}
+func (m *mockCrawler) PeersForTopic(topic string) []*enode.Node {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

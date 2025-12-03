@@ -20,7 +20,7 @@ type peerNode struct {
 	isPinged bool
 	node     *enode.Node
 	peerID   peer.ID
-	topics   map[gossipsubcrawler.Topic]struct{}
+	topics   map[string]struct{}
 }
 
 type crawledPeers struct {
@@ -29,7 +29,7 @@ type crawledPeers struct {
 	mu              sync.RWMutex
 	peerNodeByEnode map[enode.ID]*peerNode
 	peerNodeByPid   map[peer.ID]*peerNode
-	pidsByTopic     map[gossipsubcrawler.Topic]map[peer.ID]struct{}
+	pidsByTopic     map[string]map[peer.ID]struct{}
 }
 
 func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
@@ -94,7 +94,7 @@ func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (shouldPin
 		existingPNode = &peerNode{
 			node:   node,
 			peerID: peerID,
-			topics: make(map[gossipsubcrawler.Topic]struct{}),
+			topics: make(map[string]struct{}),
 		}
 		cp.peerNodeByEnode[enodeID] = existingPNode
 		cp.peerNodeByPid[peerID] = existingPNode
@@ -110,7 +110,7 @@ func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (shouldPin
 	return true, nil
 }
 
-func (cp *crawledPeers) removeTopic(topic gossipsubcrawler.Topic) {
+func (cp *crawledPeers) removeTopic(topic string) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -176,9 +176,9 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 		return
 	}
 
-	newTopics := make(map[gossipsubcrawler.Topic]struct{})
+	newTopics := make(map[string]struct{})
 	for _, t := range topics {
-		newTopics[gossipsubcrawler.Topic(t)] = struct{}{}
+		newTopics[t] = struct{}{}
 	}
 
 	// Remove old topics that are no longer present.
@@ -289,12 +289,12 @@ func NewGossipsubPeerCrawler(
 		g:               g,
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
-		pidsByTopic:     make(map[gossipsubcrawler.Topic]map[peer.ID]struct{}),
+		pidsByTopic:     make(map[string]map[peer.ID]struct{}),
 	}
 	return g, nil
 }
 
-func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*enode.Node {
+func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	g.crawledPeers.mu.RLock()
 	defer g.crawledPeers.mu.RUnlock()
 
@@ -339,7 +339,7 @@ func (g *GossipsubPeerCrawler) RemovePeerByPeerId(peerID peer.ID) {
 	g.crawledPeers.removePeerByPeerId(peerID)
 }
 
-func (g *GossipsubPeerCrawler) RemoveTopic(topic gossipsubcrawler.Topic) {
+func (g *GossipsubPeerCrawler) RemoveTopic(topic string) {
 	g.crawledPeers.removeTopic(topic)
 }
 

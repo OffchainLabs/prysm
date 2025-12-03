@@ -135,7 +135,7 @@ func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*en
 	}
 	missing := targetCount - peerCount
 	// this is fine as "PeersForTopic" does not return peers we are already connected to
-	newPeers := g.crawler.PeersForTopic(gossipsubcrawler.Topic(topic))
+	newPeers := g.crawler.PeersForTopic(topic)
 	if len(newPeers) > missing {
 		newPeers = newPeers[:missing]
 	}
