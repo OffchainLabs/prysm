@@ -235,6 +235,11 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipsubcrawler.P
 	return peerNodes
 }
 
+// GossipsubPeerCrawler discovers and maintains a registry of peers subscribed to gossipsub topics.
+// It uses discv5 to find peers, extracts their topic subscriptions from ENR records, and verifies
+// their reachability via ping. Only peers that have been successfully pinged are returned when
+// querying for peers on a given topic. The crawler runs three background loops: one for discovery,
+// one for ping verification, and one for periodic cleanup of stale or filtered-out peers.
 type GossipsubPeerCrawler struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -264,10 +269,24 @@ type GossipsubPeerCrawler struct {
 // those that are no longer useful.
 const cleanupInterval = 5 * time.Minute
 
-// PeerScoreFunc provides a way to calculate a score for a given peer ID.
-// Higher scores should indicate better peers.
+// PeerScoreFunc calculates a reputation score for a given peer ID.
+// Higher scores indicate more desirable peers. This function is used by PeersForTopic
+// to sort returned peers in descending order of quality, allowing callers to prioritize
+// connections to the most reliable peers.
 type PeerScoreFunc func(peer.ID) float64
 
+// NewGossipsubPeerCrawler creates a new crawler for discovering gossipsub peers.
+// The crawler uses the provided discv5 listener to discover peers and tracks their
+// topic subscriptions. Parameters:
+//   - p2pSvc: The P2P service for network operations
+//   - dv5: The discv5 listener used for peer discovery and ping verification
+//   - crawlTimeout: Maximum duration for each crawl iteration
+//   - crawlInterval: How often to run the discovery crawl
+//   - maxConcurrentPings: Limits parallel ping operations to avoid overwhelming the network
+//   - peerFilter: Determines which discovered peers should be tracked
+//   - scorer: Calculates peer quality scores for sorting results
+//
+// Returns an error if any required parameter is nil or invalid.
 func NewGossipsubPeerCrawler(
 	p2pSvc *Service,
 	dv5 ListenerRebooter,
@@ -320,10 +339,14 @@ func NewGossipsubPeerCrawler(
 	return g, nil
 }
 
+// PeersForTopic returns a list of enode records for peers subscribed to the given topic.
+// Only peers that have been successfully pinged (verified as reachable) and pass the
+// configured peer filter are included. Results are sorted in descending order by peer
+// score, so higher-quality peers appear first. Returns nil if no peers are found for
+// the topic.
 func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
 
-	// Sort peerNodes in descending order of their scores.
 	sort.Slice(peerNodes, func(i, j int) bool {
 		scoreI := g.scorer(peerNodes[i].peerID)
 		scoreJ := g.scorer(peerNodes[j].peerID)
@@ -338,15 +361,27 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	return nodes
 }
 
+// RemovePeerByPeerId removes a peer from the crawler's registry by their libp2p peer ID.
+// This also removes the peer from all topic subscriptions they were associated with.
+// If the peer is not found, this operation is a no-op.
 func (g *GossipsubPeerCrawler) RemovePeerByPeerId(peerID peer.ID) {
 	g.crawledPeers.removePeerByPeerId(peerID)
 }
 
+// RemoveTopic removes a topic and all its peer associations from the crawler.
+// Peers that were only subscribed to this topic are completely removed from the registry.
+// Peers subscribed to other topics remain tracked for those topics.
+// If the topic does not exist, this operation is a no-op.
 func (g *GossipsubPeerCrawler) RemoveTopic(topic string) {
 	g.crawledPeers.removeTopic(topic)
 }
 
-// Start runs the crawler's loops in the background.
+// Start begins the crawler's background operations. It launches three goroutines:
+// a crawl loop that periodically discovers new peers via discv5, a ping loop that
+// verifies peer reachability, and a cleanup loop that removes stale or filtered peers.
+// The provided TopicExtractor is used to determine which gossipsub topics each
+// discovered peer subscribes to. Start is idempotent; subsequent calls after the
+// first are no-ops. Returns an error if the topic extractor is nil.
 func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
 	if te == nil {
 		return errors.New("topic extractor is nil")
@@ -361,7 +396,10 @@ func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
 	return nil
 }
 
-// Stop terminates the crawler.
+// Stop terminates all background crawler operations and waits for them to complete.
+// It cancels the crawler's context, which signals all goroutines to exit, then blocks
+// until all goroutines have finished. After Stop returns, the crawler will no longer
+// discover new peers or process pings. Stop is safe to call multiple times.
 func (g *GossipsubPeerCrawler) Stop() {
 	g.cancel()
 	g.wg.Wait()
