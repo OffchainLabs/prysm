@@ -201,6 +201,8 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.LogFileName,
 			cmd.VerbosityFlag,
 			flags.DisableEphemeralLogFile,
+			cmd.LogExcludeFlag,
+			cmd.LogOnlyFlag,
 		},
 	},
 	{ // Feature flags.

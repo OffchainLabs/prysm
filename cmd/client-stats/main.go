@@ -62,6 +62,9 @@ func main() {
 			formatter := new(prefixed.TextFormatter)
 			formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 			formatter.FullTimestamp = true
+			logOnly, logExclude := cmd.ParseLogPackageFlags(ctx)
+			formatter.LogOnly = logOnly
+			formatter.LogExclude = logExclude
 			// If persistent log files are written - we disable the log messages coloring because
 			// the colors are ANSI codes and seen as gibberish in the log files.
 			formatter.DisableColors = ctx.String(cmd.LogFileName.Name) != ""

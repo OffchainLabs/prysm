@@ -36,6 +36,16 @@ var (
 		Usage: "Logging verbosity. (trace, debug, info, warn, error, fatal, panic)",
 		Value: "info",
 	}
+	// LogOnlyFlag specifies the packages for which logging is enabled.
+	LogOnlyFlag = &cli.StringSliceFlag{
+		Name:  "log-only",
+		Usage: "Enables logging only for the specified packages (comma-separated package paths). By default, all packages are logged.",
+	}
+	// LogExcludeFlag specifies the packages for which logging is disabled.
+	LogExcludeFlag = &cli.StringSliceFlag{
+		Name:  "log-exclude",
+		Usage: "Disables logging for the specified packages (comma-separated package paths).",
+	}
 	// DataDirFlag defines a path on disk where Prysm databases are stored.
 	DataDirFlag = &cli.StringFlag{
 		Name:  "datadir",
@@ -282,6 +292,25 @@ var (
 		Aliases: []string{"o"},
 	}
 )
+
+// ParseLogPackageFlags returns flattened lists for log-only and log-exclude flags.
+func ParseLogPackageFlags(ctx *cli.Context) (logOnly []string, logExclude []string) {
+	return parseCommaSeparatedEntries(ctx.StringSlice(LogOnlyFlag.Name)), parseCommaSeparatedEntries(ctx.StringSlice(LogExcludeFlag.Name))
+}
+
+func parseCommaSeparatedEntries(values []string) []string {
+	entries := make([]string, 0)
+	for _, value := range values {
+		for entry := range strings.SplitSeq(value, ",") {
+			entry = strings.TrimSpace(entry)
+			entry = strings.TrimSuffix(entry, "/")
+			if entry != "" {
+				entries = append(entries, entry)
+			}
+		}
+	}
+	return entries
+}
 
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.
 func LoadFlagsFromConfig(cliCtx *cli.Context, flags []cli.Flag) error {

@@ -104,6 +104,9 @@ type TextFormatter struct {
 	// Wrap empty fields in quotes if true.
 	QuoteEmptyFields bool
 
+	// Whether to respect the per-Package log filters.
+	RespectLogFilters bool
+
 	sync.Once
 
 	// Pad msg field with spaces on the right for display.
@@ -120,6 +123,10 @@ type TextFormatter struct {
 
 	// Timestamp format to use for display when a full timestamp is printed.
 	TimestampFormat string
+
+	// Per-Package log filters parsed from CLI flags.
+	LogOnly    []string
+	LogExclude []string
 }
 
 func getCompiledColor(main string, fallback string) func(string) string {
@@ -168,6 +175,13 @@ func (f *TextFormatter) SetColorScheme(colorScheme *ColorScheme) {
 }
 
 func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	// check if entry should be dropped based on package filters
+	if f.RespectLogFilters {
+		if shouldDrop := f.shouldDropEntry(entry); shouldDrop {
+			return nil, nil
+		}
+	}
+
 	var b *bytes.Buffer
 	keys := make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
@@ -401,6 +415,62 @@ func (f *TextFormatter) appendValue(b *bytes.Buffer, value any) (err error) {
 		_, err = fmt.Fprint(b, value)
 	}
 	return
+}
+
+func (f *TextFormatter) shouldDropEntry(entry *logrus.Entry) bool {
+	if len(f.LogOnly) == 0 && len(f.LogExclude) == 0 {
+		return false
+	}
+
+	// try to get package field
+	packageField, ok := entry.Data["package"]
+	if !ok {
+		return false
+	}
+	packageName, ok := packageField.(string)
+	if !ok {
+		return false
+	}
+
+	// get best matches. longer match means a more specific match
+	lengthOfBestIncludeMatch := bestMatchLen(packageName, f.LogOnly)
+	lengthOfBestExcludeMatch := bestMatchLen(packageName, f.LogExclude)
+
+	if len(f.LogOnly) > 0 && lengthOfBestIncludeMatch == 0 {
+		return true
+	}
+
+	if lengthOfBestExcludeMatch > 0 {
+		// if we're only excluding, then drop the entry
+		if len(f.LogOnly) == 0 {
+			return true
+		}
+
+		// if both include and exclude have matches, compare lengths. prefers include.
+		if lengthOfBestIncludeMatch >= lengthOfBestExcludeMatch {
+			return false
+		}
+		return true
+	}
+
+	return false
+}
+
+// bestMatchLen returns the length (specificity) of the most specific path that matches package name.
+// 0 means "no match".
+func bestMatchLen(pkg string, paths []string) int {
+	best := 0
+	for _, r := range paths {
+		if r == "" {
+			continue
+		}
+		if r == pkg || strings.HasPrefix(pkg, r+"/") {
+			if len(r) > best {
+				best = len(r)
+			}
+		}
+	}
+	return best
 }
 
 // This is to not silently overwrite `time`, `msg` and `level` fields when

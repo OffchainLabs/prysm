@@ -41,6 +41,21 @@ func TestLoadFlagsFromConfig(t *testing.T) {
 	require.NoError(t, os.Remove("flags_test.yaml"))
 }
 
+func TestParseLogPackageFlags(t *testing.T) {
+	set := flag.NewFlagSet("test", 0)
+	require.NoError(t, LogOnlyFlag.Apply(set))
+	require.NoError(t, LogExcludeFlag.Apply(set))
+	require.NoError(t, set.Set(LogOnlyFlag.Name, "pkg/a/,pkg/b"))
+	require.NoError(t, set.Set(LogOnlyFlag.Name, "pkg/c"))
+	require.NoError(t, set.Set(LogExcludeFlag.Name, " pkg/d ,pkg/e/ "))
+
+	ctx := cli.NewContext(&cli.App{}, set, nil)
+
+	logOnly, logExclude := ParseLogPackageFlags(ctx)
+	require.DeepEqual(t, []string{"pkg/a", "pkg/b", "pkg/c"}, logOnly)
+	require.DeepEqual(t, []string{"pkg/d", "pkg/e"}, logExclude)
+}
+
 func TestValidateNoArgs(t *testing.T) {
 	app := &cli.App{
 		Before: ValidateNoArgs,

@@ -113,6 +113,8 @@ var appFlags = []cli.Flag{
 	cmd.PubsubQueueSize,
 	cmd.DataDirFlag,
 	cmd.VerbosityFlag,
+	cmd.LogOnlyFlag,
+	cmd.LogExcludeFlag,
 	cmd.EnableTracingFlag,
 	cmd.TracingProcessNameFlag,
 	cmd.TracingEndpointFlag,
@@ -191,6 +193,10 @@ func before(ctx *cli.Context) error {
 		formatter.FullTimestamp = true
 		formatter.ForceFormatting = true
 		formatter.ForceColors = true
+		logOnly, logExclude := cmd.ParseLogPackageFlags(ctx)
+		formatter.LogOnly = logOnly
+		formatter.LogExclude = logExclude
+		formatter.RespectLogFilters = true
 
 		logrus.AddHook(&logs.WriterHook{
 			Formatter:     formatter,

@@ -170,6 +170,9 @@ func main() {
 				formatter.FullTimestamp = true
 				formatter.ForceFormatting = true
 				formatter.ForceColors = true
+				logOnly, logExclude := cmd.ParseLogPackageFlags(ctx)
+				formatter.LogOnly = logOnly
+				formatter.LogExclude = logExclude
 
 				logrus.AddHook(&logs.WriterHook{
 					Formatter:     formatter,
