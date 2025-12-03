@@ -39,7 +39,12 @@ func TestEndToEnd_Minimal(t *testing.T) {
 	)
 	require.NoError(t, err, "Failed to run ethereum package")
 
-	// Sleep for few minutes to see if everything is stable
-	t.Log("Sleeping for 5 minutes to observe the network...")
+	// Temp: Keep test running for 5 minutes to allow manual inspection of Dora UI
+	doraCtx, err := kurtosisWrapper.enclaves[MINIMAL_ENCLAVE_NAME].GetServiceContext("dora")
+	require.NoError(t, err, "Failed to get dora service context")
+
+	doraHTTPPort := doraCtx.GetPublicPorts()["http"].GetNumber()
+	t.Logf("Visit Dora UI at http://localhost:%d", doraHTTPPort)
+
 	time.Sleep(5 * time.Minute)
 }
