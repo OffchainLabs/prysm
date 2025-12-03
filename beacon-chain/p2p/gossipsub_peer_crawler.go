@@ -26,17 +26,17 @@ type peerNode struct {
 type crawledPeers struct {
 	g *GossipsubPeerCrawler
 
-	mu       sync.RWMutex
-	byEnode  map[enode.ID]*peerNode
-	byPeerId map[peer.ID]*peerNode
-	byTopic  map[gossipsubcrawler.Topic]map[peer.ID]struct{}
+	mu              sync.RWMutex
+	peerNodeByEnode map[enode.ID]*peerNode
+	peerNodeByPid   map[peer.ID]*peerNode
+	pidsByTopic     map[gossipsubcrawler.Topic]map[peer.ID]struct{}
 }
 
 func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
-	existingPNode, ok := cp.byEnode[enodeID]
+	existingPNode, ok := cp.peerNodeByEnode[enodeID]
 	if !ok {
 		return
 	}
@@ -46,40 +46,42 @@ func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
 	existingPNode.isPinged = true
 }
 
-func (cp *crawledPeers) removePeerOnPingFailure(enodeID enode.ID) {
+func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) error {
+	if node == nil {
+		return errors.New("node is nil")
+	}
+
+	shouldPing, err := cp.updatePeer(node, topics)
+	if err != nil {
+		return errors.Wrap(err, "failed to update peer")
+	}
+	if !shouldPing {
+		return nil
+	}
+
+	select {
+	case cp.g.pingCh <- *node:
+	case <-cp.g.ctx.Done():
+		return cp.g.ctx.Err()
+	}
+	return nil
+}
+
+func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (shouldPing bool, err error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
-	existingPNode, ok := cp.byEnode[enodeID]
-	if !ok {
-		return
-	}
-
-	// same idea as in "updateStatusToPinged" above.
-	// We don't want to test pings for every sequence number change for a given node as that
-	// can lead to an explosion in the number of pings the crawler needs to do.
-	// So, remove the peer when the first ping fails. If the node becomes reachable later,
-	// we will discover it during a re-crawl and ping it again to test for reachability.
-	// we're not blacklisting this peer anyways.
-	cp.updateTopicsUnlocked(existingPNode, nil)
-}
-
-func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) {
-	cp.mu.Lock()
-
 	enodeID := node.ID()
-	existingPNode, ok := cp.byEnode[enodeID]
+	existingPNode, ok := cp.peerNodeByEnode[enodeID]
 
 	if ok && existingPNode.node == nil {
 		log.WithField("enodeId", enodeID).Error("enode is nil for enodeId")
-		cp.mu.Unlock()
-		return
+		return false, errors.New("enode is nil for enodeId")
 	}
 
 	// we don't want to update enodes with a lower sequence number as they're stale records
 	if ok && existingPNode.node.Seq() >= node.Seq() {
-		cp.mu.Unlock()
-		return
+		return false, nil
 	}
 
 	if !ok {
@@ -87,16 +89,15 @@ func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) 
 		peerID, err := enodeToPeerID(node)
 		if err != nil {
 			log.WithError(err).WithField("node", node.ID()).Debug("Failed to convert enode to peer ID")
-			cp.mu.Unlock()
-			return
+			return false, errors.Wrap(err, "failed to convert enode to peer ID")
 		}
 		existingPNode = &peerNode{
 			node:   node,
 			peerID: peerID,
 			topics: make(map[gossipsubcrawler.Topic]struct{}),
 		}
-		cp.byEnode[enodeID] = existingPNode
-		cp.byPeerId[peerID] = existingPNode
+		cp.peerNodeByEnode[enodeID] = existingPNode
+		cp.peerNodeByPid[peerID] = existingPNode
 	} else {
 		existingPNode.node = node
 	}
@@ -104,16 +105,9 @@ func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) 
 	cp.updateTopicsUnlocked(existingPNode, topics)
 
 	if existingPNode.isPinged || len(topics) == 0 {
-		cp.mu.Unlock()
-		return
+		return false, nil
 	}
-	cp.mu.Unlock()
-
-	select {
-	case cp.g.pingCh <- *node:
-	case <-cp.g.ctx.Done():
-		return
-	}
+	return true, nil
 }
 
 func (cp *crawledPeers) removeTopic(topic gossipsubcrawler.Topic) {
@@ -121,14 +115,14 @@ func (cp *crawledPeers) removeTopic(topic gossipsubcrawler.Topic) {
 	defer cp.mu.Unlock()
 
 	// Get all peers subscribed to this topic
-	peers, ok := cp.byTopic[topic]
+	peers, ok := cp.pidsByTopic[topic]
 	if !ok {
 		return // Topic doesn't exist
 	}
 
 	// Remove the topic from each peer's topic list
 	for peerID := range peers {
-		if pnode, exists := cp.byPeerId[peerID]; exists {
+		if pnode, ok := cp.peerNodeByPid[peerID]; ok {
 			delete(pnode.topics, topic)
 			// remove the peer if it has no more topics left
 			if len(pnode.topics) == 0 {
@@ -138,15 +132,15 @@ func (cp *crawledPeers) removeTopic(topic gossipsubcrawler.Topic) {
 	}
 
 	// Remove the topic from byTopic map
-	delete(cp.byTopic, topic)
+	delete(cp.pidsByTopic, topic)
 }
 
 func (cp *crawledPeers) removePeerId(peerID peer.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
-	pnode, exists := cp.byPeerId[peerID]
-	if !exists {
+	pnode, ok := cp.peerNodeByPid[peerID]
+	if !ok {
 		return
 	}
 
@@ -157,8 +151,8 @@ func (cp *crawledPeers) removePeerId(peerID peer.ID) {
 func (cp *crawledPeers) removePeer(enodeID enode.ID) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	pnode, exists := cp.byEnode[enodeID]
-	if !exists {
+	pnode, ok := cp.peerNodeByEnode[enodeID]
+	if !ok {
 		return
 	}
 	cp.updateTopicsUnlocked(pnode, nil)
@@ -168,13 +162,13 @@ func (cp *crawledPeers) removePeer(enodeID enode.ID) {
 func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	// If topics is empty, remove the peer completely.
 	if len(topics) == 0 {
-		delete(cp.byPeerId, pnode.peerID)
-		delete(cp.byEnode, pnode.node.ID())
+		delete(cp.peerNodeByPid, pnode.peerID)
+		delete(cp.peerNodeByEnode, pnode.node.ID())
 		for t := range pnode.topics {
-			if peers, ok := cp.byTopic[t]; ok {
+			if peers, ok := cp.pidsByTopic[t]; ok {
 				delete(peers, pnode.peerID)
 				if len(peers) == 0 {
-					delete(cp.byTopic, t)
+					delete(cp.pidsByTopic, t)
 				}
 			}
 		}
@@ -189,11 +183,11 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 
 	// Remove old topics that are no longer present.
 	for oldTopic := range pnode.topics {
-		if _, exists := newTopics[oldTopic]; !exists {
-			if peers, ok := cp.byTopic[oldTopic]; ok {
+		if _, ok := newTopics[oldTopic]; !ok {
+			if peers, ok := cp.pidsByTopic[oldTopic]; ok {
 				delete(peers, pnode.peerID)
 				if len(peers) == 0 {
-					delete(cp.byTopic, oldTopic)
+					delete(cp.pidsByTopic, oldTopic)
 				}
 			}
 		}
@@ -201,11 +195,11 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 
 	// Add new topics.
 	for newTopic := range newTopics {
-		if _, exists := pnode.topics[newTopic]; !exists {
-			if _, ok := cp.byTopic[newTopic]; !ok {
-				cp.byTopic[newTopic] = make(map[peer.ID]struct{})
+		if _, ok := pnode.topics[newTopic]; !ok {
+			if _, ok := cp.pidsByTopic[newTopic]; !ok {
+				cp.pidsByTopic[newTopic] = make(map[peer.ID]struct{})
 			}
-			cp.byTopic[newTopic][pnode.peerID] = struct{}{}
+			cp.pidsByTopic[newTopic][pnode.peerID] = struct{}{}
 		}
 	}
 	pnode.topics = newTopics
@@ -292,10 +286,10 @@ func NewGossipsubPeerCrawler(
 	g.pingCh = make(chan enode.Node, 4*g.maxConcurrentPings)
 	g.pingSemaphore = semaphore.NewWeighted(int64(g.maxConcurrentPings))
 	g.crawledPeers = &crawledPeers{
-		g:        g,
-		byEnode:  make(map[enode.ID]*peerNode),
-		byPeerId: make(map[peer.ID]*peerNode),
-		byTopic:  make(map[gossipsubcrawler.Topic]map[peer.ID]struct{}),
+		g:               g,
+		peerNodeByEnode: make(map[enode.ID]*peerNode),
+		peerNodeByPid:   make(map[peer.ID]*peerNode),
+		pidsByTopic:     make(map[gossipsubcrawler.Topic]map[peer.ID]struct{}),
 	}
 	return g, nil
 }
@@ -304,7 +298,7 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 	g.crawledPeers.mu.RLock()
 	defer g.crawledPeers.mu.RUnlock()
 
-	peerIDs, ok := g.crawledPeers.byTopic[topic]
+	peerIDs, ok := g.crawledPeers.pidsByTopic[topic]
 	if !ok {
 		return nil
 	}
@@ -312,7 +306,7 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 	var peerNodes []*peerNode
 	seen := make(map[enode.ID]bool)
 	for peerID := range peerIDs {
-		peerNode, ok := g.crawledPeers.byPeerId[peerID]
+		peerNode, ok := g.crawledPeers.peerNodeByPid[peerID]
 		if !ok {
 			continue
 		}
@@ -387,7 +381,7 @@ func (g *GossipsubPeerCrawler) pingLoop() {
 				defer g.pingSemaphore.Release(1)
 
 				if err := g.dv5.Ping(node); err != nil {
-					g.crawledPeers.removePeerOnPingFailure(node.ID())
+					g.crawledPeers.removePeer(node.ID())
 					return
 				}
 
@@ -448,7 +442,10 @@ func (g *GossipsubPeerCrawler) crawl() {
 			continue
 		}
 
-		g.crawledPeers.updateCrawledIfNewer(node, topics)
+		err = g.crawledPeers.updateCrawledIfNewer(node, topics)
+		if err != nil {
+			log.WithError(err).WithField("node", node.ID()).Error("Failed to update crawled peers")
+		}
 	}
 }
 
@@ -480,8 +477,8 @@ func (g *GossipsubPeerCrawler) cleanup() {
 	// Snapshot current peers to evaluate without holding the lock during
 	// filter and topic extraction.
 	cp.mu.RLock()
-	peers := make([]*peerNode, 0, len(cp.byPeerId))
-	for _, p := range cp.byPeerId {
+	peers := make([]*peerNode, 0, len(cp.peerNodeByPid))
+	for _, p := range cp.peerNodeByPid {
 		peers = append(peers, p)
 	}
 	cp.mu.RUnlock()
