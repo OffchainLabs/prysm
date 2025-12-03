@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -16,7 +17,6 @@ import (
 )
 
 type peerNode struct {
-	id       enode.ID
 	isPinged bool
 	node     *enode.Node
 	peerID   peer.ID
@@ -91,7 +91,6 @@ func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) 
 			return
 		}
 		existingPNode = &peerNode{
-			id:     enodeID,
 			node:   node,
 			peerID: peerID,
 			topics: make(map[gossipsubcrawler.Topic]struct{}),
@@ -170,7 +169,7 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	// If topics is empty, remove the peer completely.
 	if len(topics) == 0 {
 		delete(cp.byPeerId, pnode.peerID)
-		delete(cp.byEnode, pnode.id)
+		delete(cp.byEnode, pnode.node.ID())
 		for t := range pnode.topics {
 			if peers, ok := cp.byTopic[t]; ok {
 				delete(peers, pnode.peerID)
@@ -319,10 +318,10 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic gossipsubcrawler.Topic) []*en
 		}
 		if peerNode.isPinged && g.peerFilter(peerNode.node) {
 			// Skip if we've already seen this enode ID
-			if seen[peerNode.id] {
+			if seen[peerNode.node.ID()] {
 				continue
 			}
-			seen[peerNode.id] = true
+			seen[peerNode.node.ID()] = true
 			peerNodes = append(peerNodes, peerNode)
 		}
 	}
@@ -490,14 +489,14 @@ func (g *GossipsubPeerCrawler) cleanup() {
 	for _, p := range peers {
 		// Remove peers that no longer pass the filter
 		if !g.peerFilter(p.node) {
-			cp.removePeer(p.id)
+			cp.removePeer(p.node.ID())
 			continue
 		}
 
 		// Re-extract topics; if the extractor errors or yields none, drop the peer.
 		topics, err := g.topicExtractor(g.ctx, p.node)
 		if err != nil || len(topics) == 0 {
-			cp.removePeer(p.id)
+			cp.removePeer(p.node.ID())
 		}
 	}
 }
@@ -506,7 +505,7 @@ func (g *GossipsubPeerCrawler) cleanup() {
 func enodeToPeerID(n *enode.Node) (peer.ID, error) {
 	info, _, err := convertToAddrInfo(n)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to convert enode to addr info: %w", err)
 	}
 	if info == nil {
 		return "", errors.New("peer info is nil")
