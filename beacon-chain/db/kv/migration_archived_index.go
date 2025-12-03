@@ -38,7 +38,7 @@ func migrateArchivedIndex(ctx context.Context, db *bolt.DB) error {
 				continue
 			}
 			blk := &ethpb.SignedBeaconBlock{}
-			if err := decode(context.TODO(), b, blk); err != nil {
+			if err := decode(ctx, b, blk); err != nil {
 				return err
 			}
 			if err := tx.Bucket(stateSlotIndicesBucket).Put(bytesutil.SlotToBytesBigEndian(blk.Block.Slot), v); err != nil {
