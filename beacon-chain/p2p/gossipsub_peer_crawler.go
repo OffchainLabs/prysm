@@ -430,14 +430,10 @@ func (g *GossipsubPeerCrawler) pingLoop() {
 }
 
 func (g *GossipsubPeerCrawler) crawlLoop() {
-	ticker := time.NewTicker(g.crawlInterval)
-	defer ticker.Stop()
-
-	g.crawl()
 	for {
+		g.crawl()
 		select {
-		case <-ticker.C:
-			g.crawl()
+		case <-time.After(g.crawlInterval):
 		case <-g.ctx.Done():
 			return
 		}
