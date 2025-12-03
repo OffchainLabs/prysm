@@ -301,17 +301,20 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 	nodeA2 := ln.Node()
 
 	tests := []struct {
-		name         string
-		arrange      func(*crawledPeers)
-		invokeNode   *enode.Node
-		invokeTopics []string
-		assert       func(*testing.T, *crawledPeers, <-chan enode.Node)
+		name               string
+		arrange            func(*crawledPeers)
+		invokeNode         *enode.Node
+		invokeTopics       []string
+		expectedShouldPing bool
+		expectErr          bool
+		assert             func(*testing.T, *crawledPeers, <-chan enode.Node)
 	}{
 		{
-			name:         "new peer with topics adds peer",
-			arrange:      func(cp *crawledPeers) {},
-			invokeNode:   nodeA1,
-			invokeTopics: []string{"a"},
+			name:               "new peer with topics adds peer and pings",
+			arrange:            func(cp *crawledPeers) {},
+			invokeNode:         nodeA1,
+			invokeTopics:       []string{"a"},
+			expectedShouldPing: true,
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
 				require.Len(t, cp.peerNodeByEnode, 1)
@@ -363,12 +366,13 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			},
 		},
 		{
-			name: "existing peer higher seq updates topics",
+			name: "existing peer higher seq updates topics and pings",
 			arrange: func(cp *crawledPeers) {
 				addPeerWithTopics(t, cp, nodeA1, []string{"x"}, false)
 			},
-			invokeNode:   nodeA2,
-			invokeTopics: []string{"a"},
+			invokeNode:         nodeA2,
+			invokeTopics:       []string{"a"},
+			expectedShouldPing: true,
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
 				require.NotContains(t, cp.pidsByTopic, "x")
@@ -400,6 +404,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				cp.pidsByTopic["x"] = map[peer.ID]struct{}{pid: {}}
 				cp.mu.Unlock()
 			},
+			expectErr:    true,
 			invokeNode:   nodeA2,
 			invokeTopics: []string{"a"},
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
@@ -413,6 +418,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			arrange:      func(cp *crawledPeers) {},
 			invokeNode:   newNodeNoPorts(t),
 			invokeTopics: []string{"a"},
+			expectErr:    true,
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
 				require.Empty(t, cp.peerNodeByEnode)
@@ -428,7 +434,13 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			cp, g, cancel := newCrawler()
 			defer cancel()
 			tc.arrange(cp)
-			cp.updateCrawledIfNewer(tc.invokeNode, tc.invokeTopics)
+			shouldPing, err := cp.updateCrawledIfNewer(tc.invokeNode, tc.invokeTopics)
+			if tc.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, shouldPing, tc.expectedShouldPing)
 			tc.assert(t, cp, g.pingCh)
 		})
 	}
