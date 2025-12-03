@@ -158,30 +158,21 @@ func (cp *crawledPeers) removePeerByNodeId(enodeID enode.ID) {
 	cp.updateTopicsUnlocked(pnode, nil)
 }
 
-// setting topics to empty will remove the peer completely.
-func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
-	// If topics is empty, remove the peer completely.
-	if len(topics) == 0 {
-		delete(cp.peerNodeByPid, pnode.peerID)
-		delete(cp.peerNodeByEnode, pnode.node.ID())
-		for t := range pnode.topics {
-			if peers, ok := cp.pidsByTopic[t]; ok {
-				delete(peers, pnode.peerID)
-				if len(peers) == 0 {
-					delete(cp.pidsByTopic, t)
-				}
+func (cp *crawledPeers) cleanupPeer(pnode *peerNode) {
+	delete(cp.peerNodeByPid, pnode.peerID)
+	delete(cp.peerNodeByEnode, pnode.node.ID())
+	for t := range pnode.topics {
+		if peers, ok := cp.pidsByTopic[t]; ok {
+			delete(peers, pnode.peerID)
+			if len(peers) == 0 {
+				delete(cp.pidsByTopic, t)
 			}
 		}
-		pnode.topics = nil // Clear topics to indicate removal.
-		return
 	}
+	pnode.topics = nil // Clear topics to indicate removal.
+}
 
-	newTopics := make(map[string]struct{})
-	for _, t := range topics {
-		newTopics[t] = struct{}{}
-	}
-
-	// Remove old topics that are no longer present.
+func (cp *crawledPeers) removeOldTopicsFromPeer(pnode *peerNode, newTopics map[string]struct{}) {
 	for oldTopic := range pnode.topics {
 		if _, ok := newTopics[oldTopic]; !ok {
 			if peers, ok := cp.pidsByTopic[oldTopic]; ok {
@@ -192,8 +183,9 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 			}
 		}
 	}
+}
 
-	// Add new topics.
+func (cp *crawledPeers) addNewTopicsToPeer(pnode *peerNode, newTopics map[string]struct{}) {
 	for newTopic := range newTopics {
 		if _, ok := pnode.topics[newTopic]; !ok {
 			if _, ok := cp.pidsByTopic[newTopic]; !ok {
@@ -202,6 +194,27 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 			cp.pidsByTopic[newTopic][pnode.peerID] = struct{}{}
 		}
 	}
+}
+
+// setting topics to empty will remove the peer completely.
+func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
+	// If topics is empty, remove the peer completely.
+	if len(topics) == 0 {
+		cp.cleanupPeer(pnode)
+		return
+	}
+
+	newTopics := make(map[string]struct{})
+	for _, t := range topics {
+		newTopics[t] = struct{}{}
+	}
+
+	// Remove old topics that are no longer present.
+	cp.removeOldTopicsFromPeer(pnode, newTopics)
+
+	// Add new topics.
+	cp.addNewTopicsToPeer(pnode, newTopics)
+
 	pnode.topics = newTopics
 }
 
