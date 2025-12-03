@@ -638,7 +638,7 @@ func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParam
 					log.WithFields(logrus.Fields{
 						"topic":  topic,
 						"actual": count,
-					}).Warning("Not enough connected peers")
+					}).Debug("Not enough connected peers")
 				}
 			}
 			if !isSubnetWithMissingPeers {
