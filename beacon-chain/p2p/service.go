@@ -66,7 +66,7 @@ var (
 
 	crawlTimeout       = 30 * time.Second
 	crawlInterval      = 1 * time.Second
-	maxConcurrentDials = 256
+	maxConcurrentDials = uint(256)
 )
 
 // Service for managing peer to peer (p2p) networking.

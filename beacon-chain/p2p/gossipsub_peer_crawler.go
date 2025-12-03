@@ -225,9 +225,8 @@ type GossipsubPeerCrawler struct {
 	peerFilter gossipsubcrawler.PeerFilterFunc
 	scorer     PeerScoreFunc
 
-	maxConcurrentPings int
-	pingCh             chan enode.Node
-	pingSemaphore      *semaphore.Weighted
+	pingCh        chan enode.Node
+	pingSemaphore *semaphore.Weighted
 
 	wg   sync.WaitGroup
 	once sync.Once
@@ -246,7 +245,7 @@ func NewGossipsubPeerCrawler(
 	dv5 ListenerRebooter,
 	crawlTimeout time.Duration,
 	crawlInterval time.Duration,
-	maxConcurrentPings int,
+	maxConcurrentPings uint,
 	peerFilter gossipsubcrawler.PeerFilterFunc,
 	scorer PeerScoreFunc,
 ) (*GossipsubPeerCrawler, error) {
@@ -262,7 +261,7 @@ func NewGossipsubPeerCrawler(
 	if crawlInterval <= 0 {
 		return nil, errors.New("crawl interval must be greater than 0")
 	}
-	if maxConcurrentPings <= 0 {
+	if maxConcurrentPings == 0 {
 		return nil, errors.New("max concurrent pings must be greater than 0")
 	}
 	if peerFilter == nil {
@@ -274,18 +273,17 @@ func NewGossipsubPeerCrawler(
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g := &GossipsubPeerCrawler{
-		ctx:                ctx,
-		cancel:             cancel,
-		crawlInterval:      crawlInterval,
-		crawlTimeout:       crawlTimeout,
-		p2pSvc:             p2pSvc,
-		dv5:                dv5,
-		maxConcurrentPings: maxConcurrentPings,
-		peerFilter:         peerFilter,
-		scorer:             scorer,
+		ctx:           ctx,
+		cancel:        cancel,
+		crawlInterval: crawlInterval,
+		crawlTimeout:  crawlTimeout,
+		p2pSvc:        p2pSvc,
+		dv5:           dv5,
+		peerFilter:    peerFilter,
+		scorer:        scorer,
 	}
-	g.pingCh = make(chan enode.Node, 4*g.maxConcurrentPings)
-	g.pingSemaphore = semaphore.NewWeighted(int64(g.maxConcurrentPings))
+	g.pingCh = make(chan enode.Node, 4*maxConcurrentPings)
+	g.pingSemaphore = semaphore.NewWeighted(int64(maxConcurrentPings))
 	g.crawledPeers = &crawledPeers{
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
