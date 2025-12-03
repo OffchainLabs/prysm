@@ -47,3 +47,20 @@ func BuildData() string {
 	}
 	return fmt.Sprintf("Prysm/%s/%s", gitTag, gitCommit)
 }
+
+// GetCommitPrefix returns the first 4 hex characters of the git commit.
+// This is used for graffiti generation per the client identification spec.
+func GetCommitPrefix() string {
+	// Ensure gitCommit is populated
+	if gitCommit == "{STABLE_GIT_COMMIT}" {
+		commit, err := exec.Command("git", "rev-parse", "HEAD").Output()
+		if err != nil {
+			return ""
+		}
+		gitCommit = strings.TrimRight(string(commit), "\r\n")
+	}
+	if len(gitCommit) < 4 {
+		return gitCommit
+	}
+	return gitCommit[:4]
+}

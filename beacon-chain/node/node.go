@@ -772,6 +772,9 @@ func (b *BeaconNode) registerPOWChainService() error {
 		return err
 	}
 
+	// Create GraffitiInfo for client version tracking in block graffiti
+	graffitiInfo := execution.NewGraffitiInfo("")
+
 	// skipcq: CRT-D0001
 	opts := append(
 		b.serviceFlagOpts.executionChainFlagOpts,
@@ -784,6 +787,7 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithFinalizedStateAtStartup(b.finalizedStateAtStartUp),
 		execution.WithJwtId(b.cliCtx.String(flags.JwtId.Name)),
 		execution.WithVerifierWaiter(b.verifyInitWaiter),
+		execution.WithGraffitiInfo(graffitiInfo),
 	)
 	web3Service, err := execution.NewService(b.ctx, opts...)
 	if err != nil {
@@ -989,6 +993,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
 		PayloadIDCache:            b.payloadIDCache,
 		LCStore:                   b.lcStore,
+		GraffitiInfo:              web3Service.GraffitiInfo(),
 	})
 
 	return b.services.RegisterService(rpcService)

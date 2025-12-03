@@ -89,7 +89,13 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 	// Set slot, graffiti, randao reveal, and parent root.
 	sBlk.SetSlot(req.Slot)
-	sBlk.SetGraffiti(req.Graffiti)
+	// Generate graffiti with client version info using flexible standard
+	if vs.GraffitiInfo != nil {
+		graffiti := vs.GraffitiInfo.GenerateGraffitiWithUserInput(req.Graffiti)
+		sBlk.SetGraffiti(graffiti[:])
+	} else {
+		sBlk.SetGraffiti(req.Graffiti)
+	}
 	sBlk.SetRandaoReveal(req.RandaoReveal)
 	sBlk.SetParentRoot(parentRoot[:])
 

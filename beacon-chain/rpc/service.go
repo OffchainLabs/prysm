@@ -125,6 +125,7 @@ type Config struct {
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 	LCStore                   *lightClient.Store
+	GraffitiInfo              *execution.GraffitiInfo
 }
 
 // NewService instantiates a new RPC service instance that will
@@ -256,6 +257,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		TrackedValidatorsCache:  s.cfg.TrackedValidatorsCache,
 		PayloadIDCache:          s.cfg.PayloadIDCache,
 		AttestationStateFetcher: s.cfg.AttestationReceiver,
+		GraffitiInfo:            s.cfg.GraffitiInfo,
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{
