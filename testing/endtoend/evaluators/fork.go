@@ -92,6 +92,10 @@ var ElectraForkTransition = e2etypes.Evaluator{
 var FuluForkTransition = e2etypes.Evaluator{
 	Name: "fulu_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Fulu
+		if e2etypes.GenesisFork() >= version.Fulu {
+			return false
+		}
 		fEpoch := params.BeaconConfig().FuluForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
