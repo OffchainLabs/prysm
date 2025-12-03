@@ -196,7 +196,11 @@ func (cp *crawledPeers) addNewTopicsToPeer(pnode *peerNode, newTopics map[string
 	}
 }
 
-// setting topics to empty will remove the peer completely.
+// updateTopicsUnlocked updates the topics associated with a peer node.
+// If the topics slice is empty, the peer is completely removed from the crawled peers.
+// Otherwise, it updates the peer's topics by removing old topics that are no longer
+// present and adding new topics. This method assumes the caller holds the lock on cp.mu.
+// If a topic has no peers after this update, it is removed from the list of topics we track peers for.
 func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	// If topics is empty, remove the peer completely.
 	if len(topics) == 0 {
