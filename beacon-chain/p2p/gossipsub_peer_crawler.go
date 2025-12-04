@@ -341,7 +341,8 @@ func NewGossipsubPeerCrawler(
 // Only peers that have been successfully pinged (verified as reachable) and pass the
 // configured peer filter are included. Results are sorted in descending order by peer
 // score, so higher-quality peers appear first. Returns nil if no peers are found for
-// the topic.
+// the topic. The returned slice should not be modified as it contains pointers to
+// internal enode records.
 func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
 
