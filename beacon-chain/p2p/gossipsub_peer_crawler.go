@@ -279,7 +279,7 @@ type PeerScoreFunc func(peer.ID) float64
 //   - p2pSvc: The P2P service for network operations
 //   - dv5: The discv5 listener used for peer discovery and ping verification
 //   - crawlTimeout: Maximum duration for each crawl iteration
-//   - crawlInterval: How often to run the discovery crawl
+//   - crawlInterval: The duration between each crawl iteration
 //   - maxConcurrentPings: Limits parallel ping operations to avoid overwhelming the network
 //   - peerFilter: Determines which discovered peers should be tracked
 //   - scorer: Calculates peer quality scores for sorting results
