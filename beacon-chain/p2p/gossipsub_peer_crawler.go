@@ -44,7 +44,7 @@ func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
 	existingPNode.isPinged = true
 }
 
-func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) (shouldPing bool, err error) {
+func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) (bool, error) {
 	if node == nil {
 		return false, errors.New("node is nil")
 	}
@@ -52,7 +52,7 @@ func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) 
 	return cp.updatePeer(node, topics)
 }
 
-func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (shouldPing bool, err error) {
+func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (bool, error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
