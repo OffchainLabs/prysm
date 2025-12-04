@@ -1150,9 +1150,12 @@ func (b *BeaconNode) registerLightClientStore() {
 }
 
 func (b *BeaconNode) registerProofGenerationService(cliCtx *cli.Context) error {
+	p2pService := b.fetchP2P()
+
 	cfg := &proofgen.Config{
 		StateNotifier: b,
 		ProofTypes:    flags.Get().ProofGenerationTypes,
+		Broadcaster:   p2pService,
 	}
 
 	pgs, err := proofgen.NewService(cliCtx.Context, cfg)

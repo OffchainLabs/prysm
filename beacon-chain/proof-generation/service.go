@@ -46,6 +46,25 @@ func (s *Service) Start() {
 						"blockRoot": fmt.Sprintf("%x", data.BlockRoot),
 						"slot":      data.Slot,
 					}).Info("New verified block processed - generating proofs")
+
+					proofs, err := s.GenerateProofs()
+					if err != nil {
+						log.WithError(err).Error("Failed to generate proofs")
+						continue
+					}
+					if proofs == nil || len(proofs) == 0 {
+						log.Info("No proofs generated for this block")
+						continue
+					}
+
+					// Broadcast the generated proofs
+					for _, proof := range proofs {
+						if err := s.cfg.Broadcaster.Broadcast(s.ctx, proof); err != nil {
+							log.WithError(err).Error("Failed to broadcast execution proof")
+						} else {
+							log.WithField("proofType", proof.ProofId).Info("Broadcasted execution proof")
+						}
+					}
 				}
 			}
 		case <-s.ctx.Done():
