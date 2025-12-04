@@ -408,7 +408,7 @@ func (g *GossipsubPeerCrawler) pingLoop() {
 		select {
 		case node := <-g.pingCh:
 			if err := g.pingSemaphore.Acquire(g.ctx, 1); err != nil {
-				return // Context cancelled, exit loop.
+				return
 			}
 			go func(node *enode.Node) {
 				defer g.pingSemaphore.Release(1)
