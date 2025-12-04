@@ -17,6 +17,7 @@ go_library(
         "error.go",
         "interfaces.go",
         "payload_id.go",
+        "proof_cache.go",
         "proposer_indices.go",
         "proposer_indices_disabled.go",  # keep
         "proposer_indices_type.go",
