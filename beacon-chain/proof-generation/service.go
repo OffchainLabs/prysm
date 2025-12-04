@@ -6,24 +6,36 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	zkvmexecutionlayer "github.com/OffchainLabs/prysm/v7/zkvm-execution-layer"
 	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.WithField("prefix", "proof-generation")
 
 type Service struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	cfg    *Config
+	ctx               context.Context
+	cancel            context.CancelFunc
+	cfg               *Config
+	GeneratorRegistry *zkvmexecutionlayer.GeneratorRegistry
 }
 
 func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
+	enabledProofTypes := make(map[primitives.ExecutionProofId]struct{})
+	for _, proofType := range cfg.ProofTypes {
+		enabledProofTypes[proofType] = struct{}{}
+	}
+
+	// Create a proof generator registry with dummy one.
+	generatorRegistry := zkvmexecutionlayer.NewGeneratorRegistryWithDummyGenerators(enabledProofTypes)
+
 	return &Service{
-		ctx:    ctx,
-		cancel: cancel,
-		cfg:    cfg,
+		ctx:               ctx,
+		cancel:            cancel,
+		cfg:               cfg,
+		GeneratorRegistry: generatorRegistry,
 	}, nil
 }
 
