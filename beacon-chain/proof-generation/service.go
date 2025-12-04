@@ -2,6 +2,7 @@ package proofgeneration
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
@@ -42,7 +43,7 @@ func (s *Service) Start() {
 					log.Error("Event feed data is not of type *statefeed.BlockProcessedData")
 				} else if data.Verified {
 					log.WithFields(logrus.Fields{
-						"blockRoot": data.BlockRoot,
+						"blockRoot": fmt.Sprintf("%x", data.BlockRoot),
 						"slot":      data.Slot,
 					}).Info("New verified block processed - generating proofs")
 				}
