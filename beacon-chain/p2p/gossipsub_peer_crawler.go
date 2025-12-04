@@ -3,7 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -345,10 +345,16 @@ func NewGossipsubPeerCrawler(
 func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
 
-	sort.Slice(peerNodes, func(i, j int) bool {
-		scoreI := g.scorer(peerNodes[i].peerID)
-		scoreJ := g.scorer(peerNodes[j].peerID)
-		return scoreI > scoreJ
+	slices.SortFunc(peerNodes, func(a, b *peerNode) int {
+		scoreA := g.scorer(a.peerID)
+		scoreB := g.scorer(b.peerID)
+		if scoreA > scoreB {
+			return -1
+		}
+		if scoreA < scoreB {
+			return 1
+		}
+		return 0
 	})
 
 	nodes := make([]*enode.Node, 0, len(peerNodes))
