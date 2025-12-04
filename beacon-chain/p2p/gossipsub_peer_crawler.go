@@ -60,7 +60,6 @@ func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (bool, err
 	existingPNode, ok := cp.peerNodeByEnode[enodeID]
 
 	if ok && existingPNode.node == nil {
-		log.WithField("enodeId", enodeID).Error("enode is nil for enodeId")
 		return false, errors.New("enode is nil for enodeId")
 	}
 
@@ -73,8 +72,7 @@ func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (bool, err
 		// this is a new peer
 		peerID, err := enodeToPeerID(node)
 		if err != nil {
-			log.WithError(err).WithField("node", node.ID()).Debug("Failed to convert enode to peer ID")
-			return false, errors.Wrap(err, "failed to convert enode to peer ID")
+			return false, fmt.Errorf("converting enode to peer ID: %w", err)
 		}
 		existingPNode = &peerNode{
 			node:   node,
@@ -541,7 +539,7 @@ func (g *GossipsubPeerCrawler) cleanup() {
 func enodeToPeerID(n *enode.Node) (peer.ID, error) {
 	info, _, err := convertToAddrInfo(n)
 	if err != nil {
-		return "", fmt.Errorf("failed to convert enode to addr info: %w", err)
+		return "", fmt.Errorf("converting enode to addr info: %w", err)
 	}
 	if info == nil {
 		return "", errors.New("peer info is nil")
