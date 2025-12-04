@@ -59,7 +59,19 @@ func (s *Service) Start() {
 						"slot":      data.Slot,
 					}).Info("New verified block processed - generating proofs")
 
-					proofs, err := s.GenerateProofs()
+					executionPayload, err := data.SignedBlock.Block().Body().Execution()
+					if err != nil {
+						log.WithError(err).Error("Failed to get execution payload from block")
+						continue
+					}
+
+					payloadHash, err := executionPayload.HashTreeRoot()
+					if err != nil {
+						log.WithError(err).Error("Failed to get execution payload hash")
+						continue
+					}
+
+					proofs, err := s.GenerateProofs(data.Slot, payloadHash[:], data.BlockRoot[:])
 					if err != nil {
 						log.WithError(err).Error("Failed to generate proofs")
 						continue

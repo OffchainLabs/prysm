@@ -7,10 +7,12 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
-func (s *Service) GenerateProofs() ([]*ethpb.ExecutionProof, error) {
+func (s *Service) GenerateProofs(slot primitives.Slot, payloadHash []byte, blockRoot []byte) ([]*ethpb.ExecutionProof, error) {
 	// Check if proofs are required for this epoch
 	// Get the list of proof types we should generate
-	requiredProofTypes := []primitives.ExecutionProofId{}
+
+	// TODO: For now, we generate all proofs configured in the service.
+	requiredProofTypes := s.cfg.ProofTypes
 
 	// Check which proofs are missing/we haven't received yet
 	// Check if we already have this proof
@@ -22,11 +24,10 @@ func (s *Service) GenerateProofs() ([]*ethpb.ExecutionProof, error) {
 		if !found {
 			return nil, fmt.Errorf("no proof generator registered for proof type %d", proofType)
 		}
-		// TODO: Pass in real slot, payloadHash, blockRoot
 		proof, err := generator.Generate(
-			0,
-			[]byte{},
-			[]byte{},
+			slot,
+			payloadHash,
+			blockRoot,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate proof for type %d: %w", proofType, err)
