@@ -78,7 +78,7 @@ const (
 	// DataColumnSubnetTopicFormat is the topic format for the data column subnet.
 	DataColumnSubnetTopicFormat = GossipProtocolAndDigest + GossipDataColumnSidecarMessage + "_%d"
 	// ExecutionProofSubnetTopicFormat is the topic format for the execution proof subnet.
-	ExecutionProofSubnetTopicFormat = GossipProtocolAndDigest + GossipExecutionProofMessage + "_%d"
+	ExecutionProofSubnetTopicFormat = GossipProtocolAndDigest + GossipExecutionProofMessage // + "_%d" (PoC only have one global topic)
 )
 
 // topic is a struct representing a single gossipsub topic.
