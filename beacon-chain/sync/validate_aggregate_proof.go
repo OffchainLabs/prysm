@@ -173,6 +173,9 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 
 	bs, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
+		if errors.Is(err, blockchain.ErrStopAttestationStateGen) {
+			return pubsub.ValidationIgnore, errors.New("ignored attestation, state generation is disabled")
+		}
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationIgnore, err
 	}

@@ -206,6 +206,11 @@ var (
 		Name:  "disable-last-epoch-targets",
 		Usage: "Disables processing of last epoch targets.",
 	}
+	// disableAttestationStateGen is a flag to skip generating attestation states from the head state path.
+	disableAttestationStateGen = &cli.BoolFlag{
+		Name:  "disable-attestation-state-gen",
+		Usage: "Skips generating attestation pre-states from the head state when handling attestations.",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -267,6 +272,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	forceHeadFlag,
 	blacklistRoots,
 	disableLastEpochTargets,
+	disableAttestationStateGen,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

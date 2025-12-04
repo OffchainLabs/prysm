@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -18,6 +19,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+var ErrStopAttestationStateGen = errors.New("stopped attestation state generation")
 
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) state.ReadOnlyBeaconState {
@@ -59,7 +62,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err != nil {
 		return nil
 	}
-	// Try if we have already set the checkpoint cache. This will be tried again if we fail here but the check is cheap anyway.
+
 	epochKey := strconv.FormatUint(uint64(c.Epoch), 10 /* base 10 */)
 	lock := async.NewMultilock(string(c.Root) + epochKey)
 	lock.Lock()
@@ -133,6 +136,10 @@ func (s *Service) getAttPreState(ctx context.Context, c *ethpb.Checkpoint) (stat
 	}
 	if !ok {
 		return nil, errors.Wrap(ErrNotCheckpoint, fmt.Sprintf("epoch %d root %#x", c.Epoch, c.Root))
+	}
+
+	if features.Get().DisableAttestationStateGen {
+		return nil, ErrStopAttestationStateGen
 	}
 
 	// Fallback to state regeneration.

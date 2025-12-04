@@ -72,6 +72,7 @@ type Flags struct {
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 	DisableLastEpochTargets    bool // Disables processing of states for attestations to old blocks.
+	DisableAttestationStateGen bool // Disables generating attestation pre-states from the head state path.
 
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
 
@@ -284,6 +285,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(disableLastEpochTargets.Name) {
 		logEnabled(disableLastEpochTargets)
 		cfg.DisableLastEpochTargets = true
+	}
+	if ctx.IsSet(disableAttestationStateGen.Name) {
+		logEnabled(disableAttestationStateGen)
+		cfg.DisableAttestationStateGen = true
 	}
 
 	if ctx.IsSet(EnableStateDiff.Name) {
