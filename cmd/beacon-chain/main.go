@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
@@ -170,14 +171,20 @@ func before(ctx *cli.Context) error {
 
 	switch format {
 	case "text":
+		// disabling logrus default output so we can control it via different hooks
+		logrus.SetOutput(io.Discard)
+
+		// create a custom formatter and hook for terminal output
 		formatter := new(prefixed.TextFormatter)
 		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
+		formatter.ForceFormatting = true
+		formatter.ForceColors = true
 
-		// If persistent log files are written - we disable the log messages coloring because
-		// the colors are ANSI codes and seen as gibberish in the log files.
-		formatter.DisableColors = ctx.String(cmd.LogFileName.Name) != ""
-		logrus.SetFormatter(formatter)
+		logrus.AddHook(&logs.WriterHook{
+			Formatter: formatter,
+			Writer:    os.Stderr,
+		})
 	case "fluentd":
 		f := joonix.NewFormatter()
 
