@@ -217,4 +217,3 @@ func privKeyOption(privkey *ecdsa.PrivateKey) libp2p.Option {
 		return cfg.Apply(libp2p.Identity(ifaceKey))
 	}
 }
-
