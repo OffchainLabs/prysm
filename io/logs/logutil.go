@@ -3,6 +3,7 @@
 package logs
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -13,11 +14,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+var ephemeralLogFileVerbosity = logrus.DebugLevel
 
 // SetLoggingLevel sets the base logging level for logrus.
 func SetLoggingLevel(lvl logrus.Level) {
-	logrus.SetLevel(lvl)
+	logrus.SetLevel(max(lvl, ephemeralLogFileVerbosity))
 }
 
 func addLogWriter(w io.Writer) {
@@ -58,6 +62,39 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 	})
 
 	logrus.Info("File logging initialized")
+	return nil
+}
+
+// ConfigureEphemeralLogFile adds a log file that keeps 24 hours of logs with >debug verbosity.
+func ConfigureEphemeralLogFile(datadirPath string, app string) error {
+	logFilePath := fmt.Sprintf("%s/logs/%s.log", datadirPath, app)
+	if err := file.MkdirAll(filepath.Dir(logFilePath)); err != nil {
+		return err
+	}
+
+	// Create formatter and writer hook
+	formatter := new(prefixed.TextFormatter)
+	formatter.TimestampFormat = "2006-01-02 15:04:05.00"
+	formatter.FullTimestamp = true
+	// If persistent log files are written - we disable the log messages coloring because
+	// the colors are ANSI codes and seen as gibberish in the log files.
+	formatter.DisableColors = true
+
+	// configure the lumberjack log writer to rotate logs every ~24 hours
+	debugWriter := &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    250, // MB, to avoid unbounded growth
+		MaxBackups: 1,   // one backup in case of size-based rotations
+		MaxAge:     1,   // days; files older than this are removed
+	}
+
+	logrus.AddHook(&WriterHook{
+		Formatter:     formatter,
+		Writer:        debugWriter,
+		AllowedLevels: logrus.AllLevels[:ephemeralLogFileVerbosity+1],
+	})
+
+	logrus.Info("Ephemeral log file initialized")
 	return nil
 }
 

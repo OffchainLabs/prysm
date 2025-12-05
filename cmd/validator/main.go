@@ -115,6 +115,7 @@ var appFlags = []cli.Flag{
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.AcceptTosFlag,
+	flags.DisableEphemeralLogFile,
 }
 
 func init() {
@@ -196,6 +197,12 @@ func main() {
 			if logFileName != "" {
 				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
+				}
+			}
+
+			if !ctx.Bool(flags.DisableEphemeralLogFile.Name) {
+				if err := logs.ConfigureEphemeralLogFile(ctx.String(cmd.DataDirFlag.Name), ctx.App.Name); err != nil {
+					log.WithError(err).Error("Failed to configure debug log file")
 				}
 			}
 

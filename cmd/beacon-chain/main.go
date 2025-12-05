@@ -155,6 +155,7 @@ var appFlags = []cli.Flag{
 	bflags.BackfillWorkerCount,
 	bflags.BackfillOldestSlot,
 	flags.BatchVerifierLimit,
+	flags.DisableEphemeralLogFile,
 }
 
 func init() {
@@ -217,6 +218,12 @@ func before(ctx *cli.Context) error {
 	if logFileName != "" {
 		if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
+		}
+	}
+
+	if !ctx.Bool(flags.DisableEphemeralLogFile.Name) {
+		if err := logs.ConfigureEphemeralLogFile(ctx.String(cmd.DataDirFlag.Name), ctx.App.Name); err != nil {
+			log.WithError(err).Error("Failed to configure debug log file")
 		}
 	}
 

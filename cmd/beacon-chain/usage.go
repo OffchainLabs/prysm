@@ -198,6 +198,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.LogFormat,
 			cmd.LogFileName,
 			cmd.VerbosityFlag,
+			flags.DisableEphemeralLogFile,
 		},
 	},
 	{ // Feature flags.
