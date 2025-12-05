@@ -24,17 +24,16 @@ func TestSortBatchDesc(t *testing.T) {
 }
 
 func TestWaitUntilReady(t *testing.T) {
-	b := batch{}.withState(batchErrRetryable)
-	require.Equal(t, time.Time{}, b.retryAfter)
-	var got time.Duration
 	wur := batchBlockUntil
+
+	var got time.Duration
 	var errDerp = errors.New("derp")
 	batchBlockUntil = func(_ context.Context, ur time.Duration, _ batch) error {
 		got = ur
 		return errDerp
 	}
-	// retries counter and timestamp are set when we mark the batch for sequencing, if it is in the retry state
-	b = b.withState(batchSequenced)
+
+	b := batch{}.withRetryableError(errors.New("test error"))
 	require.ErrorIs(t, b.waitUntilReady(t.Context()), errDerp)
 	require.Equal(t, true, retryDelay-time.Until(b.retryAfter) < time.Millisecond)
 	require.Equal(t, true, got < retryDelay && got > retryDelay-time.Millisecond)
