@@ -19,7 +19,7 @@ func newTestCrawledPeers() *crawledPeers {
 	return &crawledPeers{
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
-		pidsByTopic:     make(map[string]map[peer.ID]struct{}),
+		peersByTopic:    make(map[string]map[*peerNode]struct{}),
 	}
 }
 
@@ -124,14 +124,14 @@ func TestRemoveTopic(t *testing.T) {
 			},
 			topic: topic1,
 			check: func(t *testing.T, cp *crawledPeers) {
-				_, ok := cp.pidsByTopic[topic1]
+				_, ok := cp.peersByTopic[topic1]
 				require.False(t, ok)
 				for _, p := range cp.peerNodeByPid {
 					_, has := p.topics[topic1]
 					require.False(t, has)
 				}
 				// Ensure other topics remain
-				_, ok = cp.pidsByTopic[topic2]
+				_, ok = cp.peersByTopic[topic2]
 				require.True(t, ok)
 			},
 		},
@@ -142,7 +142,7 @@ func TestRemoveTopic(t *testing.T) {
 			},
 			topic: topic1,
 			check: func(t *testing.T, cp *crawledPeers) {
-				_, ok := cp.pidsByTopic[topic2]
+				_, ok := cp.peersByTopic[topic2]
 				require.True(t, ok)
 			},
 		},
@@ -204,7 +204,7 @@ func TestRemovePeer(t *testing.T) {
 			cp.removePeerByNodeId(tc.target)
 			cp.mu.RLock()
 			defer cp.mu.RUnlock()
-			require.Len(t, cp.pidsByTopic, tc.wantTopics)
+			require.Len(t, cp.peersByTopic, tc.wantTopics)
 		})
 	}
 }
@@ -264,7 +264,7 @@ func TestRemovePeerId(t *testing.T) {
 			cp.removePeerByPeerId(tc.target)
 			cp.mu.RLock()
 			defer cp.mu.RUnlock()
-			require.Len(t, cp.pidsByTopic, tc.wantTopics)
+			require.Len(t, cp.peersByTopic, tc.wantTopics)
 			require.Len(t, cp.peerNodeByPid, tc.wantPeers)
 		})
 	}
@@ -319,7 +319,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				cp.mu.RLock()
 				require.Len(t, cp.peerNodeByEnode, 1)
 				require.Len(t, cp.peerNodeByPid, 1)
-				require.Contains(t, cp.pidsByTopic, "a")
+				require.Contains(t, cp.peersByTopic, "a")
 				cp.mu.RUnlock()
 
 			},
@@ -333,7 +333,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				cp.mu.RLock()
 				require.Empty(t, cp.peerNodeByEnode)
 				require.Empty(t, cp.peerNodeByPid)
-				require.Empty(t, cp.pidsByTopic)
+				require.Empty(t, cp.peersByTopic)
 				cp.mu.RUnlock()
 			},
 		},
@@ -346,8 +346,8 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			invokeTopics: []string{"a", "b"},
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
-				require.Contains(t, cp.pidsByTopic, "x")
-				require.NotContains(t, cp.pidsByTopic, "a")
+				require.Contains(t, cp.peersByTopic, "x")
+				require.NotContains(t, cp.peersByTopic, "a")
 				cp.mu.RUnlock()
 			},
 		},
@@ -360,8 +360,8 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			invokeTopics: []string{"a"},
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
-				require.Contains(t, cp.pidsByTopic, "x")
-				require.NotContains(t, cp.pidsByTopic, "a")
+				require.Contains(t, cp.peersByTopic, "x")
+				require.NotContains(t, cp.peersByTopic, "a")
 				cp.mu.RUnlock()
 			},
 		},
@@ -375,8 +375,8 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			expectedShouldPing: true,
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
-				require.NotContains(t, cp.pidsByTopic, "x")
-				require.Contains(t, cp.pidsByTopic, "a")
+				require.NotContains(t, cp.peersByTopic, "x")
+				require.Contains(t, cp.peersByTopic, "a")
 				cp.mu.RUnlock()
 			},
 		},
@@ -399,9 +399,10 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			arrange: func(cp *crawledPeers) {
 				pid, _ := enodeToPeerID(nodeA1)
 				cp.mu.Lock()
-				cp.peerNodeByEnode[nodeA1.ID()] = &peerNode{node: nil, peerID: pid, topics: map[string]struct{}{"x": {}}}
-				cp.peerNodeByPid[pid] = cp.peerNodeByEnode[nodeA1.ID()]
-				cp.pidsByTopic["x"] = map[peer.ID]struct{}{pid: {}}
+				pn := &peerNode{node: nil, peerID: pid, topics: map[string]struct{}{"x": {}}}
+				cp.peerNodeByEnode[nodeA1.ID()] = pn
+				cp.peerNodeByPid[pid] = pn
+				cp.peersByTopic["x"] = map[*peerNode]struct{}{pn: {}}
 				cp.mu.Unlock()
 			},
 			expectErr:    true,
@@ -409,7 +410,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			invokeTopics: []string{"a"},
 			assert: func(t *testing.T, cp *crawledPeers, ch <-chan enode.Node) {
 				cp.mu.RLock()
-				require.Contains(t, cp.pidsByTopic, "x")
+				require.Contains(t, cp.peersByTopic, "x")
 				cp.mu.RUnlock()
 			},
 		},
@@ -423,7 +424,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 				cp.mu.RLock()
 				require.Empty(t, cp.peerNodeByEnode)
 				require.Empty(t, cp.peerNodeByPid)
-				require.Empty(t, cp.pidsByTopic)
+				require.Empty(t, cp.peersByTopic)
 				cp.mu.RUnlock()
 			},
 		},
@@ -497,14 +498,14 @@ func TestPeersForTopic(t *testing.T) {
 			wantIDs: []enode.ID{n1.ID()},
 		},
 		{
-			name:   "ignores dangling peerID in byTopic",
+			name:   "ignores peerNode with nil node",
 			filter: func(*enode.Node) bool { return true },
 			setup: func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers) {
 				addPeerWithTopics(t, cp, n1, []string{string(topic)}, true)
-				// Add n2 then remove it from byPeerId to simulate dangling
+				// Add n2 then set its node to nil to simulate corrupted entry
 				p2 := addPeerWithTopics(t, cp, n2, []string{string(topic)}, true)
 				cp.mu.Lock()
-				delete(cp.peerNodeByPid, p2.peerID)
+				p2.node = nil
 				cp.mu.Unlock()
 			},
 			wantIDs: []enode.ID{n1.ID()},
@@ -581,13 +582,12 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 		g.crawledPeers.mu.RLock()
 		defer g.crawledPeers.mu.RUnlock()
 
-		peersByTopic := g.crawledPeers.pidsByTopic[topic]
-		if len(peersByTopic) == 0 {
+		peers := g.crawledPeers.peersByTopic[topic]
+		if len(peers) == 0 {
 			return false
 		}
 		// Fetch the single peerNode and check status
-		for pid := range peersByTopic {
-			pn := g.crawledPeers.peerNodeByPid[pid]
+		for pn := range peers {
 			if pn == nil {
 				return false
 			}
@@ -623,9 +623,9 @@ func TestCrawler_SkipsPeer_WhenFilterRejects(t *testing.T) {
 	// Verify no peers are indexed, because filter rejected the node
 	g.crawledPeers.mu.RLock()
 	defer g.crawledPeers.mu.RUnlock()
-	if len(g.crawledPeers.peerNodeByEnode) != 0 || len(g.crawledPeers.peerNodeByPid) != 0 || len(g.crawledPeers.pidsByTopic) != 0 {
+	if len(g.crawledPeers.peerNodeByEnode) != 0 || len(g.crawledPeers.peerNodeByPid) != 0 || len(g.crawledPeers.peersByTopic) != 0 {
 		t.Fatalf("expected no peers indexed, got byEnode=%d byPeerId=%d byTopic=%d",
-			len(g.crawledPeers.peerNodeByEnode), len(g.crawledPeers.peerNodeByPid), len(g.crawledPeers.pidsByTopic))
+			len(g.crawledPeers.peerNodeByEnode), len(g.crawledPeers.peerNodeByPid), len(g.crawledPeers.peersByTopic))
 	}
 }
 
@@ -659,7 +659,7 @@ func TestCrawler_RemoveTopic_RemovesTopicFromIndexes(t *testing.T) {
 	g.crawledPeers.mu.RLock()
 	defer g.crawledPeers.mu.RUnlock()
 
-	if _, ok := g.crawledPeers.pidsByTopic[topic1]; ok {
+	if _, ok := g.crawledPeers.peersByTopic[topic1]; ok {
 		t.Fatalf("expected topic1 to be removed from byTopic")
 	}
 

@@ -27,7 +27,7 @@ type crawledPeers struct {
 	mu              sync.RWMutex
 	peerNodeByEnode map[enode.ID]*peerNode
 	peerNodeByPid   map[peer.ID]*peerNode
-	pidsByTopic     map[string]map[peer.ID]struct{}
+	peersByTopic    map[string]map[*peerNode]struct{}
 }
 
 func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
@@ -98,24 +98,22 @@ func (cp *crawledPeers) removeTopic(topic string) {
 	defer cp.mu.Unlock()
 
 	// Get all peers subscribed to this topic
-	peers, ok := cp.pidsByTopic[topic]
+	peers, ok := cp.peersByTopic[topic]
 	if !ok {
 		return // Topic doesn't exist
 	}
 
 	// Remove the topic from each peer's topic list
-	for peerID := range peers {
-		if pnode, ok := cp.peerNodeByPid[peerID]; ok {
-			delete(pnode.topics, topic)
-			// remove the peer if it has no more topics left
-			if len(pnode.topics) == 0 {
-				cp.updateTopicsUnlocked(pnode, nil)
-			}
+	for pnode := range peers {
+		delete(pnode.topics, topic)
+		// remove the peer if it has no more topics left
+		if len(pnode.topics) == 0 {
+			cp.updateTopicsUnlocked(pnode, nil)
 		}
 	}
 
 	// Remove the topic from byTopic map
-	delete(cp.pidsByTopic, topic)
+	delete(cp.peersByTopic, topic)
 }
 
 func (cp *crawledPeers) removePeerByPeerId(peerID peer.ID) {
@@ -145,10 +143,10 @@ func (cp *crawledPeers) cleanupPeer(pnode *peerNode) {
 	delete(cp.peerNodeByPid, pnode.peerID)
 	delete(cp.peerNodeByEnode, pnode.node.ID())
 	for t := range pnode.topics {
-		if peers, ok := cp.pidsByTopic[t]; ok {
-			delete(peers, pnode.peerID)
+		if peers, ok := cp.peersByTopic[t]; ok {
+			delete(peers, pnode)
 			if len(peers) == 0 {
-				delete(cp.pidsByTopic, t)
+				delete(cp.peersByTopic, t)
 			}
 		}
 	}
@@ -158,10 +156,10 @@ func (cp *crawledPeers) cleanupPeer(pnode *peerNode) {
 func (cp *crawledPeers) removeOldTopicsFromPeer(pnode *peerNode, newTopics map[string]struct{}) {
 	for oldTopic := range pnode.topics {
 		if _, ok := newTopics[oldTopic]; !ok {
-			if peers, ok := cp.pidsByTopic[oldTopic]; ok {
-				delete(peers, pnode.peerID)
+			if peers, ok := cp.peersByTopic[oldTopic]; ok {
+				delete(peers, pnode)
 				if len(peers) == 0 {
-					delete(cp.pidsByTopic, oldTopic)
+					delete(cp.peersByTopic, oldTopic)
 				}
 			}
 		}
@@ -171,10 +169,10 @@ func (cp *crawledPeers) removeOldTopicsFromPeer(pnode *peerNode, newTopics map[s
 func (cp *crawledPeers) addNewTopicsToPeer(pnode *peerNode, newTopics map[string]struct{}) {
 	for newTopic := range newTopics {
 		if _, ok := pnode.topics[newTopic]; !ok {
-			if _, ok := cp.pidsByTopic[newTopic]; !ok {
-				cp.pidsByTopic[newTopic] = make(map[peer.ID]struct{})
+			if _, ok := cp.peersByTopic[newTopic]; !ok {
+				cp.peersByTopic[newTopic] = make(map[*peerNode]struct{})
 			}
-			cp.pidsByTopic[newTopic][pnode.peerID] = struct{}{}
+			cp.peersByTopic[newTopic][pnode] = struct{}{}
 		}
 	}
 }
@@ -209,25 +207,24 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipsubcrawler.P
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 
-	peerIDs, ok := cp.pidsByTopic[topic]
+	peers, ok := cp.peersByTopic[topic]
 	if !ok {
 		return nil
 	}
 
 	var peerNodes []*peerNode
 	seen := make(map[enode.ID]bool)
-	for peerID := range peerIDs {
-		peerNode, ok := cp.peerNodeByPid[peerID]
-		if !ok || peerNode.node == nil {
+	for pnode := range peers {
+		if pnode.node == nil {
 			continue
 		}
-		if peerNode.isPinged && filter(peerNode.node) {
+		if pnode.isPinged && filter(pnode.node) {
 			// Skip if we've already seen this enode ID
-			if seen[peerNode.node.ID()] {
+			if seen[pnode.node.ID()] {
 				continue
 			}
-			seen[peerNode.node.ID()] = true
-			peerNodes = append(peerNodes, peerNode)
+			seen[pnode.node.ID()] = true
+			peerNodes = append(peerNodes, pnode)
 		}
 	}
 	return peerNodes
@@ -332,7 +329,7 @@ func NewGossipsubPeerCrawler(
 	g.crawledPeers = &crawledPeers{
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
-		pidsByTopic:     make(map[string]map[peer.ID]struct{}),
+		peersByTopic:    make(map[string]map[*peerNode]struct{}),
 	}
 	return g, nil
 }
