@@ -167,8 +167,15 @@ func before(ctx *cli.Context) error {
 		return errors.Wrap(err, "failed to load flags from config file")
 	}
 
-	format := ctx.String(cmd.LogFormat.Name)
+	// determine log verbosity
+	verbosity := ctx.String(cmd.VerbosityFlag.Name)
+	verbosityLevel, err := logrus.ParseLevel(verbosity)
+	if err != nil {
+		return err
+	}
+	logs.SetLoggingLevel(verbosityLevel)
 
+	format := ctx.String(cmd.LogFormat.Name)
 	switch format {
 	case "text":
 		// disabling logrus default output so we can control it via different hooks
@@ -182,8 +189,9 @@ func before(ctx *cli.Context) error {
 		formatter.ForceColors = true
 
 		logrus.AddHook(&logs.WriterHook{
-			Formatter: formatter,
-			Writer:    os.Stderr,
+			Formatter:     formatter,
+			Writer:        os.Stderr,
+			AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
 		})
 	case "fluentd":
 		f := joonix.NewFormatter()
@@ -207,7 +215,7 @@ func before(ctx *cli.Context) error {
 
 	logFileName := ctx.String(cmd.LogFileName.Name)
 	if logFileName != "" {
-		if err := logs.ConfigurePersistentLogging(logFileName, format); err != nil {
+		if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
 		}
 	}
@@ -288,7 +296,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 	if err != nil {
 		return err
 	}
-	logrus.SetLevel(level)
+
 	// Set libp2p logger to only panic logs for the info level.
 	golog.SetAllLoggers(golog.LevelPanic)
 

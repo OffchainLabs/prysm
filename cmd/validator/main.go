@@ -147,6 +147,14 @@ func main() {
 				return err
 			}
 
+			// determine log verbosity
+			verbosity := ctx.String(cmd.VerbosityFlag.Name)
+			verbosityLevel, err := logrus.ParseLevel(verbosity)
+			if err != nil {
+				return err
+			}
+			logs.SetLoggingLevel(verbosityLevel)
+
 			logFileName := ctx.String(cmd.LogFileName.Name)
 
 			format := ctx.String(cmd.LogFormat.Name)
@@ -163,8 +171,9 @@ func main() {
 				formatter.ForceColors = true
 
 				logrus.AddHook(&logs.WriterHook{
-					Formatter: formatter,
-					Writer:    os.Stderr,
+					Formatter:     formatter,
+					Writer:        os.Stderr,
+					AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
 				})
 			case "fluentd":
 				f := joonix.NewFormatter()
@@ -185,7 +194,7 @@ func main() {
 			}
 
 			if logFileName != "" {
-				if err := logs.ConfigurePersistentLogging(logFileName, format); err != nil {
+				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
 				}
 			}

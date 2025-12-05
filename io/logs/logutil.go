@@ -15,13 +15,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// SetLoggingLevel sets the base logging level for logrus.
+func SetLoggingLevel(lvl logrus.Level) {
+	logrus.SetLevel(lvl)
+}
+
 func addLogWriter(w io.Writer) {
 	mw := io.MultiWriter(logrus.StandardLogger().Out, w)
 	logrus.SetOutput(mw)
 }
 
 // ConfigurePersistentLogging adds a log-to-file writer. File content is identical to stdout.
-func ConfigurePersistentLogging(logFileName string, format string) error {
+func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Level) error {
 	logrus.WithField("logFileName", logFileName).Info("Logs will be made persistent")
 	if err := file.MkdirAll(filepath.Dir(logFileName)); err != nil {
 		return err
@@ -47,8 +52,9 @@ func ConfigurePersistentLogging(logFileName string, format string) error {
 	formatter.DisableColors = true
 
 	logrus.AddHook(&WriterHook{
-		Formatter: formatter,
-		Writer:    f,
+		Formatter:     formatter,
+		Writer:        f,
+		AllowedLevels: logrus.AllLevels[:lvl+1],
 	})
 
 	logrus.Info("File logging initialized")
