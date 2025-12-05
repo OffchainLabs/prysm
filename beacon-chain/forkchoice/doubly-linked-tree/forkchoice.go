@@ -642,8 +642,12 @@ func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch
 	if !ok || node == nil {
 		return [32]byte{}, ErrNilNode
 	}
-	if slots.ToEpoch(node.slot) >= epoch && node.parent != nil {
-		node = node.parent
+	if slots.ToEpoch(node.slot) >= epoch {
+		if node.parent != nil {
+			node = node.parent
+		} else {
+			return f.store.finalizedDependentRoot, nil
+		}
 	}
 	return node.root, nil
 }
