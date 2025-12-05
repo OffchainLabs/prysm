@@ -240,7 +240,7 @@ func (f *ForkChoice) IsViableForCheckpoint(cp *forkchoicetypes.Checkpoint) (bool
 	if node.slot == epochStart {
 		return true, nil
 	}
-	if !features.Get().DisableLastEpochTargets {
+	if !features.Get().IgnoreUnviableAttestations {
 		// Allow any node from the checkpoint epoch - 1 to be viable.
 		nodeEpoch := slots.ToEpoch(node.slot)
 		if nodeEpoch+1 == cp.Epoch {
