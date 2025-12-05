@@ -224,6 +224,11 @@ var (
 		Name:  "enable-upnp",
 		Usage: "Enable the service (Beacon chain or Validator) to use UPnP when possible.",
 	}
+	// EnableAutoNATFlag enables AutoNAT v2 service for per-address reachability detection.
+	EnableAutoNATFlag = &cli.BoolFlag{
+		Name:  "enable-autonat",
+		Usage: "Enable AutoNAT v2 service for per-address reachability detection. Helps diagnose connectivity issues behind NAT/firewalls.",
+	}
 	// ConfigFileFlag specifies the filepath to load flag values.
 	ConfigFileFlag = &cli.StringFlag{
 		Name:  "config-file",

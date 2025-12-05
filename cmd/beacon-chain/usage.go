@@ -82,6 +82,7 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			cmd.BootstrapNode,
 			cmd.EnableUPnPFlag,
+			cmd.EnableAutoNATFlag,
 			cmd.NoDiscovery,
 			cmd.P2PAllowList,
 			cmd.P2PDenyList,
