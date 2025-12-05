@@ -52,7 +52,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	}
 
 	// Start at the first archived point after old finalized slot, stop before current finalized slot.
-	// Jump directly between archived points instead of iterating slot-by-slot.
+	// Jump directly between archived points.
 	for slot := startSlot; slot < fSlot; slot += s.slotsPerArchivedPoint {
 		if ctx.Err() != nil {
 			return ctx.Err()
