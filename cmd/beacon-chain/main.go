@@ -154,6 +154,7 @@ var appFlags = []cli.Flag{
 	bflags.BackfillWorkerCount,
 	bflags.BackfillOldestSlot,
 	flags.BatchVerifierLimit,
+	flags.ZkvmGenerationProofTypeFlag,
 }
 
 func init() {

@@ -278,6 +278,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	forceHeadFlag,
 	blacklistRoots,
 	disableLastEpochTargets,
+	EnableZkvmFlag,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
