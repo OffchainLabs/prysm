@@ -649,6 +649,19 @@ func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch
 			return f.store.finalizedDependentRoot, nil
 		}
 	}
+
+	// E2E TEST: Log the dependent root result for verification
+	// The returned root should be from epoch-1, not from epoch or later
+	returnedEpoch := slots.ToEpoch(node.slot)
+	if returnedEpoch >= epoch {
+		// BUG DETECTED: returning a root from the wrong epoch
+		logrus.WithFields(logrus.Fields{
+			"requestedEpoch": epoch,
+			"returnedSlot":   node.slot,
+			"returnedEpoch":  returnedEpoch,
+			"returnedRoot":   fmt.Sprintf("%#x", node.root),
+		}).Error("E2E_DEPENDENT_ROOT_BUG: dependent root is from wrong epoch")
+	}
 	return node.root, nil
 }
 

@@ -94,6 +94,7 @@ go_test(
         "component_handler_test.go",
         "endtoend_setup_test.go",
         "endtoend_test.go",
+        "minimal_dependent_root_e2e_test.go",
         "minimal_e2e_test.go",
         "minimal_slashing_e2e_test.go",
         "slasher_simulator_e2e_test.go",
