@@ -23,6 +23,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -94,6 +95,7 @@ type config struct {
 	slashingPool            slashings.PoolManager
 	syncCommsPool           synccommittee.Pool
 	blsToExecPool           blstoexec.PoolManager
+	execProofsPool          execproof.PoolManager
 	chain                   blockchainService
 	initialSync             Checker
 	blockNotifier           blockfeed.Notifier
@@ -143,6 +145,8 @@ type Service struct {
 	rateLimiter                      *limiter
 	seenBlockLock                    sync.RWMutex
 	seenBlockCache                   *lru.Cache
+	seenExecutionProofLock           sync.RWMutex
+	seenExecutionProofCache          *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
 	seenDataColumnCache              *slotAwareCache
