@@ -7,7 +7,6 @@ go_library(
         "config.go",
         "dummy_proof_gen.go",
         "dummy_proof_verifier.go",
-        "proof_cache.go",
         "proof_generator.go",
         "proof_verification.go",
         "registry_proof_gen.go",
@@ -18,7 +17,6 @@ go_library(
     deps = [
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
-        "@com_github_hashicorp_golang_lru//:go_default_library",
     ],
 )
 
