@@ -39,6 +39,9 @@ func (b *SSZBytes) HashTreeRootWith(hh *ssz.Hasher) error {
 // BeaconBlockByRootsReq specifies the block by roots request type.
 type BeaconBlockByRootsReq [][fieldparams.RootLength]byte
 
+// ExecutionProofByRootsReq specifies the execution proof by roots request type.
+type ExecutionProofByRootsReq [][fieldparams.RootLength]byte
+
 // MarshalSSZTo marshals the block by roots request with the provided byte slice.
 func (r *BeaconBlockByRootsReq) MarshalSSZTo(dst []byte) ([]byte, error) {
 	marshalledObj, err := r.MarshalSSZ()
