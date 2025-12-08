@@ -5,6 +5,7 @@ load("@prysm//tools/go:def.bzl", "go_test")
 # gazelle:exclude mainnet_scenario_e2e_test.go
 # gazelle:exclude minimal_scenario_e2e_test.go
 # gazelle:exclude minimal_builder_e2e_test.go
+# gazelle:exclude minimal_e2e_merge_queue_test.go
 
 # Presubmit tests represent the group of endtoend tests that are run on pull
 # requests and must be passing before a pull request can merge.
@@ -15,6 +16,18 @@ test_suite(
     ],
     tests = [
         ":go_default_test",
+    ],
+)
+
+# Merge queue tests are run when a PR is added to the merge queue. These
+# include comprehensive fork transition tests to ensure all fork upgrades work.
+test_suite(
+    name = "merge_queue",
+    tags = [
+        "manual",
+    ],
+    tests = [
+        ":go_fork_transition_test",
     ],
 )
 
@@ -97,6 +110,40 @@ go_test(
         "minimal_e2e_test.go",
         "minimal_slashing_e2e_test.go",
         "slasher_simulator_e2e_test.go",
+    ],
+    args = ["-test.v"],
+    data = [
+        "//:prysm_sh",
+        "//cmd/beacon-chain",
+        "//cmd/validator",
+        "//config/params:custom_configs",
+        "//tools/bootnode",
+        "@com_github_ethereum_go_ethereum//cmd/geth",
+        "@web3signer",
+    ],
+    eth_network = "minimal",
+    flaky = True,
+    shard_count = 2,
+    tags = [
+        "e2e",
+        "manual",
+        "minimal",
+        "requires-network",
+    ],
+    deps = common_deps,
+)
+
+# Merge queue e2e test. Runs full fork transitions for comprehensive validation.
+# gazelle:ignore
+go_test(
+    name = "go_fork_transition_test",
+    size = "large",
+    testonly = True,
+    srcs = [
+        "component_handler_test.go",
+        "endtoend_setup_test.go",
+        "endtoend_test.go",
+        "minimal_e2e_merge_queue_test.go",
     ],
     args = ["-test.v"],
     data = [
