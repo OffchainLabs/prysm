@@ -580,12 +580,14 @@ func (s *Service) subscribeReachabilityEvents() {
 			case <-s.ctx.Done():
 				return
 			case ev := <-sub.Out():
-				e := ev.(event.EvtHostReachableAddrsChanged)
-				log.WithFields(logrus.Fields{
-					"reachable":   multiaddrsToStrings(e.Reachable),
-					"unreachable": multiaddrsToStrings(e.Unreachable),
-					"unknown":     multiaddrsToStrings(e.Unknown),
-				}).Info("Address reachability changed")
+
+				if event, ok := ev.(event.EvtHostReachableAddrsChanged); ok {
+					log.WithFields(logrus.Fields{
+						"reachable":   multiaddrsToStrings(event.Reachable),
+						"unreachable": multiaddrsToStrings(event.Unreachable),
+						"unknown":     multiaddrsToStrings(event.Unknown),
+					}).Info("Address reachability changed")
+				}
 			}
 		}
 	}()
