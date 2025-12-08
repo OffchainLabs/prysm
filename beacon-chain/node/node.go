@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
@@ -116,7 +117,7 @@ type BeaconNode struct {
 	GenesisProviders         []genesis.Provider
 	CheckpointInitializer    checkpoint.Initializer
 	forkChoicer              forkchoice.ForkChoicer
-	clockWaiter              startup.ClockWaiter
+	ClockWaiter              startup.ClockWaiter
 	BackfillOpts             []backfill.ServiceOption
 	initialSyncComplete      chan struct{}
 	BlobStorage              *filesystem.BlobStorage
@@ -129,6 +130,7 @@ type BeaconNode struct {
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
 	ConfigOptions            []params.Option
+	SyncNeedsWaiter          func() (das.SyncNeeds, error)
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -193,7 +195,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	params.LogDigests(params.BeaconConfig())
 
 	synchronizer := startup.NewClockSynchronizer()
-	beacon.clockWaiter = synchronizer
+	beacon.ClockWaiter = synchronizer
 	beacon.forkChoicer = doublylinkedtree.New()
 
 	depositAddress, err := execution.DepositContractAddress()
@@ -233,12 +235,13 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 
 	beacon.lhsp = &verification.LazyHeadStateProvider{}
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
+		beacon.ClockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
 		backfill.WithVerifierWaiter(beacon.verifyInitWaiter),
 		backfill.WithInitSyncWaiter(initSyncWaiter(ctx, beacon.initialSyncComplete)),
+		backfill.WithSyncNeedsWaiter(beacon.SyncNeedsWaiter),
 	)
 
 	if err := registerServices(cliCtx, beacon, synchronizer, bfs); err != nil {
@@ -664,7 +667,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		StateNotifier:         b,
 		DB:                    b.db,
 		StateGen:              b.stateGen,
-		ClockWaiter:           b.clockWaiter,
+		ClockWaiter:           b.ClockWaiter,
 	})
 	if err != nil {
 		return err
@@ -706,7 +709,7 @@ func (b *BeaconNode) registerSlashingPoolService() error {
 		return err
 	}
 
-	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
+	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.ClockWaiter, chainService.CurrentSlot))
 	return b.services.RegisterService(s)
 }
 
@@ -828,7 +831,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlasherAttestationsFeed(b.slasherAttestationsFeed),
 		regularsync.WithSlasherBlockHeadersFeed(b.slasherBlockHeadersFeed),
 		regularsync.WithReconstructor(web3Service),
-		regularsync.WithClockWaiter(b.clockWaiter),
+		regularsync.WithClockWaiter(b.ClockWaiter),
 		regularsync.WithInitialSyncComplete(initialSyncComplete),
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
@@ -859,7 +862,8 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 		P2P:                 b.fetchP2P(),
 		StateNotifier:       b,
 		BlockNotifier:       b,
-		ClockWaiter:         b.clockWaiter,
+		ClockWaiter:         b.ClockWaiter,
+		SyncNeedsWaiter:     b.SyncNeedsWaiter,
 		InitialSyncComplete: complete,
 		BlobStorage:         b.BlobStorage,
 		DataColumnStorage:   b.DataColumnStorage,
@@ -890,7 +894,7 @@ func (b *BeaconNode) registerSlasherService() error {
 		SlashingPoolInserter:    b.slashingsPool,
 		SyncChecker:             syncService,
 		HeadStateFetcher:        chainService,
-		ClockWaiter:             b.clockWaiter,
+		ClockWaiter:             b.ClockWaiter,
 	})
 	if err != nil {
 		return err
@@ -983,7 +987,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		MaxMsgSize:                maxMsgSize,
 		BlockBuilder:              b.fetchBuilderService(),
 		Router:                    router,
-		ClockWaiter:               b.clockWaiter,
+		ClockWaiter:               b.ClockWaiter,
 		BlobStorage:               b.BlobStorage,
 		DataColumnStorage:         b.DataColumnStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
@@ -1128,7 +1132,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
 	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
-	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.clockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
+	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.DataColumnStorage, b.ClockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")
 	}

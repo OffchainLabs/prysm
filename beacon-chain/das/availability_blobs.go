@@ -11,9 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -24,12 +23,13 @@ var (
 // This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreBlob struct {
-	store    *filesystem.BlobStorage
-	cache    *blobCache
-	verifier BlobBatchVerifier
+	store        *filesystem.BlobStorage
+	cache        *blobCache
+	verifier     BlobBatchVerifier
+	shouldRetain RetentionChecker
 }
 
-var _ AvailabilityStore = &LazilyPersistentStoreBlob{}
+var _ AvailabilityChecker = &LazilyPersistentStoreBlob{}
 
 // BlobBatchVerifier enables LazyAvailabilityStore to manage the verification process
 // going from ROBlob->VerifiedROBlob, while avoiding the decision of which individual verifications
@@ -42,11 +42,12 @@ type BlobBatchVerifier interface {
 
 // NewLazilyPersistentStore creates a new LazilyPersistentStore. This constructor should always be used
 // when creating a LazilyPersistentStore because it needs to initialize the cache under the hood.
-func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchVerifier) *LazilyPersistentStoreBlob {
+func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchVerifier, shouldRetain RetentionChecker) *LazilyPersistentStoreBlob {
 	return &LazilyPersistentStoreBlob{
-		store:    store,
-		cache:    newBlobCache(),
-		verifier: verifier,
+		store:        store,
+		cache:        newBlobCache(),
+		verifier:     verifier,
+		shouldRetain: shouldRetain,
 	}
 }
 
@@ -66,9 +67,6 @@ func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ..
 			}
 		}
 	}
-	if !params.WithinDAPeriod(slots.ToEpoch(sidecars[0].Slot()), slots.ToEpoch(current)) {
-		return nil
-	}
 	key := keyFromSidecar(sidecars[0])
 	entry := s.cache.ensure(key)
 	for _, blobSidecar := range sidecars {
@@ -81,8 +79,17 @@ func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ..
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
-	blockCommitments, err := commitmentsToCheck(b, current)
+func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
+	for _, b := range blks {
+		if err := s.checkOne(ctx, current, b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+	blockCommitments, err := commitmentsToCheck(b, s.shouldRetain)
 	if err != nil {
 		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())
 	}
@@ -112,7 +119,7 @@ func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current
 		ok := errors.As(err, &me)
 		if ok {
 			fails := me.Failures()
-			lf := make(log.Fields, len(fails))
+			lf := make(logrus.Fields, len(fails))
 			for i := range fails {
 				lf[fmt.Sprintf("fail_%d", i)] = fails[i].Error()
 			}
@@ -131,13 +138,12 @@ func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current
 	return nil
 }
 
-func commitmentsToCheck(b blocks.ROBlock, current primitives.Slot) ([][]byte, error) {
+func commitmentsToCheck(b blocks.ROBlock, shouldRetain RetentionChecker) ([][]byte, error) {
 	if b.Version() < version.Deneb {
 		return nil, nil
 	}
 
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUEST
-	if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(current)) {
+	if !shouldRetain(b.Block().Slot()) {
 		return nil, nil
 	}
 
