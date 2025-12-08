@@ -104,7 +104,8 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	}
 
 	if !s.slasherEnabled {
-		// Verify this the first attestation received for the participating validator for the slot.
+		// Verify this the first attestation received for the participating validator for the slot. This verification is here to return early if we've already seen this attestation.
+		// This verification is carried again later after all other validations to avoid TOCTOU issues.
 		if s.hasSeenUnaggregatedAtt(attKey) {
 			return pubsub.ValidationIgnore, nil
 		}
@@ -228,7 +229,13 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		Data: eventData,
 	})
 
-	s.setSeenUnaggregatedAtt(attKey)
+	if s.hasSeenUnaggregatedAtt(attKey) {
+		// We do a second check here in case another goroutine added it while we were validating
+		// the attestation.  In that case, we just ignore this attestation.
+		return pubsub.ValidationIgnore, nil
+	} else {
+		s.setSeenUnaggregatedAtt(attKey)
+	}
 
 	// Attach final validated attestation to the message for further pipeline use
 	msg.ValidatorData = attForValidation
