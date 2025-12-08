@@ -89,7 +89,7 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		require.Equal(t, groupCount, storedCount)
 	})
 
-	t.Run("update with higher group count", func(t *testing.T) {
+	t.Run("update with higher group count and higher slot", func(t *testing.T) {
 		const (
 			initialSlot  = primitives.Slot(100)
 			initialCount = uint64(5)
@@ -110,6 +110,65 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
 		require.Equal(t, earliestSlot, storedSlot)
 		require.Equal(t, groupCount, storedCount)
+	})
+
+	t.Run("update with higher group count and lower slot should preserve higher slot", func(t *testing.T) {
+		// This is the bug scenario: when switching from normal mode to semi-supernode,
+		// the incoming slot might be lower than the stored slot, but we should preserve
+		// the higher stored slot to avoid advertising that we can serve data we don't have.
+		const (
+			initialSlot  = primitives.Slot(1835523) // Higher stored slot
+			initialCount = uint64(10)
+			earliestSlot = primitives.Slot(1835456) // Lower incoming slot (e.g., from head slot)
+			groupCount   = uint64(64)               // Increasing custody (e.g., semi-supernode)
+		)
+
+		db := setupDB(t)
+
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// When custody count increases but slot is lower, the higher slot should be preserved
+		slot, count, err := db.UpdateCustodyInfo(ctx, earliestSlot, groupCount)
+		require.NoError(t, err)
+		require.Equal(t, initialSlot, slot, "earliestAvailableSlot should not decrease when custody group count increases")
+		require.Equal(t, groupCount, count)
+
+		// Verify in the database
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, initialSlot, storedSlot, "stored slot should be the higher value")
+		require.Equal(t, groupCount, storedCount)
+	})
+
+	t.Run("supernode upgrade near fork epoch with EarliestSlot lower than stored", func(t *testing.T) {
+		// This scenario occurs when:
+		// 1. Node starts with checkpoint sync at slot X
+		// 2. Node runs with custody group count from validators
+		// 3. Node restarts near fork epoch with --supernode flag
+		// 4. EarliestSlot() returns a lower slot than the stored earliestAvailableSlot
+		// The bug was that earliestAvailableSlot would incorrectly decrease.
+		const (
+			initialSlot       = primitives.Slot(1835523) // Stored from prior operation
+			initialCount      = uint64(10)               // e.g., validators' custody requirement
+			forkEpochSlot     = primitives.Slot(1835456) // Fork epoch slot (lower)
+			supernodeGroupCnt = uint64(128)              // Supernode custody all groups
+		)
+
+		db := setupDB(t)
+
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Simulate restarting with --supernode where EarliestSlot() returns fork epoch slot
+		slot, count, err := db.UpdateCustodyInfo(ctx, forkEpochSlot, supernodeGroupCnt)
+		require.NoError(t, err)
+		require.Equal(t, initialSlot, slot, "earliestAvailableSlot should not decrease on supernode upgrade")
+		require.Equal(t, supernodeGroupCnt, count)
+
+		// Verify the stored values
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, initialSlot, storedSlot)
+		require.Equal(t, supernodeGroupCnt, storedCount)
 	})
 
 	t.Run("update with lower group count should not update", func(t *testing.T) {

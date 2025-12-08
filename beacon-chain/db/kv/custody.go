@@ -15,7 +15,8 @@ import (
 )
 
 // UpdateCustodyInfo atomically updates the custody group count only if it is greater than the stored one.
-// In this case, it also updates the earliest available slot with the provided value.
+// When the custody group count increases, the earliest available slot is set to the maximum of the
+// incoming value and the stored value, ensuring the slot never decreases when increasing custody.
 // It returns the (potentially updated) custody group count and earliest available slot.
 func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateCustodyInfo")
@@ -46,10 +47,16 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 			return nil
 		}
 
-		storedGroupCount, storedEarliestAvailableSlot = custodyGroupCount, earliestAvailableSlot
+		// When custody group count increases, ensure earliestAvailableSlot never decreases.
+		// This prevents losing availability for data we already have when switching modes
+		// (e.g., from normal to semi-supernode or supernode).
+		newEarliestAvailableSlot := max(earliestAvailableSlot, storedEarliestAvailableSlot)
+
+		storedGroupCount = custodyGroupCount
+		storedEarliestAvailableSlot = newEarliestAvailableSlot
 
 		// Store the earliest available slot.
-		bytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
+		bytes := bytesutil.Uint64ToBytesBigEndian(uint64(newEarliestAvailableSlot))
 		if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
 			return errors.Wrap(err, "put earliest available slot")
 		}
