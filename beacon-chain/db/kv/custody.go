@@ -47,24 +47,22 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 			return nil
 		}
 
-		// When custody group count increases, ensure earliestAvailableSlot never decreases.
-		// This prevents losing availability for data we already have when switching modes
-		// (e.g., from normal to semi-supernode or supernode).
-		newEarliestAvailableSlot := max(earliestAvailableSlot, storedEarliestAvailableSlot)
-
+		// Update the custody group count.
 		storedGroupCount = custodyGroupCount
-		storedEarliestAvailableSlot = newEarliestAvailableSlot
-
-		// Store the earliest available slot.
-		bytes := bytesutil.Uint64ToBytesBigEndian(uint64(newEarliestAvailableSlot))
-		if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
-			return errors.Wrap(err, "put earliest available slot")
-		}
-
-		// Store the custody group count.
-		bytes = bytesutil.Uint64ToBytesBigEndian(custodyGroupCount)
+		bytes := bytesutil.Uint64ToBytesBigEndian(custodyGroupCount)
 		if err := bucket.Put(groupCountKey, bytes); err != nil {
 			return errors.Wrap(err, "put custody group count")
+		}
+
+		// Only update earliestAvailableSlot if the incoming value is higher.
+		// This prevents losing availability for data we already have when switching modes
+		// (e.g., from normal to semi-supernode or supernode).
+		if earliestAvailableSlot > storedEarliestAvailableSlot {
+			storedEarliestAvailableSlot = earliestAvailableSlot
+			bytes = bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))
+			if err := bucket.Put(earliestAvailableSlotKey, bytes); err != nil {
+				return errors.Wrap(err, "put earliest available slot")
+			}
 		}
 
 		return nil
