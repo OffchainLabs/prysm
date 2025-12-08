@@ -64,8 +64,9 @@ SECONDS_PER_ETH1_BLOCK: 2 # Override for e2e tests
 MIN_VALIDATOR_WITHDRAWABILITY_DELAY: 1
 # [customized] higher frequency of committee turnover and faster time to acceptable voluntary exit
 SHARD_COMMITTEE_PERIOD: 4 # Override for e2e tests
-# [customized] process deposits more quickly, but insecure
-ETH1_FOLLOW_DISTANCE: 8 # Override for e2e tests
+# [customized] Post-merge, the follow distance is less critical since finality is guaranteed by the beacon chain.
+# Setting to 1 avoids timing issues during e2e startup when the EL has few blocks.
+ETH1_FOLLOW_DISTANCE: 1 # Override for e2e tests
 
 
 # Validator cycle

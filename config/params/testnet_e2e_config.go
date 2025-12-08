@@ -17,7 +17,9 @@ const (
 func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig := MinimalSpecConfig()
 	e2eConfig.DepositContractAddress = "0x4242424242424242424242424242424242424242"
-	e2eConfig.Eth1FollowDistance = 8
+	// Post-merge, the follow distance is less critical since finality is guaranteed by the beacon chain.
+	// Setting to 1 avoids timing issues during e2e startup when the EL has few blocks.
+	e2eConfig.Eth1FollowDistance = 1
 
 	// Misc.
 	e2eConfig.MinGenesisActiveValidatorCount = 256
@@ -73,7 +75,9 @@ func E2ETestConfig() *BeaconChainConfig {
 func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig := MainnetConfig()
 	e2eConfig.DepositContractAddress = "0x4242424242424242424242424242424242424242"
-	e2eConfig.Eth1FollowDistance = 8
+	// Post-merge, the follow distance is less critical since finality is guaranteed by the beacon chain.
+	// Setting to 1 avoids timing issues during e2e startup when the EL has few blocks.
+	e2eConfig.Eth1FollowDistance = 1
 
 	// Misc.
 	e2eConfig.MinGenesisActiveValidatorCount = 256
