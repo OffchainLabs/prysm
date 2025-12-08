@@ -4,13 +4,16 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -286,11 +289,63 @@ var (
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.
 func LoadFlagsFromConfig(cliCtx *cli.Context, flags []cli.Flag) error {
 	if cliCtx.IsSet(ConfigFileFlag.Name) {
+		configPath := cliCtx.String(ConfigFileFlag.Name)
+		// Warn about unknown keys in the config file
+		warnOnUnknownConfigKeys(configPath, flags)
+
 		if err := altsrc.InitInputSourceWithContext(flags, altsrc.NewYamlSourceFromFlagFunc(ConfigFileFlag.Name))(cliCtx); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+var configLog = logrus.WithField("prefix", "config")
+
+// warnOnUnknownConfigKeys parses the config file and logs warnings for any keys
+// that don't correspond to known flags. This helps users identify typos or
+// misconfigured options in their config files.
+func warnOnUnknownConfigKeys(configPath string, flags []cli.Flag) {
+	unknownKeys := findUnknownConfigKeys(configPath, flags)
+	for _, key := range unknownKeys {
+		configLog.Warnf("Unknown config option %q in config file %s - this option will be ignored", key, configPath)
+	}
+}
+
+// findUnknownConfigKeys returns a list of keys from the config file that don't
+// match any known flag names. This is exported for testing purposes.
+func findUnknownConfigKeys(configPath string, flags []cli.Flag) []string {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		// If we can't read the file, let altsrc handle the error
+		return nil
+	}
+
+	var configMap map[string]interface{}
+	if err := yaml.Unmarshal(data, &configMap); err != nil {
+		// If we can't parse the YAML, let altsrc handle the error
+		return nil
+	}
+
+	// Build a set of known flag names and aliases
+	knownFlags := make(map[string]bool)
+	for _, f := range flags {
+		for _, name := range f.Names() {
+			knownFlags[name] = true
+		}
+	}
+
+	// Find unknown keys
+	var unknownKeys []string
+	for key := range configMap {
+		if !knownFlags[key] {
+			unknownKeys = append(unknownKeys, key)
+		}
+	}
+
+	// Sort for consistent output
+	slices.Sort(unknownKeys)
+	return unknownKeys
 }
 
 // ValidateNoArgs insures that the application is not run with erroneous arguments or flags.
