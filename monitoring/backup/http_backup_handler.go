@@ -22,7 +22,7 @@ func Handler(bk Exporter, outputDir string) func(http.ResponseWriter, *http.Requ
 
 		_, permissionOverride := r.URL.Query()["permissionOverride"]
 
-		if err := bk.Backup(context.Background(), outputDir, permissionOverride); err != nil {
+		if err := bk.Backup(r.Context(), outputDir, permissionOverride); err != nil {
 			log.WithError(err).Error("Failed to create backup")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
