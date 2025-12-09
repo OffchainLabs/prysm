@@ -863,7 +863,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 			want: func() *proposer.Settings {
 				return nil
 			},
-			wantErr: "failed to unmarshal yaml file",
+			wantErr: "failed to unmarshal json file",
 		},
 		{
 			name: "Both URL and Dir flags used resulting in error",
@@ -891,7 +891,7 @@ func TestProposerSettingsLoader(t *testing.T) {
 			want: func() *proposer.Settings {
 				return nil
 			},
-			wantErr: "failed to unmarshal yaml file",
+			wantErr: "failed to unmarshal json file",
 		},
 	}
 	for _, tt := range tests {

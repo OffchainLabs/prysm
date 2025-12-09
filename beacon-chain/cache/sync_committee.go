@@ -8,11 +8,11 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/fifo"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -33,7 +33,7 @@ var (
 // SyncCommitteeCache utilizes a FIFO cache to sufficiently cache validator position within sync committee.
 // It is thread safe with concurrent read write.
 type SyncCommitteeCache struct {
-	cache   *cache.FIFO
+	cache   *fifo.FIFO
 	lock    sync.RWMutex
 	cleared *atomic.Uint64
 }
@@ -64,7 +64,7 @@ func (s *SyncCommitteeCache) Clear() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.cleared.Add(1)
-	s.cache = cache.NewFIFO(keyFn)
+	s.cache = fifo.New(keyFn)
 }
 
 // CurrentPeriodPositions returns current period positions of validator indices with respect with

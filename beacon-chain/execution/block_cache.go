@@ -7,10 +7,10 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/container/fifo"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -61,8 +61,8 @@ func heightKeyFn(obj any) (string, error) {
 
 // headerCache struct with two queues for looking up by hash or by block height.
 type headerCache struct {
-	hashCache   *cache.FIFO
-	heightCache *cache.FIFO
+	hashCache   *fifo.FIFO
+	heightCache *fifo.FIFO
 	lock        sync.RWMutex
 }
 
@@ -70,8 +70,8 @@ type headerCache struct {
 // memory.
 func newHeaderCache() *headerCache {
 	return &headerCache{
-		hashCache:   cache.NewFIFO(hashKeyFn),
-		heightCache: cache.NewFIFO(heightKeyFn),
+		hashCache:   fifo.New(hashKeyFn),
+		heightCache: fifo.New(heightKeyFn),
 	}
 }
 
@@ -154,7 +154,7 @@ func (c *headerCache) AddHeader(hdr *types.HeaderInfo) error {
 }
 
 // trim the FIFO queue to the maxSize.
-func trim(queue *cache.FIFO, maxSize uint64) {
+func trim(queue *fifo.FIFO, maxSize uint64) {
 	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
 		// #nosec G104 popProcessNoopFunc never returns an error
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
