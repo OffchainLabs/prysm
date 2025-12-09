@@ -98,7 +98,7 @@ func createTestGenesisState(t *testing.T, numValidators uint64, slot primitives.
 	}
 
 	// Initialize validators and balances
-	for i := uint64(0); i < numValidators; i++ {
+	for i := range numValidators {
 		pb.Validators[i] = &ethpb.Validator{
 			PublicKey:                  deposits[i].Data.PublicKey,
 			WithdrawalCredentials:      deposits[i].Data.WithdrawalCredentials,

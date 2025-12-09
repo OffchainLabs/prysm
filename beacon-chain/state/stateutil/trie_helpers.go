@@ -61,7 +61,7 @@ func ReturnTrieLayerVariable(elements [][32]byte, length uint64) [][]*[32]byte {
 	buffer := bytes.NewBuffer([]byte{})
 	buffer.Grow(64)
 
-	for i := uint8(0); i < depth; i++ {
+	for i := range depth {
 		layerLen := len(layers[i])
 		oddNodeLength := layerLen%2 == 1
 		if oddNodeLength {

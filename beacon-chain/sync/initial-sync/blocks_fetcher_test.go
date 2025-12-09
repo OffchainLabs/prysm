@@ -388,7 +388,7 @@ func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 
 	t.Run("unblock on context cancellation", func(t *testing.T) {
 		fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
-		for i := 0; i < maxPendingRequests; i++ {
+		for range maxPendingRequests {
 			assert.NoError(t, fetcher.scheduleRequest(t.Context(), 1, blockBatchLimit))
 		}
 
@@ -516,7 +516,10 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 			p2p:   p2p,
 		})
 
-	_, peerIDs := p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, slots.ToEpoch(mc.HeadSlot()))
+	_, peerIDs := p2p.Peers().BestFinalized(slots.ToEpoch(mc.HeadSlot()))
+	if len(peerIDs) > params.BeaconConfig().MaxPeersToSync {
+		peerIDs = peerIDs[:params.BeaconConfig().MaxPeersToSync]
+	}
 	req := &ethpb.BeaconBlocksByRangeRequest{
 		StartSlot: 1,
 		Step:      1,
@@ -1366,8 +1369,8 @@ func TestFetchSidecars(t *testing.T) {
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
+		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 		cfg := params.BeaconConfig()
-		numberOfColumns := cfg.NumberOfColumns
 		samplesPerSlot := cfg.SamplesPerSlot
 
 		// Define "now" to be one epoch after genesis time + retention period.

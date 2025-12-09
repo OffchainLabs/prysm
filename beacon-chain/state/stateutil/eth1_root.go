@@ -18,7 +18,7 @@ func Eth1DataRootWithHasher(eth1Data *ethpb.Eth1Data) ([32]byte, error) {
 	}
 
 	fieldRoots := make([][32]byte, 3)
-	for i := 0; i < len(fieldRoots); i++ {
+	for i := range fieldRoots {
 		fieldRoots[i] = [32]byte{}
 	}
 
@@ -42,7 +42,7 @@ func Eth1DataRootWithHasher(eth1Data *ethpb.Eth1Data) ([32]byte, error) {
 // Eth1DatasRoot returns the hash tree root of input `eth1Datas`.
 func Eth1DatasRoot(eth1Datas []*ethpb.Eth1Data) ([32]byte, error) {
 	eth1VotesRoots := make([][32]byte, 0, len(eth1Datas))
-	for i := 0; i < len(eth1Datas); i++ {
+	for i := range eth1Datas {
 		eth1, err := Eth1DataRootWithHasher(eth1Datas[i])
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "could not compute eth1data merkleization")

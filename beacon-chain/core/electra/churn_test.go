@@ -28,7 +28,7 @@ func createValidatorsWithTotalActiveBalance(totalBal primitives.Gwei) []*eth.Val
 			ActivationEpoch:       primitives.Epoch(0),
 			EffectiveBalance:      params.BeaconConfig().MinActivationBalance,
 			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
-			PublicKey:             []byte(fmt.Sprintf("val_%d", i)),
+			PublicKey:             fmt.Appendf(nil, "val_%d", i),
 			WithdrawableEpoch:     params.BeaconConfig().FarFutureEpoch,
 			WithdrawalCredentials: wd,
 		}

@@ -24,7 +24,7 @@ const rateLimitingAmount = 1
 var notDataColumnsByRangeIdentifiersError = errors.New("not data columns by range identifiers")
 
 // dataColumnSidecarsByRangeRPCHandler looks up the request data columns from the database from a given start slot index
-func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.DataColumnSidecarsByRangeHandler")
 	defer span.End()
 

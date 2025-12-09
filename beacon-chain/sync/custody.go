@@ -92,16 +92,30 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 	cfg := params.BeaconConfig()
 
-	if flags.Get().SubscribeAllDataSubnets {
+	if flags.Get().Supernode {
 		return cfg.NumberOfCustodyGroups, nil
 	}
 
+	// Calculate validator custody requirements
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
 	if err != nil {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(cfg.CustodyRequirement, validatorsCustodyRequirement), nil
+	effectiveCustodyRequirement := max(cfg.CustodyRequirement, validatorsCustodyRequirement)
+
+	// If we're not in semi-supernode mode, just use the effective requirement.
+	if !flags.Get().SemiSupernode {
+		return effectiveCustodyRequirement, nil
+	}
+
+	// Semi-supernode mode custodies the minimum custody groups required for reconstruction.
+	// This is future-proof and works correctly even if custody groups != columns.
+	semiSupernodeTarget, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+	if err != nil {
+		return 0, errors.Wrap(err, "minimum custody group count")
+	}
+	return max(effectiveCustodyRequirement, semiSupernodeTarget), nil
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the

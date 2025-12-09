@@ -55,7 +55,7 @@ var AllNodesHaveSameHead = e2etypes.Evaluator{
 
 func healthzCheck(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	count := len(conns)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.PrysmBeaconNodeMetricsPort+i))
 		if err != nil {
 			// Continue if the connection fails, regular flake.
@@ -74,7 +74,7 @@ func healthzCheck(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) erro
 		time.Sleep(connTimeDelay)
 	}
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", e2e.TestParams.Ports.ValidatorMetricsPort+i))
 		if err != nil {
 			// Continue if the connection fails, regular flake.
@@ -157,7 +157,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		return err
 	}
 
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		if headEpochs[0] != headEpochs[i] {
 			return fmt.Errorf(
 				"received conflicting head epochs on node %d, expected %d, received %d",

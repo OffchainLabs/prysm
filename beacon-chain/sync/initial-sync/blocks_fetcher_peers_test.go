@@ -252,7 +252,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			peerStats := make(map[peer.ID]int, len(tt.want))
 			var filteredPIDs []peer.ID
 			var err error
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				filteredPIDs = fetcher.filterPeers(t.Context(), peerIDs, tt.args.peersPercentage)
 				if len(filteredPIDs) <= 1 {
 					break

@@ -116,7 +116,7 @@ func (node *Node) Start(ctx context.Context) error {
 
 	// give the miner start a couple of tries, since the p2p networking check is flaky
 	var retryErr error
-	for retries := 0; retries < 3; retries++ {
+	for retries := range 3 {
 		retryErr = nil
 		log.Infof("Starting eth1 node %d, attempt %d with flags: %s", node.index, retries, strings.Join(args[2:], " "))
 		runCmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe

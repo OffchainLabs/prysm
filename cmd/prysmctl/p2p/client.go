@@ -107,7 +107,7 @@ func (c *client) MetadataSeq() uint64 {
 // When done, the caller must Close() or Reset() on the stream.
 func (c *client) Send(
 	ctx context.Context,
-	message interface{},
+	message any,
 	baseTopic string,
 	pid peer.ID,
 ) (corenet.Stream, error) {
@@ -154,7 +154,7 @@ func (c *client) retrievePeerAddressesViaRPC(ctx context.Context, beaconEndpoint
 		return nil, errors.New("no beacon RPC endpoints specified")
 	}
 	peers := make([]string, 0)
-	for i := 0; i < len(beaconEndpoints); i++ {
+	for i := range beaconEndpoints {
 		conn, err := grpc.Dial(beaconEndpoints[i], grpc.WithInsecure())
 		if err != nil {
 			return nil, err

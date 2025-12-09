@@ -22,9 +22,9 @@ import (
 type reqOption func(*http.Request)
 
 type RestHandler interface {
-	Get(ctx context.Context, endpoint string, resp interface{}) error
+	Get(ctx context.Context, endpoint string, resp any) error
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
-	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp interface{}) error
+	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
 	HttpClient() *http.Client
 	Host() string
@@ -70,7 +70,7 @@ func (c *BeaconApiRestHandler) Host() string {
 
 // Get sends a GET request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
-func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp interface{}) error {
+func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp any) error {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -150,7 +150,7 @@ func (c *BeaconApiRestHandler) Post(
 	apiEndpoint string,
 	headers map[string]string,
 	data *bytes.Buffer,
-	resp interface{},
+	resp any,
 ) error {
 	if data == nil {
 		return errors.New("data is nil")
@@ -249,7 +249,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 	return body, httpResp.Header, nil
 }
 
-func decodeResp(httpResp *http.Response, resp interface{}) error {
+func decodeResp(httpResp *http.Response, resp any) error {
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)

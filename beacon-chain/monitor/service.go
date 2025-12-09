@@ -3,7 +3,7 @@ package monitor
 import (
 	"context"
 	"errors"
-	"sort"
+	"slices"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
@@ -108,7 +108,7 @@ func (s *Service) Start() {
 	for idx := range s.TrackedValidators {
 		tracked = append(tracked, idx)
 	}
-	sort.Slice(tracked, func(i, j int) bool { return tracked[i] < tracked[j] })
+	slices.Sort(tracked)
 
 	log.WithFields(logrus.Fields{
 		"validatorIndices": tracked,

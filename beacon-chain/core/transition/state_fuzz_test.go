@@ -17,7 +17,7 @@ func TestGenesisBeaconState_1000(t *testing.T) {
 	deposits := make([]*ethpb.Deposit, 300000)
 	var genesisTime uint64
 	eth1Data := &ethpb.Eth1Data{}
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(&deposits)
 		fuzzer.Fuzz(&genesisTime)
 		fuzzer.Fuzz(eth1Data)
@@ -40,7 +40,7 @@ func TestOptimizedGenesisBeaconState_1000(t *testing.T) {
 	preState, err := state_native.InitializeFromProtoUnsafePhase0(&ethpb.BeaconState{})
 	require.NoError(t, err)
 	eth1Data := &ethpb.Eth1Data{}
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(&genesisTime)
 		fuzzer.Fuzz(eth1Data)
 		fuzzer.Fuzz(preState)
@@ -60,7 +60,7 @@ func TestIsValidGenesisState_100000(_ *testing.T) {
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
 	var chainStartDepositCount, currentTime uint64
-	for i := 0; i < 100000; i++ {
+	for range 100000 {
 		fuzzer.Fuzz(&chainStartDepositCount)
 		fuzzer.Fuzz(&currentTime)
 		IsValidGenesisState(chainStartDepositCount, currentTime)

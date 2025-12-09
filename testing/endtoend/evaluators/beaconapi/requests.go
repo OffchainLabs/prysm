@@ -149,7 +149,7 @@ var getRequests = map[string]endpoint{
 		withSanityCheckOnly()),
 	"/config/fork_schedule": newMetadata[structs.GetForkScheduleResponse](
 		v1PathTemplate,
-		withCustomEval(func(p interface{}, lh interface{}) error {
+		withCustomEval(func(p any, lh any) error {
 			pResp, ok := p.(*structs.GetForkScheduleResponse)
 			if !ok {
 				return fmt.Errorf(msgWrongJSON, &structs.GetForkScheduleResponse{}, p)
@@ -199,7 +199,7 @@ var getRequests = map[string]endpoint{
 		withSanityCheckOnly()),
 	"/node/version": newMetadata[structs.GetVersionResponse](
 		v1PathTemplate,
-		withCustomEval(func(p interface{}, _ interface{}) error {
+		withCustomEval(func(p any, _ any) error {
 			pResp, ok := p.(*structs.GetVersionResponse)
 			if !ok {
 				return fmt.Errorf(msgWrongJSON, &structs.GetVersionResponse{}, p)
@@ -218,7 +218,7 @@ var getRequests = map[string]endpoint{
 		withParams(func(currentEpoch primitives.Epoch) []string {
 			return []string{fmt.Sprintf("%v", currentEpoch)}
 		}),
-		withCustomEval(func(p interface{}, lh interface{}) error {
+		withCustomEval(func(p any, lh any) error {
 			pResp, ok := p.(*structs.GetProposerDutiesResponse)
 			if !ok {
 				return fmt.Errorf(msgWrongJSON, &structs.GetProposerDutiesResponse{}, p)
@@ -259,7 +259,7 @@ var (
 			withParams(func(_ primitives.Epoch) []string {
 				return []string{"head"}
 			}),
-			withPOSTObj(func() interface{} {
+			withPOSTObj(func() any {
 				return struct {
 					Ids      []string `json:"ids"`
 					Statuses []string `json:"statuses"`

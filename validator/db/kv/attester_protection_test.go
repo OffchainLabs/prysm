@@ -24,7 +24,7 @@ func TestPendingAttestationRecords_Flush(t *testing.T) {
 
 	// Add 5 atts
 	num := 5
-	for i := 0; i < num; i++ {
+	for i := range num {
 		queue.Append(&common.AttestationRecord{
 			Target: primitives.Epoch(i),
 		})
@@ -543,8 +543,8 @@ func benchCheckSurroundVote(
 	} else {
 		surroundingVote = createAttestation(numEpochs+1, numEpochs+2)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		for _, pubKey := range pubKeys {
 			slashingKind, err := validatorDB.CheckSlashableAttestation(ctx, pubKey, []byte{}, surroundingVote)
 			if shouldSurround {
@@ -594,7 +594,7 @@ func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 	validatorDB, err := NewKVStore(ctx, b.TempDir(), &Config{PubKeys: pubkeys})
 	require.NoError(b, err)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		err := validatorDB.ClearDB()
 		require.NoError(b, err)

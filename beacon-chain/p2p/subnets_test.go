@@ -1094,7 +1094,7 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 				if peerData != nil {
 					service.peers.Add(node1_seq2.Record(), peerData.ID, nil, network.DirUnknown)
 					// Mark as bad peer - need enough increments to exceed threshold (6)
-					for i := 0; i < 10; i++ {
+					for range 10 {
 						service.peers.Scorers().BadResponsesScorer().Increment(peerData.ID)
 					}
 				}

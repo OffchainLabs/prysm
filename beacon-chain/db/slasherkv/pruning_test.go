@@ -66,7 +66,7 @@ func TestStore_PruneProposalsAtEpoch(t *testing.T) {
 		expectedNumPruned := 2 * uint(pruningLimitEpoch+1) * uint(slotsPerEpoch)
 
 		proposals := make([]*slashertypes.SignedBlockHeaderWrapper, 0, uint64(currentEpoch)*uint64(slotsPerEpoch)*2)
-		for i := primitives.Epoch(0); i < currentEpoch; i++ {
+		for i := range currentEpoch {
 			startSlot, err := slots.EpochStart(i)
 			require.NoError(t, err)
 			endSlot, err := slots.EpochStart(i + 1)
@@ -86,7 +86,7 @@ func TestStore_PruneProposalsAtEpoch(t *testing.T) {
 		require.Equal(t, expectedNumPruned, actualNumPruned)
 
 		// Everything before epoch 10 should be deleted.
-		for i := primitives.Epoch(0); i < pruningLimitEpoch; i++ {
+		for i := range pruningLimitEpoch {
 			err = beaconDB.db.View(func(tx *bolt.Tx) error {
 				bkt := tx.Bucket(proposalRecordsBucket)
 				startSlot, err := slots.EpochStart(i)
@@ -164,7 +164,7 @@ func TestStore_PruneAttestations_OK(t *testing.T) {
 		expectedNumPruned := 2 * uint(pruningLimitEpoch+1) * uint(slotsPerEpoch)
 
 		attestations := make([]*slashertypes.IndexedAttestationWrapper, 0, uint64(currentEpoch)*uint64(slotsPerEpoch)*2)
-		for i := primitives.Epoch(0); i < currentEpoch; i++ {
+		for i := range currentEpoch {
 			startSlot, err := slots.EpochStart(i)
 			require.NoError(t, err)
 			endSlot, err := slots.EpochStart(i + 1)
@@ -191,7 +191,7 @@ func TestStore_PruneAttestations_OK(t *testing.T) {
 		require.Equal(t, expectedNumPruned, actualNumPruned)
 
 		// Everything before epoch 10 should be deleted.
-		for i := primitives.Epoch(0); i < pruningLimitEpoch; i++ {
+		for i := range pruningLimitEpoch {
 			err = beaconDB.db.View(func(tx *bolt.Tx) error {
 				bkt := tx.Bucket(attestationDataRootsBucket)
 				startSlot, err := slots.EpochStart(i)

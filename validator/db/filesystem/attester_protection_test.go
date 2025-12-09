@@ -488,8 +488,7 @@ func BenchmarkStore_SaveAttestationForPubKey(b *testing.B) {
 	validatorDB, err := NewStore(b.TempDir(), &Config{PubKeys: pubkeys})
 	require.NoError(b, err)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		err := validatorDB.ClearDB()
 		require.NoError(b, err)

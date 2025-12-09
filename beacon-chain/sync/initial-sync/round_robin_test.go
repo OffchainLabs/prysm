@@ -317,6 +317,9 @@ func TestService_roundRobinSync(t *testing.T) {
 				clock:        clock,
 			}
 			s.genesisTime = makeGenesisTime(tt.currentSlot)
+			s.blobRetentionChecker = func(primitives.Slot) bool {
+				return true
+			}
 			assert.NoError(t, s.roundRobinSync())
 			if s.cfg.Chain.HeadSlot() < tt.currentSlot {
 				t.Errorf("Head slot (%d) is less than expected currentSlot (%d)", s.cfg.Chain.HeadSlot(), tt.currentSlot)
@@ -376,7 +379,7 @@ func TestService_processBlock(t *testing.T) {
 		rowsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
 		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
-			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
+			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityChecker) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
 		}, nil)
@@ -388,7 +391,7 @@ func TestService_processBlock(t *testing.T) {
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
 		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
-			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
+			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityChecker) error {
 			return nil
 		}, nil)
 		assert.ErrorContains(t, errBlockAlreadyProcessed.Error(), err)
@@ -399,7 +402,7 @@ func TestService_processBlock(t *testing.T) {
 		rowsb, err = blocks.NewROBlock(wsb)
 		require.NoError(t, err)
 		err = s.processBlock(ctx, genesis, blocks.BlockWithROSidecars{Block: rowsb}, func(
-			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityStore) error {
+			ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, _ das.AvailabilityChecker) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlock(ctx, block, blockRoot, nil))
 			return nil
 		}, nil)
@@ -469,7 +472,7 @@ func TestService_processBlockBatch(t *testing.T) {
 			currBlockRoot = blk1Root
 		}
 
-		cbnormal := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityStore) error {
+		cbnormal := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityChecker) error {
 			assert.NoError(t, s.cfg.Chain.ReceiveBlockBatch(ctx, blks, avs))
 			return nil
 		}
@@ -478,7 +481,7 @@ func TestService_processBlockBatch(t *testing.T) {
 		assert.NoError(t, err)
 		require.Equal(t, uint64(len(batch)), count)
 
-		cbnil := func(ctx context.Context, blocks []blocks.ROBlock, _ das.AvailabilityStore) error {
+		cbnil := func(ctx context.Context, blocks []blocks.ROBlock, _ das.AvailabilityChecker) error {
 			return nil
 		}
 
@@ -851,7 +854,7 @@ func TestService_processBlocksWithDataColumns(t *testing.T) {
 			counter: ratecounter.NewRateCounter(counterSeconds * time.Second),
 		}
 
-		receiverFunc := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityStore) error {
+		receiverFunc := func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityChecker) error {
 			require.Equal(t, 1, len(blks))
 			return nil
 		}

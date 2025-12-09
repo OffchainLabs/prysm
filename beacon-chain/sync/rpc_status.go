@@ -236,7 +236,7 @@ func (s *Service) reValidatePeer(ctx context.Context, id peer.ID) error {
 
 // statusRPCHandler reads the incoming Status RPC from the peer and responds with our version of a status message.
 // This handler will disconnect any peer that does not match our fork version.
-func (s *Service) statusRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) statusRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)
@@ -424,7 +424,7 @@ func (s *Service) buildStatusFromEpoch(
 	return status, nil
 }
 
-func (s *Service) validateStatusMessage(ctx context.Context, genericMsg interface{}) error {
+func (s *Service) validateStatusMessage(ctx context.Context, genericMsg any) error {
 	msg, err := statusV2(genericMsg)
 	if err != nil {
 		return errors.Wrap(err, "status data")
@@ -500,7 +500,7 @@ func (s *Service) validateStatusMessage(ctx context.Context, genericMsg interfac
 	return p2ptypes.ErrInvalidEpoch
 }
 
-func statusV2(msg interface{}) (*pb.StatusV2, error) {
+func statusV2(msg any) (*pb.StatusV2, error) {
 	if status, ok := msg.(*pb.StatusV2); ok {
 		return status, nil
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 func TestDebounce_NoEvents(t *testing.T) {
-	eventsChan := make(chan interface{}, 100)
+	eventsChan := make(chan any, 100)
 	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
@@ -26,7 +26,7 @@ func TestDebounce_NoEvents(t *testing.T) {
 		})
 	}()
 	go func() {
-		async.Debounce(ctx, interval, eventsChan, func(event interface{}) {
+		async.Debounce(ctx, interval, eventsChan, func(event any) {
 			atomic.AddInt32(&timesHandled, 1)
 		})
 		wg.Done()
@@ -38,7 +38,7 @@ func TestDebounce_NoEvents(t *testing.T) {
 }
 
 func TestDebounce_CtxClosing(t *testing.T) {
-	eventsChan := make(chan interface{}, 100)
+	eventsChan := make(chan any, 100)
 	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
@@ -62,7 +62,7 @@ func TestDebounce_CtxClosing(t *testing.T) {
 		})
 	}()
 	go func() {
-		async.Debounce(ctx, interval, eventsChan, func(event interface{}) {
+		async.Debounce(ctx, interval, eventsChan, func(event any) {
 			atomic.AddInt32(&timesHandled, 1)
 		})
 		wg.Done()
@@ -74,14 +74,14 @@ func TestDebounce_CtxClosing(t *testing.T) {
 }
 
 func TestDebounce_SingleHandlerInvocation(t *testing.T) {
-	eventsChan := make(chan interface{}, 100)
+	eventsChan := make(chan any, 100)
 	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
-	go async.Debounce(ctx, interval, eventsChan, func(event interface{}) {
+	go async.Debounce(ctx, interval, eventsChan, func(event any) {
 		atomic.AddInt32(&timesHandled, 1)
 	})
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		eventsChan <- struct{}{}
 	}
 	// We should expect 100 rapid fire changes to only have caused
@@ -92,14 +92,14 @@ func TestDebounce_SingleHandlerInvocation(t *testing.T) {
 }
 
 func TestDebounce_MultipleHandlerInvocation(t *testing.T) {
-	eventsChan := make(chan interface{}, 100)
+	eventsChan := make(chan any, 100)
 	ctx, cancel := context.WithCancel(t.Context())
 	interval := time.Second
 	timesHandled := int32(0)
-	go async.Debounce(ctx, interval, eventsChan, func(event interface{}) {
+	go async.Debounce(ctx, interval, eventsChan, func(event any) {
 		atomic.AddInt32(&timesHandled, 1)
 	})
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		eventsChan <- struct{}{}
 	}
 	require.Equal(t, int32(0), atomic.LoadInt32(&timesHandled), "Events must prevent from handler execution")

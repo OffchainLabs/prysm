@@ -22,7 +22,7 @@ var json = jsoniter.Config{
 
 // UnmarshalYaml using a customized json encoder that supports "spec-name"
 // override tag.
-func UnmarshalYaml(y []byte, dest interface{}) error {
+func UnmarshalYaml(y []byte, dest any) error {
 	j, err := yaml.YAMLToJSON(y)
 	if err != nil {
 		return err

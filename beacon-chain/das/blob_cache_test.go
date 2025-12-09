@@ -34,7 +34,8 @@ type filterTestCaseSetupFunc func(t *testing.T) (*blobCacheEntry, [][]byte, []bl
 func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpected int) filterTestCaseSetupFunc {
 	return func(t *testing.T) (*blobCacheEntry, [][]byte, []blocks.ROBlob) {
 		blk, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, slot, nBlobs)
-		commits, err := commitmentsToCheck(blk, blk.Block().Slot())
+		shouldRetain := func(s primitives.Slot) bool { return true }
+		commits, err := commitmentsToCheck(blk, shouldRetain)
 		require.NoError(t, err)
 		entry := &blobCacheEntry{}
 		if len(onDisk) > 0 {
@@ -44,7 +45,7 @@ func filterTestCaseSetup(slot primitives.Slot, nBlobs int, onDisk []int, numExpe
 			entry.setDiskSummary(sum)
 		}
 		expected := make([]blocks.ROBlob, 0, nBlobs)
-		for i := 0; i < len(commits); i++ {
+		for i := range commits {
 			if entry.diskSummary.HasIndex(uint64(i)) {
 				continue
 			}
@@ -113,7 +114,7 @@ func TestFilterDiskSummary(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			entry, commits, expected := c.setup(t)
 			// first (root) argument doesn't matter, it is just for logs
-			got, err := entry.filter([32]byte{}, commits, 100)
+			got, err := entry.filter([32]byte{}, commits)
 			require.NoError(t, err)
 			require.Equal(t, len(expected), len(got))
 		})
@@ -195,7 +196,7 @@ func TestFilter(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			entry, commits, expected := c.setup(t)
 			// first (root) argument doesn't matter, it is just for logs
-			got, err := entry.filter([32]byte{}, commits, 100)
+			got, err := entry.filter([32]byte{}, commits)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 				return

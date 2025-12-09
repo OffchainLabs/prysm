@@ -48,7 +48,7 @@ func (b *BeaconState) eth1DataVotesVal() []*ethpb.Eth1Data {
 	}
 
 	res := make([]*ethpb.Eth1Data, len(b.eth1DataVotes))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i] = b.eth1DataVotes[i].Copy()
 	}
 	return res

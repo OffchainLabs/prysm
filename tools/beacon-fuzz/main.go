@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/OffchainLabs/prysm/v7/io/file"
@@ -61,11 +62,11 @@ func main() {
 }
 
 func sszBytesToMapStr(ss map[int][]byte) string {
-	dst := ""
+	var dst strings.Builder
 	for i, s := range ss {
-		dst += fmt.Sprintf("%d: \"%x\",", i, s)
+		dst.WriteString(fmt.Sprintf("%d: \"%x\",", i, s))
 	}
-	return dst
+	return dst.String()
 }
 
 type input struct {
@@ -74,7 +75,7 @@ type input struct {
 	MapStr  string
 }
 
-func execTmpl(tpl string, input interface{}) *bytes.Buffer {
+func execTmpl(tpl string, input any) *bytes.Buffer {
 	tmpl, err := template.New("template").Parse(tpl)
 	if err != nil {
 		panic(err)

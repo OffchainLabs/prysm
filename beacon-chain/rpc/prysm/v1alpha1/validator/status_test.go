@@ -661,7 +661,7 @@ func TestValidatorStatus_CorrectActivationQueue(t *testing.T) {
 	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		depData := &ethpb.Deposit_Data{
 			PublicKey:             pubKey(uint64(i)),
 			Signature:             bytesutil.PadTo([]byte("hi"), 96),
@@ -975,7 +975,7 @@ func TestServer_CheckDoppelGanger(t *testing.T) {
 					ValidatorRequests: make([]*ethpb.DoppelGangerRequest_ValidatorRequest, 0),
 				}
 				response := &ethpb.DoppelGangerResponse{Responses: make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0)}
-				for i := 0; i < 3; i++ {
+				for i := range 3 {
 					request.ValidatorRequests = append(request.ValidatorRequests, &ethpb.DoppelGangerRequest_ValidatorRequest{
 						PublicKey:  keys[i].PublicKey().Marshal(),
 						Epoch:      1,
@@ -1011,7 +1011,7 @@ func TestServer_CheckDoppelGanger(t *testing.T) {
 					ValidatorRequests: make([]*ethpb.DoppelGangerRequest_ValidatorRequest, 0),
 				}
 				response := &ethpb.DoppelGangerResponse{Responses: make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0)}
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					request.ValidatorRequests = append(request.ValidatorRequests, &ethpb.DoppelGangerRequest_ValidatorRequest{
 						PublicKey:  keys[i].PublicKey().Marshal(),
 						Epoch:      1,
@@ -1058,7 +1058,7 @@ func TestServer_CheckDoppelGanger(t *testing.T) {
 					ValidatorRequests: make([]*ethpb.DoppelGangerRequest_ValidatorRequest, 0),
 				}
 				response := &ethpb.DoppelGangerResponse{Responses: make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0)}
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					request.ValidatorRequests = append(request.ValidatorRequests, &ethpb.DoppelGangerRequest_ValidatorRequest{
 						PublicKey:  keys[i].PublicKey().Marshal(),
 						Epoch:      1,
@@ -1161,7 +1161,7 @@ func TestServer_CheckDoppelGanger(t *testing.T) {
 					ValidatorRequests: make([]*ethpb.DoppelGangerRequest_ValidatorRequest, 0),
 				}
 				response := &ethpb.DoppelGangerResponse{Responses: make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0)}
-				for i := 0; i < 15; i++ {
+				for i := range 15 {
 					request.ValidatorRequests = append(request.ValidatorRequests, &ethpb.DoppelGangerRequest_ValidatorRequest{
 						PublicKey:  keys[i].PublicKey().Marshal(),
 						Epoch:      2,
@@ -1198,7 +1198,7 @@ func TestServer_CheckDoppelGanger(t *testing.T) {
 					ValidatorRequests: make([]*ethpb.DoppelGangerRequest_ValidatorRequest, 0),
 				}
 				response := &ethpb.DoppelGangerResponse{Responses: make([]*ethpb.DoppelGangerResponse_ValidatorResponse, 0)}
-				for i := 0; i < 15; i++ {
+				for i := range 15 {
 					request.ValidatorRequests = append(request.ValidatorRequests, &ethpb.DoppelGangerRequest_ValidatorRequest{
 						PublicKey:  keys[i].PublicKey().Marshal(),
 						Epoch:      1,

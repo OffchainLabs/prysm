@@ -6,7 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v7/config/params"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -59,6 +59,8 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 }
 
 func TestDataColumnSidecars(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	t.Run("sizes mismatch", func(t *testing.T) {
 		// Create a protobuf signed beacon block.
 		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
@@ -68,16 +70,16 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create cells and proofs.
-		cellsAndProofs := []kzg.CellsAndProofs{
-			{
-				Cells:  make([]kzg.Cell, params.BeaconConfig().NumberOfColumns),
-				Proofs: make([]kzg.Proof, params.BeaconConfig().NumberOfColumns),
-			},
+		cellsPerBlob := [][]kzg.Cell{
+			make([]kzg.Cell, numberOfColumns),
+		}
+		proofsPerBlob := [][]kzg.Proof{
+			make([]kzg.Proof, numberOfColumns),
 		}
 
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		_, err = peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		_, err = peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrSizeMismatch)
 	})
 
@@ -92,18 +94,18 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		// Create cells and proofs with insufficient cells for the number of columns.
 		// This simulates a scenario where cellsAndProofs has fewer cells than expected columns.
-		cellsAndProofs := []kzg.CellsAndProofs{
-			{
-				Cells:  make([]kzg.Cell, 10),  // Only 10 cells
-				Proofs: make([]kzg.Proof, 10), // Only 10 proofs
-			},
+		cellsPerBlob := [][]kzg.Cell{
+			make([]kzg.Cell, 10), // Only 10 cells
+		}
+		proofsPerBlob := [][]kzg.Proof{
+			make([]kzg.Proof, 10), // Only 10 proofs
 		}
 
 		// This should fail because the function will try to access columns up to NumberOfColumns
 		// but we only have 10 cells/proofs.
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		_, err = peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		_, err = peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 	})
 
@@ -117,18 +119,17 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create cells and proofs with sufficient cells but insufficient proofs.
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
-		cellsAndProofs := []kzg.CellsAndProofs{
-			{
-				Cells:  make([]kzg.Cell, numberOfColumns),
-				Proofs: make([]kzg.Proof, 5), // Only 5 proofs, less than columns
-			},
+		cellsPerBlob := [][]kzg.Cell{
+			make([]kzg.Cell, numberOfColumns),
+		}
+		proofsPerBlob := [][]kzg.Proof{
+			make([]kzg.Proof, 5), // Only 5 proofs, less than columns
 		}
 
 		// This should fail when trying to access proof beyond index 4.
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		_, err = peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		_, err = peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 		require.ErrorIs(t, err, peerdas.ErrNotEnoughDataColumnSidecars)
 		require.ErrorContains(t, "not enough proofs", err)
 	})
@@ -149,29 +150,26 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create cells and proofs with correct dimensions.
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
-		cellsAndProofs := []kzg.CellsAndProofs{
-			{
-				Cells:  make([]kzg.Cell, numberOfColumns),
-				Proofs: make([]kzg.Proof, numberOfColumns),
-			},
-			{
-				Cells:  make([]kzg.Cell, numberOfColumns),
-				Proofs: make([]kzg.Proof, numberOfColumns),
-			},
+		cellsPerBlob := [][]kzg.Cell{
+			make([]kzg.Cell, numberOfColumns),
+			make([]kzg.Cell, numberOfColumns),
+		}
+		proofsPerBlob := [][]kzg.Proof{
+			make([]kzg.Proof, numberOfColumns),
+			make([]kzg.Proof, numberOfColumns),
 		}
 
 		// Set distinct values in cells and proofs for testing
 		for i := range numberOfColumns {
-			cellsAndProofs[0].Cells[i][0] = byte(i)
-			cellsAndProofs[0].Proofs[i][0] = byte(i)
-			cellsAndProofs[1].Cells[i][0] = byte(i + 128)
-			cellsAndProofs[1].Proofs[i][0] = byte(i + 128)
+			cellsPerBlob[0][i][0] = byte(i)
+			proofsPerBlob[0][i][0] = byte(i)
+			cellsPerBlob[1][i][0] = byte(i + 128)
+			proofsPerBlob[1][i][0] = byte(i + 128)
 		}
 
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
 		require.NoError(t, err)
-		sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+		sidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 		require.NoError(t, err)
 		require.NotNil(t, sidecars)
 		require.Equal(t, int(numberOfColumns), len(sidecars))
@@ -199,6 +197,7 @@ func TestDataColumnSidecars(t *testing.T) {
 }
 
 func TestReconstructionSource(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
 	// Create a Fulu block with blob commitments.
 	signedBeaconBlockPb := util.NewBeaconBlockFulu()
 	commitment1 := make([]byte, 48)
@@ -214,29 +213,26 @@ func TestReconstructionSource(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create cells and proofs with correct dimensions.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	cellsAndProofs := []kzg.CellsAndProofs{
-		{
-			Cells:  make([]kzg.Cell, numberOfColumns),
-			Proofs: make([]kzg.Proof, numberOfColumns),
-		},
-		{
-			Cells:  make([]kzg.Cell, numberOfColumns),
-			Proofs: make([]kzg.Proof, numberOfColumns),
-		},
+	cellsPerBlob := [][]kzg.Cell{
+		make([]kzg.Cell, numberOfColumns),
+		make([]kzg.Cell, numberOfColumns),
+	}
+	proofsPerBlob := [][]kzg.Proof{
+		make([]kzg.Proof, numberOfColumns),
+		make([]kzg.Proof, numberOfColumns),
 	}
 
 	// Set distinct values in cells and proofs for testing
 	for i := range numberOfColumns {
-		cellsAndProofs[0].Cells[i][0] = byte(i)
-		cellsAndProofs[0].Proofs[i][0] = byte(i)
-		cellsAndProofs[1].Cells[i][0] = byte(i + 128)
-		cellsAndProofs[1].Proofs[i][0] = byte(i + 128)
+		cellsPerBlob[0][i][0] = byte(i)
+		proofsPerBlob[0][i][0] = byte(i)
+		cellsPerBlob[1][i][0] = byte(i + 128)
+		proofsPerBlob[1][i][0] = byte(i + 128)
 	}
 
 	rob, err := blocks.NewROBlock(signedBeaconBlock)
 	require.NoError(t, err)
-	sidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(rob))
+	sidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 	require.NotNil(t, sidecars)
 	require.Equal(t, int(numberOfColumns), len(sidecars))

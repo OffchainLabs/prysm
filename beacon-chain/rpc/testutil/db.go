@@ -26,7 +26,7 @@ func FillDBWithBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (
 	count := primitives.Slot(100)
 	blks := make([]interfaces.ReadOnlySignedBeaconBlock, count)
 	blkContainers := make([]*ethpbalpha.BeaconBlockContainer, count)
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		b := util.NewBeaconBlock()
 		b.Block.Slot = i
 		b.Block.ParentRoot = bytesutil.PadTo([]byte{uint8(i)}, 32)

@@ -94,7 +94,7 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 	type args struct {
 		field      types.FieldIndex
 		indices    []uint64
-		elements   interface{}
+		elements   any
 		convertAll bool
 	}
 	tests := []struct {

@@ -16,7 +16,7 @@ import (
 
 func generateBlobIdentifiers(n int) []*eth.BlobIdentifier {
 	r := make([]*eth.BlobIdentifier, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		r[i] = &eth.BlobIdentifier{
 			BlockRoot: bytesutil.PadTo([]byte{byte(i)}, 32),
 			Index:     0,
@@ -111,7 +111,7 @@ func TestBeaconBlockByRootsReq_Limit(t *testing.T) {
 func TestErrorResponse_Limit(t *testing.T) {
 	errorMessage := make([]byte, 0)
 	// Provide a message of size 6400 bytes.
-	for i := uint64(0); i < 200; i++ {
+	for i := range uint64(200) {
 		byteArr := [32]byte{byte(i)}
 		errorMessage = append(errorMessage, byteArr[:]...)
 	}
@@ -126,7 +126,7 @@ func TestRoundTripSerialization(t *testing.T) {
 
 func roundTripTestBlocksByRootReq(t *testing.T) {
 	fixedRoots := make([][32]byte, 0)
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		fixedRoots = append(fixedRoots, [32]byte{byte(i)})
 	}
 	req := BeaconBlockByRootsReq(fixedRoots)
@@ -210,7 +210,7 @@ func hexDecodeOrDie(t *testing.T, str string) []byte {
 // ====================================
 func generateDataColumnIdentifiers(n int) []*eth.DataColumnsByRootIdentifier {
 	r := make([]*eth.DataColumnsByRootIdentifier, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		r[i] = &eth.DataColumnsByRootIdentifier{
 			BlockRoot: bytesutil.PadTo([]byte{byte(i)}, 32),
 			Columns:   []uint64{uint64(i)},

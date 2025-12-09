@@ -156,12 +156,16 @@ func (s *PremineGenesisConfig) empty() (state.BeaconState, error) {
 			return nil, err
 		}
 	case version.Electra:
-		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		e, err = state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{
+			DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		})
 		if err != nil {
 			return nil, err
 		}
 	case version.Fulu:
-		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{})
+		e, err = state_native.InitializeFromProtoFulu(&ethpb.BeaconStateFulu{
+			DepositRequestsStartIndex: params.BeaconConfig().UnsetDepositRequestsStartIndex,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +376,7 @@ func (s *PremineGenesisConfig) setInactivityScores(g state.BeaconState) error {
 	}
 	scoresMissing := len(g.Validators()) - len(scores)
 	if scoresMissing > 0 {
-		for i := 0; i < scoresMissing; i++ {
+		for range scoresMissing {
 			scores = append(scores, 0)
 		}
 	}
@@ -390,7 +394,7 @@ func (s *PremineGenesisConfig) setCurrentEpochParticipation(g state.BeaconState)
 	}
 	missing := len(g.Validators()) - len(p)
 	if missing > 0 {
-		for i := 0; i < missing; i++ {
+		for range missing {
 			p = append(p, 0)
 		}
 	}
@@ -408,7 +412,7 @@ func (s *PremineGenesisConfig) setPrevEpochParticipation(g state.BeaconState) er
 	}
 	missing := len(g.Validators()) - len(p)
 	if missing > 0 {
-		for i := 0; i < missing; i++ {
+		for range missing {
 			p = append(p, 0)
 		}
 	}
@@ -755,7 +759,7 @@ func unwrapUint64Ptr(u *uint64) uint64 {
 func nZeroRoots(n uint64) [][]byte {
 	roots := make([][]byte, n)
 	zh := params.BeaconConfig().ZeroHash[:]
-	for i := uint64(0); i < n; i++ {
+	for i := range n {
 		roots[i] = zh
 	}
 	return roots
@@ -763,7 +767,7 @@ func nZeroRoots(n uint64) [][]byte {
 
 func nSetRoots(n uint64, r []byte) [][]byte {
 	roots := make([][]byte, n)
-	for i := uint64(0); i < n; i++ {
+	for i := range n {
 		h := make([]byte, 32)
 		copy(h, r)
 		roots[i] = h

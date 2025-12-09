@@ -38,7 +38,7 @@ func (m *MockBeaconNodeHealthClient) Recv() (*pb.LogsResponse, error) {
 	return log, nil
 }
 
-func (m *MockBeaconNodeHealthClient) SendMsg(_ interface{}) error {
+func (m *MockBeaconNodeHealthClient) SendMsg(_ any) error {
 	return m.err
 }
 

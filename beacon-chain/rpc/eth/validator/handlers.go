@@ -835,12 +835,17 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		s.TrackedValidatorsCache.Set(val)
 		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
 	}
+
 	if len(validatorIndices) == 0 {
 		return
 	}
-	log.WithFields(logrus.Fields{
-		"validatorIndices": validatorIndices,
-	}).Info("Updated fee recipient addresses")
+
+	log := log.WithField("validatorCount", len(validatorIndices))
+	if logrus.GetLevel() >= logrus.TraceLevel {
+		log = log.WithField("validatorIndices", validatorIndices)
+	}
+
+	log.Debug("Updated fee recipient addresses")
 }
 
 // GetAttesterDuties requests the beacon node to provide a set of attestation duties,
@@ -1168,10 +1173,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	startingEpoch := requestedEpoch
-	if startingEpoch > currentEpoch {
-		startingEpoch = currentEpoch
-	}
+	startingEpoch := min(requestedEpoch, currentEpoch)
 	slot, err := slots.EpochStart(startingEpoch)
 	if err != nil {
 		httputil.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)

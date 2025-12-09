@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -470,30 +471,35 @@ func (s *Service) removeStartupState() {
 // UpdateCustodyInfoInDB updates the custody information in the database.
 // It returns the (potentially updated) custody group count and the earliest available slot.
 func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
-	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
+	isSupernode := flags.Get().Supernode
+	isSemiSupernode := flags.Get().SemiSupernode
 
 	cfg := params.BeaconConfig()
 	custodyRequirement := cfg.CustodyRequirement
 
 	// Check if the node was previously subscribed to all data subnets, and if so,
 	// store the new status accordingly.
-	wasSubscribedToAllDataSubnets, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSubscribedToAllDataSubnets)
+	wasSupernode, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
 	if err != nil {
-		log.WithError(err).Error("Could not update subscription status to all data subnets")
+		return 0, 0, errors.Wrap(err, "update subscribed to all data subnets")
 	}
 
-	// Warn the user if the node was previously subscribed to all data subnets and is not any more.
-	if wasSubscribedToAllDataSubnets && !isSubscribedToAllDataSubnets {
-		log.Warnf(
-			"Because the flag `--%s` was previously used, the node will still subscribe to all data subnets.",
-			flags.SubscribeAllDataSubnets.Name,
-		)
+	// Compute the target custody group count based on current flag configuration.
+	targetCustodyGroupCount := custodyRequirement
+
+	// Supernode: custody all groups (either currently set or previously enabled)
+	if isSupernode {
+		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
 	}
 
-	// Compute the custody group count.
-	custodyGroupCount := custodyRequirement
-	if isSubscribedToAllDataSubnets {
-		custodyGroupCount = cfg.NumberOfCustodyGroups
+	// Semi-supernode: custody minimum needed for reconstruction, or custody requirement if higher
+	if isSemiSupernode {
+		semiSupernodeCustody, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "minimum custody group count")
+		}
+
+		targetCustodyGroupCount = max(custodyRequirement, semiSupernodeCustody)
 	}
 
 	// Safely compute the fulu fork slot.
@@ -510,12 +516,23 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		}
 	}
 
-	earliestAvailableSlot, custodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, custodyGroupCount)
+	earliestAvailableSlot, actualCustodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, targetCustodyGroupCount)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "update custody info")
 	}
 
-	return earliestAvailableSlot, custodyGroupCount, nil
+	if isSupernode {
+		log.WithFields(logrus.Fields{
+			"current": actualCustodyGroupCount,
+			"target":  cfg.NumberOfCustodyGroups,
+		}).Info("Supernode mode enabled. Will custody all data columns going forward.")
+	}
+
+	if wasSupernode && !isSupernode {
+		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.Supernode.Name)
+	}
+
+	return earliestAvailableSlot, actualCustodyGroupCount, nil
 }
 
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {

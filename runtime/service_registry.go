@@ -83,7 +83,7 @@ func (s *ServiceRegistry) RegisterService(service Service) error {
 // FetchService takes in a struct pointer and sets the value of that pointer
 // to a service currently stored in the service registry. This ensures the input argument is
 // set to the right pointer that refers to the originally registered service.
-func (s *ServiceRegistry) FetchService(service interface{}) error {
+func (s *ServiceRegistry) FetchService(service any) error {
 	if reflect.TypeOf(service).Kind() != reflect.Ptr {
 		return fmt.Errorf("input must be of pointer type, received value type instead: %T", service)
 	}

@@ -44,7 +44,7 @@ func (km *Keymanager) ImportKeystores(
 	for i := 0; i < len(storeCopy.PrivateKeys); i++ {
 		existingPubKeys[string(storeCopy.PublicKeys[i])] = true
 	}
-	for i := 0; i < len(keystores); i++ {
+	for i := range keystores {
 		var privKeyBytes []byte
 		var pubKeyBytes []byte
 		privKeyBytes, pubKeyBytes, _, err = km.attemptDecryptKeystore(decryptor, keystores[i], passwords[i])

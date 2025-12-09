@@ -25,4 +25,6 @@ var upcomingDeprecation = []cli.Flag{
 
 // deprecatedBeaconFlags contains flags that are still used by other components
 // and therefore cannot be added to deprecatedFlags
-var deprecatedBeaconFlags = []cli.Flag{}
+var deprecatedBeaconFlags = []cli.Flag{
+	deprecatedDisableLastEpochTargets,
+}
