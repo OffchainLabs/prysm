@@ -281,7 +281,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			s.subscribe(
 				p2p.BlsToExecutionChangeSubnetTopicFormat,
 				s.validateBlsToExecutionChange,
-				s.executionProofSubscriber,
+				s.blsToExecutionChangeSubscriber,
 				nse,
 			)
 		})
@@ -329,13 +329,13 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				getSubnetsRequiringPeers: s.allDataColumnSubnets,
 			})
 		})
-		
+
 		// Optional proofs
 		s.spawn(func() {
 			s.subscribe(
 				p2p.ExecutionProofSubnetTopicFormat,
 				s.validateExecutionProof,
-				s.blsToExecutionChangeSubscriber, // ETODO
+				s.executionProofSubscriber,
 				nse,
 			)
 		})
