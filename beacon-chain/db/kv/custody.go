@@ -49,7 +49,7 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 		// When increasing custody group count, prevent earliestAvailableSlot from going backward.
 		if storedEarliestAvailableSlot != 0 && earliestAvailableSlot < storedEarliestAvailableSlot {
 			return errors.Errorf(
-				"cannot decrease earliest available slot from %d to %d when increasing custody group count from %d to %d. ",
+				"cannot decrease earliest available slot from %d to %d when increasing custody group count from %d to %d",
 				storedEarliestAvailableSlot, earliestAvailableSlot, storedGroupCount, custodyGroupCount,
 			)
 		}

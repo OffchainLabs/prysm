@@ -134,6 +134,31 @@ func TestUpdateCustodyInfo(t *testing.T) {
 		require.Equal(t, initialSlot, storedSlot)
 		require.Equal(t, initialCount, storedCount)
 	})
+
+	t.Run("prevent earliest available slot from going backward when increasing group count", func(t *testing.T) {
+		const (
+			initialSlot  = primitives.Slot(200)
+			initialCount = uint64(5)
+			newSlot      = primitives.Slot(100) // Lower than initial - should be rejected
+			newCount     = uint64(10)           // Higher than initial - would trigger update
+		)
+
+		db := setupDB(t)
+
+		// Initialize custody info with slot 200 and group count 5
+		_, _, err := db.UpdateCustodyInfo(ctx, initialSlot, initialCount)
+		require.NoError(t, err)
+
+		// Try to increase group count (5 -> 10) but with a lower earliest slot (200 -> 100)
+		// This should fail because we can't move earliest available slot backward when increasing custody
+		_, _, err = db.UpdateCustodyInfo(ctx, newSlot, newCount)
+		require.ErrorContains(t, "cannot decrease earliest available slot", err)
+
+		// Verify the database wasn't updated
+		storedSlot, storedCount := getCustodyInfoFromDB(t, db)
+		require.Equal(t, initialSlot, storedSlot)
+		require.Equal(t, initialCount, storedCount)
+	})
 }
 
 func TestUpdateEarliestAvailableSlot(t *testing.T) {
