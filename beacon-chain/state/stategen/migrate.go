@@ -43,12 +43,9 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 	var startSlot primitives.Slot
 	if oldFSlot == 0 {
 		startSlot = s.slotsPerArchivedPoint
-	} else if oldFSlot%s.slotsPerArchivedPoint == 0 {
-		// oldFSlot is already on an archived point, start from oldFSlot itself
-		startSlot = oldFSlot
 	} else {
 		// Round up to the next archived point
-		startSlot = oldFSlot + (s.slotsPerArchivedPoint - oldFSlot%s.slotsPerArchivedPoint)
+		startSlot = (oldFSlot + s.slotsPerArchivedPoint - 1) / s.slotsPerArchivedPoint * s.slotsPerArchivedPoint
 	}
 
 	// Start at the first archived point after old finalized slot, stop before current finalized slot.
