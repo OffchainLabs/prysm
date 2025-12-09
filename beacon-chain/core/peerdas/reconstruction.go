@@ -297,32 +297,42 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 		return nil, nil, ErrBlobsCellsProofsMismatch
 	}
 
-	cellsPerBlob := make([][]kzg.Cell, 0, blobCount)
-	proofsPerBlob := make([][]kzg.Proof, 0, blobCount)
+	var wg errgroup.Group
+
+	cellsPerBlob := make([][]kzg.Cell, blobCount)
+	proofsPerBlob := make([][]kzg.Proof, blobCount)
+
 	for i, blob := range blobs {
-		var kzgBlob kzg.Blob
-		if copy(kzgBlob[:], blob) != len(kzgBlob) {
-			return nil, nil, errors.New("wrong blob size - should never happen")
-		}
-
-		// Compute the extended cells from the (non-extended) blob.
-		cells, err := kzg.ComputeCells(&kzgBlob)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "compute cells")
-		}
-
-		var proofs []kzg.Proof
-		for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
-			var kzgProof kzg.Proof
-			if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
-				return nil, nil, errors.New("wrong KZG proof size - should never happen")
+		wg.Go(func() error {
+			var kzgBlob kzg.Blob
+			if copy(kzgBlob[:], blob) != len(kzgBlob) {
+				return errors.New("wrong blob size - should never happen")
 			}
 
-			proofs = append(proofs, kzgProof)
-		}
+			// Compute the extended cells from the (non-extended) blob.
+			cells, err := kzg.ComputeCells(&kzgBlob)
+			if err != nil {
+				return errors.Wrap(err, "compute cells")
+			}
 
-		cellsPerBlob = append(cellsPerBlob, cells)
-		proofsPerBlob = append(proofsPerBlob, proofs)
+			proofs := make([]kzg.Proof, 0, numberOfColumns)
+			for idx := uint64(i) * numberOfColumns; idx < (uint64(i)+1)*numberOfColumns; idx++ {
+				var kzgProof kzg.Proof
+				if copy(kzgProof[:], cellProofs[idx]) != len(kzgProof) {
+					return errors.New("wrong KZG proof size - should never happen")
+				}
+
+				proofs = append(proofs, kzgProof)
+			}
+
+			cellsPerBlob[i] = cells
+			proofsPerBlob[i] = proofs
+			return nil
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		return nil, nil, err
 	}
 
 	return cellsPerBlob, proofsPerBlob, nil
