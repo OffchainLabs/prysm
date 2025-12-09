@@ -429,7 +429,7 @@ func TestService_SubscribeReachabilityEvents(t *testing.T) {
 		}
 	}()
 	// Subscribe to reachability events
-	s.subscribeReachabilityEvents()
+	require.NoError(t, s.subscribeReachabilityEvents())
 
 	// Create test multiaddrs for each reachability state
 	reachableAddr, err := multiaddr.NewMultiaddr("/ip4/192.168.1.1/tcp/9000")
