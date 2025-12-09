@@ -52,6 +52,9 @@ const (
 	// lightClientFinalityUpdateWeight specifies the scoring weight that we apply to
 	// our light client finality update topic.
 	lightClientFinalityUpdateWeight = 0.05
+	// executionProofWeight specifies the scoring weight that we apply to
+	// our execution proof topic.
+	executionProofWeight = 0.05
 
 	// maxInMeshScore describes the max score a peer can attain from being in the mesh.
 	maxInMeshScore = 10
@@ -514,7 +517,7 @@ func defaultBlsToExecutionChangeTopicParams() *pubsub.TopicScoreParams {
 
 func defaultExecutionProofTopicParams() *pubsub.TopicScoreParams {
 	return &pubsub.TopicScoreParams{
-		TopicWeight:                     blsToExecutionChangeWeight,
+		TopicWeight:                     executionProofWeight,
 		TimeInMeshWeight:                maxInMeshScore / inMeshCap(),
 		TimeInMeshQuantum:               inMeshTime(),
 		TimeInMeshCap:                   inMeshCap(),
