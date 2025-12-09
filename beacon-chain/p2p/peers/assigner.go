@@ -4,10 +4,17 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+// StatusProvider describes the minimum capability that Assigner needs from peer status tracking.
+// That is, the ability to retrieve the best peers by finalized checkpoint.
+type StatusProvider interface {
+	BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch, []peer.ID)
+}
 
 // FinalizedCheckpointer describes the minimum capability that Assigner needs from forkchoice.
 // That is, the ability to retrieve the latest finalized checkpoint to help with peer evaluation.
@@ -17,9 +24,9 @@ type FinalizedCheckpointer interface {
 
 // NewAssigner assists in the correct construction of an Assigner by code in other packages,
 // assuring all the important private member fields are given values.
-// The FinalizedCheckpointer is used to retrieve the latest finalized checkpoint each time peers are requested.
+// The StatusProvider is used to retrieve best peers, and FinalizedCheckpointer is used to retrieve the latest finalized checkpoint each time peers are requested.
 // Peers that report an older finalized checkpoint are filtered out.
-func NewAssigner(s *Status, fc FinalizedCheckpointer) *Assigner {
+func NewAssigner(s StatusProvider, fc FinalizedCheckpointer) *Assigner {
 	return &Assigner{
 		ps: s,
 		fc: fc,
@@ -28,7 +35,7 @@ func NewAssigner(s *Status, fc FinalizedCheckpointer) *Assigner {
 
 // Assigner uses the "BestFinalized" peer scoring method to pick the next-best peer to receive rpc requests.
 type Assigner struct {
-	ps *Status
+	ps StatusProvider
 	fc FinalizedCheckpointer
 }
 
@@ -38,38 +45,42 @@ type Assigner struct {
 var ErrInsufficientSuitable = errors.New("no suitable peers")
 
 func (a *Assigner) freshPeers() ([]peer.ID, error) {
-	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
-	_, peers := a.ps.BestFinalized(params.BeaconConfig().MaxPeersToSync, a.fc.FinalizedCheckpoint().Epoch)
+	required := min(flags.Get().MinimumSyncPeers, min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync))
+	_, peers := a.ps.BestFinalized(a.fc.FinalizedCheckpoint().Epoch)
 	if len(peers) < required {
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),
-			"required": required}).Warn("Unable to assign peer while suitable peers < required ")
+			"required": required}).Trace("Unable to assign peer while suitable peers < required")
 		return nil, ErrInsufficientSuitable
 	}
 	return peers, nil
 }
 
+// AssignmentFilter describes a function that takes a list of peer.IDs and returns a filtered subset.
+// An example is the NotBusy filter.
+type AssignmentFilter func([]peer.ID) []peer.ID
+
 // Assign uses the "BestFinalized" method to select the best peers that agree on a canonical block
 // for the configured finalized epoch. At most `n` peers will be returned. The `busy` param can be used
 // to filter out peers that we know we don't want to connect to, for instance if we are trying to limit
 // the number of outbound requests to each peer from a given component.
-func (a *Assigner) Assign(busy map[peer.ID]bool, n int) ([]peer.ID, error) {
+func (a *Assigner) Assign(filter AssignmentFilter) ([]peer.ID, error) {
 	best, err := a.freshPeers()
 	if err != nil {
 		return nil, err
 	}
-	return pickBest(busy, n, best), nil
+	return filter(best), nil
 }
 
-func pickBest(busy map[peer.ID]bool, n int, best []peer.ID) []peer.ID {
-	ps := make([]peer.ID, 0, n)
-	for _, p := range best {
-		if len(ps) == n {
-			return ps
+// NotBusy is a filter that returns the list of peer.IDs that are not in the `busy` map.
+func NotBusy(busy map[peer.ID]bool) AssignmentFilter {
+	return func(peers []peer.ID) []peer.ID {
+		ps := make([]peer.ID, 0, len(peers))
+		for _, p := range peers {
+			if !busy[p] {
+				ps = append(ps, p)
+			}
 		}
-		if !busy[p] {
-			ps = append(ps, p)
-		}
+		return ps
 	}
-	return ps
 }

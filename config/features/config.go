@@ -71,7 +71,7 @@ type Flags struct {
 
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
-	DisableLastEpochTargets    bool // Disables processing of states for attestations to old blocks.
+	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
 
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
 
@@ -281,13 +281,15 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
 	}
-	if ctx.IsSet(disableLastEpochTargets.Name) {
-		logEnabled(disableLastEpochTargets)
-		cfg.DisableLastEpochTargets = true
+
+	cfg.IgnoreUnviableAttestations = false
+	if ctx.IsSet(ignoreUnviableAttestations.Name) && ctx.Bool(ignoreUnviableAttestations.Name) {
+		logEnabled(ignoreUnviableAttestations)
+		cfg.IgnoreUnviableAttestations = true
 	}
 
-	if ctx.IsSet(enableStateDiff.Name) {
-		logEnabled(enableStateDiff)
+	if ctx.IsSet(EnableStateDiff.Name) {
+		logEnabled(EnableStateDiff)
 		cfg.EnableStateDiff = true
 
 		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {

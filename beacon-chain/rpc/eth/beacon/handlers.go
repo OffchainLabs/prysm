@@ -993,10 +993,11 @@ func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error 
 }
 
 func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	commitments, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")

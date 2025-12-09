@@ -260,11 +260,12 @@ func Test_IsExecutionBlockCapella(t *testing.T) {
 
 func Test_IsExecutionEnabled(t *testing.T) {
 	tests := []struct {
-		name        string
-		payload     *enginev1.ExecutionPayload
-		header      interfaces.ExecutionData
-		useAltairSt bool
-		want        bool
+		name         string
+		payload      *enginev1.ExecutionPayload
+		header       interfaces.ExecutionData
+		useAltairSt  bool
+		useCapellaSt bool
+		want         bool
 	}{
 		{
 			name:    "use older than bellatrix state",
@@ -331,6 +332,17 @@ func Test_IsExecutionEnabled(t *testing.T) {
 			}(),
 			want: true,
 		},
+		{
+			name:    "capella state always enabled",
+			payload: emptyPayload(),
+			header: func() interfaces.ExecutionData {
+				h, err := emptyPayloadHeader()
+				require.NoError(t, err)
+				return h
+			}(),
+			useCapellaSt: true,
+			want:         true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -342,6 +354,8 @@ func Test_IsExecutionEnabled(t *testing.T) {
 			require.NoError(t, err)
 			if tt.useAltairSt {
 				st, _ = util.DeterministicGenesisStateAltair(t, 1)
+			} else if tt.useCapellaSt {
+				st, _ = util.DeterministicGenesisStateCapella(t, 1)
 			}
 			got, err := blocks.IsExecutionEnabled(st, body)
 			require.NoError(t, err)

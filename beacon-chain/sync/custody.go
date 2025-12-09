@@ -80,16 +80,9 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "p2p update custody info")
 	}
 
-	// Update the p2p earliest available slot metric
-	earliestAvailableSlotP2P.Set(float64(storedEarliestSlot))
-
-	dbEarliestSlot, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount)
-	if err != nil {
+	if _, _, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, storedEarliestSlot, storedGroupCount); err != nil {
 		return errors.Wrap(err, "beacon db update custody info")
 	}
-
-	// Update the DB earliest available slot metric
-	earliestAvailableSlotDB.Set(float64(dbEarliestSlot))
 
 	return nil
 }
@@ -99,16 +92,30 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
 	cfg := params.BeaconConfig()
 
-	if flags.Get().SubscribeAllDataSubnets {
+	if flags.Get().Supernode {
 		return cfg.NumberOfCustodyGroups, nil
 	}
 
+	// Calculate validator custody requirements
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
 	if err != nil {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(cfg.CustodyRequirement, validatorsCustodyRequirement), nil
+	effectiveCustodyRequirement := max(cfg.CustodyRequirement, validatorsCustodyRequirement)
+
+	// If we're not in semi-supernode mode, just use the effective requirement.
+	if !flags.Get().SemiSupernode {
+		return effectiveCustodyRequirement, nil
+	}
+
+	// Semi-supernode mode custodies the minimum custody groups required for reconstruction.
+	// This is future-proof and works correctly even if custody groups != columns.
+	semiSupernodeTarget, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+	if err != nil {
+		return 0, errors.Wrap(err, "minimum custody group count")
+	}
+	return max(effectiveCustodyRequirement, semiSupernodeTarget), nil
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the

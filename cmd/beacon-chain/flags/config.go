@@ -1,6 +1,8 @@
 package flags
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/pkg/errors"
@@ -13,7 +15,8 @@ const maxStateDiffExponents = 30
 // beacon node.
 type GlobalFlags struct {
 	SubscribeToAllSubnets           bool
-	SubscribeAllDataSubnets         bool
+	Supernode                       bool
+	SemiSupernode                   bool
 	MinimumSyncPeers                int
 	MinimumPeersPerSubnet           int
 	MaxConcurrentDials              int
@@ -51,9 +54,22 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		cfg.SubscribeToAllSubnets = true
 	}
 
-	if ctx.Bool(SubscribeAllDataSubnets.Name) {
-		log.Warning("Subscribing to all data subnets")
-		cfg.SubscribeAllDataSubnets = true
+	supernodeSet := ctx.Bool(Supernode.Name)
+	semiSupernodeSet := ctx.Bool(SemiSupernode.Name)
+
+	// Ensure mutual exclusivity between supernode and semi-supernode modes
+	if supernodeSet && semiSupernodeSet {
+		return fmt.Errorf("cannot set both --%s and --%s flags; choose one mode", Supernode.Name, SemiSupernode.Name)
+	}
+
+	if supernodeSet {
+		log.Info("Operating in supernode mode")
+		cfg.Supernode = true
+	}
+
+	if semiSupernodeSet {
+		log.Info("Operating in semi-supernode mode (custody just enough data to serve the blobs and blob sidecars beacon API)")
+		cfg.SemiSupernode = true
 	}
 
 	// State-diff-exponents

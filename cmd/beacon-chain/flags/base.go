@@ -333,11 +333,16 @@ var (
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
-	// SubscribeAllDataSubnets enables subscription to all data subnets.
-	SubscribeAllDataSubnets = &cli.BoolFlag{
+	// Supernode custodies all data.
+	Supernode = &cli.BoolFlag{
 		Name:    "supernode",
 		Aliases: []string{"subscribe-all-data-subnets"},
-		Usage:   "Enable subscription to all data subnets and store all blob columns, serving them over RPC. Required post-Fusaka for full blob reconstruction. This is effectively one-way: once enabled, the node keeps storing and serving all columns even if the flag is later unset.",
+		Usage:   "Custodies all data. Cannot be used with --semi-supernode.",
+	}
+	// SemiSupernode custodies just enough data to serve the blobs and blob sidecars beacon API.
+	SemiSupernode = &cli.BoolFlag{
+		Name:  "semi-supernode",
+		Usage: "Custodies just enough data to serve the blobs and blob sidecars beacon API. Cannot be used with --supernode.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{

@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage"
@@ -107,14 +108,14 @@ var appHelpFlagGroups = []flagGroup{
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
 			flags.SubscribeToAllSubnets,
-			flags.SubscribeAllDataSubnets,
+			flags.Supernode,
+			flags.SemiSupernode,
 		},
 	},
 	{ // Flags relevant to storing data on disk and configuring the beacon chain database.
 		Name: "db",
 		Flags: []cli.Flag{
 			backfill.BackfillBatchSize,
-			backfill.BackfillOldestSlot,
 			backfill.BackfillWorkerCount,
 			backfill.EnableExperimentalBackfill,
 			cmd.ClearDB,
@@ -122,10 +123,11 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.ForceClearDB,
 			cmd.RestoreSourceFileFlag,
 			cmd.RestoreTargetDirFlag,
+			das.BackfillOldestSlot,
+			das.BlobRetentionEpochFlag,
 			flags.BeaconDBPruning,
 			flags.PrunerRetentionEpochs,
 			flags.SlotsPerArchivedPoint,
-			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
 			storage.DataColumnStoragePathFlag,
