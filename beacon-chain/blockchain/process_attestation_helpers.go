@@ -22,10 +22,7 @@ import (
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) state.ReadOnlyBeaconState {
 	headEpoch := slots.ToEpoch(s.HeadSlot())
-	if c.Epoch < headEpoch {
-		return nil
-	}
-	if !s.cfg.ForkChoiceStore.IsCanonical([32]byte(c.Root)) {
+	if c.Epoch < headEpoch || c.Epoch == 0 {
 		return nil
 	}
 	// Only use head state if the head state is compatible with the target checkpoint.
@@ -33,11 +30,11 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err != nil {
 		return nil
 	}
-	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), c.Epoch)
+	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), c.Epoch-1)
 	if err != nil {
 		return nil
 	}
-	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), c.Epoch)
+	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), c.Epoch-1)
 	if err != nil {
 		return nil
 	}
@@ -53,7 +50,11 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 		}
 		return st
 	}
-	// Otherwise we need to advance the head state to the start of the target epoch.
+	// At this point we can only have c.Epoch > headEpoch.
+	if !s.cfg.ForkChoiceStore.IsCanonical([32]byte(c.Root)) {
+		return nil
+	}
+	// Advance the head state to the start of the target epoch.
 	// This point can only be reached if c.Root == headRoot and c.Epoch > headEpoch.
 	slot, err := slots.EpochStart(c.Epoch)
 	if err != nil {
