@@ -335,40 +335,50 @@ func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([
 		cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	}()
 
-	cellsPerBlob := make([][]kzg.Cell, 0, len(blobsAndProofs))
-	proofsPerBlob := make([][]kzg.Proof, 0, len(blobsAndProofs))
-	for _, blobAndProof := range blobsAndProofs {
+	var wg errgroup.Group
+
+	cellsPerBlob := make([][]kzg.Cell, len(blobsAndProofs))
+	proofsPerBlob := make([][]kzg.Proof, len(blobsAndProofs))
+
+	for i, blobAndProof := range blobsAndProofs {
 		if blobAndProof == nil {
 			return nil, nil, ErrNilBlobAndProof
 		}
 
-		var kzgBlob kzg.Blob
-		if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
-			return nil, nil, errors.New("wrong blob size - should never happen")
-		}
-
-		// Compute the extended cells from the (non-extended) blob.
-		cells, err := kzg.ComputeCells(&kzgBlob)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "compute cells")
-		}
-
-		kzgProofs := make([]kzg.Proof, 0, fieldparams.NumberOfColumns)
-		for _, kzgProofBytes := range blobAndProof.KzgProofs {
-			if len(kzgProofBytes) != kzg.BytesPerProof {
-				return nil, nil, errors.New("wrong KZG proof size - should never happen")
+		wg.Go(func() error {
+			var kzgBlob kzg.Blob
+			if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
+				return errors.New("wrong blob size - should never happen")
 			}
 
-			var kzgProof kzg.Proof
-			if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
-				return nil, nil, errors.New("wrong copied KZG proof size - should never happen")
+			// Compute the extended cells from the (non-extended) blob.
+			cells, err := kzg.ComputeCells(&kzgBlob)
+			if err != nil {
+				return errors.Wrap(err, "compute cells")
 			}
 
-			kzgProofs = append(kzgProofs, kzgProof)
-		}
+			kzgProofs := make([]kzg.Proof, 0, fieldparams.NumberOfColumns)
+			for _, kzgProofBytes := range blobAndProof.KzgProofs {
+				if len(kzgProofBytes) != kzg.BytesPerProof {
+					return errors.New("wrong KZG proof size - should never happen")
+				}
 
-		cellsPerBlob = append(cellsPerBlob, cells)
-		proofsPerBlob = append(proofsPerBlob, kzgProofs)
+				var kzgProof kzg.Proof
+				if copy(kzgProof[:], kzgProofBytes) != len(kzgProof) {
+					return errors.New("wrong copied KZG proof size - should never happen")
+				}
+
+				kzgProofs = append(kzgProofs, kzgProof)
+			}
+
+			cellsPerBlob[i] = cells
+			proofsPerBlob[i] = kzgProofs
+			return nil
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		return nil, nil, err
 	}
 
 	return cellsPerBlob, proofsPerBlob, nil
