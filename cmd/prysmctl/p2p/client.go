@@ -133,7 +133,7 @@ func (c *client) Send(
 		}
 		if _, err := c.Encoding().EncodeWithMaxLength(stream, castedMsg); err != nil {
 			tracing.AnnotateError(span, err)
-			_err := stream.Reset()
+			_err := stream.ResetWithError(corenet.StreamProtocolViolation)
 			_ = _err
 			return nil, err
 		}
@@ -141,7 +141,7 @@ func (c *client) Send(
 	// Close stream for writing.
 	if err := stream.CloseWrite(); err != nil {
 		tracing.AnnotateError(span, err)
-		_err := stream.Reset()
+		_err := stream.ResetWithError(corenet.StreamNoError)
 		_ = _err
 		return nil, errors.Wrap(err, "could not close write")
 	}

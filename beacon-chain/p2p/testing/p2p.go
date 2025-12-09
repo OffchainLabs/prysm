@@ -398,7 +398,7 @@ func (p *TestP2P) Send(ctx context.Context, msg any, topic string, pid peer.ID) 
 			p.t.Fatalf("%T doesn't support ssz marshaler", msg)
 		}
 		if _, err := p.Encoding().EncodeWithMaxLength(stream, castedMsg); err != nil {
-			_err := stream.Reset()
+			_err := stream.ResetWithError(network.StreamProtocolViolation)
 			_ = _err
 			return nil, err
 		}
@@ -406,7 +406,7 @@ func (p *TestP2P) Send(ctx context.Context, msg any, topic string, pid peer.ID) 
 
 	// Close stream for writing.
 	if err := stream.CloseWrite(); err != nil {
-		_err := stream.Reset()
+		_err := stream.ResetWithError(network.StreamNoError)
 		_ = _err
 		return nil, err
 	}

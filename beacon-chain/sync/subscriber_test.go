@@ -516,11 +516,13 @@ func TestFilterSubnetPeers(t *testing.T) {
 		nPeer := createPeer(t, subnet20)
 		p.Connect(nPeer)
 		wantedPeers = append(wantedPeers, nPeer.BHost.ID())
-		time.Sleep(100 * time.Millisecond)
 	}
 
-	recPeers = r.filterNeededPeers(wantedPeers)
-	assert.Equal(t, 1, len(recPeers), "expected at least 1 suitable peer to prune")
+	// Wait for pubsub mesh to discover all topic subscriptions.
+	require.Eventually(t, func() bool {
+		recPeers = r.filterNeededPeers(wantedPeers)
+		return len(recPeers) >= 1
+	}, 2*time.Second, 100*time.Millisecond, "expected at least 1 suitable peer to prune")
 }
 
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
