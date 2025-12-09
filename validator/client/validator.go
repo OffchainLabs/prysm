@@ -921,6 +921,8 @@ func (v *validator) UpdateDomainDataCaches(ctx context.Context, slot primitives.
 	ctx, span := trace.StartSpan(ctx, "validator.UpdateDomainDataCaches")
 	defer span.End()
 
+	epoch := slots.ToEpoch(slot)
+
 	for _, d := range [][]byte{
 		params.BeaconConfig().DomainRandao[:],
 		params.BeaconConfig().DomainBeaconAttester[:],
@@ -931,7 +933,7 @@ func (v *validator) UpdateDomainDataCaches(ctx context.Context, slot primitives.
 		params.BeaconConfig().DomainSyncCommitteeSelectionProof[:],
 		params.BeaconConfig().DomainContributionAndProof[:],
 	} {
-		_, err := v.domainData(ctx, slots.ToEpoch(slot), d)
+		_, err := v.domainData(ctx, epoch, d)
 		if err != nil {
 			log.WithError(err).Errorf("Failed to update domain data for domain %v", d)
 		}
