@@ -3,6 +3,7 @@ package peerdas
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -329,6 +330,11 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
 func ComputeCellsAndProofsFromStructured(blobsAndProofs []*pb.BlobAndProofV2) ([][]kzg.Cell, [][]kzg.Proof, error) {
+	start := time.Now()
+	defer func() {
+		cellsAndProofsFromStructuredComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
 	cellsPerBlob := make([][]kzg.Cell, 0, len(blobsAndProofs))
 	proofsPerBlob := make([][]kzg.Proof, 0, len(blobsAndProofs))
 	for _, blobAndProof := range blobsAndProofs {
