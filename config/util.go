@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 func UnmarshalFromURL(ctx context.Context, from string, to any) error {
@@ -55,10 +55,64 @@ func UnmarshalFromFile(from string, to any) error {
 		return errors.Wrap(err, "failed to open file")
 	}
 
-	if err := yaml.Unmarshal(b, to); err != nil {
-		return errors.Wrap(err, "failed to unmarshal yaml file")
+	ext := filepath.Ext(cleanpath)
+	if ext == ".json" {
+		if err := json.Unmarshal(b, to); err != nil {
+			return errors.Wrap(err, "failed to unmarshal json file")
+		}
+	} else {
+		// For YAML files, convert YAML to JSON first, then unmarshal with JSON decoder.
+		// This ensures json struct tags work correctly (similar to k8s.io/apimachinery yaml behavior).
+		if err := yamlUnmarshalViaJSON(b, to); err != nil {
+			return errors.Wrap(err, "failed to unmarshal yaml file")
+		}
 	}
 	return nil
+}
+
+// yamlUnmarshalViaJSON unmarshals YAML by first converting to JSON, then using JSON unmarshaler.
+// This ensures that json struct tags work for YAML files.
+func yamlUnmarshalViaJSON(data []byte, to any) error {
+	// First unmarshal YAML to a generic interface
+	var intermediate any
+	if err := yaml.Unmarshal(data, &intermediate); err != nil {
+		return err
+	}
+	// Convert map[string]any to use JSON-compatible types
+	intermediate = convertMapKeys(intermediate)
+	// Marshal to JSON
+	jsonData, err := json.Marshal(intermediate)
+	if err != nil {
+		return err
+	}
+	// Unmarshal JSON to target struct (using json struct tags)
+	return json.Unmarshal(jsonData, to)
+}
+
+// convertMapKeys recursively converts map types from YAML to JSON-compatible format.
+// YAML v3 can produce map[string]any or map[interface{}]interface{} depending on keys.
+func convertMapKeys(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		m := make(map[string]any)
+		for k, val := range x {
+			m[k] = convertMapKeys(val)
+		}
+		return m
+	case map[interface{}]interface{}:
+		m := make(map[string]any)
+		for k, val := range x {
+			m[fmt.Sprint(k)] = convertMapKeys(val)
+		}
+		return m
+	case []any:
+		for i, val := range x {
+			x[i] = convertMapKeys(val)
+		}
+		return x
+	default:
+		return v
+	}
 }
 
 func WarnNonChecksummedAddress(feeRecipient string) error {

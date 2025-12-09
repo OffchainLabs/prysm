@@ -7,7 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	"k8s.io/client-go/tools/cache"
+	"github.com/OffchainLabs/prysm/v7/container/fifo"
 )
 
 var (
@@ -52,8 +52,8 @@ func rootKeyFn(obj any) (string, error) {
 
 // epochBoundaryState struct with two queues by looking up beacon state by slot or root.
 type epochBoundaryState struct {
-	rootStateCache *cache.FIFO
-	slotRootCache  *cache.FIFO
+	rootStateCache *fifo.FIFO
+	slotRootCache  *fifo.FIFO
 	lock           sync.RWMutex
 }
 
@@ -61,8 +61,8 @@ type epochBoundaryState struct {
 // memory.
 func newBoundaryStateCache() *epochBoundaryState {
 	return &epochBoundaryState{
-		rootStateCache: cache.NewFIFO(rootKeyFn),
-		slotRootCache:  cache.NewFIFO(slotKeyFn),
+		rootStateCache: fifo.New(rootKeyFn),
+		slotRootCache:  fifo.New(slotKeyFn),
 	}
 }
 
@@ -175,7 +175,7 @@ func (e *epochBoundaryState) delete(blockRoot [32]byte) error {
 }
 
 // trim the FIFO queue to the maxSize.
-func trim(queue *cache.FIFO, maxSize uint64) {
+func trim(queue *fifo.FIFO, maxSize uint64) {
 	for s := uint64(len(queue.ListKeys())); s > maxSize; s-- {
 		if _, err := queue.Pop(popProcessNoopFunc); err != nil { // This never returns an error, but we'll handle anyway for sanity.
 			panic(err) // lint:nopanic -- Never returns an error.
