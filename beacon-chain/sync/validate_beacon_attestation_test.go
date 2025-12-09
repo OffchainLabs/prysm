@@ -499,6 +499,10 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			Data:            &ethpb.AttestationData{Slot: 2, CommitteeIndex: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
+		s3c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 3, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
 
 		t.Run("empty cache", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
@@ -506,26 +510,39 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		})
 		t.Run("ok", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
-			s.setSeenUnaggregatedAtt(key)
+			first := s.setSeenUnaggregatedAtt(key)
 			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
+		})
+		t.Run("already seen", func(t *testing.T) {
+			key := generateKey(t, s3c0a0)
+			first := s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
+			first = s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, false, first)
 		})
 		t.Run("different slot", func(t *testing.T) {
 			key1 := generateKey(t, s1c0a0)
 			key2 := generateKey(t, s2c0a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different committee index", func(t *testing.T) {
 			key1 := generateKey(t, s0c1a0)
 			key2 := generateKey(t, s0c2a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different bit", func(t *testing.T) {
 			key1 := generateKey(t, s0c0a1)
 			key2 := generateKey(t, s0c0a2)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("0 bits set is considered not seen", func(t *testing.T) {
 			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1000}}
@@ -576,6 +593,11 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			CommitteeId:   0,
 			AttesterIndex: 0,
 		}
+		s3c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 2},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
 
 		t.Run("empty cache", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
@@ -583,26 +605,39 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		})
 		t.Run("ok", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
-			s.setSeenUnaggregatedAtt(key)
+			first := s.setSeenUnaggregatedAtt(key)
 			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different slot", func(t *testing.T) {
 			key1 := generateKey(t, s1c0a0)
 			key2 := generateKey(t, s2c0a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
+		})
+		t.Run("already seen", func(t *testing.T) {
+			key := generateKey(t, s3c0a0)
+			first := s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
+			first = s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, false, first)
 		})
 		t.Run("different committee index", func(t *testing.T) {
 			key1 := generateKey(t, s0c1a0)
 			key2 := generateKey(t, s0c2a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different attester", func(t *testing.T) {
 			key1 := generateKey(t, s0c0a1)
 			key2 := generateKey(t, s0c0a2)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("single attestation is considered not seen", func(t *testing.T) {
 			a := &ethpb.AttestationElectra{}

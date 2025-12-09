@@ -82,8 +82,8 @@ type StateRootNotFoundError struct {
 }
 
 // NewStateRootNotFoundError creates a new error instance.
-func NewStateRootNotFoundError(stateRootsSize int) StateNotFoundError {
-	return StateNotFoundError{
+func NewStateRootNotFoundError(stateRootsSize int) StateRootNotFoundError {
+	return StateRootNotFoundError{
 		message: fmt.Sprintf("state root not found in the last %d state roots", stateRootsSize),
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 )
 
@@ -30,35 +31,47 @@ type blobSummary struct {
 }
 
 type blobSyncConfig struct {
-	retentionStart primitives.Slot
-	nbv            verification.NewBlobVerifier
-	store          *filesystem.BlobStorage
+	nbv          verification.NewBlobVerifier
+	store        *filesystem.BlobStorage
+	currentNeeds func() das.CurrentNeeds
 }
 
 func newBlobSync(current primitives.Slot, vbs verifiedROBlocks, cfg *blobSyncConfig) (*blobSync, error) {
-	expected, err := vbs.blobIdents(cfg.retentionStart)
+	expected, err := vbs.blobIdents(cfg.currentNeeds)
 	if err != nil {
 		return nil, err
 	}
 	bbv := newBlobBatchVerifier(cfg.nbv)
-	as := das.NewLazilyPersistentStore(cfg.store, bbv)
+	shouldRetain := func(slot primitives.Slot) bool {
+		needs := cfg.currentNeeds()
+		return needs.Blob.At(slot)
+	}
+	as := das.NewLazilyPersistentStore(cfg.store, bbv, shouldRetain)
+
 	return &blobSync{current: current, expected: expected, bbv: bbv, store: as}, nil
 }
 
 type blobVerifierMap map[[32]byte][]verification.BlobVerifier
 
 type blobSync struct {
-	store    das.AvailabilityStore
+	store    *das.LazilyPersistentStoreBlob
 	expected []blobSummary
 	next     int
 	bbv      *blobBatchVerifier
 	current  primitives.Slot
+	peer     peer.ID
 }
 
-func (bs *blobSync) blobsNeeded() int {
+func (bs *blobSync) needed() int {
 	return len(bs.expected) - bs.next
 }
 
+// validateNext is given to the RPC request code as one of the a validation callbacks.
+// It orchestrates setting up the batch verifier (blobBatchVerifier) and calls Persist on the
+// AvailabilityStore. This enables the rest of the code in between RPC and the AvailabilityStore
+// to stay decoupled from each other. The AvailabilityStore holds the blobs in memory between the
+// call to Persist, and the call to IsDataAvailable (where the blobs are actually written to disk
+// if successfully verified).
 func (bs *blobSync) validateNext(rb blocks.ROBlob) error {
 	if bs.next >= len(bs.expected) {
 		return errUnexpectedResponseSize
@@ -102,6 +115,7 @@ func newBlobBatchVerifier(nbv verification.NewBlobVerifier) *blobBatchVerifier {
 	return &blobBatchVerifier{newBlobVerifier: nbv, verifiers: make(blobVerifierMap)}
 }
 
+// blobBatchVerifier implements the BlobBatchVerifier interface required by the das store.
 type blobBatchVerifier struct {
 	newBlobVerifier verification.NewBlobVerifier
 	verifiers       blobVerifierMap
@@ -117,6 +131,7 @@ func (bbv *blobBatchVerifier) newVerifier(rb blocks.ROBlob) verification.BlobVer
 	return m[rb.Index]
 }
 
+// VerifiedROBlobs satisfies the BlobBatchVerifier interface expected by the AvailabilityChecker
 func (bbv *blobBatchVerifier) VerifiedROBlobs(_ context.Context, blk blocks.ROBlock, _ []blocks.ROBlob) ([]blocks.VerifiedROBlob, error) {
 	m, ok := bbv.verifiers[blk.Root()]
 	if !ok {
