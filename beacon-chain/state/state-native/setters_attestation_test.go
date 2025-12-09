@@ -29,16 +29,16 @@ func TestBeaconState_RotateAttestations(t *testing.T) {
 func TestAppendBeyondIndicesLimit(t *testing.T) {
 	zeroHash := params.BeaconConfig().ZeroHash
 	mockblockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
-	for i := 0; i < len(mockblockRoots); i++ {
+	for i := range mockblockRoots {
 		mockblockRoots[i] = zeroHash[:]
 	}
 
 	mockstateRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
-	for i := 0; i < len(mockstateRoots); i++ {
+	for i := range mockstateRoots {
 		mockstateRoots[i] = zeroHash[:]
 	}
 	mockrandaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(mockrandaoMixes); i++ {
+	for i := range mockrandaoMixes {
 		mockrandaoMixes[i] = zeroHash[:]
 	}
 	st, err := InitializeFromProtoPhase0(&ethpb.BeaconState{
@@ -61,13 +61,13 @@ func TestAppendBeyondIndicesLimit(t *testing.T) {
 	}
 	_, err = st.HashTreeRoot(t.Context())
 	require.NoError(t, err)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		assert.NoError(t, st.AppendValidator(&ethpb.Validator{}))
 	}
 	assert.Equal(t, false, s.rebuildTrie[types.Validators])
 	assert.NotEqual(t, len(s.dirtyIndices[types.Validators]), 0)
 
-	for i := 0; i < indicesLimit; i++ {
+	for range indicesLimit {
 		assert.NoError(t, st.AppendValidator(&ethpb.Validator{}))
 	}
 	assert.Equal(t, true, s.rebuildTrie[types.Validators])
@@ -88,10 +88,8 @@ func BenchmarkAppendPreviousEpochAttestations(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	b.ResetTimer()
-
 	ref := st.Copy()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		err := ref.AppendPreviousEpochAttestations(&ethpb.PendingAttestation{Data: &ethpb.AttestationData{Slot: primitives.Slot(i)}})
 		require.NoError(b, err)
 		ref = st.Copy()

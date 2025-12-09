@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"runtime/debug"
 	"slices"
-	"sort"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -45,9 +44,7 @@ func ConvertToIndexed(_ context.Context, attestation ethpb.Att, committees ...[]
 		return nil, err
 	}
 
-	sort.Slice(attIndices, func(i, j int) bool {
-		return attIndices[i] < attIndices[j]
-	})
+	slices.Sort(attIndices)
 
 	if attestation.Version() >= version.Electra {
 		return &ethpb.IndexedAttestationElectra{

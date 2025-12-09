@@ -47,7 +47,7 @@ func TestImportExport_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	rawPublicKeys := make([][]byte, numValidators)
-	for i := 0; i < numValidators; i++ {
+	for i := range numValidators {
 		rawPublicKeys[i] = publicKeys[i][:]
 	}
 
@@ -133,7 +133,7 @@ func TestImportExport_RoundTrip_SkippedAttestationEpochs(t *testing.T) {
 	require.NoError(t, err)
 
 	rawPublicKeys := make([][]byte, numValidators)
-	for i := 0; i < numValidators; i++ {
+	for i := range numValidators {
 		rawPublicKeys[i] = pubKeys[i][:]
 	}
 
@@ -184,7 +184,7 @@ func TestImportExport_FilterKeys(t *testing.T) {
 	// Next up, we export our slashing protection database into the EIP standard file.
 	// Next, we attempt to import it into our validator database.
 	rawKeys := make([][]byte, 5)
-	for i := 0; i < len(rawKeys); i++ {
+	for i := range rawKeys {
 		rawKeys[i] = publicKeys[i][:]
 	}
 
@@ -228,7 +228,7 @@ func TestImportInterchangeData_OK(t *testing.T) {
 
 	// Next, we attempt to retrieve the attesting and proposals histories from our database and
 	// verify those indeed match the originally generated mock histories.
-	for i := 0; i < len(publicKeys); i++ {
+	for i := range publicKeys {
 		receivedAttestingHistory, err := validatorDB.AttestationHistoryForPubKey(ctx, publicKeys[i])
 		require.NoError(t, err)
 
@@ -399,7 +399,7 @@ func TestStore_ImportInterchangeData_BadFormat_PreventsDBWrites(t *testing.T) {
 	// verify nothing was saved to the DB. If there is an error in the import process, we need to make
 	// sure writing is an atomic operation: either the import succeeds and saves the slashing protection
 	// data to our DB, or it does not.
-	for i := 0; i < len(publicKeys); i++ {
+	for i := range publicKeys {
 		receivedAttestingHistory, err := validatorDB.AttestationHistoryForPubKey(ctx, publicKeys[i])
 		require.NoError(t, err)
 		require.Equal(

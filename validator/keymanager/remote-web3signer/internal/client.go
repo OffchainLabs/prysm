@@ -189,7 +189,7 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 }
 
 // unmarshalResponse is a utility method for unmarshalling responses.
-func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject interface{}) error {
+func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject any) error {
 	defer closeBody(responseBody)
 	if err := json.NewDecoder(responseBody).Decode(&unmarshalledResponseObject); err != nil {
 		body, err := io.ReadAll(responseBody)

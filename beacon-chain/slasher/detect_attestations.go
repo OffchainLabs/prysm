@@ -29,9 +29,7 @@ func (s *Service) checkSlashableAttestations(
 		return nil, errors.Wrap(err, "could not check slashable double votes")
 	}
 
-	for root, slashing := range doubleVoteSlashings {
-		slashings[root] = slashing
-	}
+	maps.Copy(slashings, doubleVoteSlashings)
 
 	// Save the attestation records to our database.
 	// If multiple attestations are provided for the same validator index + target epoch combination,
@@ -46,9 +44,7 @@ func (s *Service) checkSlashableAttestations(
 		return nil, errors.Wrap(err, "could not check slashable surround votes")
 	}
 
-	for root, slashing := range surroundSlashings {
-		slashings[root] = slashing
-	}
+	maps.Copy(slashings, surroundSlashings)
 
 	return slashings, nil
 }
@@ -97,9 +93,7 @@ func (s *Service) checkSurroundVotes(
 			return nil, errors.Wrapf(err, "could not update min attestation spans for validator chunk index %d", validatorChunkIndex)
 		}
 
-		for root, slashing := range surroundingSlashings {
-			slashings[root] = slashing
-		}
+		maps.Copy(slashings, surroundingSlashings)
 
 		// Check for surrounded votes.
 		surroundedSlashings, err := s.updateSpans(ctx, maxChunkByChunkIndex, attWrappersByChunkIndex, slashertypes.MaxSpan, validatorChunkIndex, currentEpoch)
@@ -107,9 +101,7 @@ func (s *Service) checkSurroundVotes(
 			return nil, errors.Wrapf(err, "could not update max attestation spans for validator chunk index %d", validatorChunkIndex)
 		}
 
-		for root, slashing := range surroundedSlashings {
-			slashings[root] = slashing
-		}
+		maps.Copy(slashings, surroundedSlashings)
 
 		// Memoize the updated chunks for the current validator chunk index.
 		minChunkByChunkIndexByValidatorChunkIndex[validatorChunkIndex] = minChunkByChunkIndex
@@ -755,7 +747,7 @@ func (s *Service) loadChunksFromDisk(
 
 	// Initialize the chunks.
 	chunksByChunkIdx := make(map[uint64]Chunker, chunksCount)
-	for i := 0; i < len(rawChunks); i++ {
+	for i := range rawChunks {
 		// If the chunk exists in the database, we initialize it from the raw bytes data.
 		// If it does not exist, we initialize an empty chunk.
 		var (

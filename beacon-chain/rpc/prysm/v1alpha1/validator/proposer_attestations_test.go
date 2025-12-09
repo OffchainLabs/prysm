@@ -703,7 +703,7 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 	r := rand.New(rand.NewSource(123))
 
 	var atts []ethpb.Att
-	for c := uint64(0); c < committeeCount; c++ {
+	for c := range committeeCount {
 		for a := uint64(0); a < params.BeaconConfig().TargetAggregatorsPerCommittee; a++ {
 			cb := primitives.NewAttestationCommitteeBits()
 			cb.SetBitAt(c, true)
@@ -718,7 +718,7 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 					CommitteeBits:   cb,
 					Signature:       sig.Marshal(),
 				}
-				for bit := uint64(0); bit < valsPerCommittee; bit++ {
+				for bit := range valsPerCommittee {
 					att.AggregationBits.SetBitAt(bit, r.Intn(100) < 2) // 2% that the bit is set
 				}
 			} else {
@@ -728,7 +728,7 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 					CommitteeBits:   cb,
 					Signature:       sig.Marshal(),
 				}
-				for bit := uint64(0); bit < valsPerCommittee; bit++ {
+				for bit := range valsPerCommittee {
 					att.AggregationBits.SetBitAt(bit, r.Intn(100) < 98) // 98% that the bit is set
 				}
 			}
@@ -745,8 +745,7 @@ func Benchmark_packAttestations_Electra(b *testing.B) {
 
 	require.NoError(b, st.SetSlot(params.BeaconConfig().SlotsPerEpoch))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err = s.packAttestations(ctx, st, params.BeaconConfig().SlotsPerEpoch+1)
 		require.NoError(b, err)
 	}

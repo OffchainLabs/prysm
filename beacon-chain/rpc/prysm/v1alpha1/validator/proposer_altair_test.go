@@ -271,14 +271,14 @@ func TestGetSyncAggregate_CorrectStateAtSyncCommitteePeriodBoundary(t *testing.T
 	wrongStateHasValidators := false
 	correctStateHasValidators := false
 
-	for i := 0; i < len(wrongStateBits); i++ {
+	for i := range wrongStateBits {
 		if wrongStateBits[i] != 0 {
 			wrongStateHasValidators = true
 			break
 		}
 	}
 
-	for i := 0; i < len(correctStateBits); i++ {
+	for i := range correctStateBits {
 		if correctStateBits[i] != 0 {
 			correctStateHasValidators = true
 			break

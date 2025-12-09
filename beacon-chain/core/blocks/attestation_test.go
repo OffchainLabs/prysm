@@ -317,7 +317,7 @@ func TestVerifyAttestationNoVerifySignature_Electra(t *testing.T) {
 func TestConvertToIndexed_OK(t *testing.T) {
 	helpers.ClearCache()
 	validators := make([]*ethpb.Validator, 2*params.BeaconConfig().SlotsPerEpoch)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch: params.BeaconConfig().FarFutureEpoch,
 		}
@@ -373,7 +373,7 @@ func TestVerifyIndexedAttestation_OK(t *testing.T) {
 	validators := make([]*ethpb.Validator, numOfValidators)
 	_, keys, err := util.DeterministicDepositsAndKeys(numOfValidators)
 	require.NoError(t, err)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
 			PublicKey:             keys[i].PublicKey().Marshal(),
@@ -481,7 +481,7 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 	sig := keys[0].Sign([]byte{'t', 'e', 's', 't'})
 	list := bitfield.Bitlist{0b11111}
 	var atts []ethpb.Att
-	for i := uint64(0); i < 1000; i++ {
+	for range uint64(1000) {
 		atts = append(atts, &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				CommitteeIndex: 1,
@@ -498,7 +498,7 @@ func TestValidateIndexedAttestation_BadAttestationsSignatureSet(t *testing.T) {
 
 	atts = []ethpb.Att{}
 	list = bitfield.Bitlist{0b10000}
-	for i := uint64(0); i < 1000; i++ {
+	for range uint64(1000) {
 		atts = append(atts, &ethpb.Attestation{
 			Data: &ethpb.AttestationData{
 				CommitteeIndex: 1,
@@ -524,7 +524,7 @@ func TestVerifyAttestations_HandlesPlannedFork(t *testing.T) {
 	validators := make([]*ethpb.Validator, numOfValidators)
 	_, keys, err := util.DeterministicDepositsAndKeys(numOfValidators)
 	require.NoError(t, err)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
 			PublicKey:             keys[i].PublicKey().Marshal(),
@@ -588,7 +588,7 @@ func TestRetrieveAttestationSignatureSet_VerifiesMultipleAttestations(t *testing
 	validators := make([]*ethpb.Validator, numOfValidators)
 	_, keys, err := util.DeterministicDepositsAndKeys(numOfValidators)
 	require.NoError(t, err)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
 			PublicKey:             keys[i].PublicKey().Marshal(),
@@ -707,7 +707,7 @@ func TestRetrieveAttestationSignatureSet_AcrossFork(t *testing.T) {
 	validators := make([]*ethpb.Validator, numOfValidators)
 	_, keys, err := util.DeterministicDepositsAndKeys(numOfValidators)
 	require.NoError(t, err)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
 			PublicKey:             keys[i].PublicKey().Marshal(),

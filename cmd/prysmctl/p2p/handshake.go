@@ -22,7 +22,7 @@ func (c *client) registerHandshakeHandlers() {
 }
 
 // pingHandler reads the incoming ping rpc message from the peer.
-func (c *client) pingHandler(_ context.Context, _ interface{}, stream libp2pcore.Stream) error {
+func (c *client) pingHandler(_ context.Context, _ any, stream libp2pcore.Stream) error {
 	defer closeStream(stream)
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
@@ -34,13 +34,13 @@ func (c *client) pingHandler(_ context.Context, _ interface{}, stream libp2pcore
 	return nil
 }
 
-func (c *client) goodbyeHandler(_ context.Context, _ interface{}, _ libp2pcore.Stream) error {
+func (c *client) goodbyeHandler(_ context.Context, _ any, _ libp2pcore.Stream) error {
 	return nil
 }
 
 // statusRPCHandler reads the incoming Status RPC from the peer and responds with our version of a status message.
 // This handler will disconnect any peer that does not match our fork version.
-func (c *client) statusRPCHandler(ctx context.Context, _ interface{}, stream libp2pcore.Stream) error {
+func (c *client) statusRPCHandler(ctx context.Context, _ any, stream libp2pcore.Stream) error {
 	defer closeStream(stream)
 	chainHead, err := c.beaconClient.GetChainHead(ctx, &emptypb.Empty{})
 	if err != nil {

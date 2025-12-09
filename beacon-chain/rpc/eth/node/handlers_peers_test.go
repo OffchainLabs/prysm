@@ -341,8 +341,7 @@ func BenchmarkGetPeers(b *testing.B) {
 	writer.Body = &bytes.Buffer{}
 	s.GetPeers(writer, request)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		s.GetPeers(writer, request)
 	}
 }

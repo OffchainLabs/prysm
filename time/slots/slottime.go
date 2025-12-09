@@ -14,6 +14,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// errOverflow is returned when a slot calculation would overflow.
+var errOverflow = errors.New("slot calculation overflows")
+
 // MaxSlotBuffer specifies the max buffer given to slots from
 // incoming objects. (24 mins with mainnet spec)
 const MaxSlotBuffer = uint64(1 << 7)
@@ -40,14 +43,17 @@ func EpochsSinceGenesis(genesis time.Time) primitives.Epoch {
 // in milliseconds, useful for dividing values such as 1 second into
 // millisecond-based durations.
 func DivideSlotBy(timesPerSlot int64) time.Duration {
-	return time.Duration(int64(params.BeaconConfig().SecondsPerSlot*1000)/timesPerSlot) * time.Millisecond
+	if timesPerSlot == 0 {
+		return 0
+	}
+	return params.BeaconConfig().SlotDuration() / time.Duration(timesPerSlot)
 }
 
 // MultiplySlotBy multiplies the SECONDS_PER_SLOT configuration
 // parameter by a specified number. It returns a value of time.Duration
 // in millisecond-based durations.
 func MultiplySlotBy(times int64) time.Duration {
-	return time.Duration(int64(params.BeaconConfig().SecondsPerSlot)*times) * time.Second
+	return params.BeaconConfig().SlotDuration() * time.Duration(times)
 }
 
 // AbsoluteValueSlotDifference between two slots.
@@ -105,7 +111,7 @@ func ToForkVersion(slot primitives.Slot) int {
 func EpochStart(epoch primitives.Epoch) (primitives.Slot, error) {
 	slot, err := params.BeaconConfig().SlotsPerEpoch.SafeMul(uint64(epoch))
 	if err != nil {
-		return slot, errors.Errorf("start slot calculation overflows: %v", err)
+		return slot, errors.Wrap(errOverflow, "epoch start")
 	}
 	return slot, nil
 }
@@ -124,7 +130,7 @@ func UnsafeEpochStart(epoch primitives.Epoch) primitives.Slot {
 // current epoch.
 func EpochEnd(epoch primitives.Epoch) (primitives.Slot, error) {
 	if epoch == math.MaxUint64 {
-		return 0, errors.New("start slot calculation overflows")
+		return 0, errors.Wrap(errOverflow, "epoch end")
 	}
 	slot, err := EpochStart(epoch + 1)
 	if err != nil {
@@ -175,12 +181,11 @@ func VerifyTime(genesis time.Time, slot primitives.Slot, timeTolerance time.Dura
 // StartTime takes the given slot and genesis time to determine the start time of the slot.
 // This method returns an error if the product of the slot duration * slot overflows int64.
 func StartTime(genesis time.Time, slot primitives.Slot) (time.Time, error) {
-	_, err := slot.SafeMul(params.BeaconConfig().SecondsPerSlot)
+	ms, err := slot.SafeMul(params.BeaconConfig().SlotDurationMillis())
 	if err != nil {
 		return time.Unix(0, 0), fmt.Errorf("slot (%d) is in the far distant future: %w", slot, err)
 	}
-	sd := time.Second * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Duration(slot)
-	return genesis.Add(sd), nil
+	return genesis.Add(time.Duration(ms) * time.Millisecond), nil
 }
 
 // CurrentSlot returns the current slot as determined by the local clock and
@@ -194,7 +199,7 @@ func At(genesis, tm time.Time) primitives.Slot {
 	if tm.Before(genesis) {
 		return 0
 	}
-	return primitives.Slot(tm.Sub(genesis) / time.Second / time.Duration(params.BeaconConfig().SecondsPerSlot))
+	return primitives.Slot(tm.Sub(genesis) / params.BeaconConfig().SlotDuration())
 }
 
 // Duration computes the span of time between two instants, represented as Slots.
@@ -202,7 +207,7 @@ func Duration(start, end time.Time) primitives.Slot {
 	if end.Before(start) {
 		return 0
 	}
-	return primitives.Slot(uint64(end.Unix()-start.Unix()) / params.BeaconConfig().SecondsPerSlot)
+	return primitives.Slot((end.Sub(start)) / params.BeaconConfig().SlotDuration())
 }
 
 // ValidateClock validates a provided slot against the local
@@ -231,7 +236,7 @@ func RoundUpToNearestEpoch(slot primitives.Slot) primitives.Slot {
 // depending on the provided genesis and current slot.
 func VotingPeriodStartTime(genesis uint64, slot primitives.Slot) uint64 {
 	slots := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod))
-	startTime := uint64((slot - slot.ModSlot(slots)).Mul(params.BeaconConfig().SecondsPerSlot))
+	startTime := uint64((slot - slot.ModSlot(slots)).Mul(params.BeaconConfig().SlotDurationMillis())) / 1000
 	return genesis + startTime
 }
 
@@ -267,7 +272,7 @@ func SyncCommitteePeriodStartEpoch(e primitives.Epoch) (primitives.Epoch, error)
 // given slot start time. This method returns an error if the timestamp happens
 // before the given slot start time.
 func SinceSlotStart(s primitives.Slot, genesis time.Time, timestamp time.Time) (time.Duration, error) {
-	limit := genesis.Add(time.Duration(uint64(s)*params.BeaconConfig().SecondsPerSlot) * time.Second)
+	limit := genesis.Add(time.Duration(uint64(s)) * params.BeaconConfig().SlotDuration())
 	if timestamp.Before(limit) {
 		return 0, fmt.Errorf("could not compute seconds since slot %d start: invalid timestamp, got %s < want %s", s, timestamp, limit)
 	}
@@ -277,13 +282,31 @@ func SinceSlotStart(s primitives.Slot, genesis time.Time, timestamp time.Time) (
 // WithinVotingWindow returns whether the current time is within the voting window
 // (eg. 4 seconds on mainnet) of the current slot.
 func WithinVotingWindow(genesis time.Time, slot primitives.Slot) bool {
-	votingWindow := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
-	return time.Since(UnsafeStartTime(genesis, slot)) < time.Duration(votingWindow)*time.Second
+	votingWindow := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
+	return time.Since(UnsafeStartTime(genesis, slot)) < votingWindow
 }
 
 // MaxSafeEpoch gives the largest epoch value that can be safely converted to a slot.
+// Note that just dividing max uint64 by slots per epoch is not sufficient,
+// because the resulting slot could still be the start of an epoch that would overflow
+// in the end slot computation. So we subtract 1 to ensure that the final epoch can always
+// have 32 slots.
 func MaxSafeEpoch() primitives.Epoch {
-	return primitives.Epoch(math.MaxUint64 / uint64(params.BeaconConfig().SlotsPerEpoch))
+	return primitives.Epoch(math.MaxUint64/uint64(params.BeaconConfig().SlotsPerEpoch)) - 1
+}
+
+// SafeEpochStartOrMax returns the start slot of the given epoch if it will not overflow,
+// otherwise it takes the highest epoch that won't overflow,
+// and to introduce a little margin for error, returns the slot beginning the prior epoch.
+func SafeEpochStartOrMax(e primitives.Epoch) primitives.Slot {
+	// The max value converted to a slot can't be the start of a conceptual epoch,
+	// because the first slot of that epoch would be overflow
+	// so use the start slot of the epoch right before that value.
+	me := MaxSafeEpoch()
+	if e > me {
+		return UnsafeEpochStart(me)
+	}
+	return UnsafeEpochStart(e)
 }
 
 // SecondsUntilNextEpochStart returns how many seconds until the next Epoch start from the current time and slot
@@ -306,10 +329,4 @@ func SecondsUntilNextEpochStart(genesis time.Time) (uint64, error) {
 		"is_epoch_start":        IsEpochStart(currentSlot),
 	}).Debugf("%d seconds until next epoch", waitTime)
 	return waitTime, nil
-}
-
-// ComponentDuration calculates the duration of a slot component in milliseconds.
-func ComponentDuration(component primitives.BP) time.Duration {
-	ms := (component * params.SlotBP()) / params.BasisPoints
-	return time.Duration(ms) * time.Millisecond
 }

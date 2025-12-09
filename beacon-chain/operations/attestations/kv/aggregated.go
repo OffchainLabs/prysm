@@ -72,7 +72,7 @@ func (c *AttCaches) aggregateParallel(atts map[attestation.Id][]ethpb.Att, leftO
 	n := runtime.GOMAXPROCS(0) // defaults to the value of runtime.NumCPU
 	ch := make(chan []ethpb.Att, n)
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			for as := range ch {

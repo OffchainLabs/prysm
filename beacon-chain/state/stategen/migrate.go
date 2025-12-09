@@ -86,7 +86,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 				// you can just remove it from the hot state cache as it becomes redundant.
 				s.saveHotStateDB.lock.Lock()
 				roots := s.saveHotStateDB.blockRootsOfSavedStates
-				for i := 0; i < len(roots); i++ {
+				for i := range roots {
 					if aRoot == roots[i] {
 						s.saveHotStateDB.blockRootsOfSavedStates = append(roots[:i], roots[i+1:]...)
 						// There shouldn't be duplicated roots in `blockRootsOfSavedStates`.

@@ -106,7 +106,7 @@ type EventFeedWrapper struct {
 	subscribed chan struct{} // this channel is closed once a subscription is made
 }
 
-func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
+func (w *EventFeedWrapper) Subscribe(channel any) event.Subscription {
 	select {
 	case <-w.subscribed:
 		break // already closed
@@ -116,7 +116,7 @@ func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
 	return w.feed.Subscribe(channel)
 }
 
-func (w *EventFeedWrapper) Send(value interface{}) int {
+func (w *EventFeedWrapper) Send(value any) int {
 	return w.feed.Send(value)
 }
 
@@ -275,7 +275,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 }
 
 // ReceiveBlockBatch processes blocks in batches from initial-sync.
-func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityStore) error {
+func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityChecker) error {
 	if s.State == nil {
 		return ErrNilState
 	}
@@ -305,7 +305,7 @@ func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBl
 }
 
 // ReceiveBlock mocks ReceiveBlock method in chain service.
-func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, _ [32]byte, _ das.AvailabilityStore) error {
+func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, _ [32]byte, _ das.AvailabilityChecker) error {
 	if s.ReceiveBlockMockErr != nil {
 		return s.ReceiveBlockMockErr
 	}

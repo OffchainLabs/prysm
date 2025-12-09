@@ -21,7 +21,7 @@ func TestFuzzExecuteStateTransition_1000(t *testing.T) {
 	sb := &ethpb.SignedBeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(sb)
 		if sb.Block == nil || sb.Block.Body == nil {
@@ -45,7 +45,7 @@ func TestFuzzCalculateStateRoot_1000(t *testing.T) {
 	sb := &ethpb.SignedBeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(sb)
 		if sb.Block == nil || sb.Block.Body == nil {
@@ -68,7 +68,7 @@ func TestFuzzProcessSlot_1000(t *testing.T) {
 	require.NoError(t, err)
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		s, err := ProcessSlot(ctx, state)
 		if err != nil && s != nil {
@@ -86,7 +86,7 @@ func TestFuzzProcessSlots_1000(t *testing.T) {
 	slot := primitives.Slot(0)
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(&slot)
 		s, err := ProcessSlots(ctx, state, slot)
@@ -105,7 +105,7 @@ func TestFuzzprocessOperationsNoVerify_1000(t *testing.T) {
 	bb := &ethpb.BeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(bb)
 		if bb.Body == nil {
@@ -128,7 +128,7 @@ func TestFuzzverifyOperationLengths_10000(t *testing.T) {
 	bb := &ethpb.BeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(bb)
 		if bb.Body == nil {
@@ -148,7 +148,7 @@ func TestFuzzCanProcessEpoch_10000(t *testing.T) {
 	require.NoError(t, err)
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		fuzzer.Fuzz(state)
 		time.CanProcessEpoch(state)
 	}
@@ -162,7 +162,7 @@ func TestFuzzProcessEpochPrecompute_1000(t *testing.T) {
 	require.NoError(t, err)
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		s, err := ProcessEpochPrecompute(ctx, state)
 		if err != nil && s != nil {
@@ -180,7 +180,7 @@ func TestFuzzProcessBlockForStateRoot_1000(t *testing.T) {
 	sb := &ethpb.SignedBeaconBlock{}
 	fuzzer := fuzz.NewWithSeed(0)
 	fuzzer.NilChance(0.1)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		fuzzer.Fuzz(state)
 		fuzzer.Fuzz(sb)
 		if sb.Block == nil || sb.Block.Body == nil || sb.Block.Body.Eth1Data == nil {

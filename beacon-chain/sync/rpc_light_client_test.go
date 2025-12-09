@@ -431,7 +431,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
-			for j := 0; j < 5; j++ {
+			for j := range 5 {
 				l := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(uint64(j)))
 				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)

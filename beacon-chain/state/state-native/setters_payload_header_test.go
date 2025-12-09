@@ -88,8 +88,8 @@ func TestSetLatestExecutionPayloadHeader(t *testing.T) {
 
 	t.Run("mismatched type version returns error", func(t *testing.T) {
 		require.Equal(t, len(payloads), len(payloadHeaders), "This test will fail if the payloads and payload headers are not same length")
-		for i := 0; i < len(payloads); i++ {
-			for j := 0; j < len(payloads); j++ {
+		for i := range payloads {
+			for j := range payloads {
 				if i == j {
 					continue
 				}

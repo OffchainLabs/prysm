@@ -69,7 +69,7 @@ func Test_spreadKeysAcrossImportedWallets(t *testing.T) {
 	)
 	require.NoError(t, err)
 	ctx := t.Context()
-	for i := 0; i < numWallets; i++ {
+	for i := range numWallets {
 		w, err := wallet.OpenWallet(ctx, &wallet.Config{
 			WalletDir:      filepath.Join(tmpDir, fmt.Sprintf("wallet_%d", i)),
 			KeymanagerKind: keymanager.Local,

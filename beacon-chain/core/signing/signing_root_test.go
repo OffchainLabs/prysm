@@ -119,7 +119,7 @@ func TestFuzzverifySigningRoot_10000(_ *testing.T) {
 	var p []byte
 	var s []byte
 	var d []byte
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		fuzzer.Fuzz(st)
 		fuzzer.Fuzz(&pubkey)
 		fuzzer.Fuzz(&sig)

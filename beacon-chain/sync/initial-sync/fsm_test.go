@@ -58,7 +58,7 @@ func TestStateMachine_EventIDString(t *testing.T) {
 func TestStateMachineManager_addEventHandler(t *testing.T) {
 	smm := newStateMachineManager()
 
-	smm.addEventHandler(eventTick, stateNew, func(m *stateMachine, i interface{}) (id stateID, err error) {
+	smm.addEventHandler(eventTick, stateNew, func(m *stateMachine, i any) (id stateID, err error) {
 		return stateScheduled, nil
 	})
 	assert.Equal(t, 1, len(smm.handlers[stateNew]), "Unexpected size")
@@ -67,7 +67,7 @@ func TestStateMachineManager_addEventHandler(t *testing.T) {
 	assert.Equal(t, stateScheduled, state, "Unexpected state")
 
 	// Add second handler to the same event
-	smm.addEventHandler(eventTick, stateSent, func(m *stateMachine, i interface{}) (id stateID, err error) {
+	smm.addEventHandler(eventTick, stateSent, func(m *stateMachine, i any) (id stateID, err error) {
 		return stateDataParsed, nil
 	})
 	assert.Equal(t, 1, len(smm.handlers[stateSent]), "Unexpected size")
@@ -76,7 +76,7 @@ func TestStateMachineManager_addEventHandler(t *testing.T) {
 	assert.Equal(t, stateDataParsed, state, "Unexpected state")
 
 	// Add another handler to existing event/state pair. Should have no effect.
-	smm.addEventHandler(eventTick, stateSent, func(m *stateMachine, i interface{}) (id stateID, err error) {
+	smm.addEventHandler(eventTick, stateSent, func(m *stateMachine, i any) (id stateID, err error) {
 		return stateSkipped, nil
 	})
 	assert.Equal(t, 1, len(smm.handlers[stateSent]), "Unexpected size")
@@ -97,7 +97,7 @@ func TestStateMachine_trigger(t *testing.T) {
 		name        eventID
 		returnState stateID
 		epoch       primitives.Epoch
-		data        interface{}
+		data        any
 	}
 	tests := []struct {
 		name   string
@@ -157,7 +157,7 @@ func TestStateMachine_trigger(t *testing.T) {
 		},
 	}
 	fn := func(e event) eventHandlerFn {
-		return func(m *stateMachine, in interface{}) (stateID, error) {
+		return func(m *stateMachine, in any) (stateID, error) {
 			if e.err {
 				return m.state, errors.New("invalid")
 			}
@@ -198,19 +198,19 @@ func TestStateMachine_trigger(t *testing.T) {
 
 func TestStateMachineManager_QueueLoop(t *testing.T) {
 	smm := newStateMachineManager()
-	smm.addEventHandler(eventTick, stateNew, func(m *stateMachine, data interface{}) (stateID, error) {
+	smm.addEventHandler(eventTick, stateNew, func(m *stateMachine, data any) (stateID, error) {
 		return stateScheduled, nil
 	})
-	smm.addEventHandler(eventTick, stateScheduled, func(m *stateMachine, data interface{}) (stateID, error) {
+	smm.addEventHandler(eventTick, stateScheduled, func(m *stateMachine, data any) (stateID, error) {
 		if m.start < 256 {
 			return stateDataParsed, nil
 		}
 		return stateSkipped, nil
 	})
-	smm.addEventHandler(eventTick, stateDataParsed, func(m *stateMachine, data interface{}) (stateID, error) {
+	smm.addEventHandler(eventTick, stateDataParsed, func(m *stateMachine, data any) (stateID, error) {
 		return stateSent, nil
 	})
-	smm.addEventHandler(eventTick, stateSkipped, func(m *stateMachine, data interface{}) (stateID, error) {
+	smm.addEventHandler(eventTick, stateSkipped, func(m *stateMachine, data any) (stateID, error) {
 		dataParsed, ok := data.(int)
 		if !ok {
 			return m.state, errors.New("invalid data type")

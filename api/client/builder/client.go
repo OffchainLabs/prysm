@@ -421,7 +421,7 @@ func (c *Client) RegisterValidator(ctx context.Context, svr []*ethpb.SignedValid
 
 func jsonValidatorRegisterRequest(svr []*ethpb.SignedValidatorRegistrationV1) ([]byte, error) {
 	vs := make([]*structs.SignedValidatorRegistration, len(svr))
-	for i := 0; i < len(svr); i++ {
+	for i := range svr {
 		vs[i] = structs.SignedValidatorRegistrationFromConsensus(svr[i])
 	}
 	body, err := json.Marshal(vs)

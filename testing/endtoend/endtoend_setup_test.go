@@ -20,7 +20,6 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	require.NoError(t, params.SetActive(cfg))
 	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 
-	// Run for 12 epochs if not in long-running to confirm long-running has no issues.
 	var err error
 	epochsToRun := 16
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
@@ -103,7 +102,7 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	} else {
 		require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 	}
-	// Run for 10 epochs if not in long-running to confirm long-running has no issues.
+
 	var err error
 	epochsToRun := 16
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")

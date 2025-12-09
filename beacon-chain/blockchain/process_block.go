@@ -134,7 +134,7 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityStore) error {
+func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
 
@@ -306,7 +306,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
 }
 
-func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityStore, roBlock consensusblocks.ROBlock) error {
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock) error {
 	blockVersion := roBlock.Version()
 	block := roBlock.Block()
 	slot := block.Slot()
@@ -634,9 +634,7 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 		return nil, nil
 	}
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	if uint64(len(expected)) > numberOfColumns {
+	if len(expected) > fieldparams.NumberOfColumns {
 		return nil, errMaxDataColumnsExceeded
 	}
 
@@ -817,11 +815,10 @@ func (s *Service) areDataColumnsAvailable(
 			}
 
 		case <-ctx.Done():
-			var missingIndices interface{} = "all"
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			missingIndicesCount := uint64(len(missing))
+			var missingIndices any = "all"
+			missingIndicesCount := len(missing)
 
-			if missingIndicesCount < numberOfColumns {
+			if missingIndicesCount < fieldparams.NumberOfColumns {
 				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
@@ -948,13 +945,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
-		headBlock, err := s.headBlock()
-		if err != nil {
-			log.WithError(err).WithField("head_root", headRoot).Error("Unable to retrieve head block to fire payload attributes event")
-		}
-		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
-		// call notifyForkchoiceUpdate, so the event is fired here.
-		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, s.CurrentSlot()+1)
 		return
 	}
 

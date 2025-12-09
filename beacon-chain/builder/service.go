@@ -166,7 +166,7 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 	indexToRegistration := make(map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1)
 
 	valid := make([]*ethpb.SignedValidatorRegistrationV1, 0)
-	for i := 0; i < len(reg); i++ {
+	for i := range reg {
 		r := reg[i]
 		nx, exists := s.cfg.headFetcher.HeadPublicKeyToValidatorIndex(bytesutil.ToBytes48(r.Message.Pubkey))
 		if !exists {

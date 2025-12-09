@@ -51,6 +51,8 @@ type Flags struct {
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
 	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
+	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -69,7 +71,7 @@ type Flags struct {
 
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
-	DisableLastEpochTargets    bool // Disables processing of states for attestations to old blocks.
+	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
 
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
 
@@ -279,9 +281,21 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
 	}
-	if ctx.IsSet(disableLastEpochTargets.Name) {
-		logEnabled(disableLastEpochTargets)
-		cfg.DisableLastEpochTargets = true
+
+	cfg.IgnoreUnviableAttestations = false
+	if ctx.IsSet(ignoreUnviableAttestations.Name) && ctx.Bool(ignoreUnviableAttestations.Name) {
+		logEnabled(ignoreUnviableAttestations)
+		cfg.IgnoreUnviableAttestations = true
+	}
+
+	if ctx.IsSet(EnableStateDiff.Name) {
+		logEnabled(EnableStateDiff)
+		cfg.EnableStateDiff = true
+
+		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {
+			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
+			cfg.EnableHistoricalSpaceRepresentation = false
+		}
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}

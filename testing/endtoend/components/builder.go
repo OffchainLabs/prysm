@@ -36,7 +36,7 @@ func NewBuilderSet() *BuilderSet {
 func (s *BuilderSet) Start(ctx context.Context) error {
 	totalNodeCount := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount
 	nodes := make([]e2etypes.ComponentRunner, totalNodeCount)
-	for i := 0; i < totalNodeCount; i++ {
+	for i := range totalNodeCount {
 		nodes[i] = NewBuilder(i)
 	}
 	s.builders = nodes

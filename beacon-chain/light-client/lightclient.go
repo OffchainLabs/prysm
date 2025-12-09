@@ -243,7 +243,7 @@ func NewLightClientUpdateFromBeaconState(
 func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaconBlock) (interfaces.LightClientUpdate, error) {
 	syncCommitteeSize := params.BeaconConfig().SyncCommitteeSize
 	pubKeys := make([][]byte, syncCommitteeSize)
-	for i := uint64(0); i < syncCommitteeSize; i++ {
+	for i := range syncCommitteeSize {
 		pubKeys[i] = make([]byte, fieldparams.BLSPubkeyLength)
 	}
 	nextSyncCommittee := &pb.SyncCommittee{
@@ -262,7 +262,7 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 	}
 
 	executionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < fieldparams.ExecutionBranchDepth; i++ {
+	for i := range fieldparams.ExecutionBranchDepth {
 		executionBranch[i] = make([]byte, 32)
 	}
 

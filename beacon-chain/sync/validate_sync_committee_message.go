@@ -185,7 +185,7 @@ func (s *Service) rejectIncorrectSyncCommittee(
 			return pubsub.ValidationIgnore, err
 		}
 
-		format := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.SyncCommitteeMessage{})]
+		format := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()]
 		// Validate that the validator is in the correct committee.
 		subCommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
 		for _, idx := range committeeIndices {

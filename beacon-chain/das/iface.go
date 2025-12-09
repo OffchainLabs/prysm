@@ -7,13 +7,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
-// AvailabilityStore describes a component that can verify and save sidecars for a given block, and confirm previously
-// verified and saved sidecars.
-// Persist guarantees that the sidecar will be available to perform a DA check
-// for the life of the beacon node process.
-// IsDataAvailable guarantees that all blobs committed to in the block have been
-// durably persisted before returning a non-error value.
-type AvailabilityStore interface {
-	IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error
-	Persist(current primitives.Slot, blobSidecar ...blocks.ROBlob) error
+// AvailabilityChecker is the minimum interface needed to check if data is available for a block.
+// By convention there is a concept of an AvailabilityStore that implements a method to persist
+// blobs or data columns to prepare for Availability checking, but since those methods are different
+// for different forms of blob data, they are not included in the interface.
+type AvailabilityChecker interface {
+	IsDataAvailable(ctx context.Context, current primitives.Slot, b ...blocks.ROBlock) error
 }
+
+// RetentionChecker is a callback that determines whether blobs at the given slot are within the retention period.
+type RetentionChecker func(primitives.Slot) bool

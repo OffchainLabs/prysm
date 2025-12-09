@@ -49,7 +49,7 @@ func stringifyKey(key string) string {
 }
 
 // Journal wants strings but logrus takes anything.
-func stringifyEntries(data map[string]interface{}) map[string]string {
+func stringifyEntries(data map[string]any) map[string]string {
 	entries := make(map[string]string)
 	for k, v := range data {
 		key := stringifyKey(k)

@@ -47,6 +47,10 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -178,6 +182,10 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 	t.Run("can save retrieve", func(t *testing.T) {
 		for _, testVersion := range version.All()[1:] {
+			if testVersion == version.Gloas {
+				// TODO(16027): Unskip light client tests for Gloas
+				continue
+			}
 			t.Run(version.String(testVersion), func(t *testing.T) {
 
 				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -493,7 +501,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
@@ -551,7 +559,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 		updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			updates[i], err = createUpdate(t, version.Altair)
 			require.NoError(t, err)
 
@@ -633,7 +641,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				if i == 1 { // skip this update
 					updatePeriod++
 					continue
@@ -687,7 +695,7 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 			updatePeriod := slot.Div(uint64(config.EpochsPerSyncCommitteePeriod)).Div(uint64(config.SlotsPerEpoch))
 
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				if i == 0 { // skip this update
 					updatePeriod++
 					continue
@@ -732,6 +740,10 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 	})
 
 	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 
@@ -827,6 +839,10 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 	})
 
 	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)
@@ -910,14 +926,14 @@ func createUpdate(t *testing.T, v int) (interfaces.LightClientUpdate, error) {
 	var err error
 
 	sampleRoot := make([]byte, 32)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		sampleRoot[i] = byte(i)
 	}
 
 	sampleExecutionBranch := make([][]byte, fieldparams.ExecutionBranchDepth)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		sampleExecutionBranch[i] = make([]byte, 32)
-		for j := 0; j < 32; j++ {
+		for j := range 32 {
 			sampleExecutionBranch[i][j] = byte(i + j)
 		}
 	}

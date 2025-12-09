@@ -74,7 +74,7 @@ func TestServer_CreateWallet_Local(t *testing.T) {
 	encryptor := keystorev4.New()
 	keystores := make([]string, 3)
 	passwords := make([]string, 3)
-	for i := 0; i < len(keystores); i++ {
+	for i := range keystores {
 		privKey, err := bls.RandKey()
 		require.NoError(t, err)
 		pubKey := fmt.Sprintf("%x", privKey.PublicKey().Marshal())

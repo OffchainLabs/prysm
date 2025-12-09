@@ -444,14 +444,14 @@ func FuzzKmpIndex(f *testing.F) {
 		// Parse comma-separated strings into int slices
 		var source, target []int
 		if sourceStr != "" {
-			for _, s := range strings.Split(sourceStr, ",") {
+			for s := range strings.SplitSeq(sourceStr, ",") {
 				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
 					source = append(source, val)
 				}
 			}
 		}
 		if targetStr != "" {
-			for _, s := range strings.Split(targetStr, ",") {
+			for s := range strings.SplitSeq(targetStr, ",") {
 				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
 					target = append(target, val)
 				}
@@ -508,7 +508,7 @@ func FuzzComputeLPS(f *testing.F) {
 		// Parse comma-separated string into int slice
 		var pattern []int
 		if patternStr != "" {
-			for _, s := range strings.Split(patternStr, ",") {
+			for s := range strings.SplitSeq(patternStr, ",") {
 				if val, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
 					pattern = append(pattern, val)
 				}

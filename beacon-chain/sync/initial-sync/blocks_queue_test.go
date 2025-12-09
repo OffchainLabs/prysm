@@ -1049,7 +1049,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		DB:    beaconDB,
 		FinalizedCheckPoint: &eth.Checkpoint{
 			Epoch: finalizedEpoch,
-			Root:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{},
@@ -1252,7 +1252,7 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 		DB:    beaconDB,
 		FinalizedCheckPoint: &eth.Checkpoint{
 			Epoch: finalizedEpoch,
-			Root:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{},

@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -322,7 +323,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 		return err
 	}
 
-	flags := append([]string{}, r.config.BeaconFlags...)
+	flags := slices.Clone(r.config.BeaconFlags)
 	flags = append(flags, fmt.Sprintf("--checkpoint-sync-url=%s", bnAPI))
 	flags = append(flags, fmt.Sprintf("--genesis-beacon-api-url=%s", bnAPI))
 
@@ -689,7 +690,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		// Set it for prysm beacon node.
 		component, err := r.comHandler.eth1Proxy.ComponentAtIndex(0)
 		require.NoError(r.t, err)
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() any {
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),
@@ -700,7 +701,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		// Set it for lighthouse beacon node.
 		component, err = r.comHandler.eth1Proxy.ComponentAtIndex(2)
 		require.NoError(r.t, err)
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() any {
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),
@@ -709,7 +710,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 			return true
 		})
 
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(forkChoiceUpdatedMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(forkChoiceUpdatedMethod, func() any {
 			return &ForkchoiceUpdatedResponse{
 				Status: &enginev1.PayloadStatus{
 					Status:          enginev1.PayloadStatus_SYNCING,
@@ -814,7 +815,7 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	case optimisticStartEpoch:
 		component, err := r.comHandler.eth1Proxy.ComponentAtIndex(0)
 		require.NoError(r.t, err)
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() any {
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),

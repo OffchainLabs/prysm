@@ -233,11 +233,9 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 func attachSpawner(s *Service) *sync.WaitGroup {
 	wg := new(sync.WaitGroup)
 	s.subscriptionSpawner = func(f func()) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			f()
-		}()
+		})
 	}
 	return wg
 }

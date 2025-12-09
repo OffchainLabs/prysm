@@ -29,7 +29,7 @@ func TestLocalKeymanager_FetchValidatingPublicKeys(t *testing.T) {
 	ctx := t.Context()
 	numAccounts := 10
 	wantedPubKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
-	for i := 0; i < numAccounts; i++ {
+	for range numAccounts {
 		privKey, err := bls.RandKey()
 		require.NoError(t, err)
 		pubKey := bytesutil.ToBytes48(privKey.PublicKey().Marshal())
@@ -61,7 +61,7 @@ func TestLocalKeymanager_FetchValidatingPrivateKeys(t *testing.T) {
 	ctx := t.Context()
 	numAccounts := 10
 	wantedPrivateKeys := make([][32]byte, numAccounts)
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		privKey, err := bls.RandKey()
 		require.NoError(t, err)
 		privKeyData := privKey.Marshal()
@@ -97,7 +97,7 @@ func TestLocalKeymanager_Sign(t *testing.T) {
 	numAccounts := 10
 	keystores := make([]*keymanager.Keystore, numAccounts)
 	passwords := make([]string, numAccounts)
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		keystores[i] = createRandomKeystore(t, password)
 		passwords[i] = password
 	}

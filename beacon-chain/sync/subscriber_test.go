@@ -130,7 +130,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(cfg)
 
 	p2pService := p2ptest.NewTestP2P(t)
@@ -262,7 +262,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p.Digest = nse.ForkDigest
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(&pb.SignedVoluntaryExit{})]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.SignedVoluntaryExit]()]
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -443,7 +443,7 @@ func Test_wrapAndReportValidation(t *testing.T) {
 func TestFilterSubnetPeers(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(cfg)
 
 	gFlags := new(flags.GlobalFlags)
@@ -457,8 +457,9 @@ func TestFilterSubnetPeers(t *testing.T) {
 	currSlot := primitives.Slot(100)
 
 	gt := time.Now()
+	slotDuration := params.BeaconConfig().SlotDuration()
 	genPlus100 := func() time.Time {
-		return gt.Add(time.Second * time.Duration(uint64(currSlot)*params.BeaconConfig().SecondsPerSlot))
+		return gt.Add(time.Duration(uint64(currSlot)) * slotDuration)
 	}
 	chain := &mockChain.ChainService{
 		Genesis:        gt,
@@ -525,7 +526,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(cfg)
 
 	p := p2ptest.NewTestP2P(t)
@@ -649,6 +650,140 @@ func TestIsDigestValid(t *testing.T) {
 	valid, err = isDigestValid(digest, clock)
 	assert.NoError(t, err)
 	assert.Equal(t, false, valid)
+}
+
+func TestSamplingSize(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := context.Background()
+	d := db.SetupDB(t)
+	p2pService := p2ptest.NewTestP2P(t)
+
+	t.Run("regular node returns validator requirements", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Disable all special modes
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = false
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+
+		custodyCount := uint64(16)
+		_, _, err := p2pService.UpdateCustodyInfo(0, custodyCount)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		// Should return max(SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount)
+		// For this test, custodyGroupCount (16) should be the max
+		expectedSize := max(cfg.SamplesPerSlot, custodyCount)
+		require.Equal(t, expectedSize, size)
+	})
+
+	t.Run("supernode mode returns all subnets", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count to all groups (simulating what updateCustodyInfoInDB() does for supernode)
+		_, _, err := p2pService.UpdateCustodyInfo(0, cfg.NumberOfCustodyGroups)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, cfg.DataColumnSidecarSubnetCount, size) // Should be 128 based on custody count
+	})
+
+	t.Run("semi-supernode with low validator requirements returns 64", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count to semi-supernode minimum (64)
+		// This simulates what updateCustodyInfoInDB() does for semi-supernode with low validator count
+		semiSupernodeCustody := cfg.DataColumnSidecarSubnetCount / 2
+		_, _, err := p2pService.UpdateCustodyInfo(0, semiSupernodeCustody)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
+	})
+
+	t.Run("semi-supernode with high validator requirements returns higher value", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count to a high value (e.g., 100)
+		// This simulates what updateCustodyInfoInDB() would set after determining
+		// that validator requirements exceed the semi-supernode minimum
+		highCustodyCount := uint64(100)
+		_, _, err := p2pService.UpdateCustodyInfo(0, highCustodyCount)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, highCustodyCount, size) // Should return the higher custody count based on custody
+		// Note: Warning is logged in updateCustodyInfoInDB(), not here
+	})
+
+	t.Run("custody count is source of truth", func(t *testing.T) {
+		resetFlags := flags.Get()
+		defer flags.Init(resetFlags)
+
+		// Set custody count directly (simulating what updateCustodyInfoInDB() does)
+		// For semi-supernode mode, this would be 64
+		semiSupernodeCustody := cfg.DataColumnSidecarSubnetCount / 2
+		_, _, err := p2pService.UpdateCustodyInfo(0, semiSupernodeCustody)
+		require.NoError(t, err)
+
+		s := &Service{
+			ctx: ctx,
+			cfg: &config{
+				beaconDB: d,
+				p2p:      p2pService,
+			},
+		}
+
+		// samplingSize() should use custody count regardless of flags
+		size, err := s.samplingSize()
+		require.NoError(t, err)
+		require.Equal(t, semiSupernodeCustody, size) // Should be 64 based on custody count
+		// Note: Downgrade prevention is handled in updateCustodyInfoInDB(), not here
+	})
 }
 
 // Create peer and register them to provided topics.

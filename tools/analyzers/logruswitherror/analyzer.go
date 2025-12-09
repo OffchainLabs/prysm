@@ -18,7 +18,7 @@ const Doc = "This analyzer requires that log statements do not use errors in tem
 const errImproperUsage = "use log.WithError rather than templated log statements with errors"
 
 // Map of logrus templated log functions.
-var logFns = map[string]interface{}{
+var logFns = map[string]any{
 	"Debugf":   nil,
 	"Infof":    nil,
 	"Printf":   nil,
@@ -37,7 +37,7 @@ var Analyzer = &analysis.Analyzer{
 	Run:      run,
 }
 
-func run(pass *analysis.Pass) (interface{}, error) {
+func run(pass *analysis.Pass) (any, error) {
 	inspect, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	if !ok {
 		return nil, errors.New("analyzer is not type *inspector.Inspector")

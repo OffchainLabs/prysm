@@ -32,7 +32,7 @@ func (s BlobStorageSummary) AllAvailable(count int) bool {
 	if count > len(s.mask) {
 		return false
 	}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		if !s.mask[i] {
 			return false
 		}

@@ -16,11 +16,9 @@ import (
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 )
@@ -83,7 +81,7 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 		},
 		{
 			name:             "not enough time passed",
-			genesisDrift:     -int(math.Ceil(float64(slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))) / float64(time.Second))),
+			genesisDrift:     -int(math.Ceil(float64(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)) / float64(time.Second))),
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
@@ -209,7 +207,7 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 		},
 		{
 			name:             "not enough time passed",
-			genesisDrift:     -int(math.Ceil(float64(slots.ComponentDuration(primitives.BP(params.BeaconConfig().SyncMessageDueBPS))) / float64(time.Second))),
+			genesisDrift:     -int(math.Ceil(float64(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)) / float64(time.Second))),
 			oldUpdateOptions: []util.LightClientOption{},
 			newUpdateOptions: []util.LightClientOption{},
 			expectedResult:   pubsub.ValidationIgnore,
