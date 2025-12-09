@@ -6,6 +6,7 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 	"time"
 
@@ -259,8 +260,11 @@ func (s *Service) Start() {
 	s.RefreshPersistentSubnets()
 
 	if s.cfg.EnableAutoNAT {
-		s.subscribeReachabilityEvents()
-		log.Info("AutoNAT v2 enabled for address reachability detection")
+		if err := s.subscribeReachabilityEvents(); err != nil {
+			log.WithError(err).Error("Failed to subscribe to AutoNAT v2 reachability events")
+		} else {
+			log.Info("AutoNAT v2 enabled for address reachability detection")
+		}
 	}
 
 	// Periodic functions.
@@ -562,11 +566,10 @@ func (s *Service) downscorePeer(peerID peer.ID, reason string) {
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }
 
-func (s *Service) subscribeReachabilityEvents() {
+func (s *Service) subscribeReachabilityEvents() error {
 	sub, err := s.host.EventBus().Subscribe(new(event.EvtHostReachableAddrsChanged))
 	if err != nil {
-		log.WithError(err).Error("Failed to subscribe to reachability events")
-		return
+		return fmt.Errorf("subscribing to reachability events: %w", err)
 	}
 
 	go func() {
@@ -580,7 +583,6 @@ func (s *Service) subscribeReachabilityEvents() {
 			case <-s.ctx.Done():
 				return
 			case ev := <-sub.Out():
-
 				if event, ok := ev.(event.EvtHostReachableAddrsChanged); ok {
 					log.WithFields(logrus.Fields{
 						"reachable":   multiaddrsToStrings(event.Reachable),
@@ -591,6 +593,7 @@ func (s *Service) subscribeReachabilityEvents() {
 			}
 		}
 	}()
+	return nil
 }
 
 func multiaddrsToStrings(addrs []multiaddr.Multiaddr) []string {
