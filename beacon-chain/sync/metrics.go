@@ -157,6 +157,12 @@ var (
 			Help: "Time for gossiped blob sidecars to arrive",
 		},
 	)
+	dataColumnSidecarArrivalGossipSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "gossip_data_column_sidecar_arrival_milliseconds",
+			Help: "Time for gossiped data column sidecars to arrive",
+		},
+	)
 	blobSidecarVerificationGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "gossip_blob_sidecar_verification_milliseconds",

@@ -465,6 +465,7 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	ctx := t.Context()
 	f := setup(1, 1)
 
+	// Insert a block in slot 32
 	state, blk, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'a'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk))
@@ -475,6 +476,7 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dependent, [32]byte{})
 
+	// Insert a block in slot 33
 	state, blk1, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch+1, [32]byte{'b'}, blk.Root(), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk1))
@@ -488,7 +490,7 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dependent, [32]byte{})
 
-	// Insert a block for the next epoch (missed slot 0)
+	// Insert a block for the next epoch (missed slot 0), slot 65
 
 	state, blk2, err := prepareForkchoiceState(ctx, 2*params.BeaconConfig().SlotsPerEpoch+1, [32]byte{'c'}, blk1.Root(), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
@@ -509,6 +511,7 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dependent, blk1.Root())
 
+	// Insert a block at slot 66
 	state, blk3, err := prepareForkchoiceState(ctx, 2*params.BeaconConfig().SlotsPerEpoch+2, [32]byte{'d'}, blk2.Root(), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk3))
@@ -533,8 +536,11 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	dependent, err = f.DependentRoot(1)
 	require.NoError(t, err)
 	require.Equal(t, [32]byte{}, dependent)
+	dependent, err = f.DependentRoot(2)
+	require.NoError(t, err)
+	require.Equal(t, blk1.Root(), dependent)
 
-	// Insert a block for next epoch (slot 0 present)
+	// Insert a block for the next epoch, slot 96 (descends from finalized at slot 33)
 	state, blk4, err := prepareForkchoiceState(ctx, 3*params.BeaconConfig().SlotsPerEpoch, [32]byte{'e'}, blk1.Root(), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk4))
@@ -551,6 +557,7 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dependent, blk1.Root())
 
+	// Insert a block at slot 97
 	state, blk5, err := prepareForkchoiceState(ctx, 3*params.BeaconConfig().SlotsPerEpoch+1, [32]byte{'f'}, blk4.Root(), params.BeaconConfig().ZeroHash, 1, 1)
 	require.NoError(t, err)
 	require.NoError(t, f.InsertNode(ctx, state, blk5))
@@ -600,12 +607,16 @@ func TestStore_TargetRootForEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, target, blk1.Root())
 
-	// Prune finalization
+	// Prune finalization, finalize the block at slot 96
 	s.finalizedCheckpoint.Root = blk4.Root()
 	require.NoError(t, s.prune(ctx))
 	target, err = f.TargetRootForEpoch(blk4.Root(), 3)
 	require.NoError(t, err)
 	require.Equal(t, blk4.Root(), target)
+	// Dependent root for the finalized block should be the root of the pruned block at slot 33
+	dependent, err = f.DependentRootForEpoch(blk4.Root(), 3)
+	require.NoError(t, err)
+	require.Equal(t, blk1.Root(), dependent)
 }
 
 func TestStore_DependentRootForEpoch(t *testing.T) {
