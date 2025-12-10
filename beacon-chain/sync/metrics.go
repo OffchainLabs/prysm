@@ -204,6 +204,13 @@ var (
 		},
 	)
 
+	dataColumnsRecoveredFromELAttempts = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "data_columns_recovered_from_el_attempts",
+			Help: "Count the number of data columns recovery attempts from the execution layer.",
+		},
+	)
+
 	dataColumnsRecoveredFromELTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "data_columns_recovered_from_el_total",

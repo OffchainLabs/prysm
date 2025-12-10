@@ -543,7 +543,6 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 
 	if len(result) != 0 {
 		getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
-
 	}
 
 	return result, handleRPCError(err)
