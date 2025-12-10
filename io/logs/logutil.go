@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -69,7 +70,7 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 	logFilePath := fmt.Sprintf("%s/logs/%s.log", datadirPath, app)
 	if err := file.MkdirAll(filepath.Dir(logFilePath)); err != nil {
-		return err
+		return errors.Wrap(err, "failed to create directory")
 	}
 
 	// Create formatter and writer hook
