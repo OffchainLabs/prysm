@@ -28,6 +28,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/kv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -3151,6 +3152,54 @@ func TestIsDataAvailable(t *testing.T) {
 		require.NoError(t, err)
 		err = service.isDataAvailable(ctx, roBlock)
 		require.NotNil(t, err)
+	})
+
+	t.Run("EIP-8025 (Optional Proofs) - execution proofs already sufficient", func(t *testing.T) {
+		// Enable zkVM feature
+		resetCfg := features.InitWithReset(&features.Flags{
+			EnableZkvm: true,
+		})
+		defer resetCfg()
+
+		// Set MinProofsRequired for testing
+		cfg := params.BeaconConfig().Copy()
+		cfg.MinProofsRequired = 3
+		params.OverrideBeaconConfig(cfg)
+
+		// Setup with sufficient data columns
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options:                 []Option{WithExecProofPool(execproof.NewPool())},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		// Insert MinProofsRequired execution proofs into the pool
+		for i := uint64(0); i < cfg.MinProofsRequired; i++ {
+			proof := &ethpb.ExecutionProof{
+				BlockRoot: root[:],
+				Slot:      signed.Block().Slot(),
+				ProofId:   primitives.ExecutionProofId(i),
+				ProofData: []byte{byte(i)},
+			}
+			service.cfg.ExecProofPool.InsertExecutionProof(proof)
+		}
+
+		// Verify that the pool has sufficient proofs
+		proofCount := service.cfg.ExecProofPool.GetProofCountForBlock(root)
+		require.Equal(t, cfg.MinProofsRequired, proofCount)
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
+		require.NoError(t, err)
 	})
 }
 
