@@ -59,17 +59,21 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// TODO:
-	// 4. Check if the proof is already in the DA checker cache
+	// 4. Check if the proof is already in the DA checker cache (execution proof pool)
 	// If it exists in the cache, we know it has already passed validation.
+	if s.isProofCachedInPool(executionProof.ProofId, executionProof.Slot) {
+		return pubsub.ValidationIgnore, nil
+	}
 
 	// 5. Verify proof size limits
 	if uint64(len(executionProof.ProofData)) > params.BeaconConfig().MaxProofDataBytes {
 		return pubsub.ValidationReject, fmt.Errorf("execution proof data size %d exceeds maximum allowed %d", len(executionProof.ProofData), params.BeaconConfig().MaxProofDataBytes)
 	}
 
-	// TODO:
 	// 6. Run zkVM proof verification
+	if err := s.verifyExecutionProof(executionProof); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	// Validation successful, return accept
 	msg.ValidatorData = executionProof
@@ -132,4 +136,17 @@ func (s *Service) setSeenExecutionProofIndex(proofId primitives.ExecutionProofId
 	defer s.seenExecutionProofLock.Unlock()
 	b := append(bytesutil.Bytes32(uint64(proofId)), bytesutil.Bytes32(uint64(slot))...)
 	s.seenExecutionProofCache.Add(string(b), true)
+}
+
+// isProofCachedInPool checks if the execution proof is already present in the pool.
+// TODO: Implement actual cache lookup logic.
+func (s *Service) isProofCachedInPool(proofId primitives.ExecutionProofId, slot primitives.Slot) bool {
+	return false
+}
+
+// verifyExecutionProof performs the actual verification of the execution proof.
+// It uses verifier implementations to validate the proof.
+// TODO: Implement the actual verification logic.
+func (s *Service) verifyExecutionProof(executionProof *ethpb.ExecutionProof) error {
+	return nil
 }
