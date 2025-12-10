@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -955,7 +956,7 @@ func (s *Service) areExecutionProofsAvailable(
 
 			proofWrapper, ok := event.Data.(*operation.ExecutionProofReceivedData)
 			if !ok {
-				log.Error("could not cast operation data to ExecutionProofReceivedData")
+				log.Error("Could not cast event data to ExecutionProofReceivedData")
 				continue
 			}
 
@@ -980,13 +981,13 @@ func (s *Service) areExecutionProofsAvailable(
 			}
 
 		case <-ctx.Done():
-			availableString := ""
-			missingString := ""
+			var availableString strings.Builder
+			var missingString strings.Builder
 			for id, available := range proofAvailableMap {
 				if available {
-					availableString += fmt.Sprintf("%#x ", id)
+					availableString.WriteString(fmt.Sprintf("%#x ", id))
 				} else {
-					missingString += fmt.Sprintf("%#x ", id)
+					missingString.WriteString(fmt.Sprintf("%#x ", id))
 				}
 			}
 
@@ -995,8 +996,8 @@ func (s *Service) areExecutionProofsAvailable(
 				blockRoot,
 				currentProofCount,
 				requiredProofCount,
-				availableString,
-				missingString,
+				availableString.String(),
+				missingString.String(),
 			)
 		}
 	}

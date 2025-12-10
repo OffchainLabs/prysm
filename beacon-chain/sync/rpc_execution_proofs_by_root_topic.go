@@ -52,21 +52,20 @@ func SendExecutionProofByRootRequest(
 	// 		return nil, err
 	// 	}
 	// }
-	
+
 	return execution_proofs, nil
 }
 
-
 // executionProofsByRootRPCHandler looks up the request blocks from the database from the given block roots.
 func (s *Service) executionProofsByRootRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
-	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
+	_, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 	SetRPCStreamDeadlines(stream)
 	// log := log.WithField("handler", "execution_proof_by_root")
 
 	rawMsg, ok := msg.(*p2ptypes.ExecutionProofByRootsReq)
 	if !ok {
-		return errors.New("message is not type BeaconBlockByRootsReq")
+		return errors.New("message is not type ExecutionProofByRootsReq")
 	}
 	blockRoots := *rawMsg
 	if err := s.rateLimiter.validateRequest(stream, uint64(len(blockRoots))); err != nil {
