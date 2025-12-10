@@ -151,7 +151,7 @@ func main() {
 			verbosity := ctx.String(cmd.VerbosityFlag.Name)
 			verbosityLevel, err := logrus.ParseLevel(verbosity)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "failed to parse log verbosity")
 			}
 			logs.SetLoggingLevel(verbosityLevel)
 
