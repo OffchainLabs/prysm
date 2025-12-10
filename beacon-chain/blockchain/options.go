@@ -13,6 +13,7 @@ import (
 	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -132,6 +133,14 @@ func WithSlashingPool(p slashings.PoolManager) Option {
 func WithBLSToExecPool(p blstoexec.PoolManager) Option {
 	return func(s *Service) error {
 		s.cfg.BLSToExecPool = p
+		return nil
+	}
+}
+
+// WithExecProofPool to keep track of execution proofs.
+func WithExecProofPool(p execproof.PoolManager) Option {
+	return func(s *Service) error {
+		s.cfg.ExecProofPool = p
 		return nil
 	}
 }

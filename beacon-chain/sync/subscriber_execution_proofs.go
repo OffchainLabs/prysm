@@ -28,6 +28,6 @@ func (s *Service) executionProofSubscriber(_ context.Context, msg proto.Message)
 	})
 
 	// Insert the execution proof into the pool
-	s.cfg.execProofsPool.InsertExecutionProof(executionProof)
+	s.cfg.execProofPool.InsertExecutionProof(executionProof)
 	return nil
 }
