@@ -139,9 +139,8 @@ func (s *Service) setSeenExecutionProofIndex(proofId primitives.ExecutionProofId
 }
 
 // isProofCachedInPool checks if the execution proof is already present in the pool.
-// TODO: Implement actual cache lookup logic.
 func (s *Service) isProofCachedInPool(proofId primitives.ExecutionProofId, slot primitives.Slot) bool {
-	return false
+	return s.cfg.execProofPool.ProofExists(slot, proofId)
 }
 
 // verifyExecutionProof performs the actual verification of the execution proof.

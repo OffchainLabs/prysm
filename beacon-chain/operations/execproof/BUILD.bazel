@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "doc.go",
+        "key.go",
         "pool.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof",
@@ -11,7 +12,6 @@ go_library(
         "//beacon-chain:__subpackages__",
     ],
     deps = [
-        "//beacon-chain/state:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/doubly-linked-list:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
