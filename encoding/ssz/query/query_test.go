@@ -389,6 +389,7 @@ func TestHashTreeRoot(t *testing.T) {
 			require.NoError(t, err, "HashTreeRoot should not return an error")
 			expectedHashTreeRoot, err := tt.obj.HashTreeRoot()
 			require.NoError(t, err, "HashTreeRoot on original object should not return an error")
+			// Verify the Merkle tree root matches with the SSZ generated HashTreeRoot
 			require.Equal(t, expectedHashTreeRoot, hashTreeRoot, "HashTreeRoot from sszInfo should match original object's HashTreeRoot")
 
 			node, err := info.MerkleTree()

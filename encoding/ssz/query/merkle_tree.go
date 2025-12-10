@@ -8,6 +8,13 @@ import (
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
+// MerkleTree builds and returns the full SSZ Merkle tree for the analyzed object.
+// The returned Node can be used to compute the hash tree root via Node.Hash(),
+// or to generate inclusion proofs via Node.Prove(gindex).
+func (info *SszInfo) MerkleTree() (*ssz.Node, error) {
+	return info.toMerkleTree(&ssz.Wrapper{})
+}
+
 // toMerkleTree constructs an SSZ Merkle tree using fastssz's Wrapper.
 // It is the entrypoint for traversing the analyzed SSZ structure and
 // building the tree by adding leaves and committing subtrees according
@@ -138,18 +145,19 @@ func buildListSubtree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error {
 	}
 
 	length := v.Len()
-	limit := int(li.Limit())
+	limit := li.Limit()
 	start := w.Indx()
+	elemInfo := li.element
 
-	if li.element.sszType.isBasic() {
+	if elemInfo.sszType.isBasic() {
 		// Lists of basic types are packed into 32-byte chunks
-		packBasicElements(li.element, v, w, length)
+		packBasicElements(elemInfo, v, w, length)
 
-		limit = int(ssz.CalculateLimit(uint64(limit), uint64(length), uint64(itemLength(li.element))))
+		limit = ssz.CalculateLimit(limit, uint64(length), uint64(itemLength(elemInfo)))
 	} else {
 		// General case: list of composite elements
 		for i := 0; i < length; i++ {
-			if err := buildTree(li.element, v.Index(i), w); err != nil {
+			if err := buildTree(elemInfo, v.Index(i), w); err != nil {
 				return fmt.Errorf("list index %d: %w", i, err)
 			}
 		}
@@ -178,7 +186,6 @@ func buildBitlistSubtree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error {
 	// Use go-bitfield to get length and bytes with termination bit cleared
 	bl := bitfield.Bitlist(bitlistBytes)
 	data := bl.BytesNoTrim()
-
 	start := w.Indx()
 
 	// Add bytes in 32-byte chunks
@@ -209,15 +216,15 @@ func buildBitvectorSubtree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error
 
 	bitvectorBytes := v.Bytes()
 
-	// If bitvector is not initialized (zero-valued), create appropriately-sized zero array
+	// bitvector must be initialized and non-empty
 	if len(bitvectorBytes) == 0 {
-		expectedBytes := int((bv.length + 7) / 8) // ceil(bits/8)
-		bitvectorBytes = make([]byte, expectedBytes)
+		return fmt.Errorf("bitvector field is uninitialized (nil or empty slice)")
 	}
 
 	start := w.Indx()
 	// Add bytes in 32-byte chunks
-	numChunks := 0
+	length := bv.Length()
+	numChunks := int(length / 32)
 	for i := 0; i < len(bitvectorBytes); i += 32 {
 		end := i + 32
 		if end > len(bitvectorBytes) {
@@ -225,7 +232,6 @@ func buildBitvectorSubtree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error
 		}
 		chunk := bitvectorBytes[i:end]
 		w.AddBytes(chunk)
-		numChunks++
 	}
 	addPadding(w, numChunks) // fixed-size, no mixin
 	w.Commit(start)
