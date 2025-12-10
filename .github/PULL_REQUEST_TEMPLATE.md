@@ -34,4 +34,4 @@ Fixes #
 
 - [ ] I have read [CONTRIBUTING.md](https://github.com/prysmaticlabs/prysm/blob/develop/CONTRIBUTING.md).
 - [ ] I have included a uniquely named [changelog fragment file](https://github.com/prysmaticlabs/prysm/blob/develop/CONTRIBUTING.md#maintaining-changelogmd).
-- [ ] I have added a description to this PR with sufficient context for reviewers to understand this PR.
+- [ ] I have added a description with sufficient context for reviewers to understand this PR and have tested that my changes work as expected.
