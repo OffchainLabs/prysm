@@ -310,6 +310,9 @@ type BeaconChainConfig struct {
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 
+	// EIP-8025: Optional Execution Proofs
+	MaxProofDataBytes uint64 `yaml:"MAX_PROOF_DATA_BYTES" spec:"true"` // MaxProofDataBytes is the maximum number of bytes for execution proof data.
+
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`

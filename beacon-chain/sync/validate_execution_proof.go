@@ -59,10 +59,16 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// TODOs:
+	// TODO:
 	// 4. Check if the proof is already in the DA checker cache
 	// If it exists in the cache, we know it has already passed validation.
+
 	// 5. Verify proof size limits
+	if uint64(len(executionProof.ProofData)) > params.BeaconConfig().MaxProofDataBytes {
+		return pubsub.ValidationReject, fmt.Errorf("execution proof data size %d exceeds maximum allowed %d", len(executionProof.ProofData), params.BeaconConfig().MaxProofDataBytes)
+	}
+
+	// TODOs:
 	// 6. Run zkVM proof verification
 	// 7. Observe the proof to prevent reprocessing
 
