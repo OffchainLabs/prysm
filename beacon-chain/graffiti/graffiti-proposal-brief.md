@@ -10,10 +10,11 @@ More details: https://github.com/ethereum/execution-apis/blob/main/src/engine/id
 ### Core Component: GraffitiInfo Struct
 Thread-safe struct holding version information:
 ```go
+const clCode = "PR"
+
 type GraffitiInfo struct {
     mu           sync.RWMutex
     userGraffiti string  // From --graffiti flag (set once at startup)
-    clCode       string  // "PR" (hardcoded)
     clCommit     string  // From version.GetCommitPrefix() helper function
     elCode       string  // From engine_getClientVersionV1
     elCommit     string  // From engine_getClientVersionV1
@@ -42,10 +43,7 @@ func (g *GraffitiInfo) GenerateGraffiti() [32]byte {
     available := 32 - len(userGraffiti)
 
     if elCode == "" {
-        if userGraffiti != "" {
-            return userGraffiti
-        }
-        return "Prysm/" + version  // Fallback if no EL info
+        elCommit2 = elCommit4 = ""
     }
 
     switch {

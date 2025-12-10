@@ -212,6 +212,9 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 
+	// Save the new finalized dependent root because it will be pruned
+	s.finalizedDependentRoot = finalizedNode.parent.root
+
 	// Prune nodeByRoot starting from root
 	if err := s.pruneFinalizedNodeByRootMap(ctx, s.treeRootNode, finalizedNode); err != nil {
 		return err
