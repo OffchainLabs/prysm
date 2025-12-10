@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
@@ -272,6 +273,13 @@ func WithLightClientStore(lcs *lightclient.Store) Option {
 func WithStartWaitingDataColumnSidecars(c chan bool) Option {
 	return func(s *Service) error {
 		s.startWaitingDataColumnSidecars = c
+		return nil
+	}
+}
+
+func WithOperationNotifier(operationNotifier operation.Notifier) Option {
+	return func(s *Service) error {
+		s.cfg.OperationNotifier = operationNotifier
 		return nil
 	}
 }

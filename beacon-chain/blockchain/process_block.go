@@ -7,6 +7,8 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -657,6 +659,8 @@ func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldpa
 // The function will first check the database to see if all sidecars have been persisted. If any
 // sidecars are missing, it will then read from the sidecar notifier channel for the given root until the channel is
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
+//
+// EIP-8025: After Fulu, also checks for execution proofs availability.
 func (s *Service) isDataAvailable(
 	ctx context.Context,
 	roBlock consensusblocks.ROBlock,
@@ -669,7 +673,12 @@ func (s *Service) isDataAvailable(
 	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
-		return s.areDataColumnsAvailable(ctx, root, block)
+		if err := s.areDataColumnsAvailable(ctx, root, block); err != nil {
+			return err
+		}
+
+		// After checking data columns, check execution proofs availability.
+		return s.areExecutionProofsAvailable(ctx, root)
 	}
 
 	if blockVersion >= version.Deneb {
@@ -899,6 +908,96 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 			return nil
 		case <-ctx.Done():
 			return errors.Wrapf(ctx.Err(), "context deadline waiting for blob sidecars slot: %d, BlockRoot: %#x", block.Slot(), root)
+		}
+	}
+}
+
+// areExecutionProofsAvailable blocks until we have enough execution proofs to import the block,
+// or an error or context cancellation occurs.
+// This check is only performed for lightweight verifier nodes that need zkVM proofs
+// to validate block execution (nodes without execution layer + proof generation capability).
+// A nil result means that the data availability check is successful.
+func (s *Service) areExecutionProofsAvailable(
+	ctx context.Context,
+	blockRoot [fieldparams.RootLength]byte,
+) error {
+	if !features.Get().EnableZkvm {
+		// We don't need to check for execution proofs if zkVM features are disabled.
+		// Return early.
+		return nil
+	}
+
+	currentProofCount := s.cfg.ExecProofPool.GetProofCountForBlock(blockRoot)
+	requiredProofCount := params.BeaconConfig().MinProofsRequired
+	// If we already have enough proofs, return early.
+	if currentProofCount >= requiredProofCount {
+		return nil
+	}
+
+	// Wait for execution proofs to be added to the pool.
+	// TODO: Is 16 a good buffer size?
+	eventsChan := make(chan *feed.Event, 16)
+	subscription := s.cfg.OperationNotifier.OperationFeed().Subscribe(eventsChan)
+	defer subscription.Unsubscribe()
+
+	currentProofs := s.cfg.ExecProofPool.GetProofsForBlock(blockRoot)
+	proofAvailableMap := make(map[primitives.ExecutionProofId]bool)
+	for _, proof := range currentProofs {
+		proofAvailableMap[proof.GetProofId()] = true
+	}
+
+	for {
+		select {
+		case event := <-eventsChan:
+			if event.Type != operation.ExecutionProofReceived {
+				continue
+			}
+
+			proofWrapper, ok := event.Data.(*operation.ExecutionProofReceivedData)
+			if !ok {
+				log.Error("could not cast operation data to ExecutionProofReceivedData")
+				continue
+			}
+
+			proof := proofWrapper.ExecutionProof
+			receivedBlockRoot := bytesutil.ToBytes32(proof.BlockRoot)
+			if receivedBlockRoot != blockRoot {
+				log.Debugf("Received execution proof for block %#x while waiting for proofs for block %#x",
+					receivedBlockRoot, blockRoot)
+				continue
+			}
+
+			// Update proof count map.
+			proofId := proof.GetProofId()
+			if _, exists := proofAvailableMap[proofId]; !exists {
+				proofAvailableMap[proofId] = true
+				currentProofCount++
+			}
+
+			// If we have enough proofs, return.
+			if currentProofCount >= requiredProofCount {
+				return nil
+			}
+
+		case <-ctx.Done():
+			availableString := ""
+			missingString := ""
+			for id, available := range proofAvailableMap {
+				if available {
+					availableString += fmt.Sprintf("%#x ", id)
+				} else {
+					missingString += fmt.Sprintf("%#x ", id)
+				}
+			}
+
+			return errors.Wrapf(ctx.Err(),
+				"not enough execution proofs for block %#x: have %d, need %d. Available proofs: [%s], missing proofs: [%s]",
+				blockRoot,
+				currentProofCount,
+				requiredProofCount,
+				availableString,
+				missingString,
+			)
 		}
 	}
 }

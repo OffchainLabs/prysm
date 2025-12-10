@@ -39,13 +39,13 @@ type PoolManager interface {
 	GetProofsForBlock(blockRoot [32]byte) []*ethpb.ExecutionProof
 
 	// GetProofCountForBlock returns the count of unique proof types for a block
-	GetProofCountForBlock(blockRoot [32]byte) int
+	GetProofCountForBlock(blockRoot [32]byte) uint64
 
 	// ProofExists checks if a proof exists for the given slot and proof ID
 	ProofExists(slot primitives.Slot, proofId primitives.ExecutionProofId) bool
 
 	// PruneFinalizedProofs removes proofs older than the finalized slot.
-	PruneFinalizedProofs(finalizedSlot primitives.Slot) int
+	PruneFinalizedProofs(finalizedSlot primitives.Slot) uint64
 
 	// PendingExecutionProofs returns all proofs from the pool (for debugging/monitoring)
 	PendingExecutionProofs() ([]*ethpb.ExecutionProof, error)
@@ -132,7 +132,7 @@ func (p *Pool) GetProofsForBlock(blockRoot [32]byte) []*ethpb.ExecutionProof {
 
 // GetProofCountForBlock returns the count of unique proof types (ProofId) for a block.
 // This is used to check if we have enough diverse proofs for data availability.
-func (p *Pool) GetProofCountForBlock(blockRoot [32]byte) int {
+func (p *Pool) GetProofCountForBlock(blockRoot [32]byte) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -155,7 +155,7 @@ func (p *Pool) GetProofCountForBlock(blockRoot [32]byte) int {
 		node, _ = node.Next()
 	}
 
-	return len(uniqueProofIds)
+	return uint64(len(uniqueProofIds))
 }
 
 // InsertExecutionProof inserts a proof into the pool.
@@ -181,11 +181,11 @@ func (p *Pool) InsertExecutionProof(proof *ethpb.ExecutionProof) {
 }
 
 // PruneFinalizedProofs removes proofs older than the finalized slot.
-func (p *Pool) PruneFinalizedProofs(finalizedSlot primitives.Slot) int {
+func (p *Pool) PruneFinalizedProofs(finalizedSlot primitives.Slot) uint64 {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	pruned := 0
+	pruned := uint64(0)
 	node := p.pending.First()
 
 	for node != nil {
