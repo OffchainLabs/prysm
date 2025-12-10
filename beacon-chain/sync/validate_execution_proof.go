@@ -68,10 +68,10 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationReject, fmt.Errorf("execution proof data size %d exceeds maximum allowed %d", len(executionProof.ProofData), params.BeaconConfig().MaxProofDataBytes)
 	}
 
-	// TODOs:
+	// TODO:
 	// 6. Run zkVM proof verification
-	// 7. Observe the proof to prevent reprocessing
 
+	// Validation successful, return accept
 	msg.ValidatorData = executionProof
 	return pubsub.ValidationAccept, nil
 }
