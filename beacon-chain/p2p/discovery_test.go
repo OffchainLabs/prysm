@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
@@ -243,11 +244,18 @@ func TestCreateLocalNode(t *testing.T) {
 		name          string
 		cfg           *Config
 		expectedError bool
+		zkvmEnabled   bool
 	}{
 		{
 			name:          "valid config",
 			cfg:           &Config{},
 			expectedError: false,
+		},
+		{
+			name:          "valid config with zkVM enabled",
+			cfg:           &Config{},
+			expectedError: false,
+			zkvmEnabled:   true,
 		},
 		{
 			name:          "invalid host address",
@@ -273,6 +281,15 @@ func TestCreateLocalNode(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.zkvmEnabled {
+				resetCfg := features.InitWithReset(&features.Flags{
+					EnableZkvm: true,
+				})
+				t.Cleanup(func() {
+					resetCfg()
+				})
+			}
+
 			// Define ports. Use unique ports since this test validates ENR content.
 			const (
 				udpPort  = 3100
@@ -348,6 +365,14 @@ func TestCreateLocalNode(t *testing.T) {
 			custodyGroupCount := new(uint64)
 			require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().CustodyGroupCountKey, custodyGroupCount)))
 			require.Equal(t, custodyRequirement, *custodyGroupCount)
+
+			// Check zkVM enabled key if applicable.
+			if tt.zkvmEnabled {
+				zkvmEnabled := new(bool)
+				require.NoError(t, localNode.Node().Record().Load(enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, zkvmEnabled)))
+				require.Equal(t, features.Get().EnableZkvm, *zkvmEnabled)
+			}
+
 		})
 	}
 }
