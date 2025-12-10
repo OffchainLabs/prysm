@@ -13,6 +13,8 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -3195,6 +3197,70 @@ func TestIsDataAvailable(t *testing.T) {
 		// Verify that the pool has sufficient proofs
 		proofCount := service.cfg.ExecProofPool.GetProofCountForBlock(root)
 		require.Equal(t, cfg.MinProofsRequired, proofCount)
+
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
+		require.NoError(t, err)
+	})
+
+	t.Run("EIP-8025 (Optional Proofs) - data columns success then wait for execution proofs", func(t *testing.T) {
+		// Enable zkVM feature
+		resetCfg := features.InitWithReset(&features.Flags{
+			EnableZkvm: true,
+		})
+		defer resetCfg()
+
+		// Set MinProofsRequired for testing
+		cfg := params.BeaconConfig().Copy()
+		cfg.MinProofsRequired = 3
+		params.OverrideBeaconConfig(cfg)
+
+		// Setup with sufficient data columns
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options: []Option{
+				WithExecProofPool(execproof.NewPool()),
+				WithOperationNotifier(&mock.MockOperationNotifier{}),
+			},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		// Goroutine to send execution proofs after data columns are available
+		go func() {
+			// Wait a bit to simulate async proof arrival
+			time.Sleep(50 * time.Millisecond)
+
+			// Send ExecutionProofReceived events
+			opfeed := service.cfg.OperationNotifier.OperationFeed()
+			for i := uint64(0); i < cfg.MinProofsRequired; i++ {
+				proof := &ethpb.ExecutionProof{
+					BlockRoot: root[:],
+					Slot:      signed.Block().Slot(),
+					ProofId:   primitives.ExecutionProofId(i),
+					ProofData: []byte{byte(i)},
+				}
+				service.cfg.ExecProofPool.InsertExecutionProof(proof)
+
+				opfeed.Send(&feed.Event{
+					Type: operation.ExecutionProofReceived,
+					Data: &operation.ExecutionProofReceivedData{
+						ExecutionProof: proof,
+					},
+				})
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+		defer cancel()
 
 		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
 		require.NoError(t, err)
