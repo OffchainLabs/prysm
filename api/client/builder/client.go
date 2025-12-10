@@ -692,17 +692,23 @@ func unexpectedStatusErr(response *http.Response, expected int) error {
 		body = "response body:\n" + string(bodyBytes)
 	}
 	msg := fmt.Sprintf("expected=%d, got=%d, url=%s, body=%s", expected, response.StatusCode, response.Request.URL, body)
+	parseErrMessage := func() error {
+		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
+			return errors.Wrap(jsonErr, "unable to read response body")
+		}
+		return nil
+	}
 	switch response.StatusCode {
 	case http.StatusUnsupportedMediaType:
 		log.WithError(ErrUnsupportedMediaType).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
+		if jsonErr := parseErrMessage(); jsonErr != nil {
+			return jsonErr
 		}
 		return errors.Wrap(ErrUnsupportedMediaType, errMessage.Message)
 	case http.StatusNotAcceptable:
 		log.WithError(ErrNotAcceptable).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
+		if jsonErr := parseErrMessage(); jsonErr != nil {
+			return jsonErr
 		}
 		return errors.Wrap(ErrNotAcceptable, errMessage.Message)
 	case http.StatusNoContent:
@@ -710,26 +716,26 @@ func unexpectedStatusErr(response *http.Response, expected int) error {
 		return ErrNoContent
 	case http.StatusBadRequest:
 		log.WithError(ErrBadRequest).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
+		if jsonErr := parseErrMessage(); jsonErr != nil {
+			return jsonErr
 		}
 		return errors.Wrap(ErrBadRequest, errMessage.Message)
 	case http.StatusNotFound:
 		log.WithError(ErrNotFound).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
+		if jsonErr := parseErrMessage(); jsonErr != nil {
+			return jsonErr
 		}
 		return errors.Wrap(ErrNotFound, errMessage.Message)
 	case http.StatusInternalServerError:
 		log.WithError(ErrNotOK).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
+		if jsonErr := parseErrMessage(); jsonErr != nil {
+			return jsonErr
 		}
 		return errors.Wrap(ErrNotOK, errMessage.Message)
 	case http.StatusBadGateway:
 		log.WithError(ErrBadGateway).Debug(msg)
-		if jsonErr := json.Unmarshal(bodyBytes, &errMessage); jsonErr != nil {
-			return errors.Wrap(jsonErr, "unable to read response body")
+		if jsonErr := parseErrMessage(); jsonErr != nil {
+			return jsonErr
 		}
 		return errors.Wrap(ErrBadGateway, errMessage.Message)
 	default:
