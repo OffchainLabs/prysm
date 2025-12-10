@@ -3267,6 +3267,69 @@ func TestIsDataAvailable(t *testing.T) {
 		err = service.isDataAvailable(ctx, roBlock)
 		require.NoError(t, err)
 	})
+
+	t.Run("EIP-8025 (Optional Proofs) - insufficient execution proofs timeout", func(t *testing.T) {
+		// Enable zkVM feature
+		resetCfg := features.InitWithReset(&features.Flags{
+			EnableZkvm: true,
+		})
+		defer resetCfg()
+
+		// Set MinProofsRequired for testing
+		cfg := params.BeaconConfig().Copy()
+		cfg.MinProofsRequired = 3
+		params.OverrideBeaconConfig(cfg)
+
+		// Setup with sufficient data columns
+		minimumColumnsCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
+		indices := make([]uint64, 0, minimumColumnsCountToReconstruct)
+		for i := range minimumColumnsCountToReconstruct {
+			indices = append(indices, i)
+		}
+
+		testParams := testIsAvailableParams{
+			options: []Option{
+				WithExecProofPool(execproof.NewPool()),
+				WithOperationNotifier(&mock.MockOperationNotifier{}),
+			},
+			columnsToSave:           indices,
+			blobKzgCommitmentsCount: 3,
+		}
+
+		ctx, _, service, root, signed := testIsAvailableSetup(t, testParams)
+
+		// Goroutine to send insufficient proofs (only 1, need 3)
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+
+			// Send only 1 proof (insufficient)
+			opfeed := service.cfg.OperationNotifier.OperationFeed()
+			proof := &ethpb.ExecutionProof{
+				BlockRoot: root[:],
+				Slot:      signed.Block().Slot(),
+				ProofId:   primitives.ExecutionProofId(0),
+				ProofData: []byte{0},
+			}
+			service.cfg.ExecProofPool.InsertExecutionProof(proof)
+
+			opfeed.Send(&feed.Event{
+				Type: operation.ExecutionProofReceived,
+				Data: &operation.ExecutionProofReceivedData{
+					ExecutionProof: proof,
+				},
+			})
+		}()
+
+		// Short timeout to make test fast
+		ctx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
+		defer cancel()
+
+		// isDataAvailable should timeout with error
+		roBlock, err := consensusblocks.NewROBlockWithRoot(signed, root)
+		require.NoError(t, err)
+		err = service.isDataAvailable(ctx, roBlock)
+		require.NotNil(t, err)
+	})
 }
 
 // Test_postBlockProcess_EventSending tests that block processed events are only sent
