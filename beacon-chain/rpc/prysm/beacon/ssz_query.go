@@ -95,15 +95,31 @@ func (s *Server) QueryBeaconState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := &sszquerypb.SSZQueryResponse{
-		Root:   stateRoot,
-		Result: encodedState[offset : offset+length],
-	}
+	var responseSsz []byte
+	// If proof is requested, generate it and return SSZQueryResponseWithProof.
+	if req.IncludeProof {
+		responseWithProof, err := generateSSZQueryResponseWithProof(info, path, sszObject, stateRoot, encodedState, offset, length)
+		if err != nil {
+			httputil.HandleError(w, "Could not compute merkle proofs: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	responseSsz, err := response.MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
-		return
+		responseSsz, err = responseWithProof.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		response := &sszquerypb.SSZQueryResponse{
+			Root:   stateRoot,
+			Result: encodedState[offset : offset+length],
+		}
+
+		responseSsz, err = response.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(st.Version()))
@@ -186,17 +202,78 @@ func (s *Server) QueryBeaconBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := &sszquerypb.SSZQueryResponse{
-		Root:   blockRoot[:],
-		Result: encodedBlock[offset : offset+length],
-	}
+	var responseSsz []byte
+	// If proof is requested, generate it and return SSZQueryResponseWithProof.
+	if req.IncludeProof {
+		responseWithProof, err := generateSSZQueryResponseWithProof(info, path, block, blockRoot[:], encodedBlock, offset, length)
+		if err != nil {
+			httputil.HandleError(w, "Could not compute merkle proofs: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	responseSsz, err := response.MarshalSSZ()
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
-		return
+		responseSsz, err = responseWithProof.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		response := &sszquerypb.SSZQueryResponse{
+			Root:   blockRoot[:],
+			Result: encodedBlock[offset : offset+length],
+		}
+
+		responseSsz, err = response.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal response to SSZ: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(signedBlock.Version()))
 	httputil.WriteSsz(w, responseSsz)
+}
+
+// generateSSZQueryResponseWithProof is a generic helper that generates a merkle proof for an SSZ query
+// and returns the response with proof included.
+func generateSSZQueryResponseWithProof(
+	info *query.SszInfo,
+	path query.Path,
+	sszObject query.SSZObject,
+	root []byte,
+	encodedObject []byte,
+	offset, length uint64,
+) (*sszquerypb.SSZQueryResponseWithProof, error) {
+	// 1. Compute generalized index for the path.
+	gi, err := query.GetGeneralizedIndexFromPath(info, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Get the merkle tree
+	merkleTree, err := info.MerkleTree()
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Generate the proof for the generalized index
+	proof, err := merkleTree.Prove(int(gi))
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Convert the proof to the protobuf format
+	protoProof := &sszquerypb.SSZQueryProof{
+		Leaf:   proof.Leaf,
+		Gindex: uint64(proof.Index),
+		Proofs: proof.Hashes,
+	}
+
+	// 5. Build response with proof
+	responseWithProof := &sszquerypb.SSZQueryResponseWithProof{
+		Root:   root,
+		Result: encodedObject[offset : offset+length],
+		Proof:  protoProof,
+	}
+
+	return responseWithProof, nil
 }

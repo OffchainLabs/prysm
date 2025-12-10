@@ -27,6 +27,25 @@ func (info *SszInfo) MerkleTree() (*ssz.Node, error) {
 	return w.Node(), nil
 }
 
+// Proof generates a Merkle inclusion proof for the element at the given
+// generalized index.
+func (info *SszInfo) Proof(gindex int) (*ssz.Proof, error) {
+	rootNode, err := info.MerkleTree()
+	if err != nil {
+		return nil, err
+	}
+	return rootNode.Prove(gindex)
+}
+
+// Multiproof generates a multi-proof for multiple generalized indices.
+func (info *SszInfo) Multiproof(gindices []int) (*ssz.Multiproof, error) {
+	rootNode, err := info.MerkleTree()
+	if err != nil {
+		return nil, err
+	}
+	return rootNode.ProveMulti(gindices)
+}
+
 // buildTree recursively merkleizes a value according to SSZ rules.
 // It dispatches to type-specific handlers based on the SSZ type
 func buildTree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error {
@@ -179,6 +198,7 @@ func buildBitlistSubtree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error {
 	// Use go-bitfield to get length and bytes with termination bit cleared
 	bl := bitfield.Bitlist(bitlistBytes)
 	data := bl.BytesNoTrim()
+	bitLength := bl.Len() // actual number of bits (excluding termination bit)
 	start := w.Indx()
 
 	// Add bytes in 32-byte chunks
@@ -194,7 +214,7 @@ func buildBitlistSubtree(info *SszInfo, v reflect.Value, w *ssz.Wrapper) error {
 	// In consensus specs these max bit sizes are chosen so this is a power of 2.
 	limitChunks := int((bi.limit + 255) / 256)
 
-	w.CommitWithMixin(start, int(bi.length), limitChunks)
+	w.CommitWithMixin(start, int(bitLength), limitChunks)
 	return nil
 }
 
