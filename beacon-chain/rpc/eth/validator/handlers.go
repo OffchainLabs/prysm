@@ -1103,7 +1103,8 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !sortProposerDuties(w, duties) {
+	if err = sortProposerDuties(duties); err != nil {
+		httputil.HandleError(w, "Could not sort proposer duties: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1447,22 +1448,20 @@ func syncCommitteeDutiesAndVals(
 	return duties, vals, nil
 }
 
-func sortProposerDuties(w http.ResponseWriter, duties []*structs.ProposerDuty) bool {
-	ok := true
+func sortProposerDuties(duties []*structs.ProposerDuty) error {
+	var err error
 	sort.Slice(duties, func(i, j int) bool {
-		si, err := strconv.ParseUint(duties[i].Slot, 10, 64)
-		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
-			ok = false
+		si, parseErr := strconv.ParseUint(duties[i].Slot, 10, 64)
+		if parseErr != nil {
+			err = errors.Wrap(parseErr, "could not parse slot")
 			return false
 		}
-		sj, err := strconv.ParseUint(duties[j].Slot, 10, 64)
-		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
-			ok = false
+		sj, parseErr := strconv.ParseUint(duties[j].Slot, 10, 64)
+		if parseErr != nil {
+			err = errors.Wrap(parseErr, "could not parse slot")
 			return false
 		}
 		return si < sj
 	})
-	return ok
+	return err
 }
