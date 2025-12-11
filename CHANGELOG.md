@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.0.1](https://github.com/prysmaticlabs/prysm/compare/v7.0.0...v7.0.1) - 2025-12-08
+
+This patch release contains 4 cherry-picked changes to address the mainnet attestation processing issue from 2025-12-04. Operators are encouraged to update to this release as soon as practical. As of this release, the feature flag `--disable-last-epoch-targets` has been deprecated and can be safely removed from your node configuration. 
+
+A post mortem doc will full details is expected to be published later this week.
+
+### Changed
+
+- Move the "Not enough connected peers" (for a given subnet) from WARN to DEBUG. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16087)
+- Use dependent root instead of target when possible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15996)
+- Introduced flag `--ignore-unviable-attestations` (replaces and deprecates `--disable-last-epoch-targets`) to drop attestations whose target state is not viable; default remains to process them unless explicitly enabled. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16094)
+
+### Fixed
+
+- Use head state to validate attestations for old blocks if they are compatible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16095)
+
 ## [v7.0.0](https://github.com/prysmaticlabs/prysm/compare/v6.1.4...v7.0.0) - 2025-11-10
 
 This is our initial mainnet release for the Ethereum mainnet Fulu fork on December 3rd, 2025. All operators MUST update to v7.0.0 or later release prior to the fulu fork epoch `411392`. See the [Ethereum Foundation blog post](https://blog.ethereum.org/2025/11/06/fusaka-mainnet-announcement) for more information on Fulu.

@@ -265,7 +265,7 @@ func (s *Service) processVerifiedAttestation(
 	if key, err := generateUnaggregatedAttCacheKey(broadcastAtt); err != nil {
 		log.WithError(err).Error("Failed to generate cache key for attestation tracking")
 	} else {
-		s.setSeenUnaggregatedAtt(key)
+		_ = s.setSeenUnaggregatedAtt(key)
 	}
 
 	valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
@@ -320,7 +320,7 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 		return
 	}
 
-	s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
+	_ = s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
 
 	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 		log.WithError(err).Debug("Could not broadcast aggregated attestation")
