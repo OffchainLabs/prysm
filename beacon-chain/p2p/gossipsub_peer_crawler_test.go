@@ -275,7 +275,6 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		g := &GossipsubPeerCrawler{
 			ctx:    ctx,
-			cancel: cancel,
 			pingCh: make(chan enode.Node, 8),
 		}
 		cp := newTestCrawledPeers()
@@ -564,7 +563,7 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 
 	// Create crawler with small intervals
 	scorer := func(peer.ID) float64 { return 0 }
-	g, err := NewGossipsubPeerCrawler(&Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 4, filter, scorer)
+	g, err := NewGossipsubPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 4, filter, scorer)
 	require.NoError(t, err)
 
 	// Assign a simple topic extractor
@@ -575,7 +574,6 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 
 	// Run ping loop in background and perform a single crawl
 	require.NoError(t, g.Start(topicExtractor))
-	defer g.Stop()
 
 	// Verify that the peer has been indexed under the topic and marked as pinged
 	require2.Eventually(t, func() bool {
@@ -610,7 +608,7 @@ func TestCrawler_SkipsPeer_WhenFilterRejects(t *testing.T) {
 	filter := gossipsubcrawler.PeerFilterFunc(func(n *enode.Node) bool { return false })
 
 	scorer := func(peer.ID) float64 { return 0 }
-	g, err := NewGossipsubPeerCrawler(&Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
+	g, err := NewGossipsubPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
 	if err != nil {
 		t.Fatalf("NewGossipsubPeerCrawler error: %v", err)
 	}
@@ -641,7 +639,7 @@ func TestCrawler_RemoveTopic_RemovesTopicFromIndexes(t *testing.T) {
 	filter := gossipsubcrawler.PeerFilterFunc(func(n *enode.Node) bool { return true })
 
 	scorer := func(peer.ID) float64 { return 0 }
-	g, err := NewGossipsubPeerCrawler(&Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
+	g, err := NewGossipsubPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
 	if err != nil {
 		t.Fatalf("NewGossipsubPeerCrawler error: %v", err)
 	}

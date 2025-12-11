@@ -250,6 +250,7 @@ func (s *Service) Start() {
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
 		crawler, err := NewGossipsubPeerCrawler(
+			s.ctx,
 			s,
 			s.dv5Listener,
 			crawlTimeout,
@@ -266,7 +267,7 @@ func (s *Service) Start() {
 		s.crawler = crawler
 		// Initialise the gossipsub dialer which will be started
 		// once the sync service is ready to provide subnet topics.
-		s.gossipsubDialer = NewGossipsubPeerDialer(s.crawler, s.PubSub().ListPeers, s.DialPeers)
+		s.gossipsubDialer = NewGossipsubPeerDialer(s.ctx, s.crawler, s.PubSub().ListPeers, s.DialPeers)
 	}
 
 	s.started = true

@@ -1107,7 +1107,7 @@ func createTestService(t *testing.T, d db.Database) *Service {
 func startTestCrawler(t *testing.T, s *Service, listener *testp2p.MockListener) *GossipsubPeerCrawler {
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	crawler, err := NewGossipsubPeerCrawler(s, listener,
+	crawler, err := NewGossipsubPeerCrawler(t.Context(), s, listener,
 		1*time.Second, 100*time.Millisecond, 10, gossipsubcrawler.PeerFilterFunc(s.filterPeer),
 		s.Peers().Scorers().Score)
 	require.NoError(t, err)

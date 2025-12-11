@@ -17,7 +17,6 @@ type PeerFilterFunc func(*enode.Node) bool
 
 type Crawler interface {
 	Start(te TopicExtractor) error
-	Stop()
 	RemovePeerByPeerId(peerID peer.ID)
 	RemoveTopic(topic string)
 	PeersForTopic(topic string) []*enode.Node
@@ -32,6 +31,5 @@ type SubnetTopicsProvider func() []string
 // on a provided SubnetTopicsProvider and the p2p crawler.
 type GossipsubDialer interface {
 	Start(provider SubnetTopicsProvider) error
-	Stop()
 	DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error
 }

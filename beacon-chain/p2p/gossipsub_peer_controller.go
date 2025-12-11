@@ -27,36 +27,27 @@ type GossipsubPeerDialer struct {
 	crawler        gossipsubcrawler.Crawler
 	topicsProvider gossipsubcrawler.SubnetTopicsProvider
 
-	wg   sync.WaitGroup
 	once sync.Once
 }
 
 func NewGossipsubPeerDialer(
+	ctx context.Context,
 	crawler gossipsubcrawler.Crawler,
 	listPeers func(topic string) []peer.ID,
 	dialPeers func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint,
 ) *GossipsubPeerDialer {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &GossipsubPeerDialer{
+		ctx:       ctx,
 		listPeers: listPeers,
 		dialPeers: dialPeers,
 		crawler:   crawler,
-		ctx:       ctx,
-		cancel:    cancel,
 	}
-}
-
-func (g *GossipsubPeerDialer) Stop() {
-	g.cancel()
-	g.wg.Wait()
 }
 
 func (g *GossipsubPeerDialer) Start(provider gossipsubcrawler.SubnetTopicsProvider) error {
 	g.once.Do(func() {
 		g.topicsProvider = provider
-		g.wg.Go(func() {
-			g.dialLoop()
-		})
+		go g.dialLoop()
 	})
 
 	return nil

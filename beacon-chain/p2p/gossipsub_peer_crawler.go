@@ -236,8 +236,7 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipsubcrawler.P
 // querying for peers on a given topic. The crawler runs three background loops: one for discovery,
 // one for ping verification, and one for periodic cleanup of stale or filtered-out peers.
 type GossipsubPeerCrawler struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx context.Context
 
 	crawlInterval, crawlTimeout time.Duration
 
@@ -256,7 +255,6 @@ type GossipsubPeerCrawler struct {
 	pingCh        chan enode.Node
 	pingSemaphore *semaphore.Weighted
 
-	wg   sync.WaitGroup
 	once sync.Once
 }
 
@@ -283,6 +281,7 @@ type PeerScoreFunc func(peer.ID) float64
 //
 // Returns an error if any required parameter is nil or invalid.
 func NewGossipsubPeerCrawler(
+	ctx context.Context,
 	p2pSvc *Service,
 	dv5 ListenerRebooter,
 	crawlTimeout time.Duration,
@@ -313,10 +312,8 @@ func NewGossipsubPeerCrawler(
 		return nil, errors.New("peer scorer is nil")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	g := &GossipsubPeerCrawler{
 		ctx:           ctx,
-		cancel:        cancel,
 		crawlInterval: crawlInterval,
 		crawlTimeout:  crawlTimeout,
 		p2pSvc:        p2pSvc,
@@ -390,21 +387,12 @@ func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
 	}
 	g.once.Do(func() {
 		g.topicExtractor = te
-		g.wg.Go(g.crawlLoop)
-		g.wg.Go(g.pingLoop)
-		g.wg.Go(g.cleanupLoop)
+		go g.crawlLoop()
+		go g.pingLoop()
+		go g.cleanupLoop()
 	})
 
 	return nil
-}
-
-// Stop terminates all background crawler operations and waits for them to complete.
-// It cancels the crawler's context, which signals all goroutines to exit, then blocks
-// until all goroutines have finished. After Stop returns, the crawler will no longer
-// discover new peers or process pings. Stop is safe to call multiple times.
-func (g *GossipsubPeerCrawler) Stop() {
-	g.cancel()
-	g.wg.Wait()
 }
 
 func (g *GossipsubPeerCrawler) pingLoop() {

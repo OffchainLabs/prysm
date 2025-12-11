@@ -326,14 +326,6 @@ func (s *Service) Stop() error {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
 
-	// Stop gossipsub dialer and crawler if present.
-	if dialer := s.cfg.p2p.GossipsubDialer(); dialer != nil {
-		dialer.Stop()
-	}
-	if s.cfg.p2p.Crawler() != nil {
-		s.cfg.p2p.Crawler().Stop()
-	}
-
 	// Stop the gossipsub controller.
 	s.gossipsubController.Stop()
 

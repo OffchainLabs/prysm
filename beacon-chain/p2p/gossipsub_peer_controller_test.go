@@ -51,8 +51,7 @@ func TestGossipsubPeerDialer_Start(t *testing.T) {
 			md := &mockDialer{}
 			listPeers := func(topic string) []peer.ID { return nil }
 
-			dialer := NewGossipsubPeerDialer(tt.newCrawler(t), listPeers, md.DialPeers)
-			defer dialer.Stop()
+			dialer := NewGossipsubPeerDialer(t.Context(), tt.newCrawler(t), listPeers, md.DialPeers)
 
 			err := dialer.Start(tt.provider)
 			if tt.expectStartErr {
@@ -138,7 +137,7 @@ func TestGossipsubPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
 			}
 
 			crawler := tt.newCrawler(t)
-			dialer := NewGossipsubPeerDialer(crawler, listPeers, dialPeers)
+			dialer := NewGossipsubPeerDialer(t.Context(), crawler, listPeers, dialPeers)
 			topic := "topic/a"
 
 			ctx, cancel := tt.ctx()
@@ -152,7 +151,6 @@ func TestGossipsubPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
 			}
 
 			require.Equal(t, tt.expectedConnects, md.dialCount())
-			dialer.Stop()
 		})
 	}
 }
@@ -221,7 +219,10 @@ func TestGossipsubPeerDialer_peersForTopic(t *testing.T) {
 				peers:   map[string][]*enode.Node{"topic/test": crawlerPeers},
 				consume: false,
 			}
-			dialer := NewGossipsubPeerDialer(crawler, listPeers, func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint { return 0 })
+			dialer := NewGossipsubPeerDialer(t.Context(), crawler, listPeers, func(ctx context.Context,
+				maxConcurrentDials int, nodes []*enode.Node) uint {
+				return 0
+			})
 
 			got := dialer.peersForTopic("topic/test", tt.targetCount)
 			if expected == nil {
