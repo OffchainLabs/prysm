@@ -42,7 +42,23 @@ func (b *baseTopicFamily) NetworkScheduleEntry() params.NetworkScheduleEntry {
 	return b.nse
 }
 
-// idempotent for a topic
+// subscribeToTopics subscribes to the given list of gossipsub topics.
+//
+// This method is idempotent for a given topic - if a subscription already exists for a topic,
+// it will be skipped without error. This allows callers to safely call subscribeToTopics
+// multiple times with overlapping topic lists without creating duplicate subscriptions.
+//
+// For each new topic subscription, this method:
+//  1. Registers a topic validator with the pubsub system
+//  2. Creates the subscription via the p2p layer
+//  3. Spawns a goroutine running a message loop that processes incoming messages
+//  4. Tracks the subscription in the internal subscriptions map
+//
+// The message loop for each subscription runs until the context is cancelled or an error
+// occurs. Each received message is processed in its own goroutine with panic recovery.
+//
+// Errors during subscription (validator registration failures, subscription failures) are
+// logged but do not prevent other topics from being subscribed to.
 func (b *baseTopicFamily) subscribeToTopics(topics []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -136,6 +152,17 @@ func (b *baseTopicFamily) subscribeToTopics(topics []string) {
 	}
 }
 
+// UnsubscribeAll unsubscribes from all topics managed by this topic family.
+//
+// This method iterates through all active subscriptions and performs cleanup for each:
+//   - Unregisters the topic validator from pubsub
+//   - Cancels the subscription (stopping the message loop goroutine)
+//   - Leaves the topic in the p2p layer
+//   - Removes the topic from the crawler's tracking (if crawler is configured)
+//   - Removes the subscription from internal tracking
+//
+// After this method returns, the topic family has no active subscriptions.
+// This is typically called during shutdown or when transitioning between network forks.
 func (b *baseTopicFamily) UnsubscribeAll() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -146,6 +173,25 @@ func (b *baseTopicFamily) UnsubscribeAll() {
 	}
 }
 
+// pruneTopicsExcept unsubscribes from all topics except those in the provided list.
+//
+// This method is used to efficiently manage dynamic subnet subscriptions. When the set of
+// required topics changes (e.g., due to slot progression or validator duty changes), this
+// method removes subscriptions that are no longer needed while preserving active ones.
+//
+// Parameters:
+//   - wantedTopics: List of topic strings that should remain subscribed. Any topic not in
+//     this list will be unsubscribed and cleaned up.
+//
+// For each topic being pruned, the cleanup process:
+//   - Unregisters the topic validator from pubsub
+//   - Cancels the subscription (stopping the message loop goroutine)
+//   - Leaves the topic in the p2p layer
+//   - Removes the topic from the crawler's tracking (if crawler is configured)
+//   - Removes the subscription from internal tracking
+//
+// This method is safe to call with an empty wantedTopics list, which will unsubscribe from
+// all topics (equivalent to UnsubscribeAll).
 func (b *baseTopicFamily) pruneTopicsExcept(wantedTopics []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
