@@ -131,6 +131,7 @@ var appFlags = []cli.Flag{
 	debug.MutexProfileFractionFlag,
 	cmd.LogFileName,
 	cmd.EnableUPnPFlag,
+	cmd.EnableAutoNATFlag,
 	cmd.ConfigFileFlag,
 	cmd.ChainConfigFileFlag,
 	cmd.GrpcMaxCallRecvMsgSizeFlag,
