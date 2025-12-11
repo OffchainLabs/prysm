@@ -110,6 +110,7 @@ func TestService_Attestation_Subnet(t *testing.T) {
 	if gtm := GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]; gtm != AttestationSubnetTopicFormat {
 		t.Errorf("Constant is out of date. Wanted %s, got %s", AttestationSubnetTopicFormat, gtm)
 	}
+	s := Service{}
 
 	tests := []struct {
 		att   *ethpb.Attestation
@@ -122,7 +123,7 @@ func TestService_Attestation_Subnet(t *testing.T) {
 					Slot:           2,
 				},
 			},
-			topic: "/eth2/00000000/beacon_attestation_2",
+			topic: "/eth2/00000000/beacon_attestation_2" + s.Encoding().ProtocolSuffix(),
 		},
 		{
 			att: &ethpb.Attestation{
@@ -131,7 +132,7 @@ func TestService_Attestation_Subnet(t *testing.T) {
 					Slot:           10,
 				},
 			},
-			topic: "/eth2/00000000/beacon_attestation_21",
+			topic: "/eth2/00000000/beacon_attestation_21" + s.Encoding().ProtocolSuffix(),
 		},
 		{
 			att: &ethpb.Attestation{
@@ -140,12 +141,12 @@ func TestService_Attestation_Subnet(t *testing.T) {
 					Slot:           529,
 				},
 			},
-			topic: "/eth2/00000000/beacon_attestation_8",
+			topic: "/eth2/00000000/beacon_attestation_8" + s.Encoding().ProtocolSuffix(),
 		},
 	}
 	for _, tt := range tests {
 		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(100, tt.att.Data.CommitteeIndex, tt.att.Data.Slot)
-		assert.Equal(t, tt.topic, attestationToTopic(subnet, [4]byte{} /* fork digest */), "Wrong topic")
+		assert.Equal(t, tt.topic, AttestationSubnetTopic([4]byte{}, subnet), "Wrong topic")
 	}
 }
 
@@ -174,14 +175,12 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
 	subnet := uint64(5)
 
-	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = AttestationSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := AttestationSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -370,14 +369,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	go p2.listenForNewNodes()
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
-	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = AttestationSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := AttestationSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	// We don't use our internal subscribe method
 	// due to using floodsub over here.
 	tpHandle, err := p2.JoinTopic(topic)
@@ -448,14 +445,12 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	msg := util.HydrateSyncCommittee(&ethpb.SyncCommitteeMessage{})
 	subnet := uint64(5)
 
-	topic := SyncCommitteeSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = SyncCommitteeSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := SyncCommitteeSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -525,14 +520,12 @@ func TestService_BroadcastBlob(t *testing.T) {
 	}
 	subnet := uint64(0)
 
-	topic := BlobSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = BlobSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := BlobSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -592,10 +585,9 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
-	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
+	topic := LcOptimisticToTopic(params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -668,10 +660,9 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
-	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
+	topic := LcFinalityToTopic(params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -719,7 +710,6 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	const (
 		port        = 2000
 		columnIndex = 12
-		topicFormat = DataColumnSubnetTopicFormat
 	)
 
 	ctx := t.Context()
@@ -777,7 +767,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	require.NoError(t, err)
 
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
-	topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+	topic := DataColumnSubnetTopic(digest, subnet)
 
 	crawler, err := NewGossipsubPeerCrawler(service, listener, 1*time.Second, 1*time.Second, 10,
 		func(n *enode.Node) bool { return true },
@@ -813,8 +803,4 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	var result ethpb.DataColumnSidecar
 	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
 	require.DeepEqual(t, &result, verifiedRoSidecar)
-}
-
-func attestationToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
-	return fmt.Sprintf(AttestationSubnetTopicFormat, forkDigest, subnet)
 }

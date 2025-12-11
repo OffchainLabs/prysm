@@ -82,9 +82,7 @@ func (s *Service) DialPeers(ctx context.Context, maxConcurrentDials int, nodes [
 			}
 
 			wg.Go(func() {
-				fmt.Println("connecting to address", info.String())
 				if err := s.connectWithPeer(ctx, *info); err != nil {
-					fmt.Println("connection failure", err)
 					log.WithError(err).WithField("info", info.String()).Debug("Could not connect with peer")
 					return
 				}

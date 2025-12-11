@@ -27,12 +27,6 @@ func TestGossipsubPeerDialer_Start(t *testing.T) {
 		expectStartErr   bool
 	}{
 		{
-			name:           "nil provider errors",
-			newCrawler:     func(t *testing.T) *mockCrawler { return &mockCrawler{} },
-			provider:       nil,
-			expectStartErr: true,
-		},
-		{
 			name: "dials unique peers across topics",
 			newCrawler: func(t *testing.T) *mockCrawler {
 				nodeA := newTestNode(t, "127.0.0.1", 30101)

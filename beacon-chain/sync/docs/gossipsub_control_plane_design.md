@@ -78,7 +78,7 @@ Dynamic families combine two subnet sources:
 
 ### 1.6 Fork Schedule
 
-Topic families declare activation and optional deactivation epochs:
+Topic families declare activation and deactivation epochs (both are non-optional):
 
 | Fork | Activations | Deactivations |
 |------|-------------|---------------|

@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"testing"
 	"time"
 
@@ -134,7 +133,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 			}
 			var topics []string
 			for subnet := range subs {
-				t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
+				t := AttestationSubnetTopic(bootNodeForkDigest, subnet)
 				topics = append(topics, t)
 			}
 			return topics, nil
@@ -147,7 +146,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 		service.dv5Listener.LocalNode().Set(entry)
 
 		// Join and subscribe to the subnet, needed by libp2p.
-		topicName := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, i) + "/ssz_snappy"
+		topicName := AttestationSubnetTopic(bootNodeForkDigest, i)
 		topic, err := service.pubsub.Join(topicName)
 		require.NoError(t, err)
 
@@ -191,7 +190,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	subnets := map[uint64]bool{1: true, 2: true, 3: true}
 	var topics []string
 	for subnet := range subnets {
-		t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
+		t := AttestationSubnetTopic(bootNodeForkDigest, subnet)
 		topics = append(topics, t)
 	}
 
@@ -204,7 +203,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 			return nil, err
 		}
 		for subnet := range subs {
-			t := fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, subnet) + service.Encoding().ProtocolSuffix()
+			t := AttestationSubnetTopic(bootNodeForkDigest, subnet)
 			topics = append(topics, t)
 		}
 		return topics, nil
@@ -215,7 +214,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	}()
 
 	builder := func(idx uint64) string {
-		return fmt.Sprintf(AttestationSubnetTopicFormat, bootNodeForkDigest, idx) + service.Encoding().ProtocolSuffix()
+		return AttestationSubnetTopic(bootNodeForkDigest, idx)
 	}
 	defectiveSubnetsCount := defectiveSubnets(service, topics, minimumPeersPerSubnet)
 	require.Equal(t, subnetCount, defectiveSubnetsCount)
@@ -1120,7 +1119,7 @@ func startTestCrawler(t *testing.T, s *Service, listener *testp2p.MockListener) 
 		}
 		var topics []string
 		for subnet := range subs {
-			t := fmt.Sprintf(AttestationSubnetTopicFormat, digest, subnet) + s.Encoding().ProtocolSuffix()
+			t := AttestationSubnetTopic(digest, subnet)
 			topics = append(topics, t)
 		}
 		return topics, nil
@@ -1133,7 +1132,7 @@ func verifyCrawlerPeers(t *testing.T, crawler *GossipsubPeerCrawler, s *Service,
 	require.NoError(t, err)
 	var topics []string
 	for subnet := range subnets {
-		topics = append(topics, fmt.Sprintf(AttestationSubnetTopicFormat, digest, subnet)+s.Encoding().ProtocolSuffix())
+		topics = append(topics, AttestationSubnetTopic(digest, subnet))
 	}
 
 	var results []*enode.Node

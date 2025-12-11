@@ -69,7 +69,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 		chainStarted: abool.New(),
 		clockWaiter:  gs,
 	}
-	r.gossipsubController = NewGossipsubController(context.Background(), &r)
+	r.gossipsubController = NewGossipsubController(t.Context(), &r)
 
 	topicFmt := "/eth2/%x/beacon_block"
 	go r.startDiscoveryAndSubscriptions()
@@ -143,7 +143,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
-	r.gossipsubController = NewGossipsubController(context.Background(), &r)
+	r.gossipsubController = NewGossipsubController(t.Context(), &r)
 	r.initCaches()
 
 	var vr [32]byte
@@ -215,7 +215,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
-	r.gossipsubController = NewGossipsubController(context.Background(), &r)
+	r.gossipsubController = NewGossipsubController(t.Context(), &r)
 	markInitSyncComplete(t, &r)
 
 	go r.startDiscoveryAndSubscriptions()
@@ -262,7 +262,7 @@ func TestService_Stop_SendsGoodbyeMessages(t *testing.T) {
 	// Create service with connected peers
 	d := dbTest.SetupDB(t)
 	chain := &mockChain.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	r := &Service{
 		cfg: &config{
@@ -341,7 +341,7 @@ func TestService_Stop_TimeoutHandling(t *testing.T) {
 
 	d := dbTest.SetupDB(t)
 	chain := &mockChain.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	r := &Service{
 		cfg: &config{
@@ -403,7 +403,7 @@ func TestService_Stop_ConcurrentGoodbyeMessages(t *testing.T) {
 
 	d := dbTest.SetupDB(t)
 	chain := &mockChain.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	r := &Service{
 		cfg: &config{

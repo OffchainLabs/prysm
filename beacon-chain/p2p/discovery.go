@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"fmt"
 	"math"
 	"net"
 	"sync"
@@ -405,11 +404,7 @@ func (s *Service) findAndDialPeers(ctx context.Context) error {
 			return err
 		}
 
-		fmt.Println("peers to dial", peersToDial)
-
 		dialedPeerCount := s.DialPeers(s.ctx, maxConcurrentDials, peersToDial)
-		fmt.Println("FINISHED DIALING", dialedPeerCount)
-
 		if dialedPeerCount > missingPeerCount {
 			missingPeerCount = 0
 			continue

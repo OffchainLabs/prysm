@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"math"
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -11,6 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
+
+const farFutureEpoch = primitives.Epoch(math.MaxUint64)
 
 // wrappedVal represents a gossip validator which also returns an error along with the result.
 type wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
@@ -48,7 +51,7 @@ type GossipsubTopicFamilyWithDynamicSubnets interface {
 
 type topicFamilyEntry struct {
 	activationEpoch   primitives.Epoch
-	deactivationEpoch *primitives.Epoch // optional; inactive at >= deactivationEpoch
+	deactivationEpoch primitives.Epoch
 	factory           func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily
 }
 
@@ -57,7 +60,8 @@ func topicFamilySchedule() []topicFamilyEntry {
 	return []topicFamilyEntry{
 		// Genesis topic families
 		{
-			activationEpoch: cfg.GenesisEpoch,
+			activationEpoch:   cfg.GenesisEpoch,
+			deactivationEpoch: farFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				return []GossipsubTopicFamily{
 					NewBlockTopicFamily(s, nse),
@@ -71,7 +75,8 @@ func topicFamilySchedule() []topicFamilyEntry {
 		},
 		// Altair topic families
 		{
-			activationEpoch: cfg.AltairForkEpoch,
+			activationEpoch:   cfg.AltairForkEpoch,
+			deactivationEpoch: farFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				families := []GossipsubTopicFamily{
 					NewSyncContributionAndProofTopicFamily(s, nse),
@@ -88,7 +93,8 @@ func topicFamilySchedule() []topicFamilyEntry {
 		},
 		// Capella topic families
 		{
-			activationEpoch: cfg.CapellaForkEpoch,
+			activationEpoch:   cfg.CapellaForkEpoch,
+			deactivationEpoch: farFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				return []GossipsubTopicFamily{NewBlsToExecutionChangeTopicFamily(s, nse)}
 			},
@@ -96,7 +102,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 		// Blob topic families (static per-subnet) in Deneb and Electra forks (removed in Fulu)
 		{
 			activationEpoch:   cfg.DenebForkEpoch,
-			deactivationEpoch: func() *primitives.Epoch { e := cfg.ElectraForkEpoch; return &e }(),
+			deactivationEpoch: cfg.ElectraForkEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				count := cfg.BlobsidecarSubnetCount
 				families := make([]GossipsubTopicFamily, 0, count)
@@ -108,7 +114,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 		},
 		{
 			activationEpoch:   cfg.ElectraForkEpoch,
-			deactivationEpoch: func() *primitives.Epoch { e := cfg.FuluForkEpoch; return &e }(),
+			deactivationEpoch: cfg.FuluForkEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				count := cfg.BlobsidecarSubnetCountElectra
 				families := make([]GossipsubTopicFamily, 0, count)
@@ -120,7 +126,8 @@ func topicFamilySchedule() []topicFamilyEntry {
 		},
 		// Fulu data column topic family
 		{
-			activationEpoch: cfg.FuluForkEpoch,
+			activationEpoch:   cfg.FuluForkEpoch,
+			deactivationEpoch: farFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				return []GossipsubTopicFamily{NewDataColumnTopicFamily(s, nse)}
 			},
@@ -134,7 +141,7 @@ func TopicFamiliesForEpoch(epoch primitives.Epoch, s *Service, nse params.Networ
 		if epoch < entry.activationEpoch {
 			continue
 		}
-		if entry.deactivationEpoch != nil && epoch >= *entry.deactivationEpoch {
+		if epoch >= entry.deactivationEpoch {
 			continue
 		}
 		activeFamilies = append(activeFamilies, entry.factory(s, nse)...)
