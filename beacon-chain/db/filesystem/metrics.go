@@ -36,16 +36,15 @@ var (
 	})
 
 	// Data columns
-	dataColumnBuckets     = []float64{3, 5, 7, 9, 11, 13}
 	dataColumnSaveLatency = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "data_column_storage_save_latency",
 		Help:    "Latency of DataColumnSidecar storage save operations in milliseconds",
-		Buckets: dataColumnBuckets,
+		Buckets: []float64{10, 20, 30, 50, 100, 200, 500},
 	})
 	dataColumnFetchLatency = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "data_column_storage_get_latency",
 		Help:    "Latency of DataColumnSidecar storage get operations in milliseconds",
-		Buckets: dataColumnBuckets,
+		Buckets: []float64{3, 5, 7, 9, 11, 13},
 	})
 	dataColumnPrunedCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "data_column_pruned",
