@@ -9,22 +9,25 @@ import (
 func TestGraffitiInfo_GenerateGraffiti_NoELInfo(t *testing.T) {
 	g := NewGraffitiInfo("")
 
-	// Without EL info, should return fallback
+	// Without EL info, should still include CL info (PR + commit)
 	result := g.GenerateGraffiti()
 	resultStr := string(result[:])
 
-	// Should start with "Prysm/"
-	require.Equal(t, true, len(resultStr) > 0 && resultStr[:6] == "Prysm/", "Expected fallback graffiti to start with Prysm/")
+	// Should start with "PR" (CL code) since EL is missing but CL info is still included
+	require.Equal(t, true, len(resultStr) >= 2 && resultStr[:2] == "PR", "Expected graffiti to start with PR (CL code)")
 }
 
 func TestGraffitiInfo_GenerateGraffiti_WithUserGraffiti(t *testing.T) {
 	g := NewGraffitiInfo("my validator")
 
-	// Without EL info, should return user graffiti
+	// Without EL info, should still include CL info + user graffiti
+	// "my validator" = 12 chars, available = 20 bytes, so full CL format: PR + commit(4) + user
 	result := g.GenerateGraffiti()
 	resultStr := trimNullBytes(string(result[:]))
 
-	require.Equal(t, "my validator", resultStr)
+	// Should start with "PR" and end with "my validator"
+	require.Equal(t, true, len(resultStr) >= 2 && resultStr[:2] == "PR", "Expected graffiti to start with PR")
+	require.Equal(t, true, len(resultStr) >= 12 && resultStr[len(resultStr)-12:] == "my validator", "Expected graffiti to end with user graffiti")
 }
 
 func TestGraffitiInfo_GenerateGraffiti_FlexibleStandard(t *testing.T) {
@@ -146,17 +149,17 @@ func TestGraffitiInfo_GenerateGraffitiWithUserInput(t *testing.T) {
 func TestGraffitiInfo_UpdateFromEngine(t *testing.T) {
 	g := NewGraffitiInfo("")
 
-	// Initially no EL info
+	// Initially no EL info - should still have CL info (PR + commit)
 	result := g.GenerateGraffiti()
 	resultStr := string(result[:])
-	require.Equal(t, true, resultStr[:6] == "Prysm/", "Expected fallback before update")
+	require.Equal(t, true, resultStr[:2] == "PR", "Expected CL info before update")
 
 	// Update with EL info
 	g.UpdateFromEngine("GE", "1234abcd")
 
 	result = g.GenerateGraffiti()
 	resultStr = string(result[:])
-	require.Equal(t, "GE1234PR", resultStr[:8], "Expected EL info after update")
+	require.Equal(t, "GE1234PR", resultStr[:8], "Expected EL+CL info after update")
 }
 
 func TestTruncateCommit(t *testing.T) {

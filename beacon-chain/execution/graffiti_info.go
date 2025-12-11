@@ -52,23 +52,16 @@ func (g *GraffitiInfo) GenerateGraffiti() [32]byte {
 	userLen := len(g.userGraffiti)
 	available := 32 - userLen
 
-	// If no EL info available, use user graffiti or fallback
-	if g.elCode == "" {
-		if g.userGraffiti != "" {
-			copy(result[:], g.userGraffiti)
-			return result
-		}
-		// Fallback: "Prysm/vX.Y.Z"
-		fallback := "Prysm/" + version.SemanticVersion()
-		copy(result[:], fallback)
-		return result
-	}
-
 	clCommit := version.GetCommitPrefix()
-	elCommit4 := truncateCommit(g.elCommit, 4)
-	elCommit2 := truncateCommit(g.elCommit, 2)
 	clCommit4 := truncateCommit(clCommit, 4)
 	clCommit2 := truncateCommit(clCommit, 2)
+
+	// If no EL info, clear EL commits but still include CL info
+	var elCommit4, elCommit2 string
+	if g.elCode != "" {
+		elCommit4 = truncateCommit(g.elCommit, 4)
+		elCommit2 = truncateCommit(g.elCommit, 2)
+	}
 
 	var graffiti string
 	switch {
@@ -118,23 +111,16 @@ func (g *GraffitiInfo) GenerateGraffitiWithUserInput(userGraffiti []byte) [32]by
 	userLen := len(userStr)
 	available := 32 - userLen
 
-	// If no EL info available, use user graffiti or fallback
-	if g.elCode == "" {
-		if userLen > 0 {
-			copy(result[:], userStr)
-			return result
-		}
-		// Fallback: "Prysm/vX.Y.Z"
-		fallback := "Prysm/" + version.SemanticVersion()
-		copy(result[:], fallback)
-		return result
-	}
-
 	clCommit := version.GetCommitPrefix()
-	elCommit4 := truncateCommit(g.elCommit, 4)
-	elCommit2 := truncateCommit(g.elCommit, 2)
 	clCommit4 := truncateCommit(clCommit, 4)
 	clCommit2 := truncateCommit(clCommit, 2)
+
+	// If no EL info, clear EL commits but still include CL info
+	var elCommit4, elCommit2 string
+	if g.elCode != "" {
+		elCommit4 = truncateCommit(g.elCommit, 4)
+		elCommit2 = truncateCommit(g.elCommit, 2)
+	}
 
 	var graffiti string
 	switch {
