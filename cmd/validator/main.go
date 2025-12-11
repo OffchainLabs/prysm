@@ -185,7 +185,7 @@ func main() {
 			}
 
 			if logFileName != "" {
-				if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+				if err := logs.ConfigurePersistentLogging(logFileName, format); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
 				}
 			}

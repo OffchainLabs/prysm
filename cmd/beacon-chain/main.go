@@ -207,7 +207,7 @@ func before(ctx *cli.Context) error {
 
 	logFileName := ctx.String(cmd.LogFileName.Name)
 	if logFileName != "" {
-		if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+		if err := logs.ConfigurePersistentLogging(logFileName, format); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
 		}
 	}
