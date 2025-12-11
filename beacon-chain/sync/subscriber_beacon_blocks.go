@@ -247,6 +247,8 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				"indices": helpers.SortedPrettySliceFromMap(unseenIndices),
 			}).Debug("Constructed data column sidecars from the execution client")
 
+			dataColumnSidecarsObtainedViaELCount.Observe(float64(len(unseenIndices)))
+
 			return nil, nil
 		}
 	}); err != nil {
