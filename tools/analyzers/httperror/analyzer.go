@@ -16,7 +16,7 @@ var Analyzer = &analysis.Analyzer{
 	},
 }
 
-func Run(pass *analysis.Pass) (interface{}, error) {
+func Run(pass *analysis.Pass) (any, error) {
 	ins := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	ins.Preorder([]ast.Node{(*ast.FuncDecl)(nil)}, func(n ast.Node) {
