@@ -436,7 +436,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 			log.WithError(err).Warn("Failed to start gossipsub peer dialer")
 		}
 	} else {
-		log.Info("No gossipsub peer dialer available")
+		log.Error("No gossipsub peer dialer available")
 	}
 }
 

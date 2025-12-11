@@ -17,6 +17,9 @@ const (
 	dialInterval = 1 * time.Second
 )
 
+// GossipsubPeerDialer maintains minimum peer counts for gossipsub topics by periodically
+// dialing new peers discovered by a crawler. It runs a background loop that checks each
+// topic's peer count and dials new peers when below the target threshold.
 type GossipsubPeerDialer struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -30,6 +33,19 @@ type GossipsubPeerDialer struct {
 	once sync.Once
 }
 
+// NewGossipsubPeerDialer creates a new GossipsubPeerDialer instance.
+//
+// Parameters:
+//   - ctx: Parent context that controls the lifecycle of the dialer. When cancelled,
+//     the background dial loop will terminate.
+//   - crawler: Source of peer candidates for each topic. The crawler maintains a registry
+//     of peers discovered through DHT crawling, indexed by the topics they subscribe to.
+//   - listPeers: Function that returns the current peers connected for a given topic.
+//     Used to determine how many additional peers need to be dialed.
+//   - dialPeers: Function that dials the given enode.Node peers with a concurrency limit.
+//     Returns the number of successful dials.
+//
+// The dialer must be started with Start() before it begins maintaining peer counts.
 func NewGossipsubPeerDialer(
 	ctx context.Context,
 	crawler gossipsubcrawler.Crawler,
@@ -44,6 +60,22 @@ func NewGossipsubPeerDialer(
 	}
 }
 
+// Start begins the background dial loop that maintains peer counts for all topics.
+//
+// The provider function is called on each tick to get the current list of topics that
+// need peer maintenance. This allows the set of topics to change dynamically as the node
+// subscribes/unsubscribes from subnets.
+//
+// Start is idempotent - calling it multiple times has no effect after the first call.
+// Only the provider from the first call will be used; subsequent calls are ignored.
+//
+// The dial loop runs every dialInterval (1 second) and for each topic:
+//  1. Checks current peer count via listPeers()
+//  2. If below peerPerTopic (20), requests candidates from the crawler
+//  3. Deduplicates peers across all topics to avoid redundant dials
+//  4. Dials missing peers with rate limiting if enabled
+//
+// Returns nil always (error return preserved for interface compatibility).
 func (g *GossipsubPeerDialer) Start(provider gossipsubcrawler.SubnetTopicsProvider) error {
 	g.once.Do(func() {
 		g.topicsProvider = provider
@@ -90,6 +122,31 @@ func (g *GossipsubPeerDialer) dialLoop() {
 	}
 }
 
+// DialPeersForTopicBlocking blocks until the specified topic has at least nPeers connected,
+// or until the context is cancelled.
+//
+// This method is useful when you need to ensure a minimum number of peers are connected
+// for a specific topic before proceeding (e.g., before publishing a message).
+//
+// The method polls in a loop:
+//  1. Check if current peer count >= nPeers, return nil if satisfied
+//  2. Get peer candidates from crawler for this topic
+//  3. Dial candidates with rate limiting
+//  4. Wait 100ms for connections to establish in pubsub layer
+//  5. Repeat until target reached or context cancelled
+//
+// Parameters:
+//   - ctx: Context to cancel the blocking operation. Takes precedence for cancellation.
+//   - topic: The gossipsub topic to ensure peers for.
+//   - nPeers: Minimum number of peers required before returning.
+//
+// Returns:
+//   - nil: Successfully reached the target peer count.
+//   - ctx.Err(): The provided context was cancelled.
+//   - g.ctx.Err(): The dialer's parent context was cancelled.
+//
+// Note: This may block indefinitely if the crawler cannot provide enough peers
+// and the context has no deadline.
 func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error {
 	for {
 		peers := g.listPeers(topic)

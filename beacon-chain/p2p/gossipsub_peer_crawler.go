@@ -44,15 +44,11 @@ func (cp *crawledPeers) updateStatusToPinged(enodeID enode.ID) {
 	existingPNode.isPinged = true
 }
 
-func (cp *crawledPeers) updateCrawledIfNewer(node *enode.Node, topics []string) (bool, error) {
+func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (bool, error) {
 	if node == nil {
 		return false, errors.New("node is nil")
 	}
 
-	return cp.updatePeer(node, topics)
-}
-
-func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (bool, error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -463,7 +459,7 @@ func (g *GossipsubPeerCrawler) crawl() {
 			continue
 		}
 
-		shouldPing, err := g.crawledPeers.updateCrawledIfNewer(node, topics)
+		shouldPing, err := g.crawledPeers.updatePeer(node, topics)
 		if err != nil {
 			log.WithError(err).WithField("node", node.ID()).Error("Failed to update crawled peers")
 		}

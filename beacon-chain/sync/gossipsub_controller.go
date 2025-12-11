@@ -91,11 +91,6 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 		if !seen {
 			g.activeTopicFamilies[key] = family
 			existing = family
-			log.WithFields(logrus.Fields{
-				"topicName":  key.topicName,
-				"forkDigest": fmt.Sprintf("%#x", key.forkDigest),
-				"epoch":      currentEpoch,
-			}).Info("Registered topic family")
 		}
 
 		switch tf := existing.(type) {

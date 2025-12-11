@@ -434,7 +434,7 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 			cp, g, cancel := newCrawler()
 			defer cancel()
 			tc.arrange(cp)
-			shouldPing, err := cp.updateCrawledIfNewer(tc.invokeNode, tc.invokeTopics)
+			shouldPing, err := cp.updatePeer(tc.invokeNode, tc.invokeTopics)
 			if tc.expectErr {
 				require.Error(t, err)
 			} else {
