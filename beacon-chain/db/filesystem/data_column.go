@@ -692,9 +692,11 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 		return errWrongBytesWritten
 	}
 
+	syncStart := time.Now()
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
 
 	return nil
 }
@@ -808,9 +810,11 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 		return errWrongBytesWritten
 	}
 
+	syncStart := time.Now()
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
 
 	return nil
 }

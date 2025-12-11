@@ -58,4 +58,8 @@ var (
 		Name: "data_column_disk_count",
 		Help: "Approximate number of data columns in storage",
 	})
+	dataColumnFileSyncLatency = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "data_column_file_sync_latency",
+		Help: "Latency of sync operations when saving data columns in milliseconds",
+	})
 )
