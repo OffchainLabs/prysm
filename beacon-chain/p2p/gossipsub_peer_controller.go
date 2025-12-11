@@ -60,10 +60,9 @@ func (g *GossipsubPeerDialer) dialLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			topics := g.topicsProvider()
 			var peersToDial []*enode.Node
 
-			for _, topic := range topics {
+			for _, topic := range g.topicsProvider() {
 				newPeers := g.peersForTopic(topic, peerPerTopic)
 				peersToDial = append(peersToDial, newPeers...)
 			}
@@ -121,7 +120,6 @@ func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*en
 		return nil
 	}
 	missing := targetCount - peerCount
-	// this is fine as "PeersForTopic" does not return peers we are already connected to
 	newPeers := g.crawler.PeersForTopic(topic)
 	if len(newPeers) > missing {
 		newPeers = newPeers[:missing]
