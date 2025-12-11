@@ -62,4 +62,8 @@ var (
 		Name: "data_column_file_sync_latency",
 		Help: "Latency of sync operations when saving data columns in milliseconds",
 	})
+	dataColumnBatchStoreCount = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "data_column_batch_store_count",
+		Help: "Number of data columns stored in a batch",
+	})
 )

@@ -622,6 +622,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 	// Create the SSZ encoded data column sidecars.
 	var sszEncodedDataColumnSidecars []byte
 
+	// Initialize the count of the saved SSZ encoded data column sidecar.
+	storedCount := uint8(0)
+
 	for {
 		dataColumnSidecars := pullChan(inputDataColumnSidecars)
 		if len(dataColumnSidecars) == 0 {
@@ -668,6 +671,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 				return errors.Wrap(err, "set index")
 			}
 
+			// Increment the count of the saved SSZ encoded data column sidecar.
+			storedCount++
+
 			// Append the SSZ encoded data column sidecar to the SSZ encoded data column sidecars.
 			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
 		}
@@ -697,6 +703,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 		return errors.Wrap(err, "sync")
 	}
 	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
+	dataColumnBatchStoreCount.Observe(float64(storedCount))
 
 	return nil
 }
@@ -814,7 +821,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+
 	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
+	dataColumnBatchStoreCount.Observe(float64(storedCount))
 
 	return nil
 }
