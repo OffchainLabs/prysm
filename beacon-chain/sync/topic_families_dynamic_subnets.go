@@ -13,14 +13,14 @@ import (
 var _ GossipsubTopicFamilyWithDynamicSubnets = (*AttestationTopicFamily)(nil)
 
 type AttestationTopicFamily struct {
-	*baseGossipsubTopicFamily
+	*baseTopicFamily
 }
 
 // NewAttestationTopicFamily creates a new AttestationTopicFamily.
 func NewAttestationTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AttestationTopicFamily {
 	a := &AttestationTopicFamily{}
 	base := newBaseGossipsubTopicFamily(s, nse, s.validateCommitteeIndexBeaconAttestation, s.committeeIndexBeaconAttestationSubscriber, a)
-	a.baseGossipsubTopicFamily = base
+	a.baseTopicFamily = base
 	return a
 }
 
@@ -35,12 +35,7 @@ func (a *AttestationTopicFamily) SubscribeForSlot(slot primitives.Slot) {
 
 // UnsubscribeForSlot unsubscribes from topics we no longer need for the slot.
 func (a *AttestationTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
-	a.removeUnwantedTopics(a.TopicsToSubscribeForSlot(slot))
-}
-
-// UnsubscribeAll unsubscribes from all topics in the family.
-func (a *AttestationTopicFamily) UnsubscribeAll() {
-	a.unsubscribeAll()
+	a.pruneTopicsExcept(a.TopicsToSubscribeForSlot(slot))
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
@@ -72,14 +67,14 @@ func (a *AttestationTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]strin
 var _ GossipsubTopicFamilyWithDynamicSubnets = (*SyncCommitteeTopicFamily)(nil)
 
 type SyncCommitteeTopicFamily struct {
-	*baseGossipsubTopicFamily
+	*baseTopicFamily
 }
 
 // NewSyncCommitteeTopicFamily creates a new SyncCommitteeTopicFamily.
 func NewSyncCommitteeTopicFamily(s *Service, nse params.NetworkScheduleEntry) *SyncCommitteeTopicFamily {
 	sc := &SyncCommitteeTopicFamily{}
 	base := newBaseGossipsubTopicFamily(s, nse, s.validateSyncCommitteeMessage, s.syncCommitteeMessageSubscriber, sc)
-	sc.baseGossipsubTopicFamily = base
+	sc.baseTopicFamily = base
 	return sc
 }
 
@@ -94,12 +89,7 @@ func (s *SyncCommitteeTopicFamily) SubscribeForSlot(slot primitives.Slot) {
 
 // UnsubscribeFor unsubscribes from topics we no longer need for the slot.
 func (s *SyncCommitteeTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
-	s.removeUnwantedTopics(s.TopicsToSubscribeForSlot(slot))
-}
-
-// UnsubscribeAll unsubscribes from all topics in the family.
-func (s *SyncCommitteeTopicFamily) UnsubscribeAll() {
-	s.unsubscribeAll()
+	s.pruneTopicsExcept(s.TopicsToSubscribeForSlot(slot))
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
@@ -131,14 +121,14 @@ func (s *SyncCommitteeTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]str
 var _ GossipsubTopicFamilyWithDynamicSubnets = (*DataColumnTopicFamily)(nil)
 
 type DataColumnTopicFamily struct {
-	*baseGossipsubTopicFamily
+	*baseTopicFamily
 }
 
 // NewDataColumnTopicFamily creates a new DataColumnTopicFamily.
 func NewDataColumnTopicFamily(s *Service, nse params.NetworkScheduleEntry) *DataColumnTopicFamily {
 	d := &DataColumnTopicFamily{}
 	base := newBaseGossipsubTopicFamily(s, nse, s.validateDataColumn, s.dataColumnSubscriber, d)
-	d.baseGossipsubTopicFamily = base
+	d.baseTopicFamily = base
 	return d
 }
 
@@ -153,12 +143,7 @@ func (d *DataColumnTopicFamily) SubscribeForSlot(slot primitives.Slot) {
 
 // UnsubscribeForSlot unsubscribes from topics we no longer need for the slot.
 func (d *DataColumnTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
-	d.removeUnwantedTopics(d.TopicsToSubscribeForSlot(slot))
-}
-
-// UnsubscribeAll unsubscribes from all topics in the family.
-func (d *DataColumnTopicFamily) UnsubscribeAll() {
-	d.unsubscribeAll()
+	d.pruneTopicsExcept(d.TopicsToSubscribeForSlot(slot))
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.

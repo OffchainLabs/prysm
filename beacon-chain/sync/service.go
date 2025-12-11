@@ -416,7 +416,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the fork watcher.
-	go s.p2pRPCHandlerControlLoop()
+	go s.rpcHandlerControlLoop()
 
 	// Start the gossipsub controller.
 	go s.gossipsubController.Start()

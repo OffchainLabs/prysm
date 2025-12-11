@@ -22,7 +22,7 @@ import (
 
 // testDynFamly is a test implementation of a dynamic-subnet topic family.
 type testDynFamly struct {
-	baseGossipsubTopicFamily
+	baseTopicFamily
 	topics []string
 	name   string
 }
@@ -39,10 +39,6 @@ func (f *testDynFamly) Handler() subHandler {
 	return noopHandler
 }
 
-func (f *testDynFamly) UnsubscribeAll() {
-	f.unsubscribeAll()
-}
-
 func (f *testDynFamly) GetFullTopicString(subnet uint64) string {
 	return fmt.Sprintf("topic-%d", subnet)
 }
@@ -56,13 +52,13 @@ func (f *testDynFamly) ExtractTopicsForNode(_ *enode.Node) ([]string, error) {
 }
 
 func (f *testDynFamly) SubscribeForSlot(_ primitives.Slot) {
-	f.baseGossipsubTopicFamily.subscribeToTopics(f.topics)
+	f.baseTopicFamily.subscribeToTopics(f.topics)
 }
 
 func (f *testDynFamly) UnsubscribeForSlot(_ primitives.Slot) {}
 
 type staticTopicFamily struct {
-	*baseGossipsubTopicFamily
+	*baseTopicFamily
 	name   string
 	topics []string
 }
@@ -80,11 +76,7 @@ func (f *staticTopicFamily) Handler() subHandler {
 }
 
 func (f *staticTopicFamily) Subscribe() {
-	f.baseGossipsubTopicFamily.subscribeToTopics(f.topics)
-}
-
-func (f *staticTopicFamily) UnsubscribeAll() {
-	f.baseGossipsubTopicFamily.unsubscribeAll()
+	f.baseTopicFamily.subscribeToTopics(f.topics)
 }
 
 func testGossipsubControllerService(t *testing.T, current primitives.Epoch) *Service {

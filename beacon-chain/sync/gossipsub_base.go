@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type baseGossipsubTopicFamily struct {
+type baseTopicFamily struct {
 	syncService *Service
 	nse         params.NetworkScheduleEntry
 	validator   wrappedVal
@@ -27,8 +27,8 @@ type baseGossipsubTopicFamily struct {
 }
 
 func newBaseGossipsubTopicFamily(syncService *Service, nse params.NetworkScheduleEntry, validator wrappedVal,
-	handler subHandler, tf GossipsubTopicFamily) *baseGossipsubTopicFamily {
-	return &baseGossipsubTopicFamily{
+	handler subHandler, tf GossipsubTopicFamily) *baseTopicFamily {
+	return &baseTopicFamily{
 		syncService:   syncService,
 		nse:           nse,
 		validator:     validator,
@@ -38,12 +38,12 @@ func newBaseGossipsubTopicFamily(syncService *Service, nse params.NetworkSchedul
 	}
 }
 
-func (b *baseGossipsubTopicFamily) NetworkScheduleEntry() params.NetworkScheduleEntry {
+func (b *baseTopicFamily) NetworkScheduleEntry() params.NetworkScheduleEntry {
 	return b.nse
 }
 
 // idempotent for a topic
-func (b *baseGossipsubTopicFamily) subscribeToTopics(topics []string) {
+func (b *baseTopicFamily) subscribeToTopics(topics []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -136,24 +136,22 @@ func (b *baseGossipsubTopicFamily) subscribeToTopics(topics []string) {
 	}
 }
 
-func (b *baseGossipsubTopicFamily) unsubscribeAll() {
+func (b *baseTopicFamily) UnsubscribeAll() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	for topic, sub := range b.subscriptions {
 		b.cleanupSubscription(topic, sub)
+		delete(b.subscriptions, topic)
 	}
-
-	b.subscriptions = make(map[string]*pubsub.Subscription)
 }
 
-func (b *baseGossipsubTopicFamily) removeUnwantedTopics(wantedTopics []string) {
+func (b *baseTopicFamily) pruneTopicsExcept(wantedTopics []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	topics := wantedTopics
-	neededMap := make(map[string]bool, len(topics))
-	for _, t := range topics {
+	neededMap := make(map[string]bool, len(wantedTopics))
+	for _, t := range wantedTopics {
 		neededMap[t] = true
 	}
 
@@ -164,7 +162,7 @@ func (b *baseGossipsubTopicFamily) removeUnwantedTopics(wantedTopics []string) {
 	}
 }
 
-func (b *baseGossipsubTopicFamily) cleanupSubscription(topic string, sub *pubsub.Subscription) {
+func (b *baseTopicFamily) cleanupSubscription(topic string, sub *pubsub.Subscription) {
 	s := b.syncService
 	log.WithField("topic", topic).Info("Unsubscribed from")
 	if err := s.cfg.p2p.PubSub().UnregisterTopicValidator(topic); err != nil {

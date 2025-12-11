@@ -73,7 +73,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 
 	tf := NewVoluntaryExitTopicFamily(&r, nse)
 	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, handler, tf)
-	tf.baseGossipsubTopicFamily = base
+	tf.baseTopicFamily = base
 
 	tf.Subscribe()
 	r.markForChainStart()
@@ -117,7 +117,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 		topics: []string{topic},
 	}
 	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, &tf)
-	tf.baseGossipsubTopicFamily = base
+	tf.baseTopicFamily = base
 
 	tf.Subscribe()
 	r.markForChainStart()
@@ -168,8 +168,8 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	p2pService.Digest = nse.ForkDigest
 
 	tf := NewAttesterSlashingTopicFamily(&r, nse)
-	tf.baseGossipsubTopicFamily.validator = r.noopValidator
-	tf.baseGossipsubTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
+	tf.baseTopicFamily.validator = r.noopValidator
+	tf.baseTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.attesterSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
@@ -227,8 +227,8 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	p2pService.Digest = nse.ForkDigest
 
 	tf := NewProposerSlashingTopicFamily(&r, nse)
-	tf.baseGossipsubTopicFamily.validator = r.noopValidator
-	tf.baseGossipsubTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
+	tf.baseTopicFamily.validator = r.noopValidator
+	tf.baseTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.proposerSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
@@ -284,7 +284,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 		panic("bad")
 	}
 	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, handler, tf)
-	tf.baseGossipsubTopicFamily = base
+	tf.baseTopicFamily = base
 
 	tf.Subscribe()
 
@@ -531,7 +531,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 
 	tfDyn := NewSyncCommitteeTopicFamily(&r, nse)
 	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn)
-	tfDyn.baseGossipsubTopicFamily = base
+	tfDyn.baseTopicFamily = base
 	tfDyn.SubscribeForSlot(slot)
 
 	time.Sleep(2 * time.Second)
@@ -580,7 +580,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 
 	tfDyn2 := NewSyncCommitteeTopicFamily(&r, nse)
 	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn2)
-	tfDyn2.baseGossipsubTopicFamily = base
+	tfDyn2.baseTopicFamily = base
 	tfDyn2.SubscribeForSlot(r.cfg.clock.CurrentSlot())
 
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
