@@ -48,6 +48,9 @@ func (m *MockStater) StateBySlot(_ context.Context, s primitives.Slot) (state.Be
 
 // StateByEpoch --
 func (m *MockStater) StateByEpoch(_ context.Context, e primitives.Epoch) (state.BeaconState, error) {
+	if m.CustomError != nil {
+		return nil, m.CustomError
+	}
 	if m.StatesByEpoch != nil {
 		return m.StatesByEpoch[e], nil
 	}

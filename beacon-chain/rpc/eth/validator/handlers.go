@@ -905,7 +905,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get state for epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1016,7 +1016,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get state for epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1143,7 +1143,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 
 	st, err := s.Stater.StateByEpoch(ctx, startingEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get state for epoch %d: %v", startingEpoch, err), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
