@@ -60,7 +60,7 @@ func (a *AttestationTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) ma
 
 // ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
 func (a *AttestationTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
-	return getTopicsForNode(a.syncService, a, node, p2p.AttestationSubnets)
+	return getTopicsForNode(a.syncService.cfg.clock.CurrentSlot, a, node, p2p.AttestationSubnets)
 }
 
 // SyncCommitteeTopicFamily
@@ -114,7 +114,7 @@ func (s *SyncCommitteeTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) 
 
 // ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
 func (s *SyncCommitteeTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
-	return getTopicsForNode(s.syncService, s, node, p2p.SyncSubnets)
+	return getTopicsForNode(s.syncService.cfg.clock.CurrentSlot, s, node, p2p.SyncSubnets)
 }
 
 // DataColumnTopicFamily
@@ -168,7 +168,7 @@ func (d *DataColumnTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) map
 
 // ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
 func (d *DataColumnTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
-	return getTopicsForNode(d.syncService, d, node, p2p.DataColumnSubnets)
+	return getTopicsForNode(d.syncService.cfg.clock.CurrentSlot, d, node, p2p.DataColumnSubnets)
 }
 
 type nodeSubnetExtractor func(id enode.ID, n *enode.Node, r *enr.Record) (map[uint64]bool, error)
@@ -180,7 +180,7 @@ type dynamicSubnetFamily interface {
 }
 
 func getTopicsForNode(
-	s *Service,
+	slotF func() primitives.Slot,
 	tf dynamicSubnetFamily,
 	node *enode.Node,
 	extractor nodeSubnetExtractor,
@@ -188,8 +188,7 @@ func getTopicsForNode(
 	if node == nil {
 		return nil, errors.New("enode is nil")
 	}
-	currentSlot := s.cfg.clock.CurrentSlot()
-
+	currentSlot := slotF()
 	neededSubnets := computeNeededSubnets(tf, currentSlot)
 
 	nodeSubnets, err := extractor(node.ID(), node, node.Record())
