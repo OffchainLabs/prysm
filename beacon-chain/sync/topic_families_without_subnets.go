@@ -6,7 +6,7 @@ import (
 )
 
 // Blocks
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*BlockTopicFamily)(nil)
+var _ ShardedTopicFamily = (*BlockTopicFamily)(nil)
 
 type BlockTopicFamily struct {
 	*baseTopicFamily
@@ -33,7 +33,7 @@ func (b *BlockTopicFamily) getFullTopicString() string {
 }
 
 // Aggregate and Proof
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*AggregateAndProofTopicFamily)(nil)
+var _ ShardedTopicFamily = (*AggregateAndProofTopicFamily)(nil)
 
 type AggregateAndProofTopicFamily struct {
 	*baseTopicFamily
@@ -60,7 +60,7 @@ func (a *AggregateAndProofTopicFamily) getFullTopicString() string {
 }
 
 // Voluntary Exit
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*VoluntaryExitTopicFamily)(nil)
+var _ ShardedTopicFamily = (*VoluntaryExitTopicFamily)(nil)
 
 type VoluntaryExitTopicFamily struct {
 	*baseTopicFamily
@@ -87,7 +87,7 @@ func (v *VoluntaryExitTopicFamily) getFullTopicString() string {
 }
 
 // Proposer Slashing
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*ProposerSlashingTopicFamily)(nil)
+var _ ShardedTopicFamily = (*ProposerSlashingTopicFamily)(nil)
 
 type ProposerSlashingTopicFamily struct {
 	*baseTopicFamily
@@ -114,7 +114,7 @@ func (p *ProposerSlashingTopicFamily) getFullTopicString() string {
 }
 
 // Attester Slashing
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*AttesterSlashingTopicFamily)(nil)
+var _ ShardedTopicFamily = (*AttesterSlashingTopicFamily)(nil)
 
 type AttesterSlashingTopicFamily struct {
 	*baseTopicFamily
@@ -141,7 +141,7 @@ func (a *AttesterSlashingTopicFamily) getFullTopicString() string {
 }
 
 // Sync Contribution and Proof (Altair+)
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*SyncContributionAndProofTopicFamily)(nil)
+var _ ShardedTopicFamily = (*SyncContributionAndProofTopicFamily)(nil)
 
 type SyncContributionAndProofTopicFamily struct{ *baseTopicFamily }
 
@@ -166,7 +166,7 @@ func (sc *SyncContributionAndProofTopicFamily) getFullTopicString() string {
 }
 
 // Light Client Optimistic Update (Altair+)
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*LightClientOptimisticUpdateTopicFamily)(nil)
+var _ ShardedTopicFamily = (*LightClientOptimisticUpdateTopicFamily)(nil)
 
 type LightClientOptimisticUpdateTopicFamily struct {
 	*baseTopicFamily
@@ -193,7 +193,7 @@ func (l *LightClientOptimisticUpdateTopicFamily) getFullTopicString() string {
 }
 
 // Light Client Finality Update (Altair+)
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*LightClientFinalityUpdateTopicFamily)(nil)
+var _ ShardedTopicFamily = (*LightClientFinalityUpdateTopicFamily)(nil)
 
 type LightClientFinalityUpdateTopicFamily struct {
 	*baseTopicFamily
@@ -220,7 +220,7 @@ func (l *LightClientFinalityUpdateTopicFamily) getFullTopicString() string {
 }
 
 // BLS to Execution Change (Capella+)
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*BlsToExecutionChangeTopicFamily)(nil)
+var _ ShardedTopicFamily = (*BlsToExecutionChangeTopicFamily)(nil)
 
 type BlsToExecutionChangeTopicFamily struct {
 	*baseTopicFamily

@@ -7,7 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 )
 
-var _ GossipsubTopicFamilyWithoutDynamicSubnets = (*BlobTopicFamily)(nil)
+var _ ShardedTopicFamily = (*BlobTopicFamily)(nil)
 
 // BlobTopicFamily represents a static-subnet family instance for a specific blob subnet index.
 type BlobTopicFamily struct {

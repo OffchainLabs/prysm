@@ -337,7 +337,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset families for each subtest
 			g.mu.Lock()
-			g.activeTopicFamilies = make(map[topicFamilyKey]GossipsubTopicFamily)
+			g.activeTopicFamilies = make(map[topicFamilyKey]TopicFamily)
 			g.mu.Unlock()
 
 			tt.setup(g)

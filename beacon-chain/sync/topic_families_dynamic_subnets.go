@@ -10,7 +10,7 @@ import (
 )
 
 // AttestationTopicFamily
-var _ GossipsubTopicFamilyWithDynamicSubnets = (*AttestationTopicFamily)(nil)
+var _ DynamicShardedTopicFamily = (*AttestationTopicFamily)(nil)
 
 type AttestationTopicFamily struct {
 	*baseTopicFamily
@@ -64,7 +64,7 @@ func (a *AttestationTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]strin
 }
 
 // SyncCommitteeTopicFamily
-var _ GossipsubTopicFamilyWithDynamicSubnets = (*SyncCommitteeTopicFamily)(nil)
+var _ DynamicShardedTopicFamily = (*SyncCommitteeTopicFamily)(nil)
 
 type SyncCommitteeTopicFamily struct {
 	*baseTopicFamily
@@ -118,7 +118,7 @@ func (s *SyncCommitteeTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]str
 }
 
 // DataColumnTopicFamily
-var _ GossipsubTopicFamilyWithDynamicSubnets = (*DataColumnTopicFamily)(nil)
+var _ DynamicShardedTopicFamily = (*DataColumnTopicFamily)(nil)
 
 type DataColumnTopicFamily struct {
 	*baseTopicFamily

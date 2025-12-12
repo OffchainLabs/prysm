@@ -20,14 +20,14 @@ type baseTopicFamily struct {
 	validator   wrappedVal
 	handler     subHandler
 
-	tf GossipsubTopicFamily
+	tf TopicFamily
 
 	mu            sync.Mutex
 	subscriptions map[string]*pubsub.Subscription
 }
 
 func newBaseGossipsubTopicFamily(syncService *Service, nse params.NetworkScheduleEntry, validator wrappedVal,
-	handler subHandler, tf GossipsubTopicFamily) *baseTopicFamily {
+	handler subHandler, tf TopicFamily) *baseTopicFamily {
 	return &baseTopicFamily{
 		syncService:   syncService,
 		nse:           nse,

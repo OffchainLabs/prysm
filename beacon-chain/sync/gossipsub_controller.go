@@ -18,7 +18,7 @@ type topicFamilyKey struct {
 	forkDigest [4]byte
 }
 
-func topicFamilyKeyFrom(tf GossipsubTopicFamily) topicFamilyKey {
+func topicFamilyKeyFrom(tf TopicFamily) topicFamilyKey {
 	return topicFamilyKey{topicName: tf.Name(), forkDigest: tf.NetworkScheduleEntry().ForkDigest}
 }
 
@@ -30,7 +30,7 @@ type GossipsubController struct {
 	wg          sync.WaitGroup
 
 	mu                  sync.RWMutex
-	activeTopicFamilies map[topicFamilyKey]GossipsubTopicFamily
+	activeTopicFamilies map[topicFamilyKey]TopicFamily
 }
 
 func NewGossipsubController(ctx context.Context, s *Service) *GossipsubController {
@@ -39,7 +39,7 @@ func NewGossipsubController(ctx context.Context, s *Service) *GossipsubControlle
 		ctx:                 ctx,
 		cancel:              cancel,
 		syncService:         s,
-		activeTopicFamilies: make(map[topicFamilyKey]GossipsubTopicFamily),
+		activeTopicFamilies: make(map[topicFamilyKey]TopicFamily),
 	}
 }
 
@@ -94,10 +94,10 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 		}
 
 		switch tf := existing.(type) {
-		case GossipsubTopicFamilyWithDynamicSubnets:
+		case DynamicShardedTopicFamily:
 			tf.UnsubscribeForSlot(slot)
 			tf.SubscribeForSlot(slot)
-		case GossipsubTopicFamilyWithoutDynamicSubnets:
+		case ShardedTopicFamily:
 			if !seen {
 				tf.Subscribe()
 			}
@@ -140,7 +140,7 @@ func (g *GossipsubController) GetCurrentActiveTopics() []string {
 	slot := g.syncService.cfg.clock.CurrentSlot()
 	var topics []string
 	for _, f := range g.activeTopicFamilies {
-		tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets)
+		tfm, ok := f.(DynamicShardedTopicFamily)
 		if !ok {
 			continue
 		}
@@ -157,9 +157,9 @@ func (g *GossipsubController) ExtractTopics(_ context.Context, node *enode.Node)
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	families := make([]GossipsubTopicFamilyWithDynamicSubnets, 0, len(g.activeTopicFamilies))
+	families := make([]DynamicShardedTopicFamily, 0, len(g.activeTopicFamilies))
 	for _, f := range g.activeTopicFamilies {
-		if tfm, ok := f.(GossipsubTopicFamilyWithDynamicSubnets); ok {
+		if tfm, ok := f.(DynamicShardedTopicFamily); ok {
 			families = append(families, tfm)
 		}
 	}

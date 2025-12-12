@@ -23,19 +23,19 @@ var noopHandler subHandler = func(ctx context.Context, msg proto.Message) error 
 	return nil
 }
 
-type GossipsubTopicFamily interface {
+type TopicFamily interface {
 	Name() string
 	NetworkScheduleEntry() params.NetworkScheduleEntry
 	UnsubscribeAll()
 }
 
-type GossipsubTopicFamilyWithoutDynamicSubnets interface {
-	GossipsubTopicFamily
+type ShardedTopicFamily interface {
+	TopicFamily
 	Subscribe()
 }
 
-type GossipsubTopicFamilyWithDynamicSubnets interface {
-	GossipsubTopicFamily
+type DynamicShardedTopicFamily interface {
+	TopicFamily
 
 	TopicsToSubscribeForSlot(slot primitives.Slot) []string
 
@@ -49,7 +49,7 @@ type GossipsubTopicFamilyWithDynamicSubnets interface {
 type topicFamilyEntry struct {
 	activationEpoch   primitives.Epoch
 	deactivationEpoch primitives.Epoch
-	factory           func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily
+	factory           func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily
 }
 
 func topicFamilySchedule() []topicFamilyEntry {
@@ -59,8 +59,8 @@ func topicFamilySchedule() []topicFamilyEntry {
 		{
 			activationEpoch:   cfg.GenesisEpoch,
 			deactivationEpoch: cfg.FarFutureEpoch,
-			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-				return []GossipsubTopicFamily{
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
+				return []TopicFamily{
 					NewBlockTopicFamily(s, nse),
 					NewAggregateAndProofTopicFamily(s, nse),
 					NewVoluntaryExitTopicFamily(s, nse),
@@ -74,8 +74,8 @@ func topicFamilySchedule() []topicFamilyEntry {
 		{
 			activationEpoch:   cfg.AltairForkEpoch,
 			deactivationEpoch: cfg.FarFutureEpoch,
-			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-				families := []GossipsubTopicFamily{
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
+				families := []TopicFamily{
 					NewSyncContributionAndProofTopicFamily(s, nse),
 					NewSyncCommitteeTopicFamily(s, nse),
 				}
@@ -92,17 +92,17 @@ func topicFamilySchedule() []topicFamilyEntry {
 		{
 			activationEpoch:   cfg.CapellaForkEpoch,
 			deactivationEpoch: cfg.FarFutureEpoch,
-			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-				return []GossipsubTopicFamily{NewBlsToExecutionChangeTopicFamily(s, nse)}
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
+				return []TopicFamily{NewBlsToExecutionChangeTopicFamily(s, nse)}
 			},
 		},
 		// Blob topic families (static per-subnet) in Deneb and Electra forks (removed in Fulu)
 		{
 			activationEpoch:   cfg.DenebForkEpoch,
 			deactivationEpoch: cfg.ElectraForkEpoch,
-			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
 				count := cfg.BlobsidecarSubnetCount
-				families := make([]GossipsubTopicFamily, 0, count)
+				families := make([]TopicFamily, 0, count)
 				for i := range count {
 					families = append(families, NewBlobTopicFamily(s, nse, i))
 				}
@@ -112,9 +112,9 @@ func topicFamilySchedule() []topicFamilyEntry {
 		{
 			activationEpoch:   cfg.ElectraForkEpoch,
 			deactivationEpoch: cfg.FuluForkEpoch,
-			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
 				count := cfg.BlobsidecarSubnetCountElectra
-				families := make([]GossipsubTopicFamily, 0, count)
+				families := make([]TopicFamily, 0, count)
 				for i := range count {
 					families = append(families, NewBlobTopicFamily(s, nse, i))
 				}
@@ -125,15 +125,15 @@ func topicFamilySchedule() []topicFamilyEntry {
 		{
 			activationEpoch:   cfg.FuluForkEpoch,
 			deactivationEpoch: cfg.FarFutureEpoch,
-			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-				return []GossipsubTopicFamily{NewDataColumnTopicFamily(s, nse)}
+			factory: func(s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
+				return []TopicFamily{NewDataColumnTopicFamily(s, nse)}
 			},
 		},
 	}
 }
 
-func TopicFamiliesForEpoch(epoch primitives.Epoch, s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
-	var activeFamilies []GossipsubTopicFamily
+func TopicFamiliesForEpoch(epoch primitives.Epoch, s *Service, nse params.NetworkScheduleEntry) []TopicFamily {
+	var activeFamilies []TopicFamily
 	for _, entry := range topicFamilySchedule() {
 		if epoch < entry.activationEpoch {
 			continue
