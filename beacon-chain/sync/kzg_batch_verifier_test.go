@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -266,6 +267,41 @@ func TestKzgBatchVerifierFallback(t *testing.T) {
 		require.Equal(t, pubsub.ValidationAccept, result)
 		require.NoError(t, err)
 	})
+}
+
+func TestValidateWithKzgBatchVerifier_DeadlockOnTimeout(t *testing.T) {
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SecondsPerSlot = 0
+	params.OverrideBeaconConfig(cfg)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	service := &Service{
+		ctx:     ctx,
+		kzgChan: make(chan *kzgVerifier),
+	}
+	go service.kzgVerifierRoutine()
+
+	result, err := service.validateWithKzgBatchVerifier(context.Background(), nil)
+	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = service.validateWithKzgBatchVerifier(context.Background(), nil)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("validateWithKzgBatchVerifier blocked")
+	}
 }
 
 func createValidTestDataColumns(t *testing.T, count int) []blocks.RODataColumn {
