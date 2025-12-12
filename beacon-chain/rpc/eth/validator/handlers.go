@@ -911,7 +911,7 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.Stater.StateBySlot(ctx, startSlot)
 	if err != nil {
-		httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1030,7 +1030,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	if requestedEpoch < currentEpoch {
 		st, err = s.Stater.StateBySlot(ctx, epochStartSlot)
 		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get state for slot %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
+			shared.WriteStateFetchError(w, err)
 			return
 		}
 	} else {
@@ -1181,7 +1181,7 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 	st, err := s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee state: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1327,7 +1327,7 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		}
 		st, err = s.Stater.StateBySlot(ctx, epochEnd)
 		if err != nil {
-			httputil.HandleError(w, "Could not get slot for requested epoch: "+err.Error(), http.StatusInternalServerError)
+			shared.WriteStateFetchError(w, err)
 			return
 		}
 		participation, err = st.CurrentEpochParticipation()
