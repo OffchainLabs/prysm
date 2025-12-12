@@ -32,8 +32,7 @@ func (m *Map[K, V]) Keys() (r []K) {
 	m.View(func(mp map[K]V) {
 		r = make([]K, 0, len(m.items))
 		for k := range mp {
-			key := k
-			r = append(r, key)
+			r = append(r, k)
 		}
 	})
 	return r
