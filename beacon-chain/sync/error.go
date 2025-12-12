@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
-	multiplex "github.com/libp2p/go-mplex"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -148,7 +147,7 @@ func closeStreamAndWait(stream network.Stream, log *logrus.Entry) {
 }
 
 func isUnwantedError(err error) bool {
-	for _, e := range []error{network.ErrReset, multiplex.ErrShutdown, io.EOF, types.ErrIODeadline} {
+	for _, e := range []error{network.ErrReset, io.EOF, types.ErrIODeadline} {
 		if errors.Is(err, e) || err.Error() == e.Error() {
 			return true
 		}

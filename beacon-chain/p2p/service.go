@@ -6,6 +6,7 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -154,8 +156,6 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		return nil, errors.Wrapf(err, "failed to build p2p options")
 	}
 
-	// Sets mplex timeouts
-	configureMplex()
 	h, err := libp2p.New(opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create p2p host")
@@ -258,6 +258,14 @@ func (s *Service) Start() {
 	// Initialize metadata according to the
 	// current epoch.
 	s.RefreshPersistentSubnets()
+
+	if s.cfg.EnableAutoNAT {
+		if err := s.subscribeReachabilityEvents(); err != nil {
+			log.WithError(err).Error("Failed to subscribe to AutoNAT v2 reachability events")
+		} else {
+			log.Info("AutoNAT v2 enabled for address reachability detection")
+		}
+	}
 
 	// Periodic functions.
 	async.RunEvery(s.ctx, params.BeaconConfig().TtfbTimeoutDuration(), func() {
@@ -556,4 +564,42 @@ func (s *Service) isInitialized() bool {
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
 	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
+func (s *Service) subscribeReachabilityEvents() error {
+	sub, err := s.host.EventBus().Subscribe(new(event.EvtHostReachableAddrsChanged))
+	if err != nil {
+		return fmt.Errorf("subscribing to reachability events: %w", err)
+	}
+
+	go func() {
+		defer func() {
+			if err := sub.Close(); err != nil {
+				log.WithError(err).Debug("Failed to close reachability event subscription")
+			}
+		}()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case ev := <-sub.Out():
+				if event, ok := ev.(event.EvtHostReachableAddrsChanged); ok {
+					log.WithFields(logrus.Fields{
+						"reachable":   multiaddrsToStrings(event.Reachable),
+						"unreachable": multiaddrsToStrings(event.Unreachable),
+						"unknown":     multiaddrsToStrings(event.Unknown),
+					}).Info("Address reachability changed")
+				}
+			}
+		}
+	}()
+	return nil
+}
+
+func multiaddrsToStrings(addrs []multiaddr.Multiaddr) []string {
+	strs := make([]string, len(addrs))
+	for i, a := range addrs {
+		strs[i] = a.String()
+	}
+	return strs
 }

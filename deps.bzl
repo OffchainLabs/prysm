@@ -1974,8 +1974,8 @@ def prysm_deps():
         ],
         build_file_proto_mode = "disable_global",
         importpath = "github.com/libp2p/go-libp2p",
-        sum = "h1:1Ur6rPCf3GR+g8jkrnaQaM0ha2IGespsnNlCqJLLALE=",
-        version = "v0.39.1",
+        sum = "h1:A8foZk+ZEhZTv0Jb++7xUFlrFhBDv4j2Vh/uq4YX+KE=",
+        version = "v0.42.0",
     )
     go_repository(
         name = "com_github_libp2p_go_libp2p_asn_util",
@@ -2037,6 +2037,12 @@ def prysm_deps():
         importpath = "github.com/libp2p/go-yamux/v4",
         sum = "h1:nrLh89LN/LEiqcFiqdKDRHjGstN300C1269K/EX0CPU=",
         version = "v4.0.2",
+    )
+    go_repository(
+        name = "com_github_libp2p_go_yamux_v5",
+        importpath = "github.com/libp2p/go-yamux/v5",
+        sum = "h1:f0WoX/bEF2E8SbE4c/k1Mo+/9z0O4oC/hWEA+nfYRSg=",
+        version = "v5.0.1",
     )
     go_repository(
         name = "com_github_libp2p_zeroconf_v2",
@@ -2323,8 +2329,8 @@ def prysm_deps():
     go_repository(
         name = "com_github_multiformats_go_multiaddr",
         importpath = "github.com/multiformats/go-multiaddr",
-        sum = "h1:bfrHrJhrRuh/NXH5mCnemjpbGjzRw/b+tJFOD41g2tU=",
-        version = "v0.14.0",
+        sum = "h1:oGWEVKioVQcdIOBlYM8BH1rZDWOGJSqr9/BKl6zQ4qc=",
+        version = "v0.16.0",
     )
     go_repository(
         name = "com_github_multiformats_go_multiaddr_dns",
@@ -2915,8 +2921,8 @@ def prysm_deps():
             "gazelle:exclude tools.go",
         ],
         importpath = "github.com/quic-go/quic-go",
-        sum = "h1:x09Agz4ATTMEP3qb5P0MRxNZfd6O9wAyK3qwwqQZVQc=",
-        version = "v0.49.1-0.20250925085836-275c172fec2b",
+        sum = "h1:/SlHrCRElyaU6MaEPKqKr9z83sBg2v4FLLvWM+Z47pA=",
+        version = "v0.52.0",
     )
     go_repository(
         name = "com_github_quic_go_webtransport_go",
