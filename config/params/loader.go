@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
 

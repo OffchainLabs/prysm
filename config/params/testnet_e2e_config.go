@@ -62,8 +62,8 @@ func E2ETestConfig() *BeaconChainConfig {
 	e2eConfig.FuluForkVersion = []byte{6, 0, 0, 253}
 
 	e2eConfig.BlobSchedule = []BlobScheduleEntry{
-		{Epoch: 12, MaxBlobsPerBlock: 6},
-		{Epoch: 14, MaxBlobsPerBlock: 9},
+		{Epoch: e2eConfig.DenebForkEpoch, MaxBlobsPerBlock: uint64(e2eConfig.DeprecatedMaxBlobsPerBlock)},
+		{Epoch: e2eConfig.ElectraForkEpoch, MaxBlobsPerBlock: uint64(e2eConfig.DeprecatedMaxBlobsPerBlockElectra)},
 	}
 
 	e2eConfig.InitializeForkSchedule()
@@ -117,8 +117,8 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.MinPerEpochChurnLimit = 2
 
 	e2eConfig.BlobSchedule = []BlobScheduleEntry{
-		{Epoch: 12, MaxBlobsPerBlock: 6},
-		{Epoch: 14, MaxBlobsPerBlock: 9},
+		{Epoch: e2eConfig.DenebForkEpoch, MaxBlobsPerBlock: uint64(e2eConfig.DeprecatedMaxBlobsPerBlock)},
+		{Epoch: e2eConfig.ElectraForkEpoch, MaxBlobsPerBlock: uint64(e2eConfig.DeprecatedMaxBlobsPerBlockElectra)},
 	}
 
 	e2eConfig.InitializeForkSchedule()

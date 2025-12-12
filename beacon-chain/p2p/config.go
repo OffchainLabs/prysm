@@ -28,6 +28,7 @@ const (
 type Config struct {
 	NoDiscovery           bool
 	EnableUPnP            bool
+	EnableAutoNAT         bool
 	StaticPeerID          bool
 	DisableLivenessCheck  bool
 	StaticPeers           []string

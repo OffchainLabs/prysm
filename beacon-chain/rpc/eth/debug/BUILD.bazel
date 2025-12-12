@@ -17,6 +17,7 @@ go_library(
         "//beacon-chain/rpc/eth/helpers:go_default_library",
         "//beacon-chain/rpc/eth/shared:go_default_library",
         "//beacon-chain/rpc/lookup:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",

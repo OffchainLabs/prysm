@@ -47,6 +47,10 @@ func TestLightClientHandler_GetLightClientBootstrap(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 
 	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			l := util.NewTestLightClient(t, testVersion)
 
@@ -178,6 +182,10 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 
 	t.Run("can save retrieve", func(t *testing.T) {
 		for _, testVersion := range version.All()[1:] {
+			if testVersion == version.Gloas {
+				// TODO(16027): Unskip light client tests for Gloas
+				continue
+			}
 			t.Run(version.String(testVersion), func(t *testing.T) {
 
 				slot := primitives.Slot(params.BeaconConfig().VersionToForkEpochMap()[testVersion] * primitives.Epoch(config.SlotsPerEpoch)).Add(1)
@@ -732,6 +740,10 @@ func TestLightClientHandler_GetLightClientFinalityUpdate(t *testing.T) {
 	})
 
 	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 
@@ -827,6 +839,10 @@ func TestLightClientHandler_GetLightClientOptimisticUpdate(t *testing.T) {
 	})
 
 	for _, testVersion := range version.All()[1:] {
+		if testVersion == version.Gloas {
+			// TODO(16027): Unskip light client tests for Gloas
+			continue
+		}
 		t.Run(version.String(testVersion), func(t *testing.T) {
 			ctx := t.Context()
 			l := util.NewTestLightClient(t, testVersion)

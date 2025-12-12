@@ -12,6 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -52,18 +53,18 @@ func TestConfigureBlobRetentionEpoch(t *testing.T) {
 	require.Equal(t, specMinEpochs, epochs)
 
 	// manually define the flag in the set, so the following code can use set.Set
-	set.Uint64(BlobRetentionEpochFlag.Name, 0, "")
+	set.Uint64(das.BlobRetentionEpochFlag.Name, 0, "")
 
 	// Test case: Input epoch is greater than or equal to spec value.
 	expectedChange := specMinEpochs + 1
-	require.NoError(t, set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
+	require.NoError(t, set.Set(das.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
 	epochs, err = blobRetentionEpoch(cliCtx)
 	require.NoError(t, err)
 	require.Equal(t, primitives.Epoch(expectedChange), epochs)
 
 	// Test case: Input epoch is less than spec value.
 	expectedChange = specMinEpochs - 1
-	require.NoError(t, set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
+	require.NoError(t, set.Set(das.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
 	_, err = blobRetentionEpoch(cliCtx)
 	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
 }
@@ -83,12 +84,12 @@ func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
 	require.Equal(t, expected, actual)
 
 	// Manually define the flag in the set, so the following code can use set.Set
-	set.Uint64(BlobRetentionEpochFlag.Name, 0, "")
+	set.Uint64(das.BlobRetentionEpochFlag.Name, 0, "")
 
 	// Test case: Input epoch is greater than or equal to specification value.
 	expected = specValue + 1
 
-	err = set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
+	err = set.Set(das.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
 	require.NoError(t, err)
 
 	actual, err = dataColumnRetentionEpoch(cliCtx)
@@ -98,7 +99,7 @@ func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
 	// Test case: Input epoch is less than specification value.
 	expected = specValue - 1
 
-	err = set.Set(BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
+	err = set.Set(das.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
 	require.NoError(t, err)
 
 	actual, err = dataColumnRetentionEpoch(cliCtx)

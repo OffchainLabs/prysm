@@ -5,18 +5,62 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
+
+func mockCurrentNeeds(begin, end primitives.Slot) das.CurrentNeeds {
+	return das.CurrentNeeds{
+		Block: das.NeedSpan{
+			Begin: begin,
+			End:   end,
+		},
+		Blob: das.NeedSpan{
+			Begin: begin,
+			End:   end,
+		},
+		Col: das.NeedSpan{
+			Begin: begin,
+			End:   end,
+		},
+	}
+}
+
+func mockCurrentSpecNeeds() das.CurrentNeeds {
+	cfg := params.BeaconConfig()
+	fuluSlot := slots.UnsafeEpochStart(cfg.FuluForkEpoch)
+	denebSlot := slots.UnsafeEpochStart(cfg.DenebForkEpoch)
+	return das.CurrentNeeds{
+		Block: das.NeedSpan{
+			Begin: 0,
+			End:   primitives.Slot(math.MaxUint64),
+		},
+		Blob: das.NeedSpan{
+			Begin: denebSlot,
+			End:   fuluSlot,
+		},
+		Col: das.NeedSpan{
+			Begin: fuluSlot,
+			End:   primitives.Slot(math.MaxUint64),
+		},
+	}
+}
+
+func mockCurrentNeedsFunc(begin, end primitives.Slot) func() das.CurrentNeeds {
+	return func() das.CurrentNeeds {
+		return mockCurrentNeeds(begin, end)
+	}
+}
 
 func TestDomainCache(t *testing.T) {
 	cfg := params.MainnetConfig()
@@ -70,12 +114,7 @@ func TestVerify(t *testing.T) {
 	}
 	v, err := newBackfillVerifier(vr, pubkeys)
 	require.NoError(t, err)
-	notrob := make([]interfaces.ReadOnlySignedBeaconBlock, len(blks))
-	// We have to unwrap the ROBlocks for this code because that's what it expects (for now).
-	for i := range blks {
-		notrob[i] = blks[i].ReadOnlySignedBeaconBlock
-	}
-	vbs, err := v.verify(notrob)
+	vbs, err := v.verify(blks)
 	require.NoError(t, err)
 	require.Equal(t, len(blks), len(vbs))
 }

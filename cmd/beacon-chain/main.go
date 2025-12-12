@@ -12,6 +12,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	blockchaincmd "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/blockchain"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das"
+	dasFlags "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
 	dbcommands "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -65,7 +67,8 @@ var appFlags = []cli.Flag{
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
-	flags.SubscribeAllDataSubnets,
+	flags.Supernode,
+	flags.SemiSupernode,
 	flags.HistoricalSlasherNode,
 	flags.ChainID,
 	flags.NetworkID,
@@ -128,6 +131,7 @@ var appFlags = []cli.Flag{
 	debug.MutexProfileFractionFlag,
 	cmd.LogFileName,
 	cmd.EnableUPnPFlag,
+	cmd.EnableAutoNATFlag,
 	cmd.ConfigFileFlag,
 	cmd.ChainConfigFileFlag,
 	cmd.GrpcMaxCallRecvMsgSizeFlag,
@@ -146,12 +150,12 @@ var appFlags = []cli.Flag{
 	flags.JwtId,
 	storage.BlobStoragePathFlag,
 	storage.DataColumnStoragePathFlag,
-	storage.BlobRetentionEpochFlag,
 	storage.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
-	bflags.BackfillOldestSlot,
+	dasFlags.BackfillOldestSlot,
+	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
 }
 
@@ -318,6 +322,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		checkpoint.BeaconNodeOptions,
 		storage.BeaconNodeOptions,
 		backfill.BeaconNodeOptions,
+		das.BeaconNodeOptions,
 	}
 	for _, of := range optFuncs {
 		ofo, err := of(ctx)

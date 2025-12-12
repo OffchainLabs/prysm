@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
@@ -42,9 +43,16 @@ var depositEndEpoch = depositActivationStartEpoch + primitives.Epoch(math.Ceil(f
 var exitSubmissionEpoch = primitives.Epoch(7)
 
 // ProcessesDepositsInBlocks ensures the expected amount of deposits are accepted into blocks.
+// Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
 var ProcessesDepositsInBlocks = e2etypes.Evaluator{
-	Name:       "processes_deposits_in_blocks_epoch_%d",
-	Policy:     policies.OnEpoch(depositsInBlockStart), // We expect all deposits to enter in one epoch.
+	Name: "processes_deposits_in_blocks_epoch_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Skip if starting at Electra or later - deposits work differently with EIP-6110
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
+		return policies.OnEpoch(depositsInBlockStart)(e)
+	},
 	Evaluation: processesDepositsInBlocks,
 }
 
@@ -56,16 +64,30 @@ var VerifyBlockGraffiti = e2etypes.Evaluator{
 }
 
 // ActivatesDepositedValidators ensures the expected amount of validator deposits are activated into the state.
+// Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
 var ActivatesDepositedValidators = e2etypes.Evaluator{
-	Name:       "processes_deposit_validators_epoch_%d",
-	Policy:     policies.BetweenEpochs(depositActivationStartEpoch, depositEndEpoch),
+	Name: "processes_deposit_validators_epoch_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Skip if starting at Electra or later - deposits work differently with EIP-6110
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
+		return policies.BetweenEpochs(depositActivationStartEpoch, depositEndEpoch)(e)
+	},
 	Evaluation: activatesDepositedValidators,
 }
 
 // DepositedValidatorsAreActive ensures the expected amount of validators are active after their deposits are processed.
+// Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
 var DepositedValidatorsAreActive = e2etypes.Evaluator{
-	Name:       "deposited_validators_are_active_epoch_%d",
-	Policy:     policies.AfterNthEpoch(depositEndEpoch),
+	Name: "deposited_validators_are_active_epoch_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Skip if starting at Electra or later - deposits work differently with EIP-6110
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
+		return policies.AfterNthEpoch(depositEndEpoch)(e)
+	},
 	Evaluation: depositedValidatorsAreActive,
 }
 
@@ -88,6 +110,10 @@ var SubmitWithdrawal = e2etypes.Evaluator{
 	Name: "submit_withdrawal_epoch_%d",
 	Policy: func(currentEpoch primitives.Epoch) bool {
 		fEpoch := params.BeaconConfig().CapellaForkEpoch
+		// If Capella is disabled (starting at Deneb+), run after exit submission
+		if e2etypes.GenesisFork() >= version.Deneb {
+			return policies.OnEpoch(exitSubmissionEpoch + 1)(currentEpoch)
+		}
 		return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
 	},
 	Evaluation: submitWithdrawal,
@@ -102,7 +128,14 @@ var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
 			return false
 		}
 		// Only run this for minimal setups after capella
-		validWithdrawnEpoch := params.BeaconConfig().CapellaForkEpoch + 1
+		fEpoch := params.BeaconConfig().CapellaForkEpoch
+		// If Capella is disabled (starting at Deneb+), run after withdrawal submission
+		var validWithdrawnEpoch primitives.Epoch
+		if e2etypes.GenesisFork() >= version.Deneb {
+			validWithdrawnEpoch = exitSubmissionEpoch + 2
+		} else {
+			validWithdrawnEpoch = fEpoch + 1
+		}
 
 		requiredPolicy := policies.OnEpoch(validWithdrawnEpoch)
 		return requiredPolicy(currentEpoch)
