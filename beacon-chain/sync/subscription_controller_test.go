@@ -135,10 +135,10 @@ func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T)
 		name                string
 		svcCreator          func(t *testing.T) *Service
 		checkRegistration   func(t *testing.T, s *Service)
-		forkEpoch           primitives.Epoch
-		forkDigest          [4]byte
 		epochAtRegistration func(primitives.Epoch) primitives.Epoch
+		forkEpoch           primitives.Epoch
 		nextForkEpoch       primitives.Epoch
+		forkDigest          [4]byte
 		nextForkDigest      [4]byte
 	}{
 		{
