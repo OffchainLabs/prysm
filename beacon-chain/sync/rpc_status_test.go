@@ -329,7 +329,7 @@ func TestHandshakeHandlers_Roundtrip(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
-	r.gossipsubController = NewGossipsubController(ctx, r)
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()
@@ -947,7 +947,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
-	r.gossipsubController = NewGossipsubController(ctx, r)
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	markInitSyncComplete(t, r)
 	clock := startup.NewClockSynchronizer()

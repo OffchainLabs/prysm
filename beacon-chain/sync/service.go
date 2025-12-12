@@ -181,7 +181,7 @@ type Service struct {
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
-	gossipsubController              *GossipsubController
+	subscriptionController           *SubscriptionController
 }
 
 // NewService initializes new regular sync service.
@@ -198,7 +198,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen: rand.NewGenerator(),
 	}
-	r.gossipsubController = NewGossipsubController(ctx, r)
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
@@ -327,7 +327,7 @@ func (s *Service) Stop() error {
 	}
 
 	// Stop the gossipsub controller.
-	s.gossipsubController.Stop()
+	s.subscriptionController.Stop()
 
 	return nil
 }
@@ -411,7 +411,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	go s.rpcHandlerControlLoop()
 
 	// Start the gossipsub controller.
-	go s.gossipsubController.Start()
+	go s.subscriptionController.Start()
 
 	// Configure the crawler and dialer with the topic extractor / subnet topics
 	// provider if available.
@@ -422,7 +422,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the crawler now that it has the extractor.
-	if err := crawler.Start(s.gossipsubController.ExtractTopics); err != nil {
+	if err := crawler.Start(s.subscriptionController.ExtractTopics); err != nil {
 		log.WithError(err).Warn("Failed to start peer crawler")
 		return
 	}
@@ -430,7 +430,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	// Start the gossipsub dialer if available.
 	if dialer := s.cfg.p2p.GossipsubDialer(); dialer != nil {
 		provider := func() []string {
-			return s.gossipsubController.GetCurrentActiveTopics()
+			return s.subscriptionController.GetCurrentActiveTopics()
 		}
 		if err := dialer.Start(provider); err != nil {
 			log.WithError(err).Warn("Failed to start gossipsub peer dialer")

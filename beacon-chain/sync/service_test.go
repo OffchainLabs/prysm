@@ -69,7 +69,7 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 		chainStarted: abool.New(),
 		clockWaiter:  gs,
 	}
-	r.gossipsubController = NewGossipsubController(t.Context(), &r)
+	r.subscriptionController = NewSubscriptionController(t.Context(), &r)
 
 	topicFmt := "/eth2/%x/beacon_block"
 	go r.startDiscoveryAndSubscriptions()
@@ -143,7 +143,7 @@ func TestSyncHandlers_WaitTillSynced(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
-	r.gossipsubController = NewGossipsubController(t.Context(), &r)
+	r.subscriptionController = NewSubscriptionController(t.Context(), &r)
 	r.initCaches()
 
 	var vr [32]byte
@@ -215,7 +215,7 @@ func TestSyncService_StopCleanly(t *testing.T) {
 		clockWaiter:         gs,
 		initialSyncComplete: make(chan struct{}),
 	}
-	r.gossipsubController = NewGossipsubController(t.Context(), &r)
+	r.subscriptionController = NewSubscriptionController(t.Context(), &r)
 	markInitSyncComplete(t, &r)
 
 	go r.startDiscoveryAndSubscriptions()
@@ -275,7 +275,7 @@ func TestService_Stop_SendsGoodbyeMessages(t *testing.T) {
 		cancel:      cancel,
 		rateLimiter: newRateLimiter(p1),
 	}
-	r.gossipsubController = NewGossipsubController(ctx, r)
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	// Initialize context map for RPC
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)
@@ -354,7 +354,7 @@ func TestService_Stop_TimeoutHandling(t *testing.T) {
 		cancel:      cancel,
 		rateLimiter: newRateLimiter(p1),
 	}
-	r.gossipsubController = NewGossipsubController(ctx, r)
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	// Initialize context map for RPC
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)
@@ -416,7 +416,7 @@ func TestService_Stop_ConcurrentGoodbyeMessages(t *testing.T) {
 		cancel:      cancel,
 		rateLimiter: newRateLimiter(p1),
 	}
-	r.gossipsubController = NewGossipsubController(ctx, r)
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	// Initialize context map for RPC
 	ctxMap, err := ContextByteVersionsForValRoot(chain.ValidatorsRoot)

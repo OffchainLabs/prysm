@@ -79,7 +79,7 @@ func (f *staticTopicFamily) Subscribe() {
 	f.baseTopicFamily.subscribeToTopics(f.topics)
 }
 
-func testGossipsubControllerService(t *testing.T, current primitives.Epoch) *Service {
+func testSubscriptionControllerService(t *testing.T, current primitives.Epoch) *Service {
 	closedChan := make(chan struct{})
 	close(closedChan)
 	peer2peer := p2ptest.NewTestP2P(t)
@@ -101,11 +101,11 @@ func testGossipsubControllerService(t *testing.T, current primitives.Epoch) *Ser
 		subHandler:          newSubTopicHandler(),
 		initialSyncComplete: closedChan,
 	}
-	r.gossipsubController = NewGossipsubController(context.Background(), r)
+	r.subscriptionController = NewSubscriptionController(context.Background(), r)
 	return r
 }
 
-func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
+func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 	closedChan := make(chan struct{})
 	close(closedChan)
 	params.SetupTestConfigCleanup(t)
@@ -192,7 +192,7 @@ func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 				fulu := params.BeaconConfig().FuluForkEpoch
 				target := fulu + 2
 				s.cfg.clock = defaultClockWithTimeAtEpoch(target)
-				s.gossipsubController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
+				s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
 
 				for _, topic := range s.subHandler.allTopics() {
 					if strings.Contains(topic, "/"+p2p.GossipBlobSidecarMessage) {
@@ -208,8 +208,8 @@ func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			current := tt.epochAtRegistration(tt.forkEpoch)
-			s := testGossipsubControllerService(t, current)
-			s.gossipsubController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
+			s := testSubscriptionControllerService(t, current)
+			s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
 			tt.checkRegistration(t, s)
 
 			if current != tt.forkEpoch-1 {
@@ -229,25 +229,25 @@ func TestGossipsubController_CheckForNextEpochForkSubscriptions(t *testing.T) {
 			nextDigest := params.ForkDigest(tt.nextForkEpoch)
 			// Move the clock to just before the next fork epoch and ensure deregistration is correct
 			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
-			s.gossipsubController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
+			s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
 
-			s.gossipsubController.updateActiveTopicFamilies(tt.nextForkEpoch)
+			s.subscriptionController.updateActiveTopicFamilies(tt.nextForkEpoch)
 			assert.Equal(t, true, s.subHandler.digestExists(digest))
 			// deregister as if it is the epoch after the next fork epoch
-			s.gossipsubController.updateActiveTopicFamilies(tt.nextForkEpoch + 1)
+			s.subscriptionController.updateActiveTopicFamilies(tt.nextForkEpoch + 1)
 			assert.Equal(t, false, s.subHandler.digestExists(digest))
 			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
 		})
 	}
 }
 
-func TestGossipsubController_ExtractTopics(t *testing.T) {
+func TestSubscriptionController_ExtractTopics(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 
 	type tc struct {
 		name    string
-		setup   func(*GossipsubController)
+		setup   func(*SubscriptionController)
 		ctx     func() context.Context
 		node    *enode.Node
 		want    []string
@@ -259,7 +259,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 	tests := []tc{
 		{
 			name:    "nil node returns error",
-			setup:   func(g *GossipsubController) {},
+			setup:   func(g *SubscriptionController) {},
 			ctx:     func() context.Context { return context.Background() },
 			node:    nil,
 			want:    nil,
@@ -267,7 +267,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		},
 		{
 			name:    "no families yields empty",
-			setup:   func(g *GossipsubController) {},
+			setup:   func(g *SubscriptionController) {},
 			ctx:     func() context.Context { return context.Background() },
 			node:    dummyNode,
 			want:    []string{},
@@ -275,7 +275,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		},
 		{
 			name: "static family ignored",
-			setup: func(g *GossipsubController) {
+			setup: func(g *SubscriptionController) {
 				g.mu.Lock()
 				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
 				g.mu.Unlock()
@@ -287,7 +287,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		},
 		{
 			name: "single dynamic family topics returned",
-			setup: func(g *GossipsubController) {
+			setup: func(g *SubscriptionController) {
 				fam := &testDynFamly{topics: []string{"t1", "t2"}, name: "Dyn1"}
 				g.mu.Lock()
 				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = fam
@@ -300,7 +300,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		},
 		{
 			name: "multiple dynamic families de-dup",
-			setup: func(g *GossipsubController) {
+			setup: func(g *SubscriptionController) {
 				f1 := &testDynFamly{topics: []string{"t1", "t2"}, name: "Dyn1"}
 				f2 := &testDynFamly{topics: []string{"t2", "t3"}, name: "Dyn2"}
 				g.mu.Lock()
@@ -316,7 +316,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 		},
 		{
 			name: "mixed static and dynamic",
-			setup: func(g *GossipsubController) {
+			setup: func(g *SubscriptionController) {
 				f1 := &testDynFamly{topics: []string{"a", "b"}, name: "Dyn"}
 				s1 := &staticTopicFamily{name: "Static"}
 				g.mu.Lock()
@@ -332,7 +332,7 @@ func TestGossipsubController_ExtractTopics(t *testing.T) {
 	}
 
 	s := &Service{}
-	g := NewGossipsubController(context.Background(), s)
+	g := NewSubscriptionController(context.Background(), s)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset families for each subtest

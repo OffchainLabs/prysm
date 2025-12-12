@@ -22,7 +22,7 @@ func topicFamilyKeyFrom(tf TopicFamily) topicFamilyKey {
 	return topicFamilyKey{topicName: tf.Name(), forkDigest: tf.NetworkScheduleEntry().ForkDigest}
 }
 
-type GossipsubController struct {
+type SubscriptionController struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -33,9 +33,9 @@ type GossipsubController struct {
 	activeTopicFamilies map[topicFamilyKey]TopicFamily
 }
 
-func NewGossipsubController(ctx context.Context, s *Service) *GossipsubController {
+func NewSubscriptionController(ctx context.Context, s *Service) *SubscriptionController {
 	ctx, cancel := context.WithCancel(ctx)
-	return &GossipsubController{
+	return &SubscriptionController{
 		ctx:                 ctx,
 		cancel:              cancel,
 		syncService:         s,
@@ -43,20 +43,20 @@ func NewGossipsubController(ctx context.Context, s *Service) *GossipsubControlle
 	}
 }
 
-func (g *GossipsubController) Start() {
+func (g *SubscriptionController) Start() {
 	currentEpoch := g.syncService.cfg.clock.CurrentEpoch()
 	if err := g.syncService.waitForInitialSync(g.ctx); err != nil {
-		log.WithError(err).Debug("Context cancelled while waiting for initial sync, not starting GossipsubController")
+		log.WithError(err).Debug("Context cancelled while waiting for initial sync, not starting SubscriptionController")
 		return
 	}
 
 	g.updateActiveTopicFamilies(currentEpoch)
 	g.wg.Go(func() { g.controlLoop() })
 
-	log.Info("GossipsubController started")
+	log.Info("SubscriptionController started")
 }
 
-func (g *GossipsubController) controlLoop() {
+func (g *SubscriptionController) controlLoop() {
 	slotTicker := slots.NewSlotTicker(g.syncService.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	defer slotTicker.Done()
 
@@ -72,7 +72,7 @@ func (g *GossipsubController) controlLoop() {
 	}
 }
 
-func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.Epoch) {
+func (g *SubscriptionController) updateActiveTopicFamilies(currentEpoch primitives.Epoch) {
 	slot := g.syncService.cfg.clock.CurrentSlot()
 	currentNSE := params.GetNetworkScheduleEntry(currentEpoch)
 
@@ -121,7 +121,7 @@ func (g *GossipsubController) updateActiveTopicFamilies(currentEpoch primitives.
 	}
 }
 
-func (g *GossipsubController) Stop() {
+func (g *SubscriptionController) Stop() {
 	g.cancel()
 	g.wg.Wait()
 
@@ -133,7 +133,7 @@ func (g *GossipsubController) Stop() {
 	}
 }
 
-func (g *GossipsubController) GetCurrentActiveTopics() []string {
+func (g *SubscriptionController) GetCurrentActiveTopics() []string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -149,7 +149,7 @@ func (g *GossipsubController) GetCurrentActiveTopics() []string {
 	return topics
 }
 
-func (g *GossipsubController) ExtractTopics(_ context.Context, node *enode.Node) ([]string, error) {
+func (g *SubscriptionController) ExtractTopics(_ context.Context, node *enode.Node) ([]string, error) {
 	if node == nil {
 		return nil, errors.New("enode is nil")
 	}
