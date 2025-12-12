@@ -2006,6 +2006,7 @@ func TestGetAttesterDuties(t *testing.T) {
 		TimeFetcher:           chain,
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: chain,
+		HeadFetcher:           chain,
 		BeaconDB:              db,
 	}
 
@@ -2184,6 +2185,7 @@ func TestGetAttesterDuties(t *testing.T) {
 			Stater:                &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
 			TimeFetcher:           chain,
 			OptimisticModeFetcher: chain,
+			HeadFetcher:           chain,
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			BeaconDB:              db,
 		}
@@ -2457,7 +2459,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 	}
 	require.NoError(t, st.SetNextSyncCommittee(nextCommittee))
 
-	mockChainService := &mockChain.ChainService{Genesis: genesisTime}
+	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st}
 	s := &Server{
 		Stater:                &testutil.MockStater{BeaconState: st},
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
@@ -2648,7 +2650,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 				return newSyncPeriodSt
 			}
 		}
-		mockChainService := &mockChain.ChainService{Genesis: genesisTime, Slot: &newSyncPeriodStartSlot}
+		mockChainService := &mockChain.ChainService{Genesis: genesisTime, Slot: &newSyncPeriodStartSlot, State: newSyncPeriodSt}
 		s := &Server{
 			Stater:                &testutil.MockStater{BeaconState: stateFetchFn(newSyncPeriodStartSlot)},
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
@@ -2729,8 +2731,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		slot, err := slots.EpochStart(1)
 		require.NoError(t, err)
 
-		st2, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
+		st2 := st.Copy()
 		require.NoError(t, st2.SetSlot(slot))
 
 		mockChainService := &mockChain.ChainService{
@@ -2744,7 +2745,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 			State: st2,
 		}
 		s := &Server{
-			Stater:                &testutil.MockStater{BeaconState: st},
+			Stater:                &testutil.MockStater{BeaconState: st2},
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			TimeFetcher:           mockChainService,
 			HeadFetcher:           mockChainService,

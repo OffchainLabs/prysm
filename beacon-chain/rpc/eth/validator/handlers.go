@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -898,20 +897,15 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var startSlot primitives.Slot
+	// For next epoch requests, we use the current epoch's state since committee
+	// assignments for next epoch can be computed from current epoch's state.
+	epochForState := requestedEpoch
 	if requestedEpoch == nextEpoch {
-		startSlot, err = slots.EpochStart(currentEpoch)
-	} else {
-		startSlot, err = slots.EpochStart(requestedEpoch)
+		epochForState = currentEpoch
 	}
+	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot from epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
-		return
-	}
-
-	st, err := s.Stater.StateBySlot(ctx, startSlot)
-	if err != nil {
-		httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, fmt.Sprintf("Could not get state for epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
 		return
 	}
 
@@ -1020,38 +1014,10 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		nextEpochLookahead = true
 	}
 
-	epochStartSlot, err := slots.EpochStart(requestedEpoch)
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot of epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		httputil.HandleError(w, fmt.Sprintf("Could not get state for epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
 		return
-	}
-	var st state.BeaconState
-	// if the requested epoch is new, use the head state and the next slot cache
-	if requestedEpoch < currentEpoch {
-		st, err = s.Stater.StateBySlot(ctx, epochStartSlot)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get state for slot %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		st, err = s.HeadFetcher.HeadState(ctx)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
-			return
-		}
-		// Notice that even for Fulu requests for the next epoch, we are only advancing the state to the start of the current epoch.
-		if st.Slot() < epochStartSlot {
-			headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not get head root: %v ", err), http.StatusInternalServerError)
-				return
-			}
-			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, epochStartSlot)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not process slots up to %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 
 	var assignments map[primitives.ValidatorIndex][]primitives.Slot
@@ -1174,14 +1140,10 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 
 	startingEpoch := min(requestedEpoch, currentEpoch)
-	slot, err := slots.EpochStart(startingEpoch)
+
+	st, err := s.Stater.StateByEpoch(ctx, startingEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	st, err := s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))
-	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee state: "+err.Error(), http.StatusInternalServerError)
+		httputil.HandleError(w, fmt.Sprintf("Could not get state for epoch %d: %v", startingEpoch, err), http.StatusInternalServerError)
 		return
 	}
 
