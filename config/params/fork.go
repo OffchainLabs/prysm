@@ -75,6 +75,11 @@ func NextNetworkScheduleEntry(epoch primitives.Epoch) NetworkScheduleEntry {
 	return entry
 }
 
+func PreviousNetworkScheduleEntry(epoch primitives.Epoch) NetworkScheduleEntry {
+	entry := BeaconConfig().networkSchedule.Previous(epoch)
+	return entry
+}
+
 func SortedNetworkScheduleEntries() []NetworkScheduleEntry {
 	return BeaconConfig().networkSchedule.entries
 }

@@ -460,6 +460,10 @@ func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
 	return ns.safeIndex(ns.epochIdx(epoch) + 1)
 }
 
+func (ns *NetworkSchedule) Previous(epoch primitives.Epoch) NetworkScheduleEntry {
+	return ns.safeIndex(ns.epochIdx(epoch) - 1)
+}
+
 func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
 	for i := len(ns.entries) - 1; i >= 0; i-- {
 		if ns.entries[i].Epoch != BeaconConfig().FarFutureEpoch {

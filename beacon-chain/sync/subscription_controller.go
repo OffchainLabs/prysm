@@ -77,7 +77,7 @@ func (g *SubscriptionController) updateActiveTopicFamilies(currentEpoch primitiv
 	currentNSE := params.GetNetworkScheduleEntry(currentEpoch)
 
 	families := TopicFamiliesForEpoch(currentEpoch, g.syncService, currentNSE)
-	isForkBoundary, nextNSE := isNextEpochForkBoundary(currentEpoch)
+	isForkBoundary, nextNSE := isNextEpochForkBoundary(currentNSE, currentEpoch)
 	if isForkBoundary {
 		families = append(families, TopicFamiliesForEpoch(nextNSE.Epoch, g.syncService, nextNSE)...)
 	}
@@ -105,7 +105,7 @@ func (g *SubscriptionController) updateActiveTopicFamilies(currentEpoch primitiv
 	}
 
 	// remove topic families for the previous NSE -> this is idempotent
-	if beyond, previous := isOneEpochBeyondForkBoundary(currentEpoch); beyond {
+	if beyond, previous := isOneEpochBeyondForkBoundary(currentNSE, currentEpoch); beyond {
 		for key, family := range g.activeTopicFamilies {
 			if key.forkDigest == previous.ForkDigest {
 
@@ -186,23 +186,19 @@ func (g *SubscriptionController) ExtractTopics(_ context.Context, node *enode.No
 	return out, nil
 }
 
-func isNextEpochForkBoundary(currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
-	current := params.GetNetworkScheduleEntry(currentEpoch)
-	next := params.GetNetworkScheduleEntry(currentEpoch + 1)
-	if current.Epoch == next.Epoch {
-		return false, next // no fork in the next epoch
-	}
-	return true, next // there is a fork in the next epoch
+func isNextEpochForkBoundary(currentNSE params.NetworkScheduleEntry, currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
+	nextNSE := params.GetNetworkScheduleEntry(currentEpoch + 1)
+	return currentNSE.Epoch != nextNSE.Epoch, nextNSE
 }
-func isOneEpochBeyondForkBoundary(currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
-	current := params.GetNetworkScheduleEntry(currentEpoch)
-	previous := params.GetNetworkScheduleEntry(current.Epoch - 1)
 
-	if current.Epoch == params.BeaconConfig().GenesisEpoch {
-		return false, previous
+func isOneEpochBeyondForkBoundary(currentNSE params.NetworkScheduleEntry, currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
+	previousNSE := params.PreviousNetworkScheduleEntry(currentNSE.Epoch)
+
+	if currentNSE.Epoch == params.BeaconConfig().GenesisEpoch {
+		return false, previousNSE
 	}
-	if currentEpoch < current.Epoch+1 {
-		return false, previous
+	if currentEpoch < currentNSE.Epoch+1 {
+		return false, previousNSE
 	}
-	return true, previous
+	return true, previousNSE
 }
