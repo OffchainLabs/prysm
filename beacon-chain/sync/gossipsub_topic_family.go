@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"math"
 
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -12,8 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
-
-const farFutureEpoch = primitives.Epoch(math.MaxUint64)
 
 // wrappedVal represents a gossip validator which also returns an error along with the result.
 type wrappedVal func(context.Context, peer.ID, *pubsub.Message) (pubsub.ValidationResult, error)
@@ -61,7 +58,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 		// Genesis topic families
 		{
 			activationEpoch:   cfg.GenesisEpoch,
-			deactivationEpoch: farFutureEpoch,
+			deactivationEpoch: cfg.FarFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				return []GossipsubTopicFamily{
 					NewBlockTopicFamily(s, nse),
@@ -76,7 +73,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 		// Altair topic families
 		{
 			activationEpoch:   cfg.AltairForkEpoch,
-			deactivationEpoch: farFutureEpoch,
+			deactivationEpoch: cfg.FarFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				families := []GossipsubTopicFamily{
 					NewSyncContributionAndProofTopicFamily(s, nse),
@@ -94,7 +91,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 		// Capella topic families
 		{
 			activationEpoch:   cfg.CapellaForkEpoch,
-			deactivationEpoch: farFutureEpoch,
+			deactivationEpoch: cfg.FarFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				return []GossipsubTopicFamily{NewBlsToExecutionChangeTopicFamily(s, nse)}
 			},
@@ -127,7 +124,7 @@ func topicFamilySchedule() []topicFamilyEntry {
 		// Fulu data column topic family
 		{
 			activationEpoch:   cfg.FuluForkEpoch,
-			deactivationEpoch: farFutureEpoch,
+			deactivationEpoch: cfg.FarFutureEpoch,
 			factory: func(s *Service, nse params.NetworkScheduleEntry) []GossipsubTopicFamily {
 				return []GossipsubTopicFamily{NewDataColumnTopicFamily(s, nse)}
 			},
