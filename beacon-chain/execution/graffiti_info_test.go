@@ -104,48 +104,6 @@ func TestGraffitiInfo_GenerateGraffiti_FlexibleStandard(t *testing.T) {
 	}
 }
 
-func TestGraffitiInfo_GenerateGraffitiWithUserInput(t *testing.T) {
-	g := NewGraffitiInfo("")
-	g.UpdateFromEngine("GE", "abcd1234")
-
-	tests := []struct {
-		name       string
-		userInput  []byte
-		wantPrefix string
-	}{
-		{
-			name:       "Empty input",
-			userInput:  []byte{},
-			wantPrefix: "GEabcdPR",
-		},
-		{
-			name:       "Short input",
-			userInput:  []byte("hello"),
-			wantPrefix: "GEabcdPR",
-		},
-		{
-			name:       "Input with null bytes",
-			userInput:  append([]byte("test"), 0, 0, 0),
-			wantPrefix: "GEabcdPR",
-		},
-		{
-			name:       "Full 32 byte input",
-			userInput:  []byte("12345678901234567890123456789012"),
-			wantPrefix: "12345678901234567890123456789012",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := g.GenerateGraffitiWithUserInput(tt.userInput)
-			resultStr := string(result[:])
-
-			require.Equal(t, true, len(resultStr) >= len(tt.wantPrefix), "Result too short")
-			require.Equal(t, tt.wantPrefix, resultStr[:len(tt.wantPrefix)], "Prefix mismatch")
-		})
-	}
-}
-
 func TestGraffitiInfo_UpdateFromEngine(t *testing.T) {
 	g := NewGraffitiInfo("")
 

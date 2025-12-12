@@ -91,7 +91,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	sBlk.SetSlot(req.Slot)
 	// Generate graffiti with client version info using flexible standard
 	if vs.GraffitiInfo != nil {
-		graffiti := vs.GraffitiInfo.GenerateGraffitiWithUserInput(req.Graffiti)
+		graffiti := vs.GraffitiInfo.GenerateGraffiti()
 		sBlk.SetGraffiti(graffiti[:])
 	} else {
 		sBlk.SetGraffiti(req.Graffiti)
