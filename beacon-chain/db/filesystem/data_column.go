@@ -288,7 +288,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		dataColumnSidecarsByRoot[root] = append(dataColumnSidecarsByRoot[root], dataColumnSidecar)
 	}
 
-	for root, dataColumnSidecars := range dataColumnSidecarsByRoot {
+	for _, dataColumnSidecars := range dataColumnSidecarsByRoot {
 		// Safety check all data column sidecars for this root are from the same slot.
 		slot := dataColumnSidecars[0].Slot()
 		for _, dataColumnSidecar := range dataColumnSidecars[1:] {
@@ -298,27 +298,9 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 		}
 
 		// Save data columns in the filesystem.
-		epoch := slots.ToEpoch(slot)
 		if err := dcs.saveFilesystem(dataColumnSidecars); err != nil {
 			return errors.Wrap(err, "save filesystem")
 		}
-
-		// Get all indices.
-		indices := make([]uint64, 0, len(dataColumnSidecars))
-		for _, dataColumnSidecar := range dataColumnSidecars {
-			indices = append(indices, dataColumnSidecar.Index)
-		}
-
-		// Compute the data columns ident.
-		dataColumnsIdent := DataColumnsIdent{Root: root, Epoch: epoch, Indices: indices}
-
-		// Set data columns in the cache.
-		if err := dcs.cache.set(dataColumnsIdent); err != nil {
-			return errors.Wrap(err, "cache set")
-		}
-
-		// Notify the data column feed.
-		dcs.dataColumnFeed.Send(dataColumnsIdent)
 	}
 
 	dataColumnSaveLatency.Observe(float64(time.Since(startTime).Milliseconds()))
@@ -361,6 +343,22 @@ func (dcs *DataColumnStorage) saveFilesystem(dataColumnSidecars []blocks.Verifie
 
 	fileMu.Lock()
 	defer fileMu.Unlock()
+
+	// Get all indices.
+	indices := make([]uint64, 0, len(dataColumnSidecars))
+	for _, dataColumnSidecar := range dataColumnSidecars {
+		indices = append(indices, dataColumnSidecar.Index)
+	}
+
+	dataColumnsIdent := DataColumnsIdent{Root: root, Epoch: epoch, Indices: indices}
+
+	// Set data columns in the cache.
+	if err := dcs.cache.set(dataColumnsIdent); err != nil {
+		return errors.Wrap(err, "cache set")
+	}
+
+	// Notify the data column feed.
+	dcs.dataColumnFeed.Send(dataColumnsIdent)
 
 	// Check if the file exists.
 	exists, err := afero.Exists(dcs.fs, filePath)
