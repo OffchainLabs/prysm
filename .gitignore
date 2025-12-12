@@ -39,12 +39,6 @@ metaData
 # execution API authentication
 jwt.hex
 
-# local execution client data
-execution/
-
-# local documentation
-CLAUDE.md
-
 # manual testing
 tmp
 
