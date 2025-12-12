@@ -113,84 +113,109 @@ func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
 	params.BeaconConfig().InitializeForkSchedule()
 
+	cfg := params.BeaconConfig()
+	altairForkEpoch := cfg.AltairForkEpoch
+	bellatrixForkEpoch := cfg.BellatrixForkEpoch
+	capellaForkEpoch := cfg.CapellaForkEpoch
+	denebForkEpoch := cfg.DenebForkEpoch
+	electraForkEpoch := cfg.ElectraForkEpoch
+	fuluForkEpoch := cfg.FuluForkEpoch
+	blobsidecarSubnetCount := cfg.BlobsidecarSubnetCount
+	blobsidecarSubnetCountElectra := cfg.BlobsidecarSubnetCountElectra
+
+	// Pre-compute digests using current config state
+	altairDigest := params.ForkDigest(altairForkEpoch)
+	bellatrixDigest := params.ForkDigest(bellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(capellaForkEpoch)
+	denebDigest := params.ForkDigest(denebForkEpoch)
+	electraDigest := params.ForkDigest(electraForkEpoch)
+	fuluDigest := params.ForkDigest(fuluForkEpoch)
+
 	tests := []struct {
 		name                string
 		svcCreator          func(t *testing.T) *Service
 		checkRegistration   func(t *testing.T, s *Service)
 		forkEpoch           primitives.Epoch
+		forkDigest          [4]byte
 		epochAtRegistration func(primitives.Epoch) primitives.Epoch
 		nextForkEpoch       primitives.Epoch
+		nextForkDigest      [4]byte
 	}{
 		{
 			name:                "no fork in the next epoch",
-			forkEpoch:           params.BeaconConfig().AltairForkEpoch,
+			forkEpoch:           altairForkEpoch,
+			forkDigest:          altairDigest,
 			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 2 },
-			nextForkEpoch:       params.BeaconConfig().BellatrixForkEpoch,
+			nextForkEpoch:       bellatrixForkEpoch,
+			nextForkDigest:      bellatrixDigest,
 			checkRegistration:   func(t *testing.T, s *Service) {},
 		},
 		{
 			name:                "altair fork in the next epoch",
-			forkEpoch:           params.BeaconConfig().AltairForkEpoch,
+			forkEpoch:           altairForkEpoch,
+			forkDigest:          altairDigest,
 			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
-			nextForkEpoch:       params.BeaconConfig().BellatrixForkEpoch,
+			nextForkEpoch:       bellatrixForkEpoch,
+			nextForkDigest:      bellatrixDigest,
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
-				expected := fmt.Sprintf(p2p.SyncContributionAndProofSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), digest)
+				expected := fmt.Sprintf(p2p.SyncContributionAndProofSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), altairDigest)
 				assert.Equal(t, true, s.subHandler.topicExists(expected), "subnet topic doesn't exist")
 			},
 		},
 		{
-			name: "capella fork in the next epoch",
+			name:                "capella fork in the next epoch",
+			forkEpoch:           capellaForkEpoch,
+			forkDigest:          capellaDigest,
+			nextForkEpoch:       denebForkEpoch,
+			nextForkDigest:      denebDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
-				rpcMap := make(map[string]bool)
-				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
-					rpcMap[string(p)] = true
-				}
-
-				expected := fmt.Sprintf(p2p.BlsToExecutionChangeSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), digest)
+				expected := fmt.Sprintf(p2p.BlsToExecutionChangeSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), capellaDigest)
 				assert.Equal(t, true, s.subHandler.topicExists(expected), "subnet topic doesn't exist")
 			},
-			forkEpoch:           params.BeaconConfig().CapellaForkEpoch,
-			nextForkEpoch:       params.BeaconConfig().DenebForkEpoch,
-			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 		},
 		{
-			name: "deneb fork in the next epoch",
+			name:                "deneb fork in the next epoch",
+			forkEpoch:           denebForkEpoch,
+			forkDigest:          denebDigest,
+			nextForkEpoch:       electraForkEpoch,
+			nextForkDigest:      electraDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
-				subIndices := mapFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
+				subIndices := mapFromCount(blobsidecarSubnetCount)
 				for idx := range subIndices {
-					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, digest, idx)
+					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, denebDigest, idx)
 					expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
 					assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
 				}
 			},
-			forkEpoch:           params.BeaconConfig().DenebForkEpoch,
-			nextForkEpoch:       params.BeaconConfig().ElectraForkEpoch,
-			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 		},
 		{
-			name: "electra fork in the next epoch",
+			name:                "electra fork in the next epoch",
+			forkEpoch:           electraForkEpoch,
+			forkDigest:          electraDigest,
+			nextForkEpoch:       fuluForkEpoch,
+			nextForkDigest:      fuluDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
-				subIndices := mapFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
+				subIndices := mapFromCount(blobsidecarSubnetCountElectra)
 				for idx := range subIndices {
-					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, digest, idx)
+					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, electraDigest, idx)
 					expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
 					assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
 				}
 			},
-			forkEpoch:           params.BeaconConfig().ElectraForkEpoch,
-			nextForkEpoch:       params.BeaconConfig().FuluForkEpoch,
-			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 		},
 		{
-			name: "fulu fork in the next epoch; should not have blob topics",
+			name:                "fulu fork in the next epoch; should not have blob topics",
+			forkEpoch:           fuluForkEpoch,
+			forkDigest:          fuluDigest,
+			nextForkEpoch:       fuluForkEpoch,
+			nextForkDigest:      fuluDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 			checkRegistration: func(t *testing.T, s *Service) {
 				// Advance to two epochs after Fulu activation and assert no blob topics remain.
-				fulu := params.BeaconConfig().FuluForkEpoch
-				target := fulu + 2
+				target := fuluForkEpoch + 2
 				s.cfg.clock = defaultClockWithTimeAtEpoch(target)
 				s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
 
@@ -200,9 +225,6 @@ func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T)
 					}
 				}
 			},
-			forkEpoch:           params.BeaconConfig().FuluForkEpoch,
-			nextForkEpoch:       params.BeaconConfig().FuluForkEpoch,
-			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 		},
 	}
 	for _, tt := range tests {
@@ -217,8 +239,8 @@ func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T)
 			}
 
 			// Ensure the topics were registered for the upcoming fork
-			digest := params.ForkDigest(tt.forkEpoch)
-			assert.Equal(t, true, s.subHandler.digestExists(digest))
+			// Use pre-computed digest from test struct to avoid race with parallel tests
+			assert.Equal(t, true, s.subHandler.digestExists(tt.forkDigest))
 
 			// After this point we are checking deregistration, which doesn't apply if there isn't a higher
 			// nextForkEpoch.
@@ -226,17 +248,16 @@ func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T)
 				return
 			}
 
-			nextDigest := params.ForkDigest(tt.nextForkEpoch)
 			// Move the clock to just before the next fork epoch and ensure deregistration is correct
 			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
 			s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
 
 			s.subscriptionController.updateActiveTopicFamilies(tt.nextForkEpoch)
-			assert.Equal(t, true, s.subHandler.digestExists(digest))
+			assert.Equal(t, true, s.subHandler.digestExists(tt.forkDigest))
 			// deregister as if it is the epoch after the next fork epoch
 			s.subscriptionController.updateActiveTopicFamilies(tt.nextForkEpoch + 1)
-			assert.Equal(t, false, s.subHandler.digestExists(digest))
-			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
+			assert.Equal(t, false, s.subHandler.digestExists(tt.forkDigest))
+			assert.Equal(t, true, s.subHandler.digestExists(tt.nextForkDigest))
 		})
 	}
 }
