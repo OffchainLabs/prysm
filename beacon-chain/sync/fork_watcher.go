@@ -9,9 +9,7 @@ import (
 )
 
 // p2pHandlerControlLoop runs in a continuous loop to ensure that:
-// - We are subscribed to the correct gossipsub topics (for the current and upcoming epoch).
 // - We have registered the correct RPC stream handlers (for the current and upcoming epoch).
-// - We have cleaned up gossipsub topics and RPC stream handlers that are no longer needed.
 func (s *Service) rpcHandlerControlLoop() {
 	slotTicker := slots.NewSlotTicker(s.cfg.clock.GenesisTime(), params.BeaconConfig().SecondsPerSlot)
 	for {

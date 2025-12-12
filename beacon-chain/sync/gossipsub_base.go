@@ -26,7 +26,7 @@ type baseTopicFamily struct {
 	subscriptions map[string]*pubsub.Subscription
 }
 
-func newBaseGossipsubTopicFamily(syncService *Service, nse params.NetworkScheduleEntry, validator wrappedVal,
+func newBaseTopicFamily(syncService *Service, nse params.NetworkScheduleEntry, validator wrappedVal,
 	handler subHandler, tf TopicFamily) *baseTopicFamily {
 	return &baseTopicFamily{
 		syncService:   syncService,

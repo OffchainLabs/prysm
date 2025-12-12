@@ -72,7 +72,7 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	}
 
 	tf := NewVoluntaryExitTopicFamily(&r, nse)
-	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, handler, tf)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, handler, tf)
 	tf.baseTopicFamily = base
 
 	tf.Subscribe()
@@ -116,7 +116,7 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 		name:   "VoluntaryExitTopicFamily",
 		topics: []string{topic},
 	}
-	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, &tf)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, noopHandler, &tf)
 	tf.baseTopicFamily = base
 
 	tf.Subscribe()
@@ -283,7 +283,7 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 		defer wg.Done()
 		panic("bad")
 	}
-	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, handler, tf)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, handler, tf)
 	tf.baseTopicFamily = base
 
 	tf.Subscribe()
@@ -530,7 +530,7 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 
 	tfDyn := NewSyncCommitteeTopicFamily(&r, nse)
-	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn)
 	tfDyn.baseTopicFamily = base
 	tfDyn.SubscribeForSlot(slot)
 
@@ -579,7 +579,7 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, params.BeaconConfig().DenebForkEpoch, nse.Epoch)
 
 	tfDyn2 := NewSyncCommitteeTopicFamily(&r, nse)
-	base := newBaseGossipsubTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn2)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn2)
 	tfDyn2.baseTopicFamily = base
 	tfDyn2.SubscribeForSlot(r.cfg.clock.CurrentSlot())
 

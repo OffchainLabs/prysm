@@ -228,7 +228,7 @@ func TestStartDiscV5_FindAndDialPeersWithSubnet(t *testing.T) {
 	defer cancel()
 
 	for _, topic := range topicsToDial {
-		err = service.GossipsubDialer().DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnet)
+		err = service.GossipDialer().DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnet)
 		require.NoError(t, err)
 	}
 

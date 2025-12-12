@@ -135,7 +135,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 			s.subnetLocker(subnet).Lock()
 			defer s.subnetLocker(subnet).Unlock()
 
-			if err := s.gossipsubDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
+			if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -192,7 +192,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			if err := s.gossipsubDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
+			if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -258,7 +258,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-			if err := s.gossipsubDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
+			if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -501,7 +501,7 @@ func (s *Service) findPeersIfNeeded(
 	s.subnetLocker(wrappedSubIdx).Lock()
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-	if err := s.gossipsubDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
+	if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 		return errors.Wrap(err, "find peers with subnet")
 	}
 	return nil

@@ -66,7 +66,7 @@ type TestP2P struct {
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
 	enr                   *enr.Record
-	dialer                gossipcrawler.GossipsubDialer
+	dialer                gossipcrawler.GossipDialer
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -590,7 +590,7 @@ func (*TestP2P) Crawler() gossipcrawler.Crawler {
 	return &MockCrawler{}
 }
 
-// GossipsubDialer returns nil for tests that do not exercise dialer behaviour.
-func (p *TestP2P) GossipsubDialer() gossipcrawler.GossipsubDialer {
+// GossipDialer returns nil for tests that do not exercise dialer behaviour.
+func (p *TestP2P) GossipDialer() gossipcrawler.GossipDialer {
 	return p.dialer
 }

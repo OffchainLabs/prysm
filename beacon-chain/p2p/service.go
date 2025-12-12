@@ -102,7 +102,7 @@ type Service struct {
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
 	crawler                  gossipcrawler.Crawler
-	gossipsubDialer          gossipcrawler.GossipsubDialer
+	gossipDialer             gossipcrawler.GossipDialer
 }
 
 type custodyInfo struct {
@@ -171,7 +171,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 
 	s.host = h
 
-	// Gossipsub registration is done before we add in any new peers
+	// Gossip registration is done before we add in any new peers
 	// due to libp2p's gossipsub implementation not taking into
 	// account previously added peers when creating the gossipsub
 	// object.
@@ -267,7 +267,7 @@ func (s *Service) Start() {
 		s.crawler = crawler
 		// Initialise the gossipsub dialer which will be started
 		// once the sync service is ready to provide subnet topics.
-		s.gossipsubDialer = NewGossipPeerDialer(s.ctx, s.crawler, s.PubSub().ListPeers, s.DialPeers)
+		s.gossipDialer = NewGossipPeerDialer(s.ctx, s.crawler, s.PubSub().ListPeers, s.DialPeers)
 	}
 
 	s.started = true
@@ -351,10 +351,10 @@ func (s *Service) Crawler() gossipcrawler.Crawler {
 	return s.crawler
 }
 
-// GossipsubDialer returns the dialer responsible for maintaining
+// GossipDialer returns the dialer responsible for maintaining
 // peer counts per gossipsub topic, if discovery is enabled.
-func (s *Service) GossipsubDialer() gossipcrawler.GossipsubDialer {
-	return s.gossipsubDialer
+func (s *Service) GossipDialer() gossipcrawler.GossipDialer {
+	return s.gossipDialer
 }
 
 // Status of the p2p service. Will return an error if the service is considered unhealthy to

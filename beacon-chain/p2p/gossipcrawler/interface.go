@@ -27,9 +27,9 @@ type Crawler interface {
 // sync committee subnets).
 type SubnetTopicsProvider func() []string
 
-// GossipsubDialer controls dialing peers for gossipsub topics based
+// GossipDialer controls dialing peers for gossipsub topics based
 // on a provided SubnetTopicsProvider and the p2p crawler.
-type GossipsubDialer interface {
+type GossipDialer interface {
 	Start(provider SubnetTopicsProvider) error
 	DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error
 }

@@ -98,7 +98,7 @@ type (
 		PeerID() peer.ID
 		Host() host.Host
 		ENR() *enr.Record
-		GossipsubDialer() gossipcrawler.GossipsubDialer
+		GossipDialer() gossipcrawler.GossipDialer
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()

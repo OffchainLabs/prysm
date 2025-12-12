@@ -428,15 +428,15 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the gossipsub dialer if available.
-	if dialer := s.cfg.p2p.GossipsubDialer(); dialer != nil {
+	if dialer := s.cfg.p2p.GossipDialer(); dialer != nil {
 		provider := func() []string {
 			return s.subscriptionController.GetCurrentActiveTopics()
 		}
 		if err := dialer.Start(provider); err != nil {
-			log.WithError(err).Warn("Failed to start gossipsub peer dialer")
+			log.WithError(err).Warn("Failed to start gossip peer dialer")
 		}
 	} else {
-		log.Error("No gossipsub peer dialer available")
+		log.Error("No gossip peer dialer available")
 	}
 }
 

@@ -19,7 +19,7 @@ type MockPeerManager struct {
 	BHost             host.Host
 	DiscoveryAddr     []multiaddr.Multiaddr
 	FailDiscoveryAddr bool
-	Dialer            gossipcrawler.GossipsubDialer
+	Dialer            gossipcrawler.GossipDialer
 }
 
 // Disconnect .
@@ -47,8 +47,8 @@ func (m MockPeerManager) NodeID() enode.ID {
 	return enode.ID{}
 }
 
-// GossipsubDialer returns the configured dialer mock, if any.
-func (m MockPeerManager) GossipsubDialer() gossipcrawler.GossipsubDialer {
+// GossipDialer returns the configured dialer mock, if any.
+func (m MockPeerManager) GossipDialer() gossipcrawler.GossipDialer {
 	return m.Dialer
 }
 

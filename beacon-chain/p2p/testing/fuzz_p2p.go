@@ -46,8 +46,8 @@ func (*FakeP2P) Crawler() gossipcrawler.Crawler {
 	return &MockCrawler{}
 }
 
-// GossipsubDialer -- fake.
-func (*FakeP2P) GossipsubDialer() gossipcrawler.GossipsubDialer {
+// GossipDialer -- fake.
+func (*FakeP2P) GossipDialer() gossipcrawler.GossipDialer {
 	return nil
 }
 

@@ -19,7 +19,7 @@ func NewBlobTopicFamily(s *Service, nse params.NetworkScheduleEntry, subnetIndex
 	b := &BlobTopicFamily{
 		subnetIndex: subnetIndex,
 	}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateBlob, s.blobSubscriber, b)
+	base := newBaseTopicFamily(s, nse, s.validateBlob, s.blobSubscriber, b)
 	b.baseTopicFamily = base
 	return b
 }

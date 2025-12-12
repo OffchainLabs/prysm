@@ -19,7 +19,7 @@ type AttestationTopicFamily struct {
 // NewAttestationTopicFamily creates a new AttestationTopicFamily.
 func NewAttestationTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AttestationTopicFamily {
 	a := &AttestationTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateCommitteeIndexBeaconAttestation, s.committeeIndexBeaconAttestationSubscriber, a)
+	base := newBaseTopicFamily(s, nse, s.validateCommitteeIndexBeaconAttestation, s.committeeIndexBeaconAttestationSubscriber, a)
 	a.baseTopicFamily = base
 	return a
 }
@@ -73,7 +73,7 @@ type SyncCommitteeTopicFamily struct {
 // NewSyncCommitteeTopicFamily creates a new SyncCommitteeTopicFamily.
 func NewSyncCommitteeTopicFamily(s *Service, nse params.NetworkScheduleEntry) *SyncCommitteeTopicFamily {
 	sc := &SyncCommitteeTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateSyncCommitteeMessage, s.syncCommitteeMessageSubscriber, sc)
+	base := newBaseTopicFamily(s, nse, s.validateSyncCommitteeMessage, s.syncCommitteeMessageSubscriber, sc)
 	sc.baseTopicFamily = base
 	return sc
 }
@@ -127,7 +127,7 @@ type DataColumnTopicFamily struct {
 // NewDataColumnTopicFamily creates a new DataColumnTopicFamily.
 func NewDataColumnTopicFamily(s *Service, nse params.NetworkScheduleEntry) *DataColumnTopicFamily {
 	d := &DataColumnTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateDataColumn, s.dataColumnSubscriber, d)
+	base := newBaseTopicFamily(s, nse, s.validateDataColumn, s.dataColumnSubscriber, d)
 	d.baseTopicFamily = base
 	return d
 }

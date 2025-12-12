@@ -14,7 +14,7 @@ type BlockTopicFamily struct {
 
 func NewBlockTopicFamily(s *Service, nse params.NetworkScheduleEntry) *BlockTopicFamily {
 	b := &BlockTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber, b)
+	base := newBaseTopicFamily(s, nse, s.validateBeaconBlockPubSub, s.beaconBlockSubscriber, b)
 	b.baseTopicFamily = base
 	return b
 }
@@ -41,7 +41,7 @@ type AggregateAndProofTopicFamily struct {
 
 func NewAggregateAndProofTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AggregateAndProofTopicFamily {
 	a := &AggregateAndProofTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber, a)
+	base := newBaseTopicFamily(s, nse, s.validateAggregateAndProof, s.beaconAggregateProofSubscriber, a)
 	a.baseTopicFamily = base
 	return a
 }
@@ -68,7 +68,7 @@ type VoluntaryExitTopicFamily struct {
 
 func NewVoluntaryExitTopicFamily(s *Service, nse params.NetworkScheduleEntry) *VoluntaryExitTopicFamily {
 	v := &VoluntaryExitTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateVoluntaryExit, s.voluntaryExitSubscriber, v)
+	base := newBaseTopicFamily(s, nse, s.validateVoluntaryExit, s.voluntaryExitSubscriber, v)
 	v.baseTopicFamily = base
 	return v
 }
@@ -95,7 +95,7 @@ type ProposerSlashingTopicFamily struct {
 
 func NewProposerSlashingTopicFamily(s *Service, nse params.NetworkScheduleEntry) *ProposerSlashingTopicFamily {
 	p := &ProposerSlashingTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateProposerSlashing, s.proposerSlashingSubscriber, p)
+	base := newBaseTopicFamily(s, nse, s.validateProposerSlashing, s.proposerSlashingSubscriber, p)
 	p.baseTopicFamily = base
 	return p
 }
@@ -122,7 +122,7 @@ type AttesterSlashingTopicFamily struct {
 
 func NewAttesterSlashingTopicFamily(s *Service, nse params.NetworkScheduleEntry) *AttesterSlashingTopicFamily {
 	a := &AttesterSlashingTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateAttesterSlashing, s.attesterSlashingSubscriber, a)
+	base := newBaseTopicFamily(s, nse, s.validateAttesterSlashing, s.attesterSlashingSubscriber, a)
 	a.baseTopicFamily = base
 	return a
 }
@@ -147,7 +147,7 @@ type SyncContributionAndProofTopicFamily struct{ *baseTopicFamily }
 
 func NewSyncContributionAndProofTopicFamily(s *Service, nse params.NetworkScheduleEntry) *SyncContributionAndProofTopicFamily {
 	sc := &SyncContributionAndProofTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateSyncContributionAndProof, s.syncContributionAndProofSubscriber, sc)
+	base := newBaseTopicFamily(s, nse, s.validateSyncContributionAndProof, s.syncContributionAndProofSubscriber, sc)
 	sc.baseTopicFamily = base
 	return sc
 }
@@ -174,7 +174,7 @@ type LightClientOptimisticUpdateTopicFamily struct {
 
 func NewLightClientOptimisticUpdateTopicFamily(s *Service, nse params.NetworkScheduleEntry) *LightClientOptimisticUpdateTopicFamily {
 	l := &LightClientOptimisticUpdateTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateLightClientOptimisticUpdate, noopHandler, l)
+	base := newBaseTopicFamily(s, nse, s.validateLightClientOptimisticUpdate, noopHandler, l)
 	l.baseTopicFamily = base
 	return l
 }
@@ -201,7 +201,7 @@ type LightClientFinalityUpdateTopicFamily struct {
 
 func NewLightClientFinalityUpdateTopicFamily(s *Service, nse params.NetworkScheduleEntry) *LightClientFinalityUpdateTopicFamily {
 	l := &LightClientFinalityUpdateTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateLightClientFinalityUpdate, noopHandler, l)
+	base := newBaseTopicFamily(s, nse, s.validateLightClientFinalityUpdate, noopHandler, l)
 	l.baseTopicFamily = base
 	return l
 }
@@ -228,7 +228,7 @@ type BlsToExecutionChangeTopicFamily struct {
 
 func NewBlsToExecutionChangeTopicFamily(s *Service, nse params.NetworkScheduleEntry) *BlsToExecutionChangeTopicFamily {
 	b := &BlsToExecutionChangeTopicFamily{}
-	base := newBaseGossipsubTopicFamily(s, nse, s.validateBlsToExecutionChange, s.blsToExecutionChangeSubscriber, b)
+	base := newBaseTopicFamily(s, nse, s.validateBlsToExecutionChange, s.blsToExecutionChangeSubscriber, b)
 	b.baseTopicFamily = base
 	return b
 }
