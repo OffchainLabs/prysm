@@ -299,7 +299,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 
 		// Save data columns in the filesystem.
 		epoch := slots.ToEpoch(slot)
-		if err := dcs.saveFilesystem(root, epoch, dataColumnSidecars); err != nil {
+		if err := dcs.saveFilesystem(dataColumnSidecars); err != nil {
 			return errors.Wrap(err, "save filesystem")
 		}
 
@@ -344,8 +344,12 @@ func (dcs *DataColumnStorage) Subscribe() (event.Subscription, <-chan DataColumn
 }
 
 // saveFilesystem saves data column sidecars into the database.
-// This function expects all data column sidecars to belong to the same block.
-func (dcs *DataColumnStorage) saveFilesystem(root [fieldparams.RootLength]byte, epoch primitives.Epoch, dataColumnSidecars []blocks.VerifiedRODataColumn) error {
+// This function expects all data column sidecars to belong to the same block, and assumes `dataColumnSidecars` is not empty.
+func (dcs *DataColumnStorage) saveFilesystem(dataColumnSidecars []blocks.VerifiedRODataColumn) error {
+	root := dataColumnSidecars[0].BlockRoot()
+	slot := dataColumnSidecars[0].SignedBlockHeader.Header.Slot
+	epoch := slots.ToEpoch(slot)
+
 	// Compute the file path.
 	filePath := filePath(root, epoch)
 
