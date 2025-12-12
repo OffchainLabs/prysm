@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -42,12 +42,12 @@ func (*FakeP2P) AddConnectionHandler(_, _ func(ctx context.Context, id peer.ID) 
 }
 
 // Crawler -- fake.
-func (*FakeP2P) Crawler() gossipsubcrawler.Crawler {
+func (*FakeP2P) Crawler() gossipcrawler.Crawler {
 	return &MockCrawler{}
 }
 
 // GossipsubDialer -- fake.
-func (*FakeP2P) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+func (*FakeP2P) GossipsubDialer() gossipcrawler.GossipsubDialer {
 	return nil
 }
 

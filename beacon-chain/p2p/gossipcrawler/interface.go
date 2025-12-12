@@ -1,4 +1,4 @@
-package gossipsubcrawler
+package gossipcrawler
 
 import (
 	"context"

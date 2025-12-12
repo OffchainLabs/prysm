@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGossipsubPeerDialer_Start(t *testing.T) {
+func TestGossipPeerDialer_Start(t *testing.T) {
 	tests := []struct {
 		name             string
 		newCrawler       func(t *testing.T) *mockCrawler
-		provider         gossipsubcrawler.SubnetTopicsProvider
+		provider         gossipcrawler.SubnetTopicsProvider
 		expectedConnects int
 		expectStartErr   bool
 	}{
@@ -51,7 +51,7 @@ func TestGossipsubPeerDialer_Start(t *testing.T) {
 			md := &mockDialer{}
 			listPeers := func(topic string) []peer.ID { return nil }
 
-			dialer := NewGossipsubPeerDialer(t.Context(), tt.newCrawler(t), listPeers, md.DialPeers)
+			dialer := NewGossipPeerDialer(t.Context(), tt.newCrawler(t), listPeers, md.DialPeers)
 
 			err := dialer.Start(tt.provider)
 			if tt.expectStartErr {
@@ -69,7 +69,7 @@ func TestGossipsubPeerDialer_Start(t *testing.T) {
 	}
 }
 
-func TestGossipsubPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
+func TestGossipPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
 	tests := []struct {
 		name             string
 		connectedPeers   int
@@ -137,7 +137,7 @@ func TestGossipsubPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
 			}
 
 			crawler := tt.newCrawler(t)
-			dialer := NewGossipsubPeerDialer(t.Context(), crawler, listPeers, dialPeers)
+			dialer := NewGossipPeerDialer(t.Context(), crawler, listPeers, dialPeers)
 			topic := "topic/a"
 
 			ctx, cancel := tt.ctx()
@@ -155,7 +155,7 @@ func TestGossipsubPeerDialer_DialPeersForTopicBlocking(t *testing.T) {
 	}
 }
 
-func TestGossipsubPeerDialer_peersForTopic(t *testing.T) {
+func TestGossipPeerDialer_peersForTopic(t *testing.T) {
 	tests := []struct {
 		name        string
 		connected   int
@@ -219,7 +219,7 @@ func TestGossipsubPeerDialer_peersForTopic(t *testing.T) {
 				peers:   map[string][]*enode.Node{"topic/test": crawlerPeers},
 				consume: false,
 			}
-			dialer := NewGossipsubPeerDialer(t.Context(), crawler, listPeers, func(ctx context.Context,
+			dialer := NewGossipPeerDialer(t.Context(), crawler, listPeers, func(ctx context.Context,
 				maxConcurrentDials int, nodes []*enode.Node) uint {
 				return 0
 			})
@@ -245,7 +245,7 @@ type mockCrawler struct {
 	consume bool
 }
 
-func (m *mockCrawler) Start(gossipsubcrawler.TopicExtractor) error {
+func (m *mockCrawler) Start(gossipcrawler.TopicExtractor) error {
 	return nil
 }
 

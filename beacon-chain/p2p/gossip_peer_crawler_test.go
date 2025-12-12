@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -271,9 +271,9 @@ func TestRemovePeerId(t *testing.T) {
 }
 
 func TestUpdateCrawledIfNewer(t *testing.T) {
-	newCrawler := func() (*crawledPeers, *GossipsubPeerCrawler, func()) {
+	newCrawler := func() (*crawledPeers, *GossipPeerCrawler, func()) {
 		ctx, cancel := context.WithCancel(context.Background())
-		g := &GossipsubPeerCrawler{
+		g := &GossipPeerCrawler{
 			ctx:    ctx,
 			pingCh: make(chan enode.Node, 8),
 		}
@@ -449,8 +449,8 @@ func TestUpdateCrawledIfNewer(t *testing.T) {
 func TestPeersForTopic(t *testing.T) {
 	t.Parallel()
 
-	newCrawler := func(filter gossipsubcrawler.PeerFilterFunc) (*GossipsubPeerCrawler, *crawledPeers) {
-		g := &GossipsubPeerCrawler{
+	newCrawler := func(filter gossipcrawler.PeerFilterFunc) (*GossipPeerCrawler, *crawledPeers) {
+		g := &GossipPeerCrawler{
 			peerFilter:   filter,
 			scorer:       func(peer.ID) float64 { return 0 },
 			crawledPeers: newTestCrawledPeers(),
@@ -467,20 +467,20 @@ func TestPeersForTopic(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		filter  gossipsubcrawler.PeerFilterFunc
-		setup   func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers)
+		filter  gossipcrawler.PeerFilterFunc
+		setup   func(t *testing.T, g *GossipPeerCrawler, cp *crawledPeers)
 		wantIDs []enode.ID
 	}{
 		{
 			name:    "no peers for topic returns empty",
 			filter:  func(*enode.Node) bool { return true },
-			setup:   func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers) {},
+			setup:   func(t *testing.T, g *GossipPeerCrawler, cp *crawledPeers) {},
 			wantIDs: nil,
 		},
 		{
 			name:   "excludes unpinged peers",
 			filter: func(*enode.Node) bool { return true },
-			setup: func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers) {
+			setup: func(t *testing.T, g *GossipPeerCrawler, cp *crawledPeers) {
 				// Add one pinged and one not pinged on same topic
 				addPeerWithTopics(t, cp, n1, []string{string(topic)}, true)
 				addPeerWithTopics(t, cp, n2, []string{string(topic)}, false)
@@ -490,7 +490,7 @@ func TestPeersForTopic(t *testing.T) {
 		{
 			name:   "applies peer filter to exclude",
 			filter: func(n *enode.Node) bool { return n.ID() != n2.ID() },
-			setup: func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers) {
+			setup: func(t *testing.T, g *GossipPeerCrawler, cp *crawledPeers) {
 				addPeerWithTopics(t, cp, n1, []string{string(topic)}, true)
 				addPeerWithTopics(t, cp, n2, []string{string(topic)}, true)
 			},
@@ -499,7 +499,7 @@ func TestPeersForTopic(t *testing.T) {
 		{
 			name:   "ignores peerNode with nil node",
 			filter: func(*enode.Node) bool { return true },
-			setup: func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers) {
+			setup: func(t *testing.T, g *GossipPeerCrawler, cp *crawledPeers) {
 				addPeerWithTopics(t, cp, n1, []string{string(topic)}, true)
 				// Add n2 then set its node to nil to simulate corrupted entry
 				p2 := addPeerWithTopics(t, cp, n2, []string{string(topic)}, true)
@@ -512,7 +512,7 @@ func TestPeersForTopic(t *testing.T) {
 		{
 			name:   "sorted by score descending",
 			filter: func(*enode.Node) bool { return true },
-			setup: func(t *testing.T, g *GossipsubPeerCrawler, cp *crawledPeers) {
+			setup: func(t *testing.T, g *GossipPeerCrawler, cp *crawledPeers) {
 				// Add three pinged peers
 				p1 := addPeerWithTopics(t, cp, n1, []string{string(topic)}, true)
 				p2 := addPeerWithTopics(t, cp, n2, []string{string(topic)}, true)
@@ -559,11 +559,11 @@ func TestCrawler_AddsAndPingsPeer(t *testing.T) {
 	mockListener.PingFunc = func(*enode.Node) error { return nil }
 
 	// Inject a permissive peer filter
-	filter := gossipsubcrawler.PeerFilterFunc(func(n *enode.Node) bool { return true })
+	filter := gossipcrawler.PeerFilterFunc(func(n *enode.Node) bool { return true })
 
 	// Create crawler with small intervals
 	scorer := func(peer.ID) float64 { return 0 }
-	g, err := NewGossipsubPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 4, filter, scorer)
+	g, err := NewGossipPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 4, filter, scorer)
 	require.NoError(t, err)
 
 	// Assign a simple topic extractor
@@ -605,12 +605,12 @@ func TestCrawler_SkipsPeer_WhenFilterRejects(t *testing.T) {
 	mockListener.PingFunc = func(*enode.Node) error { return nil }
 
 	// Reject all peers via injected filter
-	filter := gossipsubcrawler.PeerFilterFunc(func(n *enode.Node) bool { return false })
+	filter := gossipcrawler.PeerFilterFunc(func(n *enode.Node) bool { return false })
 
 	scorer := func(peer.ID) float64 { return 0 }
-	g, err := NewGossipsubPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
+	g, err := NewGossipPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
 	if err != nil {
-		t.Fatalf("NewGossipsubPeerCrawler error: %v", err)
+		t.Fatalf("NewGossipPeerCrawler error: %v", err)
 	}
 
 	topic := "test/topic"
@@ -636,12 +636,12 @@ func TestCrawler_RemoveTopic_RemovesTopicFromIndexes(t *testing.T) {
 	mockListener := p2ptest.NewMockListener(localNode, iterator)
 	mockListener.PingFunc = func(*enode.Node) error { return nil }
 
-	filter := gossipsubcrawler.PeerFilterFunc(func(n *enode.Node) bool { return true })
+	filter := gossipcrawler.PeerFilterFunc(func(n *enode.Node) bool { return true })
 
 	scorer := func(peer.ID) float64 { return 0 }
-	g, err := NewGossipsubPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
+	g, err := NewGossipPeerCrawler(t.Context(), &Service{}, mockListener, 2*time.Second, 10*time.Millisecond, 2, filter, scorer)
 	if err != nil {
-		t.Fatalf("NewGossipsubPeerCrawler error: %v", err)
+		t.Fatalf("NewGossipPeerCrawler error: %v", err)
 	}
 
 	topic1 := "test/topic1"

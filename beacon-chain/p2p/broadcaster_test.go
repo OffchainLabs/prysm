@@ -769,7 +769,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
 	topic := DataColumnSubnetTopic(digest, subnet)
 
-	crawler, err := NewGossipsubPeerCrawler(t.Context(), service, listener, 1*time.Second, 1*time.Second, 10,
+	crawler, err := NewGossipPeerCrawler(t.Context(), service, listener, 1*time.Second, 1*time.Second, 10,
 		func(n *enode.Node) bool { return true },
 		service.Peers().Scorers().Score)
 	require.NoError(t, err)
@@ -777,7 +777,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 		return []string{topic}, nil
 	})
 	require.NoError(t, err)
-	service.gossipsubDialer = NewGossipsubPeerDialer(t.Context(), crawler, service.PubSub().ListPeers, service.DialPeers)
+	service.gossipsubDialer = NewGossipPeerDialer(t.Context(), crawler, service.PubSub().ListPeers, service.DialPeers)
 
 	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
 	verifiedRoSidecar := verifiedRoSidecars[0]

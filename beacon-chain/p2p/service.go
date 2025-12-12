@@ -12,7 +12,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -101,8 +101,8 @@ type Service struct {
 	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
-	crawler                  gossipsubcrawler.Crawler
-	gossipsubDialer          gossipsubcrawler.GossipsubDialer
+	crawler                  gossipcrawler.Crawler
+	gossipsubDialer          gossipcrawler.GossipsubDialer
 }
 
 type custodyInfo struct {
@@ -249,7 +249,7 @@ func (s *Service) Start() {
 
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
-		crawler, err := NewGossipsubPeerCrawler(
+		crawler, err := NewGossipPeerCrawler(
 			s.ctx,
 			s,
 			s.dv5Listener,
@@ -267,7 +267,7 @@ func (s *Service) Start() {
 		s.crawler = crawler
 		// Initialise the gossipsub dialer which will be started
 		// once the sync service is ready to provide subnet topics.
-		s.gossipsubDialer = NewGossipsubPeerDialer(s.ctx, s.crawler, s.PubSub().ListPeers, s.DialPeers)
+		s.gossipsubDialer = NewGossipPeerDialer(s.ctx, s.crawler, s.PubSub().ListPeers, s.DialPeers)
 	}
 
 	s.started = true
@@ -347,13 +347,13 @@ func (s *Service) Stop() error {
 }
 
 // Crawler returns the p2p service's peer crawler.
-func (s *Service) Crawler() gossipsubcrawler.Crawler {
+func (s *Service) Crawler() gossipcrawler.Crawler {
 	return s.crawler
 }
 
 // GossipsubDialer returns the dialer responsible for maintaining
 // peer counts per gossipsub topic, if discovery is enabled.
-func (s *Service) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+func (s *Service) GossipsubDialer() gossipcrawler.GossipsubDialer {
 	return s.gossipsubDialer
 }
 

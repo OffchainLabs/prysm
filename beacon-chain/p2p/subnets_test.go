@@ -11,7 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -1104,11 +1104,11 @@ func createTestService(t *testing.T, d db.Database) *Service {
 	return s
 }
 
-func startTestCrawler(t *testing.T, s *Service, listener *testp2p.MockListener) *GossipsubPeerCrawler {
+func startTestCrawler(t *testing.T, s *Service, listener *testp2p.MockListener) *GossipPeerCrawler {
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
-	crawler, err := NewGossipsubPeerCrawler(t.Context(), s, listener,
-		1*time.Second, 100*time.Millisecond, 10, gossipsubcrawler.PeerFilterFunc(s.filterPeer),
+	crawler, err := NewGossipPeerCrawler(t.Context(), s, listener,
+		1*time.Second, 100*time.Millisecond, 10, gossipcrawler.PeerFilterFunc(s.filterPeer),
 		s.Peers().Scorers().Score)
 	require.NoError(t, err)
 	s.crawler = crawler
@@ -1127,7 +1127,7 @@ func startTestCrawler(t *testing.T, s *Service, listener *testp2p.MockListener) 
 	return crawler
 }
 
-func verifyCrawlerPeers(t *testing.T, crawler *GossipsubPeerCrawler, s *Service, subnets map[uint64]int, expectedCount int, description string, eval func(t *testing.T, result []*enode.Node)) {
+func verifyCrawlerPeers(t *testing.T, crawler *GossipPeerCrawler, s *Service, subnets map[uint64]int, expectedCount int, description string, eval func(t *testing.T, result []*enode.Node)) {
 	digest, err := s.currentForkDigest()
 	require.NoError(t, err)
 	var topics []string

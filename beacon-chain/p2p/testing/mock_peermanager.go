@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -19,7 +19,7 @@ type MockPeerManager struct {
 	BHost             host.Host
 	DiscoveryAddr     []multiaddr.Multiaddr
 	FailDiscoveryAddr bool
-	Dialer            gossipsubcrawler.GossipsubDialer
+	Dialer            gossipcrawler.GossipsubDialer
 }
 
 // Disconnect .
@@ -48,7 +48,7 @@ func (m MockPeerManager) NodeID() enode.ID {
 }
 
 // GossipsubDialer returns the configured dialer mock, if any.
-func (m MockPeerManager) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+func (m MockPeerManager) GossipsubDialer() gossipcrawler.GossipsubDialer {
 	return m.Dialer
 }
 
@@ -72,6 +72,6 @@ func (p *MockPeerManager) DialPeers(ctx context.Context, maxConcurrentDials int,
 func (*MockPeerManager) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {}
 
 // Crawler.
-func (*MockPeerManager) Crawler() gossipsubcrawler.Crawler {
+func (*MockPeerManager) Crawler() gossipcrawler.Crawler {
 	return nil
 }

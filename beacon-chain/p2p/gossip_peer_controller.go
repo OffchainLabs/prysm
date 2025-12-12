@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -17,23 +17,23 @@ const (
 	dialInterval = 1 * time.Second
 )
 
-// GossipsubPeerDialer maintains minimum peer counts for gossipsub topics by periodically
+// GossipPeerDialer maintains minimum peer counts for gossip topics by periodically
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
 // topic's peer count and dials new peers when below the target threshold.
-type GossipsubPeerDialer struct {
+type GossipPeerDialer struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	listPeers func(topic string) []peer.ID
 	dialPeers func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint
 
-	crawler        gossipsubcrawler.Crawler
-	topicsProvider gossipsubcrawler.SubnetTopicsProvider
+	crawler        gossipcrawler.Crawler
+	topicsProvider gossipcrawler.SubnetTopicsProvider
 
 	once sync.Once
 }
 
-// NewGossipsubPeerDialer creates a new GossipsubPeerDialer instance.
+// NewGossipPeerDialer creates a new GossipPeerDialer instance.
 //
 // Parameters:
 //   - ctx: Parent context that controls the lifecycle of the dialer. When cancelled,
@@ -46,13 +46,13 @@ type GossipsubPeerDialer struct {
 //     Returns the number of successful dials.
 //
 // The dialer must be started with Start() before it begins maintaining peer counts.
-func NewGossipsubPeerDialer(
+func NewGossipPeerDialer(
 	ctx context.Context,
-	crawler gossipsubcrawler.Crawler,
+	crawler gossipcrawler.Crawler,
 	listPeers func(topic string) []peer.ID,
 	dialPeers func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint,
-) *GossipsubPeerDialer {
-	return &GossipsubPeerDialer{
+) *GossipPeerDialer {
+	return &GossipPeerDialer{
 		ctx:       ctx,
 		listPeers: listPeers,
 		dialPeers: dialPeers,
@@ -76,7 +76,7 @@ func NewGossipsubPeerDialer(
 //  4. Dials missing peers with rate limiting if enabled
 //
 // Returns nil always (error return preserved for interface compatibility).
-func (g *GossipsubPeerDialer) Start(provider gossipsubcrawler.SubnetTopicsProvider) error {
+func (g *GossipPeerDialer) Start(provider gossipcrawler.SubnetTopicsProvider) error {
 	g.once.Do(func() {
 		g.topicsProvider = provider
 		go g.dialLoop()
@@ -85,7 +85,7 @@ func (g *GossipsubPeerDialer) Start(provider gossipsubcrawler.SubnetTopicsProvid
 	return nil
 }
 
-func (g *GossipsubPeerDialer) dialLoop() {
+func (g *GossipPeerDialer) dialLoop() {
 	ticker := time.NewTicker(dialInterval)
 	defer ticker.Stop()
 
@@ -147,7 +147,7 @@ func (g *GossipsubPeerDialer) dialLoop() {
 //
 // Note: This may block indefinitely if the crawler cannot provide enough peers
 // and the context has no deadline.
-func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error {
+func (g *GossipPeerDialer) DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error {
 	for {
 		peers := g.listPeers(topic)
 		if len(peers) >= nPeers {
@@ -170,7 +170,7 @@ func (g *GossipsubPeerDialer) DialPeersForTopicBlocking(ctx context.Context, top
 	}
 }
 
-func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*enode.Node {
+func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode.Node {
 	peers := g.listPeers(topic)
 	peerCount := len(peers)
 	if peerCount >= targetCount {
@@ -185,7 +185,7 @@ func (g *GossipsubPeerDialer) peersForTopic(topic string, targetCount int) []*en
 	return newPeers
 }
 
-func (g *GossipsubPeerDialer) dialPeersWithRatelimiting(peers []*enode.Node) {
+func (g *GossipPeerDialer) dialPeersWithRatelimiting(peers []*enode.Node) {
 	// Dial new peers in batches.
 	maxConcurrentDials := math.MaxInt
 	if flags.MaxDialIsActive() {

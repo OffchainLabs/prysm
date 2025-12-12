@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 
@@ -199,7 +199,7 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	pnode.topics = newTopics
 }
 
-func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipsubcrawler.PeerFilterFunc) []*peerNode {
+func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.PeerFilterFunc) []*peerNode {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 
@@ -226,12 +226,12 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipsubcrawler.P
 	return peerNodes
 }
 
-// GossipsubPeerCrawler discovers and maintains a registry of peers subscribed to gossipsub topics.
+// GossipPeerCrawler discovers and maintains a registry of peers subscribed to gossipsub topics.
 // It uses discv5 to find peers, extracts their topic subscriptions from ENR records, and verifies
 // their reachability via ping. Only peers that have been successfully pinged are returned when
 // querying for peers on a given topic. The crawler runs three background loops: one for discovery,
 // one for ping verification, and one for periodic cleanup of stale or filtered-out peers.
-type GossipsubPeerCrawler struct {
+type GossipPeerCrawler struct {
 	ctx context.Context
 
 	crawlInterval, crawlTimeout time.Duration
@@ -243,9 +243,9 @@ type GossipsubPeerCrawler struct {
 
 	p2pSvc *Service
 
-	topicExtractor gossipsubcrawler.TopicExtractor
+	topicExtractor gossipcrawler.TopicExtractor
 
-	peerFilter gossipsubcrawler.PeerFilterFunc
+	peerFilter gossipcrawler.PeerFilterFunc
 	scorer     PeerScoreFunc
 
 	pingCh        chan enode.Node
@@ -264,7 +264,7 @@ const cleanupInterval = 5 * time.Minute
 // connections to the most reliable peers.
 type PeerScoreFunc func(peer.ID) float64
 
-// NewGossipsubPeerCrawler creates a new crawler for discovering gossipsub peers.
+// NewGossipPeerCrawler creates a new crawler for discovering gossipsub peers.
 // The crawler uses the provided discv5 listener to discover peers and tracks their
 // topic subscriptions. Parameters:
 //   - p2pSvc: The P2P service for network operations
@@ -276,16 +276,16 @@ type PeerScoreFunc func(peer.ID) float64
 //   - scorer: Calculates peer quality scores for sorting results
 //
 // Returns an error if any required parameter is nil or invalid.
-func NewGossipsubPeerCrawler(
+func NewGossipPeerCrawler(
 	ctx context.Context,
 	p2pSvc *Service,
 	dv5 ListenerRebooter,
 	crawlTimeout time.Duration,
 	crawlInterval time.Duration,
 	maxConcurrentPings int64,
-	peerFilter gossipsubcrawler.PeerFilterFunc,
+	peerFilter gossipcrawler.PeerFilterFunc,
 	scorer PeerScoreFunc,
-) (*GossipsubPeerCrawler, error) {
+) (*GossipPeerCrawler, error) {
 	if p2pSvc == nil {
 		return nil, errors.New("p2pSvc is nil")
 	}
@@ -308,7 +308,7 @@ func NewGossipsubPeerCrawler(
 		return nil, errors.New("peer scorer is nil")
 	}
 
-	g := &GossipsubPeerCrawler{
+	g := &GossipPeerCrawler{
 		ctx:           ctx,
 		crawlInterval: crawlInterval,
 		crawlTimeout:  crawlTimeout,
@@ -333,7 +333,7 @@ func NewGossipsubPeerCrawler(
 // score, so higher-quality peers appear first. Returns nil if no peers are found for
 // the topic. The returned slice should not be modified as it contains pointers to
 // internal enode records.
-func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
+func (g *GossipPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
 
 	slices.SortFunc(peerNodes, func(a, b *peerNode) int {
@@ -359,7 +359,7 @@ func (g *GossipsubPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 // RemovePeerByPeerId removes a peer from the crawler's registry by their libp2p peer ID.
 // This also removes the peer from all topic subscriptions they were associated with.
 // If the peer is not found, this operation is a no-op.
-func (g *GossipsubPeerCrawler) RemovePeerByPeerId(peerID peer.ID) {
+func (g *GossipPeerCrawler) RemovePeerByPeerId(peerID peer.ID) {
 	g.crawledPeers.removePeerByPeerId(peerID)
 }
 
@@ -367,7 +367,7 @@ func (g *GossipsubPeerCrawler) RemovePeerByPeerId(peerID peer.ID) {
 // Peers that were only subscribed to this topic are completely removed from the registry.
 // Peers subscribed to other topics remain tracked for those topics.
 // If the topic does not exist, this operation is a no-op.
-func (g *GossipsubPeerCrawler) RemoveTopic(topic string) {
+func (g *GossipPeerCrawler) RemoveTopic(topic string) {
 	g.crawledPeers.removeTopic(topic)
 }
 
@@ -377,7 +377,7 @@ func (g *GossipsubPeerCrawler) RemoveTopic(topic string) {
 // The provided TopicExtractor is used to determine which gossipsub topics each
 // discovered peer subscribes to. Start is idempotent; subsequent calls after the
 // first are no-ops. Returns an error if the topic extractor is nil.
-func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
+func (g *GossipPeerCrawler) Start(te gossipcrawler.TopicExtractor) error {
 	if te == nil {
 		return errors.New("topic extractor is nil")
 	}
@@ -391,7 +391,7 @@ func (g *GossipsubPeerCrawler) Start(te gossipsubcrawler.TopicExtractor) error {
 	return nil
 }
 
-func (g *GossipsubPeerCrawler) pingLoop() {
+func (g *GossipPeerCrawler) pingLoop() {
 	for {
 		select {
 		case node := <-g.pingCh:
@@ -415,7 +415,7 @@ func (g *GossipsubPeerCrawler) pingLoop() {
 	}
 }
 
-func (g *GossipsubPeerCrawler) crawlLoop() {
+func (g *GossipPeerCrawler) crawlLoop() {
 	for {
 		g.crawl()
 		select {
@@ -426,7 +426,7 @@ func (g *GossipsubPeerCrawler) crawlLoop() {
 	}
 }
 
-func (g *GossipsubPeerCrawler) crawl() {
+func (g *GossipPeerCrawler) crawl() {
 	ctx, cancel := context.WithTimeout(g.ctx, g.crawlTimeout)
 	defer cancel()
 
@@ -477,7 +477,7 @@ func (g *GossipsubPeerCrawler) crawl() {
 // cleanupLoop periodically removes peers that the filter rejects or that
 // have no topics of interest. It uses the same context lifecycle as other
 // background loops.
-func (g *GossipsubPeerCrawler) cleanupLoop() {
+func (g *GossipPeerCrawler) cleanupLoop() {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -496,7 +496,7 @@ func (g *GossipsubPeerCrawler) cleanupLoop() {
 
 // cleanup scans the crawled peer set and removes entries that either fail
 // the current peer filter or have no topics of interest remaining.
-func (g *GossipsubPeerCrawler) cleanup() {
+func (g *GossipPeerCrawler) cleanup() {
 	cp := g.crawledPeers
 
 	// Snapshot current peers to evaluate without holding the lock during

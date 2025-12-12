@@ -13,7 +13,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -66,7 +66,7 @@ type TestP2P struct {
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
 	enr                   *enr.Record
-	dialer                gossipsubcrawler.GossipsubDialer
+	dialer                gossipcrawler.GossipsubDialer
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -562,7 +562,7 @@ func (s *TestP2P) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 type MockCrawler struct{}
 
 // Start does nothing as this is a mock
-func (m *MockCrawler) Start(gossipsubcrawler.TopicExtractor) error {
+func (m *MockCrawler) Start(gossipcrawler.TopicExtractor) error {
 	return nil
 }
 
@@ -586,11 +586,11 @@ func (m *MockCrawler) PeersForTopic(topic string) []*enode.Node {
 }
 
 // Crawler returns a mock crawler implementation for testing.
-func (*TestP2P) Crawler() gossipsubcrawler.Crawler {
+func (*TestP2P) Crawler() gossipcrawler.Crawler {
 	return &MockCrawler{}
 }
 
 // GossipsubDialer returns nil for tests that do not exercise dialer behaviour.
-func (p *TestP2P) GossipsubDialer() gossipsubcrawler.GossipsubDialer {
+func (p *TestP2P) GossipsubDialer() gossipcrawler.GossipsubDialer {
 	return p.dialer
 }

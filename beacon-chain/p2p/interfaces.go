@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipsubcrawler"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -98,13 +98,13 @@ type (
 		PeerID() peer.ID
 		Host() host.Host
 		ENR() *enr.Record
-		GossipsubDialer() gossipsubcrawler.GossipsubDialer
+		GossipsubDialer() gossipcrawler.GossipsubDialer
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
 		DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
-		Crawler() gossipsubcrawler.Crawler
+		Crawler() gossipcrawler.Crawler
 	}
 
 	// Sender abstracts the sending functionality from libp2p.
