@@ -5,7 +5,6 @@ go_library(
     srcs = select({
         "//config:mainnet": ["mainnet.go"],
         "//config:minimal": ["minimal.go"],
-        "//config:e2e": ["e2e.go"],
     }),
     importpath = "github.com/OffchainLabs/prysm/v7/config/fieldparams",
     visibility = ["//visibility:public"],
