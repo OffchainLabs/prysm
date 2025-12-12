@@ -40,7 +40,7 @@ metaData
 jwt.hex
 
 # local execution client data
-execution/
+/execution/
 
 # local documentation
 CLAUDE.md
