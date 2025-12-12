@@ -66,4 +66,8 @@ var (
 		Name: "data_column_batch_store_count",
 		Help: "Number of data columns stored in a batch",
 	})
+	dataColumnPruneLatency = promauto.NewSummary(prometheus.SummaryOpts{
+		Name: "data_column_prune_latency",
+		Help: "Latency of data column prune operations in milliseconds",
+	})
 )

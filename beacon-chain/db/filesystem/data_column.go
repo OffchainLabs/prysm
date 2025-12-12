@@ -515,6 +515,11 @@ func (dcs *DataColumnStorage) Clear() error {
 
 // prune clean the cache, the filesystem and mutexes.
 func (dcs *DataColumnStorage) prune() {
+	startTime := time.Now()
+	defer func() {
+		dataColumnPruneLatency.Observe(float64(time.Since(startTime).Milliseconds()))
+	}()
+
 	highestStoredEpoch := dcs.cache.HighestEpoch()
 
 	// Check if we need to prune.
