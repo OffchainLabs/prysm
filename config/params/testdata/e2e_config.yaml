@@ -122,7 +122,7 @@ MIN_SYNC_COMMITTEE_PARTICIPANTS: 1
 # Other e2e overrides
 # ---------------------------------------------------------------
 CONFIG_NAME: "end-to-end"
-SLOTS_PER_EPOCH: 6
+SLOTS_PER_EPOCH: 8
 EPOCHS_PER_ETH1_VOTING_PERIOD: 2
 MAX_SEED_LOOKAHEAD: 1
 
