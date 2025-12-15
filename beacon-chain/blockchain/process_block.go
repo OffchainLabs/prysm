@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -924,6 +925,12 @@ func (s *Service) areExecutionProofsAvailable(
 ) error {
 	if !features.Get().EnableZkvm {
 		// We don't need to check for execution proofs if zkVM features are disabled.
+		// Return early.
+		return nil
+	}
+
+	if len(flags.Get().ProofGenerationTypes) > 0 {
+		// We don't need to check for execution proofs if proof generation is enabled.
 		// Return early.
 		return nil
 	}
