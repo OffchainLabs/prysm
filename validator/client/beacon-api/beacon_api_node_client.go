@@ -98,7 +98,7 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 	}
 
 	// TODO: Implement me
-	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
+	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewNodeClientWithFallback.")
 }
 
 func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
