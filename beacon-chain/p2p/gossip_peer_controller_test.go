@@ -265,6 +265,183 @@ func TestGossipPeerDialer_peersForTopic(t *testing.T) {
 	}
 }
 
+func TestGossipPeerDialer_selectPeersForTopics(t *testing.T) {
+	tests := []struct {
+		name           string
+		connectedPeers map[string]int // topic -> connected peer count
+		topicsProvider func() map[string]int
+		buildPeers     func(t *testing.T) (map[string][]*enode.Node, []*enode.Node)
+	}{
+		{
+			name:           "prioritizes multi-topic peer over single-topic peers",
+			connectedPeers: map[string]int{},
+			topicsProvider: func() map[string]int {
+				return map[string]int{
+					"topic/a": 1,
+					"topic/b": 1,
+					"topic/c": 1,
+				}
+			},
+			buildPeers: func(t *testing.T) (map[string][]*enode.Node, []*enode.Node) {
+				// Peer X serves all 3 topics
+				nodeX := newTestNode(t, "127.0.0.1", 30401)
+				// Peer Y serves only topic/a
+				nodeY := newTestNode(t, "127.0.0.1", 30402)
+				// Peer Z serves only topic/b
+				nodeZ := newTestNode(t, "127.0.0.1", 30403)
+
+				crawlerPeers := map[string][]*enode.Node{
+					"topic/a": {nodeX, nodeY},
+					"topic/b": {nodeX, nodeZ},
+					"topic/c": {nodeX},
+				}
+				// Only nodeX should be dialed (satisfies all 3 topics)
+				return crawlerPeers, []*enode.Node{nodeX}
+			},
+		},
+		{
+			name:           "cross-topic decrement works correctly",
+			connectedPeers: map[string]int{},
+			topicsProvider: func() map[string]int {
+				return map[string]int{
+					"topic/a": 2, // Need 2 peers
+					"topic/b": 1, // Need 1 peer
+				}
+			},
+			buildPeers: func(t *testing.T) (map[string][]*enode.Node, []*enode.Node) {
+				// Peer X serves both topics
+				nodeX := newTestNode(t, "127.0.0.1", 30411)
+				// Peer Y serves only topic/a
+				nodeY := newTestNode(t, "127.0.0.1", 30412)
+
+				crawlerPeers := map[string][]*enode.Node{
+					"topic/a": {nodeX, nodeY},
+					"topic/b": {nodeX},
+				}
+				// nodeX covers topic/b fully, and 1 of 2 for topic/a
+				// nodeY covers remaining 1 for topic/a
+				return crawlerPeers, []*enode.Node{nodeX, nodeY}
+			},
+		},
+		{
+			name:           "no redundant dials when one peer satisfies all",
+			connectedPeers: map[string]int{},
+			topicsProvider: func() map[string]int {
+				return map[string]int{
+					"topic/a": 1,
+					"topic/b": 1,
+					"topic/c": 1,
+				}
+			},
+			buildPeers: func(t *testing.T) (map[string][]*enode.Node, []*enode.Node) {
+				nodeX := newTestNode(t, "127.0.0.1", 30421)
+				crawlerPeers := map[string][]*enode.Node{
+					"topic/a": {nodeX},
+					"topic/b": {nodeX},
+					"topic/c": {nodeX},
+				}
+				// Only 1 dial needed for all 3 topics
+				return crawlerPeers, []*enode.Node{nodeX}
+			},
+		},
+		{
+			name: "skips topics with enough peers already",
+			connectedPeers: map[string]int{
+				"topic/a": 2, // Already has 2
+			},
+			topicsProvider: func() map[string]int {
+				return map[string]int{
+					"topic/a": 2, // min 2, already have 2
+					"topic/b": 1, // min 1, have 0
+				}
+			},
+			buildPeers: func(t *testing.T) (map[string][]*enode.Node, []*enode.Node) {
+				nodeX := newTestNode(t, "127.0.0.1", 30431)
+				nodeY := newTestNode(t, "127.0.0.1", 30432)
+				crawlerPeers := map[string][]*enode.Node{
+					"topic/a": {nodeX},
+					"topic/b": {nodeY},
+				}
+				// Only nodeY should be dialed (topic/a already satisfied)
+				return crawlerPeers, []*enode.Node{nodeY}
+			},
+		},
+		{
+			name:           "returns nil when all topics satisfied",
+			connectedPeers: map[string]int{"topic/a": 2, "topic/b": 1},
+			topicsProvider: func() map[string]int {
+				return map[string]int{
+					"topic/a": 2,
+					"topic/b": 1,
+				}
+			},
+			buildPeers: func(t *testing.T) (map[string][]*enode.Node, []*enode.Node) {
+				nodeX := newTestNode(t, "127.0.0.1", 30441)
+				crawlerPeers := map[string][]*enode.Node{
+					"topic/a": {nodeX},
+					"topic/b": {nodeX},
+				}
+				// No dials needed
+				return crawlerPeers, nil
+			},
+		},
+		{
+			name:           "handles empty crawler response",
+			connectedPeers: map[string]int{},
+			topicsProvider: func() map[string]int {
+				return map[string]int{"topic/a": 1}
+			},
+			buildPeers: func(t *testing.T) (map[string][]*enode.Node, []*enode.Node) {
+				return map[string][]*enode.Node{}, nil
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listPeers := func(topic string) []peer.ID {
+				count := tt.connectedPeers[topic]
+				peers := make([]peer.ID, count)
+				for i := range count {
+					peers[i] = peer.ID(topic + string(rune(i)))
+				}
+				return peers
+			}
+
+			crawlerPeers, expected := tt.buildPeers(t)
+			crawler := &mockCrawler{
+				peers:   crawlerPeers,
+				consume: false,
+			}
+
+			dialer := NewGossipPeerDialer(t.Context(), crawler, listPeers, func(ctx context.Context,
+				maxConcurrentDials int, nodes []*enode.Node) uint {
+				return 0
+			})
+			dialer.topicsProvider = tt.topicsProvider
+
+			got := dialer.selectPeersForTopics()
+
+			if expected == nil {
+				require.Nil(t, got)
+				return
+			}
+
+			require.Equal(t, len(expected), len(got), "expected %d peers, got %d", len(expected), len(got))
+
+			// Verify all expected nodes are present (order may vary for equal topic counts)
+			expectedIDs := make(map[enode.ID]struct{})
+			for _, n := range expected {
+				expectedIDs[n.ID()] = struct{}{}
+			}
+			for _, n := range got {
+				_, ok := expectedIDs[n.ID()]
+				require.True(t, ok, "unexpected peer %s in result", n.ID())
+			}
+		})
+	}
+}
+
 type mockCrawler struct {
 	mu      sync.Mutex
 	peers   map[string][]*enode.Node
@@ -310,6 +487,12 @@ func (m *mockDialer) dialCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.dials)
+}
+
+func (m *mockDialer) dialedNodes() []*enode.Node {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.dials)
 }
 
 func newTestNode(t *testing.T, ip string, tcpPort uint16) *enode.Node {

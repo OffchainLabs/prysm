@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -88,35 +89,94 @@ func (g *GossipPeerDialer) dialLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			var peersToDial []*enode.Node
-
-			topicsWithMinPeers := g.topicsProvider()
-			for topic, minPeers := range topicsWithMinPeers {
-				newPeers := g.peersForTopic(topic, minPeers)
-				peersToDial = append(peersToDial, newPeers...)
-			}
-
+			peersToDial := g.selectPeersForTopics()
 			if len(peersToDial) == 0 {
 				continue
 			}
-
-			// Deduplicate peers to avoid dialing the same peer multiple times.
-			uniquePeers := make([]*enode.Node, 0, len(peersToDial))
-			seen := make(map[enode.ID]struct{})
-			for _, p := range peersToDial {
-				if _, ok := seen[p.ID()]; !ok {
-					seen[p.ID()] = struct{}{}
-					uniquePeers = append(uniquePeers, p)
-				}
-			}
-			peersToDial = uniquePeers
-
 			g.dialPeersWithRatelimiting(peersToDial)
 
 		case <-g.ctx.Done():
 			return
 		}
 	}
+}
+
+// selectPeersForTopics builds a bidirectional mapping of topics to peers and selects
+// peers to dial using a greedy algorithm that prioritizes peers serving multiple topics.
+// When a peer is selected, the needed count is decremented for ALL topics that peer serves,
+// avoiding redundant dials when one peer can satisfy multiple topic requirements.
+func (g *GossipPeerDialer) selectPeersForTopics() []*enode.Node {
+	topicsWithMinPeers := g.topicsProvider()
+
+	// Calculate how many peers each topic still needs.
+	neededByTopic := make(map[string]int)
+	for topic, minPeers := range topicsWithMinPeers {
+		currentCount := len(g.listPeers(topic))
+		if needed := minPeers - currentCount; needed > 0 {
+			neededByTopic[topic] = needed
+		}
+	}
+
+	if len(neededByTopic) == 0 {
+		return nil
+	}
+
+	peerToTopics := make(map[enode.ID][]string)
+	nodeByID := make(map[enode.ID]*enode.Node)
+
+	for topic := range neededByTopic {
+		candidates := g.crawler.PeersForTopic(topic)
+		for _, node := range candidates {
+			id := node.ID()
+			if _, exists := nodeByID[id]; !exists {
+				nodeByID[id] = node
+			}
+			peerToTopics[id] = append(peerToTopics[id], topic)
+		}
+	}
+
+	// Build candidate list sorted by topic count (descending).
+	// Peers serving more topics are prioritized.
+	type candidate struct {
+		node   *enode.Node
+		topics []string
+	}
+	candidates := make([]candidate, 0, len(peerToTopics))
+	for id, topics := range peerToTopics {
+		candidates = append(candidates, candidate{node: nodeByID[id], topics: topics})
+	}
+
+	// sort candidates by topic count (descending)
+	slices.SortFunc(candidates, func(a, b candidate) int {
+		return len(b.topics) - len(a.topics)
+	})
+
+	// Greedy selection with cross-topic accounting.
+	var selected []*enode.Node
+	for _, c := range candidates {
+		// Check if this peer serves any topic we still need.
+		servesNeededTopic := false
+		for _, topic := range c.topics {
+			if neededByTopic[topic] > 0 {
+				servesNeededTopic = true
+				break
+			}
+		}
+
+		if !servesNeededTopic {
+			continue
+		}
+
+		// Select this peer and decrement needed count for ALL topics it serves.
+		selected = append(selected, c.node)
+		for _, topic := range c.topics {
+			if neededByTopic[topic] > 0 {
+				neededByTopic[topic]--
+			}
+		}
+	}
+
+	return selected
 }
 
 // DialPeersForTopicBlocking blocks until the specified topic has at least nPeers connected,
