@@ -258,10 +258,13 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		if err != nil {
 			return err
 		}
-		if forkStartSlot == b.Block().Slot() || forkStartSlot+1 == b.Block().Slot() {
-			// Skip fork slot and the slot immediately after (validators still ramping up).
-			// In e2e tests, AltairForkEpoch is always 0 since tests start from Bellatrix or later,
-			// so this skips slots 0 and 1 where sync participation is unreliable due to startup timing.
+		if forkStartSlot == b.Block().Slot() {
+			// Skip fork slot.
+			continue
+		}
+		// Skip slot 1 at genesis - validators need time to ramp up after chain start.
+		// This is a startup timing issue, not a fork transition issue.
+		if b.Block().Slot() == 1 {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation
