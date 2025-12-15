@@ -7,10 +7,10 @@ import (
 )
 
 func TestGraffitiInfo_GenerateGraffiti_NoELInfo(t *testing.T) {
-	g := NewGraffitiInfo("")
+	g := NewGraffitiInfo()
 
 	// Without EL info, should still include CL info (PR + commit)
-	result := g.GenerateGraffiti()
+	result := g.GenerateGraffiti([]byte{})
 	resultStr := string(result[:])
 
 	// Should start with "PR" (CL code) since EL is missing but CL info is still included
@@ -18,11 +18,11 @@ func TestGraffitiInfo_GenerateGraffiti_NoELInfo(t *testing.T) {
 }
 
 func TestGraffitiInfo_GenerateGraffiti_WithUserGraffiti(t *testing.T) {
-	g := NewGraffitiInfo("my validator")
+	g := NewGraffitiInfo()
 
 	// Without EL info, should still include CL info + user graffiti
 	// "my validator" = 12 chars, available = 20 bytes, so full CL format: PR + commit(4) + user
-	result := g.GenerateGraffiti()
+	result := g.GenerateGraffiti([]byte("my validator"))
 	resultStr := trimNullBytes(string(result[:]))
 
 	// Should start with "PR" and end with "my validator"
@@ -91,10 +91,10 @@ func TestGraffitiInfo_GenerateGraffiti_FlexibleStandard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := NewGraffitiInfo(tt.userGraffiti)
+			g := NewGraffitiInfo()
 			g.UpdateFromEngine(tt.elCode, tt.elCommit)
 
-			result := g.GenerateGraffiti()
+			result := g.GenerateGraffiti([]byte(tt.userGraffiti))
 			resultStr := string(result[:])
 
 			// Check that result starts with expected prefix
@@ -104,18 +104,60 @@ func TestGraffitiInfo_GenerateGraffiti_FlexibleStandard(t *testing.T) {
 	}
 }
 
+func TestGraffitiInfo_GenerateGraffiti_WithNullBytes(t *testing.T) {
+	g := NewGraffitiInfo()
+	g.UpdateFromEngine("GE", "abcd1234")
+
+	tests := []struct {
+		name       string
+		userInput  []byte
+		wantPrefix string
+	}{
+		{
+			name:       "Empty input",
+			userInput:  []byte{},
+			wantPrefix: "GEabcdPR",
+		},
+		{
+			name:       "Short input",
+			userInput:  []byte("hello"),
+			wantPrefix: "GEabcdPR",
+		},
+		{
+			name:       "Input with null bytes",
+			userInput:  append([]byte("test"), 0, 0, 0),
+			wantPrefix: "GEabcdPR",
+		},
+		{
+			name:       "Full 32 byte input",
+			userInput:  []byte("12345678901234567890123456789012"),
+			wantPrefix: "12345678901234567890123456789012",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := g.GenerateGraffiti(tt.userInput)
+			resultStr := string(result[:])
+
+			require.Equal(t, true, len(resultStr) >= len(tt.wantPrefix), "Result too short")
+			require.Equal(t, tt.wantPrefix, resultStr[:len(tt.wantPrefix)], "Prefix mismatch")
+		})
+	}
+}
+
 func TestGraffitiInfo_UpdateFromEngine(t *testing.T) {
-	g := NewGraffitiInfo("")
+	g := NewGraffitiInfo()
 
 	// Initially no EL info - should still have CL info (PR + commit)
-	result := g.GenerateGraffiti()
+	result := g.GenerateGraffiti([]byte{})
 	resultStr := string(result[:])
 	require.Equal(t, true, resultStr[:2] == "PR", "Expected CL info before update")
 
 	// Update with EL info
 	g.UpdateFromEngine("GE", "1234abcd")
 
-	result = g.GenerateGraffiti()
+	result = g.GenerateGraffiti([]byte{})
 	resultStr = string(result[:])
 	require.Equal(t, "GE1234PR", resultStr[:8], "Expected EL+CL info after update")
 }

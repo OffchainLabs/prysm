@@ -777,7 +777,7 @@ func (b *BeaconNode) registerPOWChainService() error {
 	}
 
 	// Create GraffitiInfo for client version tracking in block graffiti
-	graffitiInfo := execution.NewGraffitiInfo("")
+	graffitiInfo := execution.NewGraffitiInfo()
 
 	// skipcq: CRT-D0001
 	opts := append(

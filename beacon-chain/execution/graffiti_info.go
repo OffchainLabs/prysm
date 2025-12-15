@@ -14,17 +14,14 @@ const (
 // GraffitiInfo holds version information for generating block graffiti.
 // It is thread-safe and can be updated by the execution service and read by the validator server.
 type GraffitiInfo struct {
-	mu           sync.RWMutex
-	userGraffiti string // From --graffiti flag (set once at startup)
-	elCode       string // From engine_getClientVersionV1
-	elCommit     string // From engine_getClientVersionV1
+	mu       sync.RWMutex
+	elCode   string // From engine_getClientVersionV1
+	elCommit string // From engine_getClientVersionV1
 }
 
-// NewGraffitiInfo creates a new GraffitiInfo with the given user graffiti.
-func NewGraffitiInfo(userGraffiti string) *GraffitiInfo {
-	return &GraffitiInfo{
-		userGraffiti: userGraffiti,
-	}
+// NewGraffitiInfo creates a new GraffitiInfo.
+func NewGraffitiInfo() *GraffitiInfo {
+	return &GraffitiInfo{}
 }
 
 // UpdateFromEngine updates the EL client information.
@@ -35,7 +32,8 @@ func (g *GraffitiInfo) UpdateFromEngine(code, commit string) {
 	g.elCommit = commit
 }
 
-// GenerateGraffiti generates graffiti using the flexible standard.
+// GenerateGraffiti generates graffiti using the flexible standard
+// with the provided user graffiti from the validator client request.
 // It packs as much client info as space allows after user graffiti.
 //
 // Available Space | Format
@@ -44,12 +42,18 @@ func (g *GraffitiInfo) UpdateFromEngine(code, commit string) {
 // 4-7 bytes       | EL(2)+CL(2)+user
 // 2-3 bytes       | EL(2)+user
 // <2 bytes        | user only
-func (g *GraffitiInfo) GenerateGraffiti() [32]byte {
+func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	var result [32]byte
-	userLen := len(g.userGraffiti)
+	userStr := string(userGraffiti)
+	// Trim trailing null bytes
+	for len(userStr) > 0 && userStr[len(userStr)-1] == 0 {
+		userStr = userStr[:len(userStr)-1]
+	}
+
+	userLen := len(userStr)
 	available := 32 - userLen
 
 	clCommit := version.GetCommitPrefix()
@@ -67,19 +71,19 @@ func (g *GraffitiInfo) GenerateGraffiti() [32]byte {
 	switch {
 	case available >= 12:
 		// Full: EL(2)+commit(4)+CL(2)+commit(4)+user
-		graffiti = g.elCode + elCommit4 + CLCode + clCommit4 + g.userGraffiti
+		graffiti = g.elCode + elCommit4 + CLCode + clCommit4 + userStr
 	case available >= 8:
 		// Reduced commits: EL(2)+commit(2)+CL(2)+commit(2)+user
-		graffiti = g.elCode + elCommit2 + CLCode + clCommit2 + g.userGraffiti
+		graffiti = g.elCode + elCommit2 + CLCode + clCommit2 + userStr
 	case available >= 4:
 		// Codes only: EL(2)+CL(2)+user
-		graffiti = g.elCode + CLCode + g.userGraffiti
+		graffiti = g.elCode + CLCode + userStr
 	case available >= 2:
 		// EL code only: EL(2)+user
-		graffiti = g.elCode + g.userGraffiti
+		graffiti = g.elCode + userStr
 	default:
 		// User graffiti only
-		graffiti = g.userGraffiti
+		graffiti = userStr
 	}
 
 	copy(result[:], graffiti)
