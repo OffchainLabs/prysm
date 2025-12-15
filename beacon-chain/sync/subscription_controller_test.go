@@ -25,8 +25,9 @@ var _ DynamicShardedTopicFamily = (*testDynFamly)(nil)
 // testDynFamly is a test implementation of a dynamic-subnet topic family.
 type testDynFamly struct {
 	baseTopicFamily
-	topics []string
-	name   string
+	topics             []string
+	name               string
+	topicsWithMinPeers map[string]int
 }
 
 func (f *testDynFamly) Name() string {
@@ -59,8 +60,8 @@ func (f *testDynFamly) SubscribeForSlot(_ primitives.Slot) {
 
 func (f *testDynFamly) UnsubscribeForSlot(_ primitives.Slot) {}
 
-func (f *testDynFamly) TopicsWithMinPeerCount(slot primitives.Slot) map[string]int {
-	return nil
+func (f *testDynFamly) TopicsWithMinPeerCount(_ primitives.Slot) map[string]int {
+	return f.topicsWithMinPeers
 }
 
 type staticTopicFamily struct {
@@ -386,6 +387,158 @@ func TestSubscriptionController_ExtractTopics(t *testing.T) {
 			require.Equal(t, len(want), len(got))
 			for k := range want {
 				require.Equal(t, true, got[k], "missing topic %s", k)
+			}
+		})
+	}
+}
+
+func TestSubscriptionController_GetCurrentActiveTopicsWithMinPeerCount(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+
+	tests := []struct {
+		name  string
+		setup func(*SubscriptionController)
+		want  map[string]int
+	}{
+		{
+			name:  "no families yields empty map",
+			setup: func(_ *SubscriptionController) {},
+			want:  map[string]int{},
+		},
+		{
+			name: "static family ignored",
+			setup: func(g *SubscriptionController) {
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
+				g.mu.Unlock()
+			},
+			want: map[string]int{},
+		},
+		{
+			name: "single dynamic family returns topics with min peer counts",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "Dyn1",
+					topicsWithMinPeers: map[string]int{"topic/a": 8, "topic/b": 6},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/a": 8, "topic/b": 6},
+		},
+		{
+			name: "dynamic family with nil topicsWithMinPeers returns empty",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "DynNil",
+					topicsWithMinPeers: nil,
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dynnil", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{},
+		},
+		{
+			name: "dynamic family with empty topicsWithMinPeers returns empty",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "DynEmpty",
+					topicsWithMinPeers: map[string]int{},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dynempty", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{},
+		},
+		{
+			name: "multiple dynamic families with disjoint topics",
+			setup: func(g *SubscriptionController) {
+				f1 := &testDynFamly{
+					name:               "Dyn1",
+					topicsWithMinPeers: map[string]int{"topic/a": 8, "topic/b": 6},
+				}
+				f2 := &testDynFamly{
+					name:               "Dyn2",
+					topicsWithMinPeers: map[string]int{"topic/c": 4, "topic/d": 2},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/a": 8, "topic/b": 6, "topic/c": 4, "topic/d": 2},
+		},
+		{
+			name: "multiple dynamic families with overlapping topics - counts are summed",
+			setup: func(g *SubscriptionController) {
+				f1 := &testDynFamly{
+					name:               "Dyn1",
+					topicsWithMinPeers: map[string]int{"topic/shared": 5, "topic/a": 3},
+				}
+				f2 := &testDynFamly{
+					name:               "Dyn2",
+					topicsWithMinPeers: map[string]int{"topic/shared": 7, "topic/b": 2},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
+				g.mu.Unlock()
+			},
+			// topic/shared: 5 + 7 = 12
+			want: map[string]int{"topic/shared": 12, "topic/a": 3, "topic/b": 2},
+		},
+		{
+			name: "mixed static and dynamic families - only dynamic counted",
+			setup: func(g *SubscriptionController) {
+				dynFam := &testDynFamly{
+					name:               "Dyn",
+					topicsWithMinPeers: map[string]int{"topic/dyn": 8},
+				}
+				staticFam := &staticTopicFamily{name: "Static"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{9}}] = dynFam
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{9}}] = staticFam
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/dyn": 8},
+		},
+		{
+			name: "single topic with zero peer count",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "DynZero",
+					topicsWithMinPeers: map[string]int{"topic/zero": 0},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dynzero", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/zero": 0},
+		},
+	}
+
+	current := params.BeaconConfig().AltairForkEpoch
+	s := testSubscriptionControllerService(t, current)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset families for each subtest
+			s.subscriptionController.mu.Lock()
+			s.subscriptionController.activeTopicFamilies = make(map[topicFamilyKey]TopicFamily)
+			s.subscriptionController.mu.Unlock()
+
+			tt.setup(s.subscriptionController)
+			got := s.subscriptionController.GetCurrentActiveTopicsWithMinPeerCount()
+
+			require.Equal(t, len(tt.want), len(got), "result length mismatch")
+			for topic, expectedCount := range tt.want {
+				actualCount, exists := got[topic]
+				require.Equal(t, true, exists, "expected topic %s not found in result", topic)
+				require.Equal(t, expectedCount, actualCount, "peer count mismatch for topic %s", topic)
 			}
 		})
 	}
