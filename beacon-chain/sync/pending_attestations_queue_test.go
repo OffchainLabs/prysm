@@ -94,7 +94,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	// Process block A (which exists and has no pending attestations)
 	// This should skip processing attestations for A and request blocks B and C
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), rootA))
-	require.LogsContain(t, hook, "Requesting block by root")
+	require.LogsContain(t, hook, "Requesting blocks by root")
 }
 
 func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {

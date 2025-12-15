@@ -379,6 +379,19 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 			req = roots[:maxReqBlock]
 		}
 
+		if logrus.GetLevel() >= logrus.DebugLevel {
+			rootsStr := make([]string, 0, len(roots))
+			for _, req := range roots {
+				rootsStr = append(rootsStr, fmt.Sprintf("%#x", req))
+			}
+
+			log.WithFields(logrus.Fields{
+				"peer":  pid,
+				"count": len(req),
+				"roots": rootsStr,
+			}).Debug("Requesting blocks by root")
+		}
+
 		// Send the request to the peer.
 		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
@@ -438,8 +451,6 @@ func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte
 			roots = append(roots[:i], roots[i+1:]...)
 			continue
 		}
-
-		log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
 	}
 	return roots
 }
