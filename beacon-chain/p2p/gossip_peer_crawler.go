@@ -406,6 +406,7 @@ func (g *GossipPeerCrawler) pingLoop() {
 				defer g.pingSemaphore.Release(1)
 
 				if err := g.dv5.Ping(node); err != nil {
+					log.WithError(err).WithField("node", node.ID()).Debug("Failed to ping node")
 					g.crawledPeers.removePeerByNodeId(node.ID())
 					return
 				}
