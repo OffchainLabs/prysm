@@ -809,28 +809,22 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		{
 			name:          "Cached, matches",
 			stateByRooter: nil,
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex()),
-			},
-			columns: columns,
+			proposerCache: &mockProposerCache{},
+			columns:       columns,
 		},
 		{
 			name:          "Cached, does not match",
 			stateByRooter: nil,
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex() + 1),
-			},
-			columns: columns,
-			error:   errSidecarUnexpectedProposer.Error(),
+			proposerCache: &mockProposerCache{},
+			columns:       columns,
+			error:         errSidecarUnexpectedProposer.Error(),
 		},
 		{
 			name:          "Not cached, state lookup failure",
 			stateByRooter: sbrNotFound(t, firstColumn.ParentRoot()),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-			},
-			columns: columns,
-			error:   "verifying state",
+			proposerCache: &mockProposerCache{},
+			columns:       columns,
+			error:         "verifying state",
 		},
 	}
 
