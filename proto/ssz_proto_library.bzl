@@ -94,15 +94,6 @@ minimal = {
     "builder_pending_payments.size": "16"  # Gloas: vector length (2 * SLOTS_PER_EPOCH)
 }
 
-# e2e is minimal with a few overrides for e2e-specific settings
-e2e = dict(minimal)
-e2e.update({
-    "eth1_data_votes.size": "12",  # SLOTS_PER_ETH1_VOTING_PERIOD for e2e (2 epochs * 6 slots)
-    "previous_epoch_attestations.max": "768",  # MAX_ATTESTATIONS * SLOTS_PER_EPOCH (128 * 6)
-    "current_epoch_attestations.max": "768",  # MAX_ATTESTATIONS * SLOTS_PER_EPOCH (128 * 6)
-    "proposer_lookahead_size": "12",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH for e2e (2 * 6)
-})
-
 ###### Rules definitions #######
 
 def _ssz_proto_files_impl(ctx):
@@ -114,8 +105,6 @@ def _ssz_proto_files_impl(ctx):
         subs = mainnet
     elif (ctx.attr.config.lower() == "minimal"):
         subs = minimal
-    elif (ctx.attr.config.lower() == "e2e"):
-        subs = e2e
     else:
         fail("%s is an unknown configuration" % ctx.attr.config)
 
