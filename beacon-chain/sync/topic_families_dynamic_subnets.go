@@ -39,8 +39,9 @@ func (a *AttestationTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
+// Only returns mesh topics (subnets to join), not fanout topics (subnets for broadcast only).
 func (a *AttestationTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
-	return topicsFromSubnets(computeNeededSubnets(a, slot), a)
+	return topicsFromSubnets(a.getSubnetsToJoin(slot), a)
 }
 
 // getFullTopicString builds the full topic string for an attestation subnet.
@@ -93,8 +94,9 @@ func (s *SyncCommitteeTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
+// Only returns mesh topics (subnets to join), not fanout topics (subnets for broadcast only).
 func (s *SyncCommitteeTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
-	return topicsFromSubnets(computeNeededSubnets(s, slot), s)
+	return topicsFromSubnets(s.getSubnetsToJoin(slot), s)
 }
 
 // getFullTopicString builds the full topic string for a sync committee subnet.
@@ -147,8 +149,9 @@ func (d *DataColumnTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
+// Only returns mesh topics (subnets to join), not fanout topics (subnets for broadcast only).
 func (d *DataColumnTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
-	return topicsFromSubnets(computeNeededSubnets(d, slot), d)
+	return topicsFromSubnets(d.getSubnetsToJoin(slot), d)
 }
 
 // getFullTopicString builds the full topic string for a data column subnet.

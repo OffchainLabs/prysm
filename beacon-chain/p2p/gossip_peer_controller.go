@@ -21,8 +21,7 @@ const (
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
 // topic's peer count and dials new peers when below the target threshold.
 type GossipPeerDialer struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx context.Context
 
 	listPeers func(topic string) []peer.ID
 	dialPeers func(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint
