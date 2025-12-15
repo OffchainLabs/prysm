@@ -36,15 +36,10 @@ type ShardedTopicFamily interface {
 
 type DynamicShardedTopicFamily interface {
 	TopicFamily
-
 	TopicsWithMinPeerCount(slot primitives.Slot) map[string]int
-
 	TopicsToSubscribeForSlot(slot primitives.Slot) []string
-
 	ExtractTopicsForNode(node *enode.Node) ([]string, error)
-
 	SubscribeForSlot(slot primitives.Slot)
-
 	UnsubscribeForSlot(slot primitives.Slot)
 }
 

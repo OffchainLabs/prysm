@@ -219,17 +219,11 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.Peer
 	}
 
 	var peerNodes []peerNode
-	seen := make(map[enode.ID]bool)
 	for pnode := range peers {
 		if pnode.node == nil {
 			continue
 		}
 		if pnode.isPinged && filter(pnode.node) {
-			// Skip if we've already seen this enode ID
-			if seen[pnode.node.ID()] {
-				continue
-			}
-			seen[pnode.node.ID()] = true
 			peerNodes = append(peerNodes, *pnode)
 		}
 	}
