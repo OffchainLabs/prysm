@@ -228,7 +228,7 @@ func (s *Server) attRewardsState(w http.ResponseWriter, r *http.Request) (state.
 	}
 	st, err := s.Stater.StateBySlot(r.Context(), nextEpochEnd)
 	if err != nil {
-		httputil.HandleError(w, "Could not get state for epoch's starting slot: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return nil, false
 	}
 	return st, true

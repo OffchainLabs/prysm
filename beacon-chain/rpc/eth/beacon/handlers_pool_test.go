@@ -2112,6 +2112,33 @@ func TestSubmitAttesterSlashingsV2(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		assert.StringContains(t, "Invalid attester slashing", e.Message)
 	})
+
+	t.Run("missing-version-header", func(t *testing.T) {
+		bs, err := util.NewBeaconStateElectra()
+		require.NoError(t, err)
+
+		broadcaster := &p2pMock.MockBroadcaster{}
+		s := &Server{
+			ChainInfoFetcher: &blockchainmock.ChainService{State: bs},
+			SlashingsPool:    &slashingsmock.PoolMock{},
+			Broadcaster:      broadcaster,
+		}
+
+		var body bytes.Buffer
+		_, err = body.WriteString(invalidAttesterSlashing)
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com/beacon/pool/attester_slashings", &body)
+		// Intentionally do not set api.VersionHeader to verify missing header handling.
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAttesterSlashingsV2(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		assert.StringContains(t, api.VersionHeader+" header is required", e.Message)
+	})
 }
 
 func TestSubmitProposerSlashing_InvalidSlashing(t *testing.T) {

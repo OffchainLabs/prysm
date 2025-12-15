@@ -21,7 +21,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -400,59 +399,4 @@ func TestService_connectWithPeer(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestService_SubscribeReachabilityEvents(t *testing.T) {
-	hook := logTest.NewGlobal()
-	ctx := t.Context()
-
-	h, _, _ := createHost(t, 0)
-	defer func() {
-		if err := h.Close(); err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	// Create service with the host
-	s := &Service{
-		ctx:  ctx,
-		host: h,
-		cfg:  &Config{EnableAutoNAT: true},
-	}
-
-	// Get an emitter for the reachability event
-	emitter, err := h.EventBus().Emitter(new(event.EvtHostReachableAddrsChanged))
-	require.NoError(t, err)
-	defer func() {
-		if err := emitter.Close(); err != nil {
-			t.Fatal(err)
-		}
-	}()
-	// Subscribe to reachability events
-	require.NoError(t, s.subscribeReachabilityEvents())
-
-	// Create test multiaddrs for each reachability state
-	reachableAddr, err := multiaddr.NewMultiaddr("/ip4/192.168.1.1/tcp/9000")
-	require.NoError(t, err)
-	unreachableAddr, err := multiaddr.NewMultiaddr("/ip4/10.0.0.1/tcp/9001")
-	require.NoError(t, err)
-	unknownAddr, err := multiaddr.NewMultiaddr("/ip4/172.16.0.1/tcp/9002")
-	require.NoError(t, err)
-
-	// Emit a reachability event with all address types
-	err = emitter.Emit(event.EvtHostReachableAddrsChanged{
-		Reachable:   []multiaddr.Multiaddr{reachableAddr},
-		Unreachable: []multiaddr.Multiaddr{unreachableAddr},
-		Unknown:     []multiaddr.Multiaddr{unknownAddr},
-	})
-	require.NoError(t, err)
-
-	// Wait for the event to be processed
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify the log message contains all addresses
-	require.LogsContain(t, hook, "Address reachability changed")
-	require.LogsContain(t, hook, "/ip4/192.168.1.1/tcp/9000")
-	require.LogsContain(t, hook, "/ip4/10.0.0.1/tcp/9001")
-	require.LogsContain(t, hook, "/ip4/172.16.0.1/tcp/9002")
 }

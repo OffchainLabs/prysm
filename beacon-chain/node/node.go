@@ -664,7 +664,6 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		DenyListCIDR:          slice.SplitCommaSeparated(cliCtx.StringSlice(cmd.P2PDenyList.Name)),
 		IPColocationWhitelist: colocationWhitelist,
 		EnableUPnP:            cliCtx.Bool(cmd.EnableUPnPFlag.Name),
-		EnableAutoNAT:         cliCtx.Bool(cmd.EnableAutoNATFlag.Name),
 		StateNotifier:         b,
 		DB:                    b.db,
 		StateGen:              b.stateGen,

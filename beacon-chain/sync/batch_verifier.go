@@ -161,7 +161,7 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 
 	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 	verificationSet := &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
 	s.kzgChan <- verificationSet
 

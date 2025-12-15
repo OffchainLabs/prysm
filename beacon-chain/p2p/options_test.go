@@ -132,6 +132,7 @@ func TestDefaultMultiplexers(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, protocol.ID("/yamux/1.0.0"), cfg.Muxers[0].ID)
+	assert.Equal(t, protocol.ID("/mplex/6.7.0"), cfg.Muxers[1].ID)
 }
 
 func TestSetConnManagerOption(t *testing.T) {
@@ -185,30 +186,6 @@ func checkLimit(t *testing.T, cm connmgr.ConnManager, expected int) {
 	if err := cm.CheckLimit(connLimitGetter(expected - 1)); err == nil {
 		t.Errorf("connection manager limit is below the expected value of %d", expected)
 	}
-}
-
-func TestBuildOptions_EnableAutoNAT(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	p2pCfg := &Config{
-		UDPPort:       2000,
-		TCPPort:       3000,
-		QUICPort:      3000,
-		EnableAutoNAT: true,
-		StateNotifier: &mock.MockStateNotifier{},
-	}
-	svc := &Service{cfg: p2pCfg}
-	var err error
-	svc.privKey, err = privKey(svc.cfg)
-	require.NoError(t, err)
-	ipAddr := network.IPAddr()
-	opts, err := svc.buildOptions(ipAddr, svc.privKey)
-	require.NoError(t, err)
-
-	// Verify that options were built without error when EnableAutoNAT is true.
-	// The actual AutoNAT v2 behavior is tested by libp2p itself.
-	var cfg libp2p.Config
-	err = cfg.Apply(append(opts, libp2p.FallbackDefaults)...)
-	assert.NoError(t, err)
 }
 
 func TestMultiAddressBuilderWithID(t *testing.T) {
