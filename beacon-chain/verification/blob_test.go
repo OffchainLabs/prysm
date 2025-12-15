@@ -452,21 +452,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 	ctx := t.Context()
 	_, blobs := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 1, 1)
 	b := blobs[0]
-	t.Run("cached, matches", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.NoError(t, v.SidecarProposerExpected(ctx))
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("cached, does not match", func(t *testing.T) {
-		ini := Initializer{shared: &sharedResources{pc: &mockProposerCache{}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
-		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
-		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
-		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
-		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
-	})
-	t.Run("not cached, state lookup failure", func(t *testing.T) {
+	t.Run("state lookup failure", func(t *testing.T) {
 		ini := Initializer{shared: &sharedResources{sr: sbrNotFound(t, b.ParentRoot()), pc: &mockProposerCache{}, fc: &mockForkchoicer{TargetRootForEpochCB: fcReturnsTargetRoot([32]byte{})}}}
 		v := ini.NewBlobVerifier(b, GossipBlobSidecarRequirements)
 		require.ErrorIs(t, v.SidecarProposerExpected(ctx), errSidecarUnexpectedProposer)
@@ -474,7 +460,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
 
-	t.Run("not cached, proposer matches", func(t *testing.T) {
+	t.Run("proposer matches", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ComputeProposerCB: func(_ context.Context, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.Slot(), slot)
@@ -487,7 +473,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NoError(t, v.results.result(RequireSidecarProposerExpected))
 	})
-	t.Run("not cached, proposer does not match", func(t *testing.T) {
+	t.Run("proposer does not match", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ComputeProposerCB: func(_ context.Context, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.Slot(), slot)
@@ -500,7 +486,7 @@ func TestSidecarProposerExpected(t *testing.T) {
 		require.Equal(t, true, v.results.executed(RequireSidecarProposerExpected))
 		require.NotNil(t, v.results.result(RequireSidecarProposerExpected))
 	})
-	t.Run("not cached, ComputeProposer fails", func(t *testing.T) {
+	t.Run("ComputeProposer fails", func(t *testing.T) {
 		pc := &mockProposerCache{
 			ComputeProposerCB: func(_ context.Context, slot primitives.Slot, _ state.BeaconState) (primitives.ValidatorIndex, error) {
 				require.Equal(t, b.Slot(), slot)

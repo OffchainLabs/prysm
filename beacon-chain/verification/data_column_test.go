@@ -799,32 +799,23 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
 	firstColumn := columns[0]
 	ctx := t.Context()
+
 	testCases := []struct {
-		name          string
-		stateByRooter StateByRooter
-		proposerCache proposerCache
-		columns       []blocks.RODataColumn
-		error         string
+		name              string
+		stateByRooter     StateByRooter
+		headStateProvider *mockHeadStateProvider
+		columns           []blocks.RODataColumn
+		error             string
 	}{
 		{
-			name:          "Cached, matches",
-			stateByRooter: nil,
-			proposerCache: &mockProposerCache{},
-			columns:       columns,
-		},
-		{
-			name:          "Cached, does not match",
-			stateByRooter: nil,
-			proposerCache: &mockProposerCache{},
-			columns:       columns,
-			error:         errSidecarUnexpectedProposer.Error(),
-		},
-		{
-			name:          "Not cached, state lookup failure",
+			name:          "state lookup failure",
 			stateByRooter: sbrNotFound(t, firstColumn.ParentRoot()),
-			proposerCache: &mockProposerCache{},
-			columns:       columns,
-			error:         "verifying state",
+			headStateProvider: &mockHeadStateProvider{
+				headRoot: []byte{0xff}, // Different from parentRoot so it won't use head
+				headSlot: 1000,
+			},
+			columns: columns,
+			error:   "verifying state",
 		},
 	}
 
@@ -833,8 +824,7 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 			initializer := Initializer{
 				shared: &sharedResources{
 					sr:  tc.stateByRooter,
-					pc:  tc.proposerCache,
-					hsp: &mockHeadStateProvider{},
+					hsp: tc.headStateProvider,
 					fc: &mockForkchoicer{
 						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
 					},
