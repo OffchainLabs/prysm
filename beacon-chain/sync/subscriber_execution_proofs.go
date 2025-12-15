@@ -15,12 +15,19 @@ func (s *Service) executionProofSubscriber(_ context.Context, msg proto.Message)
 	if !ok {
 		return errors.Errorf("incorrect type of message received, wanted %T but got %T", &ethpb.ExecutionProof{}, msg)
 	}
+
+	// Mark the proof as seen to avoid reprocessing
+	s.setSeenExecutionProofIndex(executionProof.ProofId, executionProof.Slot)
+
+	// Notify subscribers about the new execution proof
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
 		Type: opfeed.ExecutionProofReceived,
 		Data: &opfeed.ExecutionProofReceivedData{
 			ExecutionProof: executionProof,
 		},
 	})
-	s.cfg.execProofsPool.InsertExecutionProof(executionProof)
+
+	// Insert the execution proof into the pool
+	s.cfg.execProofPool.InsertExecutionProof(executionProof)
 	return nil
 }

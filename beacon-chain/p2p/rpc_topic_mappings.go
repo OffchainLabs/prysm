@@ -177,8 +177,8 @@ var (
 		// DataColumnSidecarsByRoot v1 Message
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 
-		// ExecutionPayload v1 Message
-		RPCExecutionProofsByRootTopicV1: new(p2ptypes.BeaconBlockByRootsReq),
+		// ExecutionProofsByRoot v1 Message
+		RPCExecutionProofsByRootTopicV1: new(p2ptypes.ExecutionProofByRootsReq),
 	}
 
 	// Maps all registered protocol prefixes.
@@ -202,6 +202,7 @@ var (
 		LightClientOptimisticUpdateName: true,
 		DataColumnSidecarsByRootName:    true,
 		DataColumnSidecarsByRangeName:   true,
+		ExecutionProofsByRootName:       true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

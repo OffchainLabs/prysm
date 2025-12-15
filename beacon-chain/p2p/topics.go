@@ -162,6 +162,7 @@ func (s *Service) allTopics() []topic {
 		newTopic(altair, future, empty, GossipLightClientOptimisticUpdateMessage),
 		newTopic(altair, future, empty, GossipLightClientFinalityUpdateMessage),
 		newTopic(capella, future, empty, GossipBlsToExecutionChangeMessage),
+		newTopic(fulu, future, empty, GossipExecutionProofMessage),
 	}
 	last := params.GetNetworkScheduleEntry(genesis)
 	schedule := []params.NetworkScheduleEntry{last}

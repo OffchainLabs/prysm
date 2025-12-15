@@ -355,6 +355,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 			MaxBlobsPerBlock: 21,
 		},
 	},
+
+	// EIP-8025: Optional Execution Proofs
+	MaxProofDataBytes: 1_048_576, // 1 MiB
+	MinProofsRequired: 2,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name

@@ -46,9 +46,9 @@ const (
 
 	// DataColumnReceived is sent after a data column has been seen after gossip validation rules.
 	DataColumnReceived = 12
-	
+
 	// ExecutionProofReceived is sent after a execution proof object has been received from gossip or rpc.
-	ExecutionProofReceived
+	ExecutionProofReceived = 13
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.

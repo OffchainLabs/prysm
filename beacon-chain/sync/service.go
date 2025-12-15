@@ -68,6 +68,7 @@ const (
 	seenProposerSlashingSize        = 100
 	badBlockSize                    = 1000
 	syncMetricsInterval             = 10 * time.Second
+	seenExecutionProofSize          = 100
 )
 
 var (
@@ -95,7 +96,7 @@ type config struct {
 	slashingPool            slashings.PoolManager
 	syncCommsPool           synccommittee.Pool
 	blsToExecPool           blstoexec.PoolManager
-	execProofsPool          execproof.PoolManager
+	execProofPool           execproof.PoolManager
 	chain                   blockchainService
 	initialSync             Checker
 	blockNotifier           blockfeed.Notifier
@@ -359,6 +360,9 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
+
+	// Execution Proof Cache (Optional Proofs)
+	s.seenExecutionProofCache = lruwrpr.New(seenExecutionProofSize)
 }
 
 func (s *Service) waitForChainStart() {
