@@ -82,6 +82,7 @@ func (cp *crawledPeers) updatePeer(node *enode.Node, topics []string) (bool, err
 	}
 
 	cp.updateTopicsUnlocked(existingPNode, topics)
+	cp.recordMetricsUnlocked()
 
 	if existingPNode.isPinged || len(topics) == 0 {
 		return false, nil
@@ -110,6 +111,7 @@ func (cp *crawledPeers) removeTopic(topic string) {
 
 	// Remove the topic from byTopic map
 	delete(cp.peersByTopic, topic)
+	cp.recordMetricsUnlocked()
 }
 
 func (cp *crawledPeers) removePeerByPeerId(peerID peer.ID) {
@@ -123,6 +125,7 @@ func (cp *crawledPeers) removePeerByPeerId(peerID peer.ID) {
 
 	// Use updateTopicsUnlocked with empty topics to remove the peer
 	cp.updateTopicsUnlocked(pnode, nil)
+	cp.recordMetricsUnlocked()
 }
 
 func (cp *crawledPeers) removePeerByNodeId(enodeID enode.ID) {
@@ -133,6 +136,13 @@ func (cp *crawledPeers) removePeerByNodeId(enodeID enode.ID) {
 		return
 	}
 	cp.updateTopicsUnlocked(pnode, nil)
+	cp.recordMetricsUnlocked()
+}
+
+func (cp *crawledPeers) recordMetricsUnlocked() {
+	gossipCrawlerPeersByEnodeCount.Set(float64(len(cp.peerNodeByEnode)))
+	gossipCrawlerPeersByPidCount.Set(float64(len(cp.peerNodeByPid)))
+	gossipCrawlerTopicsCount.Set(float64(len(cp.peersByTopic)))
 }
 
 func (cp *crawledPeers) cleanupPeer(pnode *peerNode) {

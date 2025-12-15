@@ -10,6 +10,7 @@ import (
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	require2 "github.com/stretchr/testify/require"
 )
@@ -670,4 +671,117 @@ func TestCrawler_RemoveTopic_RemovesTopicFromIndexes(t *testing.T) {
 			t.Fatalf("expected topic2 to remain for peer")
 		}
 	}
+}
+
+func TestCrawledPeersMetrics(t *testing.T) {
+	localNode1 := createTestNodeRandom(t)
+	node1 := localNode1.Node()
+	localNode2 := createTestNodeRandom(t)
+	node2 := localNode2.Node()
+
+	pid1, err := enodeToPeerID(node1)
+	require.NoError(t, err)
+
+	t.Run("updatePeer records metrics", func(t *testing.T) {
+		cp := newTestCrawledPeers()
+
+		// Add first peer with two topics
+		_, err := cp.updatePeer(node1, []string{"topic1", "topic2"})
+		require.NoError(t, err)
+
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByPidCount))
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerTopicsCount))
+
+		// Add second peer with one overlapping topic
+		_, err = cp.updatePeer(node2, []string{"topic1", "topic3"})
+		require.NoError(t, err)
+
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerPeersByPidCount))
+		require.Equal(t, float64(3), testutil.ToFloat64(gossipCrawlerTopicsCount))
+	})
+
+	t.Run("removePeerByPeerId records metrics", func(t *testing.T) {
+		cp := newTestCrawledPeers()
+
+		// Add two peers
+		_, err := cp.updatePeer(node1, []string{"topic1"})
+		require.NoError(t, err)
+		_, err = cp.updatePeer(node2, []string{"topic1", "topic2"})
+		require.NoError(t, err)
+
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerTopicsCount))
+
+		// Remove first peer by peer ID
+		cp.removePeerByPeerId(pid1)
+
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByPidCount))
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerTopicsCount))
+	})
+
+	t.Run("removePeerByNodeId records metrics", func(t *testing.T) {
+		cp := newTestCrawledPeers()
+
+		// Add two peers
+		_, err := cp.updatePeer(node1, []string{"topic1"})
+		require.NoError(t, err)
+		_, err = cp.updatePeer(node2, []string{"topic2"})
+		require.NoError(t, err)
+
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerTopicsCount))
+
+		// Remove first peer by enode ID
+		cp.removePeerByNodeId(node1.ID())
+
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByPidCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerTopicsCount))
+	})
+
+	t.Run("removeTopic records metrics", func(t *testing.T) {
+		cp := newTestCrawledPeers()
+
+		// Add two peers with overlapping topics
+		_, err := cp.updatePeer(node1, []string{"topic1", "topic2"})
+		require.NoError(t, err)
+		_, err = cp.updatePeer(node2, []string{"topic1"})
+		require.NoError(t, err)
+
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(2), testutil.ToFloat64(gossipCrawlerTopicsCount))
+
+		// Remove topic1 - this should also remove node2 which only had topic1
+		cp.removeTopic("topic1")
+
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByPidCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerTopicsCount))
+	})
+
+	t.Run("updatePeer with empty topics removes peer and records metrics", func(t *testing.T) {
+		cp := newTestCrawledPeers()
+
+		// Add peer with topics
+		_, err := cp.updatePeer(node1, []string{"topic1"})
+		require.NoError(t, err)
+
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(1), testutil.ToFloat64(gossipCrawlerTopicsCount))
+
+		// Increment sequence number to ensure update is processed
+		setNodeSeq(localNode1, node1.Seq()+1)
+		node1Updated := localNode1.Node()
+
+		// Update with empty topics - should remove the peer
+		_, err = cp.updatePeer(node1Updated, nil)
+		require.NoError(t, err)
+
+		require.Equal(t, float64(0), testutil.ToFloat64(gossipCrawlerPeersByEnodeCount))
+		require.Equal(t, float64(0), testutil.ToFloat64(gossipCrawlerPeersByPidCount))
+		require.Equal(t, float64(0), testutil.ToFloat64(gossipCrawlerTopicsCount))
+	})
 }
