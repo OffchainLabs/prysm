@@ -12,10 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-const (
-	peerPerTopic = 20
-	dialInterval = 1 * time.Second
-)
+const dialInterval = 1 * time.Second
 
 // GossipPeerDialer maintains minimum peer counts for gossip topics by periodically
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
@@ -70,7 +67,7 @@ func NewGossipPeerDialer(
 //
 // The dial loop runs every dialInterval (1 second) and for each topic:
 //  1. Checks current peer count via listPeers()
-//  2. If below peerPerTopic (20), requests candidates from the crawler
+//  2. If below the per-topic min peer count, requests candidates from the crawler
 //  3. Deduplicates peers across all topics to avoid redundant dials
 //  4. Dials missing peers with rate limiting if enabled
 //
@@ -93,8 +90,9 @@ func (g *GossipPeerDialer) dialLoop() {
 		case <-ticker.C:
 			var peersToDial []*enode.Node
 
-			for _, topic := range g.topicsProvider() {
-				newPeers := g.peersForTopic(topic, peerPerTopic)
+			topicsWithMinPeers := g.topicsProvider()
+			for topic, minPeers := range topicsWithMinPeers {
+				newPeers := g.peersForTopic(topic, minPeers)
 				peersToDial = append(peersToDial, newPeers...)
 			}
 

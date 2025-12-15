@@ -23,9 +23,9 @@ type Crawler interface {
 }
 
 // SubnetTopicsProvider returns the set of gossipsub topics the node
-// should currently maintain peer connections for (e.g. attestation,
-// sync committee subnets).
-type SubnetTopicsProvider func() []string
+// should currently maintain peer connections for along with the minimum number of peers required
+// for each topic.
+type SubnetTopicsProvider func() map[string]int
 
 // GossipDialer controls dialing peers for gossipsub topics based
 // on a provided SubnetTopicsProvider and the p2p crawler.

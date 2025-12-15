@@ -39,10 +39,36 @@ func TestGossipPeerDialer_Start(t *testing.T) {
 					},
 				}
 			},
-			provider: func() []string {
-				return []string{"topic/a", "topic/b"}
+			provider: func() map[string]int {
+				return map[string]int{"topic/a": 2, "topic/b": 2}
 			},
 			expectedConnects: 2,
+		},
+		{
+			name: "uses per-topic min peer counts",
+			newCrawler: func(t *testing.T) *mockCrawler {
+				nodes := make([]*enode.Node, 5)
+				for i := range nodes {
+					nodes[i] = newTestNode(t, "127.0.0.1", uint16(30110+i))
+				}
+				return &mockCrawler{
+					consume: true,
+					peers: map[string][]*enode.Node{
+						// topic/mesh has 3 available peers, minPeers=2 -> should dial 2
+						"topic/mesh": {nodes[0], nodes[1], nodes[2]},
+						// topic/fanout has 3 available peers, minPeers=1 -> should dial 1
+						"topic/fanout": {nodes[3], nodes[4]},
+					},
+				}
+			},
+			provider: func() map[string]int {
+				return map[string]int{
+					"topic/mesh":   2,
+					"topic/fanout": 1,
+				}
+			},
+			// Total: 2 from mesh + 1 from fanout = 3 peers dialed
+			expectedConnects: 3,
 		},
 	}
 

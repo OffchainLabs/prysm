@@ -143,18 +143,20 @@ func (g *SubscriptionController) Stop() {
 	}
 }
 
-func (g *SubscriptionController) GetCurrentActiveTopics() []string {
+func (g *SubscriptionController) GetCurrentActiveTopicsWithMinPeerCount() map[string]int {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	slot := g.syncService.cfg.clock.CurrentSlot()
-	var topics []string
+	topics := make(map[string]int)
 	for _, f := range g.activeTopicFamilies {
 		tfm, ok := f.(DynamicShardedTopicFamily)
 		if !ok {
 			continue
 		}
-		topics = append(topics, tfm.TopicsToSubscribeForSlot(slot)...)
+		for topic, count := range tfm.TopicsWithMinPeerCount(slot) {
+			topics[topic] += count
+		}
 	}
 	return topics
 }

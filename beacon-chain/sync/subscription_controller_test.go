@@ -20,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+var _ DynamicShardedTopicFamily = (*testDynFamly)(nil)
+
 // testDynFamly is a test implementation of a dynamic-subnet topic family.
 type testDynFamly struct {
 	baseTopicFamily
@@ -56,6 +58,10 @@ func (f *testDynFamly) SubscribeForSlot(_ primitives.Slot) {
 }
 
 func (f *testDynFamly) UnsubscribeForSlot(_ primitives.Slot) {}
+
+func (f *testDynFamly) TopicsWithMinPeerCount(slot primitives.Slot) map[string]int {
+	return nil
+}
 
 type staticTopicFamily struct {
 	*baseTopicFamily

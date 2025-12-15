@@ -212,6 +212,7 @@ go_test(
         "subscription_topic_handler_test.go",
         "sync_fuzz_test.go",
         "sync_test.go",
+        "topic_families_dynamic_subnets_test.go",
         "validate_aggregate_proof_test.go",
         "validate_attester_slashing_test.go",
         "validate_beacon_attestation_test.go",

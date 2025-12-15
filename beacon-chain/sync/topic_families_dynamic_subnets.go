@@ -12,6 +12,15 @@ import (
 // AttestationTopicFamily
 var _ DynamicShardedTopicFamily = (*AttestationTopicFamily)(nil)
 
+var (
+	attestationMinMeshPeers     = 8
+	attestationMinFanoutPeers   = 6
+	syncCommitteeMinMeshPeers   = 8
+	syncCommitteeMinFanoutPeers = 6
+	dataColumnMinMeshPeers      = 6
+	dataColumnMinFanoutPeers    = 2
+)
+
 type AttestationTopicFamily struct {
 	*baseTopicFamily
 }
@@ -39,7 +48,6 @@ func (a *AttestationTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
-// Only returns mesh topics (subnets to join), not fanout topics (subnets for broadcast only).
 func (a *AttestationTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
 	return topicsFromSubnets(a.getSubnetsToJoin(slot), a)
 }
@@ -62,6 +70,11 @@ func (a *AttestationTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) ma
 // ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
 func (a *AttestationTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
 	return getTopicsForNode(a.syncService, a, node, p2p.AttestationSubnets)
+}
+
+// TopicsWithMinPeerCount returns all topics (mesh and fanout) with their respective min peer counts.
+func (a *AttestationTopicFamily) TopicsWithMinPeerCount(slot primitives.Slot) map[string]int {
+	return topicsWithMinPeerCount(a, slot, attestationMinMeshPeers, attestationMinFanoutPeers)
 }
 
 // SyncCommitteeTopicFamily
@@ -94,7 +107,6 @@ func (s *SyncCommitteeTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
-// Only returns mesh topics (subnets to join), not fanout topics (subnets for broadcast only).
 func (s *SyncCommitteeTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
 	return topicsFromSubnets(s.getSubnetsToJoin(slot), s)
 }
@@ -117,6 +129,11 @@ func (s *SyncCommitteeTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) 
 // ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
 func (s *SyncCommitteeTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
 	return getTopicsForNode(s.syncService, s, node, p2p.SyncSubnets)
+}
+
+// TopicsWithMinPeerCount returns all topics (mesh and fanout) with their respective min peer counts.
+func (s *SyncCommitteeTopicFamily) TopicsWithMinPeerCount(slot primitives.Slot) map[string]int {
+	return topicsWithMinPeerCount(s, slot, syncCommitteeMinMeshPeers, syncCommitteeMinFanoutPeers)
 }
 
 // DataColumnTopicFamily
@@ -149,7 +166,6 @@ func (d *DataColumnTopicFamily) UnsubscribeForSlot(slot primitives.Slot) {
 }
 
 // TopicsToSubscribeFor returns the topics to subscribe to for a given slot.
-// Only returns mesh topics (subnets to join), not fanout topics (subnets for broadcast only).
 func (d *DataColumnTopicFamily) TopicsToSubscribeForSlot(slot primitives.Slot) []string {
 	return topicsFromSubnets(d.getSubnetsToJoin(slot), d)
 }
@@ -172,6 +188,11 @@ func (d *DataColumnTopicFamily) getSubnetsForBroadcast(slot primitives.Slot) map
 // ExtractTopicsForNode returns all topics for the given node that are relevant to this topic family.
 func (d *DataColumnTopicFamily) ExtractTopicsForNode(node *enode.Node) ([]string, error) {
 	return getTopicsForNode(d.syncService, d, node, p2p.DataColumnSubnets)
+}
+
+// TopicsWithMinPeerCount returns all topics (mesh and fanout) with their respective min peer counts.
+func (d *DataColumnTopicFamily) TopicsWithMinPeerCount(slot primitives.Slot) map[string]int {
+	return topicsWithMinPeerCount(d, slot, dataColumnMinMeshPeers, dataColumnMinFanoutPeers)
 }
 
 type nodeSubnetExtractor func(id enode.ID, n *enode.Node, r *enr.Record) (map[uint64]bool, error)
@@ -228,4 +249,29 @@ func topicsFromSubnets(subnets map[uint64]bool, tf dynamicSubnetFamily) []string
 		topics = append(topics, tf.getFullTopicString(s))
 	}
 	return topics
+}
+
+// topicsWithMinPeerCount returns all topics (mesh and fanout) with their respective min peer counts.
+// If a subnet appears in both mesh and fanout, the mesh peer count is used.
+func topicsWithMinPeerCount(tf dynamicSubnetFamily, slot primitives.Slot, minMeshPeers int, minFanoutPeers int) map[string]int {
+	meshSubnets := tf.getSubnetsToJoin(slot)
+	fanoutSubnets := tf.getSubnetsForBroadcast(slot)
+
+	result := make(map[string]int, len(meshSubnets)+len(fanoutSubnets))
+
+	// Add mesh topics with mesh min peer count
+	for subnet := range meshSubnets {
+		topic := tf.getFullTopicString(subnet)
+		result[topic] = minMeshPeers
+	}
+
+	// Add fanout topics with fanout min peer count (only if not already in mesh)
+	for subnet := range fanoutSubnets {
+		topic := tf.getFullTopicString(subnet)
+		if _, exists := result[topic]; !exists {
+			result[topic] = minFanoutPeers
+		}
+	}
+
+	return result
 }
