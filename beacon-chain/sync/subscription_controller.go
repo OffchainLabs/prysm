@@ -77,10 +77,13 @@ func (g *SubscriptionController) updateActiveTopicFamilies(currentEpoch primitiv
 	currentNSE := params.GetNetworkScheduleEntry(currentEpoch)
 
 	families := TopicFamiliesForEpoch(currentEpoch, g.syncService, currentNSE)
-	isForkBoundary, nextNSE := isNextEpochForkBoundary(currentNSE, currentEpoch)
-	if isForkBoundary {
+
+	// also subscribe to topics for the next epoch if there is a fork in the next epoch
+	nextNSE := params.GetNetworkScheduleEntry(currentEpoch + 1)
+	if currentNSE.Epoch != nextNSE.Epoch {
 		families = append(families, TopicFamiliesForEpoch(nextNSE.Epoch, g.syncService, nextNSE)...)
 	}
+
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -104,19 +107,26 @@ func (g *SubscriptionController) updateActiveTopicFamilies(currentEpoch primitiv
 		}
 	}
 
+	// If we are still in our genesis fork version then exit early.
+	if currentNSE.Epoch == params.BeaconConfig().GenesisEpoch {
+		return
+	}
+	if currentEpoch < currentNSE.Epoch+1 {
+		return
+	}
+	previous := params.GetNetworkScheduleEntry(currentNSE.Epoch - 1)
+
 	// remove topic families for the previous NSE -> this is idempotent
-	if beyond, previous := isOneEpochBeyondForkBoundary(currentNSE, currentEpoch); beyond {
-		for key, family := range g.activeTopicFamilies {
-			if key.forkDigest == previous.ForkDigest {
+	for key, family := range g.activeTopicFamilies {
+		if key.forkDigest == previous.ForkDigest {
 
-				family.UnsubscribeAll()
-				delete(g.activeTopicFamilies, key)
+			family.UnsubscribeAll()
+			delete(g.activeTopicFamilies, key)
 
-				log.WithFields(logrus.Fields{
-					"topicName":  key.topicName,
-					"forkDigest": fmt.Sprintf("%#x", key.forkDigest),
-				}).Info("Removed topic family")
-			}
+			log.WithFields(logrus.Fields{
+				"topicName":  key.topicName,
+				"forkDigest": fmt.Sprintf("%#x", key.forkDigest),
+			}).Info("Removed topic family")
 		}
 	}
 }
@@ -184,21 +194,4 @@ func (g *SubscriptionController) ExtractTopics(_ context.Context, node *enode.No
 		out = append(out, t)
 	}
 	return out, nil
-}
-
-func isNextEpochForkBoundary(currentNSE params.NetworkScheduleEntry, currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
-	nextNSE := params.GetNetworkScheduleEntry(currentEpoch + 1)
-	return currentNSE.Epoch != nextNSE.Epoch, nextNSE
-}
-
-func isOneEpochBeyondForkBoundary(currentNSE params.NetworkScheduleEntry, currentEpoch primitives.Epoch) (bool, params.NetworkScheduleEntry) {
-	previousNSE := params.PreviousNetworkScheduleEntry(currentNSE.Epoch)
-
-	if currentNSE.Epoch == params.BeaconConfig().GenesisEpoch {
-		return false, previousNSE
-	}
-	if currentEpoch < currentNSE.Epoch+1 {
-		return false, previousNSE
-	}
-	return true, previousNSE
 }
