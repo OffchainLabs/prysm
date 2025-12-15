@@ -223,17 +223,27 @@ func verifyGraffitiInBlocks(_ *e2etypes.EvaluationContext, conns ...*grpc.Client
 		if err != nil {
 			return err
 		}
-		var e bool
+		var found bool
 		slot := blk.Block().Slot()
 		graffitiInBlock := blk.Block().Body().Graffiti()
+		// Trim trailing null bytes from graffiti.
+		// Example: "GEabcdPRxxxxSushi\x00\x00\x00..." becomes "GEabcdPRxxxxSushi"
+		graffitiTrimmed := bytes.TrimRight(graffitiInBlock[:], "\x00")
 		for _, graffiti := range helpers.Graffiti {
-			if bytes.Equal(bytesutil.PadTo([]byte(graffiti), 32), graffitiInBlock[:]) {
-				e = true
+			// Check suffix match since graffiti now has EL/CL version prefixes.
+			// bytes.HasSuffix returns true if the first arg ends with the second arg.
+			// Examples:
+			//   bytes.HasSuffix([]byte("GEabcdPRxxxxSushi"), []byte("Sushi")) → true
+			//   bytes.HasSuffix([]byte("PRxxxxRamen"), []byte("Ramen"))       → true
+			//   bytes.HasSuffix([]byte("Sushi"), []byte("Sushi"))             → true (exact match)
+			//   bytes.HasSuffix([]byte("SushiXXX"), []byte("Sushi"))          → false (not at end)
+			if bytes.HasSuffix(graffitiTrimmed, []byte(graffiti)) {
+				found = true
 				break
 			}
 		}
-		if !e && slot != 0 {
-			return errors.New("could not get graffiti from the list")
+		if !found && slot != 0 {
+			return fmt.Errorf("block at slot %d has graffiti %q which does not end with any expected graffiti", slot, string(graffitiTrimmed))
 		}
 	}
 
