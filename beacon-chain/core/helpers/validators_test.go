@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -876,23 +875,6 @@ func TestLastActivatedValidatorIndex_OK(t *testing.T) {
 	index, err := helpers.LastActivatedValidatorIndex(t.Context(), beaconState)
 	require.NoError(t, err)
 	require.Equal(t, index, primitives.ValidatorIndex(3))
-}
-
-func TestProposerIndexFromCheckpoint(t *testing.T) {
-	helpers.ClearCache()
-
-	e := primitives.Epoch(2)
-	r := [32]byte{'a'}
-	root := [32]byte{'b'}
-	ids := [32]primitives.ValidatorIndex{}
-	slot := primitives.Slot(69) // slot 5 in the Epoch
-	ids[5] = primitives.ValidatorIndex(19)
-	helpers.ProposerIndicesCache().Set(e, r, ids)
-	c := &forkchoicetypes.Checkpoint{Root: root, Epoch: e - 1}
-	helpers.ProposerIndicesCache().SetCheckpoint(*c, r)
-	id, err := helpers.ProposerIndexAtSlotFromCheckpoint(c, slot)
-	require.NoError(t, err)
-	require.Equal(t, ids[5], id)
 }
 
 func TestHasETH1WithdrawalCredentials(t *testing.T) {

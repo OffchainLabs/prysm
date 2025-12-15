@@ -487,23 +487,36 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 	for _, dataColumn := range dv.dataColumns {
 		dataColumnSlot := dataColumn.Slot()
 
-		// Get the verifying state, it is guaranteed to have the correct proposer in the lookahead.
-		verifyingState, err := dv.getVerifyingState(ctx, dataColumn)
+		// Extract the root of the parent block corresponding to the data column.
+		parentRoot := dataColumn.ParentRoot()
+
+		// Ensure the expensive index computation is only performed once for
+		// concurrent requests for the same signature data.
+		idxAny, err, _ := dv.sg.Do(concatRootSlot(parentRoot, dataColumnSlot), func() (any, error) {
+			verifyingState, err := dv.getVerifyingState(ctx, dataColumn)
+			if err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "verifying state"))
+			}
+
+			idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, dataColumnSlot)
+			if err != nil {
+				return nil, columnErrBuilder(errors.Wrap(err, "compute proposer"))
+			}
+
+			return idx, nil
+		})
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "verifying state"))
+			return err
 		}
 
-		// Use proposer lookahead directly
-		idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, dataColumnSlot)
-		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "proposer from lookahead"))
+		idx, ok := idxAny.(primitives.ValidatorIndex)
+		if !ok {
+			return columnErrBuilder(errors.New("type assertion to ValidatorIndex failed"))
 		}
-
 		if idx != dataColumn.ProposerIndex() {
 			return columnErrBuilder(errSidecarUnexpectedProposer)
 		}
 	}
-
 	return nil
 }
 

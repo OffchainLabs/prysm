@@ -7,7 +7,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -272,32 +271,6 @@ func BeaconProposerIndex(ctx context.Context, state state.ReadOnlyBeaconState) (
 	return BeaconProposerIndexAtSlot(ctx, state, state.Slot())
 }
 
-// cachedProposerIndexAtSlot returns the proposer index at the given slot from
-// the cache at the given root key.
-func cachedProposerIndexAtSlot(slot primitives.Slot, root [32]byte) (primitives.ValidatorIndex, error) {
-	proposerIndices, has := proposerIndicesCache.ProposerIndices(slots.ToEpoch(slot), root)
-	if !has {
-		return 0, errProposerIndexMiss
-	}
-	if len(proposerIndices) != int(params.BeaconConfig().SlotsPerEpoch) {
-		return 0, errProposerIndexMiss
-	}
-	return proposerIndices[slot%params.BeaconConfig().SlotsPerEpoch], nil
-}
-
-// ProposerIndexAtSlotFromCheckpoint returns the proposer index at the given
-// slot from the cache at the given checkpoint
-func ProposerIndexAtSlotFromCheckpoint(c *forkchoicetypes.Checkpoint, slot primitives.Slot) (primitives.ValidatorIndex, error) {
-	proposerIndices, has := proposerIndicesCache.IndicesFromCheckpoint(*c)
-	if !has {
-		return 0, errProposerIndexMiss
-	}
-	if len(proposerIndices) != int(params.BeaconConfig().SlotsPerEpoch) {
-		return 0, errProposerIndexMiss
-	}
-	return proposerIndices[slot%params.BeaconConfig().SlotsPerEpoch], nil
-}
-
 func beaconProposerIndexAtSlotFulu(state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(state.Slot())
@@ -328,32 +301,6 @@ func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconSt
 			return beaconProposerIndexAtSlotFulu(state, slot)
 		}
 	}
-	// The cache uses the state root of the previous epoch - minimum_seed_lookahead last slot as key. (e.g. Starting epoch 1, slot 32, the key would be block root at slot 31)
-	// For simplicity, the node will skip caching of genesis epoch. If the passed state has not yet reached this slot then we do not check the cache.
-	if e <= stateEpoch && e > params.BeaconConfig().GenesisEpoch+params.BeaconConfig().MinSeedLookahead {
-		s, err := slots.EpochEnd(e - 1)
-		if err != nil {
-			return 0, err
-		}
-		r, err := StateRootAtSlot(state, s)
-		if err != nil {
-			return 0, err
-		}
-		if r != nil && !bytes.Equal(r, params.BeaconConfig().ZeroHash[:]) {
-			pid, err := cachedProposerIndexAtSlot(slot, [32]byte(r))
-			if err == nil {
-				return pid, nil
-			}
-			if err := UpdateProposerIndicesInCache(ctx, state, e); err != nil {
-				return 0, errors.Wrap(err, "could not update proposer index cache")
-			}
-			pid, err = cachedProposerIndexAtSlot(slot, [32]byte(r))
-			if err == nil {
-				return pid, nil
-			}
-		}
-	}
-
 	seed, err := Seed(state, e, params.BeaconConfig().DomainBeaconProposer)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not generate seed")
