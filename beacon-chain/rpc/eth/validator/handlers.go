@@ -19,7 +19,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
@@ -898,20 +897,15 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var startSlot primitives.Slot
+	// For next epoch requests, we use the current epoch's state since committee
+	// assignments for next epoch can be computed from current epoch's state.
+	epochForState := requestedEpoch
 	if requestedEpoch == nextEpoch {
-		startSlot, err = slots.EpochStart(currentEpoch)
-	} else {
-		startSlot, err = slots.EpochStart(requestedEpoch)
+		epochForState = currentEpoch
 	}
+	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot from epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
-		return
-	}
-
-	st, err := s.Stater.StateBySlot(ctx, startSlot)
-	if err != nil {
-		httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1020,38 +1014,10 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		nextEpochLookahead = true
 	}
 
-	epochStartSlot, err := slots.EpochStart(requestedEpoch)
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot of epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
-	}
-	var st state.BeaconState
-	// if the requested epoch is new, use the head state and the next slot cache
-	if requestedEpoch < currentEpoch {
-		st, err = s.Stater.StateBySlot(ctx, epochStartSlot)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get state for slot %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		st, err = s.HeadFetcher.HeadState(ctx)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
-			return
-		}
-		// Notice that even for Fulu requests for the next epoch, we are only advancing the state to the start of the current epoch.
-		if st.Slot() < epochStartSlot {
-			headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not get head root: %v ", err), http.StatusInternalServerError)
-				return
-			}
-			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, epochStartSlot)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not process slots up to %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 
 	var assignments map[primitives.ValidatorIndex][]primitives.Slot
@@ -1103,7 +1069,8 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !sortProposerDuties(w, duties) {
+	if err = sortProposerDuties(duties); err != nil {
+		httputil.HandleError(w, "Could not sort proposer duties: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1174,14 +1141,10 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 	}
 
 	startingEpoch := min(requestedEpoch, currentEpoch)
-	slot, err := slots.EpochStart(startingEpoch)
+
+	st, err := s.Stater.StateByEpoch(ctx, startingEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	st, err := s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))
-	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee state: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1327,7 +1290,7 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		}
 		st, err = s.Stater.StateBySlot(ctx, epochEnd)
 		if err != nil {
-			httputil.HandleError(w, "Could not get slot for requested epoch: "+err.Error(), http.StatusInternalServerError)
+			shared.WriteStateFetchError(w, err)
 			return
 		}
 		participation, err = st.CurrentEpochParticipation()
@@ -1447,22 +1410,20 @@ func syncCommitteeDutiesAndVals(
 	return duties, vals, nil
 }
 
-func sortProposerDuties(w http.ResponseWriter, duties []*structs.ProposerDuty) bool {
-	ok := true
+func sortProposerDuties(duties []*structs.ProposerDuty) error {
+	var err error
 	sort.Slice(duties, func(i, j int) bool {
-		si, err := strconv.ParseUint(duties[i].Slot, 10, 64)
-		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
-			ok = false
+		si, parseErr := strconv.ParseUint(duties[i].Slot, 10, 64)
+		if parseErr != nil {
+			err = errors.Wrap(parseErr, "could not parse slot")
 			return false
 		}
-		sj, err := strconv.ParseUint(duties[j].Slot, 10, 64)
-		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
-			ok = false
+		sj, parseErr := strconv.ParseUint(duties[j].Slot, 10, 64)
+		if parseErr != nil {
+			err = errors.Wrap(parseErr, "could not parse slot")
 			return false
 		}
 		return si < sj
 	})
-	return ok
+	return err
 }
