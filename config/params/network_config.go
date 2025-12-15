@@ -11,14 +11,12 @@ type NetworkConfig struct {
 	AttSubnetKey               string // AttSubnetKey is the ENR key of the subnet bitfield.
 	SyncCommsSubnetKey         string // SyncCommsSubnetKey is the ENR key of the sync committee subnet bitfield.
 	CustodyGroupCountKey       string // CustodyGroupsCountKey is the ENR key of the custody group count.
+	ZkvmEnabledKey             string // ZkvmEnabledKey is the ENR key of whether zkVM mode is enabled or not.
 	MinimumPeersInSubnetSearch uint64 // PeersInSubnetSearch is the required amount of peers that we need to be able to lookup in a subnet search.
 
 	// Chain Network Config
 	ContractDeploymentBlock uint64   // ContractDeploymentBlock is the eth1 block in which the deposit contract is deployed.
 	BootstrapNodes          []string // BootstrapNodes are the addresses of the bootnodes.
-	
-	// zkVM mode config
-	ZkvmKey string // ZkvmKey is the ENR key of the zkVM subnet bitfield.
 }
 
 var networkConfig = mainnetNetworkConfig

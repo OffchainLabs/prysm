@@ -38,6 +38,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
 	CustodyGroupCountKey:       "cgc",
+	ZkvmEnabledKey:             "zkvm",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{

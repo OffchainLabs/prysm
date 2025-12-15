@@ -228,10 +228,6 @@ func (s *Service) RefreshPersistentSubnets() {
 	for _, idx := range syncCommittees {
 		bitS.SetBitAt(idx, true)
 	}
-	
-	bitVZkvm := bitfield.Bitvector4{byte(0x00)}
-	// TODO: set subnet bitfield
-
 	// Get the sync subnet bitfield we store in our record.
 	inRecordBitS, err := syncBitvector(record)
 	if err != nil {
@@ -299,7 +295,7 @@ func (s *Service) RefreshPersistentSubnets() {
 
 	// Some data changed. Update the record and the metadata.
 	// Not returning early here because the error comes from saving the metadata sequence number.
-	if err := s.updateSubnetRecordWithMetadataV3(bitV, bitS, bitVZkvm, custodyGroupCount); err != nil {
+	if err := s.updateSubnetRecordWithMetadataV3(bitV, bitS, custodyGroupCount); err != nil {
 		log.WithError(err).Error("Failed to update subnet record with metadata")
 	}
 
@@ -590,6 +586,11 @@ func (s *Service) createLocalNode(
 	if features.Get().EnableQUIC {
 		quicEntry := quicProtocol(quicPort)
 		localNode.Set(quicEntry)
+	}
+
+	if features.Get().EnableZkvm {
+		zkvmKeyEntry := enr.WithEntry(zkvmEnabledKeyEnrKey, true)
+		localNode.Set(zkvmKeyEntry)
 	}
 
 	localNode.SetFallbackIP(ipAddr)
