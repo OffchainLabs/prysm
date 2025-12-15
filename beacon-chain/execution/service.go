@@ -329,7 +329,9 @@ func (s *Service) updateGraffitiInfo() {
 	if s.graffitiInfo == nil {
 		return
 	}
-	versions, err := s.GetClientVersion(s.ctx)
+	ctx, cancel := context.WithTimeout(s.ctx, time.Second)
+	defer cancel()
+	versions, err := s.GetClientVersion(ctx)
 	if err != nil {
 		log.WithError(err).Debug("Could not get execution client version for graffiti")
 		return
