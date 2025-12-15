@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestWeakSubjectivity_ComputeWeakSubjectivityPeriod(t *testing.T) {
@@ -270,7 +270,7 @@ func genState(t *testing.T, valCount, avgBalance uint64) state.BeaconState {
 
 	validators := make([]*ethpb.Validator, valCount)
 	balances := make([]uint64, len(validators))
-	for i := uint64(0); i < valCount; i++ {
+	for i := range valCount {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, params.BeaconConfig().BLSPubkeyLength),
 			WithdrawalCredentials: make([]byte, 32),
@@ -284,22 +284,4 @@ func genState(t *testing.T, valCount, avgBalance uint64) state.BeaconState {
 	require.NoError(t, beaconState.SetBalances(balances))
 
 	return beaconState
-}
-
-func TestMinEpochsForBlockRequests(t *testing.T) {
-	helpers.ClearCache()
-
-	params.SetActiveTestCleanup(t, params.MainnetConfig())
-	var expected primitives.Epoch = 33024
-	// expected value of 33024 via spec commentary:
-	// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
-	//	MIN_EPOCHS_FOR_BLOCK_REQUESTS is calculated using the arithmetic from compute_weak_subjectivity_period found in the weak subjectivity guide. Specifically to find this max epoch range, we use the worst case event of a very large validator size (>= MIN_PER_EPOCH_CHURN_LIMIT * CHURN_LIMIT_QUOTIENT).
-	//
-	//	MIN_EPOCHS_FOR_BLOCK_REQUESTS = (
-	//	    MIN_VALIDATOR_WITHDRAWABILITY_DELAY
-	//	    + MAX_SAFETY_DECAY * CHURN_LIMIT_QUOTIENT // (2 * 100)
-	//	)
-	//
-	//	Where MAX_SAFETY_DECAY = 100 and thus MIN_EPOCHS_FOR_BLOCK_REQUESTS = 33024 (~5 months).
-	require.Equal(t, expected, helpers.MinEpochsForBlockRequests())
 }

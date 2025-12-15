@@ -4,21 +4,21 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestProcessProposerSlashings_UnmatchedHeaderSlots(t *testing.T) {
@@ -172,8 +172,17 @@ func TestProcessProposerSlashings_AppliesCorrectStatus(t *testing.T) {
 	block := util.NewBeaconBlock()
 	block.Block.Body.ProposerSlashings = slashings
 
+	// Verify that ProcessProposerSlashingsNoVerify and ProcessProposerSlashings have the same outcome.
+	beaconStateNoVerify := beaconState.Copy()
+	newStateNoVerify, err := blocks.ProcessProposerSlashingsNoVerify(t.Context(), beaconStateNoVerify, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconStateNoVerify))
+	require.NoError(t, err)
+	sszNoVerify, err := newStateNoVerify.MarshalSSZ()
+	require.NoError(t, err)
 	newState, err := blocks.ProcessProposerSlashings(t.Context(), beaconState, block.Block.Body.ProposerSlashings, v.ExitInformation(beaconState))
 	require.NoError(t, err)
+	ssz, err := newState.MarshalSSZ()
+	require.NoError(t, err)
+	assert.DeepEqual(t, sszNoVerify, ssz, "States resulting from ProcessProposerSlashingsNoVerify and ProcessProposerSlashings are not equal")
 
 	newStateVals := newState.Validators()
 	if newStateVals[1].ExitEpoch != beaconState.Validators()[1].ExitEpoch {

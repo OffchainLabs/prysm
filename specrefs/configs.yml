@@ -1,3 +1,10 @@
+- name: AGGREGATE_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="7eaa811a">
+    AGGREGATE_DUE_BPS: uint64 = 6667
+    </spec>
+
 - name: ALTAIR_FORK_EPOCH
   sources:
     - file: config/params/config.go
@@ -18,11 +25,11 @@
     ALTAIR_FORK_VERSION: Version = '0x01000000'
     </spec>
 
-- name: AGGREGATE_DUE_BPS
+- name: ATTESTATION_DUE_BPS
   sources: []
   spec: |
-    <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="7eaa811a">
-    AGGREGATE_DUE_BPS: uint64 = 6667
+    <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
+    ATTESTATION_DUE_BPS: uint64 = 3333
     </spec>
 
 - name: ATTESTATION_PROPAGATION_SLOT_RANGE
@@ -65,13 +72,6 @@
     ATTESTATION_SUBNET_PREFIX_BITS: int = 6
     </spec>
 
-- name: ATTESTATION_DUE_BPS
-  sources: []
-  spec: |
-    <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
-    ATTESTATION_DUE_BPS: uint64 = 3333
-    </spec>
-
 - name: BALANCE_PER_ADDITIONAL_CUSTODY_GROUP
   sources:
     - file: config/params/config.go
@@ -108,8 +108,16 @@
       search: BlobSchedule\s+\[]BlobScheduleEntry
       regex: true
   spec: |
-    <spec config_var="BLOB_SCHEDULE" fork="fulu" hash="f3f1064a">
+    <spec config_var="BLOB_SCHEDULE" fork="fulu" hash="07879110">
     BLOB_SCHEDULE: tuple[frozendict[str, Any], ...] = (
+        frozendict({
+            "EPOCH": 412672,
+            "MAX_BLOBS_PER_BLOCK": 15,
+        }),
+        frozendict({
+            "EPOCH": 419072,
+            "MAX_BLOBS_PER_BLOCK": 21,
+        }),
     )
     </spec>
 
@@ -161,6 +169,13 @@
   spec: |
     <spec config_var="CHURN_LIMIT_QUOTIENT" fork="phase0" hash="a43a1d33">
     CHURN_LIMIT_QUOTIENT: uint64 = 65536
+    </spec>
+
+- name: CONTRIBUTION_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="CONTRIBUTION_DUE_BPS" fork="altair" hash="a3808203">
+    CONTRIBUTION_DUE_BPS: uint64 = 6667
     </spec>
 
 - name: CUSTODY_REQUIREMENT
@@ -259,8 +274,8 @@
       search: FuluForkEpoch\s+primitives.Epoch
       regex: true
   spec: |
-    <spec config_var="FULU_FORK_EPOCH" fork="fulu" hash="673334be">
-    FULU_FORK_EPOCH: Epoch = 18446744073709551615
+    <spec config_var="FULU_FORK_EPOCH" fork="fulu" hash="af10fa3c">
+    FULU_FORK_EPOCH: Epoch = 411392
     </spec>
 
 - name: FULU_FORK_VERSION
@@ -533,6 +548,13 @@
     NUMBER_OF_CUSTODY_GROUPS = 128
     </spec>
 
+- name: PROPOSER_REORG_CUTOFF_BPS
+  sources: []
+  spec: |
+    <spec config_var="PROPOSER_REORG_CUTOFF_BPS" fork="phase0" hash="a487cc43">
+    PROPOSER_REORG_CUTOFF_BPS: uint64 = 1667
+    </spec>
+
 - name: PROPOSER_SCORE_BOOST
   sources:
     - file: config/params/config.go
@@ -541,13 +563,6 @@
   spec: |
     <spec config_var="PROPOSER_SCORE_BOOST" fork="phase0" hash="fbc878c6">
     PROPOSER_SCORE_BOOST: uint64 = 40
-    </spec>
-
-- name: PROPOSER_REORG_CUTOFF_BPS
-  sources: []
-  spec: |
-    <spec config_var="PROPOSER_REORG_CUTOFF_BPS" fork="phase0" hash="a487cc43">
-    PROPOSER_REORG_CUTOFF_BPS: uint64 = 1667
     </spec>
 
 - name: REORG_HEAD_WEIGHT_THRESHOLD
@@ -610,13 +625,6 @@
     SECONDS_PER_SLOT: uint64 = 12
     </spec>
 
-- name: SLOT_DURATION_MS
-  sources: []
-  spec: |
-    <spec config_var="SLOT_DURATION_MS" fork="phase0" hash="b6d4ba6d">
-    SLOT_DURATION_MS: uint64 = 12000
-    </spec>
-
 - name: SHARD_COMMITTEE_PERIOD
   sources:
     - file: config/params/config.go
@@ -627,6 +635,13 @@
     SHARD_COMMITTEE_PERIOD: uint64 = 256
     </spec>
 
+- name: SLOT_DURATION_MS
+  sources: []
+  spec: |
+    <spec config_var="SLOT_DURATION_MS" fork="phase0" hash="b6d4ba6d">
+    SLOT_DURATION_MS: uint64 = 12000
+    </spec>
+
 - name: SUBNETS_PER_NODE
   sources:
     - file: config/params/config.go
@@ -635,6 +650,13 @@
   spec: |
     <spec config_var="SUBNETS_PER_NODE" fork="phase0" hash="4799f8f3">
     SUBNETS_PER_NODE = 2
+    </spec>
+
+- name: SYNC_MESSAGE_DUE_BPS
+  sources: []
+  spec: |
+    <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="791b29d8">
+    SYNC_MESSAGE_DUE_BPS: uint64 = 3333
     </spec>
 
 - name: TERMINAL_BLOCK_HASH
@@ -676,18 +698,3 @@
     <spec config_var="VALIDATOR_CUSTODY_REQUIREMENT" fork="fulu" hash="4dfc4457">
     VALIDATOR_CUSTODY_REQUIREMENT = 8
     </spec>
-
-- name: CONTRIBUTION_DUE_BPS
-  sources: []
-  spec: |
-    <spec config_var="CONTRIBUTION_DUE_BPS" fork="altair" hash="a3808203">
-    CONTRIBUTION_DUE_BPS: uint64 = 6667
-    </spec>
-
-- name: SYNC_MESSAGE_DUE_BPS
-  sources: []
-  spec: |
-    <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="791b29d8">
-    SYNC_MESSAGE_DUE_BPS: uint64 = 3333
-    </spec>
-

@@ -3,10 +3,10 @@ package cache
 import (
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	lru "github.com/hashicorp/golang-lru"
 )
 

@@ -3,20 +3,20 @@ package precompute
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/math"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/math"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {
@@ -24,7 +24,7 @@ func TestProcessRewardsAndPenaltiesPrecompute(t *testing.T) {
 	validatorCount := uint64(2048)
 	base := buildState(e+3, validatorCount)
 	atts := make([]*ethpb.PendingAttestation, 3)
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		atts[i] = &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
 				Target: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -63,7 +63,7 @@ func TestAttestationDeltas_ZeroEpoch(t *testing.T) {
 	base := buildState(e+2, validatorCount)
 	atts := make([]*ethpb.PendingAttestation, 3)
 	var emptyRoot [32]byte
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		atts[i] = &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
 				Target: &ethpb.Checkpoint{
@@ -99,7 +99,7 @@ func TestAttestationDeltas_ZeroInclusionDelay(t *testing.T) {
 	base := buildState(e+2, validatorCount)
 	atts := make([]*ethpb.PendingAttestation, 3)
 	var emptyRoot [32]byte
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		atts[i] = &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
 				Target: &ethpb.Checkpoint{
@@ -131,7 +131,7 @@ func TestProcessRewardsAndPenaltiesPrecompute_SlashedInactivePenalty(t *testing.
 	validatorCount := uint64(2048)
 	base := buildState(e+3, validatorCount)
 	atts := make([]*ethpb.PendingAttestation, 3)
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		atts[i] = &ethpb.PendingAttestation{
 			Data: &ethpb.AttestationData{
 				Target: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
@@ -176,28 +176,28 @@ func TestProcessRewardsAndPenaltiesPrecompute_SlashedInactivePenalty(t *testing.
 
 func buildState(slot primitives.Slot, validatorCount uint64) *ethpb.BeaconState {
 	validators := make([]*ethpb.Validator, validatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,
 		}
 	}
 	validatorBalances := make([]uint64, len(validators))
-	for i := 0; i < len(validatorBalances); i++ {
+	for i := range validatorBalances {
 		validatorBalances[i] = params.BeaconConfig().MaxEffectiveBalance
 	}
 	latestActiveIndexRoots := make(
 		[][]byte,
 		params.BeaconConfig().EpochsPerHistoricalVector,
 	)
-	for i := 0; i < len(latestActiveIndexRoots); i++ {
+	for i := range latestActiveIndexRoots {
 		latestActiveIndexRoots[i] = params.BeaconConfig().ZeroHash[:]
 	}
 	latestRandaoMixes := make(
 		[][]byte,
 		params.BeaconConfig().EpochsPerHistoricalVector,
 	)
-	for i := 0; i < len(latestRandaoMixes); i++ {
+	for i := range latestRandaoMixes {
 		latestRandaoMixes[i] = params.BeaconConfig().ZeroHash[:]
 	}
 	return &ethpb.BeaconState{

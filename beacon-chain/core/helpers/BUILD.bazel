@@ -10,6 +10,7 @@ go_library(
         "legacy.go",
         "metrics.go",
         "randao.go",
+        "ranges.go",
         "rewards_penalties.go",
         "shuffle.go",
         "sync_committee.go",
@@ -17,7 +18,7 @@ go_library(
         "validators.go",
         "weak_subjectivity.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/cache:go_default_library",
@@ -56,6 +57,7 @@ go_test(
         "private_access_fuzz_noop_test.go",  # keep
         "private_access_test.go",
         "randao_test.go",
+        "ranges_test.go",
         "rewards_penalties_test.go",
         "shuffle_test.go",
         "sync_committee_test.go",

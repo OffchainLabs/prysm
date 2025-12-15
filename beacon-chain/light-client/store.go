@@ -2,19 +2,19 @@ package light_client
 
 import (
 	"context"
+	"maps"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 var ErrLightClientBootstrapNotFound = errors.New("light client bootstrap not found")
@@ -203,9 +203,7 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 		return nil, errors.Wrapf(err, "failed to get updates from cache")
 	}
 
-	for period, update := range cacheUpdatesByPeriod {
-		updatesMap[period] = update
-	}
+	maps.Copy(updatesMap, cacheUpdatesByPeriod)
 
 	var updates []interfaces.LightClientUpdate
 
@@ -254,6 +252,7 @@ func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaco
 	return updatesByPeriod, nil
 }
 
+// SetLastFinalityUpdate should be used only for testing.
 func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -263,9 +262,11 @@ func (s *Store) SetLastFinalityUpdate(update interfaces.LightClientFinalityUpdat
 
 func (s *Store) setLastFinalityUpdate(update interfaces.LightClientFinalityUpdate, broadcast bool) {
 	if broadcast && IsFinalityUpdateValidForBroadcast(update, s.lastFinalityUpdate) {
-		if err := s.p2p.BroadcastLightClientFinalityUpdate(context.Background(), update); err != nil {
-			log.WithError(err).Error("Could not broadcast light client finality update")
-		}
+		go func() {
+			if err := s.p2p.BroadcastLightClientFinalityUpdate(context.Background(), update); err != nil {
+				log.WithError(err).Error("Could not broadcast light client finality update")
+			}
+		}()
 	}
 
 	s.lastFinalityUpdate = update
@@ -283,6 +284,7 @@ func (s *Store) LastFinalityUpdate() interfaces.LightClientFinalityUpdate {
 	return s.lastFinalityUpdate
 }
 
+// SetLastOptimisticUpdate should be used only for testing.
 func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate, broadcast bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -292,9 +294,11 @@ func (s *Store) SetLastOptimisticUpdate(update interfaces.LightClientOptimisticU
 
 func (s *Store) setLastOptimisticUpdate(update interfaces.LightClientOptimisticUpdate, broadcast bool) {
 	if broadcast {
-		if err := s.p2p.BroadcastLightClientOptimisticUpdate(context.Background(), update); err != nil {
-			log.WithError(err).Error("Could not broadcast light client optimistic update")
-		}
+		go func() {
+			if err := s.p2p.BroadcastLightClientOptimisticUpdate(context.Background(), update); err != nil {
+				log.WithError(err).Error("Could not broadcast light client optimistic update")
+			}
+		}()
 	}
 
 	s.lastOptimisticUpdate = update

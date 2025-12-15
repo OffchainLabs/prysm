@@ -12,60 +12,61 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/httprest"
-	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/pruner"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/slasherkv"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/monitor"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/node/registration"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	regularsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/checkpoint"
-	initialsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	"github.com/OffchainLabs/prysm/v6/runtime/prereqs"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api/server/httprest"
+	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/pruner"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/slasherkv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/monitor"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	regularsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/checkpoint"
+	initialsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -116,7 +117,7 @@ type BeaconNode struct {
 	GenesisProviders         []genesis.Provider
 	CheckpointInitializer    checkpoint.Initializer
 	forkChoicer              forkchoice.ForkChoicer
-	clockWaiter              startup.ClockWaiter
+	ClockWaiter              startup.ClockWaiter
 	BackfillOpts             []backfill.ServiceOption
 	initialSyncComplete      chan struct{}
 	BlobStorage              *filesystem.BlobStorage
@@ -124,10 +125,12 @@ type BeaconNode struct {
 	DataColumnStorage        *filesystem.DataColumnStorage
 	DataColumnStorageOptions []filesystem.DataColumnStorageOption
 	verifyInitWaiter         *verification.InitializerWaiter
+	lhsp                     *verification.LazyHeadStateProvider
 	syncChecker              *initialsync.SyncChecker
 	slasherEnabled           bool
 	lcStore                  *lightclient.Store
 	ConfigOptions            []params.Option
+	SyncNeedsWaiter          func() (das.SyncNeeds, error)
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -178,6 +181,9 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	}
 	beacon.db = kvdb
 
+	if err := dbClearer.clearGenesis(dataDir); err != nil {
+		return nil, errors.Wrap(err, "could not clear genesis state")
+	}
 	providers := append(beacon.GenesisProviders, kv.NewLegacyGenesisProvider(kvdb))
 	if err := genesis.Initialize(ctx, dataDir, providers...); err != nil {
 		return nil, errors.Wrap(err, "could not initialize genesis state")
@@ -189,7 +195,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	params.LogDigests(params.BeaconConfig())
 
 	synchronizer := startup.NewClockSynchronizer()
-	beacon.clockWaiter = synchronizer
+	beacon.ClockWaiter = synchronizer
 	beacon.forkChoicer = doublylinkedtree.New()
 
 	depositAddress, err := execution.DepositContractAddress()
@@ -227,13 +233,15 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		return nil, errors.Wrap(err, "could not start modules")
 	}
 
+	beacon.lhsp = &verification.LazyHeadStateProvider{}
 	beacon.verifyInitWaiter = verification.NewInitializerWaiter(
-		beacon.clockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen)
+		beacon.ClockWaiter, forkchoice.NewROForkChoice(beacon.forkChoicer), beacon.stateGen, beacon.lhsp)
 
 	beacon.BackfillOpts = append(
 		beacon.BackfillOpts,
 		backfill.WithVerifierWaiter(beacon.verifyInitWaiter),
 		backfill.WithInitSyncWaiter(initSyncWaiter(ctx, beacon.initialSyncComplete)),
+		backfill.WithSyncNeedsWaiter(beacon.SyncNeedsWaiter),
 	)
 
 	if err := registerServices(cliCtx, beacon, synchronizer, bfs); err != nil {
@@ -275,7 +283,10 @@ func configureBeacon(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not configure beacon chain")
 	}
 
-	flags.ConfigureGlobalFlags(cliCtx)
+	err := flags.ConfigureGlobalFlags(cliCtx)
+	if err != nil {
+		return errors.Wrap(err, "could not configure global flags")
+	}
 
 	if err := configureChainConfig(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure chain config")
@@ -598,22 +609,7 @@ func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBl
 		return err
 	}
 
-	r := bytesutil.ToBytes32(cp.Root)
-	// Consider edge case where finalized root are zeros instead of genesis root hash.
-	if r == params.BeaconConfig().ZeroHash {
-		genesisBlock, err := b.db.GenesisBlock(ctx)
-		if err != nil {
-			return err
-		}
-		if genesisBlock != nil && !genesisBlock.IsNil() {
-			r, err = genesisBlock.Block().HashTreeRoot()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	b.finalizedStateAtStartUp, err = sg.StateByRoot(ctx, r)
+	b.finalizedStateAtStartUp, err = sg.StateByRoot(ctx, [32]byte(cp.Root))
 	if err != nil {
 		return err
 	}
@@ -670,7 +666,8 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		EnableUPnP:            cliCtx.Bool(cmd.EnableUPnPFlag.Name),
 		StateNotifier:         b,
 		DB:                    b.db,
-		ClockWaiter:           b.clockWaiter,
+		StateGen:              b.stateGen,
+		ClockWaiter:           b.ClockWaiter,
 	})
 	if err != nil {
 		return err
@@ -712,7 +709,7 @@ func (b *BeaconNode) registerSlashingPoolService() error {
 		return err
 	}
 
-	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.clockWaiter, chainService.CurrentSlot))
+	s := slashings.NewPoolService(b.ctx, b.slashingsPool, slashings.WithElectraTimer(b.ClockWaiter, chainService.CurrentSlot))
 	return b.services.RegisterService(s)
 }
 
@@ -761,6 +758,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 	if err != nil {
 		return errors.Wrap(err, "could not register blockchain service")
 	}
+	b.lhsp.HeadStateProvider = blockchainService
 	return b.services.RegisterService(blockchainService)
 }
 
@@ -833,7 +831,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlasherAttestationsFeed(b.slasherAttestationsFeed),
 		regularsync.WithSlasherBlockHeadersFeed(b.slasherBlockHeadersFeed),
 		regularsync.WithReconstructor(web3Service),
-		regularsync.WithClockWaiter(b.clockWaiter),
+		regularsync.WithClockWaiter(b.ClockWaiter),
 		regularsync.WithInitialSyncComplete(initialSyncComplete),
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
@@ -864,7 +862,8 @@ func (b *BeaconNode) registerInitialSyncService(complete chan struct{}) error {
 		P2P:                 b.fetchP2P(),
 		StateNotifier:       b,
 		BlockNotifier:       b,
-		ClockWaiter:         b.clockWaiter,
+		ClockWaiter:         b.ClockWaiter,
+		SyncNeedsWaiter:     b.SyncNeedsWaiter,
 		InitialSyncComplete: complete,
 		BlobStorage:         b.BlobStorage,
 		DataColumnStorage:   b.DataColumnStorage,
@@ -895,7 +894,7 @@ func (b *BeaconNode) registerSlasherService() error {
 		SlashingPoolInserter:    b.slashingsPool,
 		SyncChecker:             syncService,
 		HeadStateFetcher:        chainService,
-		ClockWaiter:             b.clockWaiter,
+		ClockWaiter:             b.ClockWaiter,
 	})
 	if err != nil {
 		return err
@@ -988,7 +987,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		MaxMsgSize:                maxMsgSize,
 		BlockBuilder:              b.fetchBuilderService(),
 		Router:                    router,
-		ClockWaiter:               b.clockWaiter,
+		ClockWaiter:               b.ClockWaiter,
 		BlobStorage:               b.BlobStorage,
 		DataColumnStorage:         b.DataColumnStorage,
 		TrackedValidatorsCache:    b.trackedValidatorsCache,
@@ -1121,6 +1120,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 		genesis,
 		initSyncWaiter(cliCtx.Context, b.initialSyncComplete),
 		backfillService.WaitForCompletion,
+		b.fetchP2P(),
 		opts...,
 	)
 	if err != nil {
@@ -1132,7 +1132,7 @@ func (b *BeaconNode) registerPrunerService(cliCtx *cli.Context) error {
 
 func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.Store) error {
 	pa := peers.NewAssigner(b.fetchP2P().Peers(), b.forkChoicer)
-	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.clockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
+	bf, err := backfill.NewService(cliCtx.Context, bfs, b.BlobStorage, b.DataColumnStorage, b.ClockWaiter, b.fetchP2P(), pa, b.BackfillOpts...)
 	if err != nil {
 		return errors.Wrap(err, "error initializing backfill service")
 	}
@@ -1147,10 +1147,8 @@ func (b *BeaconNode) registerLightClientStore() {
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
 	for _, flag := range features.NetworkFlags {
-		for _, name := range flag.Names() {
-			if cliCtx.IsSet(name) {
-				return true
-			}
+		if slices.ContainsFunc(flag.Names(), cliCtx.IsSet) {
+			return true
 		}
 	}
 	return false

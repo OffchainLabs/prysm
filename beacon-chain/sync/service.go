@@ -9,38 +9,38 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -180,7 +180,7 @@ type Service struct {
 	slasherEnabled                   bool
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
-	registeredNetworkEntry           params.NetworkScheduleEntry
+	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
 }
 
@@ -212,7 +212,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.kzgChan = make(chan *kzgVerifier, 100)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
-	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
+	r.slotToPendingBlocks.OnEvicted(func(s string, i any) {
 		if !mutexasserts.RWMutexLocked(&r.pendingQueueLock) {
 			log.Errorf("Mutex is not locked during cache eviction of values")
 			// Continue on to allow elements to be properly removed.
@@ -274,7 +274,6 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)
 
 	s.processPendingBlocksQueue()
-	s.runPendingAttsQueue()
 	s.maintainPeerStatuses()
 
 	if params.FuluEnabled() {
@@ -378,10 +377,13 @@ func (s *Service) waitForChainStart() {
 	}
 	s.ctxMap = ctxMap
 
-	// Register respective rpc handlers at state initialized event.
-	err = s.registerRPCHandlers()
-	if err != nil {
-		log.WithError(err).Error("Could not register rpc handlers")
+	// We need to register RPC handlers ASAP so that we can handle incoming status message
+	// requests from peers.
+	nse := params.GetNetworkScheduleEntry(clock.CurrentEpoch())
+	if err := s.registerRPCHandlers(nse); err != nil {
+		// If we fail here, we won't be able to peer with anyone because we can't handle their status messages.
+		log.WithError(err).Error("Failed to register RPC handlers")
+		// TODO: need ability to bubble the error up to the top of the node init tree and exit safely.
 		return
 	}
 
@@ -402,22 +404,8 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 		return
 	}
 
-	// Compute the current epoch.
-	currentSlot := slots.CurrentSlot(s.cfg.clock.GenesisTime())
-	currentEpoch := slots.ToEpoch(currentSlot)
-
-	// Compute the current fork forkDigest.
-	forkDigest, err := s.currentForkDigest()
-	if err != nil {
-		log.WithError(err).Error("Could not retrieve current fork digest")
-		return
-	}
-
-	// Register respective pubsub handlers at state synced event.
-	s.registerSubscribers(currentEpoch, forkDigest)
-
 	// Start the fork watcher.
-	go s.forkWatcher()
+	go s.p2pHandlerControlLoop()
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {
@@ -453,6 +441,15 @@ func (s *Service) pruneDataColumnCache() {
 
 func (s *Service) chainIsStarted() bool {
 	return s.chainStarted.IsSet()
+}
+
+func (s *Service) waitForInitialSync(ctx context.Context) error {
+	select {
+	case <-s.initialSyncComplete:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Checker defines a struct which can verify whether a node is currently

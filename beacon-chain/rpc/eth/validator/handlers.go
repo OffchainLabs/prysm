@@ -13,67 +13,35 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	rpchelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	validator2 "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	mvslice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Deprecated: use GetAggregateAttestationV2 instead
-// GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
-func (s *Server) GetAggregateAttestation(w http.ResponseWriter, r *http.Request) {
-	_, span := trace.StartSpan(r.Context(), "validator.GetAggregateAttestation")
-	defer span.End()
-
-	_, attDataRoot, ok := shared.HexFromQuery(w, r, "attestation_data_root", fieldparams.RootLength, true)
-	if !ok {
-		return
-	}
-	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
-	if !ok {
-		return
-	}
-
-	agg := s.aggregatedAttestation(w, primitives.Slot(slot), attDataRoot, 0)
-	if agg == nil {
-		return
-	}
-	typedAgg, ok := agg.(*ethpbalpha.Attestation)
-	if !ok {
-		httputil.HandleError(w, fmt.Sprintf("Attestation is not of type %T", &ethpbalpha.Attestation{}), http.StatusInternalServerError)
-		return
-	}
-	data, err := json.Marshal(structs.AttFromConsensus(typedAgg))
-	if err != nil {
-		httputil.HandleError(w, "Could not marshal attestation: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	httputil.WriteJson(w, &structs.AggregateAttestationResponse{Data: data})
-}
 
 // GetAggregateAttestationV2 aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Request) {
@@ -268,64 +236,36 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	for _, item := range reqData {
+	var failures []*server.IndexedError
+	var failedBroadcasts []*server.IndexedError
+
+	for i, item := range reqData {
 		var contribution structs.SignedContributionAndProof
 		if err := json.Unmarshal(item, &contribution); err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
-			return
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not unmarshal message: " + err.Error(),
+			})
+			continue
 		}
 		consensusItem, err := contribution.ToConsensus()
 		if err != nil {
-			httputil.HandleError(w, "Could not convert contribution to consensus format: "+err.Error(), http.StatusBadRequest)
-			return
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not convert request contribution to consensus contribution: " + err.Error(),
+			})
+			continue
 		}
-		if rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem); rpcError != nil {
-			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-			return
-		}
-	}
-}
 
-// Deprecated: use SubmitAggregateAndProofsV2 instead
-// SubmitAggregateAndProofs verifies given aggregate and proofs and publishes them on appropriate gossipsub topic.
-func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "validator.SubmitAggregateAndProofs")
-	defer span.End()
-
-	var req structs.SubmitAggregateAndProofsRequest
-	err := json.NewDecoder(r.Body).Decode(&req.Data)
-	switch {
-	case errors.Is(err, io.EOF):
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	case err != nil:
-		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if len(req.Data) == 0 {
-		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
-		return
-	}
-
-	broadcastFailed := false
-	for _, item := range req.Data {
-		var signedAggregate structs.SignedAggregateAttestationAndProof
-		err := json.Unmarshal(item, &signedAggregate)
-		if err != nil {
-			httputil.HandleError(w, "Could not decode item: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		consensusItem, err := signedAggregate.ToConsensus()
-		if err != nil {
-			httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		rpcError := s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
+		rpcError := s.CoreService.SubmitSignedContributionAndProof(ctx, consensusItem)
 		if rpcError != nil {
-			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
-			ok := errors.As(rpcError.Err, &aggregateBroadcastFailedError)
-			if ok {
-				broadcastFailed = true
+			var broadcastFailedErr *server.BroadcastFailedError
+			if errors.As(rpcError.Err, &broadcastFailedErr) {
+				failedBroadcasts = append(failedBroadcasts, &server.IndexedError{
+					Index:   i,
+					Message: rpcError.Err.Error(),
+				})
+				continue
 			} else {
 				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 				return
@@ -333,8 +273,23 @@ func (s *Server) SubmitAggregateAndProofs(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+	if len(failures) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
+	}
+	if len(failedBroadcasts) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusInternalServerError,
+			Message:  server.ErrIndexedBroadcastFail,
+			Failures: failedBroadcasts,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
 	}
 }
 
@@ -368,49 +323,83 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	broadcastFailed := false
+	var failures []*server.IndexedError
+	var failedBroadcasts []*server.IndexedError
+
 	var rpcError *core.RpcError
-	for _, raw := range reqData {
+	for i, raw := range reqData {
 		if v >= version.Electra {
 			var signedAggregate structs.SignedAggregateAttestationAndProofElectra
 			err = json.Unmarshal(raw, &signedAggregate)
 			if err != nil {
-				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not parse message: " + err.Error(),
+				})
+				continue
 			}
 			consensusItem, err := signedAggregate.ToConsensus()
 			if err != nil {
-				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
+				})
+				continue
 			}
 			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
 		} else {
 			var signedAggregate structs.SignedAggregateAttestationAndProof
 			err = json.Unmarshal(raw, &signedAggregate)
 			if err != nil {
-				httputil.HandleError(w, "Failed to parse aggregate attestation and proof: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not parse message: " + err.Error(),
+				})
+				continue
 			}
 			consensusItem, err := signedAggregate.ToConsensus()
 			if err != nil {
-				httputil.HandleError(w, "Could not convert request aggregate to consensus aggregate: "+err.Error(), http.StatusBadRequest)
-				return
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not convert request aggregate to consensus aggregate: " + err.Error(),
+				})
+				continue
 			}
 			rpcError = s.CoreService.SubmitSignedAggregateSelectionProof(ctx, consensusItem)
 		}
 
 		if rpcError != nil {
-			var aggregateBroadcastFailedError *core.AggregateBroadcastFailedError
-			if errors.As(rpcError.Err, &aggregateBroadcastFailedError) {
-				broadcastFailed = true
+			var broadcastFailedErr *server.BroadcastFailedError
+			if errors.As(rpcError.Err, &broadcastFailedErr) {
+				failedBroadcasts = append(failedBroadcasts, &server.IndexedError{
+					Index:   i,
+					Message: rpcError.Err.Error(),
+				})
+				continue
 			} else {
 				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
 				return
 			}
 		}
 	}
-	if broadcastFailed {
-		httputil.HandleError(w, "Could not broadcast one or more signed aggregated attestations", http.StatusInternalServerError)
+
+	if len(failures) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
+	}
+	if len(failedBroadcasts) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusInternalServerError,
+			Message:  server.ErrIndexedBroadcastFail,
+			Failures: failedBroadcasts,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
 	}
 }
 
@@ -523,7 +512,18 @@ func (s *Server) SubmitSyncCommitteeSubscription(w http.ResponseWriter, r *http.
 		epochDuration := time.Duration(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second
 		totalDuration := epochDuration * time.Duration(epochsToWatch)
 
-		cache.SyncSubnetIDs.AddSyncCommitteeSubnets(pubkey48[:], startEpoch, sub.SyncCommitteeIndices, totalDuration)
+		subcommitteeSize := params.BeaconConfig().SyncCommitteeSize / params.BeaconConfig().SyncCommitteeSubnetCount
+		seen := make(map[uint64]bool)
+		var subnetIndices []uint64
+
+		for _, idx := range sub.SyncCommitteeIndices {
+			subnetIdx := idx / subcommitteeSize
+			if !seen[subnetIdx] {
+				seen[subnetIdx] = true
+				subnetIndices = append(subnetIndices, subnetIdx)
+			}
+		}
+		cache.SyncSubnetIDs.AddSyncCommitteeSubnets(pubkey48[:], startEpoch, subnetIndices, totalDuration)
 	}
 }
 
@@ -690,6 +690,10 @@ func (s *Server) ProduceSyncCommitteeContribution(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
+	if index >= params.BeaconConfig().SyncCommitteeSubnetCount {
+		httputil.HandleError(w, fmt.Sprintf("Subcommittee index needs to be between 0 and %d, %d is outside of this range.", params.BeaconConfig().SyncCommitteeSubnetCount-1, index), http.StatusBadRequest)
+		return
+	}
 	_, slot, ok := shared.UintFromQuery(w, r, "slot", true)
 	if !ok {
 		return
@@ -830,12 +834,17 @@ func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 		s.TrackedValidatorsCache.Set(val)
 		validatorIndices = append(validatorIndices, primitives.ValidatorIndex(validatorIndex))
 	}
+
 	if len(validatorIndices) == 0 {
 		return
 	}
-	log.WithFields(logrus.Fields{
-		"validatorIndices": validatorIndices,
-	}).Info("Updated fee recipient addresses")
+
+	log := log.WithField("validatorCount", len(validatorIndices))
+	if logrus.GetLevel() >= logrus.TraceLevel {
+		log = log.WithField("validatorIndices", validatorIndices)
+	}
+
+	log.Debug("Updated fee recipient addresses")
 }
 
 // GetAttesterDuties requests the beacon node to provide a set of attestation duties,
@@ -888,20 +897,15 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var startSlot primitives.Slot
+	// For next epoch requests, we use the current epoch's state since committee
+	// assignments for next epoch can be computed from current epoch's state.
+	epochForState := requestedEpoch
 	if requestedEpoch == nextEpoch {
-		startSlot, err = slots.EpochStart(currentEpoch)
-	} else {
-		startSlot, err = slots.EpochStart(requestedEpoch)
+		epochForState = currentEpoch
 	}
+	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot from epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
-		return
-	}
-
-	st, err := s.Stater.StateBySlot(ctx, startSlot)
-	if err != nil {
-		httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1010,38 +1014,10 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		nextEpochLookahead = true
 	}
 
-	epochStartSlot, err := slots.EpochStart(requestedEpoch)
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
 	if err != nil {
-		httputil.HandleError(w, fmt.Sprintf("Could not get start slot of epoch %d: %v", requestedEpoch, err), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
-	}
-	var st state.BeaconState
-	// if the requested epoch is new, use the head state and the next slot cache
-	if requestedEpoch < currentEpoch {
-		st, err = s.Stater.StateBySlot(ctx, epochStartSlot)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get state for slot %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		st, err = s.HeadFetcher.HeadState(ctx)
-		if err != nil {
-			httputil.HandleError(w, fmt.Sprintf("Could not get head state: %v ", err), http.StatusInternalServerError)
-			return
-		}
-		// Notice that even for Fulu requests for the next epoch, we are only advancing the state to the start of the current epoch.
-		if st.Slot() < epochStartSlot {
-			headRoot, err := s.HeadFetcher.HeadRoot(ctx)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not get head root: %v ", err), http.StatusInternalServerError)
-				return
-			}
-			st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, epochStartSlot)
-			if err != nil {
-				httputil.HandleError(w, fmt.Sprintf("Could not process slots up to %d: %v ", epochStartSlot, err), http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 
 	var assignments map[primitives.ValidatorIndex][]primitives.Slot
@@ -1093,7 +1069,8 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !sortProposerDuties(w, duties) {
+	if err = sortProposerDuties(duties); err != nil {
+		httputil.HandleError(w, "Could not sort proposer duties: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1163,18 +1140,11 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	startingEpoch := requestedEpoch
-	if startingEpoch > currentEpoch {
-		startingEpoch = currentEpoch
-	}
-	slot, err := slots.EpochStart(startingEpoch)
+	startingEpoch := min(requestedEpoch, currentEpoch)
+
+	st, err := s.Stater.StateByEpoch(ctx, startingEpoch)
 	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee slot: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	st, err := s.Stater.State(ctx, []byte(strconv.FormatUint(uint64(slot), 10)))
-	if err != nil {
-		httputil.HandleError(w, "Could not get sync committee state: "+err.Error(), http.StatusInternalServerError)
+		shared.WriteStateFetchError(w, err)
 		return
 	}
 
@@ -1320,7 +1290,7 @@ func (s *Server) GetLiveness(w http.ResponseWriter, r *http.Request) {
 		}
 		st, err = s.Stater.StateBySlot(ctx, epochEnd)
 		if err != nil {
-			httputil.HandleError(w, "Could not get slot for requested epoch: "+err.Error(), http.StatusInternalServerError)
+			shared.WriteStateFetchError(w, err)
 			return
 		}
 		participation, err = st.CurrentEpochParticipation()
@@ -1440,22 +1410,20 @@ func syncCommitteeDutiesAndVals(
 	return duties, vals, nil
 }
 
-func sortProposerDuties(w http.ResponseWriter, duties []*structs.ProposerDuty) bool {
-	ok := true
+func sortProposerDuties(duties []*structs.ProposerDuty) error {
+	var err error
 	sort.Slice(duties, func(i, j int) bool {
-		si, err := strconv.ParseUint(duties[i].Slot, 10, 64)
-		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
-			ok = false
+		si, parseErr := strconv.ParseUint(duties[i].Slot, 10, 64)
+		if parseErr != nil {
+			err = errors.Wrap(parseErr, "could not parse slot")
 			return false
 		}
-		sj, err := strconv.ParseUint(duties[j].Slot, 10, 64)
-		if err != nil {
-			httputil.HandleError(w, "Could not parse slot: "+err.Error(), http.StatusInternalServerError)
-			ok = false
+		sj, parseErr := strconv.ParseUint(duties[j].Slot, 10, 64)
+		if parseErr != nil {
+			err = errors.Wrap(parseErr, "could not parse slot")
 			return false
 		}
 		return si < sj
 	})
-	return ok
+	return err
 }

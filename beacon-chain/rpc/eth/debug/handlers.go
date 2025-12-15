@@ -10,18 +10,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -67,7 +68,7 @@ func (s *Server) getBeaconStateV2(ctx context.Context, w http.ResponseWriter, id
 		return
 	}
 	isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
-	var respSt interface{}
+	var respSt any
 
 	switch st.Version() {
 	case version.Phase0:
@@ -269,12 +270,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockId))
-	if err != nil {
-		httputil.HandleError(w, "Could not fetch block: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if blk == nil {
-		httputil.HandleError(w, "Block not found", http.StatusNotFound)
+	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
 
@@ -313,7 +309,7 @@ func (s *Server) DataColumnSidecars(w http.ResponseWriter, r *http.Request) {
 
 // parseDataColumnIndices filters out invalid and duplicate data column indices
 func parseDataColumnIndices(url *url.URL) ([]int, error) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = fieldparams.NumberOfColumns
 	rawIndices := url.Query()["indices"]
 	indices := make([]int, 0, numberOfColumns)
 	invalidIndices := make([]string, 0)

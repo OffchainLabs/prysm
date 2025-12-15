@@ -5,25 +5,25 @@ package helpers
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 var (
@@ -399,7 +399,6 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	ctx, span := trace.StartSpan(ctx, "helpers.CommitteeAssignments")
 	defer span.End()
 
-	// Verify if the epoch is valid for assignment based on the provided state.
 	if err := VerifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
 	}
@@ -407,12 +406,15 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	if err != nil {
 		return nil, err
 	}
-	vals := make(map[primitives.ValidatorIndex]struct{})
+
+	// Deduplicate and make set for O(1) membership checks.
+	vals := make(map[primitives.ValidatorIndex]struct{}, len(validators))
 	for _, v := range validators {
 		vals[v] = struct{}{}
 	}
-	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment)
-	// Compute committee assignments for each slot in the epoch.
+	remaining := len(vals)
+
+	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment, len(vals))
 	for slot := startSlot; slot < startSlot+params.BeaconConfig().SlotsPerEpoch; slot++ {
 		committees, err := BeaconCommittees(ctx, state, slot)
 		if err != nil {
@@ -420,7 +422,7 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 		}
 		for j, committee := range committees {
 			for _, vIndex := range committee {
-				if _, ok := vals[vIndex]; !ok { // Skip if the validator is not in the provided validators slice.
+				if _, ok := vals[vIndex]; !ok {
 					continue
 				}
 				if _, ok := assignments[vIndex]; !ok {
@@ -429,6 +431,11 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 				assignments[vIndex].Committee = committee
 				assignments[vIndex].AttesterSlot = slot
 				assignments[vIndex].CommitteeIndex = primitives.CommitteeIndex(j)
+				delete(vals, vIndex)
+				remaining--
+				if remaining == 0 {
+					return assignments, nil // early exit
+				}
 			}
 		}
 	}
@@ -508,9 +515,7 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	// used for failing verify signature fallback.
 	sortedIndices := make([]primitives.ValidatorIndex, len(shuffledIndices))
 	copy(sortedIndices, shuffledIndices)
-	sort.Slice(sortedIndices, func(i, j int) bool {
-		return sortedIndices[i] < sortedIndices[j]
-	})
+	slices.Sort(sortedIndices)
 
 	if err := committeeCache.AddCommitteeShuffledList(ctx, &cache.Committees{
 		ShuffledIndices: shuffledIndices,

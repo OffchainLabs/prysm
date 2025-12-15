@@ -1,90 +1,41 @@
+version: "2"
 run:
-  timeout: 10m
-  go: '1.23.5'
-
-issues:
-  exclude-files:
-    - validator/web/site_data.go
-    - .*_test.go
-  exclude-dirs:
-    - proto
-    - tools/analyzers
-
+  go: 1.23.5
 linters:
-  enable-all: true
-  disable:
-    # Deprecated linters:
+  enable:
+    - errcheck
+    - ineffassign
     - govet
-
-    # Disabled for now:
-    - asasalint
-    - bodyclose
-    - containedctx
-    - contextcheck
-    - cyclop
-    - depguard
-    - dogsled
-    - dupl
-    - durationcheck
-    - errname
-    - err113
-    - exhaustive
-    - exhaustruct
-    - forbidigo
-    - forcetypeassert
-    - funlen
-    - gci
-    - gochecknoglobals
-    - gochecknoinits
-    - goconst
-    - gocritic
-    - gocyclo
-    - godot
-    - godox
-    - gofumpt
-    - gomoddirectives
-    - gosec
-    - inamedparam
-    - interfacebloat
-    - intrange
-    - ireturn
-    - lll
-    - maintidx
-    - makezero
-    - mnd
-    - musttag
-    - nakedret
-    - nestif
-    - nilnil
-    - nlreturn
-    - noctx
-    - nolintlint
-    - nonamedreturns
-    - nosprintfhostport
-    - perfsprint
-    - prealloc
-    - predeclared
-    - promlinter
-    - protogetter
-    - recvcheck
-    - revive
-    - spancheck
+  disable:
     - staticcheck
-    - stylecheck
-    - tagalign
-    - tagliatelle
-    - thelper
-    - unparam
-    - usetesting
-    - varnamelen
-    - wrapcheck
-    - wsl
+    - unused
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - validator/web/site_data.go
+      - .*_test.go
+      - proto
+      - tools/analyzers
+      - third_party$
+      - builtin$
+      - examples$
 
-linters-settings:
-  gocognit:
-    # TODO: We should target for < 50
-    min-complexity: 65
-
-output:
-  print-issued-lines: true
-  sort-results: true
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - validator/web/site_data.go
+      - .*_test.go
+      - proto
+      - tools/analyzers
+      - third_party$
+      - builtin$
+      - examples$

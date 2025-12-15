@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -120,6 +120,29 @@ func TestCompareForkENR(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIgnoreFarFutureMismatch(t *testing.T) {
+	db, err := enode.OpenDB("")
+	assert.NoError(t, err)
+	_, k := createAddrAndPrivKey(t)
+	current := params.GetNetworkScheduleEntry(params.BeaconConfig().ElectraForkEpoch)
+	next := params.NetworkScheduleEntry{
+		Epoch:       params.BeaconConfig().FarFutureEpoch,
+		ForkDigest:  [4]byte{0xFF, 0xFF, 0xFF, 0xFF}, // Ensure a unique digest for testing.
+		ForkVersion: [4]byte{0xFF, 0xFF, 0xFF, 0xFF},
+	}
+	self := enode.NewLocalNode(db, k)
+	require.NoError(t, updateENR(self, current, next))
+
+	peerNext := params.NetworkScheduleEntry{
+		Epoch:       params.BeaconConfig().FarFutureEpoch,
+		ForkDigest:  [4]byte{0xAA, 0xAA, 0xAA, 0xAA}, // Different unique digest for testing.
+		ForkVersion: [4]byte{0xAA, 0xAA, 0xAA, 0xAA},
+	}
+	peer := enode.NewLocalNode(db, k)
+	require.NoError(t, updateENR(peer, current, peerNext))
+	require.NoError(t, compareForkENR(self.Node().Record(), peer.Node().Record()))
 }
 
 func TestNfdSetAndLoad(t *testing.T) {

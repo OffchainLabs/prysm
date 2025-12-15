@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
@@ -77,6 +77,9 @@ func compareForkENR(self, peer *enr.Record) error {
 		// We allow the connection because we have a different view of the next fork epoch. This
 		// could be due to peers that have no upgraded ahead of a fork or BPO schedule change, so
 		// we allow the connection to continue until the fork boundary.
+		return nil
+	}
+	if selfEntry.NextForkEpoch == params.BeaconConfig().FarFutureEpoch {
 		return nil
 	}
 

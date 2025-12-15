@@ -7,27 +7,27 @@ import (
 	"testing"
 	"time"
 
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -111,7 +111,7 @@ func TestServer_ListAttestations_NoPagination(t *testing.T) {
 
 	count := primitives.Slot(8)
 	atts := make([]*ethpb.Attestation, 0, count)
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		blockExample := util.NewBeaconBlock()
 		blockExample.Block.Body.Attestations = []*ethpb.Attestation{
 			{
@@ -264,7 +264,7 @@ func TestServer_ListAttestations_Pagination_CustomPageParameters(t *testing.T) {
 	count := params.BeaconConfig().SlotsPerEpoch * 4
 	atts := make([]ethpb.Att, 0, count)
 	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
-		for s := primitives.CommitteeIndex(0); s < 4; s++ {
+		for s := range primitives.CommitteeIndex(4) {
 			blockExample := util.NewBeaconBlock()
 			blockExample.Block.Slot = i
 			blockExample.Block.Body.Attestations = []*ethpb.Attestation{
@@ -370,7 +370,7 @@ func TestServer_ListAttestations_Pagination_OutOfRange(t *testing.T) {
 	util.NewBeaconBlock()
 	count := primitives.Slot(1)
 	atts := make([]*ethpb.Attestation, 0, count)
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		blockExample := util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{
 			Block: &ethpb.BeaconBlock{
 				Body: &ethpb.BeaconBlockBody{
@@ -426,7 +426,7 @@ func TestServer_ListAttestations_Pagination_DefaultPageSize(t *testing.T) {
 
 	count := primitives.Slot(params.BeaconConfig().DefaultPageSize)
 	atts := make([]*ethpb.Attestation, 0, count)
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		blockExample := util.NewBeaconBlock()
 		blockExample.Block.Body.Attestations = []*ethpb.Attestation{
 			{
@@ -520,7 +520,7 @@ func TestServer_mapAttestationToTargetRoot(t *testing.T) {
 	targetRoot1 := bytesutil.ToBytes32([]byte("root1"))
 	targetRoot2 := bytesutil.ToBytes32([]byte("root2"))
 
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		var targetRoot [32]byte
 		if i%2 == 0 {
 			targetRoot = targetRoot1
@@ -556,7 +556,7 @@ func TestServer_ListIndexedAttestations_GenesisEpoch(t *testing.T) {
 	atts := make([]*ethpb.Attestation, 0, count)
 	atts2 := make([]*ethpb.Attestation, 0, count)
 
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		var targetRoot [32]byte
 		if i%2 == 0 {
 			targetRoot = targetRoot1
@@ -697,7 +697,7 @@ func TestServer_ListIndexedAttestations_OldEpoch(t *testing.T) {
 	state, _ := util.DeterministicGenesisState(t, numValidators)
 
 	randaoMixes := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := 0; i < len(randaoMixes); i++ {
+	for i := range randaoMixes {
 		randaoMixes[i] = make([]byte, fieldparams.RootLength)
 	}
 	require.NoError(t, state.SetRandaoMixes(randaoMixes))
@@ -754,7 +754,7 @@ func TestServer_ListIndexedAttestationsElectra(t *testing.T) {
 	atts := make([]*ethpb.AttestationElectra, 0, count)
 	atts2 := make([]*ethpb.AttestationElectra, 0, count)
 
-	for i := primitives.Slot(0); i < count; i++ {
+	for i := range count {
 		var targetRoot [32]byte
 		if i%2 == 0 {
 			targetRoot = targetRoot1
@@ -924,7 +924,7 @@ func TestServer_AttestationPool_Pagination_DefaultPageSize(t *testing.T) {
 	}
 
 	atts := make([]ethpb.Att, params.BeaconConfig().DefaultPageSize+1)
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		att := util.NewAttestation()
 		att.Data.Slot = primitives.Slot(i)
 		atts[i] = att
@@ -946,7 +946,7 @@ func TestServer_AttestationPool_Pagination_CustomPageSize(t *testing.T) {
 
 	numAtts := 100
 	atts := make([]ethpb.Att, numAtts)
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		att := util.NewAttestation()
 		att.Data.Slot = primitives.Slot(i)
 		atts[i] = att
@@ -1002,7 +1002,7 @@ func TestServer_AttestationPoolElectra(t *testing.T) {
 	}
 
 	atts := make([]ethpb.Att, params.BeaconConfig().DefaultPageSize+1)
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		att := util.NewAttestationElectra()
 		att.Data.Slot = primitives.Slot(i)
 		atts[i] = att

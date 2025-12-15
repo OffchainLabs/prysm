@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
@@ -118,7 +118,7 @@ func (s *Service) BlockByTimestamp(ctx context.Context, time uint64) (*types.Hea
 	maxTimeBuffer := searchThreshold * params.BeaconConfig().SecondsPerETH1Block
 	// Terminate if we can't find an acceptable block after
 	// repeated searches.
-	for i := 0; i < repeatedSearches; i++ {
+	for range repeatedSearches {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

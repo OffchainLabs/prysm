@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // GenerateFullBlockElectra generates a fully valid Electra block with the requested parameters.
@@ -270,7 +270,7 @@ func generateWithdrawalRequests(
 	numRequests uint64,
 ) ([]*v1.WithdrawalRequest, error) {
 	withdrawalRequests := make([]*v1.WithdrawalRequest, numRequests)
-	for i := uint64(0); i < numRequests; i++ {
+	for i := range numRequests {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err
@@ -310,7 +310,7 @@ func generateDepositRequests(
 	numRequests uint64,
 ) ([]*v1.DepositRequest, error) {
 	depositRequests := make([]*v1.DepositRequest, numRequests)
-	for i := uint64(0); i < numRequests; i++ {
+	for i := range numRequests {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err
@@ -362,7 +362,7 @@ func generateConsolidationRequests(
 	numRequests uint64,
 ) ([]*v1.ConsolidationRequest, error) {
 	consolidationRequests := make([]*v1.ConsolidationRequest, numRequests)
-	for i := uint64(0); i < numRequests; i++ {
+	for i := range numRequests {
 		valIndex, err := randValIndex(bState)
 		if err != nil {
 			return nil, err

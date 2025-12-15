@@ -5,9 +5,10 @@ import (
 	"math"
 	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
@@ -89,15 +90,14 @@ func CustodyGroups(nodeId enode.ID, custodyGroupCount uint64) ([]uint64, error) 
 // ComputeColumnsForCustodyGroup computes the columns for a given custody group.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#compute_columns_for_custody_group
 func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
-	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+	cfg := params.BeaconConfig()
+	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 
 	if custodyGroup >= numberOfCustodyGroups {
 		return nil, ErrCustodyGroupTooLarge
 	}
 
-	numberOfColumns := beaconConfig.NumberOfColumns
-
+	numberOfColumns := uint64(fieldparams.NumberOfColumns)
 	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
 
 	columns := make([]uint64, 0, columnsPerGroup)
@@ -112,9 +112,10 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 // ComputeCustodyGroupForColumn computes the custody group for a given column.
 // It is the reciprocal function of ComputeColumnsForCustodyGroup.
 func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
-	numberOfColumns := beaconConfig.NumberOfColumns
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
+	const numberOfColumns = fieldparams.NumberOfColumns
+
+	cfg := params.BeaconConfig()
+	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 
 	if columnIndex >= numberOfColumns {
 		return 0, ErrIndexTooLarge

@@ -3,12 +3,12 @@ package helpers
 import (
 	"errors"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mathutil "github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 var balanceCache = cache.NewEffectiveBalanceCache()
@@ -79,7 +79,7 @@ func TotalActiveBalance(s state.ReadOnlyBeaconState) (uint64, error) {
 	}
 
 	// Spec defines `EffectiveBalanceIncrement` as min to avoid divisions by zero.
-	total = mathutil.Max(params.BeaconConfig().EffectiveBalanceIncrement, total)
+	total = max(params.BeaconConfig().EffectiveBalanceIncrement, total)
 	if err := balanceCache.AddTotalEffectiveBalance(s, total); err != nil {
 		return 0, err
 	}

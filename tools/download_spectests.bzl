@@ -110,6 +110,6 @@ consensus_spec_tests = repository_rule(
         "repo": attr.string(default = "ethereum/consensus-specs"),
         "workflow": attr.string(default = "generate_vectors.yml"),
         "branch": attr.string(default = "dev"),
-        "release_url_template": attr.string(default = "https://github.com/ethereum/consensus-spec-tests/releases/download/%s"),
+        "release_url_template": attr.string(default = "https://github.com/ethereum/consensus-specs/releases/download/%s"),
     },
 )

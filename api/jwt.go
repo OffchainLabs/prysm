@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )

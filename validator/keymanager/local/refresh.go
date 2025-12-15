@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
@@ -53,13 +53,13 @@ func (km *Keymanager) listenForAccountChanges(ctx context.Context) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	fileChangesChan := make(chan interface{}, 100)
+	fileChangesChan := make(chan any, 100)
 	defer close(fileChangesChan)
 
 	// We debounce events sent over the file changes channel by an interval
 	// to ensure we are not overwhelmed by a ton of events fired over the channel in
 	// a short span of time.
-	go async.Debounce(ctx, debounceFileChangesInterval, fileChangesChan, func(event interface{}) {
+	go async.Debounce(ctx, debounceFileChangesInterval, fileChangesChan, func(event any) {
 		ev, ok := event.(fsnotify.Event)
 		if !ok {
 			log.Errorf("Type %T is not a valid file system event", event)

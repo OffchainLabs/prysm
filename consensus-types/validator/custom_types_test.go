@@ -3,8 +3,8 @@ package validator
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/ghodss/yaml"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 func Test_customUint_UnmarshalJSON(t *testing.T) {

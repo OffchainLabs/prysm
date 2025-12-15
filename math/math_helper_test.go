@@ -5,8 +5,8 @@ import (
 	stdmath "math"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestIntegerSquareRoot(t *testing.T) {
@@ -156,21 +156,21 @@ func TestMath_Mod(t *testing.T) {
 
 func BenchmarkIntegerSquareRootBelow52Bits(b *testing.B) {
 	val := uint64(1 << 33)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, uint64(92681), math.IntegerSquareRoot(val))
 	}
 }
 
 func BenchmarkIntegerSquareRootAbove52Bits(b *testing.B) {
 	val := uint64(1 << 62)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, uint64(1<<31), math.IntegerSquareRoot(val))
 	}
 }
 
 func BenchmarkSquareRootEffectiveBalance(b *testing.B) {
 	val := uint64(1 << 62)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, uint64(1<<31), math.CachedSquareRoot(val))
 	}
 }
@@ -178,7 +178,7 @@ func BenchmarkSquareRootEffectiveBalance(b *testing.B) {
 func BenchmarkSquareRootBabylonian(b *testing.B) {
 	//Start with 700K validators' effective balance
 	val := uint64(22400000000000000)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sqr := math.CachedSquareRoot(val)
 		require.Equal(b, true, sqr^2 <= val)
 		require.Equal(b, true, (sqr+1)*(sqr+1) > val)
@@ -189,7 +189,7 @@ func BenchmarkSquareRootBabylonian(b *testing.B) {
 func BenchmarkSquareRootOldWay(b *testing.B) {
 	//Start with 700K validators' effective balance
 	val := uint64(22400000000000000)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sqr := math.IntegerSquareRoot(val)
 		require.Equal(b, true, sqr^2 <= val)
 		require.Equal(b, true, (sqr+1)*(sqr+1) > val)
@@ -199,7 +199,7 @@ func BenchmarkSquareRootOldWay(b *testing.B) {
 
 func BenchmarkIntegerSquareRoot_WithDatatable(b *testing.B) {
 	val := uint64(1024)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, uint64(32), math.IntegerSquareRoot(val))
 	}
 }
@@ -291,80 +291,6 @@ func TestPowerOf2(t *testing.T) {
 	}
 	for _, tt := range tests {
 		require.Equal(t, tt.b, math.PowerOf2(tt.a))
-	}
-}
-
-func TestMaxValue(t *testing.T) {
-	tests := []struct {
-		a      uint64
-		b      uint64
-		result uint64
-	}{
-		{
-			a:      10,
-			b:      8,
-			result: 10,
-		},
-		{
-			a:      300,
-			b:      256,
-			result: 300,
-		},
-		{
-			a:      1200,
-			b:      1024,
-			result: 1200,
-		},
-		{
-			a:      4500,
-			b:      4096,
-			result: 4500,
-		},
-		{
-			a:      9999,
-			b:      9999,
-			result: 9999,
-		},
-	}
-	for _, tt := range tests {
-		require.Equal(t, tt.result, math.Max(tt.a, tt.b))
-	}
-}
-
-func TestMinValue(t *testing.T) {
-	tests := []struct {
-		a      uint64
-		b      uint64
-		result uint64
-	}{
-		{
-			a:      10,
-			b:      8,
-			result: 8,
-		},
-		{
-			a:      300,
-			b:      256,
-			result: 256,
-		},
-		{
-			a:      1200,
-			b:      1024,
-			result: 1024,
-		},
-		{
-			a:      4500,
-			b:      4096,
-			result: 4096,
-		},
-		{
-			a:      9999,
-			b:      9999,
-			result: 9999,
-		},
-	}
-	for _, tt := range tests {
-		require.Equal(t, tt.result, math.Min(tt.a, tt.b))
 	}
 }
 

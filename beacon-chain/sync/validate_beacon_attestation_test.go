@@ -7,25 +7,25 @@ import (
 	"testing"
 	"time"
 
-	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/go-bitfield"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestService_validateCommitteeIndexBeaconAttestation(t *testing.T) {
@@ -499,6 +499,10 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			Data:            &ethpb.AttestationData{Slot: 2, CommitteeIndex: 0},
 			AggregationBits: bitfield.Bitlist{0b1001},
 		}
+		s3c0a0 := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 3, CommitteeIndex: 0},
+			AggregationBits: bitfield.Bitlist{0b1001},
+		}
 
 		t.Run("empty cache", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
@@ -506,26 +510,39 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		})
 		t.Run("ok", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
-			s.setSeenUnaggregatedAtt(key)
+			first := s.setSeenUnaggregatedAtt(key)
 			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
+		})
+		t.Run("already seen", func(t *testing.T) {
+			key := generateKey(t, s3c0a0)
+			first := s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
+			first = s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, false, first)
 		})
 		t.Run("different slot", func(t *testing.T) {
 			key1 := generateKey(t, s1c0a0)
 			key2 := generateKey(t, s2c0a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different committee index", func(t *testing.T) {
 			key1 := generateKey(t, s0c1a0)
 			key2 := generateKey(t, s0c2a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different bit", func(t *testing.T) {
 			key1 := generateKey(t, s0c0a1)
 			key2 := generateKey(t, s0c0a2)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("0 bits set is considered not seen", func(t *testing.T) {
 			a := &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b1000}}
@@ -576,6 +593,11 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			CommitteeId:   0,
 			AttesterIndex: 0,
 		}
+		s3c0a0 := &ethpb.SingleAttestation{
+			Data:          &ethpb.AttestationData{Slot: 2},
+			CommitteeId:   0,
+			AttesterIndex: 0,
+		}
 
 		t.Run("empty cache", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
@@ -583,26 +605,39 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 		})
 		t.Run("ok", func(t *testing.T) {
 			key := generateKey(t, s0c0a0)
-			s.setSeenUnaggregatedAtt(key)
+			first := s.setSeenUnaggregatedAtt(key)
 			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different slot", func(t *testing.T) {
 			key1 := generateKey(t, s1c0a0)
 			key2 := generateKey(t, s2c0a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
+		})
+		t.Run("already seen", func(t *testing.T) {
+			key := generateKey(t, s3c0a0)
+			first := s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, true, first)
+			first = s.setSeenUnaggregatedAtt(key)
+			assert.Equal(t, true, s.hasSeenUnaggregatedAtt(key))
+			assert.Equal(t, false, first)
 		})
 		t.Run("different committee index", func(t *testing.T) {
 			key1 := generateKey(t, s0c1a0)
 			key2 := generateKey(t, s0c2a0)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("different attester", func(t *testing.T) {
 			key1 := generateKey(t, s0c0a1)
 			key2 := generateKey(t, s0c0a2)
-			s.setSeenUnaggregatedAtt(key1)
+			first := s.setSeenUnaggregatedAtt(key1)
 			assert.Equal(t, false, s.hasSeenUnaggregatedAtt(key2))
+			assert.Equal(t, true, first)
 		})
 		t.Run("single attestation is considered not seen", func(t *testing.T) {
 			a := &ethpb.AttestationElectra{}
@@ -610,4 +645,42 @@ func TestService_setSeenUnaggregatedAtt(t *testing.T) {
 			require.Equal(t, err != nil, true, "Should error because no bits set is invalid")
 		})
 	})
+}
+
+func Test_validateCommitteeIndexAndCount_Boundary(t *testing.T) {
+	ctx := t.Context()
+
+	// Create a minimal state with a known number of validators.
+	validators := uint64(64)
+	bs, _ := util.DeterministicGenesisState(t, validators)
+	require.NoError(t, bs.SetSlot(1))
+
+	s := &Service{}
+
+	// Build a minimal Phase0 attestation (unaggregated path).
+	att := &ethpb.Attestation{
+		Data: &ethpb.AttestationData{
+			Slot:           1,
+			CommitteeIndex: 0,
+		},
+	}
+
+	// First call to obtain the active validator count used to derive committees per slot.
+	_, valCount, res, err := s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	count := helpers.SlotCommitteeCount(valCount)
+
+	// committee_index == count - 1 should be accepted.
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count - 1)
+	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	// committee_index == count should be rejected (out of range).
+	att.Data.CommitteeIndex = primitives.CommitteeIndex(count)
+	_, _, res, err = s.validateCommitteeIndexAndCount(ctx, att, bs)
+	require.ErrorContains(t, "committee index", err)
+	require.Equal(t, pubsub.ValidationReject, res)
 }

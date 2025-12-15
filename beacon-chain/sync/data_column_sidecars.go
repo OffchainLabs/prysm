@@ -3,24 +3,25 @@ package sync
 import (
 	"bytes"
 	"context"
+	"maps"
 	"slices"
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -129,9 +130,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "try merge storage and mandatory inputs")
 	}
 
-	for root, sidecars := range mergedSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, mergedSidecarsByRoot)
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers")
@@ -150,9 +149,7 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "try merge storage and all inputs")
 	}
 
-	for root, sidecars := range mergedSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, mergedSidecarsByRoot)
 
 	if len(incompleteRoots) == 0 {
 		log.WithField("finalMissingRootCount", 0).Debug("Fetched data column sidecars from storage and peers using rescue mode")
@@ -165,11 +162,9 @@ func FetchDataColumnSidecars(
 		return nil, nil, errors.Wrap(err, "assemble available sidecars for incomplete roots")
 	}
 
-	for root, sidecars := range incompleteSidecarsByRoot {
-		result[root] = sidecars
-	}
+	maps.Copy(result, incompleteSidecarsByRoot)
 
-	log.WithField("finalMissingRootCount", len(incompleteRoots)).Debug("Failed to fetch data column sidecars from storage and peers using rescue mode")
+	log.WithField("finalMissingRootCount", len(incompleteRoots)).Warning("Failed to fetch data column sidecars")
 	return result, missingByRoot, nil
 }
 
@@ -187,7 +182,7 @@ func requestSidecarsFromStorage(
 	requestedIndicesMap map[uint64]bool,
 	roots map[[fieldparams.RootLength]byte]bool,
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
-	requestedIndices := sortedSliceFromMap(requestedIndicesMap)
+	requestedIndices := helpers.SortedSliceFromMap(requestedIndicesMap)
 
 	result := make(map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, len(roots))
 
@@ -332,7 +327,7 @@ func requestIndirectSidecarsFromPeers(
 ) (map[[fieldparams.RootLength]byte][]blocks.VerifiedRODataColumn, error) {
 	start := time.Now()
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
 	// Create a new random source for peer selection.
@@ -599,7 +594,7 @@ func assembleAvailableSidecarsForRoot(
 	root [fieldparams.RootLength]byte,
 	indices map[uint64]bool,
 ) ([]blocks.VerifiedRODataColumn, error) {
-	stored, err := storage.Get(root, sortedSliceFromMap(indices))
+	stored, err := storage.Get(root, helpers.SortedSliceFromMap(indices))
 	if err != nil {
 		return nil, errors.Wrapf(err, "storage get for root %#x", root)
 	}
@@ -738,7 +733,7 @@ func fetchDataColumnSidecarsFromPeers(
 
 			roDataColumns, err := sendDataColumnSidecarsRequest(params, slotByRoot, slotsWithCommitments, peerID, indicesByRoot)
 			if err != nil {
-				log.WithError(err).Warning("Failed to send data column sidecars request")
+				log.WithError(err).Debug("Failed to send data column sidecars request")
 				return
 			}
 
@@ -802,24 +797,26 @@ func sendDataColumnSidecarsRequest(
 			roDataColumns = append(roDataColumns, localRoDataColumns...)
 		}
 
-		prettyByRangeRequests := make([]map[string]any, 0, len(byRangeRequests))
-		for _, request := range byRangeRequests {
-			prettyRequest := map[string]any{
-				"startSlot": request.StartSlot,
-				"count":     request.Count,
-				"columns":   request.Columns,
+		if logrus.GetLevel() >= logrus.DebugLevel {
+			prettyByRangeRequests := make([]map[string]any, 0, len(byRangeRequests))
+			for _, request := range byRangeRequests {
+				prettyRequest := map[string]any{
+					"startSlot": request.StartSlot,
+					"count":     request.Count,
+					"columns":   helpers.PrettySlice(request.Columns),
+				}
+
+				prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
 			}
 
-			prettyByRangeRequests = append(prettyByRangeRequests, prettyRequest)
+			log.WithFields(logrus.Fields{
+				"respondedSidecars": len(roDataColumns),
+				"requestCount":      len(byRangeRequests),
+				"type":              "byRange",
+				"duration":          time.Since(start),
+				"requests":          prettyByRangeRequests,
+			}).Debug("Received data column sidecars")
 		}
-
-		log.WithFields(logrus.Fields{
-			"respondedSidecars": len(roDataColumns),
-			"requestCount":      len(byRangeRequests),
-			"type":              "byRange",
-			"duration":          time.Since(start),
-			"requests":          prettyByRangeRequests,
-		}).Debug("Received data column sidecars")
 
 		return roDataColumns, nil
 	}
@@ -895,7 +892,7 @@ func buildByRangeRequests(
 		}
 	}
 
-	columns := sortedSliceFromMap(reference)
+	columns := helpers.SortedSliceFromMap(reference)
 	startSlot, endSlot := slots[0], slots[len(slots)-1]
 	totalCount := uint64(endSlot - startSlot + 1)
 
@@ -918,15 +915,15 @@ func buildByRangeRequests(
 func buildByRootRequest(indicesByRoot map[[fieldparams.RootLength]byte]map[uint64]bool) p2ptypes.DataColumnsByRootIdentifiers {
 	identifiers := make(p2ptypes.DataColumnsByRootIdentifiers, 0, len(indicesByRoot))
 	for root, indices := range indicesByRoot {
-		identifier := &eth.DataColumnsByRootIdentifier{
+		identifier := &ethpb.DataColumnsByRootIdentifier{
 			BlockRoot: root[:],
-			Columns:   sortedSliceFromMap(indices),
+			Columns:   helpers.SortedSliceFromMap(indices),
 		}
 		identifiers = append(identifiers, identifier)
 	}
 
 	// Sort identifiers to have a deterministic output.
-	slices.SortFunc(identifiers, func(left, right *eth.DataColumnsByRootIdentifier) int {
+	slices.SortFunc(identifiers, func(left, right *ethpb.DataColumnsByRootIdentifier) int {
 		if cmp := bytes.Compare(left.BlockRoot, right.BlockRoot); cmp != 0 {
 			return cmp
 		}
@@ -1020,17 +1017,20 @@ func computeIndicesByRootByPeer(
 	peersByIndex := make(map[uint64]map[goPeer.ID]bool)
 	headSlotByPeer := make(map[goPeer.ID]primitives.Slot)
 	for peer := range peers {
+		log := log.WithField("peerID", peer)
+
 		// Computes the custody columns for each peer
 		nodeID, err := prysmP2P.ConvertPeerIDToNodeID(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "convert peer ID to node ID for peer %s", peer)
+			log.WithError(err).Debug("Failed to convert peer ID to node ID")
+			continue
 		}
 
 		custodyGroupCount := p2p.CustodyGroupCountFromPeer(peer)
-
 		dasInfo, _, err := peerdas.Info(nodeID, custodyGroupCount)
 		if err != nil {
-			return nil, errors.Wrapf(err, "peerdas info for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer DAS info")
+			continue
 		}
 
 		for column := range dasInfo.CustodyColumns {
@@ -1043,11 +1043,13 @@ func computeIndicesByRootByPeer(
 		// Compute the head slot for each peer
 		peerChainState, err := p2p.Peers().ChainState(peer)
 		if err != nil {
-			return nil, errors.Wrapf(err, "get chain state for peer %s", peer)
+			log.WithError(err).Debug("Failed to get peer chain state")
+			continue
 		}
 
 		if peerChainState == nil {
-			return nil, errors.Errorf("chain state is nil for peer %s", peer)
+			log.Debug("Peer chain state is nil")
+			continue
 		}
 
 		// Our view of the head slot of a peer is not updated in real time.
@@ -1115,19 +1117,21 @@ func randomPeer(
 			}
 		}
 
-		slices.Sort(nonRateLimitedPeers)
-
-		if len(nonRateLimitedPeers) == 0 {
-			log.WithFields(logrus.Fields{
-				"peerCount": peerCount,
-				"delay":     waitPeriod,
-			}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
-			time.Sleep(waitPeriod)
-			continue
+		if len(nonRateLimitedPeers) > 0 {
+			slices.Sort(nonRateLimitedPeers)
+			randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
+			return nonRateLimitedPeers[randomIndex], nil
 		}
 
-		randomIndex := randomSource.Intn(len(nonRateLimitedPeers))
-		return nonRateLimitedPeers[randomIndex], nil
+		log.WithFields(logrus.Fields{
+			"peerCount": peerCount,
+			"delay":     waitPeriod,
+		}).Debug("Waiting for a peer with enough bandwidth for data column sidecars")
+
+		select {
+		case <-time.After(waitPeriod):
+		case <-ctx.Done():
+		}
 	}
 
 	return "", ctx.Err()
@@ -1150,9 +1154,7 @@ func copyIndicesByRoot(original map[[fieldparams.RootLength]byte]map[uint64]bool
 	copied := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(original))
 	for root, indexMap := range original {
 		copied[root] = make(map[uint64]bool, len(indexMap))
-		for index, value := range indexMap {
-			copied[root][index] = value
-		}
+		maps.Copy(copied[root], indexMap)
 	}
 	return copied
 }
@@ -1171,17 +1173,6 @@ func compareIndices(left, right map[uint64]bool) bool {
 	}
 
 	return true
-}
-
-// sortedSliceFromMap converts a map[uint64]bool to a sorted slice of keys.
-func sortedSliceFromMap(m map[uint64]bool) []uint64 {
-	result := make([]uint64, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-
-	slices.Sort(result)
-	return result
 }
 
 // computeTotalCount calculates the total count of indices across all roots.

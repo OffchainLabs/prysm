@@ -5,22 +5,20 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
@@ -67,6 +65,7 @@ type BeaconChainConfig struct {
 	GenesisDelay                     uint64           `yaml:"GENESIS_DELAY" spec:"true"`                   // GenesisDelay is the minimum number of seconds to delay starting the Ethereum Beacon Chain genesis. Must be at least 1 second.
 	MinAttestationInclusionDelay     primitives.Slot  `yaml:"MIN_ATTESTATION_INCLUSION_DELAY" spec:"true"` // MinAttestationInclusionDelay defines how many slots validator has to wait to include attestation for beacon block.
 	SecondsPerSlot                   uint64           `yaml:"SECONDS_PER_SLOT" spec:"true"`                // SecondsPerSlot is how many seconds are in a single slot.
+	SlotDurationMilliseconds         uint64           `yaml:"SLOT_DURATION_MS" spec:"true"`                // SlotDurationMilliseconds is the slot time expressed in milliseconds.
 	SlotsPerEpoch                    primitives.Slot  `yaml:"SLOTS_PER_EPOCH" spec:"true"`                 // SlotsPerEpoch is the number of slots in an epoch.
 	SqrRootSlotsPerEpoch             primitives.Slot  // SqrRootSlotsPerEpoch is a hard coded value where we take the square root of `SlotsPerEpoch` and round down.
 	MinSeedLookahead                 primitives.Epoch `yaml:"MIN_SEED_LOOKAHEAD" spec:"true"`                  // MinSeedLookahead is the duration of randao look ahead seed.
@@ -84,7 +83,12 @@ type BeaconChainConfig struct {
 	ReorgHeadWeightThreshold        uint64           `yaml:"REORG_HEAD_WEIGHT_THRESHOLD" spec:"true"`         // ReorgHeadWeightThreshold defines a value that is a % of the committee weight to consider a block weak and subject to being orphaned.
 	ReorgParentWeightThreshold      uint64           `yaml:"REORG_PARENT_WEIGHT_THRESHOLD" spec:"true"`       // ReorgParentWeightThreshold defines a value that is a % of the committee weight to consider a parent block strong and subject its child to being orphaned.
 	ReorgMaxEpochsSinceFinalization primitives.Epoch `yaml:"REORG_MAX_EPOCHS_SINCE_FINALIZATION" spec:"true"` // This defines a limit to consider safe to orphan a block if the network is finalizing
-	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT" spec:"true"`                  // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
+	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT"`                              // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
+	ProposerReorgCutoffBPS          primitives.BP    `yaml:"PROPOSER_REORG_CUTOFF_BPS" spec:"true"`           // ProposerReorgCutoffBPS defines the proposer reorg deadline in basis points of the slot.
+	AttestationDueBPS               primitives.BP    `yaml:"ATTESTATION_DUE_BPS" spec:"true"`                 // AttestationDueBPS defines the attestation due time in basis points of the slot.
+	AggregrateDueBPS                primitives.BP    `yaml:"AGGREGRATE_DUE_BPS" spec:"true"`                  // AggregrateDueBPS defines the aggregate due time in basis points of the slot.
+	SyncMessageDueBPS               primitives.BP    `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`                // SyncMessageDueBPS defines the sync message due time in basis points of the slot.
+	ContributionDueBPS              primitives.BP    `yaml:"CONTRIBUTION_DUE_BPS" spec:"true"`                // ContributionDueBPS defines the contribution due time in basis points of the slot.
 
 	// Ethereum PoW parameters.
 	DepositChainID         uint64 `yaml:"DEPOSIT_CHAIN_ID" spec:"true"`         // DepositChainID of the eth1 network. This used for replay protection.
@@ -92,8 +96,8 @@ type BeaconChainConfig struct {
 	DepositContractAddress string `yaml:"DEPOSIT_CONTRACT_ADDRESS" spec:"true"` // DepositContractAddress is the address of the deposit contract.
 
 	// Validator parameters.
-	RandomSubnetsPerValidator         uint64 `yaml:"RANDOM_SUBNETS_PER_VALIDATOR" spec:"true"`          // RandomSubnetsPerValidator specifies the amount of subnets a validator has to be subscribed to at one time.
-	EpochsPerRandomSubnetSubscription uint64 `yaml:"EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION" spec:"true"` // EpochsPerRandomSubnetSubscription specifies the minimum duration a validator is connected to their subnet.
+	RandomSubnetsPerValidator         uint64 `yaml:"RANDOM_SUBNETS_PER_VALIDATOR" spec:"true"` // RandomSubnetsPerValidator specifies the amount of subnets a validator has to be subscribed to at one time.
+	EpochsPerRandomSubnetSubscription uint64 `yaml:"EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION"`    // EpochsPerRandomSubnetSubscription specifies the minimum duration a validator is connected to their subnet.
 
 	// State list lengths
 	EpochsPerHistoricalVector primitives.Epoch `yaml:"EPOCHS_PER_HISTORICAL_VECTOR" spec:"true"` // EpochsPerHistoricalVector defines max length in epoch to store old historical stats in beacon state.
@@ -110,15 +114,14 @@ type BeaconChainConfig struct {
 	ProportionalSlashingMultiplier uint64 `yaml:"PROPORTIONAL_SLASHING_MULTIPLIER" spec:"true"` // ProportionalSlashingMultiplier is used as a multiplier on slashed penalties.
 
 	// Max operations per block constants.
-	MaxProposerSlashings             uint64 `yaml:"MAX_PROPOSER_SLASHINGS" spec:"true"`         // MaxProposerSlashings defines the maximum number of slashings of proposers possible in a block.
-	MaxAttesterSlashings             uint64 `yaml:"MAX_ATTESTER_SLASHINGS" spec:"true"`         // MaxAttesterSlashings defines the maximum number of casper FFG slashings possible in a block.
-	MaxAttesterSlashingsElectra      uint64 `yaml:"MAX_ATTESTER_SLASHINGS_ELECTRA" spec:"true"` // MaxAttesterSlashingsElectra defines the maximum number of casper FFG slashings possible in a block post Electra hard fork.
-	MaxAttestations                  uint64 `yaml:"MAX_ATTESTATIONS" spec:"true"`               // MaxAttestations defines the maximum allowed attestations in a beacon block.
-	MaxAttestationsElectra           uint64 `yaml:"MAX_ATTESTATIONS_ELECTRA" spec:"true"`       // MaxAttestationsElectra defines the maximum allowed attestations in a beacon block post Electra hard fork.
-	MaxDeposits                      uint64 `yaml:"MAX_DEPOSITS" spec:"true"`                   // MaxDeposits defines the maximum number of validator deposits in a block.
-	MaxVoluntaryExits                uint64 `yaml:"MAX_VOLUNTARY_EXITS" spec:"true"`            // MaxVoluntaryExits defines the maximum number of validator exits in a block.
-	MaxWithdrawalsPerPayload         uint64 `yaml:"MAX_WITHDRAWALS_PER_PAYLOAD" spec:"true"`    // MaxWithdrawalsPerPayload defines the maximum number of withdrawals in a block.
-	MaxPartialWithdrawalsPerPayload  uint64 `yaml:"MAX_PARTIAL_WITHDRAWALS_PER_PAYLOAD" spec:"true"`
+	MaxProposerSlashings             uint64 `yaml:"MAX_PROPOSER_SLASHINGS" spec:"true"`               // MaxProposerSlashings defines the maximum number of slashings of proposers possible in a block.
+	MaxAttesterSlashings             uint64 `yaml:"MAX_ATTESTER_SLASHINGS" spec:"true"`               // MaxAttesterSlashings defines the maximum number of casper FFG slashings possible in a block.
+	MaxAttesterSlashingsElectra      uint64 `yaml:"MAX_ATTESTER_SLASHINGS_ELECTRA" spec:"true"`       // MaxAttesterSlashingsElectra defines the maximum number of casper FFG slashings possible in a block post Electra hard fork.
+	MaxAttestations                  uint64 `yaml:"MAX_ATTESTATIONS" spec:"true"`                     // MaxAttestations defines the maximum allowed attestations in a beacon block.
+	MaxAttestationsElectra           uint64 `yaml:"MAX_ATTESTATIONS_ELECTRA" spec:"true"`             // MaxAttestationsElectra defines the maximum allowed attestations in a beacon block post Electra hard fork.
+	MaxDeposits                      uint64 `yaml:"MAX_DEPOSITS" spec:"true"`                         // MaxDeposits defines the maximum number of validator deposits in a block.
+	MaxVoluntaryExits                uint64 `yaml:"MAX_VOLUNTARY_EXITS" spec:"true"`                  // MaxVoluntaryExits defines the maximum number of validator exits in a block.
+	MaxWithdrawalsPerPayload         uint64 `yaml:"MAX_WITHDRAWALS_PER_PAYLOAD" spec:"true"`          // MaxWithdrawalsPerPayload defines the maximum number of withdrawals in a block.
 	MaxBlsToExecutionChanges         uint64 `yaml:"MAX_BLS_TO_EXECUTION_CHANGES" spec:"true"`         // MaxBlsToExecutionChanges defines the maximum number of BLS-to-execution-change objects in a block.
 	MaxValidatorsPerWithdrawalsSweep uint64 `yaml:"MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP" spec:"true"` // MaxValidatorsPerWithdrawalsSweep bounds the size of the sweep searching for withdrawals per slot.
 
@@ -158,6 +161,7 @@ type BeaconChainConfig struct {
 	BeaconStateDenebFieldCount     int             // BeaconStateDenebFieldCount defines how many fields are in beacon state post upgrade to Deneb.
 	BeaconStateElectraFieldCount   int             // BeaconStateElectraFieldCount defines how many fields are in beacon state post upgrade to Electra.
 	BeaconStateFuluFieldCount      int             // BeaconStateFuluFieldCount defines how many fields are in beacon state post upgrade to Fulu.
+	BeaconStateGloasFieldCount     int             // BeaconStateGloasFieldCount defines how many fields are in beacon state post upgrade to Gloas.
 
 	// Slasher constants.
 	WeakSubjectivityPeriod    primitives.Epoch // WeakSubjectivityPeriod defines the time period expressed in number of epochs were proof of stake network should validate block headers and attestations for slashable events.
@@ -277,12 +281,10 @@ type BeaconChainConfig struct {
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
 	// Values introduced in Fulu upgrade
-	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                            // NumberOfColumns in the extended data matrix.
 	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT" spec:"true"`                             // SamplesPerSlot is the minimum number of samples for an honest node.
 	NumberOfCustodyGroups                 uint64           `yaml:"NUMBER_OF_CUSTODY_GROUPS" spec:"true"`                     // NumberOfCustodyGroups available for nodes to custody.
 	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT" spec:"true"`                          // CustodyRequirement is minimum number of custody groups an honest node custodies and serves samples from.
 	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
-	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                             // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
 	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"`             // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
 	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
 	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
@@ -303,7 +305,7 @@ type BeaconChainConfig struct {
 	AttestationSubnetExtraBits      uint64          `yaml:"ATTESTATION_SUBNET_EXTRA_BITS" spec:"true"`      // AttestationSubnetExtraBits is the number of extra bits of a NodeId to use when mapping to a subscribed subnet.
 	AttestationSubnetPrefixBits     uint64          `yaml:"ATTESTATION_SUBNET_PREFIX_BITS" spec:"true"`     // AttestationSubnetPrefixBits is defined as (ceillog2(ATTESTATION_SUBNET_COUNT) + ATTESTATION_SUBNET_EXTRA_BITS).
 	SubnetsPerNode                  uint64          `yaml:"SUBNETS_PER_NODE" spec:"true"`                   // SubnetsPerNode is the number of long-lived subnets a beacon node should be subscribed to.
-	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS" spec:"true"`                       // NodeIdBits defines the bit length of a node id.
+	NodeIdBits                      uint64          `yaml:"NODE_ID_BITS"`                                   // NodeIdBits defines the bit length of a node id.
 
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
@@ -318,11 +320,7 @@ type BeaconChainConfig struct {
 
 	// DeprecatedTargetBlobsPerBlockElectra defines the target number of blobs per block post Electra hard fork.
 	// Deprecated: This field is no longer supported. Avoid using it.
-	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA" spec:"true"`
-
-	// DeprecatedMaxBlobsPerBlockFulu defines the max blobs that could exist in a block post Fulu hard fork.
-	// Deprecated: This field is no longer supported. Avoid using it.
-	DeprecatedMaxBlobsPerBlockFulu int `yaml:"MAX_BLOBS_PER_BLOCK_FULU" spec:"true"`
+	DeprecatedTargetBlobsPerBlockElectra int `yaml:"TARGET_BLOBS_PER_BLOCK_ELECTRA"`
 
 	forkSchedule    *NetworkSchedule
 	bpoSchedule     *NetworkSchedule
@@ -358,7 +356,7 @@ type NetworkScheduleEntry struct {
 	isFork           bool                            `yaml:"-" json:"-"`
 }
 
-func (e NetworkScheduleEntry) LogFields() log.Fields {
+func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 	gvr := BeaconConfig().GenesisValidatorsRoot
 	root, err := computeForkDataRoot(e.ForkVersion, gvr)
 	if err != nil {
@@ -366,7 +364,7 @@ func (e NetworkScheduleEntry) LogFields() log.Fields {
 			WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
 			WithError(err).Error("Failed to compute fork data root")
 	}
-	fields := log.Fields{
+	fields := logrus.Fields{
 		"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
 		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 		"maxBlobsPerBlock": e.MaxBlobsPerBlock,
@@ -388,10 +386,12 @@ func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
 	}
 }
 
-// TODO: this needs to be able to return an error
-// InitializeForkSchedule initializes the schedules forks baked into the config.
+// InitializeForkSchedule initializes the scheduled forks and BPOs baked into the config.
 func (b *BeaconChainConfig) InitializeForkSchedule() {
-	// Reset Fork Version Schedule.
+	// TODO: this needs to be able to return an error. The network schedule code has
+	// to implement weird fallbacks when it is not initialized properly, it would be better
+	// if the beacon node could crash if there isn't a valid fork schedule
+	// at the return of this function.
 	b.ForkVersionSchedule = configForkSchedule(b)
 	b.ForkVersionNames = configForkNames(b)
 	b.forkSchedule = initForkSchedule(b)
@@ -443,16 +443,18 @@ func (ns *NetworkSchedule) epochIdx(epoch primitives.Epoch) int {
 	return -1
 }
 
+func (ns *NetworkSchedule) safeIndex(idx int) NetworkScheduleEntry {
+	if idx < 0 || len(ns.entries) == 0 {
+		return genesisNetworkScheduleEntry()
+	}
+	if idx >= len(ns.entries) {
+		return ns.entries[len(ns.entries)-1]
+	}
+	return ns.entries[idx]
+}
+
 func (ns *NetworkSchedule) Next(epoch primitives.Epoch) NetworkScheduleEntry {
-	lastIdx := len(ns.entries) - 1
-	idx := ns.epochIdx(epoch)
-	if idx < 0 {
-		return ns.entries[0]
-	}
-	if idx == lastIdx {
-		return ns.entries[lastIdx]
-	}
-	return ns.entries[idx+1]
+	return ns.safeIndex(ns.epochIdx(epoch) + 1)
 }
 
 func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
@@ -461,7 +463,7 @@ func (ns *NetworkSchedule) LastEntry() NetworkScheduleEntry {
 			return ns.entries[i]
 		}
 	}
-	return ns.entries[0]
+	return genesisNetworkScheduleEntry()
 }
 
 // LastFork is the last full fork (this is used by e2e testing)
@@ -471,28 +473,11 @@ func (ns *NetworkSchedule) LastFork() NetworkScheduleEntry {
 			return ns.entries[i]
 		}
 	}
-	return ns.entries[0]
+	return genesisNetworkScheduleEntry()
 }
 
-func (ns *NetworkSchedule) ForEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
-	idx := ns.epochIdx(epoch)
-	if idx < 0 {
-		return ns.entries[0]
-	}
-	if idx >= len(ns.entries)-1 {
-		return ns.entries[len(ns.entries)-1]
-	}
-	return ns.entries[idx]
-}
-
-func (ns *NetworkSchedule) activatedAt(epoch primitives.Epoch) (*NetworkScheduleEntry, bool) {
-	ns.mu.RLock()
-	defer ns.mu.RUnlock()
-	if ns.byEpoch == nil {
-		return nil, false
-	}
-	entry, ok := ns.byEpoch[epoch]
-	return entry, ok
+func (ns *NetworkSchedule) forEpoch(epoch primitives.Epoch) NetworkScheduleEntry {
+	return ns.safeIndex(ns.epochIdx(epoch))
 }
 
 func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
@@ -501,10 +486,15 @@ func (ns *NetworkSchedule) merge(other *NetworkSchedule) *NetworkSchedule {
 	merged = append(merged, other.entries...)
 	sort.Slice(merged, func(i, j int) bool {
 		if merged[i].Epoch == merged[j].Epoch {
-			if merged[i].VersionEnum == merged[j].VersionEnum {
-				return merged[i].isFork
+			// This can happen for 2 reasons:
+			// 1) both entries are forks in a test setup (eg starting genesis at a later fork)
+			// - break tie by version enum
+			// 2) one entry is a fork, the other is a BPO change
+			// - break tie by putting the fork first
+			if merged[i].isFork && merged[j].isFork {
+				return merged[i].VersionEnum < merged[j].VersionEnum
 			}
-			return merged[i].VersionEnum < merged[j].VersionEnum
+			return merged[i].isFork
 		}
 		return merged[i].Epoch < merged[j].Epoch
 	})
@@ -526,6 +516,13 @@ func (ns *NetworkSchedule) index(e NetworkScheduleEntry) {
 }
 
 func (ns *NetworkSchedule) prepare(b *BeaconChainConfig) error {
+	// Only keep entries up to FarFutureEpoch.
+	for i := range ns.entries {
+		if ns.entries[i].Epoch == b.FarFutureEpoch {
+			ns.entries = ns.entries[:i]
+			break
+		}
+	}
 	if len(ns.entries) == 0 {
 		return errors.New("cannot compute digests for an empty network schedule")
 	}
@@ -699,52 +696,12 @@ func (b *BeaconChainConfig) TargetBlobsPerBlock(slot primitives.Slot) int {
 // MaxBlobsPerBlock returns the maximum number of blobs per block for the given slot.
 func (b *BeaconChainConfig) MaxBlobsPerBlock(slot primitives.Slot) int {
 	epoch := primitives.Epoch(slot.DivSlot(b.SlotsPerEpoch))
-
-	if len(b.BlobSchedule) > 0 {
-		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-			return int(a.Epoch - b.Epoch)
-		}) {
-			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-				return int(a.Epoch - b.Epoch)
-			})
-		}
-
-		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
-			if epoch >= b.BlobSchedule[i].Epoch {
-				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
-			}
-		}
-	}
-
-	if epoch >= b.ElectraForkEpoch {
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	}
-
-	return b.DeprecatedMaxBlobsPerBlock
+	return b.MaxBlobsPerBlockAtEpoch(epoch)
 }
 
 // MaxBlobsPerBlockAtEpoch returns the maximum number of blobs per block for the given epoch
 func (b *BeaconChainConfig) MaxBlobsPerBlockAtEpoch(epoch primitives.Epoch) int {
-	if len(b.BlobSchedule) > 0 {
-		if !slices.IsSortedFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-			return int(a.Epoch - b.Epoch)
-		}) {
-			slices.SortFunc(b.BlobSchedule, func(a, b BlobScheduleEntry) int {
-				return int(a.Epoch - b.Epoch)
-			})
-		}
-
-		for i := len(b.BlobSchedule) - 1; i >= 0; i-- {
-			if epoch >= b.BlobSchedule[i].Epoch {
-				return int(b.BlobSchedule[i].MaxBlobsPerBlock)
-			}
-		}
-	}
-
-	if epoch >= b.ElectraForkEpoch {
-		return b.DeprecatedMaxBlobsPerBlockElectra
-	}
-	return b.DeprecatedMaxBlobsPerBlock
+	return int(b.networkSchedule.forEpoch(epoch).MaxBlobsPerBlock)
 }
 
 // DenebEnabled centralizes the check to determine if code paths that are specific to deneb should be allowed to execute.
@@ -787,10 +744,29 @@ func SlotsForEpochs(count primitives.Epoch, b *BeaconChainConfig) primitives.Slo
 
 // SlotsDuration returns the time duration of the given number of slots.
 func SlotsDuration(count primitives.Slot, b *BeaconChainConfig) time.Duration {
-	return time.Duration(count) * SecondsPerSlot(b)
+	return time.Duration(count) * b.SlotDuration()
 }
 
 // SecondsPerSlot returns the time duration of a single slot.
 func SecondsPerSlot(b *BeaconChainConfig) time.Duration {
-	return time.Duration(b.SecondsPerSlot) * time.Second
+	return b.SlotDuration()
+}
+
+// SlotDuration returns the configured slot duration as a time.Duration.
+func (b *BeaconChainConfig) SlotDuration() time.Duration {
+	return time.Duration(b.SlotDurationMillis()) * time.Millisecond
+}
+
+// SlotDurationMillis returns the configured slot duration in milliseconds.
+func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
+	if b.SlotDurationMilliseconds > 0 {
+		return b.SlotDurationMilliseconds
+	}
+	return b.SecondsPerSlot * 1000
+}
+
+// SlotComponentDuration returns the duration representing the given portion (in basis points) of a slot.
+func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
+	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
+	return time.Duration(ms) * time.Millisecond
 }

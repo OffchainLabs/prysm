@@ -527,7 +527,11 @@
     </spec>
 
 - name: compute_fork_digest#fulu
-  sources: []
+  sources:
+    - file: config/params/fork.go
+      search: func ForkDigest(
+    - file: config/params/config.go
+      search: func entryWithForkDigest(
   spec: |
     <spec fn="compute_fork_digest" fork="fulu" hash="e916a595">
     def compute_fork_digest(
@@ -1299,9 +1303,24 @@
     - file: crypto/bls/bls.go
       search: func AggregatePublicKeys(
   spec: |
-    <spec fn="eth_aggregate_pubkeys" fork="altair" hash="977edbdb">
+    <spec fn="eth_aggregate_pubkeys" fork="altair" hash="bfb5ddd0">
     def eth_aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
-        return bls.AggregatePKs(pubkeys)
+        """
+        Return the aggregate public key for the public keys in ``pubkeys``.
+
+        Note: the ``+`` operation should be interpreted as elliptic curve point addition, which takes as input
+        elliptic curve points that must be decoded from the input ``BLSPubkey``s.
+        This implementation is for demonstrative purposes only and ignores encoding/decoding concerns.
+        Refer to the BLS signature draft standard for more information.
+        """
+        assert len(pubkeys) > 0
+        # Ensure that the given inputs are valid pubkeys
+        assert all(bls.KeyValidate(pubkey) for pubkey in pubkeys)
+
+        result = copy(pubkeys[0])
+        for pubkey in pubkeys[1:]:
+            result += pubkey
+        return result
     </spec>
 
 - name: eth_fast_aggregate_verify
@@ -1541,26 +1560,30 @@
     - file: beacon-chain/core/altair/attestation.go
       search: func AttestationParticipationFlagIndices(
   spec: |
-    <spec fn="get_attestation_participation_flag_indices" fork="altair" hash="c13f596c">
+    <spec fn="get_attestation_participation_flag_indices" fork="altair" hash="d697ae39">
     def get_attestation_participation_flag_indices(
         state: BeaconState, data: AttestationData, inclusion_delay: uint64
     ) -> Sequence[int]:
         """
         Return the flag indices that are satisfied by an attestation.
         """
+        # Matching source
         if data.target.epoch == get_current_epoch(state):
             justified_checkpoint = state.current_justified_checkpoint
         else:
             justified_checkpoint = state.previous_justified_checkpoint
-
-        # Matching roots
         is_matching_source = data.source == justified_checkpoint
-        is_matching_target = is_matching_source and data.target.root == get_block_root(
-            state, data.target.epoch
-        )
-        is_matching_head = is_matching_target and data.beacon_block_root == get_block_root_at_slot(
-            state, data.slot
-        )
+
+        # Matching target
+        target_root = get_block_root(state, data.target.epoch)
+        target_root_matches = data.target.root == target_root
+        is_matching_target = is_matching_source and target_root_matches
+
+        # Matching head
+        head_root = get_block_root_at_slot(state, data.slot)
+        head_root_matches = data.beacon_block_root == head_root
+        is_matching_head = is_matching_target and head_root_matches
+
         assert is_matching_source
 
         participation_flag_indices = []
@@ -1579,26 +1602,30 @@
     - file: beacon-chain/core/altair/attestation.go
       search: func AttestationParticipationFlagIndices(
   spec: |
-    <spec fn="get_attestation_participation_flag_indices" fork="deneb" hash="55cbe933">
+    <spec fn="get_attestation_participation_flag_indices" fork="deneb" hash="7b46fd38">
     def get_attestation_participation_flag_indices(
         state: BeaconState, data: AttestationData, inclusion_delay: uint64
     ) -> Sequence[int]:
         """
         Return the flag indices that are satisfied by an attestation.
         """
+        # Matching source
         if data.target.epoch == get_current_epoch(state):
             justified_checkpoint = state.current_justified_checkpoint
         else:
             justified_checkpoint = state.previous_justified_checkpoint
-
-        # Matching roots
         is_matching_source = data.source == justified_checkpoint
-        is_matching_target = is_matching_source and data.target.root == get_block_root(
-            state, data.target.epoch
-        )
-        is_matching_head = is_matching_target and data.beacon_block_root == get_block_root_at_slot(
-            state, data.slot
-        )
+
+        # Matching target
+        target_root = get_block_root(state, data.target.epoch)
+        target_root_matches = data.target.root == target_root
+        is_matching_target = is_matching_source and target_root_matches
+
+        # Matching head
+        head_root = get_block_root_at_slot(state, data.slot)
+        head_root_matches = data.beacon_block_root == head_root
+        is_matching_head = is_matching_target and head_root_matches
+
         assert is_matching_source
 
         participation_flag_indices = []
@@ -3140,6 +3167,17 @@
         return hash(domain_type + uint_to_bytes(epoch) + mix)
     </spec>
 
+- name: get_slot_component_duration_ms
+  sources: []
+  spec: |
+    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
+    def get_slot_component_duration_ms(basis_points: uint64) -> uint64:
+        """
+        Calculate the duration of a slot component in milliseconds.
+        """
+        return basis_points * SLOT_DURATION_MS // BASIS_POINTS
+    </spec>
+
 - name: get_slot_signature
   sources: []
   spec: |
@@ -3158,17 +3196,6 @@
     <spec fn="get_slots_since_genesis" fork="phase0" hash="3c697269">
     def get_slots_since_genesis(store: Store) -> int:
         return (store.time - store.genesis_time) // SECONDS_PER_SLOT
-    </spec>
-
-- name: get_slot_component_duration_ms
-  sources: []
-  spec: |
-    <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
-    def get_slot_component_duration_ms(basis_points: uint64) -> uint64:
-        """
-        Calculate the duration of a slot component in milliseconds.
-        """
-        return basis_points * SLOT_DURATION_MS // BASIS_POINTS
     </spec>
 
 - name: get_source_deltas
@@ -4200,11 +4227,12 @@
 - name: is_proposing_on_time
   sources: []
   spec: |
-    <spec fn="is_proposing_on_time" fork="phase0" hash="cadfde05">
+    <spec fn="is_proposing_on_time" fork="phase0" hash="dc5256b4">
     def is_proposing_on_time(store: Store) -> bool:
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        proposer_reorg_cutoff_ms = get_slot_component_duration_ms(PROPOSER_REORG_CUTOFF_BPS)
+        epoch = get_current_store_epoch(store)
+        proposer_reorg_cutoff_ms = get_proposer_reorg_cutoff_ms(epoch)
         return time_into_slot_ms <= proposer_reorg_cutoff_ms
     </spec>
 
@@ -4489,12 +4517,12 @@
     - file: beacon-chain/core/helpers/weak_subjectivity.go
       search: func IsWithinWeakSubjectivityPeriod(
   spec: |
-    <spec fn="is_within_weak_subjectivity_period" fork="phase0" hash="f8a94089">
+    <spec fn="is_within_weak_subjectivity_period" fork="phase0" hash="aef08e82">
     def is_within_weak_subjectivity_period(
         store: Store, ws_state: BeaconState, ws_checkpoint: Checkpoint
     ) -> bool:
         # Clients may choose to validate the input state against the input Weak Subjectivity Checkpoint
-        assert ws_state.latest_block_header.state_root == ws_checkpoint.root
+        assert get_block_root(ws_state, ws_checkpoint.epoch) == ws_checkpoint.root
         assert compute_epoch_at_slot(ws_state.slot) == ws_checkpoint.epoch
 
         ws_period = compute_weak_subjectivity_period(ws_state)
@@ -4506,12 +4534,12 @@
 - name: is_within_weak_subjectivity_period#electra
   sources: []
   spec: |
-    <spec fn="is_within_weak_subjectivity_period" fork="electra" hash="c89ae316">
+    <spec fn="is_within_weak_subjectivity_period" fork="electra" hash="d05d230d">
     def is_within_weak_subjectivity_period(
         store: Store, ws_state: BeaconState, ws_checkpoint: Checkpoint
     ) -> bool:
         # Clients may choose to validate the input state against the input Weak Subjectivity Checkpoint
-        assert ws_state.latest_block_header.state_root == ws_checkpoint.root
+        assert get_block_root(ws_state, ws_checkpoint.epoch) == ws_checkpoint.root
         assert compute_epoch_at_slot(ws_state.slot) == ws_checkpoint.epoch
 
         # [Modified in Electra]
@@ -4655,7 +4683,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="phase0" hash="0bd081f0">
+    <spec fn="on_block" fork="phase0" hash="aff24b59">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         block = signed_block.message
         # Parent block must be known
@@ -4688,7 +4716,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4710,7 +4739,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="bellatrix" hash="cceac63a">
+    <spec fn="on_block" fork="bellatrix" hash="a3193d92">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4754,7 +4783,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4776,7 +4806,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="capella" hash="b051b7c6">
+    <spec fn="on_block" fork="capella" hash="560056ad">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4812,7 +4842,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4834,7 +4865,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="deneb" hash="1f48df4d">
+    <spec fn="on_block" fork="deneb" hash="9565acee">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4875,7 +4906,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -4897,7 +4929,7 @@
     - file: beacon-chain/blockchain/receive_block.go
       search: func (s *Service) ReceiveBlock(
   spec: |
-    <spec fn="on_block" fork="fulu" hash="a27a9edb">
+    <spec fn="on_block" fork="fulu" hash="4f955de9">
     def on_block(store: Store, signed_block: SignedBeaconBlock) -> None:
         """
         Run ``on_block`` upon receiving a new block.
@@ -4938,7 +4970,8 @@
         # Add block timeliness to the store
         seconds_since_genesis = store.time - store.genesis_time
         time_into_slot_ms = seconds_to_milliseconds(seconds_since_genesis) % SLOT_DURATION_MS
-        attestation_threshold_ms = get_slot_component_duration_ms(ATTESTATION_DUE_BPS)
+        epoch = get_current_store_epoch(store)
+        attestation_threshold_ms = get_attestation_due_ms(epoch)
         is_before_attesting_interval = time_into_slot_ms < attestation_threshold_ms
         is_timely = get_current_slot(store) == block.slot and is_before_attesting_interval
         store.block_timeliness[hash_tree_root(block)] = is_timely
@@ -5924,7 +5957,7 @@
     - file: beacon-chain/core/blocks/payload.go
       search: func ProcessPayload(
   spec: |
-    <spec fn="process_execution_payload" fork="deneb" hash="b88cf7ed">
+    <spec fn="process_execution_payload" fork="deneb" hash="5e93d3cd">
     def process_execution_payload(
         state: BeaconState, body: BeaconBlockBody, execution_engine: ExecutionEngine
     ) -> None:
@@ -5936,20 +5969,23 @@
         assert payload.prev_randao == get_randao_mix(state, get_current_epoch(state))
         # Verify timestamp
         assert payload.timestamp == compute_time_at_slot(state, state.slot)
-
-        # [New in Deneb:EIP4844] Verify commitments are under limit
+        # [New in Deneb:EIP4844]
+        # Verify commitments are under limit
         assert len(body.blob_kzg_commitments) <= MAX_BLOBS_PER_BLOCK
 
-        # Verify the execution payload is valid
-        # [Modified in Deneb:EIP4844] Pass `versioned_hashes` to Execution Engine
-        # [Modified in Deneb:EIP4788] Pass `parent_beacon_block_root` to Execution Engine
+        # [New in Deneb:EIP4844]
+        # Compute list of versioned hashes
         versioned_hashes = [
             kzg_commitment_to_versioned_hash(commitment) for commitment in body.blob_kzg_commitments
         ]
+
+        # Verify the execution payload is valid
         assert execution_engine.verify_and_notify_new_payload(
             NewPayloadRequest(
                 execution_payload=payload,
+                # [New in Deneb:EIP4844]
                 versioned_hashes=versioned_hashes,
+                # [New in Deneb:EIP4788]
                 parent_beacon_block_root=state.latest_block_header.parent_root,
             )
         )
@@ -5983,7 +6019,7 @@
     - file: beacon-chain/core/blocks/payload.go
       search: func ProcessPayload(
   spec: |
-    <spec fn="process_execution_payload" fork="electra" hash="67d2ee10">
+    <spec fn="process_execution_payload" fork="electra" hash="078e4a6c">
     def process_execution_payload(
         state: BeaconState, body: BeaconBlockBody, execution_engine: ExecutionEngine
     ) -> None:
@@ -5995,12 +6031,16 @@
         assert payload.prev_randao == get_randao_mix(state, get_current_epoch(state))
         # Verify timestamp
         assert payload.timestamp == compute_time_at_slot(state, state.slot)
-        # [Modified in Electra:EIP7691] Verify commitments are under limit
+        # [Modified in Electra:EIP7691]
+        # Verify commitments are under limit
         assert len(body.blob_kzg_commitments) <= MAX_BLOBS_PER_BLOCK_ELECTRA
-        # Verify the execution payload is valid
+
+        # Compute list of versioned hashes
         versioned_hashes = [
             kzg_commitment_to_versioned_hash(commitment) for commitment in body.blob_kzg_commitments
         ]
+
+        # Verify the execution payload is valid
         assert execution_engine.verify_and_notify_new_payload(
             NewPayloadRequest(
                 execution_payload=payload,
@@ -6010,6 +6050,7 @@
                 execution_requests=body.execution_requests,
             )
         )
+
         # Cache execution payload header
         state.latest_execution_payload_header = ExecutionPayloadHeader(
             parent_hash=payload.parent_hash,
@@ -6037,7 +6078,7 @@
     - file: beacon-chain/core/blocks/payload.go
       search: func ProcessPayload(
   spec: |
-    <spec fn="process_execution_payload" fork="fulu" hash="9a872dd6">
+    <spec fn="process_execution_payload" fork="fulu" hash="adc1f5c6">
     def process_execution_payload(
         state: BeaconState, body: BeaconBlockBody, execution_engine: ExecutionEngine
     ) -> None:
@@ -6055,10 +6096,13 @@
             len(body.blob_kzg_commitments)
             <= get_blob_parameters(get_current_epoch(state)).max_blobs_per_block
         )
-        # Verify the execution payload is valid
+
+        # Compute list of versioned hashes
         versioned_hashes = [
             kzg_commitment_to_versioned_hash(commitment) for commitment in body.blob_kzg_commitments
         ]
+
+        # Verify the execution payload is valid
         assert execution_engine.verify_and_notify_new_payload(
             NewPayloadRequest(
                 execution_payload=payload,
@@ -6067,6 +6111,7 @@
                 execution_requests=body.execution_requests,
             )
         )
+
         # Cache execution payload header
         state.latest_execution_payload_header = ExecutionPayloadHeader(
             parent_hash=payload.parent_hash,
@@ -6899,16 +6944,40 @@
     - file: beacon-chain/core/altair/block.go
       search: func ProcessSyncAggregate(
   spec: |
-    <spec fn="process_sync_aggregate" fork="altair" hash="d9a71877">
+    <spec fn="process_sync_aggregate" fork="altair" hash="5f7c046f">
     def process_sync_aggregate(state: BeaconState, sync_aggregate: SyncAggregate) -> None:
         # Verify sync committee aggregate signature signing over the previous slot block root
         committee_pubkeys = state.current_sync_committee.pubkeys
-        participant_pubkeys = [
-            pubkey for pubkey, bit in zip(committee_pubkeys, sync_aggregate.sync_committee_bits) if bit
-        ]
+        committee_bits = sync_aggregate.sync_committee_bits
+        if sum(committee_bits) == SYNC_COMMITTEE_SIZE:
+            # All members participated - use precomputed aggregate key
+            participant_pubkeys = [state.current_sync_committee.aggregate_pubkey]
+        elif sum(committee_bits) > SYNC_COMMITTEE_SIZE // 2:
+            # More than half participated - subtract non-participant keys.
+            # First determine nonparticipating members
+            non_participant_pubkeys = [
+                pubkey for pubkey, bit in zip(committee_pubkeys, committee_bits) if not bit
+            ]
+            # Compute aggregate of non-participants
+            non_participant_aggregate = eth_aggregate_pubkeys(non_participant_pubkeys)
+            # Subtract non-participants from the full aggregate
+            # This is equivalent to: aggregate_pubkey + (-non_participant_aggregate)
+            participant_pubkey = bls.add(
+                bls.bytes48_to_G1(state.current_sync_committee.aggregate_pubkey),
+                bls.neg(bls.bytes48_to_G1(non_participant_aggregate)),
+            )
+            participant_pubkeys = [BLSPubkey(bls.G1_to_bytes48(participant_pubkey))]
+        else:
+            # Less than half participated - aggregate participant keys
+            participant_pubkeys = [
+                pubkey
+                for pubkey, bit in zip(committee_pubkeys, sync_aggregate.sync_committee_bits)
+                if bit
+            ]
         previous_slot = max(state.slot, Slot(1)) - Slot(1)
         domain = get_domain(state, DOMAIN_SYNC_COMMITTEE, compute_epoch_at_slot(previous_slot))
         signing_root = compute_signing_root(get_block_root_at_slot(state, previous_slot), domain)
+        # Note: eth_fast_aggregate_verify works with a singleton list containing an aggregated key
         assert eth_fast_aggregate_verify(
             participant_pubkeys, signing_root, sync_aggregate.sync_committee_signature
         )
@@ -7034,7 +7103,7 @@
     - file: beacon-chain/core/blocks/exit.go
       search: func ProcessVoluntaryExits(
   spec: |
-    <spec fn="process_voluntary_exit" fork="electra" hash="6dcb5530">
+    <spec fn="process_voluntary_exit" fork="electra" hash="51b07d36">
     def process_voluntary_exit(state: BeaconState, signed_voluntary_exit: SignedVoluntaryExit) -> None:
         voluntary_exit = signed_voluntary_exit.message
         validator = state.validators[voluntary_exit.validator_index]
@@ -7048,7 +7117,6 @@
         assert get_current_epoch(state) >= validator.activation_epoch + SHARD_COMMITTEE_PERIOD
         # [New in Electra:EIP7251]
         # Only exit validator if it has no pending withdrawals in the queue
-
         assert get_pending_balance_to_withdraw(state, voluntary_exit.validator_index) == 0
         # Verify signature
         domain = compute_domain(
@@ -7172,7 +7240,7 @@
     - file: beacon-chain/core/blocks/withdrawals.go
       search: func ProcessWithdrawals(
   spec: |
-    <spec fn="process_withdrawals" fork="electra" hash="bb094f95">
+    <spec fn="process_withdrawals" fork="electra" hash="dd99a91f">
     def process_withdrawals(state: BeaconState, payload: ExecutionPayload) -> None:
         # [Modified in Electra:EIP7251]
         expected_withdrawals, processed_partial_withdrawals_count = get_expected_withdrawals(state)
@@ -7182,7 +7250,8 @@
         for withdrawal in expected_withdrawals:
             decrease_balance(state, withdrawal.validator_index, withdrawal.amount)
 
-        # [New in Electra:EIP7251] Update pending partial withdrawals
+        # [New in Electra:EIP7251]
+        # Update pending partial withdrawals
         state.pending_partial_withdrawals = state.pending_partial_withdrawals[
             processed_partial_withdrawals_count:
         ]
@@ -7272,6 +7341,20 @@
         Computes a - b, saturating at numeric bounds.
         """
         return a - b if a > b else 0
+    </spec>
+
+- name: seconds_to_milliseconds
+  sources: []
+  spec: |
+    <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
+    def seconds_to_milliseconds(seconds: uint64) -> uint64:
+        """
+        Convert seconds to milliseconds with overflow protection.
+        Returns ``UINT64_MAX`` if the result would overflow.
+        """
+        if seconds > UINT64_MAX // 1000:
+            return UINT64_MAX
+        return seconds * 1000
     </spec>
 
 - name: set_or_append_list
@@ -7511,20 +7594,6 @@
             assert block.state_root == hash_tree_root(state)
     </spec>
 
-- name: seconds_to_milliseconds
-  sources: []
-  spec: |
-    <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
-    def seconds_to_milliseconds(seconds: uint64) -> uint64:
-        """
-        Convert seconds to milliseconds with overflow protection.
-        Returns ``UINT64_MAX`` if the result would overflow.
-        """
-        if seconds > UINT64_MAX // 1000:
-            return UINT64_MAX
-        return seconds * 1000
-    </spec>
-
 - name: store_target_checkpoint_state
   sources: []
   spec: |
@@ -7640,8 +7709,8 @@
 - name: upgrade_lc_bootstrap_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_bootstrap_to_capella" fork="capella" hash="2c8939e7">
-    def upgrade_lc_bootstrap_to_capella(pre: bellatrix.LightClientBootstrap) -> LightClientBootstrap:
+    <spec fn="upgrade_lc_bootstrap_to_capella" fork="capella" hash="d5f1203a">
+    def upgrade_lc_bootstrap_to_capella(pre: altair.LightClientBootstrap) -> LightClientBootstrap:
         return LightClientBootstrap(
             header=upgrade_lc_header_to_capella(pre.header),
             current_sync_committee=pre.current_sync_committee,
@@ -7678,9 +7747,9 @@
 - name: upgrade_lc_finality_update_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_finality_update_to_capella" fork="capella" hash="5315d1df">
+    <spec fn="upgrade_lc_finality_update_to_capella" fork="capella" hash="c314b172">
     def upgrade_lc_finality_update_to_capella(
-        pre: bellatrix.LightClientFinalityUpdate,
+        pre: altair.LightClientFinalityUpdate,
     ) -> LightClientFinalityUpdate:
         return LightClientFinalityUpdate(
             attested_header=upgrade_lc_header_to_capella(pre.attested_header),
@@ -7726,10 +7795,12 @@
 - name: upgrade_lc_header_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_header_to_capella" fork="capella" hash="9eaa5026">
-    def upgrade_lc_header_to_capella(pre: bellatrix.LightClientHeader) -> LightClientHeader:
+    <spec fn="upgrade_lc_header_to_capella" fork="capella" hash="9f7a832d">
+    def upgrade_lc_header_to_capella(pre: altair.LightClientHeader) -> LightClientHeader:
         return LightClientHeader(
             beacon=pre.beacon,
+            execution=ExecutionPayloadHeader(),
+            execution_branch=ExecutionBranch(),
         )
     </spec>
 
@@ -7780,9 +7851,9 @@
 - name: upgrade_lc_optimistic_update_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_optimistic_update_to_capella" fork="capella" hash="488c41c5">
+    <spec fn="upgrade_lc_optimistic_update_to_capella" fork="capella" hash="c4c29295">
     def upgrade_lc_optimistic_update_to_capella(
-        pre: bellatrix.LightClientOptimisticUpdate,
+        pre: altair.LightClientOptimisticUpdate,
     ) -> LightClientOptimisticUpdate:
         return LightClientOptimisticUpdate(
             attested_header=upgrade_lc_header_to_capella(pre.attested_header),
@@ -7822,8 +7893,8 @@
 - name: upgrade_lc_store_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_store_to_capella" fork="capella" hash="a25064df">
-    def upgrade_lc_store_to_capella(pre: bellatrix.LightClientStore) -> LightClientStore:
+    <spec fn="upgrade_lc_store_to_capella" fork="capella" hash="d02773ec">
+    def upgrade_lc_store_to_capella(pre: altair.LightClientStore) -> LightClientStore:
         if pre.best_valid_update is None:
             best_valid_update = None
         else:
@@ -7882,8 +7953,8 @@
 - name: upgrade_lc_update_to_capella
   sources: []
   spec: |
-    <spec fn="upgrade_lc_update_to_capella" fork="capella" hash="e7dbaf33">
-    def upgrade_lc_update_to_capella(pre: bellatrix.LightClientUpdate) -> LightClientUpdate:
+    <spec fn="upgrade_lc_update_to_capella" fork="capella" hash="ba863d2f">
+    def upgrade_lc_update_to_capella(pre: altair.LightClientUpdate) -> LightClientUpdate:
         return LightClientUpdate(
             attested_header=upgrade_lc_header_to_capella(pre.attested_header),
             next_sync_committee=pre.next_sync_committee,
@@ -8530,7 +8601,7 @@
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnSidecar(
   spec: |
-    <spec fn="verify_data_column_sidecar" fork="fulu" hash="509c0986">
+    <spec fn="verify_data_column_sidecar" fork="fulu" hash="1517491f">
     def verify_data_column_sidecar(sidecar: DataColumnSidecar) -> bool:
         """
         Verify if the data column sidecar is valid.
@@ -8541,6 +8612,11 @@
 
         # A sidecar for zero blobs is invalid
         if len(sidecar.kzg_commitments) == 0:
+            return False
+
+        # Check that the sidecar respects the blob limit
+        epoch = compute_epoch_at_slot(sidecar.signed_block_header.message.slot)
+        if len(sidecar.kzg_commitments) > get_blob_parameters(epoch).max_blobs_per_block:
             return False
 
         # The column length must be equal to the number of commitments/proofs

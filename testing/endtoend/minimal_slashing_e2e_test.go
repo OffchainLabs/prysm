@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	ev "github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators"
-	e2eParams "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	ev "github.com/OffchainLabs/prysm/v7/testing/endtoend/evaluators"
+	e2eParams "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestEndToEnd_Slasher_MinimalConfig(t *testing.T) {

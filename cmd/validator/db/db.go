@@ -1,9 +1,9 @@
 package db
 
 import (
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/runtime/tos"
-	validatordb "github.com/OffchainLabs/prysm/v6/validator/db"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/runtime/tos"
+	validatordb "github.com/OffchainLabs/prysm/v7/validator/db"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

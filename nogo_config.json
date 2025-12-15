@@ -215,7 +215,92 @@
       "external/com_github_ethereum_go_ethereum/.*": "Unsafe third party code",
       "rules_go_work-.*": "Third party code"
     }
-  }, 
+  },
+  "buildtag": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "any": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "appendclipped": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "fmtappendf": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "forvar": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "mapsloop": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "minmax": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "newexpr": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "omitzero": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "rangeint": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "reflecttypefor": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "slicescontains": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "slicessort": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "stringsbuilder": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "stringscutprefix": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "stringsseq": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
+  "waitgroup": {
+    "exclude_files": {
+      "external/.*": "Third party code"
+    }
+  },
   "nopanic": {
     "exclude_files": {
       "validator/web/site_data.go": "generated code",

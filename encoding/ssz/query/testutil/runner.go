@@ -1,10 +1,11 @@
 package testutil
 
 import (
+	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -14,7 +15,7 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 		require.NoError(t, err)
 
 		testInstance := spec.Instance
-		err = query.PopulateVariableLengthInfo(info, testInstance)
+		err = query.PopulateVariableLengthInfo(info, reflect.ValueOf(testInstance))
 		require.NoError(t, err)
 
 		marshaller, ok := testInstance.(ssz.Marshaler)
@@ -31,10 +32,10 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 				_, offset, length, err := query.CalculateOffsetAndLength(info, path)
 				require.NoError(t, err)
 
-				expectedRawBytes := marshalledData[offset : offset+length]
-				rawBytes, err := marshalAny(pathTest.Expected)
+				actualRawBytes := marshalledData[offset : offset+length]
+				expectedRawBytes, err := marshalAny(pathTest.Expected)
 				require.NoError(t, err, "Marshalling expected value should not return an error")
-				require.DeepEqual(t, expectedRawBytes, rawBytes, "Extracted value should match expected")
+				require.DeepEqual(t, actualRawBytes, expectedRawBytes, "Extracted value should match expected")
 			})
 		}
 	})

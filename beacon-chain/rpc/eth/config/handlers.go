@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	log "github.com/sirupsen/logrus"
 )
@@ -72,7 +72,7 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
 }
 
-func convertValueForJSON(v reflect.Value, tag string) interface{} {
+func convertValueForJSON(v reflect.Value, tag string) any {
 	// Unwrap pointers / interfaces
 	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
 		if v.IsNil() {
@@ -109,8 +109,8 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 		}
 		// Generic slice/array handling
 		n := v.Len()
-		out := make([]interface{}, n)
-		for i := 0; i < n; i++ {
+		out := make([]any, n)
+		for i := range n {
 			out[i] = convertValueForJSON(v.Index(i), tag)
 		}
 		return out
@@ -118,19 +118,33 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 	// ===== Struct =====
 	case reflect.Struct:
 		t := v.Type()
-		m := make(map[string]interface{}, v.NumField())
+		m := make(map[string]any, v.NumField())
 		for i := 0; i < v.NumField(); i++ {
 			f := t.Field(i)
 			if !v.Field(i).CanInterface() {
 				continue // unexported
 			}
-			key := f.Tag.Get("json")
-			if key == "" || key == "-" {
+			jsonTag := f.Tag.Get("json")
+			if jsonTag == "-" {
+				continue
+			}
+
+			// Parse JSON tag options (e.g., "fieldname,omitempty")
+			parts := strings.Split(jsonTag, ",")
+			key := parts[0]
+
+			if key == "" {
 				key = f.Name
 			}
-			m[key] = convertValueForJSON(v.Field(i), tag)
+
+			fieldValue := convertValueForJSON(v.Field(i), tag)
+			m[key] = fieldValue
 		}
 		return m
+
+	// ===== String =====
+	case reflect.String:
+		return v.String()
 
 	// ===== Default =====
 	default:
@@ -144,17 +158,17 @@ func convertValueForJSON(v reflect.Value, tag string) interface{} {
 	}
 }
 
-func prepareConfigSpec() (map[string]interface{}, error) {
-	data := make(map[string]interface{})
+func prepareConfigSpec() (map[string]any, error) {
+	data := make(map[string]any)
 	config := *params.BeaconConfig()
 
-	t := reflect.TypeOf(config)
+	t := reflect.TypeFor[params.BeaconChainConfig]()
 	v := reflect.ValueOf(config)
 
 	for i := 0; i < t.NumField(); i++ {
 		tField := t.Field(i)
-		_, isSpec := tField.Tag.Lookup("spec")
-		if !isSpec {
+		specTag, isSpec := tField.Tag.Lookup("spec")
+		if !isSpec || specTag != "true" {
 			continue
 		}
 		if shouldSkip(tField) {

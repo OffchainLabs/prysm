@@ -7,16 +7,15 @@ package validators
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/math"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/math"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -60,7 +59,7 @@ func ExitInformation(s state.BeaconState) *ExitInfo {
 	_ = err
 
 	// Apply minimum balance as per spec
-	exitInfo.TotalActiveBalance = mathutil.Max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
+	exitInfo.TotalActiveBalance = max(params.BeaconConfig().EffectiveBalanceIncrement, totalActiveBalance)
 	return exitInfo
 }
 
@@ -98,7 +97,9 @@ func InitiateValidatorExit(
 	if validator.ExitEpoch != params.BeaconConfig().FarFutureEpoch {
 		return s, ErrValidatorAlreadyExited
 	}
-
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to process validator exit")
+	}
 	// Compute exit queue epoch.
 	if s.Version() < version.Electra {
 		if err = initiateValidatorExitPreElectra(ctx, s, exitInfo); err != nil {
@@ -177,6 +178,9 @@ func initiateValidatorExitPreElectra(ctx context.Context, s state.BeaconState, e
 	//	if exit_queue_churn >= get_validator_churn_limit(state):
 	//	    exit_queue_epoch += Epoch(1)
 	exitableEpoch := helpers.ActivationExitEpoch(time.CurrentEpoch(s))
+	if exitInfo == nil {
+		return errors.New("exit info is required to process validator exit")
+	}
 	if exitableEpoch > exitInfo.HighestExitEpoch {
 		exitInfo.HighestExitEpoch = exitableEpoch
 		exitInfo.Churn = 0
@@ -235,7 +239,9 @@ func SlashValidator(
 	exitInfo *ExitInfo,
 ) (state.BeaconState, error) {
 	var err error
-
+	if exitInfo == nil {
+		return nil, errors.New("exit info is required to slash validator")
+	}
 	s, err = InitiateValidatorExitForTotalBal(ctx, s, slashedIdx, exitInfo, primitives.Gwei(exitInfo.TotalActiveBalance))
 	if err != nil && !errors.Is(err, ErrValidatorAlreadyExited) {
 		return nil, errors.Wrapf(err, "could not initiate validator %d exit", slashedIdx)
@@ -301,7 +307,7 @@ func SlashValidator(
 // ActivatedValidatorIndices determines the indices activated during the given epoch.
 func ActivatedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) []primitives.ValidatorIndex {
 	activations := make([]primitives.ValidatorIndex, 0)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		val := validators[i]
 		if val.ActivationEpoch <= epoch && epoch < val.ExitEpoch {
 			activations = append(activations, primitives.ValidatorIndex(i))
@@ -313,7 +319,7 @@ func ActivatedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Valid
 // SlashedValidatorIndices determines the indices slashed during the given epoch.
 func SlashedValidatorIndices(epoch primitives.Epoch, validators []*ethpb.Validator) []primitives.ValidatorIndex {
 	slashed := make([]primitives.ValidatorIndex, 0)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		val := validators[i]
 		maxWithdrawableEpoch := primitives.MaxEpoch(val.WithdrawableEpoch, epoch+params.BeaconConfig().EpochsPerSlashingsVector)
 		if val.WithdrawableEpoch == maxWithdrawableEpoch && val.Slashed {

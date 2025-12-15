@@ -7,22 +7,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -142,10 +142,9 @@ var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
-	}()
+	}(time.Now())
 
 	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
 	ctx, cancel := context.WithDeadline(ctx, d)
@@ -183,7 +182,10 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		return nil, errors.New("unknown execution data type")
 	}
 	if result.ValidationError != "" {
-		log.WithError(errors.New(result.ValidationError)).Error("Got a validation error in newPayload")
+		log.WithField("status", result.Status.String()).
+			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
+			WithError(errors.New(result.ValidationError)).
+			Error("Got a validation error in newPayload")
 	}
 	switch result.Status {
 	case pb.PayloadStatus_INVALID_BLOCK_HASH:
@@ -195,7 +197,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	case pb.PayloadStatus_VALID:
 		return result.LatestValidHash, nil
 	default:
-		return nil, ErrUnknownPayloadStatus
+		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
 	}
 }
 
@@ -473,7 +475,7 @@ func (s *Service) ExecutionBlocksByHashes(ctx context.Context, hashes []common.H
 		newH := h
 		elems = append(elems, gethRPC.BatchElem{
 			Method: BlockByHashMethod,
-			Args:   []interface{}{newH, withTxs},
+			Args:   []any{newH, withTxs},
 			Result: blk,
 			Error:  error(nil),
 		})
@@ -658,18 +660,18 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 		return nil, wrapWithBlockRoot(err, root, "commitments")
 	}
 
-	cellsAndProofs, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	cellsPerBlob, proofsPerBlob, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
 
 	// Return early if nothing is returned from the EL.
-	if len(cellsAndProofs) == 0 {
+	if len(cellsPerBlob) == 0 {
 		return nil, nil
 	}
 
 	// Construct data column sidears from the signed block and cells and proofs.
-	roSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, populator)
+	roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
 	if err != nil {
 		return nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
 	}
@@ -682,7 +684,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 }
 
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) ([]kzg.CellsAndProofs, error) {
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) ([][]kzg.Cell, [][]kzg.Proof, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
@@ -693,21 +695,21 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	// Fetch all blobsAndCellsProofs from the execution client.
 	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
 	if err != nil {
-		return nil, errors.Wrapf(err, "get blobs V2")
+		return nil, nil, errors.Wrapf(err, "get blobs V2")
 	}
 
 	// Return early if nothing is returned from the EL.
 	if len(blobAndProofV2s) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
-	cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromStructured(blobAndProofV2s)
+	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(blobAndProofV2s)
 	if err != nil {
-		return nil, errors.Wrap(err, "compute cells and proofs")
+		return nil, nil, errors.Wrap(err, "compute cells and proofs")
 	}
 
-	return cellsAndProofs, nil
+	return cellsPerBlob, proofsPerBlob, nil
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.

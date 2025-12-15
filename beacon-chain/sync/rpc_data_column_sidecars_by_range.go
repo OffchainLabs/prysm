@@ -5,12 +5,13 @@ import (
 	"slices"
 	"time"
 
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 
@@ -23,7 +24,7 @@ const rateLimitingAmount = 1
 var notDataColumnsByRangeIdentifiersError = errors.New("not data columns by range identifiers")
 
 // dataColumnSidecarsByRangeRPCHandler looks up the request data columns from the database from a given start slot index
-func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.DataColumnSidecarsByRangeHandler")
 	defer span.End()
 
@@ -37,24 +38,20 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 	defer cancel()
 
 	SetRPCStreamDeadlines(stream)
-	beaconConfig := params.BeaconConfig()
-	maxRequestDataColumnSidecars := beaconConfig.MaxRequestDataColumnSidecars
+	cfg := params.BeaconConfig()
+	maxRequestDataColumnSidecars := cfg.MaxRequestDataColumnSidecars
 	remotePeer := stream.Conn().RemotePeer()
 
-	requestedColumns := request.Columns
-
-	// Format log fields.
-	var requestedColumnsLog interface{} = "all"
-	if uint64(len(requestedColumns)) != beaconConfig.NumberOfColumns {
-		requestedColumnsLog = requestedColumns
-	}
-
 	log := log.WithFields(logrus.Fields{
-		"remotePeer":       remotePeer,
-		"requestedColumns": requestedColumnsLog,
-		"startSlot":        request.StartSlot,
-		"count":            request.Count,
+		"remotePeer": remotePeer,
+		"startSlot":  request.StartSlot,
+		"count":      request.Count,
 	})
+
+	if log.Logger.Level >= logrus.DebugLevel {
+		slices.Sort(request.Columns)
+		log = log.WithField("requestedColumns", helpers.PrettySlice(request.Columns))
+	}
 
 	// Validate the request regarding rate limiting.
 	if err := s.rateLimiter.validateRequest(stream, rateLimitingAmount); err != nil {
@@ -69,12 +66,13 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 		tracing.AnnotateError(span, err)
 		return errors.Wrap(err, "validate data columns by range")
 	}
+
+	log.Trace("Serving data column sidecars by range")
+
 	if rangeParameters == nil {
-		log.Debug("No data columns by range to serve")
+		closeStream(stream, log)
 		return nil
 	}
-
-	log.Debug("Serving data columns by range request")
 
 	// Ticker to stagger out large requests.
 	ticker := time.NewTicker(time.Second)
@@ -104,13 +102,13 @@ func (s *Service) dataColumnSidecarsByRangeRPCHandler(ctx context.Context, msg i
 
 		// Once the quota is reached, we're done serving the request.
 		if maxRequestDataColumnSidecars == 0 {
-			log.WithField("initialQuota", beaconConfig.MaxRequestDataColumnSidecars).Debug("Reached quota for data column sidecars by range request")
+			log.WithField("initialQuota", cfg.MaxRequestDataColumnSidecars).Trace("Reached quota for data column sidecars by range request")
 			break
 		}
 	}
 
 	if err := batch.error(); err != nil {
-		log.WithError(err).Debug("Error in DataColumnSidecarsByRange batch")
+		log.WithError(err).Error("Cannot get next batch of blocks")
 
 		// If we hit a rate limit, the error response has already been written, and the stream is already closed.
 		if !errors.Is(err, p2ptypes.ErrRateLimited) {

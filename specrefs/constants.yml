@@ -1,4 +1,3 @@
-
 - name: BASE_REWARDS_PER_EPOCH
   sources:
     - file: config/params/config.go

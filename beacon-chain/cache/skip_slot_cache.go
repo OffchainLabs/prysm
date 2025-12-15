@@ -2,13 +2,12 @@ package cache
 
 import (
 	"context"
-	"math"
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -90,7 +89,7 @@ func (c *SkipSlotCache) Get(ctx context.Context, r [32]byte) (state.BeaconState,
 		// for the in progress boolean to flip to false.
 		time.Sleep(time.Duration(delay) * time.Nanosecond)
 		delay *= delayFactor
-		delay = math.Min(delay, maxDelay)
+		delay = min(delay, maxDelay)
 	}
 	span.SetAttributes(trace.BoolAttribute("inProgress", inProgress))
 

@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	mock "github.com/OffchainLabs/prysm/v6/validator/accounts/testing"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	mock "github.com/OffchainLabs/prysm/v7/validator/accounts/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
 
@@ -29,7 +29,7 @@ func TestLocalKeymanager_FetchValidatingPublicKeys(t *testing.T) {
 	ctx := t.Context()
 	numAccounts := 10
 	wantedPubKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
-	for i := 0; i < numAccounts; i++ {
+	for range numAccounts {
 		privKey, err := bls.RandKey()
 		require.NoError(t, err)
 		pubKey := bytesutil.ToBytes48(privKey.PublicKey().Marshal())
@@ -61,7 +61,7 @@ func TestLocalKeymanager_FetchValidatingPrivateKeys(t *testing.T) {
 	ctx := t.Context()
 	numAccounts := 10
 	wantedPrivateKeys := make([][32]byte, numAccounts)
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		privKey, err := bls.RandKey()
 		require.NoError(t, err)
 		privKeyData := privKey.Marshal()
@@ -97,7 +97,7 @@ func TestLocalKeymanager_Sign(t *testing.T) {
 	numAccounts := 10
 	keystores := make([]*keymanager.Keystore, numAccounts)
 	passwords := make([]string, numAccounts)
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		keystores[i] = createRandomKeystore(t, password)
 		passwords[i] = password
 	}

@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -343,5 +343,19 @@ func Test_decodeResp(t *testing.T) {
 		}
 		err = decodeResp(r, nil)
 		assert.ErrorContains(t, "failed to decode response body into error json", err)
+	})
+	t.Run("500 not JSON", func(t *testing.T) {
+		body := bytes.Buffer{}
+		_, err := body.WriteString("foo")
+		require.NoError(t, err)
+		r := &http.Response{
+			Status:     "500",
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(&body),
+			Header:     map[string][]string{"Content-Type": {"text/plain"}},
+			Request:    &http.Request{},
+		}
+		err = decodeResp(r, nil)
+		assert.ErrorContains(t, "HTTP request unsuccessful (500: foo)", err)
 	})
 }

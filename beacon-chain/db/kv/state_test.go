@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	mathRand "math/rand"
@@ -8,19 +9,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/math"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -317,7 +323,7 @@ func TestState_CanSaveRetrieveValidatorEntriesFromCache(t *testing.T) {
 	assert.Equal(t, true, db.HasState(t.Context(), r))
 
 	// check if the state is in cache
-	for i := 0; i < len(stateValidators); i++ {
+	for i := range stateValidators {
 		hash, hashErr := stateValidators[i].HashTreeRoot()
 		assert.NoError(t, hashErr)
 
@@ -504,7 +510,7 @@ func TestStore_StatesBatchDelete(t *testing.T) {
 	totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, numBlocks)
 	blockRoots := make([][32]byte, 0)
 	evenBlockRoots := make([][32]byte, 0)
-	for i := 0; i < len(totalBlocks); i++ {
+	for i := range totalBlocks {
 		b := util.NewBeaconBlock()
 		b.Block.Slot = primitives.Slot(i)
 		var err error
@@ -873,7 +879,7 @@ func TestAltairState_CanDelete(t *testing.T) {
 
 func validators(limit int) []*ethpb.Validator {
 	var vals []*ethpb.Validator
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		pubKey := make([]byte, params.BeaconConfig().BLSPubkeyLength)
 		binary.LittleEndian.PutUint64(pubKey, mathRand.Uint64())
 		val := &ethpb.Validator{
@@ -892,13 +898,12 @@ func validators(limit int) []*ethpb.Validator {
 }
 
 func checkStateSaveTime(b *testing.B, saveCount int) {
-	b.StopTimer()
 
 	db := setupDB(b)
 	initialSetOfValidators := validators(100000)
 
 	// construct some states and save to randomize benchmark.
-	for i := 0; i < saveCount; i++ {
+	for range saveCount {
 		key := make([]byte, 32)
 		_, err := rand.Read(key)
 		require.NoError(b, err)
@@ -924,14 +929,13 @@ func checkStateSaveTime(b *testing.B, saveCount int) {
 	require.NoError(b, st.SetValidators(initialSetOfValidators))
 
 	b.ReportAllocs()
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		require.NoError(b, db.SaveState(b.Context(), st, r))
 	}
 }
 
 func checkStateReadTime(b *testing.B, saveCount int) {
-	b.StopTimer()
 
 	db := setupDB(b)
 	initialSetOfValidators := validators(100000)
@@ -944,7 +948,7 @@ func checkStateReadTime(b *testing.B, saveCount int) {
 	require.NoError(b, db.SaveState(b.Context(), st, r))
 
 	// construct some states and save to randomize benchmark.
-	for i := 0; i < saveCount; i++ {
+	for range saveCount {
 		key := make([]byte, 32)
 		_, err := rand.Read(key)
 		require.NoError(b, err)
@@ -964,8 +968,8 @@ func checkStateReadTime(b *testing.B, saveCount int) {
 	}
 
 	b.ReportAllocs()
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := db.State(b.Context(), r)
 		require.NoError(b, err)
 	}
@@ -1283,3 +1287,344 @@ func BenchmarkState_CheckStateSaveTime_10(b *testing.B) { checkStateSaveTime(b, 
 
 func BenchmarkState_CheckStateReadTime_1(b *testing.B)  { checkStateReadTime(b, 1) }
 func BenchmarkState_CheckStateReadTime_10(b *testing.B) { checkStateReadTime(b, 10) }
+
+func TestStore_CleanUpDirtyStates_NoOriginRoot(t *testing.T) {
+	// This test verifies that CleanUpDirtyStates does not fail when the origin block root is not set,
+	// which can happen when starting from genesis or in certain fork scenarios like Fulu.
+	db := setupDB(t)
+	genesisState, err := util.NewBeaconState()
+	require.NoError(t, err)
+	genesisRoot := [fieldparams.RootLength]byte{'a'}
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+	require.NoError(t, db.SaveState(t.Context(), genesisState, genesisRoot))
+	// Note: We intentionally do NOT call SaveOriginCheckpointBlockRoot here
+	// to simulate the scenario where origin block root is not set
+	slotsPerArchivedPoint := primitives.Slot(128)
+	bRoots := make([][fieldparams.RootLength]byte, 0)
+	prevRoot := genesisRoot
+	for i := primitives.Slot(1); i <= slotsPerArchivedPoint; i++ { // skip slot 0
+		b := util.NewBeaconBlock()
+		b.Block.Slot = i
+		b.Block.ParentRoot = prevRoot[:]
+		r, err := b.Block.HashTreeRoot()
+		require.NoError(t, err)
+		wsb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		require.NoError(t, db.SaveBlock(t.Context(), wsb))
+		bRoots = append(bRoots, r)
+		prevRoot = r
+		st, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, st.SetSlot(i))
+		require.NoError(t, db.SaveState(t.Context(), st, r))
+	}
+	require.NoError(t, db.SaveFinalizedCheckpoint(t.Context(), &ethpb.Checkpoint{
+		Root:  bRoots[len(bRoots)-1][:],
+		Epoch: primitives.Epoch(slotsPerArchivedPoint / params.BeaconConfig().SlotsPerEpoch),
+	}))
+	// This should not fail even though origin block root is not set
+	err = db.CleanUpDirtyStates(t.Context(), slotsPerArchivedPoint)
+	require.NoError(t, err)
+	// Verify that cleanup still works correctly
+	for i, root := range bRoots {
+		if primitives.Slot(i) >= slotsPerArchivedPoint.SubSlot(slotsPerArchivedPoint.Div(3)) {
+			require.Equal(t, true, db.HasState(t.Context(), root))
+		} else {
+			require.Equal(t, false, db.HasState(t.Context(), root))
+		}
+	}
+}
+
+func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
+	t.Run("No state summary or block", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		readSt, err := db.State(context.Background(), [32]byte{'A'})
+		require.IsNil(t, readSt)
+		require.ErrorContains(t, "neither state summary nor block found", err)
+	})
+
+	t.Run("Slot not in tree", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		r := bytesutil.ToBytes32([]byte{'A'})
+		ss := &ethpb.StateSummary{Slot: 1, Root: r[:]} // slot 1 not in tree
+		err = db.SaveStateSummary(context.Background(), ss)
+		require.NoError(t, err)
+
+		readSt, err := db.State(context.Background(), r)
+		require.ErrorContains(t, "slot not in tree", err)
+		require.IsNil(t, readSt)
+
+	})
+
+	t.Run("State not found", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		r := bytesutil.ToBytes32([]byte{'A'})
+		ss := &ethpb.StateSummary{Slot: 32, Root: r[:]} // slot 32 is in tree
+		err = db.SaveStateSummary(context.Background(), ss)
+		require.NoError(t, err)
+
+		readSt, err := db.State(context.Background(), r)
+		require.ErrorContains(t, "state not found", err)
+		require.IsNil(t, readSt)
+	})
+
+	t.Run("Full state snapshot", func(t *testing.T) {
+		t.Run("using state summary", func(t *testing.T) {
+			for v := range version.All() {
+				t.Run(version.String(v), func(t *testing.T) {
+					db := setupDB(t)
+					featCfg := &features.Flags{}
+					featCfg.EnableStateDiff = true
+					reset := features.InitWithReset(featCfg)
+					defer reset()
+					setDefaultStateDiffExponents()
+
+					err := setOffsetInDB(db, 0)
+					require.NoError(t, err)
+
+					st, _ := createState(t, 0, v)
+
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					r := bytesutil.ToBytes32([]byte{'A'})
+					ss := &ethpb.StateSummary{Slot: 0, Root: r[:]}
+					err = db.SaveStateSummary(context.Background(), ss)
+					require.NoError(t, err)
+
+					readSt, err := db.State(context.Background(), r)
+					require.NoError(t, err)
+					require.NotNil(t, readSt)
+
+					stSSZ, err := st.MarshalSSZ()
+					require.NoError(t, err)
+					readStSSZ, err := readSt.MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+				})
+			}
+		})
+
+		t.Run("using block", func(t *testing.T) {
+			for v := range version.All() {
+				t.Run(version.String(v), func(t *testing.T) {
+					db := setupDB(t)
+					featCfg := &features.Flags{}
+					featCfg.EnableStateDiff = true
+					reset := features.InitWithReset(featCfg)
+					defer reset()
+					setDefaultStateDiffExponents()
+
+					err := setOffsetInDB(db, 0)
+					require.NoError(t, err)
+
+					st, _ := createState(t, 0, v)
+
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					blk := util.NewBeaconBlock()
+					blk.Block.Slot = 0
+					signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+					require.NoError(t, err)
+					err = db.SaveBlock(context.Background(), signedBlk)
+					require.NoError(t, err)
+					r, err := signedBlk.Block().HashTreeRoot()
+					require.NoError(t, err)
+
+					readSt, err := db.State(context.Background(), r)
+					require.NoError(t, err)
+					require.NotNil(t, readSt)
+
+					stSSZ, err := st.MarshalSSZ()
+					require.NoError(t, err)
+					readStSSZ, err := readSt.MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+				})
+			}
+		})
+	})
+
+	t.Run("Diffed state", func(t *testing.T) {
+		t.Run("using state summary", func(t *testing.T) {
+			for v := range version.All() {
+				t.Run(version.String(v), func(t *testing.T) {
+					db := setupDB(t)
+					featCfg := &features.Flags{}
+					featCfg.EnableStateDiff = true
+					reset := features.InitWithReset(featCfg)
+					defer reset()
+					setDefaultStateDiffExponents()
+
+					exponents := flags.Get().StateDiffExponents
+
+					err := setOffsetInDB(db, 0)
+					require.NoError(t, err)
+
+					st, _ := createState(t, 0, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					slot := primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					slot = primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])) + math.PowerOf2(uint64(exponents[len(exponents)-1])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					r := bytesutil.ToBytes32([]byte{'A'})
+					ss := &ethpb.StateSummary{Slot: slot, Root: r[:]}
+					err = db.SaveStateSummary(context.Background(), ss)
+					require.NoError(t, err)
+
+					readSt, err := db.State(context.Background(), r)
+					require.NoError(t, err)
+					require.NotNil(t, readSt)
+
+					stSSZ, err := st.MarshalSSZ()
+					require.NoError(t, err)
+					readStSSZ, err := readSt.MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+				})
+			}
+		})
+
+		t.Run("using block", func(t *testing.T) {
+			for v := range version.All() {
+				t.Run(version.String(v), func(t *testing.T) {
+					db := setupDB(t)
+					featCfg := &features.Flags{}
+					featCfg.EnableStateDiff = true
+					reset := features.InitWithReset(featCfg)
+					defer reset()
+					setDefaultStateDiffExponents()
+
+					exponents := flags.Get().StateDiffExponents
+
+					err := setOffsetInDB(db, 0)
+					require.NoError(t, err)
+
+					st, _ := createState(t, 0, v)
+
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					slot := primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					slot = primitives.Slot(math.PowerOf2(uint64(exponents[len(exponents)-2])) + math.PowerOf2(uint64(exponents[len(exponents)-1])))
+					st, _ = createState(t, slot, v)
+					err = db.saveStateByDiff(context.Background(), st)
+					require.NoError(t, err)
+
+					blk := util.NewBeaconBlock()
+					blk.Block.Slot = slot
+					signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+					require.NoError(t, err)
+					err = db.SaveBlock(context.Background(), signedBlk)
+					require.NoError(t, err)
+					r, err := signedBlk.Block().HashTreeRoot()
+					require.NoError(t, err)
+
+					readSt, err := db.State(context.Background(), r)
+					require.NoError(t, err)
+					require.NotNil(t, readSt)
+
+					stSSZ, err := st.MarshalSSZ()
+					require.NoError(t, err)
+					readStSSZ, err := readSt.MarshalSSZ()
+					require.NoError(t, err)
+					require.DeepSSZEqual(t, stSSZ, readStSSZ)
+				})
+			}
+		})
+	})
+}
+
+func TestStore_HasStateUsingStateDiff(t *testing.T) {
+	t.Run("No state summary or block", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		hasSt := db.HasState(t.Context(), [32]byte{'A'})
+		require.Equal(t, false, hasSt)
+		require.LogsContain(t, hook, "neither state summary nor block found")
+	})
+
+	t.Run("slot in tree or not", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		testCases := []struct {
+			slot     primitives.Slot
+			expected bool
+		}{
+			{slot: 1, expected: false},                                      // slot 1 not in tree
+			{slot: 32, expected: true},                                      // slot 32 in tree
+			{slot: 0, expected: true},                                       // slot 0 in tree
+			{slot: primitives.Slot(math.PowerOf2(21)), expected: true},      // slot in tree
+			{slot: primitives.Slot(math.PowerOf2(21) - 1), expected: false}, // slot not in tree
+			{slot: primitives.Slot(math.PowerOf2(22)), expected: true},      // slot in tree
+		}
+
+		for _, tc := range testCases {
+			r := bytesutil.ToBytes32([]byte{'A'})
+			ss := &ethpb.StateSummary{Slot: tc.slot, Root: r[:]}
+			err = db.SaveStateSummary(t.Context(), ss)
+			require.NoError(t, err)
+
+			hasSt := db.HasState(t.Context(), r)
+			require.Equal(t, tc.expected, hasSt)
+		}
+
+	})
+}

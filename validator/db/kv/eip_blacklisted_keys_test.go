@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestStore_EIPBlacklistedPublicKeys(t *testing.T) {
 	ctx := t.Context()
 	numValidators := 100
 	publicKeys := make([][fieldparams.BLSPubkeyLength]byte, numValidators)
-	for i := 0; i < numValidators; i++ {
+	for i := range numValidators {
 		var key [fieldparams.BLSPubkeyLength]byte
 		copy(key[:], fmt.Sprintf("%d", i))
 		publicKeys[i] = key

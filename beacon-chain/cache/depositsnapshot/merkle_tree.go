@@ -1,10 +1,10 @@
 package depositsnapshot
 
 import (
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/math"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/math"
 	"github.com/pkg/errors"
 )
 
@@ -52,7 +52,7 @@ func create(leaves [][32]byte, depth uint64) MerkleTreeNode {
 	if depth == 0 {
 		return &LeafNode{hash: leaves[0]}
 	}
-	split := math.Min(math.PowerOf2(depth-1), length)
+	split := min(math.PowerOf2(depth-1), length)
 	left := create(leaves[0:split], depth-1)
 	right := create(leaves[split:], depth-1)
 	return &InnerNode{left: left, right: right}

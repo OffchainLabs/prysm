@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   check-specrefs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-4
 
     steps:
     - name: Checkout repository

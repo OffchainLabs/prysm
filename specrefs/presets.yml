@@ -557,8 +557,8 @@
 
 - name: NUMBER_OF_COLUMNS
   sources:
-    - file: config/params/config.go
-      search: NumberOfColumns\s+uint64
+    - file: config/fieldparams/mainnet.go
+      search: NumberOfColumns\s*=
       regex: true
   spec: |
     <spec preset_var="NUMBER_OF_COLUMNS" fork="fulu" hash="f6441e62">

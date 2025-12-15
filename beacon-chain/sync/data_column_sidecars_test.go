@@ -7,26 +7,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	testp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -34,7 +33,7 @@ import (
 )
 
 func TestFetchDataColumnSidecars(t *testing.T) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 	// Slot 1: All needed sidecars are available in storage ==> Retrieval from storage only.
 	// Slot 2: No commitment ==> Nothing to do.
 	// Slot 3: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers.
@@ -46,6 +45,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
 	params.OverrideBeaconConfig(cfg)
 
 	// Start the trusted setup.
@@ -144,7 +144,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 		HeadSlot: 8,
 	})
 
-	p2p.Peers().SetMetadata(other.PeerID(), wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+	p2p.Peers().SetMetadata(other.PeerID(), wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{
 		CustodyGroupCount: 128,
 	}))
 
@@ -154,7 +154,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 	require.NoError(t, err)
 
-	waiter := verification.NewInitializerWaiter(gs, nil, nil)
+	waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 	initializer, err := waiter.WaitForInitializer(t.Context())
 	require.NoError(t, err)
 
@@ -761,6 +761,12 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 	err := kzg.Start()
 	require.NoError(t, err)
 
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 2}}
+	params.OverrideBeaconConfig(cfg)
+
 	t.Run("nominal", func(t *testing.T) {
 		const (
 			start, stop = 0, 15
@@ -781,7 +787,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
@@ -826,7 +832,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		err := gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
 		require.NoError(t, err)
 
-		waiter := verification.NewInitializerWaiter(gs, nil, nil)
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
@@ -1005,13 +1011,6 @@ func TestCompareIndices(t *testing.T) {
 	left = map[uint64]bool{3: true, 5: true, 7: true}
 	right = map[uint64]bool{5: true, 7: true, 3: true}
 	require.Equal(t, true, compareIndices(left, right))
-}
-
-func TestSlortedSliceFromMap(t *testing.T) {
-	input := map[uint64]bool{54: true, 23: true, 35: true}
-	expected := []uint64{23, 35, 54}
-	actual := sortedSliceFromMap(input)
-	require.DeepEqual(t, expected, actual)
 }
 
 func TestComputeTotalCount(t *testing.T) {

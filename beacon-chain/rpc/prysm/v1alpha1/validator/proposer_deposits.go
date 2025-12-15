@@ -5,16 +5,15 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -143,7 +142,7 @@ func (vs *Server) deposits(
 			if err != nil {
 				return nil, errors.Wrap(err, "could not retrieve requests start index")
 			}
-			eth1DepositIndexLimit := math.Min(canonicalEth1Data.DepositCount, requestsStartIndex)
+			eth1DepositIndexLimit := min(canonicalEth1Data.DepositCount, requestsStartIndex)
 			if beaconState.Eth1DepositIndex() < eth1DepositIndexLimit {
 				if uint64(dep.Index) >= beaconState.Eth1DepositIndex() && uint64(dep.Index) < eth1DepositIndexLimit {
 					pendingDeps = append(pendingDeps, dep)

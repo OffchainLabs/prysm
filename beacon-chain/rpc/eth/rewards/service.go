@@ -5,18 +5,18 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	coreblocks "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // BlockRewardsFetcher is a interface that provides access to reward related responses
@@ -68,8 +68,12 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	exitInfo := validators.ExitInformation(st)
-	st, err = coreblocks.ProcessAttesterSlashings(ctx, st, blk.Body().AttesterSlashings(), exitInfo)
+	var exitInfo *validators.ExitInfo
+	if len(blk.Body().ProposerSlashings()) > 0 || len(blk.Body().AttesterSlashings()) > 0 {
+		// ExitInformation is expensive to compute, only do it if we need it.
+		exitInfo = validators.ExitInformation(st)
+	}
+	st, err = coreblocks.ProcessAttesterSlashingsNoVerify(ctx, st, blk.Body().AttesterSlashings(), exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get attester slashing rewards: " + err.Error(),
@@ -83,7 +87,7 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 			Code:    http.StatusInternalServerError,
 		}
 	}
-	st, err = coreblocks.ProcessProposerSlashings(ctx, st, blk.Body().ProposerSlashings(), exitInfo)
+	st, err = coreblocks.ProcessProposerSlashingsNoVerify(ctx, st, blk.Body().ProposerSlashings(), exitInfo)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get proposer slashing rewards: " + err.Error(),
@@ -105,7 +109,7 @@ func (rs *BlockRewardService) GetBlockRewardsData(ctx context.Context, blk inter
 		}
 	}
 	var syncCommitteeReward uint64
-	_, syncCommitteeReward, err = altair.ProcessSyncAggregate(ctx, st, sa)
+	_, syncCommitteeReward, err = altair.ProcessSyncAggregateNoVerifySig(ctx, st, sa)
 	if err != nil {
 		return nil, &httputil.DefaultJsonError{
 			Message: "Could not get sync aggregate rewards: " + err.Error(),

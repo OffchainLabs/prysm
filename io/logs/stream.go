@@ -3,9 +3,9 @@ package logs
 import (
 	"io"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	lru "github.com/hashicorp/golang-lru"
 )
 
