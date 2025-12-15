@@ -30,6 +30,49 @@ func TestGraffitiInfo_GenerateGraffiti_WithUserGraffiti(t *testing.T) {
 	require.Equal(t, true, len(resultStr) >= 12 && resultStr[len(resultStr)-12:] == "my validator", "Expected graffiti to end with user graffiti")
 }
 
+func TestGraffitiInfo_GenerateGraffiti_NoELInfo_LongUserGraffiti(t *testing.T) {
+	g := NewGraffitiInfo()
+	// No EL info set
+
+	tests := []struct {
+		name         string
+		userGraffiti string
+		wantPrefix   string
+	}{
+		{
+			// 29 chars user graffiti, available = 3 bytes
+			// Should still include CL code "PR" since 2 bytes fit
+			name:         "29 char user graffiti - should include PR",
+			userGraffiti: "12345678901234567890123456789",
+			wantPrefix:   "PR",
+		},
+		{
+			// 30 chars user graffiti, available = 2 bytes
+			// Should still include CL code "PR" since exactly 2 bytes fit
+			name:         "30 char user graffiti - should include PR",
+			userGraffiti: "123456789012345678901234567890",
+			wantPrefix:   "PR",
+		},
+		{
+			// 31 chars user graffiti, available = 1 byte
+			// Not enough space for PR, should be user only
+			name:         "31 char user graffiti - user only",
+			userGraffiti: "1234567890123456789012345678901",
+			wantPrefix:   "1234567890123456789012345678901",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := g.GenerateGraffiti([]byte(tt.userGraffiti))
+			resultStr := string(result[:])
+
+			require.Equal(t, true, len(resultStr) >= len(tt.wantPrefix), "Result too short")
+			require.Equal(t, tt.wantPrefix, resultStr[:len(tt.wantPrefix)], "Prefix mismatch")
+		})
+	}
+}
+
 func TestGraffitiInfo_GenerateGraffiti_FlexibleStandard(t *testing.T) {
 	tests := []struct {
 		name         string

@@ -79,8 +79,12 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 		// Codes only: EL(2)+CL(2)+user
 		graffiti = g.elCode + CLCode + userStr
 	case available >= 2:
-		// EL code only: EL(2)+user
-		graffiti = g.elCode + userStr
+		// EL code only (or CL code if no EL): code(2)+user
+		if g.elCode != "" {
+			graffiti = g.elCode + userStr
+		} else {
+			graffiti = CLCode + userStr
+		}
 	default:
 		// User graffiti only
 		graffiti = userStr
