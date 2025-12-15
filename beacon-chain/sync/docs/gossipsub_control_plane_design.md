@@ -67,7 +67,7 @@ GossipsubTopicFamilyWithDynamicSubnets
 ### 1.5 Dynamic Subnet Selection
 
 Dynamic families combine two subnet sources:
-- **Subnets to Join**: Topics we must subscribe to (persistent duties, aggregator responsibilities)
+- **Subnets to Join**: Topics we must subscribe to
 - **Subnets for Broadcast**: Topics we need peers for but may not subscribe to
 
 | Family | Subnets to Join | Subnets for Broadcast |
@@ -257,20 +257,20 @@ Maintains peer connections for topics we need. Works with the crawler to dial ve
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Sync Service                                    │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                      GossipsubController                               │  │
-│  │                                                                        │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐       │  │
-│  │  │ AttestationTF   │  │ SyncCommitteeTF │  │ DataColumnTF    │       │  │
-│  │  │ (dynamic)       │  │ (dynamic)       │  │ (dynamic)       │       │  │
-│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘       │  │
-│  │                                                                        │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐       │  │
-│  │  │ BlockTF, etc.   │  │ BlobTF (static) │  │ baseTopicFamily │       │  │
-│  │  │ (global)        │  │                 │  │ (shared logic)  │       │  │
-│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘       │  │
-│  │                                                                        │  │
+│                              Sync Service                                   │
+│  ┌───────────────────────────────────────────────────────────────────────-  │
+│  │                      GossipsubController                              |  │  
+│  │                                                                       |  │  
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐        │  │
+│  │  │ AttestationTF   │  │ SyncCommitteeTF │  │ DataColumnTF    │        │  │
+│  │  │ (dynamic)       │  │ (dynamic)       │  │ (dynamic)       │        │  │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘        │  │
+│  │                                                                       |  │  
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐        │  │
+│  │  │ BlockTF, etc.   │  │ BlobTF (static) │  │ baseTopicFamily │        │  │
+│  │  │ (global)        │  │                 │  │ (shared logic)  │        │  │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘        │  │
+│  │                                                                       |  │  
 │  └──────────────────┬─────────────────────────────┬──────────────────────┘  │
 │                     │                             │                         │
 │    GetCurrentActiveTopics()               ExtractTopics()                   │
