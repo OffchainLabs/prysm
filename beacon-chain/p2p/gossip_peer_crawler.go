@@ -209,7 +209,7 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	pnode.topics = newTopics
 }
 
-func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.PeerFilterFunc) []*peerNode {
+func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.PeerFilterFunc) []peerNode {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 
@@ -218,7 +218,7 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.Peer
 		return nil
 	}
 
-	var peerNodes []*peerNode
+	var peerNodes []peerNode
 	seen := make(map[enode.ID]bool)
 	for pnode := range peers {
 		if pnode.node == nil {
@@ -230,7 +230,7 @@ func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.Peer
 				continue
 			}
 			seen[pnode.node.ID()] = true
-			peerNodes = append(peerNodes, pnode)
+			peerNodes = append(peerNodes, *pnode)
 		}
 	}
 	return peerNodes
@@ -346,7 +346,7 @@ func NewGossipPeerCrawler(
 func (g *GossipPeerCrawler) PeersForTopic(topic string) []*enode.Node {
 	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
 
-	slices.SortFunc(peerNodes, func(a, b *peerNode) int {
+	slices.SortFunc(peerNodes, func(a, b peerNode) int {
 		scoreA := g.scorer(a.peerID)
 		scoreB := g.scorer(b.peerID)
 		if scoreA > scoreB {
