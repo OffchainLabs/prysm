@@ -1,0 +1,16 @@
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: prysm-bn-custom-image
+    cl_extra_params:
+    - --activate-zkvm
+    - --zkvm-generation-proof-types=0,1
+    vc_image: prysm-vc-custom-image
+    count: 4
+network_params:
+  seconds_per_slot: 2
+global_log_level: debug
+snooper_enabled: false
+additional_services:
+  - dora
+  - prometheus_grafana
