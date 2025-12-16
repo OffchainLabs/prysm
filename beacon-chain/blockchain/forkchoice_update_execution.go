@@ -53,37 +53,25 @@ type fcuConfig struct {
 }
 
 // sendFCU handles the logic to notify the engine of a forckhoice update
-// for the first time when processing an incoming block during regular sync. It
-// always updates the shuffling caches and handles epoch transitions when the
-// incoming block is late, preparing payload attributes in this case while it
-// only sends a message with empty attributes for early blocks.
-func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if !s.isNewHead(cfg.headRoot) {
-		return nil
+// when processing an incoming block during regular sync. It
+// always updates the shuffling caches and handles epoch transitions .
+func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
+	s.ForkChoicer().Lock()
+	defer s.ForkChoicer().Unlock()
+	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
+		log.WithError(err).Error("Could not get forkchoice update argument")
+		return
 	}
+	// If head has not been updated and attributes are nil, we can skip the FCU.
+	if !s.isNewHead(cfg.headRoot) && (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) {
+		return
+	}
+	// If we are proposing and we aim to reorg the block, we have already sent FCU with attributes on lateBlockTasks
 	if fcuArgs.attributes != nil && !fcuArgs.attributes.IsEmpty() && s.shouldOverrideFCU(cfg.headRoot, s.CurrentSlot()+1) {
-		return nil
-	}
-	return s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs)
-}
-
-// sendFCUWithAttributes computes the payload attributes and sends an FCU message
-// to the engine if needed
-func (s *Service) sendFCUWithAttributes(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
-	slotCtx, cancel := context.WithTimeout(context.Background(), slotDeadline)
-	defer cancel()
-	cfg.ctx = slotCtx
-	s.cfg.ForkChoiceStore.RLock()
-	defer s.cfg.ForkChoiceStore.RUnlock()
-	if err := s.computePayloadAttributes(cfg, fcuArgs); err != nil {
-		log.WithError(err).Error("Could not compute payload attributes")
 		return
 	}
-	if fcuArgs.attributes.IsEmpty() {
-		return
-	}
-	if _, err := s.notifyForkchoiceUpdate(cfg.ctx, fcuArgs); err != nil {
-		log.WithError(err).Error("Could not update forkchoice with payload attributes for proposal")
+	if err := s.forkchoiceUpdateWithExecution(cfg.ctx, fcuArgs); err != nil {
+		log.WithError(err).Error("Could not update forkchoice")
 	}
 }
 

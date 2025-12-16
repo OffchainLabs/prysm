@@ -66,9 +66,6 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	startTime := time.Now()
 	fcuArgs := &fcuConfig{}
 
-	if s.inRegularSync() {
-		defer s.handleSecondFCUCall(cfg, fcuArgs)
-	}
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 	}
@@ -105,13 +102,11 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
-		log.WithError(err).Error("Could not get forkchoice update argument")
-		return nil
+	if s.inRegularSync() {
+		go s.sendFCU(cfg, fcuArgs)
 	}
-	if err := s.sendFCU(cfg, fcuArgs); err != nil {
-		return errors.Wrap(err, "could not send FCU to engine")
-	}
+
+	go s.updateCachesPostBlockProcessing(cfg)
 
 	return nil
 }
@@ -330,6 +325,7 @@ func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.Availability
 	return nil
 }
 
+// the caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {
 	e := coreTime.CurrentEpoch(st)
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
@@ -359,7 +355,9 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if e > 0 {
 		e = e - 1
 	}
+	s.ForkChoicer().RLock()
 	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
+	s.ForkChoicer().RUnlock()
 	if err != nil {
 		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
@@ -372,7 +370,7 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 }
 
 // Epoch boundary tasks: it copies the headState and updates the epoch boundary
-// caches.
+// caches. The caller of this function must not hold a lock in forkchoice store.
 func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.BeaconState, blockRoot []byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.handleEpochBoundary")
 	defer span.End()
@@ -912,8 +910,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	if currentSlot == s.HeadSlot() {
 		return
 	}
-	s.cfg.ForkChoiceStore.RLock()
-	defer s.cfg.ForkChoiceStore.RUnlock()
 	// return early if we are in init sync
 	if !s.inRegularSync() {
 		return
@@ -929,11 +925,26 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	// Copy all the field tries in our cached state in the event of late
 	// blocks.
 	lastState.CopyAllTries()
-	if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-		log.WithError(err).Debug("Could not update next slot state cache")
-	}
-	if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-		log.WithError(err).Error("Could not update epoch boundary caches")
+	// Before Fulu we need to process the next slot to find out if we are proposing.
+	if lastState.Version() < version.Fulu {
+		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+			log.WithError(err).Debug("Could not update next slot state cache")
+		}
+		if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
+			log.WithError(err).Error("Could not update epoch boundary caches")
+		}
+	} else {
+		// After Fulu, we can update the caches asynchronously after sending FCU to the engine
+		defer func() {
+			go func() {
+				if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+					log.WithError(err).Debug("Could not update next slot state cache")
+				}
+				if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
+					log.WithError(err).Error("Could not update epoch boundary caches")
+				}
+			}()
+		}()
 	}
 	// return early if we already started building a block for the current
 	// head root
@@ -963,6 +974,8 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		headBlock:  headBlock,
 		attributes: attribute,
 	}
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
 	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
 	if err != nil {
 		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")
