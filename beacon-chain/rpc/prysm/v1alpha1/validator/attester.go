@@ -52,6 +52,10 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestation")
 	defer span.End()
 
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
+
 	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
 	if err != nil {
 		return nil, err
@@ -81,6 +85,10 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
 	defer span.End()
+
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
 
 	resp, err := vs.proposeAtt(ctx, singleAtt, singleAtt.GetCommitteeIndex())
 	if err != nil {
