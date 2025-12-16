@@ -84,6 +84,13 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 		return errors.Wrap(err, "beacon db update custody info")
 	}
 
+	log.WithFields(logrus.Fields{
+		"earliestAvailableSlot": storedEarliestSlot,
+		"custodyGroupCount":     storedGroupCount,
+		"headSlot":              headSlot,
+		"targetCustodyGroups":   targetCustodyGroupCount,
+	}).Debug("Maintained custody info")
+
 	return nil
 }
 

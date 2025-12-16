@@ -521,6 +521,13 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		return 0, 0, errors.Wrap(err, "update custody info")
 	}
 
+	log.WithFields(logrus.Fields{
+		"earliestAvailableSlot": earliestAvailableSlot,
+		"custodyGroupCount":     actualCustodyGroupCount,
+		"inputSlot":             slot,
+		"targetCustodyGroups":   targetCustodyGroupCount,
+	}).Info("Updated custody info in database")
+
 	if isSupernode {
 		log.WithFields(logrus.Fields{
 			"current": actualCustodyGroupCount,
