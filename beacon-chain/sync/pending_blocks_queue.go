@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"sync"
@@ -93,6 +92,8 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 		// Process each block in the queue.
 		for _, b := range blocksInCache {
+			start := time.Now()
+
 			if err := blocks.BeaconBlockIsNil(b); err != nil {
 				continue
 			}
@@ -158,8 +159,14 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
 				return err
 			}
-			log.WithFields(logrus.Fields{"slot": slot, "blockRoot": hex.EncodeToString(bytesutil.Trunc(blkRoot[:]))}).Debug("Processed pending block and cleared it in cache")
+
+			log.WithFields(logrus.Fields{
+				"slot":     slot,
+				"root":     fmt.Sprintf("%#x", blkRoot),
+				"duration": time.Since(start),
+			}).Debug("Processed pending block and cleared it in cache")
 		}
+
 		span.End()
 	}
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
