@@ -241,6 +241,7 @@ go_test(
     ],
     eth_network = "minimal",
     flaky = True,
+    local = True,  # Disable sandboxing so DB modifications persist across process restarts
     shard_count = 2,
     tags = [
         "exclusive",

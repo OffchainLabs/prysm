@@ -152,6 +152,14 @@ type EvaluationContext struct {
 	ExitedVals           map[[48]byte]bool
 	SeenVotes            map[primitives.Slot][]byte
 	ExpectedEth1DataVote []byte
+	// CustodyInfo tracks custody info state for each node index
+	CustodyInfo map[int]*CustodyInfoState
+}
+
+// CustodyInfoState tracks custody info for verification in e2e tests.
+type CustodyInfoState struct {
+	EarliestAvailableSlot primitives.Slot
+	CustodyGroupCount     uint64
 }
 
 // NewEvaluationContext handles initializing internal datastructures (like maps) provided by the EvaluationContext.
@@ -160,6 +168,7 @@ func NewEvaluationContext(d DepositBalancer) *EvaluationContext {
 		DepositBalancer: d,
 		ExitedVals:      make(map[[48]byte]bool),
 		SeenVotes:       make(map[primitives.Slot][]byte),
+		CustodyInfo:     make(map[int]*CustodyInfoState),
 	}
 }
 
@@ -207,4 +216,14 @@ type BeaconNodeSet interface {
 	ComponentRunner
 	// SetENR provides the relevant bootnode's enr to the beacon nodes.
 	SetENR(enr string)
+}
+
+// RestartableBeaconNodeSet extends BeaconNodeSet with the ability to restart
+// individual nodes with different flags.
+type RestartableBeaconNodeSet interface {
+	MultipleComponentRunners
+	BeaconNodeSet
+	// RestartAtIndex stops the beacon node at the given index and restarts it
+	// with the provided extra flags appended to the existing configuration.
+	RestartAtIndex(ctx context.Context, i int, extraFlags []string) error
 }

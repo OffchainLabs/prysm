@@ -5,9 +5,55 @@ import (
 	"math"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	log "github.com/sirupsen/logrus"
 )
+
+// InitForkCfgWithFuluAt creates a fork config where Fulu is scheduled at a specific epoch.
+// This is used for testing behavior before Fulu activates while still having Fulu scheduled.
+func InitForkCfgWithFuluAt(start int, fuluEpoch primitives.Epoch, c *params.BeaconChainConfig) *params.BeaconChainConfig {
+	c = c.Copy()
+	if start < version.Bellatrix {
+		log.Fatal("E2e tests require starting from Bellatrix or later (pre-merge forks are not supported)")
+	}
+	if start >= version.Altair {
+		c.AltairForkEpoch = 0
+	}
+	if start >= version.Bellatrix {
+		c.BellatrixForkEpoch = 0
+	}
+	if start >= version.Capella {
+		c.CapellaForkEpoch = 0
+	}
+	if start >= version.Deneb {
+		c.DenebForkEpoch = 0
+	}
+	if start >= version.Electra {
+		c.ElectraForkEpoch = 0
+	}
+	// Fulu is scheduled at a specific epoch, not from genesis
+	c.FuluForkEpoch = fuluEpoch
+
+	// Time TTD to line up roughly with the bellatrix fork epoch.
+	ttd := uint64(c.BellatrixForkEpoch) * uint64(c.SlotsPerEpoch) * c.SecondsPerSlot
+	c.TerminalTotalDifficulty = fmt.Sprintf("%d", ttd)
+
+	// Update blob schedule
+	c.BlobSchedule = nil
+	if c.DenebForkEpoch != math.MaxUint64 {
+		c.BlobSchedule = append(c.BlobSchedule, params.BlobScheduleEntry{
+			Epoch: c.DenebForkEpoch, MaxBlobsPerBlock: uint64(c.DeprecatedMaxBlobsPerBlock),
+		})
+	}
+	if c.ElectraForkEpoch != math.MaxUint64 {
+		c.BlobSchedule = append(c.BlobSchedule, params.BlobScheduleEntry{
+			Epoch: c.ElectraForkEpoch, MaxBlobsPerBlock: uint64(c.DeprecatedMaxBlobsPerBlockElectra),
+		})
+	}
+	c.InitializeForkSchedule()
+	return c
+}
 
 func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChainConfig {
 	c = c.Copy()

@@ -8,9 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	cmdshared "github.com/OffchainLabs/prysm/v7/cmd"
@@ -18,6 +21,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/runtime/interop"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
@@ -25,12 +30,14 @@ import (
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
+	bolt "go.etcd.io/bbolt"
 )
 
 var _ e2etypes.ComponentRunner = (*BeaconNode)(nil)
 var _ e2etypes.ComponentRunner = (*BeaconNodeSet)(nil)
 var _ e2etypes.MultipleComponentRunners = (*BeaconNodeSet)(nil)
 var _ e2etypes.BeaconNodeSet = (*BeaconNodeSet)(nil)
+var _ e2etypes.RestartableBeaconNodeSet = (*BeaconNodeSet)(nil)
 
 // BeaconNodeSet represents set of beacon nodes.
 type BeaconNodeSet struct {
@@ -149,24 +156,180 @@ func (s *BeaconNodeSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error
 	return s.nodes[i], nil
 }
 
+// RestartAtIndex stops the beacon node at the given index and restarts it
+// with the provided extra flags appended to the existing configuration.
+// The restarted node preserves its data directory (does not clear DB).
+func (s *BeaconNodeSet) RestartAtIndex(ctx context.Context, i int, extraFlags []string) error {
+	if i >= len(s.nodes) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.nodes))
+	}
+
+	// Get the existing node to extract its configuration
+	oldNode, ok := s.nodes[i].(*BeaconNode)
+	if !ok {
+		return errors.New("node at index is not a BeaconNode")
+	}
+
+	// Backup the log file before restart so we don't lose pre-restart logs
+	oldLogPath := path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, i))
+	backupLogPath := path.Join(e2e.TestParams.LogPath, fmt.Sprintf("beacon-%d-pre-restart.log", i))
+	if err := copyFile(oldLogPath, backupLogPath); err != nil {
+		log.WithError(err).Warnf("Failed to backup log file before restart (non-fatal)")
+	} else {
+		log.Infof("Backed up beacon node %d log to %s", i, backupLogPath)
+	}
+
+	// Stop the node for restart (sets restarting flag to prevent errgroup failure)
+	log.Infof("Stopping beacon node %d for restart", i)
+	if err := oldNode.StopForRestart(); err != nil {
+		return errors.Wrap(err, "failed to stop node for restart")
+	}
+
+	// Wait a moment for the process to fully terminate
+	time.Sleep(2 * time.Second)
+
+	// Create a new config with extra flags
+	newConfig := *s.config
+	newConfig.BeaconFlags = append(slices.Clone(s.config.BeaconFlags), extraFlags...)
+
+	// Create a new node that will preserve the data directory
+	newNode := NewBeaconNodeForRestart(&newConfig, oldNode.index, oldNode.enr)
+	s.nodes[i] = newNode
+
+	// Start the new node in a goroutine
+	startErrCh := make(chan error, 1)
+	go func() {
+		if err := newNode.Start(ctx); err != nil {
+			// Only report error if context wasn't cancelled
+			if ctx.Err() == nil {
+				startErrCh <- err
+			}
+		}
+	}()
+
+	// Wait for node to start or timeout
+	select {
+	case <-newNode.Started():
+		log.Infof("Beacon node %d restarted successfully with extra flags: %v", i, extraFlags)
+		return nil
+	case err := <-startErrCh:
+		return errors.Wrap(err, "failed to start restarted beacon node")
+	case <-time.After(2 * time.Minute):
+		return errors.New("timeout waiting for restarted beacon node to start")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// PreRestartHook is a function called after stopping a node but before restarting it.
+// It receives the BeaconNodeSet and node index, allowing modification of the node's database.
+type PreRestartHook func(s *BeaconNodeSet, nodeIndex int) error
+
+// RestartAtIndexWithPreHook is like RestartAtIndex but calls the provided hook function
+// after stopping the node and before restarting it. This allows modification of the
+// node's database (e.g., setting custody info) while the node is stopped.
+func (s *BeaconNodeSet) RestartAtIndexWithPreHook(ctx context.Context, i int, extraFlags []string, preHook PreRestartHook) error {
+	if i >= len(s.nodes) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.nodes))
+	}
+
+	// Get the existing node to extract its configuration
+	oldNode, ok := s.nodes[i].(*BeaconNode)
+	if !ok {
+		return errors.New("node at index is not a BeaconNode")
+	}
+
+	// Backup the log file before restart so we don't lose pre-restart logs
+	oldLogPath := path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, i))
+	backupLogPath := path.Join(e2e.TestParams.LogPath, fmt.Sprintf("beacon-%d-pre-restart.log", i))
+	if err := copyFile(oldLogPath, backupLogPath); err != nil {
+		log.WithError(err).Warnf("Failed to backup log file before restart (non-fatal)")
+	} else {
+		log.Infof("Backed up beacon node %d log to %s", i, backupLogPath)
+	}
+
+	// Stop the node for restart (sets restarting flag to prevent errgroup failure)
+	log.Infof("Stopping beacon node %d for restart", i)
+	if err := oldNode.StopForRestart(); err != nil {
+		return errors.Wrap(err, "failed to stop node for restart")
+	}
+
+	// Wait a moment for the process to fully terminate
+	time.Sleep(2 * time.Second)
+
+	// Execute the pre-restart hook if provided
+	if preHook != nil {
+		log.Infof("Executing pre-restart hook for beacon node %d", i)
+		if err := preHook(s, i); err != nil {
+			return errors.Wrap(err, "pre-restart hook failed")
+		}
+	}
+
+	// Create a new config with extra flags
+	newConfig := *s.config
+	newConfig.BeaconFlags = append(slices.Clone(s.config.BeaconFlags), extraFlags...)
+
+	// Create a new node that will preserve the data directory
+	newNode := NewBeaconNodeForRestart(&newConfig, oldNode.index, oldNode.enr)
+	s.nodes[i] = newNode
+
+	// Start the new node in a goroutine
+	startErrCh := make(chan error, 1)
+	go func() {
+		if err := newNode.Start(ctx); err != nil {
+			// Only report error if context wasn't cancelled
+			if ctx.Err() == nil {
+				startErrCh <- err
+			}
+		}
+	}()
+
+	// Wait for node to start or timeout
+	select {
+	case <-newNode.Started():
+		log.Infof("Beacon node %d restarted successfully with extra flags: %v", i, extraFlags)
+		return nil
+	case err := <-startErrCh:
+		return errors.Wrap(err, "failed to start restarted beacon node")
+	case <-time.After(2 * time.Minute):
+		return errors.New("timeout waiting for restarted beacon node to start")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // BeaconNode represents beacon node.
 type BeaconNode struct {
 	e2etypes.ComponentRunner
-	config  *e2etypes.E2EConfig
-	started chan struct{}
-	index   int
-	enr     string
-	peerID  string
-	cmd     *exec.Cmd
+	config     *e2etypes.E2EConfig
+	started    chan struct{}
+	index      int
+	enr        string
+	peerID     string
+	cmd        *exec.Cmd
+	isRestart  bool       // If true, don't clear DB on start
+	restarting atomic.Bool // Set to true when being intentionally stopped for restart
 }
 
 // NewBeaconNode creates and returns a beacon node.
 func NewBeaconNode(config *e2etypes.E2EConfig, index int, enr string) *BeaconNode {
 	return &BeaconNode{
-		config:  config,
-		index:   index,
-		enr:     enr,
-		started: make(chan struct{}, 1),
+		config:    config,
+		index:     index,
+		enr:       enr,
+		started:   make(chan struct{}, 1),
+		isRestart: false,
+	}
+}
+
+// NewBeaconNodeForRestart creates a beacon node configured for restart (preserves DB).
+func NewBeaconNodeForRestart(config *e2etypes.E2EConfig, index int, enr string) *BeaconNode {
+	return &BeaconNode{
+		config:    config,
+		index:     index,
+		enr:       enr,
+		started:   make(chan struct{}, 1),
+		isRestart: true,
 	}
 }
 
@@ -273,8 +436,11 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--%s=%s", cmdshared.ChainConfigFileFlag.Name, cfgPath),
 		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=1",
 		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=2",
-		"--" + cmdshared.ForceClearDB.Name,
 		"--" + cmdshared.AcceptTosFlag.Name,
+	}
+	// Only clear DB on initial start, not on restart
+	if !node.isRestart {
+		args = append(args, "--"+cmdshared.ForceClearDB.Name)
 	}
 	if config.UsePprof {
 		args = append(args, "--pprof", fmt.Sprintf("--pprofport=%d", e2e.TestParams.Ports.PrysmBeaconNodePprofPort+index))
@@ -324,7 +490,14 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 	close(node.started)
 
 	node.cmd = cmd
-	return cmd.Wait()
+	err = cmd.Wait()
+	// If the node was intentionally stopped for restart, don't propagate the error
+	// to avoid failing the errgroup
+	if err != nil && node.restarting.Load() {
+		log.Infof("Beacon node %d stopped for restart (not an error)", index)
+		return nil
+	}
+	return err
 }
 
 // Started checks whether beacon node is started and ready to be queried.
@@ -347,6 +520,18 @@ func (node *BeaconNode) Stop() error {
 	return node.cmd.Process.Kill()
 }
 
+// StopForRestart stops the component for restart, setting a flag so the errgroup knows
+// this is an intentional stop and shouldn't fail the test.
+func (node *BeaconNode) StopForRestart() error {
+	node.restarting.Store(true)
+	return node.cmd.Process.Kill()
+}
+
+// IsRestarting returns true if the node was intentionally stopped for restart.
+func (node *BeaconNode) IsRestarting() bool {
+	return node.restarting.Load()
+}
+
 func (node *BeaconNode) UnderlyingProcess() *os.Process {
 	return node.cmd.Process
 }
@@ -361,4 +546,160 @@ func GenerateGenesis(ctx context.Context) (state.BeaconState, error) {
 	nvals := params.BeaconConfig().MinGenesisActiveValidatorCount
 	version := e2etypes.GenesisFork()
 	return interop.NewPreminedGenesis(ctx, t, nvals, pcreds, version, gb)
+}
+
+// copyFile copies a file from src to dst.
+func copyFile(src, dst string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, input, 0644)
+}
+
+// Bucket and key names for custody info in BoltDB - must match beacon-chain/db/kv/schema.go
+var (
+	custodyBucket            = []byte("custody")
+	groupCountKey            = []byte("group-count")
+	earliestAvailableSlotKey = []byte("earliest-available-slot")
+)
+
+// SetEarliestSlotForNode directly sets the earliestAvailableSlot in a beacon node's database
+// without modifying the custody group count. The node MUST be stopped before calling this function.
+// This is used for testing to verify that earliestAvailableSlot never decreases.
+func (s *BeaconNodeSet) SetEarliestSlotForNode(nodeIndex int, earliestSlot primitives.Slot) error {
+	if nodeIndex >= len(s.nodes) {
+		return errors.Errorf("node index %d out of range (max %d)", nodeIndex, len(s.nodes)-1)
+	}
+
+	// Construct the path to the beacon node's database
+	// The beacon node stores its DB in a "beaconchaindata" subdirectory
+	dataDir := fmt.Sprintf("%s/eth2-beacon-node-%d", e2e.TestParams.TestPath, nodeIndex)
+	dbPath := path.Join(dataDir, "beaconchaindata", "beaconchain.db")
+
+	// Open the BoltDB database
+	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	if err != nil {
+		return errors.Wrap(err, "failed to open beacon node database")
+	}
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.WithError(closeErr).Error("Failed to close beacon node database")
+		}
+	}()
+
+	// Update only the earliest available slot
+	if err := db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
+		if err != nil {
+			return errors.Wrap(err, "create custody bucket")
+		}
+
+		// Store the earliest available slot
+		slotBytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestSlot))
+		if err := bucket.Put(earliestAvailableSlotKey, slotBytes); err != nil {
+			return errors.Wrap(err, "put earliest available slot")
+		}
+
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "update earliest slot in database")
+	}
+
+	log.WithFields(map[string]any{
+		"nodeIndex":             nodeIndex,
+		"earliestAvailableSlot": earliestSlot,
+		"dbPath":                dbPath,
+	}).Info("Set earliest available slot directly in beacon node database")
+
+	return nil
+}
+
+// SetCustodyInfoForNode directly modifies the custody info in a beacon node's database.
+// The node MUST be stopped before calling this function.
+// This is used for testing to simulate the state where maintainCustodyInfo() has updated
+// the earliestAvailableSlot to a higher value.
+func (s *BeaconNodeSet) SetCustodyInfoForNode(nodeIndex int, earliestSlot primitives.Slot, custodyGroupCount uint64) error {
+	if nodeIndex >= len(s.nodes) {
+		return errors.Errorf("node index %d out of range (max %d)", nodeIndex, len(s.nodes)-1)
+	}
+
+	// Construct the path to the beacon node's database
+	// The beacon node stores its DB in a "beaconchaindata" subdirectory
+	dataDir := fmt.Sprintf("%s/eth2-beacon-node-%d", e2e.TestParams.TestPath, nodeIndex)
+	dbPath := path.Join(dataDir, "beaconchaindata", "beaconchain.db")
+
+	// Open the BoltDB database
+	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	if err != nil {
+		return errors.Wrap(err, "failed to open beacon node database")
+	}
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.WithError(closeErr).Error("Failed to close beacon node database")
+		}
+	}()
+
+	// Update the custody info
+	if err := db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists(custodyBucket)
+		if err != nil {
+			return errors.Wrap(err, "create custody bucket")
+		}
+
+		// Store the earliest available slot
+		slotBytes := bytesutil.Uint64ToBytesBigEndian(uint64(earliestSlot))
+		if err := bucket.Put(earliestAvailableSlotKey, slotBytes); err != nil {
+			return errors.Wrap(err, "put earliest available slot")
+		}
+
+		// Store the custody group count
+		countBytes := bytesutil.Uint64ToBytesBigEndian(custodyGroupCount)
+		if err := bucket.Put(groupCountKey, countBytes); err != nil {
+			return errors.Wrap(err, "put custody group count")
+		}
+
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "update custody info in database")
+	}
+
+	// Verify the write by reading back the values
+	var verifiedSlot, verifiedCount uint64
+	if err := db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(custodyBucket)
+		if bucket == nil {
+			return errors.New("custody bucket not found after write")
+		}
+
+		slotBytes := bucket.Get(earliestAvailableSlotKey)
+		if slotBytes != nil {
+			verifiedSlot = bytesutil.BytesToUint64BigEndian(slotBytes)
+		}
+
+		countBytes := bucket.Get(groupCountKey)
+		if countBytes != nil {
+			verifiedCount = bytesutil.BytesToUint64BigEndian(countBytes)
+		}
+
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "verify custody info after write")
+	}
+
+	log.WithFields(map[string]any{
+		"nodeIndex":             nodeIndex,
+		"earliestAvailableSlot": earliestSlot,
+		"custodyGroupCount":     custodyGroupCount,
+		"verifiedSlot":          verifiedSlot,
+		"verifiedCount":         verifiedCount,
+		"dbPath":                dbPath,
+	}).Info("Set custody info directly in beacon node database")
+
+	if verifiedSlot != uint64(earliestSlot) || verifiedCount != custodyGroupCount {
+		return errors.Errorf("verification failed: wrote slot=%d count=%d, read slot=%d count=%d",
+			earliestSlot, custodyGroupCount, verifiedSlot, verifiedCount)
+	}
+
+	return nil
 }

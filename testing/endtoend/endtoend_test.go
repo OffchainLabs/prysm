@@ -195,11 +195,12 @@ func (r *testRunner) runEvaluators(ec *e2etypes.EvaluationContext, conns []*grpc
 	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
 	for currentEpoch := range ticker.C() {
-		if config.EvalInterceptor(ec, currentEpoch, conns) {
-			continue
+		intercepted := config.EvalInterceptor(ec, currentEpoch, conns)
+		if !intercepted {
+			r.executeProvidedEvaluators(ec, currentEpoch, conns, config.Evaluators)
 		}
-		r.executeProvidedEvaluators(ec, currentEpoch, conns, config.Evaluators)
 
+		// Check termination condition regardless of whether evaluators were intercepted
 		if t.Failed() || currentEpoch >= config.EpochsToRun-1 {
 			ticker.Done()
 			if t.Failed() {
@@ -850,5 +851,150 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 
 // All Epochs are valid.
 func defaultInterceptor(_ *e2etypes.EvaluationContext, _ uint64, _ []*grpc.ClientConn) bool {
+	return false
+}
+
+// preFuluSemiSupernodeRestart tests the custody info bug where restarting with
+// --semi-supernode before the Fulu fork causes earliestAvailableSlot to decrease.
+//
+// The bug scenario:
+// 1. Node starts - Fulu scheduled but not active, earliestAvailableSlot set from EarliestSlot()
+// 2. Validators connect - maintainCustodyInfo() updates earliestAvailableSlot to headSlot
+// 3. Restart with --semi-supernode (still before Fulu) - EarliestSlot() returns checkpoint slot
+//    BUG: The lower checkpoint slot overwrites the higher headSlot value
+//
+// This interceptor:
+// - Phase 1 (epoch fuluFork-3): Record initial custody info
+// - Phase 2 (epoch fuluFork-2): Let validators connect, custody info updates to headSlot
+// - Phase 3 (epoch fuluFork-1): Restart node 0 with --semi-supernode
+// - Phase 4 (epoch fuluFork): Verify earliestAvailableSlot did NOT decrease
+func (r *testRunner) preFuluSemiSupernodeRestart(ec *e2etypes.EvaluationContext, epoch uint64, conns []*grpc.ClientConn) bool {
+	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
+	if fuluForkEpoch == params.BeaconConfig().FarFutureEpoch {
+		// Fulu not scheduled, skip this scenario
+		return false
+	}
+
+	// Define epoch phases relative to Fulu fork
+	// We need at least 3 epochs before Fulu to run the full scenario
+	recordInitialEpoch := fuluForkEpoch - 3
+	validatorsConnectedEpoch := fuluForkEpoch - 2
+	restartEpoch := fuluForkEpoch - 1
+	verifyEpoch := fuluForkEpoch
+	// After verifyEpoch, we're in recovery - skip standard evaluators
+
+	epochVal := primitives.Epoch(epoch)
+
+	// Warmup period: epochs 0-2 are used for chain startup and validator initialization
+	// Skip standard evaluators during this time to avoid flaky failures
+	if epochVal < recordInitialEpoch {
+		log.WithField("epoch", epoch).Info("Pre-Fulu Semi-Supernode Test - Warmup period: waiting for chain to stabilize")
+		return true
+	}
+
+	switch epochVal {
+	case recordInitialEpoch:
+		log.Info("Pre-Fulu Semi-Supernode Test - Phase 1: Recording initial custody info")
+		// Run custody info evaluator to capture initial state
+		evs := []e2etypes.Evaluator{ev.CustodyInfoNonDecreasing}
+		r.executeProvidedEvaluators(ec, epoch, conns, evs)
+		return true
+
+	case validatorsConnectedEpoch:
+		log.Info("Pre-Fulu Semi-Supernode Test - Phase 2: Validators connected, checking custody info updated")
+		// At this point, maintainCustodyInfo() should have run and updated earliestAvailableSlot
+		// Run evaluator to verify and capture updated state
+		evs := []e2etypes.Evaluator{ev.CustodyInfoNonDecreasing}
+		r.executeProvidedEvaluators(ec, epoch, conns, evs)
+		return true
+
+	case restartEpoch:
+		log.Info("Pre-Fulu Semi-Supernode Test - Phase 3: Restarting beacon node 0 with --semi-supernode")
+
+		// Get the beacon node set with restart capability
+		beaconNodes, ok := r.comHandler.beaconNodes.(*components.BeaconNodeSet)
+		if !ok {
+			r.t.Error("Failed to get BeaconNodeSet for restart")
+			return true
+		}
+
+		// The simulated slot value that maintainCustodyInfo() would have set.
+		// This must be higher than what EarliestSlot() returns (which is 0 from genesis).
+		const simulatedHigherSlot = 100
+		// Set custody group count to 4 (the base requirement). When semi-supernode starts,
+		// it will want to increase this (but not to 128+ which validators might require).
+		// This triggers the update code path where the fix should protect the slot.
+		const initialCustodyGroupCount = 4
+
+		// Pre-restart hook: Set custody info in the DB before restart.
+		// We set a higher earliestAvailableSlot with a low custody group count.
+		// After restart with --semi-supernode, custody may increase, triggering UpdateCustodyInfo.
+		// The fix should ensure earliestAvailableSlot doesn't decrease when custody increases.
+		preRestartHook := func(s *components.BeaconNodeSet, nodeIndex int) error {
+			log.WithFields(log.Fields{
+				"nodeIndex":                  nodeIndex,
+				"simulatedEarliestAvailSlot": simulatedHigherSlot,
+				"custodyGroupCount":          initialCustodyGroupCount,
+			}).Info("Pre-restart hook: Setting earliestAvailableSlot and custodyGroupCount")
+			return s.SetCustodyInfoForNode(nodeIndex, simulatedHigherSlot, initialCustodyGroupCount)
+		}
+
+		// Restart node 0 with --semi-supernode flag
+		ctx := r.comHandler.ctx
+		if err := beaconNodes.RestartAtIndexWithPreHook(ctx, 0, []string{"--semi-supernode"}, preRestartHook); err != nil {
+			r.t.Errorf("Failed to restart beacon node with --semi-supernode: %v", err)
+			return true
+		}
+
+		log.Info("Pre-Fulu Semi-Supernode Test - Beacon node 0 restarted successfully")
+		return true
+
+	case verifyEpoch:
+		log.Info("Pre-Fulu Semi-Supernode Test - Phase 4: Verifying earliestAvailableSlot did not decrease")
+
+		// This is the critical assertion - if the bug exists, earliestAvailableSlot will have decreased
+		evs := []e2etypes.Evaluator{ev.CustodyInfoNonDecreasing}
+		r.executeProvidedEvaluators(ec, epoch, conns, evs)
+
+		// Also do a full monotonicity check on all log entries
+		logPath := path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, 0))
+		if err := ev.VerifyCustodyInfoMonotonicity(logPath); err != nil {
+			r.t.Errorf("Custody info monotonicity check failed: %v", err)
+		}
+
+		// Critical bug detection: Check that post-restart earliestAvailableSlot is >= 100 (what we set in the hook)
+		// The pre-restart hook sets earliestAvailableSlot=100 directly in the DB.
+		// If the bug exists, the post-restart value will be 0 (from EarliestSlot()).
+		// If the fix is applied, the post-restart value should be >= 100 (max of stored vs incoming).
+		const expectedMinSlot = 100
+		latestCustodyInfo, err := ev.ParseCustodyInfoFromLog(logPath)
+		if err != nil {
+			r.t.Errorf("Failed to parse custody info from log: %v", err)
+		} else if latestCustodyInfo.EarliestAvailableSlot < expectedMinSlot {
+			r.t.Errorf("BUG DETECTED: earliestAvailableSlot decreased from %d (set by hook) to %d (post-restart). "+
+				"This confirms the bug where UpdateCustodyInfo overwrites without using max().",
+				expectedMinSlot, latestCustodyInfo.EarliestAvailableSlot)
+		} else {
+			log.WithFields(log.Fields{
+				"expectedMinSlot":  expectedMinSlot,
+				"actualSlot":       latestCustodyInfo.EarliestAvailableSlot,
+				"custodyGroupCount": latestCustodyInfo.CustodyGroupCount,
+			}).Info("Post-restart earliestAvailableSlot is correct (>= expected minimum)")
+		}
+
+		return true
+
+	default:
+		// Recovery period: after restart, give the beacon node time to sync
+		// Skip normal evaluators that would fail due to syncing node
+		if epochVal > verifyEpoch {
+			log.WithField("epoch", epoch).Info("Pre-Fulu Semi-Supernode Test - Recovery period: skipping normal evaluators while node syncs")
+			// Still run custody evaluator to ensure earliestAvailableSlot remains stable
+			evs := []e2etypes.Evaluator{ev.CustodyInfoNonDecreasing}
+			r.executeProvidedEvaluators(ec, epoch, conns, evs)
+			return true
+		}
+	}
+
 	return false
 }

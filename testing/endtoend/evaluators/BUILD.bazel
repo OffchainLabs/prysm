@@ -5,6 +5,7 @@ go_library(
     testonly = True,
     srcs = [
         "builder.go",
+        "custody.go",
         "data.go",
         "execution_engine.go",
         "fee_recipient.go",
