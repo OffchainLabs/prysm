@@ -12,6 +12,7 @@ import (
 	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -56,6 +57,10 @@ type fcuConfig struct {
 // when processing an incoming block during regular sync. It
 // always updates the shuffling caches and handles epoch transitions .
 func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
+	if cfg.postState.Version() < version.Fulu {
+		// update the caches to compute the right proposer index
+		s.updateCachesPostBlockProcessing(cfg)
+	}
 	s.ForkChoicer().Lock()
 	defer s.ForkChoicer().Unlock()
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {

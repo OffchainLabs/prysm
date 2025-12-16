@@ -106,8 +106,10 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		go s.sendFCU(cfg, fcuArgs)
 	}
 
-	go s.updateCachesPostBlockProcessing(cfg)
-
+	// Pre-Fulu the caches are updated when computing the payload attributes
+	if cfg.postState.Version() >= version.Fulu {
+		go s.updateCachesPostBlockProcessing(cfg)
+	}
 	return nil
 }
 
@@ -922,11 +924,11 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	if lastState == nil {
 		lastRoot, lastState = headRoot[:], headState
 	}
-	// Copy all the field tries in our cached state in the event of late
-	// blocks.
-	lastState.CopyAllTries()
 	// Before Fulu we need to process the next slot to find out if we are proposing.
 	if lastState.Version() < version.Fulu {
+		// Copy all the field tries in our cached state in the event of late
+		// blocks.
+		lastState.CopyAllTries()
 		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
 			log.WithError(err).Debug("Could not update next slot state cache")
 		}
@@ -937,6 +939,7 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		// After Fulu, we can update the caches asynchronously after sending FCU to the engine
 		defer func() {
 			go func() {
+				lastState.CopyAllTries()
 				if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
 					log.WithError(err).Debug("Could not update next slot state cache")
 				}

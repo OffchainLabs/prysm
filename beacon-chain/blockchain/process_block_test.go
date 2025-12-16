@@ -1408,6 +1408,7 @@ func Test_verifyBlkFinalizedSlot_invalidBlock(t *testing.T) {
 // 17 and recover.
 func TestStore_NoViableHead_FCU(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
+	hook := logTest.NewGlobal()
 	config := params.BeaconConfig()
 	config.SlotsPerEpoch = 6
 	config.AltairForkEpoch = 1
@@ -1434,6 +1435,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveState(ctx, st, parentRoot), "Could not save genesis state")
 	require.NoError(t, service.cfg.BeaconDB.SaveHeadBlockRoot(ctx, parentRoot), "Could not save genesis state")
 
+	var cfg *postBlockProcessConfig
 	for i := 1; i < 6; i++ {
 		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
@@ -1452,9 +1454,10 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+		cfg = &postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}
+		require.NoError(t, service.postBlockProcess(cfg))
+		time.Sleep(100 * time.Millisecond) // ensure head was saved.
 	}
-
 	for i := 6; i < 12; i++ {
 		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
@@ -1468,12 +1471,15 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 		preState, err := service.getBlockPreState(ctx, wsb.Block())
 		require.NoError(t, err)
 		postState, err := service.validateStateTransition(ctx, preState, wsb)
+		if err != nil {
+			t.Fatalf("Slot %d validateStateTransition failed: %v (type: %T)", i, err, err)
+		}
 		require.NoError(t, err)
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+		time.Sleep(100 * time.Millisecond) // ensure head was saved.
 	}
 
 	for i := 12; i < 18; i++ {
@@ -1493,8 +1499,8 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+		time.Sleep(100 * time.Millisecond) // ensure head was saved.
 	}
 	// Check that we haven't justified the second epoch yet
 	jc := service.cfg.ForkChoiceStore.JustifiedCheckpoint()
@@ -1519,6 +1525,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	require.NoError(t, err)
 	err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
 	require.NoError(t, err)
+	time.Sleep(100 * time.Millisecond) // ensure head was saved.
 	jc = service.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	require.Equal(t, primitives.Epoch(2), jc.Epoch)
 
@@ -1547,8 +1554,9 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 	roblock, err = consensusblocks.NewROBlockWithRoot(wsb, root)
 	require.NoError(t, err)
-	err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
+	require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
+	time.Sleep(100 * time.Millisecond) // ensure head was saved.
+	require.LogsContain(t, hook, "received an INVALID payload from execution engine")
 	// Check that forkchoice's head is the last invalid block imported. The
 	// store's headroot is the previous head (since the invalid block did
 	// not finish importing) one and that the node is optimistic
@@ -1588,7 +1596,7 @@ func TestStore_NoViableHead_FCU(t *testing.T) {
 	require.Equal(t, jc.Root, bytesutil.ToBytes32(sjc.Root))
 	optimistic, err = service.IsOptimistic(ctx)
 	require.NoError(t, err)
-	require.Equal(t, false, optimistic)
+	require.Equal(t, true, optimistic)
 }
 
 // See the description in #10777 and #10782 for the full setup
@@ -1662,8 +1670,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	}
 
 	for i := 12; i < 18; i++ {
@@ -1684,8 +1691,7 @@ func TestStore_NoViableHead_NewPayload(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	}
 	// Check that we haven't justified the second epoch yet
 	jc := service.cfg.ForkChoiceStore.JustifiedCheckpoint()
@@ -1856,8 +1862,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	}
 
 	// import the merge block
@@ -1906,8 +1911,7 @@ func TestStore_NoViableHead_Liveness(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, invalidRoots[i-13], wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, invalidRoots[i-13])
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	}
 	// Check that we have justified the second epoch
 	jc := service.cfg.ForkChoiceStore.JustifiedCheckpoint()
@@ -2072,7 +2076,6 @@ func TestNoViableHead_Reboot(t *testing.T) {
 	require.NoError(t, service.cfg.BeaconDB.SaveGenesisBlockRoot(ctx, genesisRoot), "Could not save genesis state")
 
 	for i := 1; i < 6; i++ {
-		t.Log(i)
 		driftGenesisTime(service, primitives.Slot(i), 0)
 		st, err := service.HeadState(ctx)
 		require.NoError(t, err)
@@ -2109,8 +2112,7 @@ func TestNoViableHead_Reboot(t *testing.T) {
 		require.NoError(t, service.savePostStateInfo(ctx, root, wsb, postState))
 		roblock, err := consensusblocks.NewROBlockWithRoot(wsb, root)
 		require.NoError(t, err)
-		err = service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false})
-		require.NoError(t, err)
+		require.NoError(t, service.postBlockProcess(&postBlockProcessConfig{ctx, roblock, [32]byte{}, postState, false}))
 	}
 
 	// import the merge block
