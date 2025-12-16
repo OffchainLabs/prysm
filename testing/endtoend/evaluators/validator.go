@@ -262,6 +262,11 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
+		// Skip slot 1 at genesis - validators need time to ramp up after chain start.
+		// This is a startup timing issue, not a fork transition issue.
+		if b.Block().Slot() == 1 {
+			continue
+		}
 		expectedParticipation := expectedSyncParticipation
 		switch slots.ToEpoch(b.Block().Slot()) {
 		case params.BeaconConfig().AltairForkEpoch:
