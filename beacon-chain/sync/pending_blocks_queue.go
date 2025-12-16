@@ -44,11 +44,13 @@ func (s *Service) processPendingBlocksQueue() {
 		if !s.chainIsStarted() {
 			return
 		}
+
 		locker.Lock()
+		defer locker.Unlock()
+
 		if err := s.processPendingBlocks(s.ctx); err != nil {
 			log.WithError(err).Debug("Could not process pending blocks")
 		}
-		locker.Unlock()
 	})
 }
 
