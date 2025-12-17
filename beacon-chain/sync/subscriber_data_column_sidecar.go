@@ -57,6 +57,37 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	return nil
 }
 
+func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	log.WithField("slot", sidecar.Slot()).WithField("column", sidecar.Index).Info("Received data column sidecar")
+	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+		return errors.Wrap(err, "receive data column sidecar")
+	}
+
+	var wg errgroup.Group
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return errors.Wrap(err, "process data column sidecars from reconstruction")
+		}
+
+		return nil
+	})
+
+	wg.Go(func() error {
+		// Broadcast our complete column for peers that don't use partial messages
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar}, nil); err != nil {
+			return errors.Wrap(err, "process data column sidecars from execution")
+		}
+
+		return nil
+	})
+
+	if err := wg.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // receiveDataColumnSidecar receives a single data column sidecar: marks it as seen and saves it to the chain.
 // Do not loop over this function to receive multiple sidecars, use receiveDataColumnSidecars instead.
 func (s *Service) receiveDataColumnSidecar(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
