@@ -61,19 +61,18 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 		return nil, err
 	}
 
-	if features.Get().EnableExperimentalAttestationPool {
-		if err = vs.AttestationCache.Add(att); err != nil {
-			log.WithError(err).Error("Could not save attestation")
-		}
-	} else {
-		go func() {
-			attCopy := att.Copy()
+	go func() {
+		attCopy := att.Copy()
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.Add(attCopy); err != nil {
+				log.WithError(err).Error("Could not save attestation")
+			}
+		} else {
 			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
-				return
 			}
-		}()
-	}
+		}
+	}()
 
 	return resp, nil
 }
@@ -106,18 +105,17 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 
 	singleAttCopy := singleAtt.Copy()
 	att := singleAttCopy.ToAttestationElectra(committee)
-	if features.Get().EnableExperimentalAttestationPool {
-		if err = vs.AttestationCache.Add(att); err != nil {
-			log.WithError(err).Error("Could not save attestation")
-		}
-	} else {
-		go func() {
+	go func() {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.Add(att); err != nil {
+				log.WithError(err).Error("Could not save attestation")
+			}
+		} else {
 			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
-				return
 			}
-		}()
-	}
+		}
+	}()
 
 	return resp, nil
 }
