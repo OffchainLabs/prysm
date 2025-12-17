@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
@@ -242,7 +243,7 @@ func (p *TestP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interf
 }
 
 // BroadcastDataColumnSidecar broadcasts a data column for mock.
-func (p *TestP2P) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn) error {
+func (p *TestP2P) BroadcastDataColumnSidecars(context.Context, []blocks.VerifiedRODataColumn, []blocks.PartialDataColumn) error {
 	p.BroadcastCalled.Store(true)
 	return nil
 }
@@ -306,6 +307,10 @@ func (*TestP2P) Encoding() encoder.NetworkEncoding {
 // to ensure all connected peers receive the message.
 func (p *TestP2P) PubSub() *pubsub.PubSub {
 	return p.pubsub
+}
+
+func (p *TestP2P) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
+	return nil
 }
 
 // Disconnect from a peer.
