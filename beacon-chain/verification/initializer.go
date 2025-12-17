@@ -80,11 +80,18 @@ func (ini *Initializer) NewBlobVerifier(b blocks.ROBlob, reqs []Requirement) *RO
 // WARNING: The returned verifier is not thread-safe, and should not be used concurrently.
 func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColumn, reqs []Requirement) *RODataColumnsVerifier {
 	return &RODataColumnsVerifier{
-		sharedResources:             ini.shared,
-		dataColumns:                 roDataColumns,
-		results:                     newResults(reqs...),
-		verifyDataColumnsCommitment: peerdas.VerifyDataColumnsSidecarKZGProofs,
-		stateByRoot:                 make(map[[fieldparams.RootLength]byte]state.BeaconState),
+		sharedResources: ini.shared,
+		dataColumns:     roDataColumns,
+		results:         newResults(reqs...),
+		verifyDataColumnsCommitment: func(rc []blocks.RODataColumn) error {
+			var sizeHint int
+			if len(rc) > 0 {
+				sizeHint = len(rc[0].Column)
+			}
+			sizeHint *= len(rc)
+			return peerdas.VerifyDataColumnsCellsKZGProofs(sizeHint, blocks.RODataColumnsToCellProofBundles(rc))
+		},
+		stateByRoot: make(map[[fieldparams.RootLength]byte]state.BeaconState),
 	}
 }
 

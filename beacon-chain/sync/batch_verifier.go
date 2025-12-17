@@ -2,8 +2,10 @@ package sync
 
 import (
 	"context"
+	"iter"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -19,9 +21,16 @@ type signatureVerifier struct {
 	resChan chan error
 }
 
+type errorWithSegment struct {
+	err error
+	// segment is only available if the batched verification failed
+	segment peerdas.CellProofBundleSegment
+}
+
 type kzgVerifier struct {
-	dataColumns []blocks.RODataColumn
-	resChan     chan error
+	sizeHint   int
+	cellProofs iter.Seq[blocks.CellProofBundle]
+	resChan    chan errorWithSegment
 }
 
 // A routine that runs in the background to perform batch
