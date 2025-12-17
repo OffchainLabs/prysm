@@ -267,29 +267,32 @@ func (s *Server) handleAttestationsElectra(
 	}
 
 	// Save to pool after broadcast (slow path - requires state fetching)
-	for _, singleAtt := range broadcastedAttestations {
-		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
-		if err != nil {
-			log.WithError(err).Error("Could not get target state for attestation")
-			continue
-		}
-		committee, err := corehelpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, singleAtt.CommitteeId)
-		if err != nil {
-			log.WithError(err).Error("Could not get committee for attestation")
-			continue
-		}
-		att := singleAtt.ToAttestationElectra(committee)
+	// Run in goroutine to avoid blocking the HTTP response
+	go func(atts []*eth.SingleAttestation) {
+		for _, singleAtt := range atts {
+			targetState, err := s.AttestationStateFetcher.AttestationTargetState(context.Background(), singleAtt.Data.Target)
+			if err != nil {
+				log.WithError(err).Error("Could not get target state for attestation")
+				continue
+			}
+			committee, err := corehelpers.BeaconCommitteeFromState(context.Background(), targetState, singleAtt.Data.Slot, singleAtt.CommitteeId)
+			if err != nil {
+				log.WithError(err).Error("Could not get committee for attestation")
+				continue
+			}
+			att := singleAtt.ToAttestationElectra(committee)
 
-		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.AttestationCache.Add(att); err != nil {
-				log.WithError(err).Error("Could not save attestation")
-			}
-		} else {
-			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("Could not save attestation")
+			if features.Get().EnableExperimentalAttestationPool {
+				if err = s.AttestationCache.Add(att); err != nil {
+					log.WithError(err).Error("Could not save attestation")
+				}
+			} else {
+				if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
+					log.WithError(err).Error("Could not save attestation")
+				}
 			}
 		}
-	}
+	}(broadcastedAttestations)
 
 	if len(failedBroadcasts) > 0 {
 		log.WithFields(logrus.Fields{
