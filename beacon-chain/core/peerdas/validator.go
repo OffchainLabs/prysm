@@ -3,6 +3,7 @@ package peerdas
 import (
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -140,6 +141,40 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 
 	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
 	return roSidecars, nil
+}
+
+func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
+	start := time.Now()
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
+	if err != nil {
+		return nil, errors.Wrap(err, "rotate cells and proofs")
+	}
+	info, err := src.extract()
+	if err != nil {
+		return nil, errors.Wrap(err, "extract block info")
+	}
+
+	dataColumns := make([]blocks.PartialDataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
+		dc, err := blocks.NewPartialDataColumn(info.signedBlockHeader, idx, info.kzgCommitments, info.kzgInclusionProof)
+		if err != nil {
+			return nil, errors.Wrap(err, "new ro data column")
+		}
+
+		for i := range len(info.kzgCommitments) {
+			if !included.BitAt(uint64(i)) {
+				continue
+			}
+			dc.ExtendFromVerfifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
+			cells[idx] = cells[idx][1:]
+			proofs[idx] = proofs[idx][1:]
+		}
+		dataColumns = append(dataColumns, dc)
+	}
+
+	dataColumnComputationTime.Observe(float64(time.Since(start).Milliseconds()))
+	return dataColumns, nil
 }
 
 // Slot returns the slot of the source
