@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"iter"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -22,9 +23,16 @@ type signatureVerifier struct {
 	resChan chan error
 }
 
+type errorWithSegment struct {
+	err error
+	// segment is only available if the batched verification failed
+	segment peerdas.CellProofBundleSegment
+}
+
 type kzgVerifier struct {
-	dataColumns []blocks.RODataColumn
-	resChan     chan error
+	sizeHint   int
+	cellProofs iter.Seq[blocks.CellProofBundle]
+	resChan    chan errorWithSegment
 }
 
 // A routine that runs in the background to perform batch
@@ -59,8 +67,9 @@ func (s *Service) verifierRoutine() {
 // A routine that runs in the background to perform batch
 // KZG verifications by draining the channel and processing all pending requests.
 func (s *Service) kzgVerifierRoutine() {
+	kzgBatch := make([]*kzgVerifier, 0, 1)
 	for {
-		kzgBatch := make([]*kzgVerifier, 0, 1)
+		kzgBatch = kzgBatch[:0]
 		select {
 		case <-s.ctx.Done():
 			return
@@ -156,46 +165,74 @@ func performBatchAggregation(aggSet *bls.SignatureBatch) (*bls.SignatureBatch, e
 }
 
 func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
-	_, span := trace.StartSpan(ctx, "sync.validateWithKzgBatchVerifier")
+	if len(dataColumns) == 0 {
+		return pubsub.ValidationReject, errors.New("no data columns provided")
+	}
+
+	// If there are no cells in this column, we can return early since there's nothing to validate.
+	allEmpty := true
+	for _, column := range dataColumns {
+		if len(column.Column) != 0 {
+			allEmpty = false
+			break
+		}
+	}
+	if allEmpty {
+		return pubsub.ValidationAccept, nil
+	}
+	sizeHint := len(dataColumns[0].Column) * len(dataColumns)
+	err := s.validateKZGProofs(ctx, sizeHint, blocks.RODataColumnsToCellProofBundles(dataColumns))
+	if ctx.Err() != nil {
+		return pubsub.ValidationIgnore, ctx.Err()
+	} else if err != nil {
+		return pubsub.ValidationReject, err
+	}
+	return pubsub.ValidationAccept, nil
+}
+
+func (s *Service) validateKZGProofs(ctx context.Context, sizeHint int, cellProofs iter.Seq[blocks.CellProofBundle]) error {
+	_, span := trace.StartSpan(ctx, "sync.validateKZGProofs")
 	defer span.End()
 
 	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 
-	resChan := make(chan error, 1)
-	verificationSet := &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
+	resChan := make(chan errorWithSegment, 1)
+	verificationSet := &kzgVerifier{sizeHint: sizeHint, cellProofs: cellProofs, resChan: resChan}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	select {
 	case s.kzgChan <- verificationSet:
 	case <-ctx.Done():
-		return pubsub.ValidationIgnore, ctx.Err()
+		return ctx.Err()
 	}
 
 	select {
 	case <-ctx.Done():
-		return pubsub.ValidationIgnore, ctx.Err() // parent context canceled, give up
-	case err := <-resChan:
-		if err != nil {
-			log.WithError(err).Trace("Could not perform batch verification")
+		return ctx.Err() // parent context canceled, give up
+	case errWithSegment := <-resChan:
+		if errWithSegment.err != nil {
+			err := errWithSegment.err
+			log.WithError(err).Trace("Could not perform batch verification of cells")
 			tracing.AnnotateError(span, err)
-			return s.validateUnbatchedColumnsKzg(ctx, dataColumns)
+			// We failed batch verification. Try again in this goroutine without batching
+			return validateUnbatchedKZGProofs(ctx, errWithSegment.segment)
 		}
 	}
-	return pubsub.ValidationAccept, nil
+	return nil
 }
 
-func (s *Service) validateUnbatchedColumnsKzg(ctx context.Context, columns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
+func validateUnbatchedKZGProofs(ctx context.Context, segment peerdas.CellProofBundleSegment) error {
 	_, span := trace.StartSpan(ctx, "sync.validateUnbatchedColumnsKzg")
 	defer span.End()
 	start := time.Now()
-	if err := peerdas.VerifyDataColumnsSidecarKZGProofs(columns); err != nil {
+	if err := segment.Verify(); err != nil {
 		err = errors.Wrap(err, "could not verify")
 		tracing.AnnotateError(span, err)
-		return pubsub.ValidationReject, err
+		return err
 	}
 	verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("fallback").Observe(float64(time.Since(start).Milliseconds()))
-	return pubsub.ValidationAccept, nil
+	return nil
 }
 
 func verifyKzgBatch(kzgBatch []*kzgVerifier) {
@@ -203,14 +240,16 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 		return
 	}
 
-	allDataColumns := make([]blocks.RODataColumn, 0, len(kzgBatch))
+	cellProofIters := make([]iter.Seq[blocks.CellProofBundle], 0, len(kzgBatch))
+	var sizeHint int
 	for _, kzgVerifier := range kzgBatch {
-		allDataColumns = append(allDataColumns, kzgVerifier.dataColumns...)
+		sizeHint += kzgVerifier.sizeHint
+		cellProofIters = append(cellProofIters, kzgVerifier.cellProofs)
 	}
 
 	var verificationErr error
 	start := time.Now()
-	err := peerdas.VerifyDataColumnsSidecarKZGProofs(allDataColumns)
+	segments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(sizeHint, cellProofIters)
 	if err != nil {
 		verificationErr = errors.Wrap(err, "batch KZG verification failed")
 	} else {
@@ -218,7 +257,14 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 	}
 
 	// Send the same result to all verifiers in the batch
-	for _, verifier := range kzgBatch {
-		verifier.resChan <- verificationErr
+	for i, verifier := range kzgBatch {
+		var segment peerdas.CellProofBundleSegment
+		if verificationErr != nil {
+			segment = segments[i]
+		}
+		verifier.resChan <- errorWithSegment{
+			err:     verificationErr,
+			segment: segment,
+		}
 	}
 }
