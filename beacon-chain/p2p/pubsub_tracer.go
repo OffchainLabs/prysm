@@ -88,20 +88,20 @@ func (g gossipTracer) ThrottlePeer(p peer.ID) {
 
 // RecvRPC .
 func (g gossipTracer) RecvRPC(rpc *pubsub.RPC) {
-	g.setMetricFromRPC(recv, pubsubRPCSubRecv, pubsubRPCPubRecv, pubsubRPCRecv, rpc)
+	g.setMetricFromRPC(recv, pubsubRPCSubRecv, pubsubRPCPubRecv, pubsubRPCPubRecvSize, pubsubRPCRecv, rpc)
 }
 
 // SendRPC .
 func (g gossipTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
-	g.setMetricFromRPC(send, pubsubRPCSubSent, pubsubRPCPubSent, pubsubRPCSent, rpc)
+	g.setMetricFromRPC(send, pubsubRPCSubSent, pubsubRPCPubSent, pubsubRPCPubSentSize, pubsubRPCSent, rpc)
 }
 
 // DropRPC .
 func (g gossipTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {
-	g.setMetricFromRPC(drop, pubsubRPCSubDrop, pubsubRPCPubDrop, pubsubRPCDrop, rpc)
+	g.setMetricFromRPC(drop, pubsubRPCSubDrop, pubsubRPCPubDrop, pubsubRPCPubDropSize, pubsubRPCDrop, rpc)
 }
 
-func (g gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pubCtr, ctrlCtr *prometheus.CounterVec, rpc *pubsub.RPC) {
+func (g gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pubCtr, pubSizeCtr, ctrlCtr *prometheus.CounterVec, rpc *pubsub.RPC) {
 	subCtr.Add(float64(len(rpc.Subscriptions)))
 	if rpc.Control != nil {
 		ctrlCtr.WithLabelValues("graft").Add(float64(len(rpc.Control.Graft)))
@@ -116,6 +116,11 @@ func (g gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pu
 		if act == recv {
 			continue
 		}
-		pubCtr.WithLabelValues(*msg.Topic).Inc()
+		pubCtr.WithLabelValues(msg.GetTopic()).Inc()
+		pubSizeCtr.WithLabelValues(msg.GetTopic()).Add(float64(msg.Size()))
+	}
+	if rpc.Partial != nil {
+		pubCtr.WithLabelValues(rpc.Partial.GetTopicID()).Inc()
+		pubSizeCtr.WithLabelValues(rpc.Partial.GetTopicID()).Add(float64(rpc.Partial.Size()))
 	}
 }

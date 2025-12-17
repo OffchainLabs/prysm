@@ -157,6 +157,11 @@ var (
 		Help: "The number of publish messages received via rpc for a particular topic",
 	},
 		[]string{"topic"})
+	pubsubRPCPubRecvSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_recv_pub_size_total",
+		Help: "The total size of publish messages received via rpc for a particular topic",
+	},
+		[]string{"topic"})
 	pubsubRPCDrop = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_drop_total",
 		Help: "The number of messages dropped via rpc for a particular control message",
@@ -171,6 +176,11 @@ var (
 		Help: "The number of publish messages dropped via rpc for a particular topic",
 	},
 		[]string{"topic"})
+	pubsubRPCPubDropSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_drop_pub_size_total",
+		Help: "The total size of publish messages dropped via rpc for a particular topic",
+	},
+		[]string{"topic"})
 	pubsubRPCSent = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_sent_total",
 		Help: "The number of messages sent via rpc for a particular control message",
@@ -183,6 +193,11 @@ var (
 	pubsubRPCPubSent = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_sent_pub_total",
 		Help: "The number of publish messages sent via rpc for a particular topic",
+	},
+		[]string{"topic"})
+	pubsubRPCPubSentSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_sent_pub_size_total",
+		Help: "The total size of publish messages sent via rpc for a particular topic",
 	},
 		[]string{"topic"})
 )
