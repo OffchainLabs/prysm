@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
@@ -59,6 +60,7 @@ var (
 	fuluEngineEndpoints = []string{
 		GetPayloadMethodV5,
 		GetBlobsV2,
+		GetBlobsV3,
 	}
 )
 
@@ -112,6 +114,8 @@ const (
 	GetBlobsV2 = "engine_getBlobsV2"
 	// GetClientVersionV1 is the JSON-RPC method that identifies the execution client.
 	GetClientVersionV1 = "engine_getClientVersionV1"
+	// GetBlobsV3 request string for JSON-RPC.
+	GetBlobsV3 = "engine_getBlobsV3"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -141,7 +145,7 @@ type Reconstructor interface {
 		ctx context.Context, blockHashes [][32]byte,
 	) (map[[32]byte]*pb.ExecutionPayloadDeneb, error)
 	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
-	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error)
 	ReconstructExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (*ethpb.SignedExecutionPayloadEnvelope, error)
 }
 
@@ -625,6 +629,19 @@ func (s *Service) GetClientVersionV1(ctx context.Context) ([]*structs.ClientVers
 	return result, nil
 }
 
+func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV3")
+	defer span.End()
+
+	if !s.capabilityCache.has(GetBlobsV3) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV3))
+	}
+
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
+	return result, handleRPCError(err)
+}
+
 // ReconstructFullBlock takes in a blinded beacon block and reconstructs
 // a beacon block with a full execution payload via the engine API.
 func (s *Service) ReconstructFullBlock(
@@ -915,40 +932,47 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	return verifiedBlobs, nil
 }
 
-func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, []blocks.PartialDataColumn, error) {
 	root := populator.Root()
 
 	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
 	commitments, err := populator.Commitments()
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "commitments")
+		return nil, nil, wrapWithBlockRoot(err, root, "commitments")
 	}
 
-	cellsPerBlob, proofsPerBlob, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	included, cellsPerBlob, proofsPerBlob, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	log.Info("Received cells and proofs from execution client", "included", included, "cells count", len(cellsPerBlob), "err", err)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
+		return nil, nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
 	}
 
-	// Return early if nothing is returned from the EL.
-	if len(cellsPerBlob) == 0 {
-		return nil, nil
+	partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, populator)
+	haveAllBlobs := included.Count() == uint64(len(commitments))
+	log.Info("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
+
+	if haveAllBlobs {
+		// Construct data column sidears from the signed block and cells and proofs.
+		roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
+		if err != nil {
+			return nil, nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
+		}
+
+		// Upgrade the sidecars to verified sidecars.
+		// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+		verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
+
+		return verifiedROSidecars, partialColumns, nil
 	}
 
-	// Construct data column sidears from the signed block and cells and proofs.
-	roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
 	if err != nil {
-		return nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
+		return nil, nil, wrapWithBlockRoot(err, populator.Root(), "partial columns from column sidecar")
 	}
-
-	// Upgrade the sidecars to verified sidecars.
-	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
-	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
-
-	return verifiedROSidecars, nil
+	return nil, partialColumns, nil
 }
 
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
-func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) ([][]kzg.Cell, [][]kzg.Proof, error) {
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (bitfield.Bitlist /* included parts */, [][]kzg.Cell, [][]kzg.Proof, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
 	for _, commitment := range kzgCommitments {
@@ -956,24 +980,28 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 		versionedHashes = append(versionedHashes, versionedHash)
 	}
 
+	var blobAndProofs []*pb.BlobAndProofV2
+
 	// Fetch all blobsAndCellsProofs from the execution client.
-	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "get blobs V2")
+	var err error
+	if s.capabilityCache.has(GetBlobsV3) {
+		// v3 can return a partial response. V2 is all or nothing
+		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
+	} else {
+		blobAndProofs, err = s.GetBlobsV2(ctx, versionedHashes)
 	}
 
-	// Return early if nothing is returned from the EL.
-	if len(blobAndProofV2s) == 0 {
-		return nil, nil, nil
+	if err != nil {
+		return nil, nil, nil, errors.Wrapf(err, "get blobs V2/3")
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
-	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(blobAndProofV2s)
+	included, cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "compute cells and proofs")
+		return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
 	}
 
-	return cellsPerBlob, proofsPerBlob, nil
+	return included, cellsPerBlob, proofsPerBlob, nil
 }
 
 // upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
