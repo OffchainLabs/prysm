@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -338,6 +339,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	}
 
 	rob, err := blocks.NewROBlockWithRoot(block, root)
+	var partialColumns []blocks.PartialDataColumn
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
 		if errors.Is(err, builderapi.ErrBadGateway) {
@@ -345,7 +347,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
 		}
 	} else if block.Version() >= version.Deneb && block.Version() < version.Gloas {
-		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
+		blobSidecars, dataColumnSidecars, partialColumns, err = vs.handleUnblindedBlock(rob, req)
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s: %v", "handle block failed", err)
@@ -366,7 +368,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	wg.Wait()
 
 	if block.Version() < version.Gloas {
-		if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars); err != nil {
+		if err := vs.broadcastAndReceiveSidecars(ctx, block, root, blobSidecars, dataColumnSidecars, partialColumns); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not broadcast/receive sidecars: %v", err)
 		}
 	}
@@ -384,9 +386,10 @@ func (vs *Server) broadcastAndReceiveSidecars(
 	root [fieldparams.RootLength]byte,
 	blobSidecars []*ethpb.BlobSidecar,
 	dataColumnSidecars []blocks.RODataColumn,
+	partialColumns []blocks.PartialDataColumn,
 ) error {
 	if block.Version() >= version.Fulu {
-		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSidecars); err != nil {
+		if err := vs.broadcastAndReceiveDataColumns(ctx, dataColumnSidecars, partialColumns); err != nil {
 			return errors.Wrap(err, "broadcast and receive data columns")
 		}
 		return nil
@@ -435,34 +438,41 @@ func (vs *Server) handleBlindedBlock(ctx context.Context, block interfaces.Signe
 func (vs *Server) handleUnblindedBlock(
 	block blocks.ROBlock,
 	req *ethpb.GenericSignedBeaconBlock,
-) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, error) {
+) ([]*ethpb.BlobSidecar, []blocks.RODataColumn, []blocks.PartialDataColumn, error) {
 	rawBlobs, proofs, err := blobsAndProofs(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
 		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "compute cells and proofs")
+			return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
 		// Construct data column sidecars from the signed block and cells and proofs.
 		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "data column sidcars")
+			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
 		}
 
-		return nil, roDataColumnSidecars, nil
+		included := bitfield.NewBitlist(uint64(len(cellsPerBlob)))
+		included = included.Not() // all bits set to 1
+		partialColumns, err := peerdas.PartialColumns(included, cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err, "data column sidcars")
+		}
+
+		return nil, roDataColumnSidecars, partialColumns, nil
 	}
 
 	blobSidecars, err := BuildBlobSidecars(block, rawBlobs, proofs)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "build blob sidecars")
+		return nil, nil, nil, errors.Wrap(err, "build blob sidecars")
 	}
 
-	return blobSidecars, nil, nil
+	return blobSidecars, nil, nil, nil
 }
 
 // broadcastReceiveBlock broadcasts a block and handles its reception.
@@ -529,7 +539,7 @@ func (vs *Server) broadcastAndReceiveBlobs(ctx context.Context, sidecars []*ethp
 }
 
 // broadcastAndReceiveDataColumns handles the broadcasting and reception of data columns sidecars.
-func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars []blocks.RODataColumn) error {
+func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars []blocks.RODataColumn, partialColumns []blocks.PartialDataColumn) error {
 	// We built this block ourselves, so we can upgrade the read only data column sidecar into a verified one.
 	verifiedSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
 	for _, sidecar := range roSidecars {
@@ -538,7 +548,7 @@ func (vs *Server) broadcastAndReceiveDataColumns(ctx context.Context, roSidecars
 	}
 
 	// Broadcast sidecars (non blocking).
-	if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars); err != nil {
+	if err := vs.P2P.BroadcastDataColumnSidecars(ctx, verifiedSidecars, partialColumns); err != nil {
 		return errors.Wrap(err, "broadcast data column sidecars")
 	}
 
