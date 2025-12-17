@@ -102,9 +102,7 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	if s.inRegularSync() {
-		go s.sendFCU(cfg, fcuArgs)
-	}
+	s.sendFCU(cfg, fcuArgs)
 
 	// Pre-Fulu the caches are updated when computing the payload attributes
 	if cfg.postState.Version() >= version.Fulu {
