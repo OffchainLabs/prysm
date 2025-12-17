@@ -35,6 +35,10 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	}
 	tracingPort := e2eParams.TestParams.Ports.JaegerTracingPort
 	tracingEndpoint := fmt.Sprintf("127.0.0.1:%d", tracingPort)
+	// Default exit epoch used for voluntary exit tests.
+	// Can be overridden via WithExitEpoch option for shorter test runs.
+	exitEpoch := primitives.Epoch(7)
+
 	evals := []types.Evaluator{
 		ev.PeersConnect,
 		ev.HealthzCheck,
@@ -44,10 +48,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 		ev.FinalizationOccurs(3),
 		ev.VerifyBlockGraffiti,
 		ev.PeersCheck,
-		ev.ProposeVoluntaryExit,
-		ev.ValidatorsHaveExited,
-		ev.SubmitWithdrawal,
-		ev.ValidatorsHaveWithdrawn,
+		// Exit-related evaluators are added after processing options to allow custom exit epoch.
 		ev.ProcessesDepositsInBlocks,
 		ev.ActivatesDepositedValidators,
 		ev.DepositedValidatorsAreActive,
@@ -88,6 +89,18 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	for _, o := range cfgo {
 		o(testConfig)
 	}
+
+	// Add exit-related evaluators using custom exit epoch if configured, otherwise use default.
+	if testConfig.ExitEpoch > 0 {
+		exitEpoch = testConfig.ExitEpoch
+	}
+	testConfig.Evaluators = append(testConfig.Evaluators,
+		ev.ProposeVoluntaryExitAtEpoch(exitEpoch),
+		ev.ValidatorsHaveExitedAtEpoch(exitEpoch+1),
+		ev.SubmitWithdrawalAtEpoch(exitEpoch+1),
+		ev.ValidatorsHaveWithdrawnAfterExitAtEpoch(exitEpoch),
+	)
+
 	if testConfig.UseBuilder {
 		testConfig.Evaluators = append(testConfig.Evaluators, ev.BuilderIsActive)
 	}

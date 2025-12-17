@@ -67,6 +67,14 @@ func WithSSZOnly() E2EConfigOpt {
 	}
 }
 
+// WithExitEpoch sets a custom epoch for voluntary exit submission.
+// This affects ProposeVoluntaryExit, ValidatorsHaveExited, SubmitWithdrawal, and ValidatorsHaveWithdrawn evaluators.
+func WithExitEpoch(e primitives.Epoch) E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.ExitEpoch = e
+	}
+}
+
 // E2EConfig defines the struct for all configurations needed for E2E testing.
 type E2EConfig struct {
 	TestCheckpointSync      bool
@@ -82,6 +90,7 @@ type E2EConfig struct {
 	UseBeaconRestApi        bool
 	UseBuilder              bool
 	EpochsToRun             uint64
+	ExitEpoch               primitives.Epoch // Custom epoch for voluntary exit submission (0 means use default)
 	Seed                    int64
 	TracingSinkEndpoint     string
 	Evaluators              []Evaluator
@@ -149,7 +158,9 @@ type DepositBalancer interface {
 // EvaluationContext allows for additional data to be provided to evaluators that need extra state.
 type EvaluationContext struct {
 	DepositBalancer
-	ExitedVals           map[[48]byte]bool
+	// ExitedVals maps validator pubkey to the epoch when their exit was submitted.
+	// The actual exit takes effect at: submission_epoch + 1 + MaxSeedLookahead
+	ExitedVals           map[[48]byte]primitives.Epoch
 	SeenVotes            map[primitives.Slot][]byte
 	ExpectedEth1DataVote []byte
 }
@@ -158,7 +169,7 @@ type EvaluationContext struct {
 func NewEvaluationContext(d DepositBalancer) *EvaluationContext {
 	return &EvaluationContext{
 		DepositBalancer: d,
-		ExitedVals:      make(map[[48]byte]bool),
+		ExitedVals:      make(map[[48]byte]primitives.Epoch),
 		SeenVotes:       make(map[primitives.Slot][]byte),
 	}
 }

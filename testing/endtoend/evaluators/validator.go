@@ -62,6 +62,7 @@ var ValidatorSyncParticipation = types.Evaluator{
 func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconChainClient(conn)
+
 	// Balances actually fluctuate but we just want to check initial balance.
 	validatorRequest := &ethpb.ListValidatorsRequest{
 		PageSize: int32(params.BeaconConfig().MinGenesisActiveValidatorCount),
@@ -72,17 +73,26 @@ func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn)
 		return errors.Wrap(err, "failed to get validators")
 	}
 
-	expectedCount := params.BeaconConfig().MinGenesisActiveValidatorCount
+	// Count should be MinGenesisActiveValidatorCount minus any validators that have exited.
+	// We determine actual exited count from the difference, as exits may be submitted but
+	// not yet processed, or affected by churn limits.
 	receivedCount := uint64(len(validators.ValidatorList))
-	if expectedCount != receivedCount {
-		return fmt.Errorf("expected validator count to be %d, received %d", expectedCount, receivedCount)
+	maxExpected := params.BeaconConfig().MinGenesisActiveValidatorCount
+	minExpected := maxExpected - uint64(len(ec.ExitedVals))
+
+	if receivedCount > maxExpected {
+		return fmt.Errorf("validator count %d exceeds genesis count %d", receivedCount, maxExpected)
+	}
+	if receivedCount < minExpected {
+		return fmt.Errorf("validator count %d is less than expected minimum %d (genesis %d - %d submitted exits)",
+			receivedCount, minExpected, maxExpected, len(ec.ExitedVals))
 	}
 
 	effBalanceLowCount := 0
 	exitEpochWrongCount := 0
 	withdrawEpochWrongCount := 0
 	for _, item := range validators.ValidatorList {
-		if ec.ExitedVals[bytesutil.ToBytes48(item.Validator.PublicKey)] {
+		if _, exited := ec.ExitedVals[bytesutil.ToBytes48(item.Validator.PublicKey)]; exited {
 			continue
 		}
 		if item.Validator.EffectiveBalance < params.BeaconConfig().MaxEffectiveBalance {

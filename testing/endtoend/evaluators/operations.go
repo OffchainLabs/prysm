@@ -40,7 +40,9 @@ var depositsInBlockStart = params.E2ETestConfig().EpochsPerEth1VotingPeriod * 2
 // deposits included + finalization + MaxSeedLookahead for activation.
 var depositActivationStartEpoch = depositsInBlockStart + 2 + params.E2ETestConfig().MaxSeedLookahead
 var depositEndEpoch = depositActivationStartEpoch + primitives.Epoch(math.Ceil(float64(depositValCount)/float64(params.E2ETestConfig().MinPerEpochChurnLimit)))
-var exitSubmissionEpoch = primitives.Epoch(7)
+
+// Default exit submission epoch for standard tests.
+var defaultExitSubmissionEpoch = primitives.Epoch(7)
 
 // ProcessesDepositsInBlocks ensures the expected amount of deposits are accepted into blocks.
 // Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
@@ -92,61 +94,87 @@ var DepositedValidatorsAreActive = e2etypes.Evaluator{
 }
 
 // ProposeVoluntaryExit sends a voluntary exit from randomly selected validator in the genesis set.
-var ProposeVoluntaryExit = e2etypes.Evaluator{
-	Name:       "propose_voluntary_exit_epoch_%d",
-	Policy:     policies.OnEpoch(exitSubmissionEpoch),
-	Evaluation: proposeVoluntaryExit,
+// Uses the default exit submission epoch (7).
+var ProposeVoluntaryExit = ProposeVoluntaryExitAtEpoch(defaultExitSubmissionEpoch)
+
+// ProposeVoluntaryExitAtEpoch sends a voluntary exit at the specified epoch.
+var ProposeVoluntaryExitAtEpoch = func(epoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name:       "propose_voluntary_exit_epoch_%d",
+		Policy:     policies.OnEpoch(epoch),
+		Evaluation: proposeVoluntaryExit,
+	}
 }
 
 // ValidatorsHaveExited checks the beacon state for the exited validator and ensures its marked as exited.
-var ValidatorsHaveExited = e2etypes.Evaluator{
-	Name:       "voluntary_has_exited_%d",
-	Policy:     policies.OnEpoch(8),
-	Evaluation: validatorsHaveExited,
+// Uses the default exit submission epoch + 1 (epoch 8).
+var ValidatorsHaveExited = ValidatorsHaveExitedAtEpoch(defaultExitSubmissionEpoch + 1)
+
+// ValidatorsHaveExitedAtEpoch checks validators have exited at the specified epoch.
+var ValidatorsHaveExitedAtEpoch = func(epoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name:       "voluntary_has_exited_%d",
+		Policy:     policies.OnEpoch(epoch),
+		Evaluation: validatorsHaveExited,
+	}
 }
 
 // SubmitWithdrawal sends a withdrawal from a previously exited validator.
-var SubmitWithdrawal = e2etypes.Evaluator{
-	Name: "submit_withdrawal_epoch_%d",
-	Policy: func(currentEpoch primitives.Epoch) bool {
-		fEpoch := params.BeaconConfig().CapellaForkEpoch
-		// If Capella is disabled (starting at Deneb+), run after exit submission
-		if e2etypes.GenesisFork() >= version.Deneb {
-			return policies.OnEpoch(exitSubmissionEpoch + 1)(currentEpoch)
-		}
-		return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
-	},
-	Evaluation: submitWithdrawal,
+// Uses default timing based on exit submission epoch.
+var SubmitWithdrawal = SubmitWithdrawalAtEpoch(defaultExitSubmissionEpoch + 1)
+
+// SubmitWithdrawalAtEpoch sends a withdrawal at the specified epoch.
+// For pre-Deneb genesis, it runs around the Capella fork epoch instead.
+var SubmitWithdrawalAtEpoch = func(epoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name: "submit_withdrawal_epoch_%d",
+		Policy: func(currentEpoch primitives.Epoch) bool {
+			fEpoch := params.BeaconConfig().CapellaForkEpoch
+			// If Capella is disabled (starting at Deneb+), run at the specified epoch
+			if e2etypes.GenesisFork() >= version.Deneb {
+				return policies.OnEpoch(epoch)(currentEpoch)
+			}
+			return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
+		},
+		Evaluation: submitWithdrawal,
+	}
 }
 
 // ValidatorsHaveWithdrawn checks the beacon state for the withdrawn validator and ensures it has been withdrawn.
-var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
-	Name: "validator_has_withdrawn_%d",
-	Policy: func(currentEpoch primitives.Epoch) bool {
-		// TODO: Fix this for mainnet configs.
-		if params.BeaconConfig().ConfigName != params.EndToEndName {
-			return false
-		}
-		// Only run this for minimal setups after capella
-		fEpoch := params.BeaconConfig().CapellaForkEpoch
-		// If Capella is disabled (starting at Deneb+), run after withdrawal submission
-		var validWithdrawnEpoch primitives.Epoch
-		if e2etypes.GenesisFork() >= version.Deneb {
-			// Exit submitted at exitSubmissionEpoch (7)
-			// Exit epoch = exitSubmissionEpoch + 1 + MAX_SEED_LOOKAHEAD
-			// Withdrawable epoch = exit epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY
-			// Add 1 more epoch for the sweep to process
-			exitEpoch := exitSubmissionEpoch + 1 + primitives.Epoch(params.BeaconConfig().MaxSeedLookahead)
-			withdrawableEpoch := exitEpoch + primitives.Epoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
-			validWithdrawnEpoch = withdrawableEpoch + 1
-		} else {
-			validWithdrawnEpoch = fEpoch + 1
-		}
+// Uses default timing based on exit submission epoch.
+var ValidatorsHaveWithdrawn = ValidatorsHaveWithdrawnAfterExitAtEpoch(defaultExitSubmissionEpoch)
 
-		requiredPolicy := policies.OnEpoch(validWithdrawnEpoch)
-		return requiredPolicy(currentEpoch)
-	},
-	Evaluation: validatorsAreWithdrawn,
+// ValidatorsHaveWithdrawnAfterExitAtEpoch checks validators have withdrawn after exiting at the specified epoch.
+// For pre-Deneb genesis, it runs at CapellaForkEpoch + 1 instead.
+var ValidatorsHaveWithdrawnAfterExitAtEpoch = func(exitSubmitEpoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name: "validator_has_withdrawn_%d",
+		Policy: func(currentEpoch primitives.Epoch) bool {
+			// TODO: Fix this for mainnet configs.
+			if params.BeaconConfig().ConfigName != params.EndToEndName {
+				return false
+			}
+			// Only run this for minimal setups after capella
+			fEpoch := params.BeaconConfig().CapellaForkEpoch
+			// If Capella is disabled (starting at Deneb+), run after withdrawal submission
+			var validWithdrawnEpoch primitives.Epoch
+			if e2etypes.GenesisFork() >= version.Deneb {
+				// Exit submitted at exitSubmitEpoch
+				// Exit epoch = exitSubmitEpoch + 1 + MAX_SEED_LOOKAHEAD
+				// Withdrawable epoch = exit epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+				// Add 1 more epoch for the sweep to process
+				exitEpoch := exitSubmitEpoch + 1 + primitives.Epoch(params.BeaconConfig().MaxSeedLookahead)
+				withdrawableEpoch := exitEpoch + primitives.Epoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
+				validWithdrawnEpoch = withdrawableEpoch + 1
+			} else {
+				validWithdrawnEpoch = fEpoch + 1
+			}
+
+			requiredPolicy := policies.OnEpoch(validWithdrawnEpoch)
+			return requiredPolicy(currentEpoch)
+		},
+		Evaluation: validatorsAreWithdrawn,
+	}
 }
 
 // ValidatorsVoteWithTheMajority verifies whether validator vote for eth1data using the majority algorithm.
@@ -357,8 +385,7 @@ func depositedValidatorsAreActive(ec *e2etypes.EvaluationContext, conns ...*grpc
 			continue // we aren't checking for this validator
 		}
 		// ignore voluntary exits when checking balance and active status
-		exited := ec.ExitedVals[key]
-		if exited {
+		if _, exited := ec.ExitedVals[key]; exited {
 			nexits++
 			delete(expected, key)
 			continue
@@ -463,7 +490,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 			return errors.Wrap(err, "could not propose exit")
 		}
 		pubk := bytesutil.ToBytes48(deposits[exitedIndex].Data.PublicKey)
-		ec.ExitedVals[pubk] = true
+		ec.ExitedVals[pubk] = chainHead.HeadEpoch // Store submission epoch
 		return nil
 	}
 
@@ -477,7 +504,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	// Send an exit for a non-exited validator.
 	for i := 0; i < numOfExits; {
 		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		if ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())] {
+		if _, alreadyExited := ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())]; alreadyExited {
 			continue
 		}
 		if err := sendExit(randIndex); err != nil {
