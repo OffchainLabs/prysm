@@ -239,6 +239,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	groupID := rpcWithFrom.GroupID
 	ourDataColumn := p.getDataColumn(topicID, groupID)
 	if ourDataColumn == nil {
+		// TODO: If this contains eager data, we should keep a small quarantine
+		// cache for it in case we receive the block shortly after.
 		p.logger.Debug("No partial column found in store, ignoring partial rpc")
 		return nil
 	}
@@ -257,6 +259,10 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		if err != nil {
 			return err
 		}
+		// TODO: is there any penalty we want to consider for giving us data we didn't request?
+		// Note that we need to be careful around race conditions and eager data.
+		// Also note that protobufs by design allow extra data that we don't parse.
+		// Marco's thoughts. No, we don't need to do anything else here.
 		cellIndices, cellsToVerify, err := ourDataColumn.CellsToVerifyFromPartialMessage(&message)
 		if err != nil {
 			return err
