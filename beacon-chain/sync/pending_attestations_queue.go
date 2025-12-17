@@ -26,7 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var pendingAttsLimit = 32768
+const pendingAttsLimit = 32768
 
 // This method processes pending attestations as a "known" block as arrived. With validations,
 // the valid attestations get saved into the operation mem pool, and the invalid attestations gets deleted
