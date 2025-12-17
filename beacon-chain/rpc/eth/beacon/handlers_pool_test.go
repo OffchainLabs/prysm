@@ -657,6 +657,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("multiple", func(t *testing.T) {
@@ -676,6 +677,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("phase0 att post electra", func(t *testing.T) {
@@ -796,6 +798,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("multiple", func(t *testing.T) {
@@ -815,6 +818,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("no body", func(t *testing.T) {
