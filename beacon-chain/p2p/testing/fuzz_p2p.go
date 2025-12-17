@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -108,6 +109,10 @@ func (*FakeP2P) PubSub() *pubsub.PubSub {
 	return nil
 }
 
+func (*FakeP2P) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
+	return nil
+}
+
 // MetadataSeq -- fake.
 func (*FakeP2P) MetadataSeq() uint64 {
 	return 0
@@ -169,7 +174,7 @@ func (*FakeP2P) BroadcastLightClientFinalityUpdate(_ context.Context, _ interfac
 }
 
 // BroadcastDataColumnSidecar -- fake.
-func (*FakeP2P) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn) error {
+func (*FakeP2P) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn, _ []blocks.PartialDataColumn) error {
 	return nil
 }
 
