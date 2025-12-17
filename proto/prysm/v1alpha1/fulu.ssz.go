@@ -2494,3 +2494,211 @@ func (s *StatusV2) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PartialDataColumnSidecar object to a target array
+func (p *PartialDataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(12)
+
+	// Offset (0) 'CellsPresentBitmap'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.CellsPresentBitmap)
+
+	// Offset (1) 'PartialColumn'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.PartialColumn) * 2048
+
+	// Offset (2) 'KzgProofs'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.KzgProofs) * 48
+
+	// Field (0) 'CellsPresentBitmap'
+	if size := len(p.CellsPresentBitmap); size > 512 {
+		err = ssz.ErrBytesLengthFn("--.CellsPresentBitmap", size, 512)
+		return
+	}
+	dst = append(dst, p.CellsPresentBitmap...)
+
+	// Field (1) 'PartialColumn'
+	if size := len(p.PartialColumn); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.PartialColumn", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(p.PartialColumn); ii++ {
+		if size := len(p.PartialColumn[ii]); size != 2048 {
+			err = ssz.ErrBytesLengthFn("--.PartialColumn[ii]", size, 2048)
+			return
+		}
+		dst = append(dst, p.PartialColumn[ii]...)
+	}
+
+	// Field (2) 'KzgProofs'
+	if size := len(p.KzgProofs); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(p.KzgProofs); ii++ {
+		if size := len(p.KzgProofs[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgProofs[ii]", size, 48)
+			return
+		}
+		dst = append(dst, p.KzgProofs[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 12 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'CellsPresentBitmap'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 12 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'PartialColumn'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'KzgProofs'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'CellsPresentBitmap'
+	{
+		buf = tail[o0:o1]
+		if err = ssz.ValidateBitlist(buf, 512); err != nil {
+			return err
+		}
+		if cap(p.CellsPresentBitmap) == 0 {
+			p.CellsPresentBitmap = make([]byte, 0, len(buf))
+		}
+		p.CellsPresentBitmap = append(p.CellsPresentBitmap, buf...)
+	}
+
+	// Field (1) 'PartialColumn'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DivideInt2(len(buf), 2048, 4096)
+		if err != nil {
+			return err
+		}
+		p.PartialColumn = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(p.PartialColumn[ii]) == 0 {
+				p.PartialColumn[ii] = make([]byte, 0, len(buf[ii*2048:(ii+1)*2048]))
+			}
+			p.PartialColumn[ii] = append(p.PartialColumn[ii], buf[ii*2048:(ii+1)*2048]...)
+		}
+	}
+
+	// Field (2) 'KzgProofs'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		p.KzgProofs = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(p.KzgProofs[ii]) == 0 {
+				p.KzgProofs[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			p.KzgProofs[ii] = append(p.KzgProofs[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) SizeSSZ() (size int) {
+	size = 12
+
+	// Field (0) 'CellsPresentBitmap'
+	size += len(p.CellsPresentBitmap)
+
+	// Field (1) 'PartialColumn'
+	size += len(p.PartialColumn) * 2048
+
+	// Field (2) 'KzgProofs'
+	size += len(p.KzgProofs) * 48
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PartialDataColumnSidecar object
+func (p *PartialDataColumnSidecar) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PartialDataColumnSidecar object with a hasher
+func (p *PartialDataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'CellsPresentBitmap'
+	if len(p.CellsPresentBitmap) == 0 {
+		err = ssz.ErrEmptyBitlist
+		return
+	}
+	hh.PutBitlist(p.CellsPresentBitmap, 512)
+
+	// Field (1) 'PartialColumn'
+	{
+		if size := len(p.PartialColumn); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.PartialColumn", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.PartialColumn {
+			if len(i) != 2048 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(p.PartialColumn))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (2) 'KzgProofs'
+	{
+		if size := len(p.KzgProofs); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgProofs", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.KzgProofs {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(p.KzgProofs))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
