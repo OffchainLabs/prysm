@@ -402,9 +402,6 @@ func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
 	if a.Version() != b.Version() {
 		return false
 	}
-	if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
-		return false
-	}
 	aAtt := a.AggregateAttestationAndProof().AggregateVal()
 	bAtt := b.AggregateAttestationAndProof().AggregateVal()
 	if aAtt.GetData().Slot != bAtt.GetData().Slot {
