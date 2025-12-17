@@ -6,6 +6,8 @@ package sync
 
 import (
 	"context"
+	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -183,6 +185,7 @@ type Service struct {
 	syncContributionBitsOverlapLock      sync.RWMutex
 	syncContributionBitsOverlapCache     *lru.Cache
 	signatureChan                        chan *signatureVerifier
+	kzgChan                              chan *kzgVerifier
 	clockWaiter                          startup.ClockWaiter
 	initialSyncComplete                  chan struct{}
 	verifierWaiter                       *verification.InitializerWaiter
@@ -236,6 +239,9 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	// Initialize signature channel with configured limit
 	r.signatureChan = make(chan *signatureVerifier, r.cfg.batchVerifierLimit)
+	// Initialize KZG channel with fixed buffer size of 100.
+	// This buffer size is designed to handle burst traffic of partial data column cells:
+	r.kzgChan = make(chan *kzgVerifier, 100)
 
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
@@ -311,6 +317,10 @@ func (s *Service) Start() {
 	s.newExecutionPayloadEnvelopeVerifier = newPayloadVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
+	go s.kzgVerifierRoutine()
+
+	s.startPartialColumnBroadcaster()
+
 	go s.startDiscoveryAndSubscriptions()
 	go s.processDataColumnLogs()
 
@@ -342,6 +352,12 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Failed to maintain custody info")
 	}
 
+}
+
+func (s *Service) startPartialColumnBroadcaster() {
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		go broadcaster.Start(&partialColumnCallbacks{s: s})
+	}
 }
 
 // Stop the regular sync service.
@@ -380,6 +396,9 @@ func (s *Service) Stop() error {
 	}
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
+	}
+	if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+		broadcaster.Stop()
 	}
 	return nil
 }
@@ -458,6 +477,68 @@ func (s *Service) waitForChainStart() {
 	}
 	log.WithField("startTime", startTime).Debug("Chain started in sync service")
 	s.markForChainStart()
+}
+
+type partialColumnCallbacks struct {
+	s *Service
+}
+
+func (c *partialColumnCallbacks) PartialVerifierFromHeader(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, bool, error) {
+	return c.s.validatePartialDataColumnHeader(c.s.ctx, col)
+}
+
+func (c *partialColumnCallbacks) PartialVerifierFromTrustedColumn(col *blocks.PartialDataColumn) (*verification.PartialColumnVerifier, error) {
+	return c.s.partialVerifierFromTrustedColumn(c.s.ctx, col)
+}
+
+func (c *partialColumnCallbacks) ValidateColumn(cellsToVerify []blocks.CellProofBundle) error {
+	return c.s.validateKZGProofs(c.s.ctx, len(cellsToVerify), slices.Values(cellsToVerify))
+}
+
+func (c *partialColumnCallbacks) HandleColumn(topic string, col blocks.VerifiedRODataColumn) {
+	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
+	defer cancel()
+
+	slot := col.Slot()
+	proposerIndex, err := col.ProposerIndex()
+	if err != nil {
+		log.WithError(err).Error("Failed to get proposer index from data column")
+		return
+	}
+	commitments, err := col.KzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Failed to get KZG commitments from data column")
+		return
+	}
+	if c.s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index()) {
+		return
+	}
+
+	c.s.setSeenDataColumnIndex(slot, proposerIndex, col.Index())
+	if len(commitments) == 0 {
+		return
+	}
+	// This column was completed from a partial message.
+	partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index(), 10)).Inc()
+	err = c.s.verifiedRODataColumnSubscriber(ctx, col)
+	if err != nil {
+		log.WithError(err).Error("Failed to handle verified RO data column subscriber")
+	}
+}
+
+func (c *partialColumnCallbacks) HandleHeader(header *ethpb.PartialDataColumnHeader, groupID string) {
+	ctx, cancel := context.WithTimeout(c.s.ctx, pubsubMessageTimeout)
+	defer cancel()
+	source, err := peerdas.PopulateFromPartialHeader(header)
+	if err != nil {
+		log.WithError(err).Error("Failed to populate from partial data column header")
+		return
+	}
+	log.WithField("slot", source.Slot()).Debug("Received data column header")
+	err = c.s.processDataColumnSidecarsFromExecution(ctx, source)
+	if err != nil {
+		log.WithError(err).Error("Failed to process partial data column header")
+	}
 }
 
 func (s *Service) startDiscoveryAndSubscriptions() {

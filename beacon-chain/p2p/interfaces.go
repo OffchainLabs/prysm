@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -28,6 +29,7 @@ type (
 		Broadcaster
 		SetStreamHandler
 		PubSubProvider
+		PartialColumnBroadcasterProvider
 		PubSubTopicUser
 		SenderEncoder
 		PeerManager
@@ -53,7 +55,7 @@ type (
 		BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.BlobSidecar) error
 		BroadcastLightClientOptimisticUpdate(ctx context.Context, update interfaces.LightClientOptimisticUpdate) error
 		BroadcastLightClientFinalityUpdate(ctx context.Context, update interfaces.LightClientFinalityUpdate) error
-		BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error
+		BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn, partialColumns []blocks.PartialDataColumn) error
 	}
 
 	// SetStreamHandler configures p2p to handle streams of a certain topic ID.
@@ -91,6 +93,11 @@ type (
 	// PubSubProvider provides the p2p pubsub protocol.
 	PubSubProvider interface {
 		PubSub() *pubsub.PubSub
+	}
+
+	// PubSubProvider provides the p2p pubsub protocol.
+	PartialColumnBroadcasterProvider interface {
+		PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster
 	}
 
 	// PeerManager abstracts some peer management methods from libp2p.

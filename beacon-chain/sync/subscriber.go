@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -62,6 +63,12 @@ type subscribeParameters struct {
 	// getSubnetsRequiringPeers is a function that returns all subnets that require peers to be found
 	// but for which no subscriptions are needed.
 	getSubnetsRequiringPeers func(currentSlot primitives.Slot) map[uint64]bool
+
+	partial *partialSubscribeParameters
+}
+
+type partialSubscribeParameters struct {
+	broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.
@@ -321,6 +328,12 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 	// Data column gossip topic (Fulu and Gloas).
 	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
+			var ps *partialSubscribeParameters
+			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+				ps = &partialSubscribeParameters{
+					broadcaster: broadcaster,
+				}
+			}
 			s.subscribeWithParameters(subscribeParameters{
 				topicFormat:              p2p.DataColumnSubnetTopicFormat,
 				validate:                 s.validateDataColumn,
@@ -328,6 +341,7 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				nse:                      nse,
 				getSubnetsToJoin:         s.dataColumnSubnetIndices,
 				getSubnetsRequiringPeers: s.allDataColumnSubnets,
+				partial:                  ps,
 			})
 		})
 	}
@@ -405,11 +419,10 @@ func (s *Service) subscribe(topic string, validator wrappedVal, handle subHandle
 		// Impossible condition as it would mean topic does not exist.
 		panic(fmt.Sprintf("%s is not mapped to any message in GossipTopicMappings", topic)) // lint:nopanic -- Impossible condition.
 	}
-	s.subscribeWithBase(s.addDigestToTopic(topic, nse.ForkDigest), validator, handle)
+	s.subscribeWithBase(s.addDigestToTopic(topic, nse.ForkDigest)+s.cfg.p2p.Encoding().ProtocolSuffix(), validator, handle)
 }
 
 func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle subHandler) *pubsub.Subscription {
-	topic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	log := log.WithField("topic", topic)
 
 	// Do not resubscribe already seen subscriptions.
@@ -577,7 +590,11 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 func (s *Service) pruneNotWanted(t *subnetTracker, wantedSubnets map[uint64]bool) {
 	for _, subnet := range t.unwanted(wantedSubnets) {
 		t.cancelSubscription(subnet)
-		s.unSubscribeFromTopic(t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix()))
+		topic := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
+		if t.partial != nil {
+			_ = t.partial.broadcaster.Unsubscribe(s.ctx, topic)
+		}
+		s.unSubscribeFromTopic(topic)
 	}
 }
 
@@ -624,9 +641,33 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 	subnetsToJoin := t.getSubnetsToJoin(s.cfg.clock.CurrentSlot())
 	s.pruneNotWanted(t, subnetsToJoin)
 	for _, subnet := range t.missing(subnetsToJoin) {
-		// TODO: subscribeWithBase appends the protocol suffix, other methods don't. Make this consistent.
-		topic := t.fullTopic(subnet, "")
-		t.track(subnet, s.subscribeWithBase(topic, t.validate, t.handle))
+		topicStr := t.fullTopic(subnet, s.cfg.p2p.Encoding().ProtocolSuffix())
+		topicOpts := make([]pubsub.TopicOpt, 0, 2)
+
+		requestPartial := t.partial != nil
+
+		if requestPartial {
+			topicOpts = append(topicOpts, pubsub.RequestPartialMessages())
+		}
+
+		topic, err := s.cfg.p2p.JoinTopic(topicStr, topicOpts...)
+		if err != nil {
+			log.WithError(err).Error("Failed to join topic")
+			return
+		}
+
+		if requestPartial {
+			log.Info("Subscribing to partial columns on", topicStr)
+			err = t.partial.broadcaster.Subscribe(s.ctx, topic)
+
+			if err != nil {
+				log.WithError(err).Error("Failed to subscribe to partial column")
+			}
+		}
+
+		// We still need to subscribe to the full columns as well as partial in
+		// case our peers don't support partial messages.
+		t.track(subnet, s.subscribeWithBase(topicStr, t.validate, t.handle))
 	}
 }
 

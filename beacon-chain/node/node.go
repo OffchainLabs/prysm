@@ -141,7 +141,10 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
 	}
+<<<<<<< HEAD
 
+=======
+>>>>>>> a329a77037 (fix partial columns broadcast (#16321))
 	for _, of := range optFuncs {
 		ofo, err := of(cliCtx)
 		if err != nil {
@@ -693,6 +696,7 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		DB:                    b.db,
 		StateGen:              b.stateGen,
 		ClockWaiter:           b.ClockWaiter,
+		PartialDataColumns:    b.cliCtx.Bool(flags.PartialDataColumns.Name),
 	})
 	if err != nil {
 		return err
@@ -818,6 +822,10 @@ func (b *BeaconNode) registerPOWChainService() error {
 		execution.WithVerifierWaiter(b.verifyInitWaiter),
 		execution.WithGraffitiInfo(graffitiInfo),
 	)
+
+	if b.cliCtx.Bool(flags.PartialDataColumns.Name) {
+		opts = append(opts, execution.WithPartialColumnsSupported())
+	}
 	web3Service, err := execution.NewService(b.ctx, opts...)
 	if err != nil {
 		return errors.Wrap(err, "could not register proof-of-work chain web3Service")
@@ -1036,6 +1044,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		PayloadIDCache:                   b.payloadIDCache,
 		LCStore:                          b.lcStore,
 		GraffitiInfo:                     web3Service.GraffitiInfo(),
+		BlockProposalEagerPushCells:      b.cliCtx.Bool(flags.BlockProposalEagerPushCells.Name),
 	})
 
 	return b.services.RegisterService(rpcService)

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -219,6 +220,11 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			return nil, errors.Wrap(err, "proposer index")
 		}
 
+		digest, err := s.currentForkDigest()
+		if err != nil {
+			return nil, err
+		}
+
 		log := log.WithFields(logrus.Fields{
 			"root":          fmt.Sprintf("%#x", source.Root()),
 			"slot":          source.Slot(),
@@ -249,9 +255,33 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
-			constructedSidecars, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
+			partialBroadcaster := s.cfg.p2p.PartialColumnBroadcaster()
+			isPartialEnabled := partialBroadcaster != nil
+			constructedSidecars, partialColumns, err := s.cfg.executionReconstructor.ConstructDataColumnSidecars(ctx, source)
 			if err != nil {
 				return nil, errors.Wrap(err, "reconstruct data column sidecars")
+			}
+
+			if isPartialEnabled && len(partialColumns) > 0 {
+				log.WithField("len(partialColumns)", len(partialColumns)).Debug("Publishing partial columns")
+				// Publish the partial column. This is idempotent if we republish the same data twice.
+				// Note, the "partial column" may indeed be complete. We still
+				// should publish to help our peers.
+				err = partialBroadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+					for i := range uint64(len(partialColumns)) {
+						if !columnIndicesToSample[i] {
+							continue
+						}
+						subnet := peerdas.ComputeSubnetForDataColumnSidecar(i)
+						topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+						if !yield(topic, partialColumns[i]) {
+							return
+						}
+					}
+				})
+				if err != nil {
+					log.WithError(err).Warn("Failed to publish partial columns")
+				}
 			}
 
 			// No sidecars are retrieved from the EL, retry later
@@ -325,7 +355,7 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 	}
 
 	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).
-	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars); err != nil {
+	if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, unseenSidecars, nil); err != nil {
 		return nil, errors.Wrap(err, "broadcast data column sidecars")
 	}
 

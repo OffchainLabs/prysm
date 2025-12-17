@@ -3,10 +3,12 @@ package sync
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -36,6 +38,30 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 		sidecar = blocks.NewVerifiedRODataColumn(ro)
 	default:
 		return fmt.Errorf("unexpected data column type: %T", msg)
+	}
+
+	// Track useful full columns received via gossip (not previously seen)
+	slot := sidecar.SignedBlockHeader.Header.Slot
+	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
+	if !s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
+		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index, 10)).Inc()
+		// re-publish the full column on the partial column extension as we don't send full columns to peers
+		// who have explicitly requested for partial columns. This method is idempotent so this is fine.
+		if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
+			digest, err := s.currentForkDigest()
+			if err != nil {
+				log.Error("Failed to get current fork digest")
+			} else {
+				err := broadcaster.Publish(ctx, func(yield func(string, blocks.PartialDataColumn) bool) {
+					subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+					topic := fmt.Sprintf(p2p.DataColumnSubnetTopicFormat, digest, subnet) + s.cfg.p2p.Encoding().ProtocolSuffix()
+					yield(topic, blocks.NewPartialDataColumnFromVerifiedRODataColumn(sidecar))
+				})
+				if err != nil {
+					log.WithError(err).Error("Failed to publish partial column on getting data column sidecar")
+				}
+			}
+		}
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
@@ -71,6 +97,34 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	return nil
+}
+
+func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
+	log.WithField("slot", sidecar.Slot()).WithField("column", sidecar.Index).Debug("Received data column sidecar")
+
+	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
+		return errors.Wrap(err, "receive data column sidecar")
+	}
+
+	var wg errgroup.Group
+	wg.Go(func() error {
+		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
+			return errors.Wrap(err, "process data column sidecars from reconstruction")
+		}
+
+		return nil
+	})
+
+	wg.Go(func() error {
+		// Broadcast our complete column for peers that don't use partial messages
+		if err := s.cfg.p2p.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{sidecar}, nil); err != nil {
+			return errors.Wrap(err, "broadcast data column sidecars")
+		}
+
+		return nil
+	})
+
+	return wg.Wait()
 }
 
 // receiveDataColumnSidecar receives a single data column sidecar: marks it as seen and saves it to the chain.

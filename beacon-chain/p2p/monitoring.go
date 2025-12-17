@@ -97,6 +97,11 @@ var (
 		Help: "The number of data column sidecar message broadcast attempts.",
 	})
 
+	// Partial Data Column Metrics
+	partialDataColumnBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "p2p_partial_data_column_broadcasts",
+		Help: "The number of partial data column messages that were broadcasted.",
+	})
 	// Gossip Tracer Metrics
 	pubsubTopicsActive = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "p2p_pubsub_topic_active",
@@ -157,6 +162,11 @@ var (
 		Help: "The number of publish messages received via rpc for a particular topic",
 	},
 		[]string{"topic"})
+	pubsubRPCPubRecvSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_recv_pub_bytes_total",
+		Help: "The total size in bytes of publish messages received via rpc for a particular topic",
+	},
+		[]string{"topic", "is_partial"})
 	pubsubRPCDrop = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_drop_total",
 		Help: "The number of messages dropped via rpc for a particular control message",
@@ -171,6 +181,11 @@ var (
 		Help: "The number of publish messages dropped via rpc for a particular topic",
 	},
 		[]string{"topic"})
+	pubsubRPCPubDropSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "p2p_pubsub_rpc_drop_pub_bytes_total",
+		Help: "The total size in bytes of publish messages dropped via rpc for a particular topic",
+	},
+		[]string{"topic", "is_partial"})
 	pubsubRPCSent = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_sent_total",
 		Help: "The number of messages sent via rpc for a particular control message",
@@ -185,6 +200,16 @@ var (
 		Help: "The number of publish messages sent via rpc for a particular topic",
 	},
 		[]string{"topic"})
+	pubsubRPCPubSentSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gossipsub_topic_msg_sent_bytes",
+		Help: "The total size of publish messages sent via rpc for a particular topic",
+	},
+		[]string{"topic", "partial"})
+	pubsubMeshPeers = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gossipsub_mesh_peer_counts",
+		Help: "The number of capable peers in mesh",
+	},
+		[]string{"topic", "supports_partial"})
 )
 
 func (s *Service) updateMetrics() {

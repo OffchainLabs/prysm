@@ -1,6 +1,8 @@
 package blocks
 
 import (
+	"iter"
+
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -220,4 +222,21 @@ func NewRODataColumnNoVerify(dc *ethpb.DataColumnSidecar) RODataColumn {
 // NewVerifiedRODataColumn "upgrades" an RODataColumn to a VerifiedRODataColumn. This method should only be used by the verification package.
 func NewVerifiedRODataColumn(roDataColumn RODataColumn) VerifiedRODataColumn {
 	return VerifiedRODataColumn{RODataColumn: roDataColumn}
+}
+
+func RODataColumnsToCellProofBundles(sidecars []RODataColumn) iter.Seq[CellProofBundle] {
+	return func(yield func(CellProofBundle) bool) {
+		for _, sidecar := range sidecars {
+			for i := range sidecar.Column {
+				if !yield(CellProofBundle{
+					ColumnIndex: sidecar.Index,
+					Commitment:  sidecar.KzgCommitments[i],
+					Cell:        sidecar.Column[i],
+					Proof:       sidecar.KzgProofs[i],
+				}) {
+					return
+				}
+			}
+		}
+	}
 }

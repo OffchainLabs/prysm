@@ -163,6 +163,8 @@ var appFlags = []cli.Flag{
 	flags.BatchVerifierLimit,
 	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
+	flags.PartialDataColumns,
+	flags.BlockProposalEagerPushCells,
 }
 
 func init() {
