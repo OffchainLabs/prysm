@@ -54,14 +54,13 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
-			tokenParts := strings.Split(reqToken, "Bearer ")
-			if len(tokenParts) != 2 {
+			if !strings.HasPrefix(reqToken, "Bearer ") {
 				httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
 				return
 			}
 
-			token := tokenParts[1]
-			if strings.TrimSpace(token) != s.authToken || strings.TrimSpace(s.authToken) == "" {
+			token := strings.TrimSpace(reqToken[len("Bearer "):])
+			if s.authToken == "" || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
@@ -74,19 +73,19 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 func (s *Server) authorize(ctx context.Context) error {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return status.Error(codes.InvalidArgument, "Retrieving metadata failed")
+		return status.Errorf(codes.InvalidArgument, "Retrieving metadata failed")
 	}
 
-	authHeaders, ok := md["authorization"]
-	if !ok || len(authHeaders) == 0 {
+	authHeader, ok := md["authorization"]
+	if !ok || len(authHeader) == 0 {
 		return status.Error(codes.Unauthenticated, "Authorization token could not be found")
 	}
 
-	if !strings.HasPrefix(authHeaders[0], "Bearer") {
+	if !strings.HasPrefix(authHeader[0], "Bearer") {
 		return status.Error(codes.Unauthenticated, "Invalid auth header, needs Bearer {token}")
 	}
 
-	token := strings.TrimSpace(authHeaders[0][len("Bearer"):])
+	token := strings.TrimSpace(authHeader[0][len("Bearer"):])
 
 	if len(s.authToken) == 0 || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 		return status.Errorf(codes.Unauthenticated, "Forbidden: token value is invalid")
