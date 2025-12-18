@@ -234,9 +234,6 @@ func (s *Server) handleAttestationsElectra(
 	// broadcasts fail for the same reason, so this should be sufficient in most cases.
 	var broadcastErr error
 
-	// Track successfully broadcast attestations for pool saving
-	var broadcastedAttestations []*eth.SingleAttestation
-
 	for i, singleAtt := range validAttestations {
 		s.OperationNotifier.OperationFeed().Send(&feed.Event{
 			Type: operation.SingleAttReceived,
@@ -263,7 +260,6 @@ func (s *Server) handleAttestationsElectra(
 			}
 			continue
 		}
-		broadcastedAttestations = append(broadcastedAttestations, singleAtt)
 	}
 
 	// Save to pool after broadcast (slow path - requires state fetching)
