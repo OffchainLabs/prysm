@@ -343,7 +343,7 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 
 	s.savePending(root, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
-		return ok && pendingAggregatesAreEqual(agg, a)
+		return ok && pendingAggregatesAreEqual(agg, a, true /* filter on aggregator index */)
 	})
 }
 
@@ -398,13 +398,19 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], pending)
 }
 
-func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
+// pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
+// If filterOnAggregatorIndex is false, two aggregates only differ by their aggregator index will be considered equal.
+func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filterOnAggregatorIndex bool) bool {
 	if a.Version() != b.Version() {
 		return false
 	}
-	if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
-		return false
+
+	if filterOnAggregatorIndex {
+		if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
+			return false
+		}
 	}
+
 	aAtt := a.AggregateAttestationAndProof().AggregateVal()
 	bAtt := b.AggregateAttestationAndProof().AggregateVal()
 	if aAtt.GetData().Slot != bAtt.GetData().Slot {
