@@ -62,12 +62,12 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 	}
 
 	go func() {
-		attCopy := att.Copy()
 		if features.Get().EnableExperimentalAttestationPool {
-			if err := vs.AttestationCache.Add(attCopy); err != nil {
+			if err := vs.AttestationCache.Add(att); err != nil {
 				log.WithError(err).Error("Could not save attestation")
 			}
 		} else {
+			attCopy := att.Copy()
 			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
 			}

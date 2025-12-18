@@ -268,8 +268,8 @@ func (s *Server) handleAttestationsElectra(
 
 	// Save to pool after broadcast (slow path - requires state fetching)
 	// Run in goroutine to avoid blocking the HTTP response
-	go func(atts []*eth.SingleAttestation) {
-		for _, singleAtt := range atts {
+	go func() {
+		for _, singleAtt := range validAttestations {
 			targetState, err := s.AttestationStateFetcher.AttestationTargetState(context.Background(), singleAtt.Data.Target)
 			if err != nil {
 				log.WithError(err).Error("Could not get target state for attestation")
@@ -292,7 +292,7 @@ func (s *Server) handleAttestationsElectra(
 				}
 			}
 		}
-	}(broadcastedAttestations)
+	}()
 
 	if len(failedBroadcasts) > 0 {
 		log.WithFields(logrus.Fields{
