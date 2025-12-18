@@ -311,28 +311,17 @@ func (s *Service) processVerifiedAttestation(
 }
 
 func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
-	if !s.validateBlockInAttestation(ctx, aggregate) {
-		log.Debug("Validate Block in attestation failed")
+	res, err := s.validateAggregatedAtt(ctx, aggregate)
+	if err != nil {
+		log.WithError(err).Debug("Pending aggregated attestation failed validation")
+		return
+	}
+	if res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
+		log.Debug("Pending aggregated attestation failed validation")
 		return
 	}
 
-	// Verify attestation target root is consistent with the head root.
-	// This verification is not in the spec, however we guard against it as it opens us up
-	// to weird edge cases during verification. The attestation technically could be used to add value to a block,
-	// but it's invalid in the spirit of the protocol. Here we choose safety over profit.
 	att := aggregate.AggregateAttestationAndProof().AggregateVal()
-	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, aggregate.AggregateAttestationAndProof().AggregateVal()); err != nil {
-		attBadLmdConsistencyCount.Inc()
-		log.Debug("Aggregated attestation verify LMD FFG consistency failed")
-		return
-	}
-
-	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
-	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)) {
-		log.Debug("Block being voted for by attestation not in fork choice")
-		return
-	}
-
 	if err := s.saveAttestation(att); err != nil {
 		log.WithError(err).Debug("Could not save aggregated attestation")
 		return
