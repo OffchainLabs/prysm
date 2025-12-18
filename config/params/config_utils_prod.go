@@ -16,7 +16,9 @@ func BeaconConfig() *BeaconChainConfig {
 // OverrideBeaconConfig(c). Any subsequent calls to params.BeaconConfig() will
 // return this new configuration.
 func OverrideBeaconConfig(c *BeaconChainConfig) {
-	c.InitializeForkSchedule()
+	if err := c.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	configs.active = c
 }
 

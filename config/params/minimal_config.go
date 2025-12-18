@@ -129,6 +129,8 @@ func MinimalSpecConfig() *BeaconChainConfig {
 
 	minimalConfig.BlobSchedule = make([]BlobScheduleEntry, 0)
 
-	minimalConfig.InitializeForkSchedule()
+	if err := minimalConfig.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return minimalConfig
 }

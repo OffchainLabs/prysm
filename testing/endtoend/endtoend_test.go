@@ -186,7 +186,9 @@ func (r *testRunner) postStartConfigure() {
 
 	// initialize genesis and fork schedule params in the test runner config to the same values they will have in the components
 	params.BeaconConfig().ApplyOptions(params.WithGenesisValidatorsRoot(bytesutil.ToBytes32(gs.GenesisValidatorsRoot())))
-	params.BeaconConfig().InitializeForkSchedule()
+	if err := params.BeaconConfig().InitializeForkSchedule(); err != nil {
+		r.t.Fatal(errors.Wrap(err, "initialize fork schedule")) // lint:nopanic -- test runner startup path expects fatal on config errors
+	}
 }
 
 // runEvaluators executes assigned evaluators.

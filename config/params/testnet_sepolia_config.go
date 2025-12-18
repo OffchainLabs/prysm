@@ -59,6 +59,8 @@ func SepoliaConfig() *BeaconChainConfig {
 			Epoch:            275712, // 2025-10-27 23:16:48 UTC
 		},
 	}
-	cfg.InitializeForkSchedule()
+	if err := cfg.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return cfg
 }

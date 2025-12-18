@@ -66,7 +66,9 @@ func E2ETestConfig() *BeaconChainConfig {
 		{Epoch: e2eConfig.ElectraForkEpoch, MaxBlobsPerBlock: uint64(e2eConfig.DeprecatedMaxBlobsPerBlockElectra)},
 	}
 
-	e2eConfig.InitializeForkSchedule()
+	if err := e2eConfig.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return e2eConfig
 }
 
