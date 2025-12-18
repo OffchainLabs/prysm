@@ -1220,7 +1220,7 @@ func genExecutionPayloadBidGloas() *v1alpha1.ExecutionPayloadBid {
 		BlockHash:              bytes(32),
 		FeeRecipient:           bytes(20),
 		GasLimit:               rand.Uint64(),
-		BuilderIndex:           primitives.ValidatorIndex(rand.Uint64()),
+		BuilderIndex:           primitives.BuilderIndex(rand.Uint64()),
 		Slot:                   primitives.Slot(rand.Uint64()),
 		Value:                  primitives.Gwei(rand.Uint64()),
 		BlobKzgCommitmentsRoot: bytes(32),

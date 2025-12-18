@@ -305,10 +305,12 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PendingConsolidations:         b.pendingConsolidations,
 			ProposerLookahead:             lookahead,
 			ExecutionPayloadAvailability:  b.executionPayloadAvailability,
+			Builders:                      b.builders,
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
 			BuilderPendingPayments:        b.builderPendingPayments,
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
 			LatestBlockHash:               b.latestBlockHash,
-			LatestWithdrawalsRoot:         b.latestWithdrawalsRoot,
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
 		}
 	default:
 		return nil
@@ -607,10 +609,12 @@ func (b *BeaconState) ToProto() any {
 			PendingConsolidations:         b.pendingConsolidationsVal(),
 			ProposerLookahead:             lookahead,
 			ExecutionPayloadAvailability:  b.executionPayloadAvailabilityVal(),
+			Builders:                      b.buildersVal(),
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
 			BuilderPendingPayments:        b.builderPendingPaymentsVal(),
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
 			LatestBlockHash:               b.latestBlockHashVal(),
-			LatestWithdrawalsRoot:         b.latestWithdrawalsRootVal(),
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
 		}
 	default:
 		return nil

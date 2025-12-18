@@ -28,10 +28,9 @@ func (withdrawal *BuilderPendingWithdrawal) Copy() *BuilderPendingWithdrawal {
 		return nil
 	}
 	return &BuilderPendingWithdrawal{
-		FeeRecipient:      bytesutil.SafeCopyBytes(withdrawal.FeeRecipient),
-		Amount:            withdrawal.Amount,
-		BuilderIndex:      withdrawal.BuilderIndex,
-		WithdrawableEpoch: withdrawal.WithdrawableEpoch,
+		FeeRecipient: bytesutil.SafeCopyBytes(withdrawal.FeeRecipient),
+		Amount:       withdrawal.Amount,
+		BuilderIndex: withdrawal.BuilderIndex,
 	}
 }
 

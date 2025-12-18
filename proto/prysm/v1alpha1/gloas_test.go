@@ -28,7 +28,7 @@ func TestExecutionPayloadBid_Copy(t *testing.T) {
 				BlockHash:              []byte("block_hash_32_bytes_are_long!!"),
 				FeeRecipient:           []byte("fee_recipient_20_byt"),
 				GasLimit:               15000000,
-				BuilderIndex:           primitives.ValidatorIndex(42),
+				BuilderIndex:           primitives.BuilderIndex(42),
 				Slot:                   primitives.Slot(12345),
 				Value:                  1000000000000000000,
 				BlobKzgCommitmentsRoot: []byte("blob_kzg_commitments_32_bytes!!"),
@@ -76,10 +76,9 @@ func TestBuilderPendingWithdrawal_Copy(t *testing.T) {
 		{
 			name: "fully populated withdrawal",
 			withdrawal: &BuilderPendingWithdrawal{
-				FeeRecipient:      []byte("fee_recipient_20_byt"),
-				Amount:            primitives.Gwei(5000000000),
-				BuilderIndex:      primitives.ValidatorIndex(123),
-				WithdrawableEpoch: primitives.Epoch(456),
+				FeeRecipient: []byte("fee_recipient_20_byt"),
+				Amount:       primitives.Gwei(5000000000),
+				BuilderIndex: primitives.BuilderIndex(123),
 			},
 		},
 	}
@@ -134,10 +133,9 @@ func TestBuilderPendingPayment_Copy(t *testing.T) {
 			payment: &BuilderPendingPayment{
 				Weight: primitives.Gwei(2500),
 				Withdrawal: &BuilderPendingWithdrawal{
-					FeeRecipient:      []byte("test_recipient_20byt"),
-					Amount:            primitives.Gwei(10000),
-					BuilderIndex:      primitives.ValidatorIndex(789),
-					WithdrawableEpoch: primitives.Epoch(999),
+					FeeRecipient: []byte("test_recipient_20byt"),
+					Amount:       primitives.Gwei(10000),
+					BuilderIndex: primitives.BuilderIndex(789),
 				},
 			},
 		},
@@ -161,6 +159,62 @@ func TestBuilderPendingPayment_Copy(t *testing.T) {
 				tt.payment.Withdrawal.FeeRecipient[0] = 0xFF
 				if copied.Withdrawal != nil && len(copied.Withdrawal.FeeRecipient) > 0 && copied.Withdrawal.FeeRecipient[0] == 0xFF {
 					t.Error("Copy() did not create deep copy of nested Withdrawal.FeeRecipient")
+				}
+			}
+		})
+	}
+}
+
+func TestCopyBuilder(t *testing.T) {
+	tests := []struct {
+		name    string
+		builder *Builder
+	}{
+		{
+			name:    "nil builder",
+			builder: nil,
+		},
+		{
+			name:    "empty builder",
+			builder: &Builder{},
+		},
+		{
+			name: "fully populated builder",
+			builder: &Builder{
+				Pubkey:            []byte("pubkey_48_bytes_long_pubkey_48_bytes_long_pubkey_48!"),
+				ExecutionAddress:  []byte("execution_address_20"),
+				Balance:           primitives.Gwei(12345),
+				DepositEpoch:      primitives.Epoch(10),
+				WithdrawableEpoch: primitives.Epoch(20),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			copied := CopyBuilder(tt.builder)
+			if tt.builder == nil {
+				if copied != nil {
+					t.Errorf("CopyBuilder() of nil should return nil, got %v", copied)
+				}
+				return
+			}
+
+			if !reflect.DeepEqual(tt.builder, copied) {
+				t.Errorf("CopyBuilder() = %v, want %v", copied, tt.builder)
+			}
+
+			if len(tt.builder.Pubkey) > 0 {
+				tt.builder.Pubkey[0] = 0xFF
+				if copied.Pubkey[0] == 0xFF {
+					t.Error("CopyBuilder() did not create deep copy of Pubkey")
+				}
+			}
+
+			if len(tt.builder.ExecutionAddress) > 0 {
+				tt.builder.ExecutionAddress[0] = 0xFF
+				if copied.ExecutionAddress[0] == 0xFF {
+					t.Error("CopyBuilder() did not create deep copy of ExecutionAddress")
 				}
 			}
 		})
