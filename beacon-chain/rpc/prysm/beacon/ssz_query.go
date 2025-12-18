@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -251,29 +250,19 @@ func generateSSZQueryResponseWithProof(
 	}
 
 	// 2. Get the merkle tree
-	proof, htr, err := info.Prove(gi)
+	proof, err := info.Prove(gi)
 	if err != nil {
 		return nil, err
 	}
 
-	if !bytes.Equal(htr[:], root) {
-		return nil, errors.New("computed merkle tree root does not match expected root")
-	}
-
-	// // 3. Generate the proof for the generalized index
-	// proof, err := merkleTree.Prove(int(gi))
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// 4. Convert the proof to the protobuf format
+	// 3. Convert the proof to the protobuf format
 	protoProof := &sszquerypb.SSZQueryProof{
 		Leaf:   proof.Leaf,
 		Gindex: uint64(proof.Index),
 		Proofs: proof.Hashes,
 	}
 
-	// 5. Build response with proof
+	// 4. Build response with proof
 	responseWithProof := &sszquerypb.SSZQueryResponseWithProof{
 		Root:   root,
 		Result: encodedObject[offset : offset+length],

@@ -73,9 +73,9 @@ func (pc *ProofCollector) siblingsGindex(gindex uint64) {
 // - fastssz.Proof: the Merkle proof containing the leaf, index, and sibling hashes.
 // - [32]byte: the Merkle root of the entire SSZ object.
 // - error: any error encountered during proof generation.
-func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, [32]byte, error) {
+func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 	if info == nil {
-		return nil, [32]byte{}, fmt.Errorf("nil SszInfo")
+		return nil, fmt.Errorf("nil SszInfo")
 	}
 
 	collector := NewProofCollector()
@@ -84,12 +84,12 @@ func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, [32]byte, error) {
 	// info.source is guaranteed to be valid and dereferenced by AnalyzeObject
 	v := reflect.ValueOf(info.source).Elem()
 
-	htr, err := merkleize(info, v, collector, 1)
+	_, err := merkleize(info, v, collector, 1)
 	if err != nil {
-		return nil, [32]byte{}, err
+		return nil, err
 	}
 
-	return collector.toProof(), htr, nil
+	return collector.toProof() /*htr,*/, nil
 }
 
 // merkleize recursively traverse the SSZ structure to build the Merkle proof.
