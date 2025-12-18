@@ -275,11 +275,15 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
-	if len(flags) == 0 {
+	total := 0
+	for _, f := range flags {
+		total += len(f)
+	}
+	if total == 0 {
 		return []cli.Flag{}
 	}
-	collected := flags[0]
-	for _, f := range flags[1:] {
+	collected := make([]cli.Flag, 0, total)
+	for _, f := range flags {
 		collected = append(collected, f...)
 	}
 	return collected
