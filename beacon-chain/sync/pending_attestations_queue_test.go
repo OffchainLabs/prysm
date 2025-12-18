@@ -918,6 +918,11 @@ func Test_pendingAggregatesAreEqual(t *testing.T) {
 		b := &ethpb.SignedAggregateAttestationAndProofElectra{Message: &ethpb.AggregateAttestationAndProofElectra{AggregatorIndex: 1}}
 		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
 	})
+	t.Run("different aggregator index", func(t *testing.T) {
+		a := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
+		b := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 2}}
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+	})
 	t.Run("different slot", func(t *testing.T) {
 		a := &ethpb.SignedAggregateAttestationAndProof{
 			Message: &ethpb.AggregateAttestationAndProof{
