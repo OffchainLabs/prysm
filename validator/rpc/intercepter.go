@@ -60,7 +60,7 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 			}
 
 			token := strings.TrimSpace(reqToken[len("Bearer "):])
-			if s.authToken == "" || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
+			if len(s.authToken) == 0 || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
