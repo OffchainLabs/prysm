@@ -74,6 +74,8 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	randGen := rand.NewGenerator()
 	var parentRoots [][32]byte
 
+	blkRoots := make([][32]byte, 0, len(sortedSlots)*maxBlocksPerSlot)
+
 	// Iterate through sorted slots.
 	for i, slot := range sortedSlots {
 		// Skip processing if slot is in the future.
@@ -93,6 +95,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 		// Process each block in the queue.
 		for _, b := range blocksInCache {
 			start := time.Now()
+			totalDuration := time.Duration(0)
 
 			if err := blocks.BeaconBlockIsNil(b); err != nil {
 				continue
@@ -150,26 +153,34 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
-			// Process pending attestations for this block.
-			if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
-				log.WithError(err).Debug("Failed to process pending attestations for block")
-			}
+			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
 				return err
 			}
 
+			duration := time.Since(start)
+			totalDuration += duration
 			log.WithFields(logrus.Fields{
-				"slotIndex": fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
-				"slot":      slot,
-				"root":      fmt.Sprintf("%#x", blkRoot),
-				"duration":  time.Since(start),
+				"slotIndex":     fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
+				"slot":          slot,
+				"root":          fmt.Sprintf("%#x", blkRoot),
+				"duration":      duration,
+				"totalDuration": totalDuration,
 			}).Debug("Processed pending block and cleared it in cache")
 		}
 
 		span.End()
 	}
+
+	for _, blkRoot := range blkRoots {
+		// Process pending attestations for this block.
+		if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
+			log.WithError(err).Debug("Failed to process pending attestations for block")
+		}
+	}
+
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
 }
 
