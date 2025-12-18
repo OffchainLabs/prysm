@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -928,12 +929,23 @@ func (s *Service) areExecutionProofsAvailable(
 		return nil
 	}
 
+	if len(flags.Get().ProofGenerationTypes) > 0 {
+		// We don't need to check for execution proofs if proof generation is enabled.
+		// Return early.
+		return nil
+	}
+
 	currentProofCount := s.cfg.ExecProofPool.GetProofCountForBlock(blockRoot)
 	requiredProofCount := params.BeaconConfig().MinProofsRequired
 	// If we already have enough proofs, return early.
 	if currentProofCount >= requiredProofCount {
+		log.Debugf("Already have enough execution proofs for block %#x: have %d, need %d",
+			blockRoot, currentProofCount, requiredProofCount)
 		return nil
 	}
+
+	log.Infof("Need execution proofs for block %#x: have %d, need %d",
+		blockRoot, currentProofCount, requiredProofCount)
 
 	// Wait for execution proofs to be added to the pool.
 	// TODO: Is 16 a good buffer size?
@@ -963,8 +975,6 @@ func (s *Service) areExecutionProofsAvailable(
 			proof := proofWrapper.ExecutionProof
 			receivedBlockRoot := bytesutil.ToBytes32(proof.BlockRoot)
 			if receivedBlockRoot != blockRoot {
-				log.Debugf("Received execution proof for block %#x while waiting for proofs for block %#x",
-					receivedBlockRoot, blockRoot)
 				continue
 			}
 
@@ -977,6 +987,8 @@ func (s *Service) areExecutionProofsAvailable(
 
 			// If we have enough proofs, return.
 			if currentProofCount >= requiredProofCount {
+				log.Debugf("Received enough execution proofs for block %#x: have %d, need %d",
+					blockRoot, currentProofCount, requiredProofCount)
 				return nil
 			}
 
