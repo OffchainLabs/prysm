@@ -126,15 +126,31 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		}
 	}
 
+	validationRes, err := s.validateAggregatedAtt(ctx, m)
+	if validationRes != pubsub.ValidationAccept {
+		return validationRes, err
+	}
+
 	// Verify the block being voted on is in the beacon chain.
 	// If not, store this attestation in the map of pending attestations.
 	if !s.validateBlockInAttestation(ctx, m) {
 		return pubsub.ValidationIgnore, nil
 	}
 
-	validationRes, err := s.validateAggregatedAtt(ctx, m)
-	if validationRes != pubsub.ValidationAccept {
-		return validationRes, err
+	// Verify attestation target root is consistent with the head root.
+	// This verification is not in the spec, however we guard against it as it opens us up
+	// to weird edge cases during verification. The attestation technically could be used to add value to a block,
+	// but it's invalid in the spirit of the protocol. Here we choose safety over profit.
+	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, aggregate); err != nil {
+		tracing.AnnotateError(span, err)
+		attBadLmdConsistencyCount.Inc()
+		return pubsub.ValidationReject, err
+	}
+
+	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
+	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
+		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
 	}
 
 	if first := s.setAggregatorIndexEpochSeen(data.Target.Epoch, m.AggregateAttestationAndProof().GetAggregatorIndex()); !first {
@@ -156,22 +172,6 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	aggregatorIndex := aggregateAndProof.GetAggregatorIndex()
 	aggregate := aggregateAndProof.AggregateVal()
 	data := aggregate.GetData()
-
-	// Verify attestation target root is consistent with the head root.
-	// This verification is not in the spec, however we guard against it as it opens us up
-	// to weird edge cases during verification. The attestation technically could be used to add value to a block,
-	// but it's invalid in the spirit of the protocol. Here we choose safety over profit.
-	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, aggregate); err != nil {
-		tracing.AnnotateError(span, err)
-		attBadLmdConsistencyCount.Inc()
-		return pubsub.ValidationReject, err
-	}
-
-	// Verify current finalized checkpoint is an ancestor of the block defined by the attestation's beacon block root.
-	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
-		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
-	}
 
 	bs, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
