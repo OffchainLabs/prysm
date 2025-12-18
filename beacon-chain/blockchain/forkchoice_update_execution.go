@@ -61,8 +61,6 @@ func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
 		// update the caches to compute the right proposer index
 		s.updateCachesPostBlockProcessing(cfg)
 	}
-	s.ForkChoicer().Lock()
-	defer s.ForkChoicer().Unlock()
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
 		return
