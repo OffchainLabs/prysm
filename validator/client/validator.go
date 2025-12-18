@@ -1274,7 +1274,7 @@ func (v *validator) FindHealthyHost(ctx context.Context) bool {
 	// Tail-recursive closure keeps retry count private.
 	var check func(remaining int) bool
 	check = func(remaining int) bool {
-		if v.nodeClient.IsHealthy(ctx) { // healthy → done
+		if v.nodeClient.IsReady(ctx) { // ready → done
 			return true
 		}
 		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {

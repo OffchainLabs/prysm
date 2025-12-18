@@ -2,6 +2,8 @@ package beacon_api
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -284,6 +286,58 @@ func TestGetVersion(t *testing.T) {
 			} else {
 				assert.DeepEqual(t, testCase.expectedResponse, version)
 			}
+		})
+	}
+}
+
+func TestIsReady(t *testing.T) {
+	testCases := []struct {
+		name           string
+		statusCode     int
+		expectedResult bool
+	}{
+		{
+			name:           "returns true for 200 OK (fully synced)",
+			statusCode:     http.StatusOK,
+			expectedResult: true,
+		},
+		{
+			name:           "returns false for 206 Partial Content (syncing)",
+			statusCode:     http.StatusPartialContent,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false for 503 Service Unavailable",
+			statusCode:     http.StatusServiceUnavailable,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false for 500 Internal Server Error",
+			statusCode:     http.StatusInternalServerError,
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ctx := t.Context()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/eth/v1/node/health", r.URL.Path)
+				w.WriteHeader(tc.statusCode)
+			}))
+			defer server.Close()
+
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			jsonRestHandler.EXPECT().Host().Return(server.URL)
+			jsonRestHandler.EXPECT().HttpClient().Return(server.Client())
+
+			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			result := nodeClient.IsReady(ctx)
+
+			assert.Equal(t, tc.expectedResult, result)
 		})
 	}
 }
