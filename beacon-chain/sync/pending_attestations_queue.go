@@ -23,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -74,6 +75,7 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any, b
 		return
 	}
 
+	validAggregates := make([]ethpb.SignedAggregateAttAndProof, 0, len(attestations))
 	startAggregate := time.Now()
 	atts := make([]ethpb.Att, 0, len(attestations))
 	aggregateAttAndProofCount := 0
@@ -82,8 +84,20 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any, b
 		case ethpb.Att:
 			atts = append(atts, v)
 		case ethpb.SignedAggregateAttAndProof:
-			s.processAggregate(ctx, v)
 			aggregateAttAndProofCount++
+			// Avoid processing multiple aggregates only differing by aggregator index.
+			if slices.ContainsFunc(validAggregates, func(other ethpb.SignedAggregateAttAndProof) bool {
+				return pendingAggregatesAreEqual(v, other, false /* do not filter on aggregator index */)
+			}) {
+				continue
+			}
+
+			if err := s.processAggregate(ctx, v); err != nil {
+				log.WithError(err).Debug("Pending aggregate attestation could not be processed")
+				continue
+			}
+
+			validAggregates = append(validAggregates, v)
 		default:
 			log.Warnf("Unexpected attestation type %T, skipping", v)
 		}
@@ -98,13 +112,14 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any, b
 	durationAtts := time.Since(startAtts)
 
 	log.WithFields(logrus.Fields{
-		"blockRoot":                        fmt.Sprintf("%#x", blockRoot),
-		"pendingTotalCount":                len(attestations),
-		"pendingAggregateAttAndProofCount": aggregateAttAndProofCount,
-		"pendingAttCount":                  len(atts),
-		"durationTotal":                    durationAggregateAttAndProof + durationAtts,
-		"durationAggregateAttAndProof":     durationAggregateAttAndProof,
-		"durationAtts":                     durationAtts,
+		"blockRoot":                       fmt.Sprintf("%#x", blockRoot),
+		"totalCount":                      len(attestations),
+		"aggregateAttAndProofCount":       aggregateAttAndProofCount,
+		"uniqueAggregateAttAndProofCount": len(validAggregates),
+		"attCount":                        len(atts),
+		"durationTotal":                   durationAggregateAttAndProof + durationAtts,
+		"durationAggregateAttAndProof":    durationAggregateAttAndProof,
+		"durationAtts":                    durationAtts,
 	}).Debug("Verified and saved pending attestations to pool")
 }
 
@@ -310,21 +325,20 @@ func (s *Service) processVerifiedAttestation(
 	})
 }
 
-func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
+func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) error {
 	res, err := s.validateAggregatedAtt(ctx, aggregate)
 	if err != nil {
 		log.WithError(err).Debug("Pending aggregated attestation failed validation")
-		return
+		return errors.Wrap(err, "validate aggregated att")
 	}
+
 	if res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
-		log.Debug("Pending aggregated attestation failed validation")
-		return
+		return errors.New("Pending aggregated attestation failed validation")
 	}
 
 	att := aggregate.AggregateAttestationAndProof().AggregateVal()
 	if err := s.saveAttestation(att); err != nil {
-		log.WithError(err).Debug("Could not save aggregated attestation")
-		return
+		return errors.Wrap(err, "save attestation")
 	}
 
 	_ = s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
@@ -332,6 +346,8 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 		log.WithError(err).Debug("Could not broadcast aggregated attestation")
 	}
+
+	return nil
 }
 
 // This defines how pending aggregates are saved in the map. The key is the
