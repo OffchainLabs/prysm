@@ -75,7 +75,7 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	var parentRoots [][32]byte
 
 	// Iterate through sorted slots.
-	for _, slot := range sortedSlots {
+	for i, slot := range sortedSlots {
 		// Skip processing if slot is in the future.
 		if slot > s.cfg.clock.CurrentSlot() {
 			continue
@@ -161,9 +161,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 
 			log.WithFields(logrus.Fields{
-				"slot":     slot,
-				"root":     fmt.Sprintf("%#x", blkRoot),
-				"duration": time.Since(start),
+				"slotIndex": fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
+				"slot":      slot,
+				"root":      fmt.Sprintf("%#x", blkRoot),
+				"duration":  time.Since(start),
 			}).Debug("Processed pending block and cleared it in cache")
 		}
 
