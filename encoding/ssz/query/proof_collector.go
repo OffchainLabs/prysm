@@ -3,8 +3,10 @@ package query
 import (
 	"encoding/binary"
 	"fmt"
+	"math/bits"
 	"reflect"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -15,85 +17,152 @@ import (
 	"github.com/prysmaticlabs/gohashtree"
 )
 
-// ProofCollector collects sibling hashes and leaves needed for a Merkle proof.
-// It maps generalized indices to their corresponding hashes or leaves.
+// ProofCollector collects sibling hashes and leaves needed for Merkle proofs.
+//
+// Multiproof-ready design:
+// - requiredSiblings/requiredLeaves store which gindices we want to collect (registered before merkleization).
+// - siblings/leaves store the actual collected hashes.
+//
+// Concurrency:
+// - required* maps are read-only during merkleization.
+// - siblings/leaves writes are protected by mu.
 type ProofCollector struct {
+	mu sync.Mutex
+
+	// Required gindices (registered before merkleization)
+	requiredSiblings map[uint64]struct{}
+	requiredLeaves   map[uint64]struct{}
+
+	// Collected hashes
 	siblings map[uint64][32]byte
 	leaves   map[uint64][32]byte
 }
 
 func NewProofCollector() *ProofCollector {
 	return &ProofCollector{
-		siblings: make(map[uint64][32]byte),
-		leaves:   make(map[uint64][32]byte),
+		requiredSiblings: make(map[uint64]struct{}),
+		requiredLeaves:   make(map[uint64]struct{}),
+		siblings:         make(map[uint64][32]byte),
+		leaves:           make(map[uint64][32]byte),
 	}
 }
 
 func (pc *ProofCollector) Reset() {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+
+	pc.requiredSiblings = make(map[uint64]struct{})
+	pc.requiredLeaves = make(map[uint64]struct{})
 	pc.siblings = make(map[uint64][32]byte)
 	pc.leaves = make(map[uint64][32]byte)
 }
 
+// AddTarget register the target leaf and its required sibling nodes for proof construction.
+// Registration should happen before merkleization begins.
 func (pc *ProofCollector) AddTarget(gindex uint64) {
-	pc.leaves[gindex] = [32]byte{} // marker
+	// Lock safe just in case the collector is re-used.
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
 
-	for g := gindex; g > 1; g /= 2 {
-		pc.siblings[g^1] = [32]byte{} // marker
+	pc.requiredLeaves[gindex] = struct{}{}
+
+	// Walk from the target leaf up to (but not including) the root (gindex=1).
+	// At each step, register the sibling node required to prove inclusion.
+	nodeGindex := gindex
+	for nodeGindex > 1 {
+		siblingGindex := nodeGindex ^ 1 // flip the last bit: left<->right sibling
+		pc.requiredSiblings[siblingGindex] = struct{}{}
+
+		// Move to parent
+		nodeGindex /= 2
 	}
 }
 
 // toProof converts the collected siblings and leaves into a fastssz.Proof structure.
-// It assumes there is only one leaf in the leaves map (the target of the proof).
+// Current behavior expects a single target leaf (single proof).
 func (pc *ProofCollector) toProof() *fastssz.Proof {
-	proof := &fastssz.Proof{}
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
 
-	// Get target gindex and leaf from leaves map (single entry for single proof)
-	var targetGindex uint64
-	for gindex, leaf := range pc.leaves {
-		targetGindex = gindex
-		proof.Index = int(gindex)
-		proof.Leaf = leaf[:]
+	proof := &fastssz.Proof{}
+	if len(pc.leaves) == 0 {
+		return proof
 	}
 
-	// Collect siblings in leaf-to-root order
-	// Walk from target gindex up to root, collecting sibling hashes
-	gindex := targetGindex
-	for gindex > 1 {
-		siblingGindex := gindex ^ 1
-		if hash, ok := pc.siblings[siblingGindex]; ok {
-			proof.Hashes = append(proof.Hashes, hash[:])
+	leafGindices := make([]uint64, 0, len(pc.leaves))
+	for g := range pc.leaves {
+		leafGindices = append(leafGindices, g)
+	}
+	slices.Sort(leafGindices)
+
+	// single proof resides in leafGindices[0]
+	targetGindex := leafGindices[0]
+	proof.Index = int(targetGindex)
+
+	// store the leaf
+	leaf := pc.leaves[targetGindex]
+	leafBuf := make([]byte, 32)
+	copy(leafBuf, leaf[:])
+	proof.Leaf = leafBuf
+
+	// Walk from target up to root, collecting siblings.
+	steps := bits.Len64(targetGindex) - 1
+	proof.Hashes = make([][]byte, 0, steps)
+
+	for targetGindex > 1 {
+		sib := targetGindex ^ 1
+		h, ok := pc.siblings[sib]
+		if !ok {
+			// Missing sibling; proof will fail verification.
+			break
 		}
-		gindex = gindex / 2
+		proof.Hashes = append(proof.Hashes, h[:])
+		targetGindex /= 2
 	}
 
 	return proof
 }
 
-// RegisterRequiredSiblings computes all sibling generalized indices along the path
+// registerRequiredSiblings computes all sibling generalized indices along the path
 // from the given gindex up to the root. These are the nodes whose hashes
 // are needed to construct a merkle proof.
-func (pc *ProofCollector) RegisterRequiredSiblings(gindex uint64) {
+func (pc *ProofCollector) registerRequiredSiblings(gindex uint64) {
 	pc.Reset()
 	pc.AddTarget(gindex)
 }
 
+// collectLeaf checks if the given gindex is a required leaf for the proof,
+// and if so, stores the provided leaf hash in the collector.
 func (pc *ProofCollector) collectLeaf(gindex uint64, leaf [32]byte) {
-	if _, ok := pc.leaves[gindex]; ok {
-		pc.leaves[gindex] = leaf
+	if _, ok := pc.requiredLeaves[gindex]; !ok {
+		return
 	}
+	pc.mu.Lock()
+	pc.leaves[gindex] = leaf
+	pc.mu.Unlock()
 }
 
-// Merkleizers
+// Merkleizers and proof collection methods
 
-// merkleize recursively traverse the SSZ structure to build the Merkle proof.
-// It handles basic types, containers, lists, vectors, bitlists, and bitvectors.
+// merkleize recursively traverses an SSZ info  and computes the Merkle root of the subtree.
+//
+// Proof collection:
+//   - During traversal it calls collectLeaf/collectSibling with the SSZ generalized indices (gindices)
+//     of visited nodes.
+//   - The collector only stores hashes for gindices that were pre-registered via AddTarget
+//     (requiredLeaves/requiredSiblings). This makes the traversal multiproof-ready: you can register
+//     multiple targets before calling merkleize.
+//
+// SSZ types handled: basic types, containers, lists, vectors, bitlists, and bitvectors.
+//
 // Parameters:
-// - info: the SszInfo for the current SSZ object.
-// - v: the reflect.Value of the current SSZ object.
-// - currentGindex: the generalized index of the current node in the traversal.
+// - info: SSZ type metadata for the current value.
+// - v: reflect.Value of the current value.
+// - currentGindex: generalized index of the current subtree root.
+//
 // Returns:
-// - [32]byte: the Merkle root of the current subtree.
-// - error: any error encountered during merkleization.
+// - [32]byte: Merkle root of the current subtree.
+// - error: any error encountered during traversal/merkleization.
 func (pc *ProofCollector) merkleize(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	if info.sszType.isBasic() {
 		return pc.merkleizeBasicType(info.sszType, v, currentGindex)
@@ -114,15 +183,19 @@ func (pc *ProofCollector) merkleize(info *SszInfo, v reflect.Value, currentGinde
 	}
 }
 
-// merkleizeBasicType serializes a basic SSZ type into a 32-byte leaf chunk.
-// If this leaf is the proof target (gindex == currentGindex), it sets proof.Leaf and proof.Index.
+// merkleizeBasicType serializes a basic SSZ value into a 32-byte leaf chunk (little-endian, zero-padded).
+//
+// Proof collection:
+// - It calls collectLeaf(currentGindex, leaf) and stores the leaf if currentGindex was pre-registered via AddTarget.
+//
 // Parameters:
 // - t: the SSZType (basic).
-// - v: the reflect.Value of the basic type.
-// - currentGindex: the generalized index of the current node in the traversal.
+// - v: the reflect.Value of the basic value.
+// - currentGindex: the generalized index (gindex) of this leaf.
+//
 // Returns:
-// - [32]byte: the 32-byte leaf chunk.
-// - error: if the provided data type is unexpected.
+// - [32]byte: the 32-byte SSZ leaf chunk.
+// - error: if the SSZType is not a supported basic type.
 func (pc *ProofCollector) merkleizeBasicType(t SSZType, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	var leaf [32]byte
 
@@ -144,22 +217,26 @@ func (pc *ProofCollector) merkleizeBasicType(t SSZType, v reflect.Value, current
 		return [32]byte{}, fmt.Errorf("unexpected basic type: %v", t)
 	}
 
-	// If this leaf is the target we're proving, update the proof
 	pc.collectLeaf(currentGindex, leaf)
 
 	return leaf, nil
 }
 
-// Tree structure for a container with N fields:
+// merkleizeContainer computes the Merkle root of an SSZ container by:
+//  1. Merkleizing each field into a 32-byte subtree root
+//  2. Merkleizing the field roots into the container root (padding to the next power-of-2)
 //
-//	    container root (currentGindex)
-//	       /        \
-//	    ...          ...
-//	   /    \      /    \
-//	field0  field1 ... fieldN-1  [virtual zero subtrees for padding]
+// Generalized indices (gindices): depth = ssz.Depth(uint64(N)) and field i has gindex = (currentGindex << depth) + uint64(i).
+// Proof collection: merkleize() computes each field root, MerkleizeVectorAndCollect collects required siblings, and collectLeaf stores the container root if registered.
 //
-// Field i has gindex: (currentGindex << depth) | i, where depth = log2(nextPow2(N))
-// Padding to power-of-2 is handled by MerkleizeVectorAndCollect using trie.ZeroHashes.
+// Parameters:
+// - info: SSZ type metadata for the container.
+// - v: reflect.Value of the container value.
+// - currentGindex: generalized index (gindex) of the container root.
+//
+// Returns:
+// - [32]byte: Merkle root of the container.
+// - error: any error encountered while merkleizing fields.
 func (pc *ProofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	ci, err := info.ContainerInfo()
 	if err != nil {
@@ -180,7 +257,7 @@ func (pc *ProofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 		fieldVal := v.FieldByName(fieldInfo.goFieldName)
 
 		// Field i's gindex: shift currentGindex left by depth, then OR with field index
-		fieldGindex := currentGindex*(1<<depth) + uint64(i)
+		fieldGindex := currentGindex<<depth + uint64(i)
 
 		htr, err := pc.merkleize(fieldInfo.sszInfo, fieldVal, fieldGindex)
 		if err != nil {
@@ -199,15 +276,25 @@ func (pc *ProofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 	return root, nil
 }
 
-// merkleizeVectorBody merkleizes the "data" part of a vector-like structure.
-// - `length` is the number of actual elements present.
-// - `virtualLeaves` defines the virtual leaf capacity (used for padding/Depth):
-//   - vectors: virtualLeaves == fixed element count (or fixed chunk count for packed basic)
-//   - lists:   virtualLeaves == limit element count (or limit chunk count for packed basic)
+// merkleizeVectorBody computes the Merkle root of the "data" subtree for vector-like SSZ types
+// (vectors and the data-part of lists/bitlists).
 //
-// - `subtreeRootGindex` is the gindex of the data subtree root.
-func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value, length int, virtualLeaves uint64, subtreeRootGindex uint64) ([32]byte, error) {
-	depth := int(ssz.Depth(virtualLeaves))
+// Generalized indices (gindices): depth = ssz.Depth(limit); leafBase = subtreeRootGindex << depth; element/chunk i gindex = leafBase + uint64(i).
+// Proof collection: merkleize() is called for composite elements; MerkleizeVectorAndCollect collects required siblings at this layer.
+// Padding: MerkleizeVectorAndCollect uses trie.ZeroHashes as needed.
+//
+// Parameters:
+// - elemInfo: SSZ type metadata for the element.
+// - v: reflect.Value of the vector/list data.
+// - length: number of actual elements present.
+// - limit: virtual leaf capacity used for padding/Depth (fixed length for vectors, limit for lists).
+// - subtreeRootGindex: gindex of the data subtree root.
+//
+// Returns:
+// - [32]byte: Merkle root of the data subtree.
+// - error: any error encountered while merkleizing composite elements.
+func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value, length int, limit uint64, subtreeRootGindex uint64) ([32]byte, error) {
+	depth := int(ssz.Depth(limit))
 
 	var chunks [][32]byte
 	if elemInfo.sszType.isBasic() {
@@ -217,11 +304,8 @@ func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		// Composite elements: compute each element root (no padding here; MerkleizeVectorAndCollect pads).
 		chunks = make([][32]byte, length)
 
-		// Parallel execution for large collections (bounded worker pool)
+		// Parallel execution
 		workerCount := runtime.GOMAXPROCS(0) * 2
-		if workerCount < 1 {
-			workerCount = 1
-		}
 		if workerCount > length {
 			workerCount = length
 		}
@@ -241,7 +325,7 @@ func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 				default:
 				}
 
-				elemGindex := subtreeRootGindex*(1<<depth) + uint64(idx)
+				elemGindex := subtreeRootGindex<<depth + uint64(idx)
 				htr, err := pc.merkleize(elemInfo, v.Index(idx), elemGindex)
 				if err != nil {
 					stopOnce.Do(func() { close(stopCh) })
@@ -278,14 +362,28 @@ func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 			return [32]byte{}, err
 		default:
 		}
-
 	}
 
 	root := pc.MerkleizeVectorAndCollect(chunks, subtreeRootGindex, uint64(depth))
 	return root, nil
 }
 
-// merkleizeVector handles SSZ vectors (fixed-length).
+// merkleizeVector computes the Merkle root of an SSZ vector (fixed-length).
+//
+// Generalized indices (gindices): currentGindex is the gindex of the vector root; element/chunk gindices are derived
+// inside merkleizeVectorBody using leafBase = currentGindex << ssz.Depth(leaves).
+//
+// Proof collection: merkleizeVectorBody performs element/chunk merkleization and collects required siblings at the
+// vector layer; collectLeaf stores the vector root if currentGindex was registered via AddTarget.
+//
+// Parameters:
+// - info: SSZ type metadata for the vector.
+// - v: reflect.Value of the vector value.
+// - currentGindex: generalized index (gindex) of the vector root.
+//
+// Returns:
+// - [32]byte: Merkle root of the vector.
+// - error: any error encountered while merkleizing composite elements.
 func (pc *ProofCollector) merkleizeVector(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	vi, err := info.VectorInfo()
 	if err != nil {
@@ -317,7 +415,19 @@ func (pc *ProofCollector) merkleizeVector(info *SszInfo, v reflect.Value, curren
 	return root, nil
 }
 
-// merkleizeList handles SSZ lists (variable-length).
+// merkleizeList computes the Merkle root of an SSZ list by merkleizing its data subtree and mixing in the length.
+//
+// Generalized indices (gindices): dataRoot is the left child of the list root (dataRootGindex = currentGindex*2); the length mixin is the right child (currentGindex*2+1).
+// Proof collection: merkleizeVectorBody computes the data root (collecting required siblings in the data subtree), and mixinLengthAndCollect collects required siblings at the length-mixin level; collectLeaf stores the list root if registered.
+//
+// Parameters:
+// - info: SSZ type metadata for the list.
+// - v: reflect.Value of the list value.
+// - currentGindex: generalized index (gindex) of the list root.
+//
+// Returns:
+// - [32]byte: Merkle root of the list.
+// - error: any error encountered while merkleizing the data subtree.
 func (pc *ProofCollector) merkleizeList(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	li, err := info.ListInfo()
 	if err != nil {
@@ -361,11 +471,26 @@ func (pc *ProofCollector) merkleizeList(info *SszInfo, v reflect.Value, currentG
 	return root, nil
 }
 
-// merkleizeBitvectorBody merkleizes a chunked byte sequence as a bitvector-like structure.
-// `virtualChunks` is the fixed/limit chunk capacity used for padding/Depth.
-func (pc *ProofCollector) merkleizeBitvectorBody(data []byte, virtualChunks uint64, subtreeRootGindex uint64) ([32]byte, error) {
-	depth := ssz.Depth(virtualChunks)
-	chunks := chunkBytes(data)
+// merkleizeBitvectorBody computes the Merkle root of a bitvector-like byte sequence by packing it into 32-byte chunks
+// and merkleizing those chunks as a fixed-capacity vector (padding with trie.ZeroHashes as needed).
+//
+// Generalized indices (gindices): depth = ssz.Depth(chunkLimit); leafBase = subtreeRootGindex << depth; chunk i uses gindex = leafBase + uint64(i).
+// Proof collection: MerkleizeVectorAndCollect collects required sibling hashes at the chunk-merkleization layer.
+//
+// Parameters:
+// - data: raw byte sequence representing the bitvector payload.
+// - chunkLimit: fixed/limit number of 32-byte chunks (used for padding/Depth).
+// - subtreeRootGindex: gindex of the bitvector data subtree root.
+//
+// Returns:
+// - [32]byte: Merkle root of the bitvector data subtree.
+// - error: any error encountered while packing data into chunks.
+func (pc *ProofCollector) merkleizeBitvectorBody(data []byte, chunkLimit uint64, subtreeRootGindex uint64) ([32]byte, error) {
+	depth := ssz.Depth(chunkLimit)
+	chunks, err := ssz.PackByChunk([][]byte{data})
+	if err != nil {
+		return [32]byte{}, err
+	}
 	root := pc.MerkleizeVectorAndCollect(chunks, subtreeRootGindex, uint64(depth))
 	return root, nil
 }
@@ -395,6 +520,19 @@ func (pc *ProofCollector) merkleizeBitvector(info *SszInfo, v reflect.Value, cur
 	return root, nil
 }
 
+// merkleizeBitlist computes the Merkle root of an SSZ bitlist by merkleizing its data chunks and mixing in the bit length.
+//
+// Generalized indices (gindices): dataRoot is the left child (dataRootGindex = currentGindex*2) and the length mixin is the right child (currentGindex*2+1).
+// Proof collection: merkleizeBitvectorBody computes the data root (collecting required siblings under dataRootGindex), and mixinLengthAndCollect collects required siblings at the length-mixin level; collectLeaf stores the bitlist root if registered.
+//
+// Parameters:
+// - info: SSZ type metadata for the bitlist.
+// - v: reflect.Value of the bitlist value.
+// - currentGindex: generalized index (gindex) of the bitlist root.
+//
+// Returns:
+// - [32]byte: Merkle root of the bitlist.
+// - error: any error encountered while merkleizing the data subtree.
 func (pc *ProofCollector) merkleizeBitlist(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	bi, err := info.BitlistInfo()
 	if err != nil {
@@ -434,13 +572,18 @@ func (pc *ProofCollector) merkleizeBitlist(info *SszInfo, v reflect.Value, curre
 	return root, nil
 }
 
-// MerkleizeVectorAndCollect uses the optimized VectorizedSha256 routine to hash a list of 32-byte
-// elements while collecting sibling hashes for proof generation.
-// It is similar to MerkleizeVector but also updates the ProofCollector.
+// MerkleizeVectorAndCollect merkleizes a slice of 32-byte leaf nodes into a subtree root, padding to a virtual size of 2^depth.
+//
+// Generalized indices (gindices): at layer i (0-based), nodes have gindices levelBase = subtreeGeneralizedIndex << (depth-i) and node gindex = levelBase + idx.
+// Proof collection: for each layer it calls collectSibling(nodeGindex, nodeHash) and stores only those gindices registered via AddTarget.
+//
 // Parameters:
-// - elements: the leaf-level hashes
-// - subtreeGeneralizedIndex: the gindex of this subtree's root
-// - depth: the depth from subtree root to leaves (determines virtual tree size = 2^depth)
+// - elements: leaf-level hashes (may be shorter than 2^depth; padding is applied with trie.ZeroHashes).
+// - subtreeGeneralizedIndex: gindex of the subtree root.
+// - depth: number of merkleization layers from subtree root to leaves.
+//
+// Returns:
+// - [32]byte: Merkle root of the subtree.
 func (pc *ProofCollector) MerkleizeVectorAndCollect(elements [][32]byte, subtreeGeneralizedIndex uint64, depth uint64) [32]byte {
 	// Return zerohash at depth
 	if len(elements) == 0 {
@@ -454,13 +597,10 @@ func (pc *ProofCollector) MerkleizeVectorAndCollect(elements [][32]byte, subtree
 			elements = append(elements, zerohash)
 		}
 
-		// Debug: print generalized indices for the nodes at this layer.
-		// At loop iteration i, `elements` represents nodes at tree depth (depth - i),
-		// so the gindex base is 1<<(depth-i) and each node is base+idx.
-		for idx, element := range elements {
-			levelBaseGindex := subtreeGeneralizedIndex << (depth - i)
+		levelBaseGindex := subtreeGeneralizedIndex << (depth - i)
+		for idx := range elements {
 			gindex := levelBaseGindex + uint64(idx)
-			pc.collectSibling(gindex, element)
+			pc.collectSibling(gindex, elements[idx])
 		}
 
 		elements = htr.VectorizedSha256(elements)
@@ -468,9 +608,21 @@ func (pc *ProofCollector) MerkleizeVectorAndCollect(elements [][32]byte, subtree
 	return elements[0]
 }
 
-// mixinLengthAndCollect handles the final mix-in layer for list/bitlist:
-// root = sha256Two(dataRoot, lengthHash)
-// It also updates the collector for siblings/leaves at the length mixin level.
+// mixinLengthAndCollect computes the final mix-in root for list/bitlist values:
+//
+//	root = hash(dataRoot, lengthHash)
+//
+// where chunks[0] is dataRoot and chunks[1] is the 32-byte length hash.
+//
+// Generalized indices (gindices): dataRoot is the left child (dataRootGindex = currentGindex*2) and lengthHash is the right child (lengthHashGindex = currentGindex*2+1).
+// Proof collection: it calls collectSibling/collectLeaf for both child gindices; the collector stores them only if they were registered via AddTarget.
+//
+// Parameters:
+// - currentGindex: gindex of the parent node (list/bitlist root).
+// - chunks: two 32-byte nodes: [dataRoot, lengthHash].
+//
+// Returns:
+// - [32]byte: mixed-in Merkle root (or zero value on hashing error).
 func (pc *ProofCollector) mixinLengthAndCollect(currentGindex uint64, chunks [][32]byte) [32]byte {
 	dataRootGindex := currentGindex * 2
 	lengthHashGindex := currentGindex*2 + 1
@@ -493,10 +645,16 @@ func (pc *ProofCollector) mixinLengthAndCollect(currentGindex uint64, chunks [][
 	return chunks[0]
 }
 
+// collectSibling stores the hash for a sibling node identified by gindex.
+// It only stores the hash if gindex was pre-registered via AddTarget (present in requiredSiblings).
+// Writes to the collected siblings map are protected by the collector mutex.
 func (pc *ProofCollector) collectSibling(gindex uint64, hash [32]byte) {
-	if _, ok := pc.siblings[gindex]; ok {
-		pc.siblings[gindex] = hash
+	if _, ok := pc.requiredSiblings[gindex]; !ok {
+		return
 	}
+	pc.mu.Lock()
+	pc.siblings[gindex] = hash
+	pc.mu.Unlock()
 }
 
 // Utils
@@ -528,28 +686,6 @@ func packBasicElementsToChunks(elemInfo *SszInfo, v reflect.Value, length int) [
 				putLittleEndian(chunks[chunkIdx][offset:], v.Index(elemIdx).Uint(), elemSize)
 			}
 		}
-	}
-
-	return chunks
-}
-
-// chunkBytes splits a byte slice into 32-byte chunks.
-// The last chunk is zero-padded if necessary.
-func chunkBytes(data []byte) [][32]byte {
-	if len(data) == 0 {
-		return [][32]byte{{}}
-	}
-
-	numChunks := (len(data) + 31) / 32
-	chunks := make([][32]byte, numChunks)
-
-	for i := 0; i < numChunks; i++ {
-		start := i * 32
-		end := start + 32
-		if end > len(data) {
-			end = len(data)
-		}
-		copy(chunks[i][:], data[start:end])
 	}
 
 	return chunks
