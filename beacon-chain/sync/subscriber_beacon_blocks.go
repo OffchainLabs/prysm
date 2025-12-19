@@ -80,7 +80,11 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
-			log.WithError(err).Error("Failed to process data column sidecars from execution")
+			log.WithError(err).WithFields(logrus.Fields{
+				"slot": roBlock.Block().Slot(),
+				"root": fmt.Sprintf("%#x", roBlock.Root()),
+			}).Error("Failed to process data column sidecars from execution")
+
 			return
 		}
 
