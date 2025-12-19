@@ -48,7 +48,15 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"root": fmt.Sprintf("%#x", root),
+				"slot": block.Slot(),
+			}).Error("Failed to process sidecars from execution from block")
+		}
+	})
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -69,32 +77,33 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
+
 	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
 		return errors.Wrap(err, "process pending atts for block")
 	}
+
+	wg.Wait()
+
 	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
-			log.WithError(err).WithFields(logrus.Fields{
-				"slot": roBlock.Block().Slot(),
-				"root": fmt.Sprintf("%#x", roBlock.Root()),
-			}).Error("Failed to process data column sidecars from execution")
-
-			return
+			return errors.Wrap(err, "process data column sidecars from execution")
 		}
 
-		return
+		return nil
 	}
 
 	if roBlock.Version() >= version.Deneb {
 		s.processBlobSidecarsFromExecution(ctx, roBlock)
-		return
+		return nil
 	}
+
+	return nil
 }
 
 // processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
