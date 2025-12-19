@@ -9,8 +9,9 @@ go_library(
         "container.go",
         "generalized_index.go",
         "list.go",
-        "merkle_tree.go",
+        "merkle_proof.go",
         "path.go",
+        "proof_collector.go",
         "query.go",
         "ssz_info.go",
         "ssz_object.go",
@@ -22,9 +23,11 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//container/trie:go_default_library",
+        "//crypto/hash/htr:go_default_library",
         "//encoding/ssz:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_prysmaticlabs_gohashtree//:go_default_library",
     ],
 )
 
