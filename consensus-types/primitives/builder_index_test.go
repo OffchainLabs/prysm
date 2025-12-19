@@ -10,8 +10,6 @@ import (
 )
 
 func TestBuilderIndex_SSZRoundTripAndHashRoot(t *testing.T) {
-	t.Parallel()
-
 	cases := []uint64{
 		0,
 		1,
@@ -59,8 +57,6 @@ func TestBuilderIndex_SSZRoundTripAndHashRoot(t *testing.T) {
 }
 
 func TestBuilderIndex_UnmarshalSSZRejectsWrongSize(t *testing.T) {
-	t.Parallel()
-
 	for _, size := range []int{7, 9} {
 		size := size
 		t.Run("size="+strconv.Itoa(size), func(t *testing.T) {
