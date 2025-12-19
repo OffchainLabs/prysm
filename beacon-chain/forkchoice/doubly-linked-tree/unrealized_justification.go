@@ -88,9 +88,6 @@ func (s *Store) pullTips(state state.BeaconState, node *Node, jc, fc *ethpb.Chec
 		}
 	}
 	if uf.Epoch > s.unrealizedFinalizedCheckpoint.Epoch {
-		s.unrealizedJustifiedCheckpoint = &forkchoicetypes.Checkpoint{
-			Epoch: uj.Epoch, Root: bytesutil.ToBytes32(uj.Root),
-		}
 		s.unrealizedFinalizedCheckpoint = &forkchoicetypes.Checkpoint{
 			Epoch: uf.Epoch, Root: bytesutil.ToBytes32(uf.Root),
 		}
