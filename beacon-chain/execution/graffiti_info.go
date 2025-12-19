@@ -34,14 +34,14 @@ func (g *GraffitiInfo) UpdateFromEngine(code, commit string) {
 
 // GenerateGraffiti generates graffiti using the flexible standard
 // with the provided user graffiti from the validator client request.
-// It packs as much client info as space allows after user graffiti.
+// It packs as much client info as space allows, followed by a space and user graffiti.
 //
-// Available Space | Format
-// ≥12 bytes       | EL(2)+commit(4)+CL(2)+commit(4)+user
-// 8-11 bytes      | EL(2)+commit(2)+CL(2)+commit(2)+user
-// 4-7 bytes       | EL(2)+CL(2)+user
-// 2-3 bytes       | EL(2)+user
-// <2 bytes        | user only
+// Available Space | Format (space added before user graffiti if present)
+// ≥13 bytes       | EL(2)+commit(4)+CL(2)+commit(4)+space+user  e.g. "GEabcdPRxxxx Sushi"
+// 9-12 bytes      | EL(2)+commit(2)+CL(2)+commit(2)+space+user  e.g. "GEabPRxx Sushi"
+// 5-8 bytes       | EL(2)+CL(2)+space+user                      e.g. "GEPR Sushi"
+// 3-4 bytes       | code(2)+space+user                          e.g. "GE Sushi" or "PR Sushi"
+// <3 bytes        | user only                                   e.g. "Sushi"
 func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -53,8 +53,11 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 		userStr = userStr[:len(userStr)-1]
 	}
 
-	userLen := len(userStr)
-	available := 32 - userLen
+	// Prepend space to user graffiti for readability
+	if len(userStr) > 0 {
+		userStr = " " + userStr
+	}
+	available := 32 - len(userStr)
 
 	clCommit := version.GetCommitPrefix()
 	clCommit4 := truncateCommit(clCommit, 4)
@@ -70,24 +73,25 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	var graffiti string
 	switch {
 	case available >= 12:
-		// Full: EL(2)+commit(4)+CL(2)+commit(4)+user
+		// Full: EL(2)+commit(4)+CL(2)+commit(4)+space+user
 		graffiti = g.elCode + elCommit4 + CLCode + clCommit4 + userStr
 	case available >= 8:
-		// Reduced commits: EL(2)+commit(2)+CL(2)+commit(2)+user
+		// Reduced commits: EL(2)+commit(2)+CL(2)+commit(2)+space+user
 		graffiti = g.elCode + elCommit2 + CLCode + clCommit2 + userStr
 	case available >= 4:
-		// Codes only: EL(2)+CL(2)+user
+		// Codes only: EL(2)+CL(2)+space+user
 		graffiti = g.elCode + CLCode + userStr
 	case available >= 2:
-		// EL code only (or CL code if no EL): code(2)+user
+		// EL code only (or CL code if no EL): code(2)+space+user
 		if g.elCode != "" {
 			graffiti = g.elCode + userStr
 		} else {
 			graffiti = CLCode + userStr
 		}
 	default:
-		// User graffiti only
-		graffiti = userStr
+		// User graffiti only (no space needed since no version prefix)
+		// Remove the prepended space since we can't fit any version info
+		graffiti = userStr[1:]
 	}
 
 	copy(result[:], graffiti)
