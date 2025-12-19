@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -218,6 +219,11 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, nil
 			}
 
+			// Return if the context is done.
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
 			if iteration == 0 {
 				dataColumnsRecoveredFromELAttempts.Inc()
 			}
@@ -229,20 +235,10 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// No sidecars are retrieved from the EL, retry later
-			constructedSidecarCount = uint64(len(constructedSidecars))
-			if constructedSidecarCount == 0 {
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
-
-				time.Sleep(delay)
-				continue
-			}
-
-			dataColumnsRecoveredFromELTotal.Inc()
+			constructedCount := uint64(len(constructedSidecars))
 
 			// Boundary check.
-			if constructedSidecarCount != fieldparams.NumberOfColumns {
+			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
@@ -251,14 +247,24 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
 
-			log.WithFields(logrus.Fields{
-				"count":   len(unseenIndices),
-				"indices": helpers.SortedPrettySliceFromMap(unseenIndices),
-			}).Debug("Constructed data column sidecars from the execution client")
+			if constructedCount > 0 {
+				dataColumnsRecoveredFromELTotal.Inc()
 
-			dataColumnSidecarsObtainedViaELCount.Observe(float64(len(unseenIndices)))
+				log.WithFields(logrus.Fields{
+					"root":          fmt.Sprintf("%#x", source.Root()),
+					"slot":          source.Slot(),
+					"proposerIndex": source.ProposerIndex(),
+					"iteration":     iteration,
+					"type":          source.Type(),
+					"count":         len(unseenIndices),
+					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
+				}).Debug("Constructed data column sidecars from the execution client")
 
-			return nil, nil
+				return nil, nil
+			}
+
+			// Wait before retrying.
+			time.Sleep(delay)
 		}
 	}); err != nil {
 		return err
@@ -291,6 +297,11 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 
 		unseenSidecars = append(unseenSidecars, sidecar)
 		unseenIndices[sidecar.Index] = true
+	}
+
+	// Exit early if there are no nothing to broadcast or receive.
+	if len(unseenSidecars) == 0 {
+		return nil, nil
 	}
 
 	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).
