@@ -19,4 +19,6 @@ func testFieldParametersMatchConfig(t *testing.T) {
 	require.Equal(t, uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().MaxAttestations)), uint64(fieldparams.CurrentEpochAttestationsLength))
 	require.Equal(t, uint64(params.BeaconConfig().EpochsPerSlashingsVector), uint64(fieldparams.SlashingsLength))
 	require.Equal(t, params.BeaconConfig().SyncCommitteeSize, uint64(fieldparams.SyncCommitteeLength))
+	require.Equal(t, params.BeaconConfig().NumberOfColumns, uint64(fieldparams.NumberOfColumns))
+	require.Equal(t, params.BeaconConfig().FieldElementsPerCell, uint64(fieldparams.CellsPerBlob))
 }

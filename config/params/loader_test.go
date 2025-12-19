@@ -29,7 +29,6 @@ var placeholderFields = []string{
 	"ATTESTATION_DEADLINE",
 	"ATTESTATION_DUE_BPS_GLOAS",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
-	"CELLS_PER_EXT_BLOB",
 	"CONTRIBUTION_DUE_BPS_GLOAS",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
@@ -44,18 +43,14 @@ var placeholderFields = []string{
 	"EIP7928_FORK_EPOCH",
 	"EIP7928_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
-	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
-	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
 	"GLOAS_FORK_EPOCH",
 	"GLOAS_FORK_VERSION",
 	"INCLUSION_LIST_SUBMISSION_DEADLINE",
 	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
-	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
-	"NUMBER_OF_COLUMNS",    // Configured as a constant in config/fieldparams/mainnet.go
 	"PAYLOAD_ATTESTATION_DUE_BPS",
 	"PROPOSER_INCLUSION_LIST_CUTOFF",
 	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",

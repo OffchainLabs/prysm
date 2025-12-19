@@ -328,6 +328,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
+	FieldElementsPerCell:                  64,
+	FieldElementsPerExtBlob:               8192,
+	KzgCommitmentsInclusionProofDepth:     4,
+	CellsPerExtBlob:                       128,
+	NumberOfColumns:                       128,
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

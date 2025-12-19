@@ -168,6 +168,11 @@ func TestGetSpec(t *testing.T) {
 	config.BlobsidecarSubnetCount = 101
 	config.BlobsidecarSubnetCountElectra = 102
 	config.SyncMessageDueBPS = 103
+	config.FieldElementsPerCell = 104
+	config.FieldElementsPerExtBlob = 105
+	config.KzgCommitmentsInclusionProofDepth = 106
+	config.CellsPerExtBlob = 107
+	config.NumberOfColumns = 108
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -205,7 +210,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 175, len(data))
+	assert.Equal(t, 180, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -581,6 +586,16 @@ func TestGetSpec(t *testing.T) {
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
+			case "FIELD_ELEMENTS_PER_CELL":
+				assert.Equal(t, "104", v)
+			case "FIELD_ELEMENTS_PER_EXT_BLOB":
+				assert.Equal(t, "105", v)
+			case "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH":
+				assert.Equal(t, "106", v)
+			case "CELLS_PER_EXT_BLOB":
+				assert.Equal(t, "107", v)
+			case "NUMBER_OF_COLUMNS":
+				assert.Equal(t, "108", v)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

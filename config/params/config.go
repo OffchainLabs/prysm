@@ -289,6 +289,11 @@ type BeaconChainConfig struct {
 	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
 	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
 	BalancePerAdditionalCustodyGroup      uint64           `yaml:"BALANCE_PER_ADDITIONAL_CUSTODY_GROUP" spec:"true"`         // BalancePerAdditionalCustodyGroup is the balance increment corresponding to one additional group to custody.
+	FieldElementsPerCell                  uint64           `yaml:"FIELD_ELEMENTS_PER_CELL" spec:"true"`                      // FieldElementsPerCell is the number of field elements in a cell.
+	FieldElementsPerExtBlob               uint64           `yaml:"FIELD_ELEMENTS_PER_EXT_BLOB" spec:"true"`                  // FieldElementsPerExtBlob is the number of field elements in an extended blob.
+	KzgCommitmentsInclusionProofDepth     uint64           `yaml:"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH" spec:"true"`        // KzgCommitmentsInclusionProofDepth is the depth of the KZG commitments inclusion proof.
+	CellsPerExtBlob                       uint64           `yaml:"CELLS_PER_EXT_BLOB" spec:"true"`                           // CellsPerExtBlob is the number of cells in an extended blob.
+	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                            // NumberOfColumns is the number of data columns in the network.
 
 	// Networking Specific Parameters
 	MaxPayloadSize                  uint64          `yaml:"MAX_PAYLOAD_SIZE" spec:"true"`                   // MAX_PAYLOAD_SIZE is the maximum allowed size of uncompressed payload in gossip messages and rpc chunks.
