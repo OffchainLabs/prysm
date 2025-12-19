@@ -60,7 +60,7 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	attestations := s.blkRootToPendingAtts[bRoot]
 	s.pendingAttsLock.RUnlock()
 
-	s.processAttestations(ctx, attestations, bRoot)
+	s.processAttestations(ctx, attestations)
 
 	randGen := rand.NewGenerator()
 	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
@@ -80,8 +80,22 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	return s.sendBatchRootRequest(ctx, pendingRoots, randGen)
 }
 
-func (s *Service) processAttestations(ctx context.Context, attestations []any, blockRoot [32]byte) {
+// processAttestations processes a list of attestations.
+// It assumes (for logging purposes only) that all attestations pertain to the same block.
+func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 	if len(attestations) == 0 {
+		return
+	}
+
+	firstAttestation := attestations[0]
+	var blockRoot []byte
+	switch v := firstAttestation.(type) {
+	case ethpb.Att:
+		blockRoot = v.GetData().BeaconBlockRoot
+	case ethpb.SignedAggregateAttAndProof:
+		blockRoot = v.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot
+	default:
+		log.Warnf("Unexpected attestation type %T, skipping processing", v)
 		return
 	}
 
