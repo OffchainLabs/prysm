@@ -76,13 +76,22 @@ func (c *AttestationCache) Add(att ethpb.Att) error {
 	if group == nil {
 		group = &attGroup{
 			slot: att.GetData().Slot,
-			atts: []ethpb.Att{att},
+			atts: []ethpb.Att{att.Clone()},
 		}
 		c.atts[id] = group
 		return nil
 	}
 
 	if att.IsAggregated() {
+		// Ensure that this attestation is not already fully contained in an existing attestation.
+		for _, a := range group.atts {
+			if c, err := a.GetAggregationBits().Contains(att.GetAggregationBits()); err != nil {
+				return err
+			} else if c {
+				return nil
+			}
+		}
+
 		group.atts = append(group.atts, att.Clone())
 		return nil
 	}

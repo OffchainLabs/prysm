@@ -460,6 +460,9 @@ func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconS
 func (s *Service) pruneCoveredAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
 	switch {
 	case !att.IsAggregated():
+		if features.Get().EnableExperimentalAttestationPool {
+			return errors.Wrap(s.cfg.AttestationCache.DeleteCovered(att), "could not delete covered attestation")
+		}
 		return s.cfg.AttPool.DeleteUnaggregatedAttestation(att)
 	case att.Version() == version.Phase0:
 		if features.Get().EnableExperimentalAttestationPool {
@@ -528,12 +531,12 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 			if err = s.cfg.AttestationCache.DeleteCovered(a); err != nil {
 				return errors.Wrap(err, "could not delete covered attestation")
 			}
-		} else if !a.IsAggregated() {
-			if err = s.cfg.AttPool.DeleteUnaggregatedAttestation(a); err != nil {
-				return errors.Wrap(err, "could not delete unaggregated attestation")
+		} else if a.IsAggregated() {
+			if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
+				return errors.Wrap(err, "could not delete aggregated attestation")
 			}
-		} else if err = s.cfg.AttPool.DeleteAggregatedAttestation(a); err != nil {
-			return errors.Wrap(err, "could not delete aggregated attestation")
+		} else if err = s.cfg.AttPool.DeleteUnaggregatedAttestation(a); err != nil {
+			return errors.Wrap(err, "could not delete unaggregated attestation")
 		}
 
 		offset += uint64(len(c))

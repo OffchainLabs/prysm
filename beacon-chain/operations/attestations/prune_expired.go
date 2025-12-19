@@ -20,7 +20,7 @@ func (s *Service) pruneExpired() {
 			s.pruneExpiredAtts()
 			s.updateMetrics()
 		case <-s.ctx.Done():
-			log.Debug("Context closed, exiting routine")
+			log.Debug("Context closed, exiting att pruning routine")
 			return
 		}
 	}
@@ -28,11 +28,13 @@ func (s *Service) pruneExpired() {
 
 // pruneExpiredExperimental prunes attestations on every prune interval.
 func (s *Service) pruneExpiredExperimental() {
-	ticker := time.NewTicker(s.cfg.pruneInterval)
-	defer ticker.Stop()
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	offset := time.Duration(secondsPerSlot-1) * time.Second
+	slotTicker := slots.NewSlotTickerWithOffset(s.genesisTime, offset, secondsPerSlot)
+	defer slotTicker.Done()
 	for {
 		select {
-		case <-ticker.C:
+		case <-slotTicker.C():
 			expirySlot, err := s.expirySlot()
 			if err != nil {
 				log.WithError(err).Error("Could not get expiry slot")
@@ -41,7 +43,7 @@ func (s *Service) pruneExpiredExperimental() {
 			numExpired := s.cfg.Cache.PruneBefore(expirySlot)
 			s.updateMetricsExperimental(numExpired)
 		case <-s.ctx.Done():
-			log.Debug("Context closed, exiting routine")
+			log.Debug("Context closed, exiting att pruning routine")
 			return
 		}
 	}

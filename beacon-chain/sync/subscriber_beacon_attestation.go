@@ -23,16 +23,16 @@ func (s *Service) committeeIndexBeaconAttestationSubscriber(_ context.Context, m
 
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(a)
-	} else {
-		exists, err := s.cfg.attPool.HasAggregatedAttestation(a)
-		if err != nil {
-			return errors.Wrap(err, "could not determine if attestation pool has this attestation")
-		}
-		if exists {
-			return nil
-		}
-		return s.cfg.attPool.SaveUnaggregatedAttestation(a)
 	}
+	exists, err := s.cfg.attPool.HasAggregatedAttestation(a)
+	if err != nil {
+		return errors.Wrap(err, "could not determine if attestation pool has this attestation")
+	}
+	if exists {
+		return nil
+	}
+	return s.cfg.attPool.SaveUnaggregatedAttestation(a)
+
 }
 
 func persistentSubnetIndices() []uint64 {

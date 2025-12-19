@@ -120,6 +120,9 @@ func (s *Service) aggregateAndSaveForkChoiceAtts(atts []ethpb.Att) error {
 		return err
 	}
 
+	if features.Get().EnableExperimentalAttestationPool {
+		return s.cfg.Cache.SaveForkchoiceAttestations(aggregatedAtts)
+	}
 	return s.cfg.Pool.SaveForkchoiceAttestations(aggregatedAtts)
 }
 

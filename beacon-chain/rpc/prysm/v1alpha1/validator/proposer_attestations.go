@@ -439,16 +439,12 @@ func (vs *Server) deleteAttsInPool(ctx context.Context, atts []ethpb.Att) error 
 			if err := vs.AttestationCache.DeleteCovered(att); err != nil {
 				return errors.Wrap(err, "could not delete attestation")
 			}
-		} else {
-			if att.IsAggregated() {
-				if err := vs.AttPool.DeleteAggregatedAttestation(att); err != nil {
-					return err
-				}
-			} else {
-				if err := vs.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
-					return err
-				}
+		} else if att.IsAggregated() {
+			if err := vs.AttPool.DeleteAggregatedAttestation(att); err != nil {
+				return err
 			}
+		} else if err := vs.AttPool.DeleteUnaggregatedAttestation(att); err != nil {
+			return err
 		}
 	}
 	return nil
