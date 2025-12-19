@@ -2,6 +2,7 @@ package primitives_test
 
 import (
 	"encoding/binary"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -20,8 +21,6 @@ func TestBuilderIndex_SSZRoundTripAndHashRoot(t *testing.T) {
 	}
 
 	for _, v := range cases {
-		v := v
-
 		t.Run("v="+u64name(v), func(t *testing.T) {
 			t.Parallel()
 
@@ -37,7 +36,7 @@ func TestBuilderIndex_SSZRoundTripAndHashRoot(t *testing.T) {
 			require.DeepEqual(t, wantEnc, enc)
 
 			dstPrefix := []byte("prefix:")
-			dst, err := (&val).MarshalSSZTo(append([]byte{}, dstPrefix...))
+			dst, err := (&val).MarshalSSZTo(slices.Clone(dstPrefix))
 			require.NoError(t, err)
 			wantDst := append(dstPrefix, wantEnc...)
 			require.DeepEqual(t, wantDst, dst)
@@ -58,7 +57,6 @@ func TestBuilderIndex_SSZRoundTripAndHashRoot(t *testing.T) {
 
 func TestBuilderIndex_UnmarshalSSZRejectsWrongSize(t *testing.T) {
 	for _, size := range []int{7, 9} {
-		size := size
 		t.Run("size="+strconv.Itoa(size), func(t *testing.T) {
 			t.Parallel()
 			var v primitives.BuilderIndex
