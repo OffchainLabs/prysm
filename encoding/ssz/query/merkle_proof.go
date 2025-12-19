@@ -20,7 +20,7 @@ func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 	}
 
 	collector := NewProofCollector()
-	collector.siblingsGindex(gindex)
+	collector.RegisterRequiredSiblings(gindex)
 
 	// info.source is guaranteed to be valid and dereferenced by AnalyzeObject
 	v := reflect.ValueOf(info.source).Elem()

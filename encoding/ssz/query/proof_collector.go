@@ -29,6 +29,19 @@ func NewProofCollector() *ProofCollector {
 	}
 }
 
+func (pc *ProofCollector) Reset() {
+	pc.siblings = make(map[uint64][32]byte)
+	pc.leaves = make(map[uint64][32]byte)
+}
+
+func (pc *ProofCollector) AddTarget(gindex uint64) {
+	pc.leaves[gindex] = [32]byte{} // marker
+
+	for g := gindex; g > 1; g /= 2 {
+		pc.siblings[g^1] = [32]byte{} // marker
+	}
+}
+
 // toProof converts the collected siblings and leaves into a fastssz.Proof structure.
 // It assumes there is only one leaf in the leaves map (the target of the proof).
 func (pc *ProofCollector) toProof() *fastssz.Proof {
@@ -56,20 +69,12 @@ func (pc *ProofCollector) toProof() *fastssz.Proof {
 	return proof
 }
 
-// siblingsGindex computes all sibling generalized indices along the path
+// RegisterRequiredSiblings computes all sibling generalized indices along the path
 // from the given gindex up to the root. These are the nodes whose hashes
 // are needed to construct a merkle proof.
-func (pc *ProofCollector) siblingsGindex(gindex uint64) {
-	// Store the target gindex in leaves map
-	pc.leaves[gindex] = [32]byte{}
-
-	// Walk from gindex up to root (gindex 1)
-	// At each level, the sibling is gindex XOR 1
-	for gindex > 1 {
-		siblingGindex := gindex ^ 1
-		pc.siblings[siblingGindex] = [32]byte{}
-		gindex = gindex / 2 // Move to parent
-	}
+func (pc *ProofCollector) RegisterRequiredSiblings(gindex uint64) {
+	pc.Reset()
+	pc.AddTarget(gindex)
 }
 
 func (pc *ProofCollector) collectLeaf(gindex uint64, leaf [32]byte) {
@@ -323,9 +328,9 @@ func (pc *ProofCollector) merkleizeList(info *SszInfo, v reflect.Value, currentG
 	limit := li.Limit()
 	elemInfo := li.element
 
+	chunks := make([][32]byte, 2)
 	// Compute the length hash (little-endian uint256)
-	var lengthHash [32]byte
-	binary.LittleEndian.PutUint64(lengthHash[:8], uint64(length))
+	binary.LittleEndian.PutUint64(chunks[1][:8], uint64(length))
 
 	// Data subtree root is the left child of the list root.
 	dataRootGindex := currentGindex * 2
@@ -341,14 +346,14 @@ func (pc *ProofCollector) merkleizeList(info *SszInfo, v reflect.Value, currentG
 		leaves = uint64(limit)
 	}
 
-	dataRoot, err := pc.merkleizeVectorBody(elemInfo, v, length, leaves, dataRootGindex)
+	chunks[0], err = pc.merkleizeVectorBody(elemInfo, v, length, leaves, dataRootGindex)
 	if err != nil {
 		return [32]byte{}, err
 	}
 
 	// Handle the length mixin level (and proof bookkeeping at this level).
 	// Compute the final list root: hash(dataRoot || lengthHash)
-	root := pc.mixinLengthAndCollect(currentGindex, dataRoot, lengthHash)
+	root := pc.mixinLengthAndCollect(currentGindex, chunks)
 
 	// If the list root itself is the target
 	pc.collectLeaf(currentGindex, root)
@@ -411,18 +416,18 @@ func (pc *ProofCollector) merkleizeBitlist(info *SszInfo, v reflect.Value, curre
 	// Note: Bitlist[0] is illegal per SSZ spec, so limit >= 1 is guaranteed.
 	limitChunks := (bi.limit + 255) / 256
 
+	chunks := make([][32]byte, 2)
 	// Compute the length hash (little-endian uint256)
-	var lengthHash [32]byte
-	binary.LittleEndian.PutUint64(lengthHash[:8], uint64(bitLength))
+	binary.LittleEndian.PutUint64(chunks[1][:8], uint64(bitLength))
 
 	dataRootGindex := currentGindex * 2
-	dataRoot, err := pc.merkleizeBitvectorBody(data, limitChunks, dataRootGindex)
+	chunks[0], err = pc.merkleizeBitvectorBody(data, limitChunks, dataRootGindex)
 	if err != nil {
 		return [32]byte{}, err
 	}
 
 	// Handle the length mixin level (and proof bookkeeping at this level).
-	root := pc.mixinLengthAndCollect(currentGindex, dataRoot, lengthHash)
+	root := pc.mixinLengthAndCollect(currentGindex, chunks)
 
 	pc.collectLeaf(currentGindex, root)
 
@@ -431,6 +436,7 @@ func (pc *ProofCollector) merkleizeBitlist(info *SszInfo, v reflect.Value, curre
 
 // MerkleizeVectorAndCollect uses the optimized VectorizedSha256 routine to hash a list of 32-byte
 // elements while collecting sibling hashes for proof generation.
+// It is similar to MerkleizeVector but also updates the ProofCollector.
 // Parameters:
 // - elements: the leaf-level hashes
 // - subtreeGeneralizedIndex: the gindex of this subtree's root
@@ -465,23 +471,26 @@ func (pc *ProofCollector) MerkleizeVectorAndCollect(elements [][32]byte, subtree
 // mixinLengthAndCollect handles the final mix-in layer for list/bitlist:
 // root = sha256Two(dataRoot, lengthHash)
 // It also updates the collector for siblings/leaves at the length mixin level.
-func (pc *ProofCollector) mixinLengthAndCollect(currentGindex uint64, dataRoot [32]byte, lengthHash [32]byte) [32]byte {
+func (pc *ProofCollector) mixinLengthAndCollect(currentGindex uint64, chunks [][32]byte) [32]byte {
 	dataRootGindex := currentGindex * 2
 	lengthHashGindex := currentGindex*2 + 1
 
 	// Check if dataRoot is a sibling we need to collect
-	pc.collectSibling(dataRootGindex, dataRoot)
+	pc.collectSibling(dataRootGindex, chunks[0])
 
 	// Check if lengthHash is a sibling we need to collect
-	pc.collectSibling(lengthHashGindex, lengthHash)
+	pc.collectSibling(lengthHashGindex, chunks[1])
 
 	// Check if dataRoot is a leaf we need to collect
-	pc.collectLeaf(dataRootGindex, dataRoot)
+	pc.collectLeaf(dataRootGindex, chunks[0])
 
 	// Check if lengthHash is a leaf we need to collect
-	pc.collectLeaf(lengthHashGindex, lengthHash)
+	pc.collectLeaf(lengthHashGindex, chunks[1])
 
-	return sha256Two(dataRoot, lengthHash)
+	if err := gohashtree.Hash(chunks, chunks); err != nil {
+		return [32]byte{}
+	}
+	return chunks[0]
 }
 
 func (pc *ProofCollector) collectSibling(gindex uint64, hash [32]byte) {
@@ -544,19 +553,6 @@ func chunkBytes(data []byte) [][32]byte {
 	}
 
 	return chunks
-}
-
-// sha256Two hashes two 32-byte chunks together.
-// avoiding allocating a new hasher per call: hash a fixed 64-byte buffer.
-func sha256Two(left, right [32]byte) [32]byte {
-	chunks := make([][32]byte, 2)
-	chunks[0] = left
-	chunks[1] = right
-
-	if err := gohashtree.Hash(chunks, chunks); err != nil {
-		return [32]byte{}
-	}
-	return chunks[0]
 }
 
 // putLittleEndian writes an unsigned integer value in little-endian format.
