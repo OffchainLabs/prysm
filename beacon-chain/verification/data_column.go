@@ -361,7 +361,7 @@ func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.
 		}
 
 		if !dv.fc.HasNode(parentRoot) {
-			return columnErrBuilder(errSidecarParentNotSeen)
+			return columnErrBuilder(errors.Wrapf(errSidecarParentNotSeen, "parent root: %#x", parentRoot))
 		}
 	}
 
