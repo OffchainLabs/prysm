@@ -168,7 +168,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	key := fmt.Sprintf("%#x", source.Root())
 	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
-		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
 
 		commitments, err := source.Commitments()
 		if err != nil {
@@ -185,9 +184,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		if err != nil {
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
-
-		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
-		defer cancel()
 
 		log := log.WithFields(logrus.Fields{
 			"root":          fmt.Sprintf("%#x", source.Root()),
