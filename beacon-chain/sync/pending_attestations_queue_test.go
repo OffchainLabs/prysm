@@ -986,6 +986,29 @@ func Test_pendingAggregatesAreEqual(t *testing.T) {
 				}}}
 		assert.Equal(t, false, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
 	})
+	t.Run("different aggregator index should be equal while ignoring aggregator index", func(t *testing.T) {
+		a := &ethpb.SignedAggregateAttestationAndProof{
+			Message: &ethpb.AggregateAttestationAndProof{
+				AggregatorIndex: 1,
+				Aggregate: &ethpb.Attestation{
+					Data: &ethpb.AttestationData{
+						Slot:           1,
+						CommitteeIndex: 1,
+					},
+					AggregationBits: bitfield.Bitlist{0b1111},
+				}}}
+		b := &ethpb.SignedAggregateAttestationAndProof{
+			Message: &ethpb.AggregateAttestationAndProof{
+				AggregatorIndex: 2,
+				Aggregate: &ethpb.Attestation{
+					Data: &ethpb.AttestationData{
+						Slot:           1,
+						CommitteeIndex: 1,
+					},
+					AggregationBits: bitfield.Bitlist{0b1111},
+				}}}
+		assert.Equal(t, true, pendingAggregatesAreEqual(a, b, ignoreAggregatorIndex))
+	})
 }
 
 func Test_pendingAttsAreEqual(t *testing.T) {
