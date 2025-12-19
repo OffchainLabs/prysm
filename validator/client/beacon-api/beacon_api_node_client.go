@@ -3,6 +3,7 @@ package beacon_api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -105,8 +106,12 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 // IsReady returns true only if the node is fully synced (200 OK).
 // A 206 Partial Content response indicates the node is syncing and not ready.
 func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
-	url := c.jsonRestHandler.Host() + "/eth/v1/node/health"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	endpoint, err := url.JoinPath(c.jsonRestHandler.Host(), "/eth/v1/node/health")
+	if err != nil {
+		log.WithError(err).Error("failed to construct health URL")
+		return false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		log.WithError(err).Error("failed to create health request")
 		return false
