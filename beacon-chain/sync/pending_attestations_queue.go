@@ -29,6 +29,16 @@ import (
 
 const pendingAttsLimit = 32768
 
+// aggregatorIndexFilter defines how aggregator index should be handled in equality checks.
+type aggregatorIndexFilter int
+
+const (
+	// ignoreAggregatorIndex means aggregates differing only by aggregator index are considered equal.
+	ignoreAggregatorIndex aggregatorIndexFilter = iota
+	// includeAggregatorIndex means aggregator index must also match for aggregates to be considered equal.
+	includeAggregatorIndex
+)
+
 // This method processes pending attestations as a "known" block as arrived. With validations,
 // the valid attestations get saved into the operation mem pool, and the invalid attestations gets deleted
 // from the sync pending pool.
@@ -87,7 +97,7 @@ func (s *Service) processAttestations(ctx context.Context, attestations []any, b
 			aggregateAttAndProofCount++
 			// Avoid processing multiple aggregates only differing by aggregator index.
 			if slices.ContainsFunc(validAggregates, func(other ethpb.SignedAggregateAttAndProof) bool {
-				return pendingAggregatesAreEqual(v, other, false /* do not filter on aggregator index */)
+				return pendingAggregatesAreEqual(v, other, ignoreAggregatorIndex)
 			}) {
 				continue
 			}
@@ -359,7 +369,7 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 
 	s.savePending(root, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
-		return ok && pendingAggregatesAreEqual(agg, a, true /* filter on aggregator index */)
+		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
 	})
 }
 
@@ -415,13 +425,13 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 }
 
 // pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
-// If filterOnAggregatorIndex is false, two aggregates only differ by their aggregator index will be considered equal.
-func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filterOnAggregatorIndex bool) bool {
+// The filter parameter controls whether aggregator index is considered in the equality check.
+func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filter aggregatorIndexFilter) bool {
 	if a.Version() != b.Version() {
 		return false
 	}
 
-	if filterOnAggregatorIndex {
+	if filter == includeAggregatorIndex {
 		if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
 			return false
 		}
