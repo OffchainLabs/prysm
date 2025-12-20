@@ -86,6 +86,20 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 	}
 }
 
+// BlobVerifierFactory adapts Initializer.NewBlobVerifier to the mock-friendly interface type.
+func BlobVerifierFactory(ini *Initializer) NewBlobVerifier {
+	return func(b blocks.ROBlob, reqs []Requirement) BlobVerifier {
+		return ini.NewBlobVerifier(b, reqs)
+	}
+}
+
+// DataColumnsVerifierFactory adapts Initializer.NewDataColumnsVerifier to the interface type.
+func DataColumnsVerifierFactory(ini *Initializer) NewDataColumnsVerifier {
+	return func(roDataColumns []blocks.RODataColumn, reqs []Requirement) DataColumnsVerifier {
+		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
+	}
+}
+
 // InitializerWaiter provides an Initializer once all dependent resources are ready
 // via the WaitForInitializer method.
 type InitializerWaiter struct {
