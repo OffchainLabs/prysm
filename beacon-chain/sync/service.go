@@ -34,7 +34,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
@@ -239,18 +238,6 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	return r
 }
 
-func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
-	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-		return ini.NewBlobVerifier(b, reqs)
-	}
-}
-
-func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
-	return func(roDataColumns []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
-		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
-	}
-}
-
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -258,8 +245,8 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Could not get verification initializer")
 		return
 	}
-	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
-	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
+	s.newBlobVerifier = verification.BlobVerifierFactory(v)
+	s.newColumnsVerifier = verification.DataColumnsVerifierFactory(v)
 
 	go s.verifierRoutine()
 	go s.kzgVerifierRoutine()
