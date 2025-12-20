@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
@@ -353,18 +352,6 @@ func syncEpochOffset(current primitives.Slot, subtract primitives.Epoch) primiti
 		return 1
 	}
 	return current - offset
-}
-
-func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
-	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-		return ini.NewBlobVerifier(b, reqs)
-	}
-}
-
-func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
-	return func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
-		return ini.NewDataColumnsVerifier(cols, reqs)
-	}
 }
 
 func (s *Service) markComplete() {
