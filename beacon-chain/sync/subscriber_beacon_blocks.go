@@ -7,18 +7,19 @@ import (
 	"path"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -165,11 +166,9 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
 	key := fmt.Sprintf("%#x", source.Root())
-	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
 		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		commitments, err := source.Commitments()
 		if err != nil {
@@ -190,10 +189,28 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
 		defer cancel()
 
+		log := log.WithFields(logrus.Fields{
+			"root":          fmt.Sprintf("%#x", source.Root()),
+			"slot":          source.Slot(),
+			"proposerIndex": source.ProposerIndex(),
+			"type":          source.Type(),
+		})
+
+		var constructedSidecarCount uint64
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
+			log = log.WithField("iteration", iteration)
+
 			// Exit early if all sidecars to sample have been seen.
 			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), columnIndicesToSample) {
+				if iteration > 0 && constructedSidecarCount == 0 {
+					log.Debug("No data column sidecars constructed from the execution client")
+				}
+
 				return nil, nil
+			}
+
+			if iteration == 0 {
+				dataColumnsRecoveredFromELAttempts.Inc()
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
@@ -203,8 +220,8 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// No sidecars are retrieved from the EL, retry later
-			sidecarCount := uint64(len(constructedSidecars))
-			if sidecarCount == 0 {
+			constructedSidecarCount = uint64(len(constructedSidecars))
+			if constructedSidecarCount == 0 {
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
@@ -213,9 +230,11 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				continue
 			}
 
+			dataColumnsRecoveredFromELTotal.Inc()
+
 			// Boundary check.
-			if sidecarCount != numberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+			if constructedSidecarCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
 			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), source.ProposerIndex(), columnIndicesToSample, constructedSidecars)
@@ -223,17 +242,12 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
 
-			if len(unseenIndices) > 0 {
-				log.WithFields(logrus.Fields{
-					"root":          fmt.Sprintf("%#x", source.Root()),
-					"slot":          source.Slot(),
-					"proposerIndex": source.ProposerIndex(),
-					"iteration":     iteration,
-					"type":          source.Type(),
-					"count":         len(unseenIndices),
-					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
-				}).Debug("Constructed data column sidecars from the execution client")
-			}
+			log.WithFields(logrus.Fields{
+				"count":   len(unseenIndices),
+				"indices": helpers.SortedPrettySliceFromMap(unseenIndices),
+			}).Debug("Constructed data column sidecars from the execution client")
+
+			dataColumnSidecarsObtainedViaELCount.Observe(float64(len(unseenIndices)))
 
 			return nil, nil
 		}

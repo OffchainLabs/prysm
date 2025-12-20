@@ -3,9 +3,9 @@ package eth1
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/pkg/errors"
 )
 
@@ -37,7 +37,7 @@ func (s *NodeSet) Start(ctx context.Context) error {
 	// beacon node will connect to the already existing Eth1 miner.
 	totalNodeCount := e2e.TestParams.BeaconNodeCount + e2e.TestParams.LighthouseBeaconNodeCount - 1
 	nodes := make([]e2etypes.ComponentRunner, totalNodeCount)
-	for i := 0; i < totalNodeCount; i++ {
+	for i := range totalNodeCount {
 		// We start indexing nodes from 1 because the miner has an implicit 0 index.
 		node := NewNode(i+1, s.enr)
 		nodes[i] = node

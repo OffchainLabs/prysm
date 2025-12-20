@@ -3,13 +3,13 @@ package peerdas
 import (
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	beaconState "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -84,28 +84,31 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 		totalNodeBalance += validator.EffectiveBalance()
 	}
 
-	beaconConfig := params.BeaconConfig()
-	numberOfCustodyGroups := beaconConfig.NumberOfCustodyGroups
-	validatorCustodyRequirement := beaconConfig.ValidatorCustodyRequirement
-	balancePerAdditionalCustodyGroup := beaconConfig.BalancePerAdditionalCustodyGroup
+	cfg := params.BeaconConfig()
+	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
+	validatorCustodyRequirement := cfg.ValidatorCustodyRequirement
+	balancePerAdditionalCustodyGroup := cfg.BalancePerAdditionalCustodyGroup
 
 	count := totalNodeBalance / balancePerAdditionalCustodyGroup
 	return min(max(count, validatorCustodyRequirement), numberOfCustodyGroups), nil
 }
 
-// DataColumnSidecars, given ConstructionPopulator and the cells/proofs associated with each blob in the
+// DataColumnSidecars given ConstructionPopulator and the cells/proofs associated with each blob in the
 // block, assembles sidecars which can be distributed to peers.
+// cellsPerBlob and proofsPerBlob are parallel slices where each index represents a blob sidecar.
 // This is an adapted version of
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars,
 // which is designed to be used both when constructing sidecars from a block and from a sidecar, replacing
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_block and
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_column_sidecar
-func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
-	if len(rows) == 0 {
+func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+
+	if len(cellsPerBlob) == 0 {
 		return nil, nil
 	}
 	start := time.Now()
-	cells, proofs, err := rotateRowsToCols(rows, params.BeaconConfig().NumberOfColumns)
+	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
@@ -114,9 +117,8 @@ func DataColumnSidecars(rows []kzg.CellsAndProofs, src ConstructionPopulator) ([
 		return nil, errors.Wrap(err, "extract block info")
 	}
 
-	maxIdx := params.BeaconConfig().NumberOfColumns
-	roSidecars := make([]blocks.RODataColumn, 0, maxIdx)
-	for idx := range maxIdx {
+	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
 		sidecar := &ethpb.DataColumnSidecar{
 			Index:                        idx,
 			Column:                       cells[idx],
@@ -197,26 +199,31 @@ func (b *BlockReconstructionSource) extract() (*blockInfo, error) {
 
 // rotateRowsToCols takes a 2D slice of cells and proofs, where the x is rows (blobs) and y is columns,
 // and returns a 2D slice where x is columns and y is rows.
-func rotateRowsToCols(rows []kzg.CellsAndProofs, numCols uint64) ([][][]byte, [][][]byte, error) {
-	if len(rows) == 0 {
+func rotateRowsToCols(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, numCols uint64) ([][][]byte, [][][]byte, error) {
+	if len(cellsPerBlob) == 0 {
 		return nil, nil, nil
+	}
+	if len(cellsPerBlob) != len(proofsPerBlob) {
+		return nil, nil, errors.New("cells and proofs length mismatch")
 	}
 	cellCols := make([][][]byte, numCols)
 	proofCols := make([][][]byte, numCols)
-	for i, cp := range rows {
-		if uint64(len(cp.Cells)) != numCols {
+	for i := range cellsPerBlob {
+		cells := cellsPerBlob[i]
+		proofs := proofsPerBlob[i]
+		if uint64(len(cells)) != numCols {
 			return nil, nil, errors.Wrap(ErrNotEnoughDataColumnSidecars, "not enough cells")
 		}
-		if len(cp.Cells) != len(cp.Proofs) {
+		if len(cells) != len(proofs) {
 			return nil, nil, errors.Wrap(ErrNotEnoughDataColumnSidecars, "not enough proofs")
 		}
-		for j := uint64(0); j < numCols; j++ {
+		for j := range numCols {
 			if i == 0 {
-				cellCols[j] = make([][]byte, len(rows))
-				proofCols[j] = make([][]byte, len(rows))
+				cellCols[j] = make([][]byte, len(cellsPerBlob))
+				proofCols[j] = make([][]byte, len(cellsPerBlob))
 			}
-			cellCols[j][i] = cp.Cells[j][:]
-			proofCols[j][i] = cp.Proofs[j][:]
+			cellCols[j][i] = cells[j][:]
+			proofCols[j][i] = proofs[j][:]
 		}
 	}
 	return cellCols, proofCols, nil

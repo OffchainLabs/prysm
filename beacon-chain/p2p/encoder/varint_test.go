@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -23,7 +23,7 @@ func TestReadVarint_ExceedsMaxLength(t *testing.T) {
 	// Terminating byte.
 	tByte := byte(1 << 6)
 	var header []byte
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		header = append(header, fByte)
 	}
 	header = append(header, tByte)

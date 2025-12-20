@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
+	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
 )
 
 // TestHealthMonitor_IsHealthy_Concurrency tests thread-safety of IsHealthy.
@@ -36,12 +36,10 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	var wg sync.WaitGroup
 	numGoroutines := 10
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numGoroutines {
+		wg.Go(func() {
 			assert.True(t, monitor.IsHealthy())
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -50,12 +48,10 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 	monitor.isHealthy = false
 	monitor.Unlock()
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numGoroutines {
+		wg.Go(func() {
 			assert.False(t, monitor.IsHealthy())
-		}()
+		})
 	}
 	wg.Wait()
 }

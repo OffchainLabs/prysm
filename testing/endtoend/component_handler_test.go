@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components/eth1"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/components"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/components/eth1"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -136,10 +136,6 @@ func (c *componentHandler) setup() {
 	})
 	c.eth1Nodes = eth1Nodes
 
-	if config.TestCheckpointSync {
-		appendDebugEndpoints(config)
-	}
-
 	var builders *components.BuilderSet
 	var proxies *eth1.ProxySet
 	if config.UseBuilder {
@@ -260,16 +256,20 @@ func (c *componentHandler) required() []e2etypes.ComponentRunner {
 	return requiredComponents
 }
 
-func (c *componentHandler) printPIDs(logger func(string, ...interface{})) {
+func (c *componentHandler) printPIDs(logger func(string, ...any)) {
 	msg := "\nPID of components. Attach a debugger... if you dare!\n\n"
 
 	msg += "This test PID: " + strconv.Itoa(os.Getpid()) + " (parent=" + strconv.Itoa(os.Getppid()) + ")\n"
 
-	// Beacon chain nodes
-	msg += fmt.Sprintf("Beacon chain nodes: %v\n", PIDsFromMultiComponentRunner(c.beaconNodes))
-	// Validator nodes
+	msg += fmt.Sprintf("Prysm beacon chain nodes: %v\n", PIDsFromMultiComponentRunner(c.beaconNodes))
+	msg += fmt.Sprintf("Prysm validators: %v\n", PIDsFromMultiComponentRunner(c.validatorNodes))
+	if c.lighthouseBeaconNodes != nil {
+		msg += fmt.Sprintf("Lighthouse beacon chain nodes: %v\n", PIDsFromMultiComponentRunner(c.lighthouseBeaconNodes))
+	}
+	if c.lighthouseValidatorNodes != nil {
+		msg += fmt.Sprintf("Lighthouse validators: %v\n", PIDsFromMultiComponentRunner(c.lighthouseValidatorNodes))
+	}
 	msg += fmt.Sprintf("Validators: %v\n", PIDsFromMultiComponentRunner(c.validatorNodes))
-	// ETH1 nodes
 	msg += fmt.Sprintf("ETH1 nodes: %v\n", PIDsFromMultiComponentRunner(c.eth1Nodes))
 
 	logger(msg)
@@ -289,11 +289,4 @@ func PIDsFromMultiComponentRunner(runner e2etypes.MultipleComponentRunners) []in
 		}
 	}
 	return pids
-}
-
-func appendDebugEndpoints(cfg *e2etypes.E2EConfig) {
-	debug := []string{
-		"--enable-debug-rpc-endpoints",
-	}
-	cfg.BeaconFlags = append(cfg.BeaconFlags, debug...)
 }

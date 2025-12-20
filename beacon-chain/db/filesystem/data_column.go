@@ -14,15 +14,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -200,6 +200,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 		fileMetadata, err := extractFileMetadata(path)
 		if err != nil {
 			log.WithError(err).Error("Error encountered while extracting file metadata")
+			return nil
 		}
 
 		// Open the data column filesystem file.
@@ -269,7 +270,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 	// Check the number of columns is the one expected.
 	// While implementing this, we expect the number of columns won't change.
 	// If it does, we will need to create a new version of the data column sidecar file.
-	if params.BeaconConfig().NumberOfColumns != mandatoryNumberOfColumns {
+	if fieldparams.NumberOfColumns != mandatoryNumberOfColumns {
 		return errWrongNumberOfColumns
 	}
 
@@ -514,6 +515,11 @@ func (dcs *DataColumnStorage) Clear() error {
 
 // prune clean the cache, the filesystem and mutexes.
 func (dcs *DataColumnStorage) prune() {
+	startTime := time.Now()
+	defer func() {
+		dataColumnPruneLatency.Observe(float64(time.Since(startTime).Milliseconds()))
+	}()
+
 	highestStoredEpoch := dcs.cache.HighestEpoch()
 
 	// Check if we need to prune.
@@ -621,6 +627,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 	// Create the SSZ encoded data column sidecars.
 	var sszEncodedDataColumnSidecars []byte
 
+	// Initialize the count of the saved SSZ encoded data column sidecar.
+	storedCount := uint8(0)
+
 	for {
 		dataColumnSidecars := pullChan(inputDataColumnSidecars)
 		if len(dataColumnSidecars) == 0 {
@@ -667,6 +676,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 				return errors.Wrap(err, "set index")
 			}
 
+			// Increment the count of the saved SSZ encoded data column sidecar.
+			storedCount++
+
 			// Append the SSZ encoded data column sidecar to the SSZ encoded data column sidecars.
 			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
 		}
@@ -691,9 +703,12 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 		return errWrongBytesWritten
 	}
 
+	syncStart := time.Now()
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
+	dataColumnBatchStoreCount.Observe(float64(storedCount))
 
 	return nil
 }
@@ -807,9 +822,13 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 		return errWrongBytesWritten
 	}
 
+	syncStart := time.Now()
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+
+	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
+	dataColumnBatchStoreCount.Observe(float64(storedCount))
 
 	return nil
 }
@@ -963,8 +982,7 @@ func (si *storageIndices) set(dataColumnIndex uint64, position uint8) error {
 
 // pullChan pulls data column sidecars from the input channel until it is empty.
 func pullChan(inputRoDataColumns chan []blocks.VerifiedRODataColumn) []blocks.VerifiedRODataColumn {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	dataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, numberOfColumns)
+	dataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, fieldparams.NumberOfColumns)
 
 	for {
 		select {
@@ -988,8 +1006,8 @@ func filePath(root [fieldparams.RootLength]byte, epoch primitives.Epoch) string 
 // extractFileMetadata extracts the metadata from a file path.
 // If the path is not a leaf, it returns nil.
 func extractFileMetadata(path string) (*fileMetadata, error) {
-	// Is this Windows friendly?
-	parts := strings.Split(path, "/")
+	// Use filepath.Separator to handle both Windows (\) and Unix (/) path separators
+	parts := strings.Split(path, string(filepath.Separator))
 	if len(parts) != 3 {
 		return nil, errors.Errorf("unexpected file %s", path)
 	}

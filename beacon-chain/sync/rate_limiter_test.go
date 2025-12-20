@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
@@ -84,7 +84,7 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	stream, err := p1.BHost.NewStream(t.Context(), p2.PeerID(), protocol.ID(topic))
 	require.NoError(t, err, "could not create stream")
 
-	for i := 0; i < 2*defaultBurstLimit; i++ {
+	for range 2 * defaultBurstLimit {
 		err = rlimiter.validateRawRpcRequest(stream, 1)
 		rlimiter.addRawStream(stream)
 		require.NoError(t, err, "could not validate incoming request")
@@ -93,7 +93,7 @@ func TestRateLimiter_ExceedRawCapacity(t *testing.T) {
 	assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
 
 	// Make Peer bad.
-	for i := 0; i < defaultBurstLimit; i++ {
+	for range defaultBurstLimit {
 		assert.ErrorContains(t, p2ptypes.ErrRateLimited.Error(), rlimiter.validateRawRpcRequest(stream, 1))
 	}
 	assert.NotNil(t, p1.Peers().IsBad(p2.PeerID()), "peer is not marked as a bad peer")

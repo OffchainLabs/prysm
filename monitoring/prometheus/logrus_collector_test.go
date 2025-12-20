@@ -10,16 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	log "github.com/sirupsen/logrus"
 )
 
 type logger interface {
-	Info(args ...interface{})
-	Warn(args ...interface{})
-	Error(args ...interface{})
+	Info(args ...any)
+	Warn(args ...any)
+	Error(args ...any)
 }
 
 func TestLogrusCollector(t *testing.T) {

@@ -8,29 +8,29 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
@@ -53,6 +53,7 @@ type Config struct {
 	StateNotifier       statefeed.Notifier
 	BlockNotifier       blockfeed.Notifier
 	ClockWaiter         startup.ClockWaiter
+	SyncNeedsWaiter     func() (das.SyncNeeds, error)
 	InitialSyncComplete chan struct{}
 	BlobStorage         *filesystem.BlobStorage
 	DataColumnStorage   *filesystem.DataColumnStorage
@@ -73,6 +74,7 @@ type Service struct {
 	newDataColumnsVerifier verification.NewDataColumnsVerifier
 	ctxMap                 sync.ContextByteVersions
 	genesisTime            time.Time
+	blobRetentionChecker   das.RetentionChecker
 }
 
 // Option is a functional option for the initial-sync Service.
@@ -138,6 +140,20 @@ func (s *Service) Start() {
 		return
 	}
 	s.clock = clock
+
+	if s.blobRetentionChecker == nil {
+		if s.cfg.SyncNeedsWaiter == nil {
+			log.Error("Initial-sync service missing sync needs waiter; cannot start")
+			return
+		}
+		syncNeeds, err := s.cfg.SyncNeedsWaiter()
+		if err != nil {
+			log.WithError(err).Error("Initial-sync failed to receive sync needs")
+			return
+		}
+		s.blobRetentionChecker = syncNeeds.BlobRetentionChecker()
+	}
+
 	log.Info("Received state initialized event")
 	ctxMap, err := sync.ContextByteVersionsForValRoot(clock.GenesisValidatorsRoot())
 	if err != nil {
@@ -217,9 +233,16 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 		return nil
 	}
 
+	if err != nil {
+		return errors.Wrap(err, "error fetching origin checkpoint blockroot")
+	}
+
 	block, err := s.cfg.DB.Block(s.ctx, blockRoot)
 	if err != nil {
 		return errors.Wrap(err, "block")
+	}
+	if block.IsNil() {
+		return errors.Errorf("origin block for root %#x not found in database", blockRoot)
 	}
 
 	currentSlot, blockSlot := s.clock.CurrentSlot(), block.Block().Slot()
@@ -305,10 +328,7 @@ func (s *Service) Resync() error {
 }
 
 func (s *Service) waitForMinimumPeers() ([]peer.ID, error) {
-	required := params.BeaconConfig().MaxPeersToSync
-	if flags.Get().MinimumSyncPeers < required {
-		required = flags.Get().MinimumSyncPeers
-	}
+	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
 	for {
 		if s.ctx.Err() != nil {
 			return nil, s.ctx.Err()
@@ -378,7 +398,7 @@ func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) er
 			continue
 		}
 		bv := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv)
+		avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, bv, s.blobRetentionChecker)
 		current := s.clock.CurrentSlot()
 		if err := avs.Persist(current, blobSidecars...); err != nil {
 			return err

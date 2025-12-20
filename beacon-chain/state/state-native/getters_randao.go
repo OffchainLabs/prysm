@@ -1,7 +1,7 @@
 package state_native
 
 import (
-	customtypes "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/custom-types"
+	customtypes "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/custom-types"
 )
 
 // RandaoMixes of block proposers on the beacon chain.

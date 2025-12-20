@@ -10,26 +10,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/cache/lru"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/config/proposer"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
-	testing2 "github.com/OffchainLabs/prysm/v6/validator/db/testing"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
+	testing2 "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -170,7 +170,7 @@ func TestAttests_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	attSubmitted := make(chan interface{})
+	attSubmitted := make(chan any)
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, AttSubmitted: attSubmitted}
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -192,7 +192,7 @@ func TestAttests_NextSlot(t *testing.T) {
 func TestProposes_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	blockProposed := make(chan interface{})
+	blockProposed := make(chan any)
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, BlockProposed: blockProposed}
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -216,8 +216,8 @@ func TestBothProposesAndAttests_NextSlot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	blockProposed := make(chan interface{})
-	attSubmitted := make(chan interface{})
+	blockProposed := make(chan any)
+	attSubmitted := make(chan any)
 	v := &testutil.FakeValidator{Km: &mockKeymanager{accountsChangedFeed: &event.Feed{}}, BlockProposed: blockProposed, AttSubmitted: attSubmitted}
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -274,7 +274,7 @@ func TestKeyReload_NoActiveKey(t *testing.T) {
 func notActive(t *testing.T) [fieldparams.BLSPubkeyLength]byte {
 	var r [fieldparams.BLSPubkeyLength]byte
 	copy(r[:], testutil.ActiveKey[:])
-	for i := 0; i < len(r); i++ {
+	for i := range len(r) {
 		r[i] = bits.Reverse8(r[i])
 	}
 	require.DeepNotEqual(t, r, testutil.ActiveKey)
@@ -373,7 +373,7 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 	logrus.SetOutput(tlogger{t})
 
 	cfg := params.BeaconConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	params.SetActiveTestCleanup(t, cfg)
 
 	timedCtx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)

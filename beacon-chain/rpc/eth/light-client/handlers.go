@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
@@ -116,6 +116,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		for _, update := range updates {
 			if ctx.Err() != nil {
 				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+				return
 			}
 
 			updateSlot := update.AttestedHeader().Beacon().Slot
@@ -131,12 +132,15 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 			chunkLength = ssz.MarshalUint64(chunkLength, uint64(len(updateSSZ)+4))
 			if _, err := w.Write(chunkLength); err != nil {
 				httputil.HandleError(w, "Could not write chunk length: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 			if _, err := w.Write(updateEntry.ForkDigest[:]); err != nil {
 				httputil.HandleError(w, "Could not write fork digest: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 			if _, err := w.Write(updateSSZ); err != nil {
 				httputil.HandleError(w, "Could not write update SSZ: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 		}
 	} else {
@@ -145,6 +149,7 @@ func (s *Server) GetLightClientUpdatesByRange(w http.ResponseWriter, req *http.R
 		for _, update := range updates {
 			if ctx.Err() != nil {
 				httputil.HandleError(w, "Context error: "+ctx.Err().Error(), http.StatusInternalServerError)
+				return
 			}
 
 			updateJson, err := structs.LightClientUpdateFromConsensus(update)

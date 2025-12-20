@@ -1,11 +1,11 @@
 package blocks
 
 import (
-	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -40,23 +40,25 @@ var (
 
 // BeaconBlockBody is the main beacon block body structure. It can represent any block type.
 type BeaconBlockBody struct {
-	version                  int
-	randaoReveal             [field_params.BLSSignatureLength]byte
-	eth1Data                 *eth.Eth1Data
-	graffiti                 [field_params.RootLength]byte
-	proposerSlashings        []*eth.ProposerSlashing
-	attesterSlashings        []*eth.AttesterSlashing
-	attesterSlashingsElectra []*eth.AttesterSlashingElectra
-	attestations             []*eth.Attestation
-	attestationsElectra      []*eth.AttestationElectra
-	deposits                 []*eth.Deposit
-	voluntaryExits           []*eth.SignedVoluntaryExit
-	syncAggregate            *eth.SyncAggregate
-	executionPayload         interfaces.ExecutionData
-	executionPayloadHeader   interfaces.ExecutionData
-	blsToExecutionChanges    []*eth.SignedBLSToExecutionChange
-	blobKzgCommitments       [][]byte
-	executionRequests        *enginev1.ExecutionRequests
+	version                   int
+	randaoReveal              [field_params.BLSSignatureLength]byte
+	eth1Data                  *eth.Eth1Data
+	graffiti                  [field_params.RootLength]byte
+	proposerSlashings         []*eth.ProposerSlashing
+	attesterSlashings         []*eth.AttesterSlashing
+	attesterSlashingsElectra  []*eth.AttesterSlashingElectra
+	attestations              []*eth.Attestation
+	attestationsElectra       []*eth.AttestationElectra
+	deposits                  []*eth.Deposit
+	voluntaryExits            []*eth.SignedVoluntaryExit
+	syncAggregate             *eth.SyncAggregate
+	executionPayload          interfaces.ExecutionData
+	executionPayloadHeader    interfaces.ExecutionData
+	blsToExecutionChanges     []*eth.SignedBLSToExecutionChange
+	blobKzgCommitments        [][]byte
+	executionRequests         *enginev1.ExecutionRequests
+	signedExecutionPayloadBid *eth.SignedExecutionPayloadBid
+	payloadAttestations       []*eth.PayloadAttestation
 }
 
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

@@ -10,13 +10,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -191,7 +191,7 @@ func (m *Miner) Start(ctx context.Context) error {
 	// give the miner start a couple of tries, since the p2p networking check is flaky
 	var retryErr error
 	var minerLog *os.File
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		minerLog, retryErr = m.initAttempt(ctx, attempt)
 		if retryErr == nil {
 			log.Infof("Miner started after %d retries", attempt)

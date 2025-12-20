@@ -3,15 +3,15 @@ package stateutil_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stateutil"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestReturnTrieLayer_OK(t *testing.T) {
@@ -36,8 +36,7 @@ func BenchmarkReturnTrieLayer_NormalAlgorithm(b *testing.B) {
 	require.NoError(b, err)
 	roots := retrieveBlockRoots(newState)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		layers, err := stateutil.ReturnTrieLayer(roots, uint64(len(roots)))
 		assert.NoError(b, err)
 		newRoot := *layers[len(layers)-1][0]
@@ -51,8 +50,7 @@ func BenchmarkReturnTrieLayer_VectorizedAlgorithm(b *testing.B) {
 	require.NoError(b, err)
 	roots := retrieveBlockRoots(newState)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		layers, err := stateutil.ReturnTrieLayer(roots, uint64(len(roots)))
 		assert.NoError(b, err)
 		newRoot := *layers[len(layers)-1][0]
@@ -96,8 +94,8 @@ func BenchmarkReturnTrieLayerVariable_NormalAlgorithm(b *testing.B) {
 		require.NoError(b, err)
 		roots = append(roots, rt)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		layers := stateutil.ReturnTrieLayerVariable(roots, params.BeaconConfig().ValidatorRegistryLimit)
 		newRoot := *layers[len(layers)-1][0]
 		newRoot, err = stateutil.AddInMixin(newRoot, uint64(len(validators)))
@@ -118,8 +116,8 @@ func BenchmarkReturnTrieLayerVariable_VectorizedAlgorithm(b *testing.B) {
 		require.NoError(b, err)
 		roots = append(roots, rt)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		layers := stateutil.ReturnTrieLayerVariable(roots, params.BeaconConfig().ValidatorRegistryLimit)
 		newRoot := *layers[len(layers)-1][0]
 		newRoot, err = stateutil.AddInMixin(newRoot, uint64(len(validators)))

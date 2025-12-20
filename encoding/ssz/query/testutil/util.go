@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/OffchainLabs/go-bitfield"
 	ssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // marshalAny marshals any value into SSZ format.

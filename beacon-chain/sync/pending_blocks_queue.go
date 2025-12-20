@@ -2,26 +2,25 @@ package sync
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	prysmTrace "github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -44,11 +43,13 @@ func (s *Service) processPendingBlocksQueue() {
 		if !s.chainIsStarted() {
 			return
 		}
+
 		locker.Lock()
+		defer locker.Unlock()
+
 		if err := s.processPendingBlocks(s.ctx); err != nil {
 			log.WithError(err).Debug("Could not process pending blocks")
 		}
-		locker.Unlock()
 	})
 }
 
@@ -73,8 +74,10 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	randGen := rand.NewGenerator()
 	var parentRoots [][32]byte
 
+	blkRoots := make([][32]byte, 0, len(sortedSlots)*maxBlocksPerSlot)
+
 	// Iterate through sorted slots.
-	for _, slot := range sortedSlots {
+	for i, slot := range sortedSlots {
 		// Skip processing if slot is in the future.
 		if slot > s.cfg.clock.CurrentSlot() {
 			continue
@@ -91,6 +94,9 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 
 		// Process each block in the queue.
 		for _, b := range blocksInCache {
+			start := time.Now()
+			totalDuration := time.Duration(0)
+
 			if err := blocks.BeaconBlockIsNil(b); err != nil {
 				continue
 			}
@@ -147,19 +153,34 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 			}
 			cancelFunction()
 
-			// Process pending attestations for this block.
-			if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
-				log.WithError(err).Debug("Failed to process pending attestations for block")
-			}
+			blkRoots = append(blkRoots, blkRoot)
 
 			// Remove the processed block from the queue.
 			if err := s.removeBlockFromQueue(b, blkRoot); err != nil {
 				return err
 			}
-			log.WithFields(logrus.Fields{"slot": slot, "blockRoot": hex.EncodeToString(bytesutil.Trunc(blkRoot[:]))}).Debug("Processed pending block and cleared it in cache")
+
+			duration := time.Since(start)
+			totalDuration += duration
+			log.WithFields(logrus.Fields{
+				"slotIndex":     fmt.Sprintf("%d/%d", i+1, len(sortedSlots)),
+				"slot":          slot,
+				"root":          fmt.Sprintf("%#x", blkRoot),
+				"duration":      duration,
+				"totalDuration": totalDuration,
+			}).Debug("Processed pending block and cleared it in cache")
 		}
+
 		span.End()
 	}
+
+	for _, blkRoot := range blkRoots {
+		// Process pending attestations for this block.
+		if err := s.processPendingAttsForBlock(ctx, blkRoot); err != nil {
+			log.WithError(err).Debug("Failed to process pending attestations for block")
+		}
+	}
+
 	return s.sendBatchRootRequest(ctx, parentRoots, randGen)
 }
 
@@ -297,7 +318,10 @@ func (s *Service) handleBlockProcessingError(ctx context.Context, err error, b i
 
 // getBestPeers returns the list of best peers based on finalized checkpoint epoch.
 func (s *Service) getBestPeers() []core.PeerID {
-	_, bestPeers := s.cfg.p2p.Peers().BestFinalized(maxPeerRequest, s.cfg.chain.FinalizedCheckpt().Epoch)
+	_, bestPeers := s.cfg.p2p.Peers().BestFinalized(s.cfg.chain.FinalizedCheckpt().Epoch)
+	if len(bestPeers) > maxPeerRequest {
+		bestPeers = bestPeers[:maxPeerRequest]
+	}
 	return bestPeers
 }
 
@@ -376,6 +400,19 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, ra
 			req = roots[:maxReqBlock]
 		}
 
+		if logrus.GetLevel() >= logrus.DebugLevel {
+			rootsStr := make([]string, 0, len(roots))
+			for _, req := range roots {
+				rootsStr = append(rootsStr, fmt.Sprintf("%#x", req))
+			}
+
+			log.WithFields(logrus.Fields{
+				"peer":  pid,
+				"count": len(req),
+				"roots": rootsStr,
+			}).Debug("Requesting blocks by root")
+		}
+
 		// Send the request to the peer.
 		if err := s.sendBeaconBlocksRequest(ctx, &req, pid); err != nil {
 			tracing.AnnotateError(span, err)
@@ -435,8 +472,6 @@ func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte
 			roots = append(roots[:i], roots[i+1:]...)
 			continue
 		}
-
-		log.WithField("blockRoot", fmt.Sprintf("%#x", r)).Debug("Requesting block by root")
 	}
 	return roots
 }
@@ -452,9 +487,7 @@ func (s *Service) sortedPendingSlots() []primitives.Slot {
 		slot := cacheKeyToSlot(k)
 		ss = append(ss, slot)
 	}
-	sort.Slice(ss, func(i, j int) bool {
-		return ss[i] < ss[j]
-	})
+	slices.Sort(ss)
 	return ss
 }
 
