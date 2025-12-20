@@ -323,14 +323,17 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	var ok bool
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
-	if e == stateEpoch {
+	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
+	if e == stateEpoch || fuluAndNextEpoch {
 		val, ok = s.trackedProposer(st, slot)
 		if !ok {
 			return emptyAttri
 		}
 	}
-	st = st.Copy()
 	if slot > st.Slot() {
+		// At this point either we know we are proposing on a future slot or we need to still compute the
+		// right proposer index pre-Fulu, either way we need to copy the state to process it.
+		st = st.Copy()
 		var err error
 		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
 		if err != nil {
@@ -338,7 +341,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			return emptyAttri
 		}
 	}
-	if e > stateEpoch {
+	if e > stateEpoch && !fuluAndNextEpoch {
 		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 		val, ok = s.trackedProposer(st, slot)
 		if !ok {

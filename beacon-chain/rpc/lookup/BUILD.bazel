@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/core/peerdas:go_default_library",
+        "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filesystem:go_default_library",
         "//beacon-chain/rpc/core:go_default_library",
