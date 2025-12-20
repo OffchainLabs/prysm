@@ -168,8 +168,8 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Could not get verification initializer")
 		return
 	}
-	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
-	s.newDataColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
+	s.newBlobVerifier = verification.BlobVerifierFactory(v)
+	s.newDataColumnsVerifier = verification.DataColumnsVerifierFactory(v)
 
 	gt := clock.GenesisTime()
 	if gt.IsZero() {
@@ -518,16 +518,4 @@ func shufflePeers(pids []peer.ID) {
 	rg.Shuffle(len(pids), func(i, j int) {
 		pids[i], pids[j] = pids[j], pids[i]
 	})
-}
-
-func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
-	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-		return ini.NewBlobVerifier(b, reqs)
-	}
-}
-
-func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verification.NewDataColumnsVerifier {
-	return func(roDataColumns []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
-		return ini.NewDataColumnsVerifier(roDataColumns, reqs)
-	}
 }
