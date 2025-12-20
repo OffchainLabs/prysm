@@ -56,8 +56,8 @@ func initWorkerCfg(ctx context.Context, cfg *workerCfg, vw InitializerWaiter, st
 	}
 	cfg.verifier = v
 	cfg.ctxMap = cm
-	cfg.newVB = newBlobVerifierFromInitializer(vi)
-	cfg.newVC = newDataColumnVerifierFromInitializer(vi)
+	cfg.newVB = verification.BlobVerifierFactory(vi)
+	cfg.newVC = verification.DataColumnsVerifierFactory(vi)
 	return nil
 }
 
