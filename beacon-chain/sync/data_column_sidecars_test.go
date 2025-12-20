@@ -158,7 +158,7 @@ func TestFetchDataColumnSidecars(t *testing.T) {
 	initializer, err := waiter.WaitForInitializer(t.Context())
 	require.NoError(t, err)
 
-	newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+	newDataColumnsVerifier := verification.DataColumnsVerifierFactory(initializer)
 
 	other.SetStreamHandler(byRangeProtocol, func(stream network.Stream) {
 		expectedRequest := &ethpb.DataColumnSidecarsByRangeRequest{
@@ -791,7 +791,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		newDataColumnsVerifier := verification.DataColumnsVerifierFactory(initializer)
 		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
 		require.NoError(t, err)
 
@@ -836,7 +836,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		newDataColumnsVerifier := verification.DataColumnsVerifierFactory(initializer)
 		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, roDataColumnsByPeer)
 		require.NoError(t, err)
 
