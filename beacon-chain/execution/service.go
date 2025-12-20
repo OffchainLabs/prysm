@@ -25,7 +25,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -242,7 +241,7 @@ func (s *Service) Start() {
 		log.WithError(err).Error("Could not get verification initializer")
 		return
 	}
-	s.blobVerifier = newBlobVerifierFromInitializer(v)
+	s.blobVerifier = verification.BlobVerifierFactory(v)
 
 	s.isRunning = true
 
@@ -913,12 +912,6 @@ func (s *Service) initDepositRequests() {
 		return
 	}
 	s.depositRequestsStarted = helpers.DepositRequestsStarted(fState)
-}
-
-func newBlobVerifierFromInitializer(ini *verification.Initializer) verification.NewBlobVerifier {
-	return func(b blocks.ROBlob, reqs []verification.Requirement) verification.BlobVerifier {
-		return ini.NewBlobVerifier(b, reqs)
-	}
 }
 
 type capabilityCache struct {
