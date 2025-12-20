@@ -52,24 +52,27 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestation")
 	defer span.End()
 
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
+
 	resp, err := vs.proposeAtt(ctx, att, att.GetData().CommitteeIndex)
 	if err != nil {
 		return nil, err
 	}
 
-	if features.Get().EnableExperimentalAttestationPool {
-		if err = vs.AttestationCache.Add(att); err != nil {
-			log.WithError(err).Error("Could not save attestation")
-		}
-	} else {
-		go func() {
+	go func() {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.Add(att); err != nil {
+				log.WithError(err).Error("Could not save attestation")
+			}
+		} else {
 			attCopy := att.Copy()
 			if err := vs.AttPool.SaveUnaggregatedAttestation(attCopy); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
-				return
 			}
-		}()
-	}
+		}
+	}()
 
 	return resp, nil
 }
@@ -81,6 +84,10 @@ func (vs *Server) ProposeAttestation(ctx context.Context, att *ethpb.Attestation
 func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethpb.SingleAttestation) (*ethpb.AttestResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "AttesterServer.ProposeAttestationElectra")
 	defer span.End()
+
+	if vs.SyncChecker.Syncing() {
+		return nil, status.Errorf(codes.Unavailable, "Syncing to latest head, not ready to respond")
+	}
 
 	resp, err := vs.proposeAtt(ctx, singleAtt, singleAtt.GetCommitteeIndex())
 	if err != nil {
@@ -98,18 +105,17 @@ func (vs *Server) ProposeAttestationElectra(ctx context.Context, singleAtt *ethp
 
 	singleAttCopy := singleAtt.Copy()
 	att := singleAttCopy.ToAttestationElectra(committee)
-	if features.Get().EnableExperimentalAttestationPool {
-		if err = vs.AttestationCache.Add(att); err != nil {
-			log.WithError(err).Error("Could not save attestation")
-		}
-	} else {
-		go func() {
+	go func() {
+		if features.Get().EnableExperimentalAttestationPool {
+			if err := vs.AttestationCache.Add(att); err != nil {
+				log.WithError(err).Error("Could not save attestation")
+			}
+		} else {
 			if err := vs.AttPool.SaveUnaggregatedAttestation(att); err != nil {
 				log.WithError(err).Error("Could not save unaggregated attestation")
-				return
 			}
-		}()
-	}
+		}
+	}()
 
 	return resp, nil
 }

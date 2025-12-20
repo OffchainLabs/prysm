@@ -1,3 +1,0 @@
-### Added
-
-- Implement Gloas state
