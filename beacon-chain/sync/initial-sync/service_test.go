@@ -791,7 +791,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		initializer, err := waiter.WaitForInitializer(t.Context())
 		require.NoError(t, err)
 
-		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+		newDataColumnsVerifier := verification.DataColumnsVerifierFactory(initializer)
 
 		// Create a block with blob commitments and sidecars
 		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
