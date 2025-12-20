@@ -201,10 +201,15 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
-	// disableLastEpochTargets is a flag to disable processing of attestations for old blocks.
-	disableLastEpochTargets = &cli.BoolFlag{
+	// deprecatedDisableLastEpochTargets is a flag to disable processing of attestations for old blocks.
+	deprecatedDisableLastEpochTargets = &cli.BoolFlag{
 		Name:  "disable-last-epoch-targets",
-		Usage: "Disables processing of last epoch targets.",
+		Usage: "Deprecated: disables processing of last epoch targets.",
+	}
+	// ignoreUnviableAttestations flag to skip attestations whose target state is not viable with respect to head (from lagging nodes).
+	ignoreUnviableAttestations = &cli.BoolFlag{
+		Name:  "ignore-unviable-attestations",
+		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
 )
 
@@ -251,6 +256,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
+	ignoreUnviableAttestations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
 	prepareAllPayloads,
@@ -266,7 +272,6 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
-	disableLastEpochTargets,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

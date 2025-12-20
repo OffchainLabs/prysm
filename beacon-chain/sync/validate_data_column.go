@@ -51,14 +51,12 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	// Decode the message, reject if it fails.
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
-		log.WithError(err).Error("Failed to decode message")
 		return pubsub.ValidationReject, err
 	}
 
 	// Reject messages that are not of the expected type.
 	dcsc, ok := m.(*eth.DataColumnSidecar)
 	if !ok {
-		log.WithField("message", m).Error("Message is not of type *eth.DataColumnSidecar")
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
@@ -191,6 +189,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
+	dataColumnSidecarArrivalGossipSummary.Observe(float64(sinceSlotStartTime.Milliseconds()))
 	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
 
 	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)

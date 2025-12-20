@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1571,5 +1572,59 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 				})
 			}
 		})
+	})
+}
+
+func TestStore_HasStateUsingStateDiff(t *testing.T) {
+	t.Run("No state summary or block", func(t *testing.T) {
+		hook := logTest.NewGlobal()
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		hasSt := db.HasState(t.Context(), [32]byte{'A'})
+		require.Equal(t, false, hasSt)
+		require.LogsContain(t, hook, "neither state summary nor block found")
+	})
+
+	t.Run("slot in tree or not", func(t *testing.T) {
+		db := setupDB(t)
+		featCfg := &features.Flags{}
+		featCfg.EnableStateDiff = true
+		reset := features.InitWithReset(featCfg)
+		defer reset()
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 0)
+		require.NoError(t, err)
+
+		testCases := []struct {
+			slot     primitives.Slot
+			expected bool
+		}{
+			{slot: 1, expected: false},                                      // slot 1 not in tree
+			{slot: 32, expected: true},                                      // slot 32 in tree
+			{slot: 0, expected: true},                                       // slot 0 in tree
+			{slot: primitives.Slot(math.PowerOf2(21)), expected: true},      // slot in tree
+			{slot: primitives.Slot(math.PowerOf2(21) - 1), expected: false}, // slot not in tree
+			{slot: primitives.Slot(math.PowerOf2(22)), expected: true},      // slot in tree
+		}
+
+		for _, tc := range testCases {
+			r := bytesutil.ToBytes32([]byte{'A'})
+			ss := &ethpb.StateSummary{Slot: tc.slot, Root: r[:]}
+			err = db.SaveStateSummary(t.Context(), ss)
+			require.NoError(t, err)
+
+			hasSt := db.HasState(t.Context(), r)
+			require.Equal(t, tc.expected, hasSt)
+		}
+
 	})
 }

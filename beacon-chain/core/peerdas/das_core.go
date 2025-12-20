@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -96,8 +97,7 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 		return nil, ErrCustodyGroupTooLarge
 	}
 
-	numberOfColumns := cfg.NumberOfColumns
-
+	numberOfColumns := uint64(fieldparams.NumberOfColumns)
 	columnsPerGroup := numberOfColumns / numberOfCustodyGroups
 
 	columns := make([]uint64, 0, columnsPerGroup)
@@ -112,8 +112,9 @@ func ComputeColumnsForCustodyGroup(custodyGroup uint64) ([]uint64, error) {
 // ComputeCustodyGroupForColumn computes the custody group for a given column.
 // It is the reciprocal function of ComputeColumnsForCustodyGroup.
 func ComputeCustodyGroupForColumn(columnIndex uint64) (uint64, error) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	cfg := params.BeaconConfig()
-	numberOfColumns := cfg.NumberOfColumns
 	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
 
 	if columnIndex >= numberOfColumns {

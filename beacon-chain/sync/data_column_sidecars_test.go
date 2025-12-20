@@ -33,7 +33,7 @@ import (
 )
 
 func TestFetchDataColumnSidecars(t *testing.T) {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
 	// Slot 1: All needed sidecars are available in storage ==> Retrieval from storage only.
 	// Slot 2: No commitment ==> Nothing to do.
 	// Slot 3: Some sidecars are in the storage, other have to be retrieved from peers ==> Retrieval from storage and peers.

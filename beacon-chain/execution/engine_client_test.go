@@ -2683,7 +2683,7 @@ func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.
 				Blob:      []byte("0xblob"),
 				KzgProofs: []hexutil.Bytes{},
 			}
-			for j := 0; j < int(params.BeaconConfig().NumberOfColumns); j++ {
+			for range fieldparams.NumberOfColumns {
 				cellProof := make([]byte, 48)
 				blobAndCellProofs[i].KzgProofs = append(blobAndCellProofs[i].KzgProofs, cellProof)
 			}

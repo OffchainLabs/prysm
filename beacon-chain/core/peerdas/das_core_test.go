@@ -30,7 +30,6 @@ func TestComputeColumnsForCustodyGroup(t *testing.T) {
 func TestComputeCustodyGroupForColumn(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
-	config.NumberOfColumns = 128
 	config.NumberOfCustodyGroups = 64
 	params.OverrideBeaconConfig(config)
 
