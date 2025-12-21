@@ -345,7 +345,7 @@ type tlogger struct {
 }
 
 func (t tlogger) Write(p []byte) (n int, err error) {
-	t.t.Log(fmt.Sprintf("%s", p))
+	t.t.Log(string(p))
 	return len(p), nil
 }
 
