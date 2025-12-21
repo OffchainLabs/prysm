@@ -201,11 +201,6 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
-	// deprecatedDisableLastEpochTargets is a flag to disable processing of attestations for old blocks.
-	deprecatedDisableLastEpochTargets = &cli.BoolFlag{
-		Name:  "disable-last-epoch-targets",
-		Usage: "Deprecated: disables processing of last epoch targets.",
-	}
 	// ignoreUnviableAttestations flag to skip attestations whose target state is not viable with respect to head (from lagging nodes).
 	ignoreUnviableAttestations = &cli.BoolFlag{
 		Name:  "ignore-unviable-attestations",
@@ -219,7 +214,7 @@ var devModeFlags = []cli.Flag{
 }
 
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
-var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
+var ValidatorFlags = []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
 	HoleskyTestnet,
 	SepoliaTestnet,
@@ -233,7 +228,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	EnableBeaconRESTApi,
 	DisableDutiesV2,
 	EnableWebFlag,
-}...)
+}
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
 var E2EValidatorFlags = []string{
@@ -272,7 +267,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
-}, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
+}, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
 	if len(flags) == 0 {
