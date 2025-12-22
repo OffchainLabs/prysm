@@ -59,6 +59,20 @@ func (m *mockProvider) Genesis(context.Context) (state.BeaconState, error) {
 	return m.state, nil
 }
 
+// setupTestConfigWithoutEmbedded configures a test beacon config with a unique name
+// to ensure embedded genesis data lookup fails, forcing tests to use providers.
+func setupTestConfigWithoutEmbedded(t *testing.T, useMainnet bool, testName string) {
+	var baseConfig func() *params.BeaconChainConfig
+	if useMainnet {
+		baseConfig = params.MainnetConfig
+	} else {
+		baseConfig = params.MinimalSpecConfig
+	}
+	customConfig := baseConfig().Copy()
+	customConfig.ConfigName = "test-config-" + testName
+	params.OverrideBeaconConfig(customConfig)
+}
+
 // createTestGenesisState creates a deterministic genesis state for testing.
 // This avoids using the embedded mainnet state which could cause false positives.
 func createTestGenesisState(t *testing.T, numValidators uint64, slot primitives.Slot) state.BeaconState {
@@ -133,10 +147,7 @@ func TestInitializeWithProviders(t *testing.T) {
 	defer params.OverrideBeaconConfig(originalConfig)
 
 	t.Run("providers_used_when_no_embedded_or_file", func(t *testing.T) {
-		// Use a custom config that won't have embedded data
-		customConfig := params.MainnetConfig().Copy()
-		customConfig.ConfigName = "test-config-no-embedded"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, true, "no-embedded")
 
 		// Use a deterministic test state instead of mainnet to avoid false positives
 		testState := createTestGenesisState(t, 64, 0)
@@ -159,10 +170,7 @@ func TestInitializeWithProviders(t *testing.T) {
 	})
 
 	t.Run("multiple_providers_first_success_wins", func(t *testing.T) {
-		// Use a custom config that won't have embedded data
-		customConfig := params.MainnetConfig().Copy()
-		customConfig.ConfigName = "test-config-multiple-providers"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, true, "multiple-providers")
 
 		// Use deterministic test states with different slots
 		state1 := createTestGenesisState(t, 64, 50)
@@ -197,10 +205,7 @@ func TestInitializeWithProviders(t *testing.T) {
 	})
 
 	t.Run("all_providers_fail_returns_error", func(t *testing.T) {
-		// Use a custom config that won't have embedded data
-		customConfig := params.MinimalSpecConfig().Copy()
-		customConfig.ConfigName = "test-config-all-fail"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, false, "all-fail")
 
 		// Create failing providers
 		provider1 := &mockProvider{
@@ -218,10 +223,7 @@ func TestInitializeWithProviders(t *testing.T) {
 	})
 
 	t.Run("no_providers_and_no_data_returns_error", func(t *testing.T) {
-		// Use a custom config that won't have embedded data
-		customConfig := params.MinimalSpecConfig().Copy()
-		customConfig.ConfigName = "test-config-no-providers"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, false, "no-providers")
 
 		// Initialize with no providers should fail
 		err := genesis.Initialize(t.Context(), t.TempDir())
@@ -229,10 +231,7 @@ func TestInitializeWithProviders(t *testing.T) {
 	})
 
 	t.Run("provider_returns_nil_state", func(t *testing.T) {
-		// Use a custom config that won't have embedded data
-		customConfig := params.MinimalSpecConfig().Copy()
-		customConfig.ConfigName = "test-config-nil-state"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, false, "nil-state")
 
 		// Create provider that returns nil state
 		provider := &mockProvider{
@@ -246,10 +245,7 @@ func TestInitializeWithProviders(t *testing.T) {
 	})
 
 	t.Run("empty_dir_path_with_providers", func(t *testing.T) {
-		// Use a custom config that won't have embedded data
-		customConfig := params.MainnetConfig().Copy()
-		customConfig.ConfigName = "test-config-empty-dir"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, true, "empty-dir")
 
 		// Use a deterministic test state
 		testState := createTestGenesisState(t, 16, 0)
@@ -269,10 +265,7 @@ func TestInitializeWithProviders(t *testing.T) {
 		// Create temp directory with genesis file
 		tmpDir := t.TempDir()
 
-		// Use a custom config that won't have embedded data
-		customConfig := params.MainnetConfig().Copy()
-		customConfig.ConfigName = "test-config-file-precedence"
-		params.OverrideBeaconConfig(customConfig)
+		setupTestConfigWithoutEmbedded(t, true, "file-precedence")
 
 		// Create deterministic test states for file and provider
 		fileState := createTestGenesisState(t, 128, 75)
