@@ -29,5 +29,5 @@ func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 		return nil, err
 	}
 
-	return collector.toProof(), nil
+	return collector.toProof()
 }

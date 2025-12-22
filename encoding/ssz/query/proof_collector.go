@@ -80,13 +80,13 @@ func (pc *ProofCollector) AddTarget(gindex uint64) {
 
 // toProof converts the collected siblings and leaves into a fastssz.Proof structure.
 // Current behavior expects a single target leaf (single proof).
-func (pc *ProofCollector) toProof() *fastssz.Proof {
+func (pc *ProofCollector) toProof() (*fastssz.Proof, error) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
 	proof := &fastssz.Proof{}
 	if len(pc.leaves) == 0 {
-		return proof
+		return proof, nil
 	}
 
 	leafGindices := make([]uint64, 0, len(pc.leaves))
@@ -113,14 +113,13 @@ func (pc *ProofCollector) toProof() *fastssz.Proof {
 		sib := targetGindex ^ 1
 		h, ok := pc.siblings[sib]
 		if !ok {
-			// Missing sibling; proof will fail verification.
-			break
+			return nil, fmt.Errorf("missing sibling hash for gindex %d", sib)
 		}
 		proof.Hashes = append(proof.Hashes, h[:])
 		targetGindex /= 2
 	}
 
-	return proof
+	return proof, nil
 }
 
 // registerRequiredSiblings computes all sibling generalized indices along the path
@@ -140,6 +139,14 @@ func (pc *ProofCollector) collectLeaf(gindex uint64, leaf [32]byte) {
 	pc.mu.Lock()
 	pc.leaves[gindex] = leaf
 	pc.mu.Unlock()
+}
+
+// putLittleEndian writes an unsigned integer value in little-endian format.
+// Supports sizes 1, 2, 4, or 8 bytes for uint8/16/32/64 respectively.
+func putLittleEndian(dst []byte, val uint64, size int) {
+	for i := 0; i < size; i++ {
+		dst[i] = byte(val >> (8 * i))
+	}
 }
 
 // Merkleizers and proof collection methods
@@ -689,12 +696,4 @@ func packBasicElementsToChunks(elemInfo *SszInfo, v reflect.Value, length int) [
 	}
 
 	return chunks
-}
-
-// putLittleEndian writes an unsigned integer value in little-endian format.
-// Supports sizes 1, 2, 4, or 8 bytes for uint8/16/32/64 respectively.
-func putLittleEndian(dst []byte, val uint64, size int) {
-	for i := 0; i < size; i++ {
-		dst[i] = byte(val >> (8 * i))
-	}
 }
