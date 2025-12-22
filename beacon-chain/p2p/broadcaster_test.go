@@ -710,7 +710,7 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	// Load the KZG trust setup.
 	err := kzg.Start()
 	require.NoError(t, err)
-
+	
 	gFlags := new(flags.GlobalFlags)
 	gFlags.MinimumPeersPerSubnet = 1
 	flags.Init(gFlags)

@@ -84,7 +84,7 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 
 	h, err := libp2p.New(options...)
 	require.NoError(t, err)
-	ps, err := pubsub.NewFloodSub(ctx, h,
+	ps, err := pubsub.NewGossipSub(ctx, h,
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
 	)

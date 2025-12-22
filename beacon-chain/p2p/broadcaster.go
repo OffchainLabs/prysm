@@ -420,7 +420,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 	// Wait for all messages to be added to the batch.
 	wg.Wait()
-	s.pubsub.PublishBatch(&messageBatch)
+	if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
+		log.WithError(err).Error("Cannot publish batch for data column sidecars")
+		return
+	}
 
 	// The rest of this function is only for debug logging purposes.
 	if logLevel < logrus.DebugLevel {
@@ -543,7 +546,7 @@ func (s *Service) broadcastOrBatchObject(ctx context.Context, batch *pubsub.Mess
 
 	var err error
 	if batch != nil {
-		err = s.addToBatch(ctx, batch, topic, buf.Bytes())
+		err = s.addToBatch(ctx, batch, topic+s.Encoding().ProtocolSuffix(), buf.Bytes())
 	} else {
 		err = s.PublishToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes())
 	}
