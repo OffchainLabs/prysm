@@ -1,6 +1,7 @@
 package httpwriter
 
 import (
+	"fmt"
 	"go/ast"
 
 	"golang.org/x/tools/go/analysis"
@@ -99,7 +100,7 @@ func checkBlock(pass *analysis.Pass, fn *ast.FuncDecl, block *ast.BlockStmt, nex
 
 		// Now check the current statement itself: is it (or does it contain) a direct call to httputil.HandleError?
 		// We only consider ExprStmt that are direct CallExpr to httputil.HandleError.
-		call := findHandleErrorCall(stmt)
+		call, name := findHandleErrorCall(stmt)
 		if call == nil {
 			continue
 		}
@@ -121,7 +122,7 @@ func checkBlock(pass *analysis.Pass, fn *ast.FuncDecl, block *ast.BlockStmt, nex
 				continue
 			}
 			// otherwise it's not a return (even if it's an if/for etc) -> violation
-			pass.Reportf(stmt.Pos(), "call to httputil.HandleError must be immediately followed by a return statement")
+			pass.Reportf(stmt.Pos(), fmt.Sprintf("call to httputil.%s must be immediately followed by a return statement", name))
 			continue
 		}
 
@@ -133,33 +134,33 @@ func checkBlock(pass *analysis.Pass, fn *ast.FuncDecl, block *ast.BlockStmt, nex
 		}
 
 		// Non-void function and it's the last statement → violation
-		pass.Reportf(stmt.Pos(), "call to httputil.HandleError must be followed by return because function has return values")
+		pass.Reportf(stmt.Pos(), fmt.Sprintf("call to httputil.%s must be immediately followed by a return statement", name))
 	}
 }
 
 // findHandleErrorCall returns the call expression if stmt is a direct call to httputil.HandleError(...),
 // otherwise nil. We only match direct ExprStmt -> CallExpr -> SelectorExpr where selector is httputil.HandleError.
-func findHandleErrorCall(stmt ast.Stmt) *ast.CallExpr {
+func findHandleErrorCall(stmt ast.Stmt) (*ast.CallExpr, string) {
 	es, ok := stmt.(*ast.ExprStmt)
 	if !ok {
-		return nil
+		return nil, ""
 	}
 	call, ok := es.X.(*ast.CallExpr)
 	if !ok {
-		return nil
+		return nil, ""
 	}
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
-		return nil
+		return nil, ""
 	}
 	pkgIdent, ok := sel.X.(*ast.Ident)
 	if !ok {
-		return nil
+		return nil, ""
 	}
 	selectorName := sel.Sel.Name
 	if pkgIdent.Name == "httputil" &&
 		(selectorName == "HandleError" || selectorName == "WriteError" || selectorName == "WriteJson" || selectorName == "WriteSSZ") {
-		return call
+		return call, selectorName
 	}
-	return nil
+	return nil, ""
 }
