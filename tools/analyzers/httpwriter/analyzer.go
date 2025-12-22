@@ -1,4 +1,4 @@
-package httperror
+package httpwriter
 
 import (
 	"go/ast"
@@ -9,8 +9,8 @@ import (
 )
 
 var Analyzer = &analysis.Analyzer{
-	Name: "httperror",
-	Doc:  "Ensures calls to httputil.HandleError are immediately followed by a return statement.",
+	Name: "httpwriter",
+	Doc:  "Ensures that httputil functions which make use of the writer are immediately followed by a return statement.",
 	Requires: []*analysis.Analyzer{
 		inspect.Analyzer,
 	},
@@ -156,7 +156,9 @@ func findHandleErrorCall(stmt ast.Stmt) *ast.CallExpr {
 	if !ok {
 		return nil
 	}
-	if pkgIdent.Name == "httputil" && sel.Sel.Name == "HandleError" {
+	selectorName := sel.Sel.Name
+	if pkgIdent.Name == "httputil" &&
+		(selectorName == "HandleError" || selectorName == "WriteError" || selectorName == "WriteJson" || selectorName == "WriteSSZ") {
 		return call
 	}
 	return nil

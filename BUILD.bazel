@@ -193,7 +193,7 @@ nogo(
         "//tools/analyzers/featureconfig:go_default_library",
         "//tools/analyzers/gocognit:go_default_library",
         "//tools/analyzers/ineffassign:go_default_library",
-        "//tools/analyzers/httperror:go_default_library",
+        "//tools/analyzers/httpwriter:go_default_library",
         "//tools/analyzers/interfacechecker:go_default_library",
         "//tools/analyzers/logcapitalization:go_default_library",
         "//tools/analyzers/logruswitherror:go_default_library",

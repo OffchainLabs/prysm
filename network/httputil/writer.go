@@ -43,6 +43,7 @@ func WriteJson(w http.ResponseWriter, v any) {
 func WriteSsz(w http.ResponseWriter, respSsz []byte) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(respSsz)))
 	w.Header().Set("Content-Type", api.OctetStreamMediaType)
+	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, io.NopCloser(bytes.NewReader(respSsz))); err != nil {
 		log.WithError(err).Error("Could not write response message")
 	}
