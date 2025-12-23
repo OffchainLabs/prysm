@@ -204,6 +204,13 @@ var (
 		},
 	)
 
+	dataColumnsRecoveredFromELAttempts = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "data_columns_recovered_from_el_attempts",
+			Help: "Count the number of data columns recovery attempts from the execution layer.",
+		},
+	)
+
 	dataColumnsRecoveredFromELTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "data_columns_recovered_from_el_total",
@@ -240,6 +247,13 @@ var (
 			Name:    "beacon_data_availability_reconstruction_time_milliseconds",
 			Help:    "Captures the time taken to reconstruct data columns.",
 			Buckets: []float64{100, 250, 500, 750, 1000, 1500, 2000, 4000, 8000, 12000, 16000},
+		},
+	)
+
+	dataColumnSidecarsObtainedViaELCount = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "data_column_obtained_via_el_count",
+			Help: "Count the number of data column sidecars obtained via the execution layer.",
 		},
 	)
 )

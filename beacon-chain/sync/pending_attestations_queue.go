@@ -3,9 +3,9 @@ package sync
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -21,13 +21,23 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
-	"github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-var pendingAttsLimit = 32768
+const pendingAttsLimit = 32768
+
+// aggregatorIndexFilter defines how aggregator index should be handled in equality checks.
+type aggregatorIndexFilter int
+
+const (
+	// ignoreAggregatorIndex means aggregates differing only by aggregator index are considered equal.
+	ignoreAggregatorIndex aggregatorIndexFilter = iota
+	// includeAggregatorIndex means aggregator index must also match for aggregates to be considered equal.
+	includeAggregatorIndex
+)
 
 // This method processes pending attestations as a "known" block as arrived. With validations,
 // the valid attestations get saved into the operation mem pool, and the invalid attestations gets deleted
@@ -50,16 +60,7 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	attestations := s.blkRootToPendingAtts[bRoot]
 	s.pendingAttsLock.RUnlock()
 
-	if len(attestations) > 0 {
-		start := time.Now()
-		s.processAttestations(ctx, attestations)
-		duration := time.Since(start)
-		log.WithFields(logrus.Fields{
-			"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
-			"pendingAttsCount": len(attestations),
-			"duration":         duration,
-		}).Debug("Verified and saved pending attestations to pool")
-	}
+	s.processAttestations(ctx, attestations)
 
 	randGen := rand.NewGenerator()
 	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
@@ -79,26 +80,71 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 	return s.sendBatchRootRequest(ctx, pendingRoots, randGen)
 }
 
+// processAttestations processes a list of attestations.
+// It assumes (for logging purposes only) that all attestations pertain to the same block.
 func (s *Service) processAttestations(ctx context.Context, attestations []any) {
 	if len(attestations) == 0 {
 		return
 	}
 
+	firstAttestation := attestations[0]
+	var blockRoot []byte
+	switch v := firstAttestation.(type) {
+	case ethpb.Att:
+		blockRoot = v.GetData().BeaconBlockRoot
+	case ethpb.SignedAggregateAttAndProof:
+		blockRoot = v.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot
+	default:
+		log.Warnf("Unexpected attestation type %T, skipping processing", v)
+		return
+	}
+
+	validAggregates := make([]ethpb.SignedAggregateAttAndProof, 0, len(attestations))
+	startAggregate := time.Now()
 	atts := make([]ethpb.Att, 0, len(attestations))
+	aggregateAttAndProofCount := 0
 	for _, att := range attestations {
 		switch v := att.(type) {
 		case ethpb.Att:
 			atts = append(atts, v)
 		case ethpb.SignedAggregateAttAndProof:
-			s.processAggregate(ctx, v)
+			aggregateAttAndProofCount++
+			// Avoid processing multiple aggregates only differing by aggregator index.
+			if slices.ContainsFunc(validAggregates, func(other ethpb.SignedAggregateAttAndProof) bool {
+				return pendingAggregatesAreEqual(v, other, ignoreAggregatorIndex)
+			}) {
+				continue
+			}
+
+			if err := s.processAggregate(ctx, v); err != nil {
+				log.WithError(err).Debug("Pending aggregate attestation could not be processed")
+				continue
+			}
+
+			validAggregates = append(validAggregates, v)
 		default:
 			log.Warnf("Unexpected attestation type %T, skipping", v)
 		}
 	}
+	durationAggregateAttAndProof := time.Since(startAggregate)
 
+	startAtts := time.Now()
 	for _, bucket := range bucketAttestationsByData(atts) {
 		s.processAttestationBucket(ctx, bucket)
 	}
+
+	durationAtts := time.Since(startAtts)
+
+	log.WithFields(logrus.Fields{
+		"blockRoot":                       fmt.Sprintf("%#x", blockRoot),
+		"totalCount":                      len(attestations),
+		"aggregateAttAndProofCount":       aggregateAttAndProofCount,
+		"uniqueAggregateAttAndProofCount": len(validAggregates),
+		"attCount":                        len(atts),
+		"durationTotal":                   durationAggregateAttAndProof + durationAtts,
+		"durationAggregateAttAndProof":    durationAggregateAttAndProof,
+		"durationAtts":                    durationAtts,
+	}).Debug("Verified and saved pending attestations to pool")
 }
 
 // attestationBucket groups attestations with the same AttestationData for batch processing.
@@ -303,21 +349,20 @@ func (s *Service) processVerifiedAttestation(
 	})
 }
 
-func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) {
+func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) error {
 	res, err := s.validateAggregatedAtt(ctx, aggregate)
 	if err != nil {
 		log.WithError(err).Debug("Pending aggregated attestation failed validation")
-		return
+		return errors.Wrap(err, "validate aggregated att")
 	}
+
 	if res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
-		log.Debug("Pending aggregated attestation failed validation")
-		return
+		return errors.New("Pending aggregated attestation failed validation")
 	}
 
 	att := aggregate.AggregateAttestationAndProof().AggregateVal()
 	if err := s.saveAttestation(att); err != nil {
-		log.WithError(err).Debug("Could not save aggregated attestation")
-		return
+		return errors.Wrap(err, "save attestation")
 	}
 
 	_ = s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
@@ -325,6 +370,8 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
 		log.WithError(err).Debug("Could not broadcast aggregated attestation")
 	}
+
+	return nil
 }
 
 // This defines how pending aggregates are saved in the map. The key is the
@@ -336,7 +383,7 @@ func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
 
 	s.savePending(root, agg, func(other any) bool {
 		a, ok := other.(ethpb.SignedAggregateAttAndProof)
-		return ok && pendingAggregatesAreEqual(agg, a)
+		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
 	})
 }
 
@@ -391,13 +438,19 @@ func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any
 	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], pending)
 }
 
-func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
+// pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
+// The filter parameter controls whether aggregator index is considered in the equality check.
+func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filter aggregatorIndexFilter) bool {
 	if a.Version() != b.Version() {
 		return false
 	}
-	if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
-		return false
+
+	if filter == includeAggregatorIndex {
+		if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
+			return false
+		}
 	}
+
 	aAtt := a.AggregateAttestationAndProof().AggregateVal()
 	bAtt := b.AggregateAttestationAndProof().AggregateVal()
 	if aAtt.GetData().Slot != bAtt.GetData().Slot {
