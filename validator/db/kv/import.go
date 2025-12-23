@@ -287,7 +287,7 @@ func filterSlashablePubKeysFromBlocks(_ context.Context, historyByPubKey map[[fi
 		seenSigningRootsBySlot := make(map[primitives.Slot][]byte)
 		for _, blk := range proposals.Proposals {
 			if signingRoot, ok := seenSigningRootsBySlot[blk.Slot]; ok {
-				if signingRoot == nil || !bytes.Equal(signingRoot, blk.SigningRoot) {
+				if len(signingRoot) == 0 || !bytes.Equal(signingRoot, blk.SigningRoot) {
 					slashablePubKeys = append(slashablePubKeys, pubKey)
 					break
 				}
