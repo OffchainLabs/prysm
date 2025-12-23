@@ -1,7 +1,6 @@
 package httpwriter
 
 import (
-	"fmt"
 	"go/ast"
 
 	"golang.org/x/tools/go/analysis"
@@ -122,7 +121,7 @@ func checkBlock(pass *analysis.Pass, fn *ast.FuncDecl, block *ast.BlockStmt, nex
 				continue
 			}
 			// otherwise it's not a return (even if it's an if/for etc) -> violation
-			pass.Reportf(stmt.Pos(), fmt.Sprintf("call to httputil.%s must be immediately followed by a return statement", name))
+			pass.Reportf(stmt.Pos(), "call to httputil.%s must be immediately followed by a return statement", name)
 			continue
 		}
 
@@ -134,7 +133,7 @@ func checkBlock(pass *analysis.Pass, fn *ast.FuncDecl, block *ast.BlockStmt, nex
 		}
 
 		// Non-void function and it's the last statement → violation
-		pass.Reportf(stmt.Pos(), fmt.Sprintf("call to httputil.%s must be immediately followed by a return statement", name))
+		pass.Reportf(stmt.Pos(), "call to httputil.%s must be immediately followed by a return statement", name)
 	}
 }
 
