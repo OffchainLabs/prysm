@@ -133,6 +133,12 @@ var (
 			Help: "Time to verify gossiped attestations",
 		},
 	)
+	attestationVerificationGossipSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "gossip_attestation_verification_milliseconds",
+			Help: "Time to verify gossiped attestations",
+		},
+	)
 	blockVerificationGossipSummary = promauto.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "gossip_block_verification_milliseconds",
@@ -149,6 +155,12 @@ var (
 		prometheus.SummaryOpts{
 			Name: "gossip_blob_sidecar_arrival_milliseconds",
 			Help: "Time for gossiped blob sidecars to arrive",
+		},
+	)
+	dataColumnSidecarArrivalGossipSummary = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "gossip_data_column_sidecar_arrival_milliseconds",
+			Help: "Time for gossiped data column sidecars to arrive",
 		},
 	)
 	blobSidecarVerificationGossipSummary = promauto.NewSummary(
@@ -192,6 +204,13 @@ var (
 		},
 	)
 
+	dataColumnsRecoveredFromELAttempts = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "data_columns_recovered_from_el_attempts",
+			Help: "Count the number of data columns recovery attempts from the execution layer.",
+		},
+	)
+
 	dataColumnsRecoveredFromELTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "data_columns_recovered_from_el_total",
@@ -231,16 +250,12 @@ var (
 		},
 	)
 
-	// Custody earliest available slot metrics
-	earliestAvailableSlotP2P = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "custody_earliest_available_slot_p2p",
-		Help: "The earliest available slot tracked by the p2p service for custody purposes",
-	})
-
-	earliestAvailableSlotDB = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "custody_earliest_available_slot_db",
-		Help: "The earliest available slot tracked by the database for custody purposes",
-	})
+	dataColumnSidecarsObtainedViaELCount = promauto.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "data_column_obtained_via_el_count",
+			Help: "Count the number of data column sidecars obtained via the execution layer.",
+		},
+	)
 )
 
 func (s *Service) updateMetrics() {

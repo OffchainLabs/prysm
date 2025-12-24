@@ -117,8 +117,6 @@ func (sc *dataColumnStorageSummaryCache) HighestEpoch() primitives.Epoch {
 
 // set updates the cache.
 func (sc *dataColumnStorageSummaryCache) set(dataColumnsIdent DataColumnsIdent) error {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -127,7 +125,7 @@ func (sc *dataColumnStorageSummaryCache) set(dataColumnsIdent DataColumnsIdent) 
 
 	count := uint64(0)
 	for _, index := range dataColumnsIdent.Indices {
-		if index >= numberOfColumns {
+		if index >= fieldparams.NumberOfColumns {
 			return errDataColumnIndexOutOfBounds
 		}
 

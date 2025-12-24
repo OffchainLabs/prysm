@@ -14,6 +14,7 @@ go_library(
         "interop.go",
         "io_config.go",
         "loader.go",
+        "log.go",
         "mainnet_config.go",
         "minimal_config.go",
         "network_config.go",

@@ -77,12 +77,12 @@ func InitializeDataMaps() {
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
 			return blocks.NewSignedBeaconBlock(
-				&ethpb.SignedBeaconBlockElectra{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
+				&ethpb.SignedBeaconBlockElectra{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}, ExecutionRequests: &enginev1.ExecutionRequests{}}}},
 			)
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
 			return blocks.NewSignedBeaconBlock(
-				&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}}}},
+				&ethpb.SignedBeaconBlockFulu{Block: &ethpb.BeaconBlockElectra{Body: &ethpb.BeaconBlockBodyElectra{ExecutionPayload: &enginev1.ExecutionPayloadDeneb{}, ExecutionRequests: &enginev1.ExecutionRequests{}}}},
 			)
 		},
 	}
@@ -204,6 +204,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
 			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
+		},
 	}
 
 	// Reset our light client finality update map.
@@ -221,6 +224,9 @@ func InitializeDataMaps() {
 			return lightclientConsensusTypes.NewEmptyFinalityUpdateDeneb(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().ElectraForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().FuluForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
 			return lightclientConsensusTypes.NewEmptyFinalityUpdateElectra(), nil
 		},
 	}

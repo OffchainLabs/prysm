@@ -2,6 +2,13 @@ package kv
 
 import "bytes"
 
+func hasPhase0Key(enc []byte) bool {
+	if len(phase0Key) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(phase0Key)], phase0Key)
+}
+
 // In order for an encoding to be Altair compatible, it must be prefixed with altair key.
 func hasAltairKey(enc []byte) bool {
 	if len(altairKey) >= len(enc) {

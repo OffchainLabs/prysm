@@ -801,3 +801,27 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 	assert.NotNil(t, err)
 	assert.Equal(t, pubsub.ValidationReject, res)
 }
+
+func Test_SetAggregatorIndexEpochSeen(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+
+	r := &Service{
+		cfg: &config{
+			p2p:      p,
+			beaconDB: db,
+		},
+		seenAggregatedAttestationCache: lruwrpr.New(10),
+	}
+
+	aggIndex := primitives.ValidatorIndex(42)
+	epoch := primitives.Epoch(7)
+
+	require.Equal(t, false, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
+	first := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
+	require.Equal(t, true, first)
+	require.Equal(t, true, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
+
+	second := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
+	require.Equal(t, false, second)
+}

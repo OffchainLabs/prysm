@@ -206,6 +206,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateDenebFieldCount:     28,
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
+	BeaconStateGloasFieldCount:     43,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -321,12 +322,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Values related to fulu
 	MaxRequestDataColumnSidecars:          16384,
 	DataColumnSidecarSubnetCount:          128,
-	NumberOfColumns:                       128,
 	SamplesPerSlot:                        8,
 	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
-	MaxCellsInExtendedMatrix:              768,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 	// Values related to networking parameters.

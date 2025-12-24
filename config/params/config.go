@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
@@ -20,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // BeaconChainConfig contains constant configs for node to participate in beacon chain.
@@ -162,6 +161,7 @@ type BeaconChainConfig struct {
 	BeaconStateDenebFieldCount     int             // BeaconStateDenebFieldCount defines how many fields are in beacon state post upgrade to Deneb.
 	BeaconStateElectraFieldCount   int             // BeaconStateElectraFieldCount defines how many fields are in beacon state post upgrade to Electra.
 	BeaconStateFuluFieldCount      int             // BeaconStateFuluFieldCount defines how many fields are in beacon state post upgrade to Fulu.
+	BeaconStateGloasFieldCount     int             // BeaconStateGloasFieldCount defines how many fields are in beacon state post upgrade to Gloas.
 
 	// Slasher constants.
 	WeakSubjectivityPeriod    primitives.Epoch // WeakSubjectivityPeriod defines the time period expressed in number of epochs were proof of stake network should validate block headers and attestations for slashable events.
@@ -281,12 +281,10 @@ type BeaconChainConfig struct {
 	UnsetDepositRequestsStartIndex        uint64 `yaml:"UNSET_DEPOSIT_REQUESTS_START_INDEX" spec:"true"`         // UnsetDepositRequestsStartIndex is used to check the start index for eip6110
 
 	// Values introduced in Fulu upgrade
-	NumberOfColumns                       uint64           `yaml:"NUMBER_OF_COLUMNS" spec:"true"`                            // NumberOfColumns in the extended data matrix.
 	SamplesPerSlot                        uint64           `yaml:"SAMPLES_PER_SLOT" spec:"true"`                             // SamplesPerSlot is the minimum number of samples for an honest node.
 	NumberOfCustodyGroups                 uint64           `yaml:"NUMBER_OF_CUSTODY_GROUPS" spec:"true"`                     // NumberOfCustodyGroups available for nodes to custody.
 	CustodyRequirement                    uint64           `yaml:"CUSTODY_REQUIREMENT" spec:"true"`                          // CustodyRequirement is minimum number of custody groups an honest node custodies and serves samples from.
 	MinEpochsForDataColumnSidecarsRequest primitives.Epoch `yaml:"MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS" spec:"true"` // MinEpochsForDataColumnSidecarsRequest is the minimum number of epochs the node will keep the data columns for.
-	MaxCellsInExtendedMatrix              uint64           `yaml:"MAX_CELLS_IN_EXTENDED_MATRIX"`                             // MaxCellsInExtendedMatrix is the full data of one-dimensional erasure coding extended blobs (in row major format).
 	DataColumnSidecarSubnetCount          uint64           `yaml:"DATA_COLUMN_SIDECAR_SUBNET_COUNT" spec:"true"`             // DataColumnSidecarSubnetCount is the number of data column sidecar subnets used in the gossipsub protocol
 	MaxRequestDataColumnSidecars          uint64           `yaml:"MAX_REQUEST_DATA_COLUMN_SIDECARS" spec:"true"`             // MaxRequestDataColumnSidecars is the maximum number of data column sidecars in a single request
 	ValidatorCustodyRequirement           uint64           `yaml:"VALIDATOR_CUSTODY_REQUIREMENT" spec:"true"`                // ValidatorCustodyRequirement is the minimum number of custody groups an honest node with validators attached custodies and serves samples from
@@ -358,7 +356,7 @@ type NetworkScheduleEntry struct {
 	isFork           bool                            `yaml:"-" json:"-"`
 }
 
-func (e NetworkScheduleEntry) LogFields() log.Fields {
+func (e NetworkScheduleEntry) LogFields() logrus.Fields {
 	gvr := BeaconConfig().GenesisValidatorsRoot
 	root, err := computeForkDataRoot(e.ForkVersion, gvr)
 	if err != nil {
@@ -366,7 +364,7 @@ func (e NetworkScheduleEntry) LogFields() log.Fields {
 			WithField("genesisValidatorsRoot", fmt.Sprintf("%#x", gvr)).
 			WithError(err).Error("Failed to compute fork data root")
 	}
-	fields := log.Fields{
+	fields := logrus.Fields{
 		"forkVersion":      fmt.Sprintf("%#x", e.ForkVersion),
 		"forkDigest":       fmt.Sprintf("%#x", e.ForkDigest),
 		"maxBlobsPerBlock": e.MaxBlobsPerBlock,

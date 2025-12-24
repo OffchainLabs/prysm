@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -193,7 +193,7 @@ func TestValidateDataColumn(t *testing.T) {
 		},
 		{
 			name:           "nominal",
-			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}),
+			verifier:       testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}),
 			expectedResult: pubsub.ValidationAccept,
 		},
 	}
@@ -220,5 +220,14 @@ func TestValidateDataColumn(t *testing.T) {
 func testNewDataColumnSidecarsVerifier(verifier verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
 	return func([]blocks.RODataColumn, []verification.Requirement) verification.DataColumnsVerifier {
 		return &verifier
+	}
+}
+
+func testVerifierReturnsAll(v *verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
+	return func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		for _, col := range cols {
+			v.AppendRODataColumns(col)
+		}
+		return v
 	}
 }
