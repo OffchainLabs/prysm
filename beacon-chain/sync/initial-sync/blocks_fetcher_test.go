@@ -516,7 +516,10 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 			p2p:   p2p,
 		})
 
-	_, peerIDs := p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, slots.ToEpoch(mc.HeadSlot()))
+	_, peerIDs := p2p.Peers().BestFinalized(slots.ToEpoch(mc.HeadSlot()))
+	if len(peerIDs) > params.BeaconConfig().MaxPeersToSync {
+		peerIDs = peerIDs[:params.BeaconConfig().MaxPeersToSync]
+	}
 	req := &ethpb.BeaconBlocksByRangeRequest{
 		StartSlot: 1,
 		Step:      1,

@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
@@ -22,12 +23,6 @@ var (
 	BlobStoragePathFlag = &cli.PathFlag{
 		Name:  "blob-path",
 		Usage: "Location for blob storage. Default location will be a 'blobs' directory next to the beacon db.",
-	}
-	BlobRetentionEpochFlag = &cli.Uint64Flag{
-		Name:    "blob-retention-epochs",
-		Usage:   "Override the default blob retention period (measured in epochs). The node will exit with an error at startup if the value is less than the default of 4096 epochs.",
-		Value:   uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
-		Aliases: []string{"extend-blob-retention-epoch"},
 	}
 	BlobStorageLayout = &cli.StringFlag{
 		Name:        "blob-storage-layout",
@@ -43,7 +38,6 @@ var (
 // Flags is the list of CLI flags for configuring blob storage.
 var Flags = []cli.Flag{
 	BlobStoragePathFlag,
-	BlobRetentionEpochFlag,
 	BlobStorageLayout,
 	DataColumnStoragePathFlag,
 }
@@ -178,14 +172,14 @@ var errInvalidBlobRetentionEpochs = errors.New("value is smaller than spec minim
 // smaller than the spec default, an error will be returned.
 func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	spec := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
-	if !cliCtx.IsSet(BlobRetentionEpochFlag.Name) {
+	if !cliCtx.IsSet(das.BlobRetentionEpochFlag.Name) {
 		return spec, nil
 	}
 
-	re := primitives.Epoch(cliCtx.Uint64(BlobRetentionEpochFlag.Name))
+	re := primitives.Epoch(cliCtx.Uint64(das.BlobRetentionEpochFlag.Name))
 	// Validate the epoch value against the spec default.
 	if re < params.BeaconConfig().MinEpochsForBlobsSidecarsRequest {
-		return spec, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", BlobRetentionEpochFlag.Name, re, spec)
+		return spec, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", das.BlobRetentionEpochFlag.Name, re, spec)
 	}
 
 	return re, nil
@@ -196,16 +190,16 @@ func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 // smaller than the spec default, an error will be returned.
 func dataColumnRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	defaultValue := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
-	if !cliCtx.IsSet(BlobRetentionEpochFlag.Name) {
+	if !cliCtx.IsSet(das.BlobRetentionEpochFlag.Name) {
 		return defaultValue, nil
 	}
 
 	// We use on purpose the same retention flag for both blobs and data columns.
-	customValue := primitives.Epoch(cliCtx.Uint64(BlobRetentionEpochFlag.Name))
+	customValue := primitives.Epoch(cliCtx.Uint64(das.BlobRetentionEpochFlag.Name))
 
 	// Validate the epoch value against the spec default.
 	if customValue < defaultValue {
-		return defaultValue, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", BlobRetentionEpochFlag.Name, customValue, defaultValue)
+		return defaultValue, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", das.BlobRetentionEpochFlag.Name, customValue, defaultValue)
 	}
 
 	return customValue, nil

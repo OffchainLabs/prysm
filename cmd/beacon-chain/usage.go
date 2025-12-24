@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage"
@@ -115,7 +116,6 @@ var appHelpFlagGroups = []flagGroup{
 		Name: "db",
 		Flags: []cli.Flag{
 			backfill.BackfillBatchSize,
-			backfill.BackfillOldestSlot,
 			backfill.BackfillWorkerCount,
 			backfill.EnableExperimentalBackfill,
 			cmd.ClearDB,
@@ -123,10 +123,11 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.ForceClearDB,
 			cmd.RestoreSourceFileFlag,
 			cmd.RestoreTargetDirFlag,
+			das.BackfillOldestSlot,
+			das.BlobRetentionEpochFlag,
 			flags.BeaconDBPruning,
 			flags.PrunerRetentionEpochs,
 			flags.SlotsPerArchivedPoint,
-			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
 			storage.DataColumnStoragePathFlag,
