@@ -3,19 +3,29 @@ package proofgeneration
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func (s *Service) GenerateProofs(slot primitives.Slot, payloadHash []byte, blockRoot []byte) ([]*ethpb.ExecutionProof, error) {
 	// Check if proofs are required for this epoch
-	// Get the list of proof types we should generate
+	requestedEpoch := slots.ToEpoch(slot)
+	if !s.isProofRequiredForEpoch(requestedEpoch) {
+		log.WithField("epoch", requestedEpoch).Info("Proof generation not required for this epoch")
+		return nil, nil
+	}
 
-	// TODO: For now, we generate all proofs configured in the service.
-	requiredProofTypes := s.cfg.ProofTypes
+	// Get the list of proof types we should generate,
+	// so check if we already have this proof in the pool
+	requiredProofTypes := make([]primitives.ExecutionProofId, 0, len(s.cfg.ProofTypes))
+	for _, proofType := range s.cfg.ProofTypes {
+		if !s.cfg.ExecProofPool.ProofExists(slot, proofType) {
+			requiredProofTypes = append(requiredProofTypes, proofType)
+		}
 
-	// Check which proofs are missing/we haven't received yet
-	// Check if we already have this proof
+	}
 
 	// Generate the required proofs
 	proofs := []*ethpb.ExecutionProof{}
@@ -36,4 +46,20 @@ func (s *Service) GenerateProofs(slot primitives.Slot, payloadHash []byte, block
 	}
 
 	return proofs, nil
+}
+
+// isProofRequiredForEpoch checks if proof generation is required for the given epoch.
+// This checks against the current epoch and the configured retention policy.
+func (s *Service) isProofRequiredForEpoch(epoch primitives.Epoch) bool {
+	currentSlot := s.cfg.TimeFetcher.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+
+	proofRetentionEpoch := primitives.Epoch(0)
+	if currentEpoch >= primitives.Epoch(params.BeaconConfig().MinEpochsForExecutionProofRequests) {
+		proofRetentionEpoch = currentEpoch.Sub(params.BeaconConfig().MinEpochsForExecutionProofRequests)
+	}
+
+	boundaryEpoch := primitives.MaxEpoch(params.BeaconConfig().FuluForkEpoch, proofRetentionEpoch)
+
+	return epoch >= boundaryEpoch
 }
