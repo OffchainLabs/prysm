@@ -257,7 +257,7 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			numOfSlots := primitives.Slot(4)
 			slotDuration := params.BeaconConfig().SlotDuration()
 			validator.genesisTime = currentTime.Add(-slotDuration * time.Duration(numOfSlots))
-			timeToSleep := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AggregrateDueBPS)
+			timeToSleep := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AggregateDueBPS)
 
 			twoThirdTime := currentTime.Add(timeToSleep)
 			validator.waitToSlotTwoThirds(t.Context(), numOfSlots)

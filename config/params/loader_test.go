@@ -98,7 +98,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.HysteresisDownwardMultiplier, actual.HysteresisDownwardMultiplier, "%s: HysteresisDownwardMultiplier", name)
 	assert.Equal(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier, "%s: HysteresisUpwardMultiplier", name)
 	assert.Equal(t, expected.AttestationDueBPS, actual.AttestationDueBPS, "%s: AttestationDueBPS", name)
-	assert.Equal(t, expected.AggregrateDueBPS, actual.AggregrateDueBPS, "%s: AggregrateDueBPS", name)
+	assert.Equal(t, expected.AggregateDueBPS, actual.AggregateDueBPS, "%s: AggregateDueBPS", name)
 	assert.Equal(t, expected.ContributionDueBPS, actual.ContributionDueBPS, "%s: ContributionDueBPS", name)
 	assert.Equal(t, expected.ProposerReorgCutoffBPS, actual.ProposerReorgCutoffBPS, "%s: ProposerReorgCutoffBPS", name)
 	assert.Equal(t, expected.SyncMessageDueBPS, actual.SyncMessageDueBPS, "%s: SyncMessageDueBPS", name)

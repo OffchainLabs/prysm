@@ -132,7 +132,7 @@ func TestGetSpec(t *testing.T) {
 	config.MinSyncCommitteeParticipants = 71
 	config.ProposerReorgCutoffBPS = primitives.BP(121)
 	config.AttestationDueBPS = primitives.BP(122)
-	config.AggregrateDueBPS = primitives.BP(123)
+	config.AggregateDueBPS = primitives.BP(123)
 	config.ContributionDueBPS = primitives.BP(124)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
@@ -457,7 +457,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "121", v)
 			case "ATTESTATION_DUE_BPS":
 				assert.Equal(t, "122", v)
-			case "AGGREGRATE_DUE_BPS":
+			case "AGGREGATE_DUE_BPS":
 				assert.Equal(t, "123", v)
 			case "CONTRIBUTION_DUE_BPS":
 				assert.Equal(t, "124", v)
