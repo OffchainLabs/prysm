@@ -165,6 +165,7 @@ go_test(
         "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state/stategen/mock:go_default_library",
         "//cmd/beacon-chain/flags:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",

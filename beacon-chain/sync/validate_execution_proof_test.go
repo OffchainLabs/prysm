@@ -22,6 +22,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	zkvmexecutionlayer "github.com/OffchainLabs/prysm/v7/zkvm-execution-layer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -73,6 +74,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(genesisTime, [32]byte{'A'}),
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				return s
@@ -102,6 +104,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						chain:       chainService,
 						clock:       startup.NewClock(genesisTime, [32]byte{'A'}),
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				return s
@@ -131,6 +134,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
 						execProofPool: execproof.NewPool(),
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				return s
@@ -163,6 +167,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
 						execProofPool: execproof.NewPool(),
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				return s
@@ -195,6 +200,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
 						execProofPool: execproof.NewPool(),
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				// Mark proof as seen
@@ -238,6 +244,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
 						execProofPool: pool,
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				return s
@@ -258,6 +265,77 @@ func TestValidateExecutionProof(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "Reject proof if no verifier found",
+			setupService: func() *Service {
+				s := &Service{
+					cfg: &config{
+						p2p:           p2pService,
+						initialSync:   &mockSync.Sync{IsSyncing: false},
+						chain:         chainService,
+						clock:         startup.NewClock(genesisTime, [32]byte{'A'}),
+						beaconDB:      beaconDB,
+						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
+						execProofPool: execproof.NewPool(),
+					},
+					// Empty verifier registry to simulate no verifier found
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistry(),
+				}
+				s.initCaches()
+				return s
+			},
+			proof: &ethpb.ExecutionProof{
+				Slot:      currentSlot,
+				ProofId:   primitives.ExecutionProofId(1),
+				BlockRoot: make([]byte, 32),
+				BlockHash: make([]byte, 32),
+				ProofData: make([]byte, 100),
+			},
+			topic: func() *string {
+				t := fmt.Sprintf(defaultTopic, fakeDigest)
+				return &t
+			}(),
+			pid:     "random-peer",
+			want:    pubsub.ValidationReject,
+			wantErr: true,
+		},
+		{
+			name: "Reject proof if verification fails",
+			setupService: func() *Service {
+				registry := zkvmexecutionlayer.NewVerifierRegistry()
+				failVerifier := &alwaysFailVerifier{}
+				registry.RegisterVerifier(failVerifier)
+
+				s := &Service{
+					cfg: &config{
+						p2p:           p2pService,
+						initialSync:   &mockSync.Sync{IsSyncing: false},
+						chain:         chainService,
+						clock:         startup.NewClock(genesisTime, [32]byte{'A'}),
+						beaconDB:      beaconDB,
+						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
+						execProofPool: execproof.NewPool(),
+					},
+					executionProofVerifierRegistry: registry,
+				}
+				s.initCaches()
+				return s
+			},
+			proof: &ethpb.ExecutionProof{
+				Slot:      currentSlot,
+				ProofId:   primitives.ExecutionProofId(1),
+				BlockRoot: make([]byte, 32),
+				BlockHash: make([]byte, 32),
+				ProofData: make([]byte, 100),
+			},
+			topic: func() *string {
+				t := fmt.Sprintf(defaultTopic, fakeDigest)
+				return &t
+			}(),
+			pid:     "random-peer",
+			want:    pubsub.ValidationReject,
+			wantErr: true,
+		},
+		{
 			name: "Accept valid proof",
 			setupService: func() *Service {
 				s := &Service{
@@ -270,6 +348,7 @@ func TestValidateExecutionProof(t *testing.T) {
 						stateGen:      stategen.New(beaconDB, doublylinkedtree.New()),
 						execProofPool: execproof.NewPool(),
 					},
+					executionProofVerifierRegistry: zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers(),
 				}
 				s.initCaches()
 				return s
@@ -333,4 +412,14 @@ func TestValidateExecutionProof(t *testing.T) {
 			}
 		})
 	}
+}
+
+type alwaysFailVerifier struct{}
+
+func (v *alwaysFailVerifier) Verify(proof *ethpb.ExecutionProof) (bool, error) {
+	return false, nil
+}
+
+func (v *alwaysFailVerifier) GetProofId() primitives.ExecutionProofId {
+	return primitives.ExecutionProofId(1)
 }

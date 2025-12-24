@@ -34,6 +34,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -42,6 +43,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	zkvmexecutionlayer "github.com/OffchainLabs/prysm/v7/zkvm-execution-layer"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -187,6 +189,9 @@ type Service struct {
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
+
+	// EIP-8025: Optional Execution Proofs
+	executionProofVerifierRegistry *zkvmexecutionlayer.VerifierRegistry
 }
 
 // NewService initializes new regular sync service.
@@ -240,6 +245,12 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 	r.initCaches()
+
+	// Register execution proof verifier registry if zkvm feature is enabled.
+	if features.Get().EnableZkvm {
+		// For now, use dummy verifiers.
+		r.executionProofVerifierRegistry = zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers()
+	}
 
 	return r
 }

@@ -145,7 +145,30 @@ func (s *Service) isProofCachedInPool(proofId primitives.ExecutionProofId, slot 
 
 // verifyExecutionProof performs the actual verification of the execution proof.
 // It uses verifier implementations to validate the proof.
-// TODO: Implement the actual verification logic.
 func (s *Service) verifyExecutionProof(executionProof *ethpb.ExecutionProof) error {
+	verifierRegistry := s.executionProofVerifierRegistry
+	if verifierRegistry == nil {
+		return fmt.Errorf("execution proof verifier registry is not initialized")
+	}
+
+	if verifierRegistry.IsEmpty() {
+		return fmt.Errorf("no execution proof verifiers are registered")
+	}
+
+	proofId := primitives.ExecutionProofId(executionProof.ProofId)
+	verifier, found := verifierRegistry.GetVerifier(proofId)
+	if !found {
+		return fmt.Errorf("no verifier registered for execution proof ID %d", proofId)
+	}
+
+	isValid, err := verifier.Verify(executionProof)
+	if err != nil {
+		return fmt.Errorf("error during execution proof verification: %w", err)
+	}
+
+	if !isValid {
+		return fmt.Errorf("execution proof verification failed for proof ID %d", proofId)
+	}
+
 	return nil
 }
