@@ -33,7 +33,7 @@ var (
 			"validator_index",
 		},
 	)
-	// timelyTargetCounter used to track attestation timely head flags
+	// timelyTargetCounter used to track attestation timely target flags
 	timelyTargetCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "monitor",
@@ -44,7 +44,7 @@ var (
 			"validator_index",
 		},
 	)
-	// timelySourceCounter used to track attestation timely head flags
+	// timelySourceCounter used to track attestation timely source flags
 	timelySourceCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "monitor",
