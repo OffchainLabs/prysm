@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('I')
+[]byte("4\xd0&s!2\x9b|4\x84\xbb\xe9\xe3*(h\r")
