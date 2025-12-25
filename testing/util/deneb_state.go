@@ -98,12 +98,6 @@ func buildGenesisBeaconStateDeneb(genesisTime uint64, preState state.BeaconState
 	}
 
 	zeroHash := params.BeaconConfig().ZeroHash[:]
-
-	activeIndexRoots := make([][]byte, params.BeaconConfig().EpochsPerHistoricalVector)
-	for i := range activeIndexRoots {
-		activeIndexRoots[i] = zeroHash
-	}
-
 	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
 	for i := range blockRoots {
 		blockRoots[i] = zeroHash
