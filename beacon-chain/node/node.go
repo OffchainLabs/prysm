@@ -440,10 +440,17 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		}
 	}
 
-	if features.Get().EnableZkvm && len(flags.Get().ProofGenerationTypes) > 0 {
-		log.Debugln("Registering Proof Generation Service")
-		if err := beacon.registerProofGenerationService(cliCtx); err != nil {
-			return errors.Wrap(err, "could not register proof generation service")
+	if features.Get().EnableZkvm {
+		log.Debugln("Registering Execution Proof Pool")
+		if err := beacon.registerExecutionProofPool(); err != nil {
+			return errors.Wrap(err, "could not register execution proof pool")
+		}
+
+		if len(flags.Get().ProofGenerationTypes) > 0 {
+			log.Debugln("Registering Proof Generation Service")
+			if err := beacon.registerProofGenerationService(cliCtx); err != nil {
+				return errors.Wrap(err, "could not register proof generation service")
+			}
 		}
 	}
 
@@ -1180,6 +1187,26 @@ func (b *BeaconNode) registerProofGenerationService(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not create proof generation service")
 	}
 	return b.services.RegisterService(pgs)
+}
+
+func (b *BeaconNode) registerExecutionProofPool() error {
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	s, err := execproof.NewService(
+		b.ctx,
+		&execproof.Config{
+			Pool:             b.execProofPool,
+			FinalizedFetcher: chainService,
+			ClockWaiter:      b.ClockWaiter,
+		})
+	if err != nil {
+		return errors.Wrap(err, "could not register exec proof pool service")
+	}
+
+	return b.services.RegisterService(s)
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {
