@@ -157,3 +157,144 @@ func (e *ExecutionProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	hh.Merkleize(indx)
 	return
 }
+
+// MarshalSSZ ssz marshals the ExecutionProofsByRootRequest object
+func (e *ExecutionProofsByRootRequest) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionProofsByRootRequest object to a target array
+func (e *ExecutionProofsByRootRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(44)
+
+	// Field (0) 'BlockRoot'
+	if size := len(e.BlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
+		return
+	}
+	dst = append(dst, e.BlockRoot...)
+
+	// Field (1) 'CountNeeded'
+	dst = ssz.MarshalUint64(dst, e.CountNeeded)
+
+	// Offset (2) 'AlreadyHave'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.AlreadyHave) * 1
+
+	// Field (2) 'AlreadyHave'
+	if size := len(e.AlreadyHave); size > 8 {
+		err = ssz.ErrListTooBigFn("--.AlreadyHave", size, 8)
+		return
+	}
+	for ii := 0; ii < len(e.AlreadyHave); ii++ {
+		dst = ssz.MarshalUint8(dst, uint8(e.AlreadyHave[ii]))
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ExecutionProofsByRootRequest object
+func (e *ExecutionProofsByRootRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 44 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o2 uint64
+
+	// Field (0) 'BlockRoot'
+	if cap(e.BlockRoot) == 0 {
+		e.BlockRoot = make([]byte, 0, len(buf[0:32]))
+	}
+	e.BlockRoot = append(e.BlockRoot, buf[0:32]...)
+
+	// Field (1) 'CountNeeded'
+	e.CountNeeded = ssz.UnmarshallUint64(buf[32:40])
+
+	// Offset (2) 'AlreadyHave'
+	if o2 = ssz.ReadOffset(buf[40:44]); o2 > size {
+		return ssz.ErrOffset
+	}
+
+	if o2 != 44 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'AlreadyHave'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DivideInt2(len(buf), 1, 8)
+		if err != nil {
+			return err
+		}
+		// `primitives.ExecutionProofId` is an alias of `uint8`,
+		// but we need to handle the conversion manually here
+		// to call `ssz.ExtendUint8`.
+		alreadyHave := make([]uint8, len(e.AlreadyHave))
+		for i, v := range e.AlreadyHave {
+			alreadyHave[i] = uint8(v)
+		}
+		alreadyHave = ssz.ExtendUint8(alreadyHave, num)
+		alreadyHave2 := make([]github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ExecutionProofId, len(alreadyHave))
+		for i, v := range alreadyHave {
+			alreadyHave2[i] = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ExecutionProofId(v)
+		}
+		e.AlreadyHave = alreadyHave2
+		for ii := range num {
+			e.AlreadyHave[ii] = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ExecutionProofId(ssz.UnmarshallUint8(buf[ii*1 : (ii+1)*1]))
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionProofsByRootRequest object
+func (e *ExecutionProofsByRootRequest) SizeSSZ() (size int) {
+	size = 44
+
+	// Field (2) 'AlreadyHave'
+	size += len(e.AlreadyHave) * 1
+
+	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionProofsByRootRequest object
+func (e *ExecutionProofsByRootRequest) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionProofsByRootRequest object with a hasher
+func (e *ExecutionProofsByRootRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BlockRoot'
+	if size := len(e.BlockRoot); size != 32 {
+		err = ssz.ErrBytesLengthFn("--.BlockRoot", size, 32)
+		return
+	}
+	hh.PutBytes(e.BlockRoot)
+
+	// Field (1) 'CountNeeded'
+	hh.PutUint64(e.CountNeeded)
+
+	// Field (2) 'AlreadyHave'
+	{
+		if size := len(e.AlreadyHave); size > 8 {
+			err = ssz.ErrListTooBigFn("--.AlreadyHave", size, 8)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range e.AlreadyHave {
+			hh.AppendUint8(uint8(i))
+		}
+		hh.FillUpTo32()
+
+		numItems := uint64(len(e.AlreadyHave))
+		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(8, numItems, 1))
+	}
+
+	hh.Merkleize(indx)
+	return
+}

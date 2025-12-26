@@ -182,3 +182,21 @@ func WriteDataColumnSidecarChunk(stream libp2pcore.Stream, tor blockchain.Tempor
 
 	return nil
 }
+
+func WriteExecutionProofChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, proof *ethpb.ExecutionProof) error {
+	// Success response code.
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return errors.Wrap(err, "stream write")
+	}
+	ctxBytes := params.ForkDigest(slots.ToEpoch(proof.Slot))
+	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
+		return errors.Wrap(err, "write context to stream")
+	}
+
+	// Execution proof.
+	if _, err := encoding.EncodeWithMaxLength(stream, proof); err != nil {
+		return errors.Wrap(err, "encode with max length")
+	}
+
+	return nil
+}

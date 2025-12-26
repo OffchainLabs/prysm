@@ -602,6 +602,33 @@ func (p *Status) All() []peer.ID {
 	return pids
 }
 
+// ZkvmEnabledPeers returns all connected peers that have zkvm enabled in their ENR.
+func (p *Status) ZkvmEnabledPeers() []peer.ID {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	peers := make([]peer.ID, 0)
+	for pid, peerData := range p.store.Peers() {
+		if peerData.ConnState != Connected {
+			continue
+		}
+		if peerData.Enr == nil {
+			continue
+		}
+
+		var enabled bool
+		entry := enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, &enabled)
+		if err := peerData.Enr.Load(entry); err != nil {
+			continue
+		}
+
+		if enabled {
+			peers = append(peers, pid)
+		}
+	}
+	return peers
+}
+
 // Prune clears out and removes outdated and disconnected peers.
 func (p *Status) Prune() {
 	p.store.Lock()

@@ -192,6 +192,7 @@ go_test(
         "rpc_blob_sidecars_by_root_test.go",
         "rpc_data_column_sidecars_by_range_test.go",
         "rpc_data_column_sidecars_by_root_test.go",
+        "rpc_execution_proofs_by_root_topic_test.go",
         "rpc_goodbye_test.go",
         "rpc_handler_test.go",
         "rpc_light_client_test.go",

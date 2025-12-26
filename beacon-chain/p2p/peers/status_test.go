@@ -1341,3 +1341,75 @@ func createPeer(t *testing.T, p *peers.Status, addr ma.Multiaddr,
 	p.SetConnectionState(id, state)
 	return id
 }
+
+func TestZkvmEnabledPeers(t *testing.T) {
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit: 30,
+		ScorerParams: &scorers.Config{
+			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+				Threshold: 1,
+			},
+		},
+	})
+
+	// Create peer 1: Connected, zkVM enabled
+	pid1 := addPeer(t, p, peers.Connected)
+	record1 := new(enr.Record)
+	zkvmEnabled := true
+	record1.Set(enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, &zkvmEnabled))
+	p.Add(record1, pid1, nil, network.DirOutbound)
+	p.SetConnectionState(pid1, peers.Connected)
+
+	// Create peer 2: Connected, zkVM disabled
+	pid2 := addPeer(t, p, peers.Connected)
+	record2 := new(enr.Record)
+	zkvmDisabled := false
+	record2.Set(enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, &zkvmDisabled))
+	p.Add(record2, pid2, nil, network.DirOutbound)
+	p.SetConnectionState(pid2, peers.Connected)
+
+	// Create peer 3: Connected, zkVM enabled
+	pid3 := addPeer(t, p, peers.Connected)
+	record3 := new(enr.Record)
+	record3.Set(enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, &zkvmEnabled))
+	p.Add(record3, pid3, nil, network.DirOutbound)
+	p.SetConnectionState(pid3, peers.Connected)
+
+	// Create peer 4: Disconnected, zkVM enabled (should not be included)
+	pid4 := addPeer(t, p, peers.Disconnected)
+	record4 := new(enr.Record)
+	record4.Set(enr.WithEntry(params.BeaconNetworkConfig().ZkvmEnabledKey, &zkvmEnabled))
+	p.Add(record4, pid4, nil, network.DirOutbound)
+	p.SetConnectionState(pid4, peers.Disconnected)
+
+	// Create peer 5: Connected, no ENR (should not be included)
+	pid5 := addPeer(t, p, peers.Connected)
+	p.Add(nil, pid5, nil, network.DirOutbound)
+	p.SetConnectionState(pid5, peers.Connected)
+
+	// Create peer 6: Connected, no zkVM key in ENR (should not be included)
+	pid6 := addPeer(t, p, peers.Connected)
+	record6 := new(enr.Record)
+	record6.Set(enr.WithEntry("other_key", "other_value"))
+	p.Add(record6, pid6, nil, network.DirOutbound)
+	p.SetConnectionState(pid6, peers.Connected)
+
+	// Get zkVM enabled peers
+	zkvmPeers := p.ZkvmEnabledPeers()
+
+	// Should return only pid1 and pid3 (connected peers with zkVM enabled)
+	assert.Equal(t, 2, len(zkvmPeers), "Expected 2 zkVM enabled peers")
+
+	// Verify the returned peers are correct
+	zkvmPeerMap := make(map[peer.ID]bool)
+	for _, pid := range zkvmPeers {
+		zkvmPeerMap[pid] = true
+	}
+
+	assert.Equal(t, true, zkvmPeerMap[pid1], "pid1 should be in zkVM enabled peers")
+	assert.Equal(t, true, zkvmPeerMap[pid3], "pid3 should be in zkVM enabled peers")
+	assert.Equal(t, false, zkvmPeerMap[pid2], "pid2 should not be in zkVM enabled peers (disabled)")
+	assert.Equal(t, false, zkvmPeerMap[pid4], "pid4 should not be in zkVM enabled peers (disconnected)")
+	assert.Equal(t, false, zkvmPeerMap[pid5], "pid5 should not be in zkVM enabled peers (no ENR)")
+	assert.Equal(t, false, zkvmPeerMap[pid6], "pid6 should not be in zkVM enabled peers (no zkVM key)")
+}

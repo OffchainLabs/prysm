@@ -11,11 +11,14 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/verify"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -87,7 +90,83 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		return errors.Wrap(err, "request and save missing data columns")
 	}
 
+	// EIP-8025: Optional Execution Proofs
+	// When requesting beacon blocks, also request execution proofs for blocks that are missing them.
+	if err := s.requestAndSaveMissingExecutionProofs(postFuluBlocks); err != nil {
+		return errors.Wrap(err, "request and save missing execution proofs")
+	}
+
 	return err
+}
+
+func (s *Service) requestAndSaveMissingExecutionProofs(blks []blocks.ROBlock) error {
+	if len(blks) == 0 {
+		return nil
+	}
+
+	for _, blk := range blks {
+		if err := s.sendAndSaveExecutionProofs(s.ctx, blk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) sendAndSaveExecutionProofs(
+	ctx context.Context,
+	block blocks.ROBlock,
+) error {
+	// If EIP-8025 is not enabled, skip.
+	if !features.Get().EnableZkvm {
+		return nil
+	}
+
+	// Check proof retention period.
+	blockEpoch := slots.ToEpoch(block.Block().Slot())
+	currentEpoch := slots.ToEpoch(s.cfg.clock.CurrentSlot())
+	if !params.WithinExecutionProofPeriod(blockEpoch, currentEpoch) {
+		return nil
+	}
+
+	// Check how many proofs are needed with Execution Proof Pool.
+	proofTypesSet := s.cfg.execProofPool.GetProofTypesForBlock(block.Root())
+	if uint64(len(proofTypesSet)) >= params.BeaconConfig().MinProofsRequired {
+		return nil
+	}
+
+	alreadyHave := make([]primitives.ExecutionProofId, 0, len(proofTypesSet))
+	for proofType := range proofTypesSet {
+		alreadyHave = append(alreadyHave, proofType)
+	}
+
+	// Construct request
+	blockRoot := block.Root()
+	req := &ethpb.ExecutionProofsByRootRequest{
+		BlockRoot:   blockRoot[:],
+		CountNeeded: params.BeaconConfig().MinProofsRequired - uint64(len(proofTypesSet)),
+		AlreadyHave: alreadyHave,
+	}
+
+	// Call SendExecutionProofByRootRequest
+	zkvmEnabledPeers := s.cfg.p2p.Peers().ZkvmEnabledPeers()
+	if len(zkvmEnabledPeers) == 0 {
+		return fmt.Errorf("no zkVM enabled peers available to request execution proofs")
+	}
+
+	// For simplicity, just pick the first peer for now.
+	// In the future, we can implement better peer selection logic.
+	pid := zkvmEnabledPeers[0]
+	proofs, err := SendExecutionProofsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, req)
+	if err != nil {
+		return fmt.Errorf("send execution proofs by root request: %w", err)
+	}
+
+	// Insert ExecProofPool
+	for _, proof := range proofs {
+		s.cfg.execProofPool.InsertExecutionProof(proof)
+	}
+
+	return nil
 }
 
 // requestAndSaveMissingDataColumns checks if the data columns are missing for the given block.

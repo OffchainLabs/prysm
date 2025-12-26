@@ -41,6 +41,9 @@ type PoolManager interface {
 	// GetProofCountForBlock returns the count of unique proof types for a block
 	GetProofCountForBlock(blockRoot [32]byte) uint64
 
+	// GetProofTypesForBlock returns the unique proof types for a block
+	GetProofTypesForBlock(blockRoot [32]byte) map[primitives.ExecutionProofId]struct{}
+
 	// ProofExists checks if a proof exists for the given slot and proof ID
 	ProofExists(slot primitives.Slot, proofId primitives.ExecutionProofId) bool
 
@@ -136,8 +139,23 @@ func (p *Pool) GetProofCountForBlock(blockRoot [32]byte) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
+	set := p.getProofSet(blockRoot)
+	return uint64(len(set))
+}
+
+// GetProofTypesForBlock returns the count of unique proof types (ProofId) for a block.
+func (p *Pool) GetProofTypesForBlock(blockRoot [32]byte) map[primitives.ExecutionProofId]struct{} {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.getProofSet(blockRoot)
+}
+
+// getProofSet is an internal helper to retrieve the set of unique proof IDs for a block.
+// Should be called with the lock held.
+func (p *Pool) getProofSet(blockRoot [32]byte) map[primitives.ExecutionProofId]struct{} {
 	// Track unique proof IDs
-	uniqueProofIds := make(map[primitives.ExecutionProofId]bool)
+	set := make(map[primitives.ExecutionProofId]struct{})
 	node := p.pending.First()
 
 	for node != nil {
@@ -149,13 +167,13 @@ func (p *Pool) GetProofCountForBlock(blockRoot [32]byte) uint64 {
 		var proofBlockRoot [32]byte
 		copy(proofBlockRoot[:], proof.BlockRoot)
 		if proofBlockRoot == blockRoot {
-			uniqueProofIds[proof.ProofId] = true
+			set[proof.ProofId] = struct{}{}
 		}
 
 		node, _ = node.Next()
 	}
 
-	return uint64(len(uniqueProofIds))
+	return set
 }
 
 // InsertExecutionProof inserts a proof into the pool.

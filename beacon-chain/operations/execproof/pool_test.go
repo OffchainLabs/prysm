@@ -145,7 +145,7 @@ func TestPendingExecutionProofs(t *testing.T) {
 		var expectedProofs []*ethpb.ExecutionProof
 
 		// Insert 5 proofs in sequence
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			proof := &ethpb.ExecutionProof{
 				Slot:      primitives.Slot(100 + i),
 				ProofId:   primitives.ExecutionProofId(i),
@@ -160,7 +160,7 @@ func TestPendingExecutionProofs(t *testing.T) {
 		assert.Equal(t, 5, len(proofs))
 
 		// Verify order is maintained (FIFO)
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			assert.DeepEqual(t, expectedProofs[i], proofs[i])
 		}
 	})
@@ -377,7 +377,7 @@ func TestPruneFinalizedProofs(t *testing.T) {
 
 	t.Run("multiple prune calls", func(t *testing.T) {
 		pool := NewPool()
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			proof := &ethpb.ExecutionProof{
 				Slot:      primitives.Slot(100 + i),
 				ProofId:   primitives.ExecutionProofId(i),

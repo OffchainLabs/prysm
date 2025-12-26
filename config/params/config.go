@@ -737,6 +737,20 @@ func WithinDAPeriod(block, current primitives.Epoch) bool {
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
 }
 
+// WithinExecutionProofPeriod checks if the given epoch is within the execution proof retention period.
+// This is used to determine whether execution proofs should be requested or generated for blocks at the given epoch.
+// Returns true if the epoch is at or after the retention boundary (Fulu fork epoch or proof retention epoch).
+func WithinExecutionProofPeriod(epoch, current primitives.Epoch) bool {
+	proofRetentionEpoch := primitives.Epoch(0)
+	if current >= primitives.Epoch(BeaconConfig().MinEpochsForExecutionProofRequests) {
+		proofRetentionEpoch = current - primitives.Epoch(BeaconConfig().MinEpochsForExecutionProofRequests)
+	}
+
+	boundaryEpoch := primitives.MaxEpoch(BeaconConfig().FuluForkEpoch, proofRetentionEpoch)
+
+	return epoch >= boundaryEpoch
+}
+
 // EpochsDuration returns the time duration of the given number of epochs.
 func EpochsDuration(count primitives.Epoch, b *BeaconChainConfig) time.Duration {
 	return SlotsDuration(SlotsForEpochs(count, b), b)

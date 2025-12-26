@@ -35,3 +35,18 @@ message ExecutionProof {
     // The actual proof data
     bytes proof_data = 5 [ (ethereum.eth.ext.ssz_max) = "1048576" ];
 }
+
+message ExecutionProofsByRootRequest {
+  // The block root we need proofs for
+  bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // The number of proofs needed
+  uint64 count_needed = 2;
+
+  // We already have these proof IDs, so don't send them again
+  repeated uint64 already_have = 3 [
+    (ethereum.eth.ext.ssz_max) = "8",
+    (ethereum.eth.ext.cast_type) =
+    "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ExecutionProofId"
+  ];
+}

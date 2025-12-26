@@ -87,10 +87,6 @@ func (r *BeaconBlockByRootsReq) UnmarshalSSZ(buf []byte) error {
 	return nil
 }
 
-// ExecutionProofByRootsReq specifies the execution proof by roots request type.
-// Same as BeaconBlockByRootsReq.
-type ExecutionProofByRootsReq = BeaconBlockByRootsReq
-
 // ErrorMessage describes the error message type.
 type ErrorMessage []byte
 

@@ -53,13 +53,5 @@ func (s *Service) GenerateProofs(slot primitives.Slot, payloadHash []byte, block
 func (s *Service) isProofRequiredForEpoch(epoch primitives.Epoch) bool {
 	currentSlot := s.cfg.TimeFetcher.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
-
-	proofRetentionEpoch := primitives.Epoch(0)
-	if currentEpoch >= primitives.Epoch(params.BeaconConfig().MinEpochsForExecutionProofRequests) {
-		proofRetentionEpoch = currentEpoch.Sub(params.BeaconConfig().MinEpochsForExecutionProofRequests)
-	}
-
-	boundaryEpoch := primitives.MaxEpoch(params.BeaconConfig().FuluForkEpoch, proofRetentionEpoch)
-
-	return epoch >= boundaryEpoch
+	return params.WithinExecutionProofPeriod(epoch, currentEpoch)
 }
