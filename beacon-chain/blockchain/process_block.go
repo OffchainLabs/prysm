@@ -295,14 +295,6 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
-	arg := &fcuConfig{
-		headState: preState,
-		headRoot:  lastBR,
-		headBlock: lastB,
-	}
-	if _, err := s.notifyForkchoiceUpdate(ctx, arg); err != nil {
-		return err
-	}
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
 }
 
