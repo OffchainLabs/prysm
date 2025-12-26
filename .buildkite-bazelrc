@@ -32,6 +32,10 @@ import %workspace%/.bazelrc
 # startup --digest_function=blake3
 
 startup --host_jvm_args=-Xmx8g --host_jvm_args=-Xms4g
+
+# Disable bzlmod to avoid BCR registry access (certificate issues)
+common --noenable_bzlmod
+
 build --experimental_strict_action_env
 build --sandbox_tmpfs_path=/tmp
 build --verbose_failures

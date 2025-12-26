@@ -8,4 +8,5 @@ env -i \
  PATH=/usr/bin:/bin \
  HOME="$HOME" \
  GOOGLE_APPLICATION_CREDENTIALS="$GOOGLE_APPLICATION_CREDENTIALS" \
+ BAZELISK_BASE_URL="https://github.com/bazelbuild/bazel/releases/download" \
  bazel "$@"
