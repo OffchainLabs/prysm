@@ -156,10 +156,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.InteropStartIndex,
 		},
 	},
-	{
-		Name:  "deprecated",
-		Flags: []cli.Flag{},
-	},
 }
 
 func init() {
