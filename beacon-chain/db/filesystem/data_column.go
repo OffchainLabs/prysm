@@ -626,7 +626,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 	}
 
 	// Create the SSZ encoded data column sidecars.
-	var sszEncodedDataColumnSidecars []byte
+	var sszEncodedDataColumnSidecarsBytes []byte
 
 	// Initialize the count of the saved SSZ encoded data column sidecar.
 	storedCount := uint8(0)
@@ -681,7 +681,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 			storedCount++
 
 			// Append the SSZ encoded data column sidecar to the SSZ encoded data column sidecars.
-			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
+			sszEncodedDataColumnSidecarsBytes = append(sszEncodedDataColumnSidecarsBytes, sszEncodedDataColumnSidecar...)
 		}
 	}
 
@@ -696,11 +696,11 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 	}
 
 	// Append the SSZ encoded data column sidecars to the end of the file.
-	count, err = file.WriteAt(sszEncodedDataColumnSidecars, metadata.fileSize)
+	count, err = file.WriteAt(sszEncodedDataColumnSidecarsBytes, metadata.fileSize)
 	if err != nil {
 		return errors.Wrap(err, "write SSZ encoded data column sidecars")
 	}
-	if count != len(sszEncodedDataColumnSidecars) {
+	if count != len(sszEncodedDataColumnSidecarsBytes) {
 		return errWrongBytesWritten
 	}
 
