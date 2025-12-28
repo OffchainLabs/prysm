@@ -131,6 +131,7 @@ var appHelpFlagGroups = []flagGroup{
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
 			storage.DataColumnStoragePathFlag,
+			flags.StateDiffExponents,
 		},
 	},
 	{ // Flags relevant to configuring local block production or external builders such as mev-boost.
