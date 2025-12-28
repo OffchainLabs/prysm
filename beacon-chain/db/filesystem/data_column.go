@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -733,7 +734,26 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 			break
 		}
 
-		for _, dataColumnSidecar := range dataColumnSidecars {
+		var wg errgroup.Group
+		sszEncodedDataColumnSidecars := make([][]byte, len(dataColumnSidecars))
+		for i, dataColumnSidecar := range dataColumnSidecars {
+			wg.Go(func() error {
+				// SSZ encode the first data column sidecar.
+				sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
+				if err != nil {
+					return errors.Wrap(err, "data column sidecar marshal SSZ")
+				}
+
+				sszEncodedDataColumnSidecars[i] = sszEncodedDataColumnSidecar
+				return nil
+			})
+		}
+
+		if err := wg.Wait(); err != nil {
+			return err
+		}
+
+		for i, dataColumnSidecar := range dataColumnSidecars {
 			// Extract the data column index.
 			dataColumnIndex := dataColumnSidecar.Index
 
@@ -756,10 +776,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 			storedCount++
 
 			// SSZ encode the first data column sidecar.
-			sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
-			if err != nil {
-				return errors.Wrap(err, "data column sidecar marshal SSZ")
-			}
+			sszEncodedDataColumnSidecar := sszEncodedDataColumnSidecars[i]
 
 			// Check if the size of the SSZ encoded data column sidecar is correct.
 			if sszEncodedDataColumnSidecarRefSize != 0 && len(sszEncodedDataColumnSidecar) != sszEncodedDataColumnSidecarRefSize {
