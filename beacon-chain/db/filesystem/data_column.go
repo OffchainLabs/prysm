@@ -721,7 +721,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 
 	var (
 		sszEncodedDataColumnSidecarRefSize int
-		sszEncodedDataColumnSidecars       []byte
+		sszEncodedDataColumnSidecarsBytes  []byte
 	)
 
 	// Initialize the count of the saved SSZ encoded data column sidecar.
@@ -770,7 +770,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 			sszEncodedDataColumnSidecarRefSize = len(sszEncodedDataColumnSidecar)
 
 			// Append the first SSZ encoded data column sidecar to the SSZ encoded data column sidecars.
-			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
+			sszEncodedDataColumnSidecarsBytes = append(sszEncodedDataColumnSidecarsBytes, sszEncodedDataColumnSidecar...)
 		}
 	}
 
@@ -807,12 +807,12 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 	rawIndices := indices.raw()
 
 	// Concatenate the version, the data column sidecar size, the data column indices and the SSZ encoded data column sidecar.
-	countToWrite := headerSize + len(sszEncodedDataColumnSidecars)
+	countToWrite := headerSize + len(sszEncodedDataColumnSidecarsBytes)
 	bytes := make([]byte, 0, countToWrite)
 	bytes = append(bytes, byte(version))
 	bytes = append(bytes, encodedSszEncodedDataColumnSidecarSize[:]...)
 	bytes = append(bytes, rawIndices[:]...)
-	bytes = append(bytes, sszEncodedDataColumnSidecars...)
+	bytes = append(bytes, sszEncodedDataColumnSidecarsBytes...)
 
 	countWritten, err := file.Write(bytes)
 	if err != nil {
