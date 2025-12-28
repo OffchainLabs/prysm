@@ -637,7 +637,26 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 			break
 		}
 
-		for _, dataColumnSidecar := range dataColumnSidecars {
+		var wg errgroup.Group
+		sszEncodedDataColumnSidecars := make([][]byte, len(dataColumnSidecars))
+		for i, dataColumnSidecar := range dataColumnSidecars {
+			wg.Go(func() error {
+				// SSZ encode the data column sidecar.
+				sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
+				if err != nil {
+					return errors.Wrap(err, "data column sidecar marshal SSZ")
+				}
+
+				sszEncodedDataColumnSidecars[i] = sszEncodedDataColumnSidecar
+				return nil
+			})
+		}
+
+		if err := wg.Wait(); err != nil {
+			return err
+		}
+
+		for i, dataColumnSidecar := range dataColumnSidecars {
 			// Extract the data columns index.
 			dataColumnIndex := dataColumnSidecar.Index
 
@@ -659,10 +678,7 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 			}
 
 			// SSZ encode the data column sidecar.
-			sszEncodedDataColumnSidecar, err := dataColumnSidecar.MarshalSSZ()
-			if err != nil {
-				return errors.Wrap(err, "data column sidecar marshal SSZ")
-			}
+			sszEncodedDataColumnSidecar := sszEncodedDataColumnSidecars[i]
 
 			// Compute the size of the SSZ encoded data column sidecar.
 			incomingSszEncodedDataColumnSidecarSize := uint32(len(sszEncodedDataColumnSidecar))
