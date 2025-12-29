@@ -59,7 +59,10 @@ type fcuConfig struct {
 func (s *Service) sendFCU(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
 	if cfg.postState.Version() < version.Fulu {
 		// update the caches to compute the right proposer index
+		// this function is called under a forkchoice lock which we need to release.
+		s.ForkChoicer().Unlock()
 		s.updateCachesPostBlockProcessing(cfg)
+		s.ForkChoicer().Lock()
 	}
 	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
 		log.WithError(err).Error("Could not get forkchoice update argument")
