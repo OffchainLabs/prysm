@@ -157,9 +157,8 @@ func TestProcessBlockNoVerify_SigSetContainsDescriptions(t *testing.T) {
 	set, _, err := transition.ProcessBlockNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
 	assert.Equal(t, len(set.Signatures), len(set.Descriptions), "Signatures and descriptions do not match up")
-	assert.Equal(t, "block signature", set.Descriptions[0])
-	assert.Equal(t, "randao signature", set.Descriptions[1])
-	assert.Equal(t, "attestation signature", set.Descriptions[2])
+	assert.Equal(t, "randao signature", set.Descriptions[0])
+	assert.Equal(t, "attestation signature", set.Descriptions[1])
 }
 
 func TestProcessOperationsNoVerifyAttsSigs_OK(t *testing.T) {

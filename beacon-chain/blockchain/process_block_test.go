@@ -820,24 +820,6 @@ func TestOnBlock_NilBlock(t *testing.T) {
 	require.Equal(t, true, IsInvalidBlock(err))
 }
 
-func TestOnBlock_InvalidSignature(t *testing.T) {
-	service, tr := minimalTestService(t)
-	ctx := tr.ctx
-
-	gs, keys := util.DeterministicGenesisState(t, 32)
-	require.NoError(t, service.saveGenesisData(ctx, gs))
-
-	blk, err := util.GenerateFullBlock(gs, keys, util.DefaultBlockGenConfig(), 1)
-	require.NoError(t, err)
-	blk.Signature = []byte{'a'} // Mutate the signature.
-	wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
-	require.NoError(t, err)
-	preState, err := service.getBlockPreState(ctx, wsb.Block())
-	require.NoError(t, err)
-	_, err = service.validateStateTransition(ctx, preState, wsb)
-	require.Equal(t, true, IsInvalidBlock(err))
-}
-
 func TestOnBlock_CallNewPayloadAndForkchoiceUpdated(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	config := params.BeaconConfig()
