@@ -790,26 +790,40 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	require.DeepEqual(t, &result, verifiedRoSidecar)
 }
 
+type topicInvoked struct {
+	topic string
+	pid   peer.ID
+}
+
 // rpcOrderTracer is a RawTracer implementation that captures the order of SendRPC calls.
 // It records the topics of messages sent via pubsub to verify round-robin ordering.
 type rpcOrderTracer struct {
-	mu     sync.Mutex
-	topics []string
+	mu      sync.Mutex
+	invoked []*topicInvoked
+	byTopic map[string][]peer.ID
 }
 
-func (t *rpcOrderTracer) SendRPC(rpc *pubsub.RPC, _ peer.ID) {
+func (t *rpcOrderTracer) SendRPC(rpc *pubsub.RPC, pid peer.ID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, msg := range rpc.GetPublish() {
-		t.topics = append(t.topics, msg.GetTopic())
+		invoked := &topicInvoked{topic: msg.GetTopic(), pid: pid}
+		t.invoked = append(t.invoked, invoked)
+		t.byTopic[invoked.topic] = append(t.byTopic[invoked.topic], invoked.pid)
 	}
+}
+
+func newRpcOrderTracer() *rpcOrderTracer {
+	return &rpcOrderTracer{byTopic: make(map[string][]peer.ID)}
 }
 
 func (t *rpcOrderTracer) getTopics() []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	result := make([]string, len(t.topics))
-	copy(result, t.topics)
+	result := make([]string, len(t.invoked))
+	for i := range t.invoked {
+		result[i] = t.invoked[i].topic
+	}
 	return result
 }
 
@@ -853,18 +867,21 @@ func TestService_BroadcastDataColumnRoundRobin(t *testing.T) {
 	defer flags.Init(new(flags.GlobalFlags))
 
 	// Create a tracer to capture the order of SendRPC calls.
-	tracer := &rpcOrderTracer{}
+	tracer := newRpcOrderTracer()
 
 	// Create the publisher node with the tracer injected.
 	p1 := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
 
 	// Create subscriber peers.
-	p2 := p2ptest.NewTestP2P(t)
-	p3 := p2ptest.NewTestP2P(t)
+	expectedPeers := []*p2ptest.TestP2P{
+		p2ptest.NewTestP2P(t),
+		p2ptest.NewTestP2P(t),
+	}
 
 	// Connect peers.
-	p1.Connect(p2)
-	p1.Connect(p3)
+	for _, p := range expectedPeers {
+		p1.Connect(p)
+	}
 	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
 
 	// Create a host for discovery.
@@ -907,67 +924,55 @@ func TestService_BroadcastDataColumnRoundRobin(t *testing.T) {
 	for i, idx := range columnIndices {
 		params[i] = util.DataColumnParam{Index: idx}
 	}
-
 	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
 
 	expectedTopics := make(map[string]bool)
-
 	// Subscribe peers to the relevant topics.
 	for _, idx := range columnIndices {
 		subnet := peerdas.ComputeSubnetForDataColumnSidecar(idx)
 		topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
-		_, err = p2.SubscribeToTopic(topic)
-		require.NoError(t, err)
-		_, err = p3.SubscribeToTopic(topic)
-		require.NoError(t, err)
+		for _, p := range expectedPeers {
+			_, err = p.SubscribeToTopic(topic)
+			require.NoError(t, err)
+		}
 		expectedTopics[topic] = true
 	}
-
 	// libp2p needs some time to establish mesh connections.
 	time.Sleep(100 * time.Millisecond)
 
 	// Broadcast all sidecars.
 	err = service.BroadcastDataColumnSidecars(ctx, verifiedRoSidecars)
 	require.NoError(t, err)
-
 	// Give some time for messages to be sent.
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify round-robin ordering: before all topics are seen once, no topic should repeat.
-	// This is the invariant from go-libp2p-pubsub's RoundRobinMessageIDScheduler.
 	topics := tracer.getTopics()
 	if len(topics) == 0 {
-		t.Fatal("Expected at least one message to be sent")
+		t.Fatal("Expected at least one message for each topic to be sent to each peer")
 	}
 
-	var filteredTopics []string
-	for _, topic := range topics {
-		if expectedTopics[topic] {
-			filteredTopics = append(filteredTopics, topic)
-		}
+	unseen := make(map[string]bool)
+	for k := range expectedTopics {
+		unseen[k] = true
 	}
-
 	// Verify round-robin invariant: before all message IDs are seen, no message ID may be repeated.
 	// In round-robin order, we should see each topic once before any topic repeats.
-	seen := make(map[string]int)
-	allTopicsSeenOnce := false
-	for _, topic := range filteredTopics {
-		seen[topic]++
-		if len(seen) == len(expectedTopics) && !allTopicsSeenOnce {
-			// All topics have been seen at least once.
-			allTopicsSeenOnce = true
+	for _, topic := range topics {
+		if !expectedTopics[topic] {
+			continue
 		}
-		if !allTopicsSeenOnce && seen[topic] > 1 {
+		if !unseen[topic] {
 			t.Errorf("Topic %s repeated before all topics were seen once. This violates round-robin ordering.", topic)
 		}
+		delete(unseen, topic)
+		if len(unseen) == 0 {
+			break // all have been seen
+		}
 	}
+	require.Equal(t, 0, len(unseen))
 
 	// Verify that we actually saw all expected topics.
 	for topic := range expectedTopics {
-		if seen[topic] == 0 {
-			t.Errorf("Expected topic %s to be sent at least once", topic)
-		}
+		require.Equal(t, len(expectedPeers), len(tracer.byTopic[topic]))
 	}
-
-	t.Logf("Round-robin verification passed. Topics sent in order: %v", filteredTopics)
 }
