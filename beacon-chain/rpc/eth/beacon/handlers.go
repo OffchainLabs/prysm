@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
@@ -956,6 +957,13 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 				return errors.Wrap(err, "could not get parent state")
 			}
 		}
+	}
+	blockRoot, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "could not hash block")
+	}
+	if err := coreblocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+		return errors.Wrap(err, "could not verify block signature")
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
