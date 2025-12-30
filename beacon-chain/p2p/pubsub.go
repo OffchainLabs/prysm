@@ -114,8 +114,8 @@ func (s *Service) addToBatch(ctx context.Context, batch *pubsub.MessageBatch, to
 		select {
 		case <-ctx.Done():
 			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
-		default:
-			time.Sleep(100 * time.Millisecond)
+		case <-time.After(100 * time.Millisecond):
+			// reenter the for loop after 100ms
 		}
 	}
 }
