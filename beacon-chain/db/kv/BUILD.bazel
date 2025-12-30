@@ -30,6 +30,7 @@ go_library(
         "state_diff.go",
         "state_diff_cache.go",
         "state_diff_helpers.go",
+        "testing_helpers.go",
         "state_summary.go",
         "state_summary_cache.go",
         "utils.go",
