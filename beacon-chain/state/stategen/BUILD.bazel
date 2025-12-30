@@ -64,7 +64,6 @@ go_test(
         "setter_test.go",
     ],
     embed = [":go_default_library"],
-    gotags = ["testing"],
     deps = [
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
