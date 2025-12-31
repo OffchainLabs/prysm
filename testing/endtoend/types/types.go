@@ -67,6 +67,15 @@ func WithSSZOnly() E2EConfigOpt {
 	}
 }
 
+func WithStateDiff() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.BeaconFlags = append(cfg.BeaconFlags,
+			"--enable-state-diff",
+			"--state-diff-exponents=6,5", // Small exponents for quick testing
+		)
+	}
+}
+
 // E2EConfig defines the struct for all configurations needed for E2E testing.
 type E2EConfig struct {
 	TestCheckpointSync      bool
