@@ -687,6 +687,12 @@ func sbrNotFound(t *testing.T, expectedRoot [32]byte) *mockStateByRooter {
 	}}
 }
 
+func sbrReturnsState(st state.BeaconState) *mockStateByRooter {
+	return &mockStateByRooter{sbr: func(_ context.Context, _ [32]byte) (state.BeaconState, error) {
+		return st, nil
+	}}
+}
+
 func sbrForValOverride(idx primitives.ValidatorIndex, val *ethpb.Validator) *mockStateByRooter {
 	return sbrForValOverrideWithT(nil, idx, val)
 }
