@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/math"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	pkgerrors "github.com/pkg/errors"
 	"go.etcd.io/bbolt"
 )
 
@@ -117,6 +118,54 @@ func (s *Store) setOffset(slot primitives.Slot) error {
 
 func (s *Store) getOffset() uint64 {
 	return s.stateDiffCache.getOffset()
+}
+
+// hasStateDiffOffset checks if the state-diff offset has been set in the database.
+// This is used to detect if an existing database has state-diff enabled.
+func (s *Store) hasStateDiffOffset() (bool, error) {
+	var hasOffset bool
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return nil
+		}
+		hasOffset = bucket.Get(offsetKey) != nil
+		return nil
+	})
+	return hasOffset, err
+}
+
+// initializeStateDiff sets up the state-diff schema for a new database.
+// This should be called during checkpoint sync or genesis sync.
+func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.ReadOnlyBeaconState) error {
+	// Write offset directly to the database (without using cache which doesn't exist yet).
+	err := s.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+
+		offsetBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(offsetBytes, uint64(slot))
+		return bucket.Put(offsetKey, offsetBytes)
+	})
+	if err != nil {
+		return pkgerrors.Wrap(err, "failed to set offset")
+	}
+
+	// Create the state diff cache (this will read the offset from the database).
+	sdCache, err := newStateDiffCache(s)
+	if err != nil {
+		return pkgerrors.Wrap(err, "failed to create state diff cache")
+	}
+	s.stateDiffCache = sdCache
+
+	// Save the initial state as a full snapshot.
+	if err := s.saveFullSnapshot(initialState); err != nil {
+		return pkgerrors.Wrap(err, "failed to save initial snapshot")
+	}
+
+	return nil
 }
 
 func keyForSnapshot(v int) ([]byte, error) {

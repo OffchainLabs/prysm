@@ -204,11 +204,31 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 	}
 
 	if features.Get().EnableStateDiff {
-		sdCache, err := newStateDiffCache(kv)
+		// Check if offset already exists (existing state-diff database).
+		hasOffset, err := kv.hasStateDiffOffset()
 		if err != nil {
 			return nil, err
 		}
-		kv.stateDiffCache = sdCache
+
+		if hasOffset {
+			// Existing state-diff database - restarts not yet supported.
+			return nil, errors.New("restarting with existing state-diff database not yet supported")
+		}
+
+		// Check if this is a new database (no head block).
+		headBlock, err := kv.HeadBlock(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get head block")
+		}
+
+		if headBlock == nil {
+			// New database - will be initialized later during checkpoint/genesis sync.
+			// stateDiffCache stays nil until SaveOrigin or SaveGenesisData initializes it.
+			log.Info("State-diff enabled: will be initialized during checkpoint or genesis sync")
+		} else {
+			// Existing database without state-diff - warn and disable feature.
+			log.Warn("State-diff feature ignored: database was created without state-diff support")
+		}
 	}
 
 	return kv, nil

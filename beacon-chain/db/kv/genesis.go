@@ -7,6 +7,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	dbIface "github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -42,6 +43,15 @@ func (s *Store) SaveGenesisData(ctx context.Context, genesisState state.BeaconSt
 	if err := s.SaveGenesisBlockRoot(ctx, genesisBlkRoot); err != nil {
 		return errors.Wrap(err, "could not save genesis block root")
 	}
+
+	// Initialize state-diff if enabled and not yet initialized.
+	if features.Get().EnableStateDiff && s.stateDiffCache == nil {
+		if err := s.initializeStateDiff(0, genesisState); err != nil {
+			return errors.Wrap(err, "failed to initialize state diff for genesis")
+		}
+		log.Info("Initialized state-diff with genesis state")
+	}
+
 	return nil
 }
 

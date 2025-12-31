@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
@@ -109,6 +110,14 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 
 	if err = s.SaveFinalizedCheckpoint(ctx, chkpt); err != nil {
 		return errors.Wrap(err, "save finalized checkpoint")
+	}
+
+	// Initialize state-diff if enabled and not yet initialized.
+	if features.Get().EnableStateDiff && s.stateDiffCache == nil {
+		if err := s.initializeStateDiff(state.Slot(), state); err != nil {
+			return errors.Wrap(err, "failed to initialize state diff")
+		}
+		log.WithField("slot", state.Slot()).Info("Initialized state-diff with checkpoint state")
 	}
 
 	return nil
