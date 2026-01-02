@@ -251,7 +251,7 @@ func TestMigrateToColdHdiff_CanUpdateFinalizedInfo(t *testing.T) {
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
 	// Initialize the state diff cache via the method on *kv.Store (not in interface).
-	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(0))
+	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
 	// Now enable the feature flag.
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
@@ -307,7 +307,7 @@ func TestMigrateToColdHdiff_SkipsSlotsNotInDiffTree(t *testing.T) {
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
 	// Initialize the state diff cache via the method on *kv.Store (not in interface).
-	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(0))
+	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
 	// Now enable the feature flag.
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
@@ -359,7 +359,7 @@ func TestMigrateToColdHdiff_NoOpWhenFinalizedSlotNotAdvanced(t *testing.T) {
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
 	// Initialize the state diff cache via the method on *kv.Store (not in interface).
-	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(0))
+	require.NoError(t, beaconDB.(*kv.Store).InitStateDiffCacheForTesting(t, 0))
 	// Now enable the feature flag.
 	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
 	defer resetCfg()
