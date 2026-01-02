@@ -157,8 +157,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	// Send blob transactions - use different versions pre/post Fulu
 	if isPostFulu {
 		logrus.Info("Sending blob transactions with cell proofs")
-		// Reduced from 10 to 5 to conserve funds during extended test runs
-		for index := range uint64(5) {
+		for index := range uint64(10) {
 
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
@@ -177,8 +176,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		}
 	} else {
 		logrus.Info("Sending blob transactions with sidecars")
-		// Reduced from 10 to 5 to conserve funds during extended test runs
-		for index := range uint64(5) {
+		for index := range uint64(10) {
 
 			g.Go(func() error {
 				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
