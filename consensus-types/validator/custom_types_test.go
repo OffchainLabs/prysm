@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"k8s.io/apimachinery/pkg/util/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 func Test_customUint_UnmarshalJSON(t *testing.T) {
@@ -30,17 +30,17 @@ func Test_customUint_UnmarshalJSON(t *testing.T) {
 		{
 			name:             "empty",
 			jsonString:       `{"test":""}`,
-			wantUnmarshalErr: "error unmarshaling JSON",
+			wantUnmarshalErr: "invalid syntax",
 		},
 		{
 			name:             "digits more than uint64",
 			jsonString:       `{"test":"8888888888888888888888888888888888888888888888888888888888888"}`,
-			wantUnmarshalErr: "error unmarshaling JSON",
+			wantUnmarshalErr: "value out of range",
 		},
 		{
 			name:             "not a uint64",
 			jsonString:       `{"test":"one hundred"}`,
-			wantUnmarshalErr: "error unmarshaling JSON",
+			wantUnmarshalErr: "invalid syntax",
 		},
 	}
 	for _, tt := range tests {
