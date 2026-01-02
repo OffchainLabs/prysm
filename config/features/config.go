@@ -246,6 +246,9 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.EnableVerboseSigVerification = false
 	}
 	cfg.EnableProposerPreprocessing = ctx.Bool(enableProposerPreprocessing.Name)
+	if cfg.EnableProposerPreprocessing {
+		logEnabled(enableProposerPreprocessing)
+	}
 	if ctx.IsSet(prepareAllPayloads.Name) {
 		logEnabled(prepareAllPayloads)
 		cfg.PrepareAllPayloads = true

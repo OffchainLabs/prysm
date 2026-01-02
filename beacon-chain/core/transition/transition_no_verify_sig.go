@@ -142,7 +142,7 @@ func CalculateStateRoot(
 
 	// Execute per block transition.
 	if features.Get().EnableProposerPreprocessing {
-		state, err = processBlockForProposing(ctx, rollback, state, signed)
+		state, err = processBlockForProposing(ctx, state, signed)
 		if err != nil {
 			return [32]byte{}, errors.Wrap(err, "could not process block for proposing")
 		}
@@ -156,7 +156,7 @@ func CalculateStateRoot(
 }
 
 // processBlockVerifySigs processes the block and verifies the signatures within it. Block signatures are not verified as this block is not yet signed.
-func processBlockForProposing(ctx context.Context, rollback state.BeaconState, st state.BeaconState, signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
+func processBlockForProposing(ctx context.Context, st state.BeaconState, signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
 	var err error
 	var set BlockSignatureBatches
 	set, st, err = ProcessBlockNoVerifyAnySig(ctx, st, signed)

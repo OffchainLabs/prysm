@@ -620,6 +620,11 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedB
 	return root[:], nil
 }
 
+type computeStateRootAttemptsKeyType string
+
+const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
+const maxComputeStateRootAttempts = 3
+
 // handleStateRootError retries block construction in some error cases.
 func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) ([]byte, error) {
 	if ctx.Err() != nil {
@@ -661,6 +666,14 @@ func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.Sig
 
 	default:
 		return nil, errors.Wrap(err, "could not compute state root")
+	}
+	// prevent deep recursion by limiting max attempts.
+	if v, ok := ctx.Value(computeStateRootAttemptsKey).(int); !ok {
+		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, int(1))
+	} else if v >= maxComputeStateRootAttempts {
+		return nil, fmt.Errorf("attempted max compute state root attempts %d", maxComputeStateRootAttempts)
+	} else {
+		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, v+1)
 	}
 	// recursive call to compute state root again
 	return vs.computeStateRoot(ctx, block)
