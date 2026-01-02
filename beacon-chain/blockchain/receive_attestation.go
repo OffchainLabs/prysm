@@ -156,15 +156,13 @@ func (s *Service) UpdateHead(ctx context.Context, proposingSlot primitives.Slot)
 	}
 	if s.inRegularSync() {
 		fcuArgs.attributes = s.getPayloadAttribute(ctx, headState, proposingSlot, newHeadRoot[:])
-		if fcuArgs.attributes != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
-			return
-		}
-		go s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs)
 	}
-	if err := s.saveHead(s.ctx, fcuArgs.headRoot, fcuArgs.headBlock, fcuArgs.headState); err != nil {
-		log.WithError(err).Error("Could not save head")
+	if fcuArgs.attributes != nil && s.shouldOverrideFCU(newHeadRoot, proposingSlot) {
+		return
 	}
-	s.pruneAttsFromPool(s.ctx, fcuArgs.headState, fcuArgs.headBlock)
+	if err := s.forkchoiceUpdateWithExecution(s.ctx, fcuArgs); err != nil {
+		log.WithError(err).Error("Could not update forkchoice")
+	}
 }
 
 // This processes fork choice attestations from the pool to account for validator votes and fork choice.
