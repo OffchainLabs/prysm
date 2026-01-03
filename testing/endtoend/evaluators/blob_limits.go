@@ -200,13 +200,13 @@ func blobLimitsRespected(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCon
 	utilizationPercent := (maxBlobsInBlock * 100) / maxBlobsForEpoch
 
 	logrus.WithFields(logrus.Fields{
-		"epoch":               epochToCheck,
-		"maxBlobsForEpoch":    maxBlobsForEpoch,
-		"prevEpochMaxBlobs":   prevEpochMaxBlobs,
-		"maxBlobsInBlock":     maxBlobsInBlock,
-		"totalBlobs":          totalBlobs,
-		"blockCount":          blockCount,
-		"utilizationPercent":  utilizationPercent,
+		"epoch":                epochToCheck,
+		"maxBlobsForEpoch":     maxBlobsForEpoch,
+		"prevEpochMaxBlobs":    prevEpochMaxBlobs,
+		"maxBlobsInBlock":      maxBlobsInBlock,
+		"totalBlobs":           totalBlobs,
+		"blockCount":           blockCount,
+		"utilizationPercent":   utilizationPercent,
 		"isBPOTransitionEpoch": isBPOTransitionEpoch,
 	}).Info("Blob utilization stats for epoch")
 
