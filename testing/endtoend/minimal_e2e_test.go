@@ -14,6 +14,8 @@ import (
 //   - Participation at epoch 2
 //   - Finalization at epoch 3
 //   - Fulu fork transition at epoch 2
+//   - BPO 1 at epoch 3 (15 blobs)
+//   - BPO 2 at epoch 4 (21 blobs)
 //   - Exit proposed at epoch 4
 //   - Exit confirmed at epoch 5
 //   - Withdrawal submitted at epoch 5
@@ -23,6 +25,14 @@ func TestEndToEnd_MinimalConfig(t *testing.T) {
 	cfg = types.InitForkCfg(version.Electra, version.Fulu, cfg)
 	// Set Fulu fork at epoch 2 for a quick fork transition test
 	cfg.FuluForkEpoch = 2
+	// Update BlobSchedule to use the new FuluForkEpoch for BPO testing
+	cfg.BlobSchedule = []params.BlobScheduleEntry{
+		{Epoch: cfg.DenebForkEpoch, MaxBlobsPerBlock: uint64(cfg.DeprecatedMaxBlobsPerBlock)},
+		{Epoch: cfg.ElectraForkEpoch, MaxBlobsPerBlock: uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)},
+		// BPO (Blob Parameter Optimization) schedule for Fulu
+		{Epoch: cfg.FuluForkEpoch + 1, MaxBlobsPerBlock: 15},
+		{Epoch: cfg.FuluForkEpoch + 2, MaxBlobsPerBlock: 21},
+	}
 	cfg.InitializeForkSchedule()
 
 	r := e2eMinimal(t, cfg,

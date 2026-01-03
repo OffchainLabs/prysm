@@ -128,6 +128,45 @@ func GethOsakaTime(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint
 	return osakaTime
 }
 
+// GethBPO1Time calculates the absolute time of the BPO1 activation
+// by finding the first BlobSchedule entry with MaxBlobsPerBlock > 9 (Electra's limit)
+// which corresponds to the first BPO increase.
+func GethBPO1Time(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
+	for _, entry := range cfg.BlobSchedule {
+		// BPO1 is the first entry that increases beyond Electra's 9 blobs
+		if entry.MaxBlobsPerBlock > uint64(cfg.DeprecatedMaxBlobsPerBlockElectra) {
+			startSlot, err := slots.EpochStart(entry.Epoch)
+			if err == nil {
+				startTime := slots.UnsafeStartTime(genesisTime, startSlot)
+				newTime := uint64(startTime.Unix())
+				return &newTime
+			}
+		}
+	}
+	return nil
+}
+
+// GethBPO2Time calculates the absolute time of the BPO2 activation
+// by finding the second BlobSchedule entry with MaxBlobsPerBlock > 9.
+func GethBPO2Time(genesisTime time.Time, cfg *clparams.BeaconChainConfig) *uint64 {
+	count := 0
+	for _, entry := range cfg.BlobSchedule {
+		// Count entries that are beyond Electra's limit
+		if entry.MaxBlobsPerBlock > uint64(cfg.DeprecatedMaxBlobsPerBlockElectra) {
+			count++
+			if count == 2 { // BPO2 is the second such entry
+				startSlot, err := slots.EpochStart(entry.Epoch)
+				if err == nil {
+					startTime := slots.UnsafeStartTime(genesisTime, startSlot)
+					newTime := uint64(startTime.Unix())
+					return &newTime
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // GethTestnetGenesis creates a genesis.json for eth1 clients with a set of defaults suitable for ephemeral testnets,
 // like in an e2e test. The parameters are minimal but the full value is returned unmarshaled so that it can be
 // customized as desired.
@@ -149,6 +188,8 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 	if cfg.FuluForkEpoch == 0 {
 		osakaTime = &genesisTime
 	}
+	bpo1Time := GethBPO1Time(genesis, cfg)
+	bpo2Time := GethBPO2Time(genesis, cfg)
 	cc := &params.ChainConfig{
 		ChainID:                 big.NewInt(defaultTestChainId),
 		HomesteadBlock:          bigz,
@@ -171,26 +212,16 @@ func GethTestnetGenesis(genesis time.Time, cfg *clparams.BeaconChainConfig) *cor
 		CancunTime:              cancunTime,
 		PragueTime:              pragueTime,
 		OsakaTime:               osakaTime,
+		BPO1Time:                bpo1Time,
+		BPO2Time:                bpo2Time,
 		DepositContractAddress:  common.HexToAddress(cfg.DepositContractAddress),
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
 			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1: &params.BlobConfig{
-				Target:         9,
-				Max:            14,
-				UpdateFraction: 8832827,
-			},
-			BPO2: &params.BlobConfig{
-				Target:         14,
-				Max:            21,
-				UpdateFraction: 13739630,
-			},
-			BPO3: &params.BlobConfig{
-				Target:         21,
-				Max:            32,
-				UpdateFraction: 20609697,
-			},
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
+			BPO3:   params.DefaultBPO3BlobConfig,
 		},
 	}
 	da := defaultDepositContractAllocation(cfg.DepositContractAddress)

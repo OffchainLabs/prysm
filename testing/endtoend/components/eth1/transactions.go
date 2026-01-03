@@ -594,10 +594,14 @@ func encodeBlobs(data []byte) []kzg4844.Blob {
 	blobIndex := 0
 	fieldIndex := -1
 	numOfElems := fieldparams.BlobLength / 32
+	// Allow up to 6 blobs per transaction to properly test BPO limits.
+	// With 10 blob txs per slot × 6 blobs = 60 max blobs submitted,
+	// which exceeds the highest BPO limit (21) and ensures we can hit it.
+	const maxBlobsPerTx = 6
 	for i := 0; i < len(data); i += 31 {
 		fieldIndex++
 		if fieldIndex == numOfElems {
-			if blobIndex >= 1 {
+			if blobIndex >= maxBlobsPerTx-1 {
 				break
 			}
 			blobs = append(blobs, kzg4844.Blob{})
@@ -650,7 +654,12 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 }
 
 func randomBlobData() ([]byte, error) {
-	size := mathRand.Intn(fieldparams.BlobSize) // #nosec G404
+	// Always generate 6 blobs worth of data to properly test BPO limits.
+	// With 10 blob txs per slot * 6 blobs = 60 blobs submitted per slot,
+	// we can easily hit any BPO limit (up to 21 blobs per block).
+	const numBlobs = 6
+	// Generate enough data to fill all 6 blobs
+	size := (numBlobs-1)*fieldparams.BlobSize + 1
 	data := make([]byte, size)
 	n, err := mathRand.Read(data) // #nosec G404
 	if err != nil {
