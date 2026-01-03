@@ -94,7 +94,7 @@ func TestProcessPendingAtts_NoBlockRequestBlock(t *testing.T) {
 	// Process block A (which exists and has no pending attestations)
 	// This should skip processing attestations for A and request blocks B and C
 	require.NoError(t, r.processPendingAttsForBlock(t.Context(), rootA))
-	require.LogsContain(t, hook, "Requesting block by root")
+	require.LogsContain(t, hook, "Requesting blocks by root")
 }
 
 func TestProcessPendingAtts_HasBlockSaveUnaggregatedAtt(t *testing.T) {
@@ -911,17 +911,17 @@ func Test_pendingAggregatesAreEqual(t *testing.T) {
 					},
 					AggregationBits: bitfield.Bitlist{0b1111},
 				}}}
-		assert.Equal(t, true, pendingAggregatesAreEqual(a, b))
+		assert.Equal(t, true, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
 	})
 	t.Run("different version", func(t *testing.T) {
 		a := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
 		b := &ethpb.SignedAggregateAttestationAndProofElectra{Message: &ethpb.AggregateAttestationAndProofElectra{AggregatorIndex: 1}}
-		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
 	})
 	t.Run("different aggregator index", func(t *testing.T) {
 		a := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 1}}
 		b := &ethpb.SignedAggregateAttestationAndProof{Message: &ethpb.AggregateAttestationAndProof{AggregatorIndex: 2}}
-		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
 	})
 	t.Run("different slot", func(t *testing.T) {
 		a := &ethpb.SignedAggregateAttestationAndProof{
@@ -942,7 +942,7 @@ func Test_pendingAggregatesAreEqual(t *testing.T) {
 					},
 					AggregationBits: bitfield.Bitlist{0b1111},
 				}}}
-		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
 	})
 	t.Run("different committee index", func(t *testing.T) {
 		a := &ethpb.SignedAggregateAttestationAndProof{
@@ -963,7 +963,7 @@ func Test_pendingAggregatesAreEqual(t *testing.T) {
 					},
 					AggregationBits: bitfield.Bitlist{0b1111},
 				}}}
-		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
 	})
 	t.Run("different aggregation bits", func(t *testing.T) {
 		a := &ethpb.SignedAggregateAttestationAndProof{
@@ -984,7 +984,30 @@ func Test_pendingAggregatesAreEqual(t *testing.T) {
 					},
 					AggregationBits: bitfield.Bitlist{0b1000},
 				}}}
-		assert.Equal(t, false, pendingAggregatesAreEqual(a, b))
+		assert.Equal(t, false, pendingAggregatesAreEqual(a, b, includeAggregatorIndex))
+	})
+	t.Run("different aggregator index should be equal while ignoring aggregator index", func(t *testing.T) {
+		a := &ethpb.SignedAggregateAttestationAndProof{
+			Message: &ethpb.AggregateAttestationAndProof{
+				AggregatorIndex: 1,
+				Aggregate: &ethpb.Attestation{
+					Data: &ethpb.AttestationData{
+						Slot:           1,
+						CommitteeIndex: 1,
+					},
+					AggregationBits: bitfield.Bitlist{0b1111},
+				}}}
+		b := &ethpb.SignedAggregateAttestationAndProof{
+			Message: &ethpb.AggregateAttestationAndProof{
+				AggregatorIndex: 2,
+				Aggregate: &ethpb.Attestation{
+					Data: &ethpb.AttestationData{
+						Slot:           1,
+						CommitteeIndex: 1,
+					},
+					AggregationBits: bitfield.Bitlist{0b1111},
+				}}}
+		assert.Equal(t, true, pendingAggregatesAreEqual(a, b, ignoreAggregatorIndex))
 	})
 }
 

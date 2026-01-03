@@ -130,6 +130,10 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitAttestationsV2")
 	defer span.End()
 
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
 	versionHeader := r.Header.Get(api.VersionHeader)
 	if versionHeader == "" {
 		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
@@ -238,22 +242,14 @@ func (s *Server) handleAttestationsElectra(
 			},
 		})
 
-		targetState, err := s.AttestationStateFetcher.AttestationTargetState(ctx, singleAtt.Data.Target)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not get target state for attestation")
-		}
-		committee, err := corehelpers.BeaconCommitteeFromState(ctx, targetState, singleAtt.Data.Slot, singleAtt.CommitteeId)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not get committee for attestation")
-		}
-		att := singleAtt.ToAttestationElectra(committee)
-
-		wantedEpoch := slots.ToEpoch(att.Data.Slot)
+		// Broadcast first using CommitteeId directly (fast path)
+		// This matches gRPC behavior and avoids blocking on state fetching
+		wantedEpoch := slots.ToEpoch(singleAtt.Data.Slot)
 		vals, err := s.HeadFetcher.HeadValidatorsIndices(ctx, wantedEpoch)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not get head validator indices")
 		}
-		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), att.GetCommitteeIndex(), att.Data.Slot)
+		subnet := corehelpers.ComputeSubnetFromCommitteeAndSlot(uint64(len(vals)), singleAtt.CommitteeId, singleAtt.Data.Slot)
 		if err = s.Broadcaster.BroadcastAttestation(ctx, subnet, singleAtt); err != nil {
 			failedBroadcasts = append(failedBroadcasts, &server.IndexedError{
 				Index:   i,
@@ -264,17 +260,35 @@ func (s *Server) handleAttestationsElectra(
 			}
 			continue
 		}
+	}
 
-		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.AttestationCache.Add(att); err != nil {
-				log.WithError(err).Error("Could not save attestation")
+	// Save to pool after broadcast (slow path - requires state fetching)
+	// Run in goroutine to avoid blocking the HTTP response
+	go func() {
+		for _, singleAtt := range validAttestations {
+			targetState, err := s.AttestationStateFetcher.AttestationTargetState(context.Background(), singleAtt.Data.Target)
+			if err != nil {
+				log.WithError(err).Error("Could not get target state for attestation")
+				continue
 			}
-		} else {
-			if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
-				log.WithError(err).Error("Could not save attestation")
+			committee, err := corehelpers.BeaconCommitteeFromState(context.Background(), targetState, singleAtt.Data.Slot, singleAtt.CommitteeId)
+			if err != nil {
+				log.WithError(err).Error("Could not get committee for attestation")
+				continue
+			}
+			att := singleAtt.ToAttestationElectra(committee)
+
+			if features.Get().EnableExperimentalAttestationPool {
+				if err = s.AttestationCache.Add(att); err != nil {
+					log.WithError(err).Error("Could not save attestation")
+				}
+			} else {
+				if err = s.AttestationsPool.SaveUnaggregatedAttestation(att); err != nil {
+					log.WithError(err).Error("Could not save attestation")
+				}
 			}
 		}
-	}
+	}()
 
 	if len(failedBroadcasts) > 0 {
 		log.WithFields(logrus.Fields{
@@ -469,6 +483,10 @@ func (s *Server) SubmitVoluntaryExit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) SubmitSyncCommitteeSignatures(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitPoolSyncCommitteeSignatures")
 	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
 
 	var req structs.SubmitSyncCommitteeSignaturesRequest
 	err := json.NewDecoder(r.Body).Decode(&req.Data)

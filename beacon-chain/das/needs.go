@@ -67,9 +67,9 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 
 	// Override spec minimum block retention with user-provided flag only if it is lower than the spec minimum.
 	sn.blockRetention = primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
+
 	if oldestSlotFlagPtr != nil {
-		oldestEpoch := slots.ToEpoch(*oldestSlotFlagPtr)
-		if oldestEpoch < sn.blockRetention {
+		if *oldestSlotFlagPtr <= syncEpochOffset(current(), sn.blockRetention) {
 			sn.validOldestSlotPtr = oldestSlotFlagPtr
 		} else {
 			log.WithField("backfill-oldest-slot", *oldestSlotFlagPtr).

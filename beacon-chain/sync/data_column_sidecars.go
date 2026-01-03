@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -243,8 +244,10 @@ func requestDirectSidecarsFromPeers(
 	}
 
 	// Compute missing indices by root, excluding those already in storage.
+	var lastRoot [fieldparams.RootLength]byte
 	missingIndicesByRoot := make(map[[fieldparams.RootLength]byte]map[uint64]bool, len(incompleteRoots))
 	for root := range incompleteRoots {
+		lastRoot = root
 		storedIndices := storedIndicesByRoot[root]
 
 		missingIndices := make(map[uint64]bool, len(requestedIndices))
@@ -259,6 +262,7 @@ func requestDirectSidecarsFromPeers(
 		}
 	}
 
+	initialMissingRootCount := len(missingIndicesByRoot)
 	initialMissingCount := computeTotalCount(missingIndicesByRoot)
 
 	indicesByRootByPeer, err := computeIndicesByRootByPeer(params.P2P, slotByRoot, missingIndicesByRoot, connectedPeers)
@@ -301,11 +305,19 @@ func requestDirectSidecarsFromPeers(
 		}
 	}
 
-	log.WithFields(logrus.Fields{
-		"duration":            time.Since(start),
-		"initialMissingCount": initialMissingCount,
-		"finalMissingCount":   computeTotalCount(missingIndicesByRoot),
-	}).Debug("Requested direct data column sidecars from peers")
+	log := log.WithFields(logrus.Fields{
+		"duration":                time.Since(start),
+		"initialMissingRootCount": initialMissingRootCount,
+		"initialMissingCount":     initialMissingCount,
+		"finalMissingRootCount":   len(missingIndicesByRoot),
+		"finalMissingCount":       computeTotalCount(missingIndicesByRoot),
+	})
+
+	if initialMissingRootCount == 1 {
+		log = log.WithField("root", fmt.Sprintf("%#x", lastRoot))
+	}
+
+	log.Debug("Requested direct data column sidecars from peers")
 
 	return verifiedColumnsByRoot, nil
 }

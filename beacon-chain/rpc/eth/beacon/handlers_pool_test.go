@@ -26,6 +26,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits/mock"
 	p2pMock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -622,6 +623,8 @@ func TestSubmitAttestationsV2(t *testing.T) {
 		HeadFetcher:             chainService,
 		ChainInfoFetcher:        chainService,
 		TimeFetcher:             chainService,
+		OptimisticModeFetcher:   chainService,
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
 		OperationNotifier:       &blockchainmock.MockOperationNotifier{},
 		AttestationStateFetcher: chainService,
 	}
@@ -654,6 +657,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("multiple", func(t *testing.T) {
@@ -673,6 +677,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("phase0 att post electra", func(t *testing.T) {
@@ -793,6 +798,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("multiple", func(t *testing.T) {
@@ -812,6 +818,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
+			time.Sleep(100 * time.Millisecond) // Wait for async pool save
 			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 		})
 		t.Run("no body", func(t *testing.T) {
@@ -860,6 +867,27 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			require.Equal(t, 1, len(e.Failures))
 			assert.Equal(t, true, strings.Contains(e.Failures[0].Message, "Incorrect attestation signature"))
 		})
+	})
+	t.Run("syncing", func(t *testing.T) {
+		chainService := &blockchainmock.ChainService{}
+		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: true},
+		}
+
+		var body bytes.Buffer
+		_, err := body.WriteString(singleAtt)
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+		request.Header.Set(api.VersionHeader, version.String(version.Phase0))
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitAttestationsV2(writer, request)
+		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
+		assert.Equal(t, true, strings.Contains(writer.Body.String(), "Beacon node is currently syncing"))
 	})
 }
 
@@ -1057,14 +1085,19 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 
 	t.Run("single", func(t *testing.T) {
 		broadcaster := &p2pMock.MockBroadcaster{}
+		chainService := &blockchainmock.ChainService{
+			State:                st,
+			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+		}
 		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			CoreService: &core.Service{
 				SyncCommitteePool: synccommittee.NewStore(),
 				P2P:               broadcaster,
-				HeadFetcher: &blockchainmock.ChainService{
-					State:                st,
-					SyncCommitteeIndices: []primitives.CommitteeIndex{0},
-				},
+				HeadFetcher:       chainService,
 			},
 		}
 
@@ -1089,14 +1122,19 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 	})
 	t.Run("multiple", func(t *testing.T) {
 		broadcaster := &p2pMock.MockBroadcaster{}
+		chainService := &blockchainmock.ChainService{
+			State:                st,
+			SyncCommitteeIndices: []primitives.CommitteeIndex{0},
+		}
 		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			CoreService: &core.Service{
 				SyncCommitteePool: synccommittee.NewStore(),
 				P2P:               broadcaster,
-				HeadFetcher: &blockchainmock.ChainService{
-					State:                st,
-					SyncCommitteeIndices: []primitives.CommitteeIndex{0},
-				},
+				HeadFetcher:       chainService,
 			},
 		}
 
@@ -1120,13 +1158,18 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 	})
 	t.Run("invalid", func(t *testing.T) {
 		broadcaster := &p2pMock.MockBroadcaster{}
+		chainService := &blockchainmock.ChainService{
+			State: st,
+		}
 		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			CoreService: &core.Service{
 				SyncCommitteePool: synccommittee.NewStore(),
 				P2P:               broadcaster,
-				HeadFetcher: &blockchainmock.ChainService{
-					State: st,
-				},
+				HeadFetcher:       chainService,
 			},
 		}
 
@@ -1149,7 +1192,13 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 		assert.Equal(t, false, broadcaster.BroadcastCalled.Load())
 	})
 	t.Run("empty", func(t *testing.T) {
-		s := &Server{}
+		chainService := &blockchainmock.ChainService{State: st}
+		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		}
 
 		var body bytes.Buffer
 		_, err := body.WriteString("[]")
@@ -1166,7 +1215,13 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 		assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
 	})
 	t.Run("no body", func(t *testing.T) {
-		s := &Server{}
+		chainService := &blockchainmock.ChainService{State: st}
+		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+		}
 
 		request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
 		writer := httptest.NewRecorder()
@@ -1178,6 +1233,26 @@ func TestSubmitSyncCommitteeSignatures(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusBadRequest, e.Code)
 		assert.Equal(t, true, strings.Contains(e.Message, "No data submitted"))
+	})
+	t.Run("syncing", func(t *testing.T) {
+		chainService := &blockchainmock.ChainService{State: st}
+		s := &Server{
+			HeadFetcher:           chainService,
+			TimeFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: true},
+		}
+
+		var body bytes.Buffer
+		_, err := body.WriteString(singleSyncCommitteeMsg)
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://example.com", &body)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.SubmitSyncCommitteeSignatures(writer, request)
+		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
+		assert.Equal(t, true, strings.Contains(writer.Body.String(), "Beacon node is currently syncing"))
 	})
 }
 
