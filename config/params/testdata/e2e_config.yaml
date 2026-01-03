@@ -136,3 +136,8 @@ BLOB_SCHEDULE:
   # Electra
   - EPOCH: 14
     MAX_BLOBS_PER_BLOCK: 9
+  # BPO (Blob Parameter Optimization) schedule for Fulu
+  - EPOCH: 17
+    MAX_BLOBS_PER_BLOCK: 15
+  - EPOCH: 18
+    MAX_BLOBS_PER_BLOCK: 21
