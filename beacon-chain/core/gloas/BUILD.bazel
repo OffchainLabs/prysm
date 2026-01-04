@@ -5,12 +5,14 @@ go_library(
     srcs = [
         "bid.go",
         "pending_payment.go",
+        "proposer_slashing.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas",
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
+        "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
@@ -29,6 +31,7 @@ go_test(
     srcs = [
         "bid_test.go",
         "pending_payment_test.go",
+        "proposer_slashing_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

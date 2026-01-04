@@ -6,7 +6,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
-type writeOnlyGloasFields interface {
+type WriteOnlyGloasFields interface {
 	SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid) error
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	RotateBuilderPendingPayments() error

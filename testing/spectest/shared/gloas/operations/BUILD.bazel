@@ -4,8 +4,9 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = [
-        "execution_payload_bid.go",
         "helpers.go",
+        "execution_payload_bid.go",
+        "proposer_slashing.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/shared/gloas/operations",
     visibility = ["//visibility:public"],
