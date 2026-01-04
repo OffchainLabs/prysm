@@ -189,3 +189,28 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 
 	return copied
 }
+
+// CopyBuilderPendingPayment creates a deep copy of a builder pending payment.
+func CopyBuilderPendingPayment(original *BuilderPendingPayment) *BuilderPendingPayment {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingPayment{
+		Weight:     original.Weight,
+		Withdrawal: copyBuilderPendingWithdrawal(original.Withdrawal),
+	}
+}
+
+// copyBuilderPendingWithdrawal creates a deep copy of a builder pending withdrawal.
+func copyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPendingWithdrawal {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingWithdrawal{
+		FeeRecipient: bytesutil.SafeCopyBytes(original.FeeRecipient),
+		Amount:       original.Amount,
+		BuilderIndex: original.BuilderIndex,
+	}
+}

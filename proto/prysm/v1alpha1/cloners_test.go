@@ -356,6 +356,64 @@ func TestCopyBlindedBeaconBlockBodyDeneb(t *testing.T) {
 	assert.NotEmpty(t, bb, "Copied blinded beacon block body Deneb has empty fields")
 }
 
+func TestCopyBuilderPendingPayment(t *testing.T) {
+	t.Run("nil payment", func(t *testing.T) {
+		if got := v1alpha1.CopyBuilderPendingPayment(nil); got != nil {
+			t.Fatalf("CopyBuilderPendingPayment(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("nil withdrawal", func(t *testing.T) {
+		original := &v1alpha1.BuilderPendingPayment{
+			Weight: primitives.Gwei(1),
+		}
+
+		copied := v1alpha1.CopyBuilderPendingPayment(original)
+		if copied == original {
+			t.Fatal("expected CopyBuilderPendingPayment to return a new pointer")
+		}
+		if !reflect.DeepEqual(copied, original) {
+			t.Fatalf("CopyBuilderPendingPayment() = %v, want %v", copied, original)
+		}
+		if copied.Withdrawal != nil {
+			t.Fatalf("CopyBuilderPendingPayment() withdrawal = %v, want nil", copied.Withdrawal)
+		}
+	})
+
+	t.Run("deep copy", func(t *testing.T) {
+		original := &v1alpha1.BuilderPendingPayment{
+			Weight: primitives.Gwei(2500),
+			Withdrawal: &v1alpha1.BuilderPendingWithdrawal{
+				FeeRecipient: []byte("fee_recipient_20_byt"),
+				Amount:       primitives.Gwei(10000),
+				BuilderIndex: primitives.BuilderIndex(789),
+			},
+		}
+
+		copied := v1alpha1.CopyBuilderPendingPayment(original)
+		if copied == original {
+			t.Fatal("expected CopyBuilderPendingPayment to return a new pointer")
+		}
+		if copied.Withdrawal == original.Withdrawal {
+			t.Fatal("expected nested Withdrawal to be copied")
+		}
+		if !reflect.DeepEqual(copied, original) {
+			t.Fatalf("CopyBuilderPendingPayment() = %v, want %v", copied, original)
+		}
+
+		want := proto.Clone(copied).(*v1alpha1.BuilderPendingPayment)
+
+		original.Weight++
+		original.Withdrawal.Amount++
+		original.Withdrawal.BuilderIndex++
+		original.Withdrawal.FeeRecipient[0] ^= 0xFF
+
+		if !reflect.DeepEqual(copied, want) {
+			t.Fatalf("copied payment mutated after changing source: got %v, want %v", copied, want)
+		}
+	})
+}
+
 func bytes(length int) []byte {
 	b := make([]byte, length)
 	for i := range length {

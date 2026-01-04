@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -16,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -75,7 +77,12 @@ func ProcessAttestationNoVerifySignature(
 		return nil, err
 	}
 
-	return SetParticipationAndRewardProposer(ctx, beaconState, att.GetData().Target.Epoch, indices, participatedFlags, totalBalance)
+	beaconState, err = gloas.UpdatePendingPaymentWeight(beaconState, att, indices, participatedFlags)
+	if err != nil {
+		return nil, err
+	}
+
+	return SetParticipationAndRewardProposer(ctx, beaconState, att.GetData().Target.Epoch, indices, participatedFlags, totalBalance, att)
 }
 
 // SetParticipationAndRewardProposer retrieves and sets the epoch participation bits in state. Based on the epoch participation, it rewards
@@ -105,7 +112,9 @@ func SetParticipationAndRewardProposer(
 	beaconState state.BeaconState,
 	targetEpoch primitives.Epoch,
 	indices []uint64,
-	participatedFlags map[uint8]bool, totalBalance uint64) (state.BeaconState, error) {
+	participatedFlags map[uint8]bool,
+	totalBalance uint64,
+	att ethpb.Att) (state.BeaconState, error) {
 	var proposerRewardNumerator uint64
 	currentEpoch := time.CurrentEpoch(beaconState)
 	var stateErr error
@@ -299,6 +308,40 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		participatedFlags[targetFlagIndex] = true
 	}
 	matchedSrcTgtHead := matchedHead && matchedSrcTgt
+
+	// Spec v1.6.1 (pseudocode excerpt):
+	//
+	//	# [New in Gloas:EIP7732]
+	//	if is_attestation_same_slot(state, data):
+	//	    assert data.index == 0
+	//	    payload_matches = True
+	//	else:
+	//	    slot_index = data.slot % SLOTS_PER_HISTORICAL_ROOT
+	//	    payload_index = state.execution_payload_availability[slot_index]
+	//	    payload_matches = data.index == payload_index
+	//
+	//	# [Modified in Gloas:EIP7732]
+	//	is_matching_head = is_matching_target and head_root_matches and payload_matches
+	var matchingPayload bool
+	if beaconState.Version() >= version.Gloas {
+		sameSlot, err := gloas.SameSlotAttestation(beaconState, [32]byte(data.BeaconBlockRoot), data.Slot)
+		if err != nil {
+			return nil, err
+		}
+		if sameSlot {
+			if data.CommitteeIndex != 0 {
+				return nil, fmt.Errorf("committee index %d for same slot attestation must be 0", data.CommitteeIndex)
+			}
+			matchingPayload = true
+		} else {
+			executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(data.Slot)
+			if err != nil {
+				return nil, err
+			}
+			matchingPayload = executionPayloadAvail == uint64(data.CommitteeIndex)
+		}
+		matchedSrcTgtHead = matchedSrcTgtHead && matchingPayload
+	}
 	if matchedSrcTgtHead && delay == cfg.MinAttestationInclusionDelay {
 		participatedFlags[headFlagIndex] = true
 	}
