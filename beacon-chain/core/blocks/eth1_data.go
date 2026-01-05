@@ -60,7 +60,7 @@ func Eth1DataHasEnoughSupport(beaconState state.ReadOnlyBeaconState, data *ethpb
 	voteCount := uint64(0)
 
 	for _, vote := range beaconState.Eth1DataVotes() {
-		if AreEth1DataEqual(vote, data.Copy()) {
+		if AreEth1DataEqual(vote, data) {
 			voteCount++
 		}
 	}

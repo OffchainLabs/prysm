@@ -2,7 +2,6 @@ package verification
 
 import (
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -795,87 +794,90 @@ func TestDataColumnsSidecarProposerExpected(t *testing.T) {
 		blobCount  = 1
 	)
 
-	parentRoot := [fieldparams.RootLength]byte{}
-	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
-	firstColumn := columns[0]
 	ctx := t.Context()
-	testCases := []struct {
-		name          string
-		stateByRooter StateByRooter
-		proposerCache proposerCache
-		columns       []blocks.RODataColumn
-		error         string
-	}{
-		{
-			name:          "Cached, matches",
-			stateByRooter: nil,
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex()),
-			},
-			columns: columns,
-		},
-		{
-			name:          "Cached, does not match",
-			stateByRooter: nil,
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsIdx(firstColumn.ProposerIndex() + 1),
-			},
-			columns: columns,
-			error:   errSidecarUnexpectedProposer.Error(),
-		},
-		{
-			name:          "Not cached, state lookup failure",
-			stateByRooter: sbrNotFound(t, firstColumn.ParentRoot()),
-			proposerCache: &mockProposerCache{
-				ProposerCB: pcReturnsNotFound(),
-			},
-			columns: columns,
-			error:   "verifying state",
-		},
-	}
+	parentRoot := [fieldparams.RootLength]byte{}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			initializer := Initializer{
-				shared: &sharedResources{
-					sr:  tc.stateByRooter,
-					pc:  tc.proposerCache,
-					hsp: &mockHeadStateProvider{},
-					fc: &mockForkchoicer{
-						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
-					},
+	// Create a Fulu state to get the expected proposer from the lookahead.
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, 32)
+	expectedProposer, err := fuluState.ProposerLookahead()
+	require.NoError(t, err)
+	expectedProposerIdx := primitives.ValidatorIndex(expectedProposer[columnSlot])
+
+	// Generate data columns with the expected proposer index.
+	matchingColumns := generateTestDataColumnsWithProposer(t, parentRoot, columnSlot, blobCount, expectedProposerIdx)
+	// Generate data columns with wrong proposer index.
+	wrongColumns := generateTestDataColumnsWithProposer(t, parentRoot, columnSlot, blobCount, expectedProposerIdx+1)
+
+	t.Run("Proposer matches", func(t *testing.T) {
+		initializer := Initializer{
+			shared: &sharedResources{
+				sr: sbrReturnsState(fuluState),
+				hsp: &mockHeadStateProvider{
+					headRoot:          parentRoot[:],
+					headSlot:          columnSlot, // Same epoch so HeadStateReadOnly is used
+					headStateReadOnly: fuluState,
 				},
-			}
+				fc: &mockForkchoicer{},
+			},
+		}
 
-			verifier := initializer.NewDataColumnsVerifier(tc.columns, GossipDataColumnSidecarRequirements)
-			var wg sync.WaitGroup
+		verifier := initializer.NewDataColumnsVerifier(matchingColumns, GossipDataColumnSidecarRequirements)
+		err := verifier.SidecarProposerExpected(ctx)
+		require.NoError(t, err)
+		require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
+		require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
+	})
 
-			var err1, err2 error
-			wg.Go(func() {
-				err1 = verifier.SidecarProposerExpected(ctx)
-			})
-			wg.Go(func() {
-				err2 = verifier.SidecarProposerExpected(ctx)
-			})
-			wg.Wait()
+	t.Run("Proposer does not match", func(t *testing.T) {
+		initializer := Initializer{
+			shared: &sharedResources{
+				sr: sbrReturnsState(fuluState),
+				hsp: &mockHeadStateProvider{
+					headRoot:          parentRoot[:],
+					headSlot:          columnSlot, // Same epoch so HeadStateReadOnly is used
+					headStateReadOnly: fuluState,
+				},
+				fc: &mockForkchoicer{},
+			},
+		}
 
-			require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
+		verifier := initializer.NewDataColumnsVerifier(wrongColumns, GossipDataColumnSidecarRequirements)
+		err := verifier.SidecarProposerExpected(ctx)
+		require.ErrorContains(t, errSidecarUnexpectedProposer.Error(), err)
+		require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
+		require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
+	})
 
-			if len(tc.error) > 0 {
-				require.ErrorContains(t, tc.error, err1)
-				require.ErrorContains(t, tc.error, err2)
-				require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
-				return
-			}
+	t.Run("State lookup failure", func(t *testing.T) {
+		columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
+		initializer := Initializer{
+			shared: &sharedResources{
+				sr:  sbrNotFound(t, columns[0].ParentRoot()),
+				hsp: &mockHeadStateProvider{},
+				fc:  &mockForkchoicer{},
+			},
+		}
 
-			require.NoError(t, err1)
-			require.NoError(t, err2)
-			require.NoError(t, verifier.results.result(RequireSidecarProposerExpected))
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+		err := verifier.SidecarProposerExpected(ctx)
+		require.ErrorContains(t, "verifying state", err)
+		require.Equal(t, true, verifier.results.executed(RequireSidecarProposerExpected))
+		require.NotNil(t, verifier.results.result(RequireSidecarProposerExpected))
+	})
+}
 
-			err := verifier.SidecarProposerExpected(ctx)
-			require.NoError(t, err)
-		})
+func generateTestDataColumnsWithProposer(t *testing.T, parent [fieldparams.RootLength]byte, slot primitives.Slot, blobCount int, proposer primitives.ValidatorIndex) []blocks.RODataColumn {
+	roBlock, roBlobs := util.GenerateTestDenebBlockWithSidecar(t, parent, slot, blobCount, util.WithProposer(proposer))
+	blobs := make([]kzg.Blob, 0, len(roBlobs))
+	for i := range roBlobs {
+		blobs = append(blobs, kzg.Blob(roBlobs[i].Blob))
 	}
+
+	cellsPerBlob, proofsPerBlob := util.GenerateCellsAndProofs(t, blobs)
+	roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(roBlock))
+	require.NoError(t, err)
+
+	return roDataColumnSidecars
 }
 
 func TestColumnRequirementSatisfaction(t *testing.T) {
@@ -922,12 +924,3 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestConcatRootSlot(t *testing.T) {
-	root := [fieldparams.RootLength]byte{1, 2, 3}
-	const slot = primitives.Slot(3210)
-
-	const expected = "\x01\x02\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x003210"
-
-	actual := concatRootSlot(root, slot)
-	require.Equal(t, expected, actual)
-}
