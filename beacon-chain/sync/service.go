@@ -413,6 +413,20 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	// Start the gossipsub controller.
 	go s.subscriptionController.Start()
 
+	for {
+		if s.cfg.p2p.Status() == nil {
+			break
+		}
+		log.Debug("p2p service not started yet; will retry in 100ms")
+
+		select {
+		case <-s.ctx.Done():
+			log.WithError(s.ctx.Err()).Error("context closed while waiting for p2p service to start, exiting startDiscoveryAndSubscriptions routine")
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
 	// Configure the crawler and dialer with the topic extractor / subnet topics
 	// provider if available.
 	crawler := s.cfg.p2p.Crawler()

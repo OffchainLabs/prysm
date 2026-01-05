@@ -35,6 +35,7 @@ type (
 		PeersProvider
 		MetadataProvider
 		CustodyManager
+		Status() error
 	}
 
 	// Accessor provides access to the Broadcaster, PeerManager and CustodyManager interfaces.
