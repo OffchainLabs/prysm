@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -276,17 +275,6 @@ func (*grpcValidatorClient) AggregatedSelections(context.Context, []iface.Beacon
 
 func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.SyncCommitteeSelection) ([]iface.SyncCommitteeSelection, error) {
 	return nil, iface.ErrNotSupported
-}
-
-// NewGrpcValidatorClient creates a new gRPC validator client from a single connection.
-// This is the legacy constructor for backward compatibility.
-func NewGrpcValidatorClient(cc grpc.ClientConnInterface) iface.ValidatorClient {
-	return &grpcValidatorClient{
-		grpcClientManager: &grpcClientManager[ethpb.BeaconNodeValidatorClient]{
-			client:    ethpb.NewBeaconNodeValidatorClient(cc),
-			newClient: ethpb.NewBeaconNodeValidatorClient,
-		},
-	}
 }
 
 // NewGrpcValidatorClientWithConnection creates a new gRPC validator client that supports

@@ -15,7 +15,6 @@ import (
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 type grpcPrysmChainClient struct {
@@ -94,12 +93,6 @@ func validatorCountByStatus(validators []*ethpb.Validator, statuses []validator.
 
 func (c *grpcPrysmChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.ValidatorPerformanceRequest) (*ethpb.ValidatorPerformanceResponse, error) {
 	return c.chainClient.ValidatorPerformance(ctx, in)
-}
-
-// NewGrpcPrysmChainClient creates a new gRPC Prysm chain client from a single connection.
-// This is the legacy constructor for backward compatibility.
-func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) iface.PrysmChainClient {
-	return &grpcPrysmChainClient{chainClient: NewGrpcChainClient(cc)}
 }
 
 // NewGrpcPrysmChainClientWithConnection creates a new gRPC Prysm chain client that supports

@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/golang/protobuf/ptypes/empty"
-	"google.golang.org/grpc"
 )
 
 type grpcChainClient struct {
@@ -36,17 +35,6 @@ func (c *grpcChainClient) ValidatorPerformance(ctx context.Context, in *ethpb.Va
 
 func (c *grpcChainClient) ValidatorParticipation(ctx context.Context, in *ethpb.GetValidatorParticipationRequest) (*ethpb.ValidatorParticipationResponse, error) {
 	return c.getClient().GetValidatorParticipation(ctx, in)
-}
-
-// NewGrpcChainClient creates a new gRPC chain client from a single connection.
-// This is the legacy constructor for backward compatibility.
-func NewGrpcChainClient(cc grpc.ClientConnInterface) iface.ChainClient {
-	return &grpcChainClient{
-		grpcClientManager: &grpcClientManager[ethpb.BeaconChainClient]{
-			client:    ethpb.NewBeaconChainClient(cc),
-			newClient: ethpb.NewBeaconChainClient,
-		},
-	}
 }
 
 // NewGrpcChainClientWithConnection creates a new gRPC chain client that supports

@@ -135,8 +135,7 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 
 	validatorClient := &grpcValidatorClient{
 		grpcClientManager: &grpcClientManager[eth.BeaconNodeValidatorClient]{
-			client:    beaconNodeValidatorClient,
-			newClient: eth.NewBeaconNodeValidatorClient,
+			client: beaconNodeValidatorClient,
 		},
 		isEventStreamRunning: true,
 	}
@@ -154,8 +153,7 @@ func TestStartEventStream(t *testing.T) {
 	beaconNodeValidatorClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
 	grpcClient := &grpcValidatorClient{
 		grpcClientManager: &grpcClientManager[eth.BeaconNodeValidatorClient]{
-			client:    beaconNodeValidatorClient,
-			newClient: eth.NewBeaconNodeValidatorClient,
+			client: beaconNodeValidatorClient,
 		},
 		isEventStreamRunning: true,
 	}

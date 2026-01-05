@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/golang/protobuf/ptypes/empty"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -41,17 +40,6 @@ func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 		return false
 	}
 	return true
-}
-
-// NewNodeClient creates a new gRPC node client from a single connection.
-// This is the legacy constructor for backward compatibility.
-func NewNodeClient(cc grpc.ClientConnInterface) iface.NodeClient {
-	return &grpcNodeClient{
-		grpcClientManager: &grpcClientManager[ethpb.NodeClient]{
-			client:    ethpb.NewNodeClient(cc),
-			newClient: ethpb.NewNodeClient,
-		},
-	}
 }
 
 // NewNodeClientWithConnection creates a new gRPC node client that supports
