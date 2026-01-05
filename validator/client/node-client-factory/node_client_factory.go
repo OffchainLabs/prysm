@@ -9,16 +9,9 @@ import (
 )
 
 func NewNodeClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.RestHandler) iface.NodeClient {
-	// Use connection-aware client if a connection provider is configured for gRPC failover support
-	var grpcClient iface.NodeClient
-	if validatorConn.GetGrpcConnectionProvider() != nil {
-		grpcClient = grpcApi.NewNodeClientWithConnection(validatorConn)
-	} else {
-		grpcClient = grpcApi.NewNodeClient(validatorConn.GetGrpcClientConn())
-	}
+	grpcClient := grpcApi.NewNodeClientWithConnection(validatorConn)
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewNodeClientWithFallback(jsonRestHandler, grpcClient)
-	} else {
-		return grpcClient
 	}
+	return grpcClient
 }

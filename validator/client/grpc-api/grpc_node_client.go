@@ -2,7 +2,6 @@ package grpc_api
 
 import (
 	"context"
-	"sync"
 
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -16,38 +15,7 @@ var (
 )
 
 type grpcNodeClient struct {
-	nodeClient   ethpb.NodeClient
-	conn         validatorHelpers.NodeConnection
-	lastHost     string
-	clientMu     sync.RWMutex
-}
-
-// getClient returns the current node client, recreating it if the connection has changed.
-func (c *grpcNodeClient) getClient() ethpb.NodeClient {
-	if c.conn == nil || c.conn.GetGrpcConnectionProvider() == nil {
-		// No connection provider, use static client
-		return c.nodeClient
-	}
-
-	currentHost := c.conn.GetGrpcConnectionProvider().CurrentHost()
-	c.clientMu.RLock()
-	if c.lastHost == currentHost {
-		client := c.nodeClient
-		c.clientMu.RUnlock()
-		return client
-	}
-	c.clientMu.RUnlock()
-
-	// Connection changed, need to recreate client
-	c.clientMu.Lock()
-	defer c.clientMu.Unlock()
-	// Double-check after acquiring write lock
-	if c.lastHost == currentHost {
-		return c.nodeClient
-	}
-	c.nodeClient = ethpb.NewNodeClient(c.conn.GetGrpcClientConn())
-	c.lastHost = currentHost
-	return c.nodeClient
+	*grpcClientManager[ethpb.NodeClient]
 }
 
 func (c *grpcNodeClient) SyncStatus(ctx context.Context, in *empty.Empty) (*ethpb.SyncStatus, error) {
@@ -78,18 +46,18 @@ func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
 // NewNodeClient creates a new gRPC node client from a single connection.
 // This is the legacy constructor for backward compatibility.
 func NewNodeClient(cc grpc.ClientConnInterface) iface.NodeClient {
-	return &grpcNodeClient{nodeClient: ethpb.NewNodeClient(cc)}
+	return &grpcNodeClient{
+		grpcClientManager: &grpcClientManager[ethpb.NodeClient]{
+			client:    ethpb.NewNodeClient(cc),
+			newClient: ethpb.NewNodeClient,
+		},
+	}
 }
 
 // NewNodeClientWithConnection creates a new gRPC node client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
 func NewNodeClientWithConnection(conn validatorHelpers.NodeConnection) iface.NodeClient {
-	client := &grpcNodeClient{
-		conn:       conn,
-		nodeClient: ethpb.NewNodeClient(conn.GetGrpcClientConn()),
+	return &grpcNodeClient{
+		grpcClientManager: newGrpcClientManager(conn, ethpb.NewNodeClient),
 	}
-	if provider := conn.GetGrpcConnectionProvider(); provider != nil {
-		client.lastHost = provider.CurrentHost()
-	}
-	return client
 }

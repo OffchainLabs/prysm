@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
@@ -25,39 +24,8 @@ import (
 )
 
 type grpcValidatorClient struct {
-	beaconNodeValidatorClient ethpb.BeaconNodeValidatorClient
-	conn                      validatorHelpers.NodeConnection
-	lastHost                  string
-	clientMu                  sync.RWMutex
-	isEventStreamRunning      bool
-}
-
-// getClient returns the current validator client, recreating it if the connection has changed.
-func (c *grpcValidatorClient) getClient() ethpb.BeaconNodeValidatorClient {
-	if c.conn == nil || c.conn.GetGrpcConnectionProvider() == nil {
-		// No connection provider, use static client
-		return c.beaconNodeValidatorClient
-	}
-
-	currentHost := c.conn.GetGrpcConnectionProvider().CurrentHost()
-	c.clientMu.RLock()
-	if c.lastHost == currentHost {
-		client := c.beaconNodeValidatorClient
-		c.clientMu.RUnlock()
-		return client
-	}
-	c.clientMu.RUnlock()
-
-	// Connection changed, need to recreate client
-	c.clientMu.Lock()
-	defer c.clientMu.Unlock()
-	// Double-check after acquiring write lock
-	if c.lastHost == currentHost {
-		return c.beaconNodeValidatorClient
-	}
-	c.beaconNodeValidatorClient = ethpb.NewBeaconNodeValidatorClient(c.conn.GetGrpcClientConn())
-	c.lastHost = currentHost
-	return c.beaconNodeValidatorClient
+	*grpcClientManager[ethpb.BeaconNodeValidatorClient]
+	isEventStreamRunning bool
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
@@ -313,20 +281,20 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 // NewGrpcValidatorClient creates a new gRPC validator client from a single connection.
 // This is the legacy constructor for backward compatibility.
 func NewGrpcValidatorClient(cc grpc.ClientConnInterface) iface.ValidatorClient {
-	return &grpcValidatorClient{beaconNodeValidatorClient: ethpb.NewBeaconNodeValidatorClient(cc)}
+	return &grpcValidatorClient{
+		grpcClientManager: &grpcClientManager[ethpb.BeaconNodeValidatorClient]{
+			client:    ethpb.NewBeaconNodeValidatorClient(cc),
+			newClient: ethpb.NewBeaconNodeValidatorClient,
+		},
+	}
 }
 
 // NewGrpcValidatorClientWithConnection creates a new gRPC validator client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
 func NewGrpcValidatorClientWithConnection(conn validatorHelpers.NodeConnection) iface.ValidatorClient {
-	client := &grpcValidatorClient{
-		conn:                      conn,
-		beaconNodeValidatorClient: ethpb.NewBeaconNodeValidatorClient(conn.GetGrpcClientConn()),
+	return &grpcValidatorClient{
+		grpcClientManager: newGrpcClientManager(conn, ethpb.NewBeaconNodeValidatorClient),
 	}
-	if provider := conn.GetGrpcConnectionProvider(); provider != nil {
-		client.lastHost = provider.CurrentHost()
-	}
-	return client
 }
 
 func (c *grpcValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *eventClient.Event) {
@@ -423,17 +391,17 @@ func (c *grpcValidatorClient) EventStreamIsRunning() bool {
 }
 
 func (c *grpcValidatorClient) Host() string {
-	if c.conn == nil || c.conn.GetGrpcConnectionProvider() == nil {
+	if c.grpcClientManager == nil || c.grpcClientManager.conn == nil || c.grpcClientManager.conn.GetGrpcConnectionProvider() == nil {
 		return ""
 	}
-	return c.conn.GetGrpcConnectionProvider().CurrentHost()
+	return c.grpcClientManager.conn.GetGrpcConnectionProvider().CurrentHost()
 }
 
 func (c *grpcValidatorClient) SetHost(_ string) {
 	// For gRPC, host switching is done via the connection provider's NextHost() method,
 	// not by setting a specific host string. The validator's changeHost() logic
 	// uses the connection provider directly.
-	if c.conn == nil || c.conn.GetGrpcConnectionProvider() == nil {
+	if c.grpcClientManager == nil || c.grpcClientManager.conn == nil || c.grpcClientManager.conn.GetGrpcConnectionProvider() == nil {
 		log.Debug("SetHost called but no gRPC connection provider configured")
 		return
 	}

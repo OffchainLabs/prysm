@@ -15,11 +15,6 @@ func NewValidatorClient(
 ) iface.ValidatorClient {
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewBeaconApiValidatorClient(jsonRestHandler, opt...)
-	} else {
-		// Use connection-aware client if a connection provider is configured for gRPC failover support
-		if validatorConn.GetGrpcConnectionProvider() != nil {
-			return grpcApi.NewGrpcValidatorClientWithConnection(validatorConn)
-		}
-		return grpcApi.NewGrpcValidatorClient(validatorConn.GetGrpcClientConn())
 	}
+	return grpcApi.NewGrpcValidatorClientWithConnection(validatorConn)
 }

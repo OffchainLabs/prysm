@@ -99,7 +99,7 @@ func (c *grpcPrysmChainClient) ValidatorPerformance(ctx context.Context, in *eth
 // NewGrpcPrysmChainClient creates a new gRPC Prysm chain client from a single connection.
 // This is the legacy constructor for backward compatibility.
 func NewGrpcPrysmChainClient(cc grpc.ClientConnInterface) iface.PrysmChainClient {
-	return &grpcPrysmChainClient{chainClient: &grpcChainClient{beaconChainClient: ethpb.NewBeaconChainClient(cc)}}
+	return &grpcPrysmChainClient{chainClient: NewGrpcChainClient(cc)}
 }
 
 // NewGrpcPrysmChainClientWithConnection creates a new gRPC Prysm chain client that supports

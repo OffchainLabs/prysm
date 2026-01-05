@@ -133,7 +133,13 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 		gomock.Any(),
 	).Return(nil, errors.New("failed stream"))
 
-	validatorClient := &grpcValidatorClient{beaconNodeValidatorClient: beaconNodeValidatorClient, isEventStreamRunning: true}
+	validatorClient := &grpcValidatorClient{
+		grpcClientManager: &grpcClientManager[eth.BeaconNodeValidatorClient]{
+			client:    beaconNodeValidatorClient,
+			newClient: eth.NewBeaconNodeValidatorClient,
+		},
+		isEventStreamRunning: true,
+	}
 	_, err := validatorClient.WaitForChainStart(t.Context(), &emptypb.Empty{})
 	want := "could not setup beacon chain ChainStart streaming client"
 	assert.ErrorContains(t, want, err)
@@ -146,7 +152,13 @@ func TestStartEventStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	beaconNodeValidatorClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
-	grpcClient := &grpcValidatorClient{beaconNodeValidatorClient: beaconNodeValidatorClient, isEventStreamRunning: true}
+	grpcClient := &grpcValidatorClient{
+		grpcClientManager: &grpcClientManager[eth.BeaconNodeValidatorClient]{
+			client:    beaconNodeValidatorClient,
+			newClient: eth.NewBeaconNodeValidatorClient,
+		},
+		isEventStreamRunning: true,
+	}
 	tests := []struct {
 		name    string
 		topics  []string
