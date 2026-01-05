@@ -414,8 +414,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
 			}
-
-			dataColumnSidecarBroadcasts.Inc()
+			log.Debugf("Successfully batched data column sidecar for topic %s", topic)
 
 			if logLevel >= logrus.DebugLevel {
 				root := sidecar.BlockRoot()
@@ -461,6 +460,9 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	if len(sidecarsWithPeers) > 0 {
 		if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
 			log.WithError(err).Error("Cannot publish batch for data column sidecars")
+		} else {
+			log.Debugf("Successfully published batch for %d data column sidecars", len(sidecarsWithPeers))
+			dataColumnSidecarBroadcasts.Add(float64(len(sidecarsWithPeers)))
 		}
 	}
 
