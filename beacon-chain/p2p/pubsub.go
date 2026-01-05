@@ -103,12 +103,12 @@ func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte,
 func (s *Service) addToBatch(ctx context.Context, batch *pubsub.MessageBatch, topic string, data []byte, opts ...pubsub.PubOpt) error {
 	topicHandle, err := s.JoinTopic(topic)
 	if err != nil {
-		return err
+		return fmt.Errorf("joining topic: %w", err)
 	}
 
 	// Wait for at least 1 peer to be available to receive the published message.
 	for {
-		if flags.Get().MinimumSyncPeers == 0 || len(topicHandle.ListPeers()) > 0  {
+		if flags.Get().MinimumSyncPeers == 0 || len(topicHandle.ListPeers()) > 0 {
 			return topicHandle.AddToBatch(ctx, batch, data, opts...)
 		}
 		select {
