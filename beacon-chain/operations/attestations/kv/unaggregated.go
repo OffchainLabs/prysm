@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // SaveUnaggregatedAttestation saves an unaggregated attestation in cache.

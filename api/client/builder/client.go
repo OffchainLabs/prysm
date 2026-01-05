@@ -25,7 +25,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -70,7 +70,7 @@ type requestLogger struct{}
 func (*requestLogger) observe(r *http.Request) (e error) {
 	b := bytes.NewBuffer(nil)
 	if r.Body == nil {
-		log.WithFields(log.Fields{
+		log.WithFields(logrus.Fields{
 			"bodyBase64": "(nil value)",
 			"url":        r.URL.String(),
 		}).Info("Builder http request")
@@ -87,7 +87,7 @@ func (*requestLogger) observe(r *http.Request) (e error) {
 		return err
 	}
 	r.Body = io.NopCloser(b)
-	log.WithFields(log.Fields{
+	log.WithFields(logrus.Fields{
 		"bodyBase64": string(body),
 		"url":        r.URL.String(),
 	}).Info("Builder http request")

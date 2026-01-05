@@ -10,7 +10,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	log "github.com/sirupsen/logrus"
 )
 
 // frozenHeaderRecorder allows asserting that response headers were not modified

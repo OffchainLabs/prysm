@@ -13,7 +13,6 @@ import (
 	attaggregation "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // AggregateUnaggregatedAttestations aggregates the unaggregated attestations and saves the

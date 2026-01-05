@@ -170,12 +170,13 @@ func TestService_GetRecentPreState(t *testing.T) {
 	err = s.SetFinalizedCheckpoint(cp0)
 	require.NoError(t, err)
 
-	st, root, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	st, blk, err := prepareForkchoiceState(ctx, 31, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	service.head = &head{
 		root:  [32]byte(ckRoot),
 		state: s,
+		block: blk,
 		slot:  31,
 	}
 	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 1, Root: ckRoot}))
@@ -197,12 +198,13 @@ func TestService_GetRecentPreState_Old_Checkpoint(t *testing.T) {
 	err = s.SetFinalizedCheckpoint(cp0)
 	require.NoError(t, err)
 
-	st, root, err := prepareForkchoiceState(ctx, 33, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	st, blk, err := prepareForkchoiceState(ctx, 33, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	service.head = &head{
 		root:  [32]byte(ckRoot),
 		state: s,
+		block: blk,
 		slot:  33,
 	}
 	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{}))
@@ -227,6 +229,7 @@ func TestService_GetRecentPreState_Same_DependentRoots(t *testing.T) {
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	st, blk, err = prepareForkchoiceState(ctx, 64, [32]byte{'T'}, blk.Root(), [32]byte{}, cp0, cp0)
 	require.NoError(t, err)
+	headBlock := blk
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	st, blk, err = prepareForkchoiceState(ctx, 33, [32]byte{'U'}, [32]byte(ckRoot), [32]byte{}, cp0, cp0)
 	require.NoError(t, err)
@@ -235,8 +238,9 @@ func TestService_GetRecentPreState_Same_DependentRoots(t *testing.T) {
 
 	service.head = &head{
 		root:  [32]byte{'T'},
-		state: s,
+		block: headBlock,
 		slot:  64,
+		state: s,
 	}
 	require.NotNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{Epoch: 2, Root: cpRoot[:]}))
 }
@@ -263,6 +267,7 @@ func TestService_GetRecentPreState_Different_DependentRoots(t *testing.T) {
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	st, blk, err = prepareForkchoiceState(ctx, 64, [32]byte{'U'}, blk.Root(), [32]byte{}, cp0, cp0)
 	require.NoError(t, err)
+	headBlock := blk
 	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	st, blk, err = prepareForkchoiceState(ctx, 33, [32]byte{'V'}, [32]byte(ckRoot), [32]byte{}, cp0, cp0)
 	require.NoError(t, err)
@@ -270,7 +275,8 @@ func TestService_GetRecentPreState_Different_DependentRoots(t *testing.T) {
 	cpRoot := blk.Root()
 
 	service.head = &head{
-		root:  [32]byte{'T'},
+		root:  [32]byte{'U'},
+		block: headBlock,
 		state: s,
 		slot:  64,
 	}
@@ -287,12 +293,13 @@ func TestService_GetRecentPreState_Different(t *testing.T) {
 	err = s.SetFinalizedCheckpoint(cp0)
 	require.NoError(t, err)
 
-	st, root, err := prepareForkchoiceState(ctx, 33, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
+	st, blk, err := prepareForkchoiceState(ctx, 33, [32]byte(ckRoot), [32]byte{}, [32]byte{'R'}, cp0, cp0)
 	require.NoError(t, err)
-	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, root))
+	require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, st, blk))
 	service.head = &head{
 		root:  [32]byte(ckRoot),
 		state: s,
+		block: blk,
 		slot:  33,
 	}
 	require.IsNil(t, service.getRecentPreState(ctx, &ethpb.Checkpoint{}))
