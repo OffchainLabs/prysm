@@ -182,12 +182,6 @@ func ProcessBlockNoVerifyAnySig(
 		return nil, nil, err
 	}
 
-	sig := signed.Signature()
-	bSet, err := b.BlockSignatureBatch(st, blk.ProposerIndex(), sig[:], blk.HashTreeRoot)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return nil, nil, errors.Wrap(err, "could not retrieve block signature set")
-	}
 	randaoReveal := signed.Block().Body().RandaoReveal()
 	rSet, err := b.RandaoSignatureBatch(ctx, st, randaoReveal[:])
 	if err != nil {
@@ -201,7 +195,7 @@ func ProcessBlockNoVerifyAnySig(
 
 	// Merge beacon block, randao and attestations signatures into a set.
 	set := bls.NewSet()
-	set.Join(bSet).Join(rSet).Join(aSet)
+	set.Join(rSet).Join(aSet)
 
 	if blk.Version() >= version.Capella {
 		changes, err := signed.Block().Body().BLSToExecutionChanges()

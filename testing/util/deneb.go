@@ -44,6 +44,13 @@ func WithProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoo
 	}
 }
 
+// WithProposer sets the proposer index for the generated block without signing.
+func WithProposer(idx primitives.ValidatorIndex) DenebBlockGeneratorOption {
+	return func(g *denebBlockGenerator) {
+		g.proposer = idx
+	}
+}
+
 func WithPayloadSetter(p *enginev1.ExecutionPayloadDeneb) DenebBlockGeneratorOption {
 	return func(g *denebBlockGenerator) {
 		g.payload = p

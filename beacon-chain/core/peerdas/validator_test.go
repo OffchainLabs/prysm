@@ -6,7 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v7/config/params"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -59,6 +59,8 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 }
 
 func TestDataColumnSidecars(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	t.Run("sizes mismatch", func(t *testing.T) {
 		// Create a protobuf signed beacon block.
 		signedBeaconBlockPb := util.NewBeaconBlockDeneb()
@@ -69,10 +71,10 @@ func TestDataColumnSidecars(t *testing.T) {
 
 		// Create cells and proofs.
 		cellsPerBlob := [][]kzg.Cell{
-			make([]kzg.Cell, params.BeaconConfig().NumberOfColumns),
+			make([]kzg.Cell, numberOfColumns),
 		}
 		proofsPerBlob := [][]kzg.Proof{
-			make([]kzg.Proof, params.BeaconConfig().NumberOfColumns),
+			make([]kzg.Proof, numberOfColumns),
 		}
 
 		rob, err := blocks.NewROBlock(signedBeaconBlock)
@@ -117,7 +119,6 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create cells and proofs with sufficient cells but insufficient proofs.
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		cellsPerBlob := [][]kzg.Cell{
 			make([]kzg.Cell, numberOfColumns),
 		}
@@ -149,7 +150,6 @@ func TestDataColumnSidecars(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create cells and proofs with correct dimensions.
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		cellsPerBlob := [][]kzg.Cell{
 			make([]kzg.Cell, numberOfColumns),
 			make([]kzg.Cell, numberOfColumns),
@@ -197,6 +197,7 @@ func TestDataColumnSidecars(t *testing.T) {
 }
 
 func TestReconstructionSource(t *testing.T) {
+	const numberOfColumns = fieldparams.NumberOfColumns
 	// Create a Fulu block with blob commitments.
 	signedBeaconBlockPb := util.NewBeaconBlockFulu()
 	commitment1 := make([]byte, 48)
@@ -212,7 +213,6 @@ func TestReconstructionSource(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create cells and proofs with correct dimensions.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 	cellsPerBlob := [][]kzg.Cell{
 		make([]kzg.Cell, numberOfColumns),
 		make([]kzg.Cell, numberOfColumns),

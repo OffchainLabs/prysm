@@ -532,12 +532,19 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
 	defer span.End()
 
+	start := time.Now()
+
 	if !s.capabilityCache.has(GetBlobsV2) {
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
 	}
 
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
+
+	if len(result) != 0 {
+		getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
+	}
+
 	return result, handleRPCError(err)
 }
 

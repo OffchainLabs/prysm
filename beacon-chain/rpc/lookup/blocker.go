@@ -450,7 +450,7 @@ func (p *BeaconDbBlocker) blobsDataFromStoredDataColumns(root [fieldparams.RootL
 	if count < peerdas.MinimumColumnCountToReconstruct() {
 		// There is no way to reconstruct the data columns.
 		return nil, &core.RpcError{
-			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs - please start the beacon node with the `--%s` flag to ensure this call to succeed, or retry later if it is already the case", flags.Supernode.Name),
+			Err:    errors.Errorf("the node does not custody enough data columns to reconstruct blobs - please start the beacon node with the `--%s` flag to ensure this call to succeed", flags.SemiSupernode.Name),
 			Reason: core.NotFound,
 		}
 	}
@@ -628,6 +628,8 @@ func (p *BeaconDbBlocker) neededDataColumnSidecars(root [fieldparams.RootLength]
 //   - no block, 404
 //   - block exists, before Fulu fork, 400 (data columns are not supported before Fulu fork)
 func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError) {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	// Check for genesis block first (not supported for data columns)
 	if id == "genesis" {
 		return nil, &core.RpcError{Err: errors.New("data columns are not supported for Phase 0 fork"), Reason: core.BadRequest}
@@ -681,7 +683,6 @@ func (p *BeaconDbBlocker) DataColumns(ctx context.Context, id string, indices []
 		}
 	} else {
 		// Validate and convert indices
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 		for _, index := range indices {
 			if index < 0 || uint64(index) >= numberOfColumns {
 				return nil, &core.RpcError{

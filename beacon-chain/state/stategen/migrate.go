@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/sirupsen/logrus"
@@ -37,76 +38,84 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) error {
 		return nil
 	}
 
-	// Start at previous finalized slot, stop at current finalized slot (it will be handled in the next migration).
-	// If the slot is on archived point, save the state of that slot to the DB.
-	for slot := oldFSlot; slot < fSlot; slot++ {
+	// Calculate the first archived point slot >= oldFSlot (but > 0).
+	// This avoids iterating through every slot and only visits archived points directly.
+	var startSlot primitives.Slot
+	if oldFSlot == 0 {
+		startSlot = s.slotsPerArchivedPoint
+	} else {
+		// Round up to the next archived point
+		startSlot = (oldFSlot + s.slotsPerArchivedPoint - 1) / s.slotsPerArchivedPoint * s.slotsPerArchivedPoint
+	}
+
+	// Start at the first archived point after old finalized slot, stop before current finalized slot.
+	// Jump directly between archived points.
+	for slot := startSlot; slot < fSlot; slot += s.slotsPerArchivedPoint {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		if slot%s.slotsPerArchivedPoint == 0 && slot != 0 {
-			cached, exists, err := s.epochBoundaryStateCache.getBySlot(slot)
+		cached, exists, err := s.epochBoundaryStateCache.getBySlot(slot)
+		if err != nil {
+			return fmt.Errorf("could not get epoch boundary state for slot %d", slot)
+		}
+
+		var aRoot [32]byte
+		var aState state.BeaconState
+
+		// When the epoch boundary state is not in cache due to skip slot scenario,
+		// we have to regenerate the state which will represent epoch boundary.
+		// By finding the highest available block below epoch boundary slot, we
+		// generate the state for that block root.
+		if exists {
+			aRoot = cached.root
+			aState = cached.state
+		} else {
+			_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot)
 			if err != nil {
-				return fmt.Errorf("could not get epoch boundary state for slot %d", slot)
+				return err
 			}
-
-			var aRoot [32]byte
-			var aState state.BeaconState
-
-			// When the epoch boundary state is not in cache due to skip slot scenario,
-			// we have to regenerate the state which will represent epoch boundary.
-			// By finding the highest available block below epoch boundary slot, we
-			// generate the state for that block root.
-			if exists {
-				aRoot = cached.root
-				aState = cached.state
-			} else {
-				_, roots, err := s.beaconDB.HighestRootsBelowSlot(ctx, slot)
+			// Given the block has been finalized, the db should not have more than one block in a given slot.
+			// We should error out when this happens.
+			if len(roots) != 1 {
+				return errUnknownBlock
+			}
+			aRoot = roots[0]
+			// There's no need to generate the state if the state already exists in the DB.
+			// We can skip saving the state.
+			if !s.beaconDB.HasState(ctx, aRoot) {
+				aState, err = s.StateByRoot(ctx, aRoot)
 				if err != nil {
 					return err
 				}
-				// Given the block has been finalized, the db should not have more than one block in a given slot.
-				// We should error out when this happens.
-				if len(roots) != 1 {
-					return errUnknownBlock
-				}
-				aRoot = roots[0]
-				// There's no need to generate the state if the state already exists in the DB.
-				// We can skip saving the state.
-				if !s.beaconDB.HasState(ctx, aRoot) {
-					aState, err = s.StateByRoot(ctx, aRoot)
-					if err != nil {
-						return err
-					}
-				}
 			}
-
-			if s.beaconDB.HasState(ctx, aRoot) {
-				// If you are migrating a state and its already part of the hot state cache saved to the db,
-				// you can just remove it from the hot state cache as it becomes redundant.
-				s.saveHotStateDB.lock.Lock()
-				roots := s.saveHotStateDB.blockRootsOfSavedStates
-				for i := range roots {
-					if aRoot == roots[i] {
-						s.saveHotStateDB.blockRootsOfSavedStates = append(roots[:i], roots[i+1:]...)
-						// There shouldn't be duplicated roots in `blockRootsOfSavedStates`.
-						// Break here is ok.
-						break
-					}
-				}
-				s.saveHotStateDB.lock.Unlock()
-				continue
-			}
-
-			if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
-				return err
-			}
-			log.WithFields(
-				logrus.Fields{
-					"slot": aState.Slot(),
-					"root": hex.EncodeToString(bytesutil.Trunc(aRoot[:])),
-				}).Info("Saved state in DB")
 		}
+
+		if s.beaconDB.HasState(ctx, aRoot) {
+			// If you are migrating a state and its already part of the hot state cache saved to the db,
+			// you can just remove it from the hot state cache as it becomes redundant.
+			s.saveHotStateDB.lock.Lock()
+			roots := s.saveHotStateDB.blockRootsOfSavedStates
+			for i := range roots {
+				if aRoot == roots[i] {
+					s.saveHotStateDB.blockRootsOfSavedStates = append(roots[:i], roots[i+1:]...)
+					// There shouldn't be duplicated roots in `blockRootsOfSavedStates`.
+					// Break here is ok.
+					break
+				}
+			}
+			s.saveHotStateDB.lock.Unlock()
+			continue
+		}
+
+		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
+			return err
+		}
+		log.WithFields(
+			logrus.Fields{
+				"slot": aState.Slot(),
+				"root": hex.EncodeToString(bytesutil.Trunc(aRoot[:])),
+			}).Info("Saved state in DB")
 	}
 
 	// Update finalized info in memory.

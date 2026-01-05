@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -185,73 +186,162 @@ func (dcs *DataColumnStorage) WarmCache() {
 
 	highestStoredEpoch := primitives.Epoch(0)
 
-	// Walk the data column filesystem to warm up the cache.
-	if err := afero.Walk(dcs.fs, ".", func(path string, info os.FileInfo, fileErr error) (err error) {
-		if fileErr != nil {
-			return fileErr
-		}
-
-		// If not a leaf, skip.
-		if info.IsDir() {
-			return nil
-		}
-
-		// Extract metadata from the file path.
-		fileMetadata, err := extractFileMetadata(path)
-		if err != nil {
-			log.WithError(err).Error("Error encountered while extracting file metadata")
-			return nil
-		}
-
-		// Open the data column filesystem file.
-		f, err := dcs.fs.Open(path)
-		if err != nil {
-			log.WithError(err).Error("Error encountered while opening data column filesystem file")
-			return nil
-		}
-
-		// Close the file.
-		defer func() {
-			// Overwrite the existing error only if it is nil, since the close error is less important.
-			closeErr := f.Close()
-			if closeErr != nil && err == nil {
-				err = closeErr
-			}
-		}()
-
-		// Read the metadata of the file.
-		metadata, err := dcs.metadata(f)
-		if err != nil {
-			log.WithError(err).Error("Error encountered while reading metadata from data column filesystem file")
-			return nil
-		}
-
-		// Check the indices.
-		indices := metadata.indices.all()
-		if len(indices) == 0 {
-			return nil
-		}
-
-		// Build the ident.
-		dataColumnsIdent := DataColumnsIdent{Root: fileMetadata.blockRoot, Epoch: fileMetadata.epoch, Indices: indices}
-
-		// Update the highest stored epoch.
-		highestStoredEpoch = max(highestStoredEpoch, fileMetadata.epoch)
-
-		// Set the ident in the cache.
-		if err := dcs.cache.set(dataColumnsIdent); err != nil {
-			log.WithError(err).Error("Error encountered while ensuring data column filesystem cache")
-		}
-
-		return nil
-	}); err != nil {
-		log.WithError(err).Error("Error encountered while walking data column filesystem.")
+	// List all period directories
+	periodFileInfos, err := afero.ReadDir(dcs.fs, ".")
+	if err != nil {
+		log.WithError(err).Error("Error reading top directory during warm cache")
+		return
 	}
 
-	// Prune the cache and the filesystem.
+	// Iterate through periods
+	for _, periodFileInfo := range periodFileInfos {
+		if !periodFileInfo.IsDir() {
+			continue
+		}
+
+		periodPath := periodFileInfo.Name()
+
+		// List all epoch directories in this period
+		epochFileInfos, err := afero.ReadDir(dcs.fs, periodPath)
+		if err != nil {
+			log.WithError(err).WithField("period", periodPath).Error("Error reading period directory during warm cache")
+			continue
+		}
+
+		// Iterate through epochs
+		for _, epochFileInfo := range epochFileInfos {
+			if !epochFileInfo.IsDir() {
+				continue
+			}
+
+			epochPath := path.Join(periodPath, epochFileInfo.Name())
+
+			// List all .sszs files in this epoch
+			files, err := listEpochFiles(dcs.fs, epochPath)
+			if err != nil {
+				log.WithError(err).WithField("epoch", epochPath).Error("Error listing epoch files during warm cache")
+				continue
+			}
+
+			if len(files) == 0 {
+				continue
+			}
+
+			// Process all files in this epoch in parallel
+			epochHighest, err := dcs.processEpochFiles(files)
+			if err != nil {
+				log.WithError(err).WithField("epoch", epochPath).Error("Error processing epoch files during warm cache")
+			}
+
+			highestStoredEpoch = max(highestStoredEpoch, epochHighest)
+		}
+	}
+
+	// Prune the cache and the filesystem
 	dcs.prune()
 
-	log.WithField("elapsed", time.Since(start)).Info("Data column filesystem cache warm-up complete")
+	totalElapsed := time.Since(start)
+
+	// Log summary
+	log.WithField("elapsed", totalElapsed).Info("Data column filesystem cache warm-up complete")
+}
+
+// listEpochFiles lists all .sszs files in an epoch directory.
+func listEpochFiles(fs afero.Fs, epochPath string) ([]string, error) {
+	fileInfos, err := afero.ReadDir(fs, epochPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "read epoch directory")
+	}
+
+	files := make([]string, 0, len(fileInfos))
+	for _, fileInfo := range fileInfos {
+		if fileInfo.IsDir() {
+			continue
+		}
+
+		fileName := fileInfo.Name()
+		if strings.HasSuffix(fileName, "."+dataColumnsFileExtension) {
+			files = append(files, path.Join(epochPath, fileName))
+		}
+	}
+
+	return files, nil
+}
+
+// processEpochFiles processes all .sszs files in an epoch directory in parallel.
+func (dcs *DataColumnStorage) processEpochFiles(files []string) (primitives.Epoch, error) {
+	var (
+		eg errgroup.Group
+		mu sync.Mutex
+	)
+
+	highestEpoch := primitives.Epoch(0)
+	for _, filePath := range files {
+		eg.Go(func() error {
+			epoch, err := dcs.processFile(filePath)
+			if err != nil {
+				log.WithError(err).WithField("file", filePath).Error("Error processing file during warm cache")
+				return nil
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			highestEpoch = max(highestEpoch, epoch)
+
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return highestEpoch, err
+	}
+
+	return highestEpoch, nil
+}
+
+// processFile processes a single .sszs file.
+func (dcs *DataColumnStorage) processFile(filePath string) (primitives.Epoch, error) {
+	// Extract metadata from the file path
+	fileMetadata, err := extractFileMetadata(filePath)
+	if err != nil {
+		return 0, errors.Wrap(err, "extract file metadata")
+	}
+
+	// Open the file (each goroutine gets its own FD)
+	f, err := dcs.fs.Open(filePath)
+	if err != nil {
+		return 0, errors.Wrap(err, "open file")
+	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			log.WithError(closeErr).WithField("file", filePath).Error("Error closing file during warm cache")
+		}
+	}()
+
+	// Read metadata
+	metadata, err := dcs.metadata(f)
+	if err != nil {
+		return 0, errors.Wrap(err, "read metadata")
+	}
+
+	// Extract indices
+	indices := metadata.indices.all()
+	if len(indices) == 0 {
+		return fileMetadata.epoch, nil // No indices, skip
+	}
+
+	// Build ident and set in cache (thread-safe)
+	dataColumnsIdent := DataColumnsIdent{
+		Root:    fileMetadata.blockRoot,
+		Epoch:   fileMetadata.epoch,
+		Indices: indices,
+	}
+
+	if err := dcs.cache.set(dataColumnsIdent); err != nil {
+		return 0, errors.Wrap(err, "cache set")
+	}
+
+	return fileMetadata.epoch, nil
 }
 
 // Summary returns the DataColumnStorageSummary.
@@ -270,7 +360,7 @@ func (dcs *DataColumnStorage) Save(dataColumnSidecars []blocks.VerifiedRODataCol
 	// Check the number of columns is the one expected.
 	// While implementing this, we expect the number of columns won't change.
 	// If it does, we will need to create a new version of the data column sidecar file.
-	if params.BeaconConfig().NumberOfColumns != mandatoryNumberOfColumns {
+	if fieldparams.NumberOfColumns != mandatoryNumberOfColumns {
 		return errWrongNumberOfColumns
 	}
 
@@ -515,6 +605,11 @@ func (dcs *DataColumnStorage) Clear() error {
 
 // prune clean the cache, the filesystem and mutexes.
 func (dcs *DataColumnStorage) prune() {
+	startTime := time.Now()
+	defer func() {
+		dataColumnPruneLatency.Observe(float64(time.Since(startTime).Milliseconds()))
+	}()
+
 	highestStoredEpoch := dcs.cache.HighestEpoch()
 
 	// Check if we need to prune.
@@ -622,6 +717,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 	// Create the SSZ encoded data column sidecars.
 	var sszEncodedDataColumnSidecars []byte
 
+	// Initialize the count of the saved SSZ encoded data column sidecar.
+	storedCount := uint8(0)
+
 	for {
 		dataColumnSidecars := pullChan(inputDataColumnSidecars)
 		if len(dataColumnSidecars) == 0 {
@@ -668,6 +766,9 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 				return errors.Wrap(err, "set index")
 			}
 
+			// Increment the count of the saved SSZ encoded data column sidecar.
+			storedCount++
+
 			// Append the SSZ encoded data column sidecar to the SSZ encoded data column sidecars.
 			sszEncodedDataColumnSidecars = append(sszEncodedDataColumnSidecars, sszEncodedDataColumnSidecar...)
 		}
@@ -692,9 +793,12 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsExistingFile(filePath string
 		return errWrongBytesWritten
 	}
 
+	syncStart := time.Now()
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
+	dataColumnBatchStoreCount.Observe(float64(storedCount))
 
 	return nil
 }
@@ -808,9 +912,13 @@ func (dcs *DataColumnStorage) saveDataColumnSidecarsNewFile(filePath string, inp
 		return errWrongBytesWritten
 	}
 
+	syncStart := time.Now()
 	if err := file.Sync(); err != nil {
 		return errors.Wrap(err, "sync")
 	}
+
+	dataColumnFileSyncLatency.Observe(float64(time.Since(syncStart).Milliseconds()))
+	dataColumnBatchStoreCount.Observe(float64(storedCount))
 
 	return nil
 }
@@ -964,8 +1072,7 @@ func (si *storageIndices) set(dataColumnIndex uint64, position uint8) error {
 
 // pullChan pulls data column sidecars from the input channel until it is empty.
 func pullChan(inputRoDataColumns chan []blocks.VerifiedRODataColumn) []blocks.VerifiedRODataColumn {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	dataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, numberOfColumns)
+	dataColumnSidecars := make([]blocks.VerifiedRODataColumn, 0, fieldparams.NumberOfColumns)
 
 	for {
 		select {
