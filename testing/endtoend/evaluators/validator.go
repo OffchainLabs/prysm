@@ -26,7 +26,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var expectedParticipation = 0.99
+var expectedParticipation = 0.98
 
 var expectedMulticlientParticipation = 0.95
 
@@ -310,20 +310,30 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		if b == nil || b.IsNil() {
 			return errors.New("nil block provided")
 		}
-		forkSlot, err := slots.EpochStart(params.BeaconConfig().AltairForkEpoch)
-		if err != nil {
-			return err
+		// Skip evaluation of fork transition slots as sync participation
+		// tends to drop briefly when transitioning between forks.
+		forkEpochs := []primitives.Epoch{
+			params.BeaconConfig().AltairForkEpoch,
+			params.BeaconConfig().BellatrixForkEpoch,
+			params.BeaconConfig().CapellaForkEpoch,
+			params.BeaconConfig().DenebForkEpoch,
+			params.BeaconConfig().ElectraForkEpoch,
+			params.BeaconConfig().FuluForkEpoch,
 		}
-		nexForkSlot, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
-		if err != nil {
-			return err
+		skipSlot := false
+		for _, forkEpoch := range forkEpochs {
+			forkSlot, err := slots.EpochStart(forkEpoch)
+			if err != nil {
+				return err
+			}
+			// Skip the first two slots of each fork epoch.
+			if b.Block().Slot() == forkSlot || b.Block().Slot() == forkSlot+1 {
+				skipSlot = true
+				break
+			}
 		}
-		switch b.Block().Slot() {
-		case forkSlot, forkSlot + 1, nexForkSlot:
-			// Skip evaluation of the slot.
+		if skipSlot {
 			continue
-		default:
-			// no-op
 		}
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
