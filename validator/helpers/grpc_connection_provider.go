@@ -79,14 +79,12 @@ func NewGrpcConnectionProvider(
 
 // parseEndpoints splits a comma-separated endpoint string into individual endpoints.
 func parseEndpoints(endpoint string) []string {
-	endpoint = strings.ReplaceAll(endpoint, " ", "")
 	if endpoint == "" {
 		return nil
 	}
-	parts := strings.Split(endpoint, ",")
-	endpoints := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p != "" {
+	var endpoints []string
+	for _, p := range strings.Split(endpoint, ",") {
+		if p = strings.TrimSpace(p); p != "" {
 			endpoints = append(endpoints, p)
 		}
 	}
