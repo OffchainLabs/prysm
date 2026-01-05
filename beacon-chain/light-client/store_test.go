@@ -102,7 +102,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update1, true)
 	require.Equal(t, update1, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(50 * time.Millisecond) // give goroutine time to run if it would
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called after setting a new last finality update without supermajority")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
@@ -133,7 +133,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update3, true)
 	require.Equal(t, update3, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(50 * time.Millisecond) // give goroutine time to run if it would
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been when previous was already broadcast")
 
 	// update 4 with increased finality slot, increased attested slot, and supermajority - should save and broadcast
@@ -163,7 +163,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update5, true)
 	require.Equal(t, update5, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(50 * time.Millisecond) // give goroutine time to run if it would
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called when previous was already broadcast with supermajority")
 
 	// update 6 with the same new finality slot, increased attested slot, and no supermajority - should save but not broadcast
@@ -177,7 +177,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update6, true)
 	require.Equal(t, update6, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(50 * time.Millisecond) // give goroutine time to run if it would
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called when previous was already broadcast with supermajority")
 }
 

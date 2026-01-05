@@ -512,9 +512,8 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		s.executePostFinalizationTasks(s.ctx, headState)
 
 		require.Eventually(t, func() bool {
-			return len(notifier.ReceivedEvents()) >= 1
-		}, 5*time.Second, 50*time.Millisecond, "Expected at least 1 state notification")
-		require.Equal(t, 1, len(notifier.ReceivedEvents()))
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
 		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
@@ -554,9 +553,8 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		s.executePostFinalizationTasks(s.ctx, headState)
 
 		require.Eventually(t, func() bool {
-			return len(notifier.ReceivedEvents()) >= 1
-		}, 5*time.Second, 50*time.Millisecond, "Expected at least 1 state notification")
-		require.Equal(t, 1, len(notifier.ReceivedEvents()))
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
 		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
@@ -606,7 +604,6 @@ func TestProcessLightClientBootstrap(t *testing.T) {
 				b, err = s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
 				return err == nil && b != nil
 			}, 5*time.Second, 50*time.Millisecond, "Light client bootstrap was not saved within timeout")
-			require.NotNil(t, b)
 
 			btst, err := lightClient.NewLightClientBootstrapFromBeaconState(ctx, l.FinalizedState.Slot(), l.FinalizedState, l.FinalizedBlock)
 			require.NoError(t, err)
