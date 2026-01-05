@@ -157,6 +157,7 @@ var appFlags = []cli.Flag{
 	dasFlags.BackfillOldestSlot,
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
+	flags.PartialDataColumns,
 }
 
 func init() {

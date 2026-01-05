@@ -1,6 +1,7 @@
 package util
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
@@ -65,7 +66,7 @@ func CreateTestVerifiedRoDataColumnSidecars(t *testing.T, params []DataColumnPar
 			Index:          param.Index,
 			Column:         column,
 			KzgCommitments: param.KzgCommitments,
-			KzgProofs:      param.KzgProofs,
+			KzgProofs:      slices.Clone(param.KzgProofs),
 			SignedBlockHeader: &ethpb.SignedBeaconBlockHeader{
 				Header: &ethpb.BeaconBlockHeader{
 					Slot:          param.Slot,

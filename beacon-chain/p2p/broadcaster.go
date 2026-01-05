@@ -342,7 +342,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 // there is at least one peer in each needed subnet. If not, it will attempt to find one before broadcasting.
 // This function is non-blocking. It stops trying to broadcast a given sidecar when more than one slot has passed, or the context is
 // cancelled (whichever comes first).
-func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn) error {
+func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []blocks.VerifiedRODataColumn, partialColumns []blocks.PartialDataColumn) error {
 	// Increase the number of broadcast attempts.
 	dataColumnSidecarBroadcastAttempts.Add(float64(len(sidecars)))
 
@@ -352,7 +352,7 @@ func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []bl
 		return errors.Wrap(err, "current fork digest")
 	}
 
-	go s.broadcastDataColumnSidecars(ctx, forkDigest, sidecars)
+	go s.broadcastDataColumnSidecars(ctx, forkDigest, sidecars, partialColumns)
 
 	return nil
 }
@@ -360,7 +360,7 @@ func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []bl
 // broadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network, after ensuring
 // there is at least one peer in each needed subnet. If not, it will attempt to find one before broadcasting.
 // It returns when all broadcasts are complete, or the context is cancelled (whichever comes first).
-func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [fieldparams.VersionLength]byte, sidecars []blocks.VerifiedRODataColumn) {
+func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [fieldparams.VersionLength]byte, sidecars []blocks.VerifiedRODataColumn, partialColumns []blocks.PartialDataColumn) {
 	type rootAndIndex struct {
 		root  [fieldparams.RootLength]byte
 		index uint64
@@ -374,7 +374,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 	logLevel := logrus.GetLevel()
 
 	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
-	for _, sidecar := range sidecars {
+	for i, sidecar := range sidecars {
 		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
 
 		wg.Go(func() {
@@ -396,6 +396,14 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot find peers if needed")
 				return
+			}
+
+			if s.partialColumnBroadcaster != nil && i < len(partialColumns) {
+				fullTopicStr := topic + s.Encoding().ProtocolSuffix()
+				if err := s.partialColumnBroadcaster.Publish(fullTopicStr, partialColumns[i]); err != nil {
+					tracing.AnnotateError(span, err)
+					log.WithError(err).Error("Cannot partial broadcast data column sidecar")
+				}
 			}
 
 			// Broadcast the data column sidecar to the network.

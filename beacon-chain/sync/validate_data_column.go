@@ -71,6 +71,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	roDataColumns := []blocks.RODataColumn{roDataColumn}
 
 	// Create the verifier.
+	// Question(marco): Do we want the multiple columns verifier? Is batching used only for kzg proofs?
 	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
 
 	// Start the verification process.

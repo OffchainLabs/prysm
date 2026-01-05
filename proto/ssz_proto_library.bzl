@@ -25,6 +25,7 @@ mainnet = {
     "extra_data.size": "32",
     "max_blobs_per_block.size": "6",
     "max_blob_commitments.size": "4096",
+    "max_blob_commitments_bitmap.size": "512", # MAX_BLOB_COMMITMENTS_PER_BLOCK / 8
     "max_cell_proofs_length.size": "33554432",  # FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
     "kzg_commitment_inclusion_proof_depth.size": "17",
     "max_withdrawal_requests_per_payload.size": "16",
@@ -69,6 +70,7 @@ minimal = {
     "extra_data.size": "32",
     "max_blobs_per_block.size": "6",
     "max_blob_commitments.size": "4096",
+    "max_blob_commitments_bitmap.size": "512", # MAX_BLOB_COMMITMENTS_PER_BLOCK / 8
     "max_cell_proofs_length.size": "33554432",  # FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK
     "kzg_commitment_inclusion_proof_depth.size": "17",
     "max_withdrawal_requests_per_payload.size": "16",

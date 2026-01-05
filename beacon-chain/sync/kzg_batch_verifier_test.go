@@ -88,12 +88,12 @@ func TestVerifierRoutine(t *testing.T) {
 		go service.kzgVerifierRoutine()
 
 		dataColumns := createValidTestDataColumns(t, 1)
-		resChan := make(chan error, 1)
-		service.kzgChan <- &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
+		resChan := make(chan errorWithSegment, 1)
+		service.kzgChan <- &kzgVerifier{sizeHint: 1, cellProofs: blocks.RODataColumnsToCellProofBundles(dataColumns), resChan: resChan}
 
 		select {
-		case err := <-resChan:
-			require.NoError(t, err)
+		case errWithSegment := <-resChan:
+			require.NoError(t, errWithSegment.err)
 		case <-time.After(time.Second):
 			t.Fatal("timeout waiting for verification result")
 		}
@@ -109,19 +109,19 @@ func TestVerifierRoutine(t *testing.T) {
 		go service.kzgVerifierRoutine()
 
 		const numRequests = 5
-		resChans := make([]chan error, numRequests)
+		resChans := make([]chan errorWithSegment, numRequests)
 
 		for i := range numRequests {
 			dataColumns := createValidTestDataColumns(t, 1)
-			resChan := make(chan error, 1)
+			resChan := make(chan errorWithSegment, 1)
 			resChans[i] = resChan
-			service.kzgChan <- &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
+			service.kzgChan <- &kzgVerifier{sizeHint: 1, cellProofs: blocks.RODataColumnsToCellProofBundles(dataColumns), resChan: resChan}
 		}
 
 		for i := range numRequests {
 			select {
-			case err := <-resChans[i]:
-				require.NoError(t, err)
+			case errWithSegment := <-resChans[i]:
+				require.NoError(t, errWithSegment.err)
 			case <-time.After(time.Second):
 				t.Fatalf("timeout waiting for verification result %d", i)
 			}
@@ -158,14 +158,14 @@ func TestVerifyKzgBatch(t *testing.T) {
 
 	t.Run("all valid data columns succeed", func(t *testing.T) {
 		dataColumns := createValidTestDataColumns(t, 3)
-		resChan := make(chan error, 1)
-		kzgVerifiers := []*kzgVerifier{{dataColumns: dataColumns, resChan: resChan}}
+		resChan := make(chan errorWithSegment, 1)
+		kzgVerifiers := []*kzgVerifier{{sizeHint: 3, cellProofs: blocks.RODataColumnsToCellProofBundles(dataColumns), resChan: resChan}}
 
 		verifyKzgBatch(kzgVerifiers)
 
 		select {
-		case err := <-resChan:
-			require.NoError(t, err)
+		case errWithSegment := <-resChan:
+			require.NoError(t, errWithSegment.err)
 		case <-time.After(time.Second):
 			t.Fatal("timeout waiting for batch verification")
 		}
@@ -176,14 +176,14 @@ func TestVerifyKzgBatch(t *testing.T) {
 		invalidColumns := createInvalidTestDataColumns(t, 1)
 		allColumns := append(validColumns, invalidColumns...)
 
-		resChan := make(chan error, 1)
-		kzgVerifiers := []*kzgVerifier{{dataColumns: allColumns, resChan: resChan}}
+		resChan := make(chan errorWithSegment, 1)
+		kzgVerifiers := []*kzgVerifier{{sizeHint: 2, cellProofs: blocks.RODataColumnsToCellProofBundles(allColumns), resChan: resChan}}
 
 		verifyKzgBatch(kzgVerifiers)
 
 		select {
-		case err := <-resChan:
-			assert.NotNil(t, err)
+		case errWithSegment := <-resChan:
+			assert.NotNil(t, errWithSegment.err)
 		case <-time.After(time.Second):
 			t.Fatal("timeout waiting for batch verification")
 		}

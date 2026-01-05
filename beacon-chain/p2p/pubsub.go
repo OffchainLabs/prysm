@@ -160,6 +160,9 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		}
 		psOpts = append(psOpts, pubsub.WithDirectPeers(directPeersAddrInfos))
 	}
+	if s.partialColumnBroadcaster != nil {
+		psOpts = s.partialColumnBroadcaster.AppendPubSubOpts(psOpts)
+	}
 
 	return psOpts
 }

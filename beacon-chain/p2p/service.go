@@ -11,6 +11,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -77,6 +78,7 @@ type Service struct {
 	privKey                  *ecdsa.PrivateKey
 	metaData                 metadata.Metadata
 	pubsub                   *pubsub.PubSub
+	partialColumnBroadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
 	joinedTopics             map[string]*pubsub.Topic
 	joinedTopicsLock         sync.RWMutex
 	subnetsLock              map[uint64]*sync.RWMutex
@@ -145,6 +147,10 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
 		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
 		custodyInfoSet:        make(chan struct{}),
+	}
+
+	if cfg.PartialDataColumns {
+		s.partialColumnBroadcaster = partialdatacolumnbroadcaster.NewBroadcaster(log.Logger)
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -305,6 +311,10 @@ func (s *Service) Start() {
 		logExternalDNSAddr(s.host.ID(), p2pHostDNS, p2pTCPPort)
 	}
 	go s.forkWatcher()
+
+	if s.partialColumnBroadcaster != nil {
+		go s.partialColumnBroadcaster.Start()
+	}
 }
 
 // Stop the p2p service and terminate all peer connections.
@@ -313,6 +323,10 @@ func (s *Service) Stop() error {
 	s.started = false
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
+	}
+
+	if s.partialColumnBroadcaster != nil {
+		s.partialColumnBroadcaster.Stop()
 	}
 	return nil
 }
@@ -348,6 +362,10 @@ func (*Service) Encoding() encoder.NetworkEncoding {
 // PubSub returns the p2p pubsub framework.
 func (s *Service) PubSub() *pubsub.PubSub {
 	return s.pubsub
+}
+
+func (s *Service) PartialColumnBroadcaster() *partialdatacolumnbroadcaster.PartialColumnBroadcaster {
+	return s.partialColumnBroadcaster
 }
 
 // Host returns the currently running libp2p
