@@ -25,6 +25,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	p2pmock "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
@@ -2006,6 +2007,7 @@ func TestGetAttesterDuties(t *testing.T) {
 		TimeFetcher:           chain,
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
 		OptimisticModeFetcher: chain,
+		HeadFetcher:           chain,
 		BeaconDB:              db,
 	}
 
@@ -2184,6 +2186,7 @@ func TestGetAttesterDuties(t *testing.T) {
 			Stater:                &testutil.MockStater{StatesBySlot: map[primitives.Slot]state.BeaconState{0: bs}},
 			TimeFetcher:           chain,
 			OptimisticModeFetcher: chain,
+			HeadFetcher:           chain,
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			BeaconDB:              db,
 		}
@@ -2223,6 +2226,62 @@ func TestGetAttesterDuties(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusServiceUnavailable, e.Code)
+	})
+	t.Run("state not found returns 404", func(t *testing.T) {
+		chainSlot := primitives.Slot(0)
+		chain := &mockChain.ChainService{
+			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
+		}
+		stateNotFoundErr := lookup.NewStateNotFoundError(8192, []byte("test"))
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: &stateNotFoundErr},
+			TimeFetcher:           chain,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: chain,
+			HeadFetcher:           chain,
+		}
+
+		var body bytes.Buffer
+		_, err = body.WriteString("[\"0\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/attester/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttesterDuties(writer, request)
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusNotFound, e.Code)
+		assert.StringContains(t, "State not found", e.Message)
+	})
+	t.Run("state fetch error returns 500", func(t *testing.T) {
+		chainSlot := primitives.Slot(0)
+		chain := &mockChain.ChainService{
+			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
+		}
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: errors.New("internal error")},
+			TimeFetcher:           chain,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: chain,
+			HeadFetcher:           chain,
+		}
+
+		var body bytes.Buffer
+		_, err = body.WriteString("[\"0\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/attester/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetAttesterDuties(writer, request)
+		assert.Equal(t, http.StatusInternalServerError, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusInternalServerError, e.Code)
 	})
 }
 
@@ -2427,6 +2486,60 @@ func TestGetProposerDuties(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusServiceUnavailable, e.Code)
 	})
+	t.Run("state not found returns 404", func(t *testing.T) {
+		bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+		require.NoError(t, err)
+		chainSlot := primitives.Slot(0)
+		chain := &mockChain.ChainService{
+			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
+		}
+		stateNotFoundErr := lookup.NewStateNotFoundError(8192, []byte("test"))
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: &stateNotFoundErr},
+			TimeFetcher:           chain,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: chain,
+			HeadFetcher:           chain,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetProposerDuties(writer, request)
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusNotFound, e.Code)
+		assert.StringContains(t, "State not found", e.Message)
+	})
+	t.Run("state fetch error returns 500", func(t *testing.T) {
+		bs, err := transition.GenesisBeaconState(t.Context(), deposits, 0, eth1Data)
+		require.NoError(t, err)
+		chainSlot := primitives.Slot(0)
+		chain := &mockChain.ChainService{
+			State: bs, Root: genesisRoot[:], Slot: &chainSlot,
+		}
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: errors.New("internal error")},
+			TimeFetcher:           chain,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: chain,
+			HeadFetcher:           chain,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/proposer/{epoch}", nil)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetProposerDuties(writer, request)
+		assert.Equal(t, http.StatusInternalServerError, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusInternalServerError, e.Code)
+	})
 }
 
 func TestGetSyncCommitteeDuties(t *testing.T) {
@@ -2457,7 +2570,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 	}
 	require.NoError(t, st.SetNextSyncCommittee(nextCommittee))
 
-	mockChainService := &mockChain.ChainService{Genesis: genesisTime}
+	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st}
 	s := &Server{
 		Stater:                &testutil.MockStater{BeaconState: st},
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
@@ -2648,7 +2761,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 				return newSyncPeriodSt
 			}
 		}
-		mockChainService := &mockChain.ChainService{Genesis: genesisTime, Slot: &newSyncPeriodStartSlot}
+		mockChainService := &mockChain.ChainService{Genesis: genesisTime, Slot: &newSyncPeriodStartSlot, State: newSyncPeriodSt}
 		s := &Server{
 			Stater:                &testutil.MockStater{BeaconState: stateFetchFn(newSyncPeriodStartSlot)},
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
@@ -2729,8 +2842,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		slot, err := slots.EpochStart(1)
 		require.NoError(t, err)
 
-		st2, err := util.NewBeaconStateBellatrix()
-		require.NoError(t, err)
+		st2 := st.Copy()
 		require.NoError(t, st2.SetSlot(slot))
 
 		mockChainService := &mockChain.ChainService{
@@ -2744,7 +2856,7 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 			State: st2,
 		}
 		s := &Server{
-			Stater:                &testutil.MockStater{BeaconState: st},
+			Stater:                &testutil.MockStater{BeaconState: st2},
 			SyncChecker:           &mockSync.Sync{IsSyncing: false},
 			TimeFetcher:           mockChainService,
 			HeadFetcher:           mockChainService,
@@ -2788,6 +2900,62 @@ func TestGetSyncCommitteeDuties(t *testing.T) {
 		e := &httputil.DefaultJsonError{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
 		assert.Equal(t, http.StatusServiceUnavailable, e.Code)
+	})
+	t.Run("state not found returns 404", func(t *testing.T) {
+		slot := 2 * params.BeaconConfig().SlotsPerEpoch
+		chainService := &mockChain.ChainService{
+			Slot: &slot,
+		}
+		stateNotFoundErr := lookup.NewStateNotFoundError(8192, []byte("test"))
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: &stateNotFoundErr},
+			TimeFetcher:           chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: chainService,
+			HeadFetcher:           chainService,
+		}
+
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"1\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/sync/{epoch}", &body)
+		request.SetPathValue("epoch", "1")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetSyncCommitteeDuties(writer, request)
+		assert.Equal(t, http.StatusNotFound, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusNotFound, e.Code)
+		assert.StringContains(t, "State not found", e.Message)
+	})
+	t.Run("state fetch error returns 500", func(t *testing.T) {
+		slot := 2 * params.BeaconConfig().SlotsPerEpoch
+		chainService := &mockChain.ChainService{
+			Slot: &slot,
+		}
+		s := &Server{
+			Stater:                &testutil.MockStater{CustomError: errors.New("internal error")},
+			TimeFetcher:           chainService,
+			SyncChecker:           &mockSync.Sync{IsSyncing: false},
+			OptimisticModeFetcher: chainService,
+			HeadFetcher:           chainService,
+		}
+
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"1\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodGet, "http://www.example.com/eth/v1/validator/duties/sync/{epoch}", &body)
+		request.SetPathValue("epoch", "1")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetSyncCommitteeDuties(writer, request)
+		assert.Equal(t, http.StatusInternalServerError, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusInternalServerError, e.Code)
 	})
 }
 

@@ -132,6 +132,7 @@ func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 	optimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
 	if err != nil {
 		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 	if s.SyncChecker.Synced() && !optimistic {
 		return
