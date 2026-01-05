@@ -381,7 +381,8 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 		wg.Go(func() {
 			// Add tracing to the function.
-			ctx, span := trace.StartSpan(s.ctx, "p2p.broadcastDataColumnSidecars")
+			_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
+			ctx = trace.NewContext(s.ctx, span) // clear parent context / deadline.
 			defer span.End()
 
 			// Compute the subnet for this data column sidecar.
