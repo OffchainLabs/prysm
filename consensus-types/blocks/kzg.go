@@ -1,6 +1,8 @@
 package blocks
 
 import (
+	"github.com/OffchainLabs/hashtree"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -9,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/gohashtree"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -45,7 +48,14 @@ func VerifyKZGInclusionProof(blob ROBlob) error {
 		return errInvalidBodyRoot
 	}
 	chunks := makeChunk(blob.KzgCommitment)
-	gohashtree.HashChunks(chunks, chunks)
+	if features.Get().EnableHashtree {
+		err := hashtree.Hash(chunks, chunks)
+		if err != nil {
+			return err
+		}
+	} else {
+		gohashtree.HashChunks(chunks, chunks)
+	}
 	verified := trie.VerifyMerkleProof(root, chunks[0][:], blob.Index+KZGOffset, blob.CommitmentInclusionProof)
 	if !verified {
 		return errInvalidInclusionProof
@@ -182,7 +192,14 @@ func LeavesFromCommitments(commitments [][]byte) [][]byte {
 	leaves := make([][]byte, len(commitments))
 	for i, kzg := range commitments {
 		chunk := makeChunk(kzg)
-		gohashtree.HashChunks(chunk, chunk)
+		if features.Get().EnableHashtree {
+			err := hashtree.Hash(chunk, chunk)
+			if err != nil {
+				logrus.WithError(err).Error("Could not hash KZG commitment chunk")
+			}
+		} else {
+			gohashtree.HashChunks(chunk, chunk)
+		}
 		leaves[i] = chunk[0][:]
 	}
 	return leaves

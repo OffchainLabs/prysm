@@ -2450,6 +2450,12 @@ def prysm_deps():
         version = "v1.4.11",
     )
     go_repository(
+        name = "com_github_offchainlabs_hashtree",
+        importpath = "github.com/OffchainLabs/hashtree",
+        sum = "h1:Ws38dQSEtTbRihiAnqoV5HHubSC/zaxE4Yq3j2Z8S7Y=",
+        version = "v0.2.1",
+    )
+    go_repository(
         name = "com_github_oklog_oklog",
         importpath = "github.com/oklog/oklog",
         sum = "h1:wVfs8F+in6nTBMkA7CbRw+zZMIB7nNM825cM1wuzoTk=",
