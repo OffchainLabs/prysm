@@ -12,7 +12,6 @@ import (
 // - gindex: the generalized index of the node to prove inclusion for.
 // Returns:
 // - fastssz.Proof: the Merkle proof containing the leaf, index, and sibling hashes.
-// - [32]byte: the Merkle root of the entire SSZ object.
 // - error: any error encountered during proof generation.
 func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 	if info == nil {
