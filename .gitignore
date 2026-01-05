@@ -44,3 +44,9 @@ tmp
 
 # spectest coverage reports
 report.txt
+
+# execution client data
+execution/
+
+# AI assistant files
+CLAUDE.md
