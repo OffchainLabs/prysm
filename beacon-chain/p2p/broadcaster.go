@@ -415,9 +415,9 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			if err := s.batchObject(ctx, &messageBatch, sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
 			}
-			log.Debugf("Successfully batched data column sidecar for topic %s", topic)
 
 			if logLevel >= logrus.DebugLevel {
 				root := sidecar.BlockRoot()
