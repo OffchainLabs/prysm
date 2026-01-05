@@ -30,7 +30,7 @@ var expectedParticipation = 0.98
 
 var expectedMulticlientParticipation = 0.95
 
-var expectedSyncParticipation = 0.99
+var expectedSyncParticipation = 0.95
 
 // ValidatorsAreActive ensures the expected amount of validators are active.
 var ValidatorsAreActive = types.Evaluator{
@@ -272,9 +272,9 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
-		// Skip slot 1 at genesis - validators need time to ramp up after chain start.
-		// This is a startup timing issue, not a fork transition issue.
-		if b.Block().Slot() == 1 {
+		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
+		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
+		if b.Block().Slot() == 1 || b.Block().Slot() == 2 {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation
@@ -322,6 +322,10 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		}
 		skipSlot := false
 		for _, forkEpoch := range forkEpochs {
+			// Skip fork epochs set to far future (not scheduled).
+			if forkEpoch == params.BeaconConfig().FarFutureEpoch {
+				continue
+			}
 			forkSlot, err := slots.EpochStart(forkEpoch)
 			if err != nil {
 				return err

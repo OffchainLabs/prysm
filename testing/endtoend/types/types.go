@@ -163,6 +163,9 @@ type EvaluationContext struct {
 	ExitedVals           map[[48]byte]primitives.Epoch
 	SeenVotes            map[primitives.Slot][]byte
 	ExpectedEth1DataVote []byte
+	// Eth1DataMismatchCount tracks how many eth1data vote mismatches have been seen
+	// in the current voting period. Some tolerance is allowed for timing differences.
+	Eth1DataMismatchCount int
 }
 
 // NewEvaluationContext handles initializing internal datastructures (like maps) provided by the EvaluationContext.
