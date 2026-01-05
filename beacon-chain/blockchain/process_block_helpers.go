@@ -42,14 +42,8 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 	if err := s.getFCUArgsEarlyBlock(cfg, fcuArgs); err != nil {
 		return err
 	}
-	if !s.inRegularSync() {
-		return nil
-	}
-	slot := cfg.roblock.Block().Slot()
-	if slots.WithinVotingWindow(s.genesisTime, slot) {
-		return nil
-	}
-	return s.computePayloadAttributes(cfg, fcuArgs)
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
+	return nil
 }
 
 func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
@@ -173,26 +167,19 @@ func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
 
 // updateCachesPostBlockProcessing updates the next slot cache and handles the epoch
 // boundary in order to compute the right proposer indices after processing
-// state transition. This function is called on late blocks while still locked,
-// before sending FCU to the engine.
-func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) error {
+// state transition. The caller of this function must not hold a lock in forkchoice store.
+func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
 	slot := cfg.postState.Slot()
 	root := cfg.roblock.Root()
 	if err := transition.UpdateNextSlotCache(cfg.ctx, root[:], cfg.postState); err != nil {
-		return errors.Wrap(err, "could not update next slot state cache")
+		log.WithError(err).Error("Could not update next slot state cache")
+		return
 	}
 	if !slots.IsEpochEnd(slot) {
-		return nil
+		return
 	}
-	return s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:])
-}
-
-// handleSecondFCUCall handles a second call to FCU when syncing a new block.
-// This is useful when proposing in the next block and we want to defer the
-// computation of the next slot shuffling.
-func (s *Service) handleSecondFCUCall(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
-	if (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) && cfg.headRoot == cfg.roblock.Root() {
-		go s.sendFCUWithAttributes(cfg, fcuArgs)
+	if err := s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:]); err != nil {
+		log.WithError(err).Error("Could not handle epoch boundary")
 	}
 }
 
@@ -200,20 +187,6 @@ func (s *Service) handleSecondFCUCall(cfg *postBlockProcessConfig, fcuArgs *fcuC
 // current block
 func reportProcessingTime(startTime time.Time) {
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
-}
-
-// computePayloadAttributes modifies the passed FCU arguments to
-// contain the right payload attributes with the tracked proposer. It gets
-// called on blocks that arrive after the attestation voting window, or in a
-// background routine after syncing early blocks.
-func (s *Service) computePayloadAttributes(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if cfg.roblock.Root() == cfg.headRoot {
-		if err := s.updateCachesPostBlockProcessing(cfg); err != nil {
-			return err
-		}
-	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
-	return nil
 }
 
 // getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block

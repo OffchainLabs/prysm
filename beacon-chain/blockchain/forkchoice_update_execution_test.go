@@ -97,7 +97,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		headBlock:     wsb,
 		proposingSlot: service.CurrentSlot() + 1,
 	}
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, args))
+	service.forkchoiceUpdateWithExecution(ctx, args)
 
 	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2})
 	require.Equal(t, true, has)
@@ -151,7 +151,7 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 		headRoot:      r,
 		proposingSlot: service.CurrentSlot() + 1,
 	}
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, args))
+	service.forkchoiceUpdateWithExecution(ctx, args)
 }
 
 func TestShouldOverrideFCU(t *testing.T) {
