@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -49,15 +48,14 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	var wg sync.WaitGroup
-	wg.Go(func() {
+	go func() {
 		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"root": fmt.Sprintf("%#x", root),
 				"slot": block.Slot(),
 			}).Error("Failed to process sidecars from execution from block")
 		}
-	})
+	}()
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -83,8 +81,6 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "process pending atts for block")
 	}
 
-	wg.Wait()
-
 	return nil
 }
 
@@ -93,6 +89,12 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
+			// Do not log if the context was cancelled on purpose.
+			// (Still log other context errors such as deadlines exceeded).
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+
 			return errors.Wrap(err, "process data column sidecars from execution")
 		}
 
