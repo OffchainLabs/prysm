@@ -358,60 +358,65 @@ func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []bl
 	return nil
 }
 
-// broadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network, after ensuring
-// there is at least one peer in each needed subnet. If not, it will attempt to find one before broadcasting.
-// It returns when all broadcasts are complete, or the context is cancelled (whichever comes first).
+// broadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network.
+// For sidecars with available peers, it uses batch publishing.
+// For sidecars without peers, it finds peers first and then publishes individually.
+// Both paths run in parallel. It returns when all broadcasts are complete, or the context is cancelled.
 func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [fieldparams.VersionLength]byte, sidecars []blocks.VerifiedRODataColumn) {
 	type rootAndIndex struct {
 		root  [fieldparams.RootLength]byte
 		index uint64
 	}
 
-	var (
-		wg      sync.WaitGroup
-		timings sync.Map
-	)
-
+	var timings sync.Map
 	logLevel := logrus.GetLevel()
-
 	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
-	var messageBatch pubsub.MessageBatch
+
+	topicFunc := func(sidecar blocks.VerifiedRODataColumn) (topic string, wrappedSubIdx uint64, subnet uint64) {
+		subnet = peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+		topic = dataColumnSubnetToTopic(subnet, forkDigest)
+		wrappedSubIdx = subnet + dataColumnSubnetVal
+		return
+	}
+
+	// Phase 1: Categorize sidecars by peer availability.
+	var sidecarsWithPeers, sidecarsWithoutPeers []blocks.VerifiedRODataColumn
 	for _, sidecar := range sidecars {
 		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
 
-		wg.Go(func() {
-			// Add tracing to the function.
+		topic, wrappedSubIdx, _ := topicFunc(sidecar)
+		// Check if we have a peer for this subnet (use RLock for read-only check).
+		s.subnetLocker(wrappedSubIdx).RLock()
+		hasPeer := s.hasPeerWithSubnet(topic)
+		s.subnetLocker(wrappedSubIdx).RUnlock()
+
+		if hasPeer {
+			sidecarsWithPeers = append(sidecarsWithPeers, sidecar)
+		} else {
+			sidecarsWithoutPeers = append(sidecarsWithoutPeers, sidecar)
+		}
+	}
+
+	var batchWg, individualWg sync.WaitGroup
+
+	// Batch publish sidecars that already have peers (runs in parallel with Phase 3).
+	var messageBatch pubsub.MessageBatch
+	for _, sidecar := range sidecarsWithPeers {
+		batchWg.Go(func() {
 			_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
-			ctx = trace.NewContext(s.ctx, span) // clear parent context / deadline.
+			ctx := trace.NewContext(s.ctx, span)
 			defer span.End()
 
-			// Compute the subnet for this data column sidecar.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+			topic, _, _ := topicFunc(sidecar)
 
-			// Build the topic corresponding to subnet column subnet and this fork digest.
-			topic := dataColumnSubnetToTopic(subnet, forkDigest)
-
-			// Compute the wrapped subnet index.
-			wrappedSubIdx := subnet + dataColumnSubnetVal
-
-			// Find peers if needed.
-			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
-				tracing.AnnotateError(span, err)
-				log.WithError(err).Error("Cannot find peers if needed")
-				return
-			}
-
-			// Broadcast the data column sidecar to the network.
 			if err := s.batchObject(ctx, &messageBatch, sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
-				log.WithError(err).Error("Cannot broadcast data column sidecar")
+				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
 			}
 
-			// Increase the number of successful broadcasts.
 			dataColumnSidecarBroadcasts.Inc()
 
-			// Record the timing for log purposes.
 			if logLevel >= logrus.DebugLevel {
 				root := sidecar.BlockRoot()
 				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
@@ -419,12 +424,48 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		})
 	}
 
-	// Wait for all messages to be added to the batch.
-	wg.Wait()
-	if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
-		log.WithError(err).Error("Cannot publish batch for data column sidecars")
-		return
+	// Phase 3: For sidecars without peers, find peers and publish individually (runs in parallel with Phase 2).
+	for _, sidecar := range sidecarsWithoutPeers {
+		individualWg.Go(func() {
+			_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
+			ctx := trace.NewContext(s.ctx, span)
+			defer span.End()
+
+			topic, wrappedSubIdx, subnet := topicFunc(sidecar)
+
+			// Find peers for this sidecar's subnet.
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot find peers if needed")
+				return
+			}
+
+			// Publish individually (not batched) since we just found peers.
+			if err := s.broadcastObject(ctx, sidecar, topic); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot broadcast data column sidecar")
+				return
+			}
+
+			dataColumnSidecarBroadcasts.Inc()
+
+			if logLevel >= logrus.DebugLevel {
+				root := sidecar.BlockRoot()
+				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
+			}
+		})
 	}
+
+	// Wait for batch to be populated, then publish.
+	batchWg.Wait()
+	if len(sidecarsWithPeers) > 0 {
+		if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
+			log.WithError(err).Error("Cannot publish batch for data column sidecars")
+		}
+	}
+
+	// Wait for all individual publishes to complete.
+	individualWg.Wait()
 
 	// The rest of this function is only for debug logging purposes.
 	if logLevel < logrus.DebugLevel {
