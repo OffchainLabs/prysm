@@ -122,24 +122,6 @@ func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState,
 	return nil
 }
 
-// BlockSignatureBatch retrieves the block signature batch from the provided block and its corresponding state.
-func BlockSignatureBatch(beaconState state.ReadOnlyBeaconState,
-	proposerIndex primitives.ValidatorIndex,
-	sig []byte,
-	rootFunc func() ([32]byte, error)) (*bls.SignatureBatch, error) {
-	currentEpoch := slots.ToEpoch(beaconState.Slot())
-	domain, err := signing.Domain(beaconState.Fork(), currentEpoch, params.BeaconConfig().DomainBeaconProposer, beaconState.GenesisValidatorsRoot())
-	if err != nil {
-		return nil, err
-	}
-	proposer, err := beaconState.ValidatorAtIndex(proposerIndex)
-	if err != nil {
-		return nil, err
-	}
-	proposerPubKey := proposer.PublicKey
-	return signing.BlockSignatureBatch(proposerPubKey, sig, domain, rootFunc)
-}
-
 // RandaoSignatureBatch retrieves the relevant randao specific signature batch object
 // from a block and its corresponding state.
 func RandaoSignatureBatch(

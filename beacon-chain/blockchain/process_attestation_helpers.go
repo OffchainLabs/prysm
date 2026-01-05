@@ -22,7 +22,7 @@ import (
 // The caller of this function must have a lock on forkchoice.
 func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) state.ReadOnlyBeaconState {
 	headEpoch := slots.ToEpoch(s.HeadSlot())
-	if c.Epoch < headEpoch || c.Epoch == 0 {
+	if c.Epoch+1 < headEpoch || c.Epoch == 0 {
 		return nil
 	}
 	// Only use head state if the head state is compatible with the target checkpoint.
@@ -30,11 +30,13 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	if err != nil {
 		return nil
 	}
-	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), c.Epoch-1)
+	// headEpoch - 1 equals c.Epoch if c is from the previous epoch and equals c.Epoch - 1 if c is from the current epoch.
+	// We don't use the smaller c.Epoch - 1 because forkchoice would not have the data to answer that.
+	headDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(headRoot), headEpoch-1)
 	if err != nil {
 		return nil
 	}
-	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), c.Epoch-1)
+	targetDependent, err := s.cfg.ForkChoiceStore.DependentRootForEpoch([32]byte(c.Root), headEpoch-1)
 	if err != nil {
 		return nil
 	}
@@ -43,7 +45,7 @@ func (s *Service) getRecentPreState(ctx context.Context, c *ethpb.Checkpoint) st
 	}
 
 	// If the head state alone is enough, we can return it directly read only.
-	if c.Epoch == headEpoch {
+	if c.Epoch <= headEpoch {
 		st, err := s.HeadStateReadOnly(ctx)
 		if err != nil {
 			return nil

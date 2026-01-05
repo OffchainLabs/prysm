@@ -40,6 +40,7 @@ func GetForkSchedule(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteJson(w, &structs.GetForkScheduleResponse{
 			Data: data,
 		})
+		return
 	}
 	previous := schedule[0]
 	for _, entry := range schedule {

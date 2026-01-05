@@ -128,6 +128,9 @@ func TestSyncNeedsInitialize(t *testing.T) {
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	minBlobEpochs := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
 	minColEpochs := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
+	denebSlot := slots.UnsafeEpochStart(params.BeaconConfig().DenebForkEpoch)
+	fuluSlot := slots.UnsafeEpochStart(params.BeaconConfig().FuluForkEpoch)
+	minSlots := slots.UnsafeEpochStart(primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests))
 
 	currentSlot := primitives.Slot(10000)
 	currentFunc := func() primitives.Slot { return currentSlot }
@@ -141,6 +144,7 @@ func TestSyncNeedsInitialize(t *testing.T) {
 		expectedCol       primitives.Epoch
 		name              string
 		input             SyncNeeds
+		current           func() primitives.Slot
 	}{
 		{
 			name:              "basic initialization with no flags",
@@ -174,13 +178,13 @@ func TestSyncNeedsInitialize(t *testing.T) {
 		{
 			name:              "valid oldestSlotFlagPtr (earlier than spec minimum)",
 			blobRetentionFlag: 0,
-			oldestSlotFlagPtr: func() *primitives.Slot {
-				slot := primitives.Slot(10)
-				return &slot
-			}(),
+			oldestSlotFlagPtr: &denebSlot,
 			expectValidOldest: true,
 			expectedBlob:      minBlobEpochs,
 			expectedCol:       minColEpochs,
+			current: func() primitives.Slot {
+				return fuluSlot + minSlots
+			},
 		},
 		{
 			name:              "invalid oldestSlotFlagPtr (later than spec minimum)",
@@ -210,6 +214,9 @@ func TestSyncNeedsInitialize(t *testing.T) {
 		{
 			name:              "both blob retention flag and oldest slot set",
 			blobRetentionFlag: minBlobEpochs + 5,
+			current: func() primitives.Slot {
+				return fuluSlot + minSlots
+			},
 			oldestSlotFlagPtr: func() *primitives.Slot {
 				slot := primitives.Slot(100)
 				return &slot
@@ -232,15 +239,26 @@ func TestSyncNeedsInitialize(t *testing.T) {
 			expectedBlob:      5000,
 			expectedCol:       5000,
 		},
+		{
+			name:              "regression for deneb start",
+			blobRetentionFlag: 8212500,
+			expectValidOldest: true,
+			oldestSlotFlagPtr: &denebSlot,
+			current: func() primitives.Slot {
+				return fuluSlot + minSlots
+			},
+			expectedBlob: 8212500,
+			expectedCol:  8212500,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewSyncNeeds(currentFunc, tc.oldestSlotFlagPtr, tc.blobRetentionFlag)
+			if tc.current == nil {
+				tc.current = currentFunc
+			}
+			result, err := NewSyncNeeds(tc.current, tc.oldestSlotFlagPtr, tc.blobRetentionFlag)
 			require.NoError(t, err)
-
-			// Check that current, deneb, fulu are set correctly
-			require.Equal(t, currentSlot, result.current())
 
 			// Check retention calculations
 			require.Equal(t, tc.expectedBlob, result.blobRetention)
