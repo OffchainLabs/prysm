@@ -180,6 +180,12 @@ func prepareConfigSpec() (map[string]any, error) {
 		data[tag] = convertValueForJSON(val, tag)
 	}
 
+	// Add derived values that are computed from other config values.
+	data["UPDATE_TIMEOUT"] = strconv.FormatUint(
+		uint64(config.SlotsPerEpoch)*uint64(config.EpochsPerSyncCommitteePeriod),
+		10,
+	)
+
 	return data, nil
 }
 

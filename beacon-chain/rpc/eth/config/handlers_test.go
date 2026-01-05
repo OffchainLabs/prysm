@@ -210,7 +210,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 180, len(data))
+	assert.Equal(t, 181, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -596,6 +596,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "107", v)
 			case "NUMBER_OF_COLUMNS":
 				assert.Equal(t, "108", v)
+			case "UPDATE_TIMEOUT":
+				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
