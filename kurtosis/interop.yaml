@@ -22,8 +22,7 @@ participants:
       - --target-peers=3
     count: 1
   # Prysm: Proof verifying only node (node 4)
-  - el_type: geth
-    el_image: dummy_el:local
+  - el_type: dummy
     cl_type: prysm
     cl_image: prysm-bn-custom-image
     cl_extra_params:

@@ -4,11 +4,11 @@
 
 I slightly modified [Manu's tip](https://hackmd.io/8z4thpsyQJioaU6jj0Wazw) by adding those in my `~/.zshrc`.
 
-```zshrc
+```zsh
 # Kurtosis Aliases
 blog() {
     docker logs -f "$(docker ps | grep cl-"$1"-prysm-geth | awk '{print $NF}')" 2>&1
-} 
+}
 
 vlog() {
     docker logs -f "$(docker ps | grep vc-"$1"-geth-prysm | awk '{print $NF}')" 2>&1
@@ -65,13 +65,8 @@ $ devnet ./kurtosis/proof_verify.yaml
 
 ### Running scripts with local images
 
-Images from Prysm can be automatically loaded from `devnet` command, but if you want to run a script with `dummy_el` or `lighthouse`:
-
-#### `./kurtosis/proof_verify.yaml`
-
-- `dummy_el:local`: Please follow [Kev's guide](https://github.com/kevaundray/lighthouse/tree/kw/sel-alternative/dummy_el).
+Images from Prysm can be automatically loaded from `devnet` command, but if you want to run a script with `lighthouse`:
 
 #### `./kurtosis/interop.yaml`
 
-- `dummy_el:local`: Please follow [Kev's guide](https://github.com/kevaundray/lighthouse/tree/kw/sel-alternative/dummy_el).
 - `lighthouse:local`: Please build your own image following [Lighthouse's guide](https://lighthouse-book.sigmaprime.io/installation_docker.html?highlight=docker#building-the-docker-image) on [`kevaundray/kw/sel-alternative`](https://github.com/kevaundray/lighthouse/tree/kw/sel-alternative/) branch.

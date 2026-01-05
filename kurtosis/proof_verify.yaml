@@ -11,10 +11,7 @@ participants:
     vc_image: prysm-vc-custom-image
     count: 3
   # Proof verifying only node (node 4)
-  # TODO(zkproofs): Currently there is no way to add no client here
-  # We likely want to use our dummy zkvm EL here
-  - el_type: geth
-    el_image: dummy_el:local
+  - el_type: dummy
     cl_type: prysm
     cl_image: prysm-bn-custom-image
     cl_extra_params:
