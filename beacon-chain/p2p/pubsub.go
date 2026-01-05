@@ -108,7 +108,7 @@ func (s *Service) addToBatch(ctx context.Context, batch *pubsub.MessageBatch, to
 
 	// Wait for at least 1 peer to be available to receive the published message.
 	for {
-		if len(topicHandle.ListPeers()) > 0 || flags.Get().MinimumSyncPeers == 0 {
+		if flags.Get().MinimumSyncPeers == 0 || len(topicHandle.ListPeers()) > 0  {
 			return topicHandle.AddToBatch(ctx, batch, data, opts...)
 		}
 		select {
