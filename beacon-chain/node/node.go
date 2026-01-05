@@ -40,11 +40,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	proofgen "github.com/OffchainLabs/prysm/v7/beacon-chain/proof-generation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -102,6 +104,7 @@ type BeaconNode struct {
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
 	blsToExecPool            blstoexec.PoolManager
+	execProofPool            execproof.PoolManager
 	depositCache             cache.DepositCache
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
 	payloadIDCache           *cache.PayloadIDCache
@@ -156,6 +159,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		slashingsPool:           slashings.NewPool(),
 		syncCommitteePool:       synccommittee.NewPool(),
 		blsToExecPool:           blstoexec.NewPool(),
+		execProofPool:           execproof.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadIDCache:          cache.NewPayloadIDCache(),
 		slasherBlockHeadersFeed: new(event.Feed),
@@ -433,6 +437,20 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		log.Debugln("Registering Pruner Service")
 		if err := beacon.registerPrunerService(cliCtx); err != nil {
 			return errors.Wrap(err, "could not register pruner service")
+		}
+	}
+
+	if features.Get().EnableZkvm {
+		log.Debugln("Registering Execution Proof Pool")
+		if err := beacon.registerExecutionProofPool(); err != nil {
+			return errors.Wrap(err, "could not register execution proof pool")
+		}
+
+		if len(flags.Get().ProofGenerationTypes) > 0 {
+			log.Debugln("Registering Proof Generation Service")
+			if err := beacon.registerProofGenerationService(cliCtx); err != nil {
+				return errors.Wrap(err, "could not register proof generation service")
+			}
 		}
 	}
 
@@ -737,6 +755,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
 		blockchain.WithBLSToExecPool(b.blsToExecPool),
+		blockchain.WithExecProofPool(b.execProofPool),
 		blockchain.WithP2PBroadcaster(b.fetchP2P()),
 		blockchain.WithStateNotifier(b),
 		blockchain.WithAttestationService(attService),
@@ -752,6 +771,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithSyncChecker(b.syncChecker),
 		blockchain.WithSlasherEnabled(b.slasherEnabled),
 		blockchain.WithLightClientStore(b.lcStore),
+		blockchain.WithOperationNotifier(b),
 	)
 
 	blockchainService, err := blockchain.NewService(b.ctx, opts...)
@@ -827,6 +847,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlashingPool(b.slashingsPool),
 		regularsync.WithSyncCommsPool(b.syncCommitteePool),
 		regularsync.WithBlsToExecPool(b.blsToExecPool),
+		regularsync.WithExecProofPool(b.execProofPool),
 		regularsync.WithStateGen(b.stateGen),
 		regularsync.WithSlasherAttestationsFeed(b.slasherAttestationsFeed),
 		regularsync.WithSlasherBlockHeadersFeed(b.slasherBlockHeadersFeed),
@@ -1143,6 +1164,49 @@ func (b *BeaconNode) RegisterBackfillService(cliCtx *cli.Context, bfs *backfill.
 func (b *BeaconNode) registerLightClientStore() {
 	lcs := lightclient.NewLightClientStore(b.fetchP2P(), b.StateFeed(), b.db)
 	b.lcStore = lcs
+}
+
+func (b *BeaconNode) registerProofGenerationService(cliCtx *cli.Context) error {
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	p2pService := b.fetchP2P()
+
+	cfg := &proofgen.Config{
+		StateNotifier: b,
+		ProofTypes:    flags.Get().ProofGenerationTypes,
+		Broadcaster:   p2pService,
+		TimeFetcher:   chainService,
+		ExecProofPool: b.execProofPool,
+	}
+
+	pgs, err := proofgen.NewService(cliCtx.Context, cfg)
+	if err != nil {
+		return errors.Wrap(err, "could not create proof generation service")
+	}
+	return b.services.RegisterService(pgs)
+}
+
+func (b *BeaconNode) registerExecutionProofPool() error {
+	var chainService *blockchain.Service
+	if err := b.services.FetchService(&chainService); err != nil {
+		return err
+	}
+
+	s, err := execproof.NewService(
+		b.ctx,
+		&execproof.Config{
+			Pool:             b.execProofPool,
+			FinalizedFetcher: chainService,
+			ClockWaiter:      b.ClockWaiter,
+		})
+	if err != nil {
+		return errors.Wrap(err, "could not register exec proof pool service")
+	}
+
+	return b.services.RegisterService(s)
 }
 
 func hasNetworkFlag(cliCtx *cli.Context) bool {

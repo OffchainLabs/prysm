@@ -1,0 +1,27 @@
+# 3 nodes generate proofs, 1 node only verifies
+participants:
+  # Proof generating nodes (nodes 1-3)
+  - el_type: geth
+    el_image: ethereum/client-go:latest
+    cl_type: prysm
+    cl_image: prysm-bn-custom-image
+    cl_extra_params:
+      - --activate-zkvm
+      - --zkvm-generation-proof-types=0,1
+    vc_image: prysm-vc-custom-image
+    count: 3
+  # Proof verifying only node (node 4)
+  - el_type: dummy
+    cl_type: prysm
+    cl_image: prysm-bn-custom-image
+    cl_extra_params:
+      - --activate-zkvm
+    vc_image: prysm-vc-custom-image
+    count: 1
+network_params:
+  seconds_per_slot: 2
+global_log_level: debug
+snooper_enabled: false
+additional_services:
+  - dora
+  - prometheus_grafana

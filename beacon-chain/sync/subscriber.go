@@ -329,6 +329,16 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 				getSubnetsRequiringPeers: s.allDataColumnSubnets,
 			})
 		})
+
+		// Optional proofs
+		s.spawn(func() {
+			s.subscribe(
+				p2p.ExecutionProofSubnetTopicFormat,
+				s.validateExecutionProof,
+				s.executionProofSubscriber,
+				nse,
+			)
+		})
 	}
 	return true
 }

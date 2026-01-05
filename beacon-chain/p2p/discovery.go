@@ -228,7 +228,6 @@ func (s *Service) RefreshPersistentSubnets() {
 	for _, idx := range syncCommittees {
 		bitS.SetBitAt(idx, true)
 	}
-
 	// Get the sync subnet bitfield we store in our record.
 	inRecordBitS, err := syncBitvector(record)
 	if err != nil {
@@ -587,6 +586,11 @@ func (s *Service) createLocalNode(
 	if features.Get().EnableQUIC {
 		quicEntry := quicProtocol(quicPort)
 		localNode.Set(quicEntry)
+	}
+
+	if features.Get().EnableZkvm {
+		zkvmKeyEntry := enr.WithEntry(zkvmEnabledKeyEnrKey, true)
+		localNode.Set(zkvmKeyEntry)
 	}
 
 	localNode.SetFallbackIP(ipAddr)

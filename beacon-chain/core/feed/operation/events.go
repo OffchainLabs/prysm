@@ -46,6 +46,9 @@ const (
 
 	// DataColumnReceived is sent after a data column has been seen after gossip validation rules.
 	DataColumnReceived = 12
+
+	// ExecutionProofReceived is sent after a execution proof object has been received from gossip or rpc.
+	ExecutionProofReceived = 13
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -75,6 +78,11 @@ type SyncCommitteeContributionReceivedData struct {
 // BLSToExecutionChangeReceivedData is the data sent with BLSToExecutionChangeReceived events.
 type BLSToExecutionChangeReceivedData struct {
 	Change *ethpb.SignedBLSToExecutionChange
+}
+
+// ExecutionProofReceivedData is the data sent with ExecutionProofReceived events.
+type ExecutionProofReceivedData struct {
+	ExecutionProof *ethpb.ExecutionProof
 }
 
 // BlobSidecarReceivedData is the data sent with BlobSidecarReceived events.

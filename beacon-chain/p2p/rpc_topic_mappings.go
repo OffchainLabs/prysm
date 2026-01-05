@@ -67,6 +67,9 @@ const (
 
 	// DataColumnSidecarsByRangeName is the name for the DataColumnSidecarsByRange v1 message topic.
 	DataColumnSidecarsByRangeName = "/data_column_sidecars_by_range"
+
+	// ExecutionProofsByRootName is the name for the ExecutionProofsByRoot v1 message topic.
+	ExecutionProofsByRootName = "/execution_proofs_by_root"
 )
 
 const (
@@ -106,6 +109,9 @@ const (
 	// RPCDataColumnSidecarsByRangeTopicV1 is a topic for requesting data column sidecars by their slot.
 	// /eth2/beacon_chain/req/data_column_sidecars_by_range/1 - New in Fulu.
 	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
+	// RPCExecutionProofsByRootTopicV1 is a topic for requesting execution proofs by their block root.
+	// /eth2/beacon_chain/req/execution_proofs_by_root/1 - New in Fulu.
+	RPCExecutionProofsByRootTopicV1 = protocolPrefix + ExecutionProofsByRootName + SchemaVersionV1
 
 	// V2 RPC Topics
 	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
@@ -170,6 +176,9 @@ var (
 
 		// DataColumnSidecarsByRoot v1 Message
 		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
+
+		// ExecutionProofsByRoot v1 Message
+		RPCExecutionProofsByRootTopicV1: new(pb.ExecutionProofsByRootRequest),
 	}
 
 	// Maps all registered protocol prefixes.
@@ -193,6 +202,7 @@ var (
 		LightClientOptimisticUpdateName: true,
 		DataColumnSidecarsByRootName:    true,
 		DataColumnSidecarsByRangeName:   true,
+		ExecutionProofsByRootName:       true,
 	}
 
 	// Maps all the RPC messages which are to updated in altair.

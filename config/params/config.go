@@ -310,6 +310,11 @@ type BeaconChainConfig struct {
 	// Blobs Values
 	BlobSchedule []BlobScheduleEntry `yaml:"BLOB_SCHEDULE" spec:"true"`
 
+	// EIP-8025: Optional Execution Proofs
+	MaxProofDataBytes                  uint64 `yaml:"MAX_PROOF_DATA_BYTES" spec:"true"`                    // MaxProofDataBytes is the maximum number of bytes for execution proof data.
+	MinProofsRequired                  uint64 `yaml:"MIN_PROOFS_REQUIRED" spec:"true"`                     // MinProofsRequired is the minimum number of execution proofs required for a block to be considered valid.
+	MinEpochsForExecutionProofRequests uint64 `yaml:"MIN_EPOCHS_FOR_EXECUTION_PROOF_REQUESTS" spec:"true"` // MinEpochsForExecutionProofRequests is the minimum number of epochs the node will keep the execution proofs for.
+
 	// Deprecated_MaxBlobsPerBlock defines the max blobs that could exist in a block.
 	// Deprecated: This field is no longer supported. Avoid using it.
 	DeprecatedMaxBlobsPerBlock int `yaml:"MAX_BLOBS_PER_BLOCK" spec:"true"`
@@ -730,6 +735,20 @@ func WithinDAPeriod(block, current primitives.Epoch) bool {
 	}
 
 	return block+BeaconConfig().MinEpochsForBlobsSidecarsRequest >= current
+}
+
+// WithinExecutionProofPeriod checks if the given epoch is within the execution proof retention period.
+// This is used to determine whether execution proofs should be requested or generated for blocks at the given epoch.
+// Returns true if the epoch is at or after the retention boundary (Fulu fork epoch or proof retention epoch).
+func WithinExecutionProofPeriod(epoch, current primitives.Epoch) bool {
+	proofRetentionEpoch := primitives.Epoch(0)
+	if current >= primitives.Epoch(BeaconConfig().MinEpochsForExecutionProofRequests) {
+		proofRetentionEpoch = current - primitives.Epoch(BeaconConfig().MinEpochsForExecutionProofRequests)
+	}
+
+	boundaryEpoch := primitives.MaxEpoch(BeaconConfig().FuluForkEpoch, proofRetentionEpoch)
+
+	return epoch >= boundaryEpoch
 }
 
 // EpochsDuration returns the time duration of the given number of epochs.

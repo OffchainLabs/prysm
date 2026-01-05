@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/eth/ext/options.proto";
+
+option csharp_namespace = "Ethereum.Eth.v1alpha1";
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+option java_multiple_files = true;
+option java_outer_classname = "ExecutionProofProto";
+option java_package = "org.ethereum.eth.v1alpha1";
+option php_namespace = "Ethereum\\Eth\\v1alpha1";
+
+message ExecutionProof {
+    // Which proof type (zkVM+EL combination) this proof belongs to
+    // Examples: 0=SP1+Reth, 1=Risc0+Geth, 2=SP1+Geth, etc.
+    uint64 proof_id = 1 [
+        (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ExecutionProofId"
+    ];
+
+    // The slot of the beacon block this proof validates
+    uint64 slot = 2 [
+      (ethereum.eth.ext.cast_type) =
+          "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+    ];
+
+    // The block hash of the execution payload this proof validates
+    bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+    // The beacon block root corresponding to the beacon block
+    // with the execution payload, that this proof attests to.
+    bytes block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+    // The actual proof data
+    bytes proof_data = 5 [ (ethereum.eth.ext.ssz_max) = "1048576" ];
+}
+
+message ExecutionProofsByRootRequest {
+  // The block root we need proofs for
+  bytes block_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+
+  // The number of proofs needed
+  uint64 count_needed = 2;
+
+  // We already have these proof IDs, so don't send them again
+  repeated uint64 already_have = 3 [
+    (ethereum.eth.ext.ssz_max) = "8",
+    (ethereum.eth.ext.cast_type) =
+    "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.ExecutionProofId"
+  ];
+}

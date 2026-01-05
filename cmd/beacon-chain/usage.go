@@ -231,6 +231,12 @@ var appHelpFlagGroups = []flagGroup{
 			flags.SetGCPercent,
 		},
 	},
+	{
+		Name: "zkvm",
+		Flags: []cli.Flag{
+			flags.ZkvmGenerationProofTypeFlag,
+		},
+	},
 }
 
 func init() {

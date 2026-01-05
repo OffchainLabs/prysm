@@ -371,6 +371,11 @@ go_library(
         "beacon_block.go",
         "cloners.go",
         "eip_7521.go",
+        "execution_proof.go",
+        # NOTE: ExecutionProof includes an alias type of uint8,
+        # which is not supported by fastssz sszgen.
+        # Temporarily managed manually.
+        "execution_proof.ssz.go",
         "gloas.go",
         "log.go",
         "sync_committee_mainnet.go",
@@ -427,6 +432,7 @@ ssz_proto_files(
         "beacon_state.proto",
         "blobs.proto",
         "data_columns.proto",
+        "execution_proof.proto",
         "gloas.proto",
         "light_client.proto",
         "sync_committee.proto",

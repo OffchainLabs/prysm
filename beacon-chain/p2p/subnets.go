@@ -36,6 +36,7 @@ var (
 	attSubnetEnrKey         = params.BeaconNetworkConfig().AttSubnetKey
 	syncCommsSubnetEnrKey   = params.BeaconNetworkConfig().SyncCommsSubnetKey
 	custodyGroupCountEnrKey = params.BeaconNetworkConfig().CustodyGroupCountKey
+	zkvmEnabledKeyEnrKey    = params.BeaconNetworkConfig().ZkvmEnabledKey
 )
 
 // The value used with the subnet, in order

@@ -38,6 +38,7 @@ var mainnetNetworkConfig = &NetworkConfig{
 	AttSubnetKey:               "attnets",
 	SyncCommsSubnetKey:         "syncnets",
 	CustodyGroupCountKey:       "cgc",
+	ZkvmEnabledKey:             "zkvm",
 	MinimumPeersInSubnetSearch: 20,
 	ContractDeploymentBlock:    11184524, // Note: contract was deployed in block 11052984 but no transactions were sent until 11184524.
 	BootstrapNodes: []string{
@@ -355,6 +356,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 			MaxBlobsPerBlock: 21,
 		},
 	},
+
+	// EIP-8025: Optional Execution Proofs
+	MaxProofDataBytes:                  1_048_576, // 1 MiB
+	MinProofsRequired:                  2,
+	MinEpochsForExecutionProofRequests: 2,
 }
 
 // MainnetTestConfig provides a version of the mainnet config that has a different name
