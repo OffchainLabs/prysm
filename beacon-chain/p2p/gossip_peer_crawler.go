@@ -16,6 +16,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+const (
+	semaphoreWeight = int64(1)
+	// pingBufferSizeScaleFactor determines the ping channel buffer size as a multiple
+	// of maxConcurrentPings. The crawl loop blocks when the ping buffer is full, so we
+	// need headroom beyond the number of concurrent pings allowed. Since pings to
+	// unreachable peers may timeout (taking longer to complete), a larger buffer ensures
+	// the crawler can continue discovering peers without stalling while waiting for slow
+	// or failed pings to drain.
+	pingBufferSizeScaleFactor = 4
+)
+
 type peerNode struct {
 	isPinged bool
 	node     *enode.Node
@@ -209,7 +220,7 @@ func (cp *crawledPeers) updateTopicsUnlocked(pnode *peerNode, topics []string) {
 	pnode.topics = newTopics
 }
 
-func (cp *crawledPeers) getPeersForTopic(topic string, filter gossipcrawler.PeerFilterFunc) []peerNode {
+func (cp *crawledPeers) peersForTopic(topic string, filter gossipcrawler.PeerFilterFunc) []peerNode {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 
@@ -321,7 +332,7 @@ func NewGossipPeerCrawler(
 		peerFilter:    peerFilter,
 		scorer:        scorer,
 	}
-	g.pingCh = make(chan enode.Node, 4*maxConcurrentPings)
+	g.pingCh = make(chan enode.Node, pingBufferSizeScaleFactor*maxConcurrentPings)
 	g.pingSemaphore = semaphore.NewWeighted(maxConcurrentPings)
 	g.crawledPeers = &crawledPeers{
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
@@ -338,7 +349,7 @@ func NewGossipPeerCrawler(
 // the topic. The returned slice should not be modified as it contains pointers to
 // internal enode records.
 func (g *GossipPeerCrawler) PeersForTopic(topic string) []*enode.Node {
-	peerNodes := g.crawledPeers.getPeersForTopic(topic, g.peerFilter)
+	peerNodes := g.crawledPeers.peersForTopic(topic, g.peerFilter)
 
 	slices.SortFunc(peerNodes, func(a, b peerNode) int {
 		scoreA := g.scorer(a.peerID)
@@ -399,11 +410,11 @@ func (g *GossipPeerCrawler) pingLoop() {
 	for {
 		select {
 		case node := <-g.pingCh:
-			if err := g.pingSemaphore.Acquire(g.ctx, 1); err != nil {
+			if err := g.pingSemaphore.Acquire(g.ctx, semaphoreWeight); err != nil {
 				return
 			}
 			go func(node *enode.Node) {
-				defer g.pingSemaphore.Release(1)
+				defer g.pingSemaphore.Release(semaphoreWeight)
 
 				if err := g.dv5.Ping(node); err != nil {
 					log.WithError(err).WithField("node", node.ID()).Debug("Failed to ping node")

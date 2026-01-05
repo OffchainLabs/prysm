@@ -431,7 +431,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	// provider if available.
 	crawler := s.cfg.p2p.Crawler()
 	if crawler == nil {
-		log.Info("No crawler available, topic extraction disabled")
+		log.Error("No crawler available, topic extraction disabled")
 		return
 	}
 
