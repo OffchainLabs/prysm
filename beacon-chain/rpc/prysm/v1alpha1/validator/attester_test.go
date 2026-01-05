@@ -38,6 +38,7 @@ func TestProposeAttestation(t *testing.T) {
 		OperationNotifier:       (&mock.ChainService{}).OperationNotifier(),
 		TimeFetcher:             chainService,
 		AttestationStateFetcher: chainService,
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
 	}
 	head := util.NewBeaconBlock()
 	head.Block.Slot = 999
@@ -141,12 +142,44 @@ func TestProposeAttestation_IncorrectSignature(t *testing.T) {
 		P2P:               &mockp2p.MockBroadcaster{},
 		AttPool:           attestations.NewPool(),
 		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 	}
 
 	req := util.HydrateAttestation(&ethpb.Attestation{})
 	wanted := "Incorrect attestation signature"
 	_, err := attesterServer.ProposeAttestation(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
+}
+
+func TestProposeAttestation_Syncing(t *testing.T) {
+	attesterServer := &Server{
+		SyncChecker: &mockSync.Sync{IsSyncing: true},
+	}
+
+	req := util.HydrateAttestation(&ethpb.Attestation{})
+	_, err := attesterServer.ProposeAttestation(t.Context(), req)
+	assert.ErrorContains(t, "Syncing to latest head", err)
+	s, ok := status.FromError(err)
+	require.Equal(t, true, ok)
+	assert.Equal(t, codes.Unavailable, s.Code())
+}
+
+func TestProposeAttestationElectra_Syncing(t *testing.T) {
+	attesterServer := &Server{
+		SyncChecker: &mockSync.Sync{IsSyncing: true},
+	}
+
+	req := &ethpb.SingleAttestation{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
+		},
+	}
+	_, err := attesterServer.ProposeAttestationElectra(t.Context(), req)
+	assert.ErrorContains(t, "Syncing to latest head", err)
+	s, ok := status.FromError(err)
+	require.Equal(t, true, ok)
+	assert.Equal(t, codes.Unavailable, s.Code())
 }
 
 func TestGetAttestationData_OK(t *testing.T) {

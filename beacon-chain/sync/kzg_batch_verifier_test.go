@@ -304,6 +304,36 @@ func TestValidateWithKzgBatchVerifier_DeadlockOnTimeout(t *testing.T) {
 	}
 }
 
+func TestValidateWithKzgBatchVerifier_ContextCanceledBeforeSend(t *testing.T) {
+	cancelledCtx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	service := &Service{
+		ctx:     context.Background(),
+		kzgChan: make(chan *kzgVerifier),
+	}
+
+	done := make(chan struct{})
+	go func() {
+		result, err := service.validateWithKzgBatchVerifier(cancelledCtx, nil)
+		require.Equal(t, pubsub.ValidationIgnore, result)
+		require.ErrorIs(t, err, context.Canceled)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("validateWithKzgBatchVerifier did not return after context cancellation")
+	}
+
+	select {
+	case <-service.kzgChan:
+		t.Fatal("verificationSet was sent to kzgChan despite canceled context")
+	default:
+	}
+}
+
 func createValidTestDataColumns(t *testing.T, count int) []blocks.RODataColumn {
 	_, roSidecars, _ := util.GenerateTestFuluBlockWithSidecars(t, count)
 	if len(roSidecars) >= count {
