@@ -379,28 +379,31 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		return
 	}
 
-	// Phase 1: Categorize sidecars by peer availability.
-	var sidecarsWithPeers, sidecarsWithoutPeers []blocks.VerifiedRODataColumn
+	sidecarsWithPeers := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	var sidecarsWithoutPeers []blocks.VerifiedRODataColumn
+
+	// Categorize sidecars by peer availability.
 	for _, sidecar := range sidecars {
 		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
 
 		topic, wrappedSubIdx, _ := topicFunc(sidecar)
 		// Check if we have a peer for this subnet (use RLock for read-only check).
-		s.subnetLocker(wrappedSubIdx).RLock()
+		mu := s.subnetLocker(wrappedSubIdx)
+		mu.RLock()
 		hasPeer := s.hasPeerWithSubnet(topic)
-		s.subnetLocker(wrappedSubIdx).RUnlock()
+		mu.RUnlock()
 
 		if hasPeer {
 			sidecarsWithPeers = append(sidecarsWithPeers, sidecar)
 			continue
-		} 
-		
+		}
+
 		sidecarsWithoutPeers = append(sidecarsWithoutPeers, sidecar)
 	}
 
 	var batchWg, individualWg sync.WaitGroup
 
-	// Batch publish sidecars that already have peers (runs in parallel with Phase 3).
+	// Batch publish sidecars that already have peers
 	var messageBatch pubsub.MessageBatch
 	for _, sidecar := range sidecarsWithPeers {
 		batchWg.Go(func() {
@@ -412,7 +415,6 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			if err := s.batchObject(ctx, &messageBatch, sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
-				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
 			}
 			log.Debugf("Successfully batched data column sidecar for topic %s", topic)
@@ -424,7 +426,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		})
 	}
 
-	// Phase 3: For sidecars without peers, find peers and publish individually (runs in parallel with Phase 2).
+	// For sidecars without peers, find peers and publish individually (no batching).
 	for _, sidecar := range sidecarsWithoutPeers {
 		individualWg.Go(func() {
 			_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
