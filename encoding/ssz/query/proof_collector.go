@@ -151,7 +151,7 @@ func putLittleEndian(dst []byte, val uint64, size int) {
 
 // Merkleizers and proof collection methods
 
-// merkleize recursively traverses an SSZ info  and computes the Merkle root of the subtree.
+// merkleize recursively traverses an SSZ info and computes the Merkle root of the subtree.
 //
 // Proof collection:
 //   - During traversal it calls collectLeaf/collectSibling with the SSZ generalized indices (gindices)
