@@ -1,0 +1,43 @@
+diff -urN a/BUILD.bazel b/BUILD.bazel
+--- a/BUILD.bazel	1969-12-31 18:00:00.000000000 -0600
++++ b/BUILD.bazel	2025-01-05 12:00:00.000000000 -0600
+@@ -0,0 +1,39 @@
++load("@io_bazel_rules_go//go:def.bzl", "go_library")
++
++go_library(
++    name = "go_default_library",
++    srcs = [
++        "bindings.go",
++        "sha256_1_generic.go",
++    ] + select({
++        "@io_bazel_rules_go//go/platform:linux_amd64": [
++            "bindings_amd64.go",
++            "wrapper_linux_amd64.s",
++            "hashtree_amd64.syso",
++        ],
++        "@io_bazel_rules_go//go/platform:darwin_amd64": [
++            "bindings_amd64.go",
++            "wrapper_linux_amd64.s",
++            "hashtree_amd64.syso",
++        ],
++        "@io_bazel_rules_go//go/platform:windows_amd64": [
++            "bindings_amd64.go",
++            "wrapper_windows_amd64.s",
++            "hashtree_windows_amd64.syso",
++        ],
++        "@io_bazel_rules_go//go/platform:linux_arm64": [
++            "bindings_arm64.go",
++            "wrapper_arm64.s",
++            "hashtree_linux_arm64.syso",
++        ],
++        "@io_bazel_rules_go//go/platform:darwin_arm64": [
++            "bindings_arm64.go",
++            "wrapper_arm64.s",
++            "hashtree_darwin_arm64.syso",
++        ],
++        "//conditions:default": [],
++    }),
++    importpath = "github.com/OffchainLabs/hashtree",
++    visibility = ["//visibility:public"],
++    deps = ["@com_github_klauspost_cpuid_v2//:go_default_library"],
++)

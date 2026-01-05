@@ -2451,7 +2451,10 @@ def prysm_deps():
     )
     go_repository(
         name = "com_github_offchainlabs_hashtree",
+        build_file_generation = "off",
         importpath = "github.com/OffchainLabs/hashtree",
+        patch_args = ["-p1"],
+        patches = ["//third_party:com_github_offchainlabs_hashtree.patch"],
         sum = "h1:Ws38dQSEtTbRihiAnqoV5HHubSC/zaxE4Yq3j2Z8S7Y=",
         version = "v0.2.1",
     )
