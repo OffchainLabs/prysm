@@ -99,6 +99,28 @@ func TestPrunerNotify(t *testing.T) {
 	}
 }
 
+func TestNoOpBlobPruner(t *testing.T) {
+	actual := &pruneExpectation{}
+	l := &mockLayout{pruneBeforeFunc: actual.record}
+	pruner := newNoOpBlobPruner()
+	
+	// Verify retention period is 0
+	require.Equal(t, primitives.Epoch(0), pruner.retentionPeriod)
+	
+	// Call notify multiple times - should never trigger pruning
+	done1 := pruner.notify(1000, l)
+	<-done1
+	require.Equal(t, false, actual.called)
+	
+	done2 := pruner.notify(10000, l)
+	<-done2
+	require.Equal(t, false, actual.called)
+	
+	done3 := pruner.notify(100000, l)
+	<-done3
+	require.Equal(t, false, actual.called)
+}
+
 func testSetupBlobIdentPaths(t *testing.T, fs afero.Fs, bs *BlobStorage, idents []testIdent) []blobIdent {
 	created := make([]blobIdent, len(idents))
 	for i, id := range idents {

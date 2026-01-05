@@ -17,6 +17,7 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		oldestBackfillSlot = &sv
 	}
 	blobRetentionEpochs := primitives.Epoch(c.Uint64(flags.BlobRetentionEpochFlag.Name))
+	blobArchival := c.Bool(flags.BlobArchivalFlag.Name)
 	opt := func(n *node.BeaconNode) error {
 		n.SyncNeedsWaiter = func() (das.SyncNeeds, error) {
 			clock, err := n.ClockWaiter.WaitForClock(c.Context)
@@ -27,6 +28,7 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 				clock.CurrentSlot,
 				oldestBackfillSlot,
 				blobRetentionEpochs,
+				blobArchival,
 			)
 		}
 		return nil

@@ -17,9 +17,14 @@ var (
 		Value:   uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
 		Aliases: []string{"extend-blob-retention-epoch"},
 	}
+	BlobArchivalFlag = &cli.BoolFlag{
+		Name:  "blob-archival",
+		Usage: "Disable blob pruning to retain all blobs indefinitely (useful for archival nodes).",
+	}
 )
 
 var Flags = []cli.Flag{
 	BackfillOldestSlot,
 	BlobRetentionEpochFlag,
+	BlobArchivalFlag,
 }

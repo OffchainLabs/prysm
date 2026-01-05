@@ -107,6 +107,26 @@ func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
 	require.Equal(t, specValue, actual)
 }
 
+func TestBlobArchivalFlag(t *testing.T) {
+	app := cli.App{}
+	set := flag.NewFlagSet("test", 0)
+	cliCtx := cli.NewContext(&app, set, nil)
+
+	// Manually define the flag in the set
+	set.Bool(das.BlobArchivalFlag.Name, false, "")
+
+	// Test case: Flag not set (default false)
+	require.Equal(t, false, cliCtx.Bool(das.BlobArchivalFlag.Name))
+
+	// Test case: Flag set to true
+	require.NoError(t, set.Set(das.BlobArchivalFlag.Name, "true"))
+	require.Equal(t, true, cliCtx.Bool(das.BlobArchivalFlag.Name))
+
+	// Test case: Flag set to false
+	require.NoError(t, set.Set(das.BlobArchivalFlag.Name, "false"))
+	require.Equal(t, false, cliCtx.Bool(das.BlobArchivalFlag.Name))
+}
+
 func TestDataColumnStoragePath_FlagSpecified(t *testing.T) {
 	app := cli.App{}
 	set := flag.NewFlagSet("test", 0)

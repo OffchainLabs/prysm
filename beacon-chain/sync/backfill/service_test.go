@@ -64,6 +64,7 @@ func TestServiceInit(t *testing.T) {
 			clock.CurrentSlot,
 			nil,
 			primitives.Epoch(0),
+			false,
 		)
 	}
 	srv, err := NewService(ctx, su, bfs, dcs, cw, p2pt, &mockAssigner{},

@@ -236,7 +236,7 @@ func TestSyncNeedsInitialize(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := NewSyncNeeds(currentFunc, tc.oldestSlotFlagPtr, tc.blobRetentionFlag)
+			result, err := NewSyncNeeds(currentFunc, tc.oldestSlotFlagPtr, tc.blobRetentionFlag, false)
 			require.NoError(t, err)
 
 			// Check that current, deneb, fulu are set correctly
@@ -672,4 +672,79 @@ func TestCurrentNeedsIntegration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSyncNeedsArchivalMode tests that archival mode properly disables retention limits.
+func TestSyncNeedsArchivalMode(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	currentSlot := primitives.Slot(100000)
+	currentFunc := func() primitives.Slot { return currentSlot }
+	denebSlot, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
+	require.NoError(t, err)
+
+	t.Run("archival mode uses spec minimum for retention", func(t *testing.T) {
+		sn, err := NewSyncNeeds(currentFunc, nil, primitives.Epoch(5000), true)
+		require.NoError(t, err)
+		require.Equal(t, true, sn.archival)
+
+		// Should use spec minimum even with large retention flag
+		expectedBlob := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
+		expectedCol := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
+		require.Equal(t, expectedBlob, sn.blobRetention)
+		require.Equal(t, expectedCol, sn.colRetention)
+	})
+
+	t.Run("archival mode retention checker always returns true for valid slots", func(t *testing.T) {
+		sn, err := NewSyncNeeds(currentFunc, nil, primitives.Epoch(0), true)
+		require.NoError(t, err)
+		require.Equal(t, true, sn.archival)
+
+		checker := sn.BlobRetentionChecker()
+
+		// Test slots from Deneb onwards using the actual deneb slot from SyncNeeds
+		testDenebSlot := sn.deneb
+		current := sn.current()
+
+		// Only test if Deneb slot is not in the future
+		if testDenebSlot <= current {
+			require.Equal(t, true, checker(testDenebSlot), "Deneb slot should be retained")
+			if testDenebSlot+100 <= current {
+				require.Equal(t, true, checker(testDenebSlot+100), "Slot after Deneb should be retained")
+			}
+			// Test a slot before current but after Deneb
+			if testDenebSlot < current-1000 {
+				require.Equal(t, true, checker(current-1000), "Recent slot should be retained")
+			}
+			require.Equal(t, true, checker(current), "Current slot should be retained")
+
+			// Slots before Deneb should not be retained
+			if testDenebSlot > 0 {
+				require.Equal(t, false, checker(testDenebSlot-1), "Slot before Deneb should not be retained")
+			}
+		}
+
+		// Future slots beyond current should not be retained
+		require.Equal(t, false, checker(current+1000), "Future slot should not be retained")
+	})
+
+	t.Run("archival mode Currently() returns correct blob span", func(t *testing.T) {
+		sn, err := NewSyncNeeds(currentFunc, nil, primitives.Epoch(0), true)
+		require.NoError(t, err)
+
+		needs := sn.Currently()
+
+		// Blob span should start at Deneb, not at a retention offset
+		require.Equal(t, denebSlot, needs.Blob.Begin)
+		require.Equal(t, true, needs.Blob.End >= currentSlot, "Blob.End should be >= currentSlot")
+	})
+
+	t.Run("non-archival mode uses retention flag", func(t *testing.T) {
+		sn, err := NewSyncNeeds(currentFunc, nil, primitives.Epoch(5000), false)
+		require.NoError(t, err)
+		require.Equal(t, false, sn.archival)
+
+		// Should use max of flag and spec minimum
+		expectedBlob := max(primitives.Epoch(5000), params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
+		require.Equal(t, expectedBlob, sn.blobRetention)
+	})
 }

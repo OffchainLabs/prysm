@@ -77,11 +77,16 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 
 			filesystem.LayoutNameFlat, BlobStorageLayout.Name, filesystem.LayoutNameByEpoch)
 	}
+	blobArchival := c.Bool(das.BlobArchivalFlag.Name)
 	blobStorageOptions := node.WithBlobStorageOptions(
 		filesystem.WithBlobRetentionEpochs(blobRetentionEpoch),
+		filesystem.WithBlobArchival(blobArchival),
 		filesystem.WithBasePath(blobPath),
 		filesystem.WithLayout(layout), // This is validated in the Action func for BlobStorageLayout.
 	)
+	if blobArchival {
+		log.Info("Blob archival mode enabled: blob pruning is disabled and all blobs will be retained indefinitely")
+	}
 
 	dataColumnRetentionEpoch, err := dataColumnRetentionEpoch(c)
 	if err != nil {

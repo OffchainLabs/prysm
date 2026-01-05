@@ -72,6 +72,14 @@ func WithLayout(name string) BlobStorageOption {
 	}
 }
 
+// WithBlobArchival is an option that disables blob pruning to retain all blobs indefinitely.
+func WithBlobArchival(archival bool) BlobStorageOption {
+	return func(b *BlobStorage) error {
+		b.archival = archival
+		return nil
+	}
+}
+
 // NewBlobStorage creates a new instance of the BlobStorage object. Note that the implementation of BlobStorage may
 // attempt to hold a file lock to guarantee exclusive control of the blob storage directory, so this should only be
 // initialized once per beacon node.
@@ -94,7 +102,12 @@ func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
 		b.fs = afero.NewBasePathFs(afero.NewOsFs(), b.base)
 	}
 	b.cache = newBlobStorageCache()
-	pruner := newBlobPruner(b.retentionEpochs)
+	var pruner *blobPruner
+	if b.archival {
+		pruner = newNoOpBlobPruner()
+	} else {
+		pruner = newBlobPruner(b.retentionEpochs)
+	}
 	if b.layoutName == "" {
 		b.layoutName = LayoutNameFlat
 	}
@@ -108,13 +121,14 @@ func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
 
 // BlobStorage is the concrete implementation of the filesystem backend for saving and retrieving BlobSidecars.
 type BlobStorage struct {
-	base            string
-	retentionEpochs primitives.Epoch
-	layoutName      string
 	fsync           bool
-	fs              afero.Fs
-	layout          fsLayout
+	archival        bool
 	cache           *blobStorageSummaryCache
+	retentionEpochs primitives.Epoch
+	layout          fsLayout
+	fs              afero.Fs
+	layoutName      string
+	base            string
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache

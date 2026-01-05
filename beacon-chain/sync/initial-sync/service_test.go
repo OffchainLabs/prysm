@@ -220,7 +220,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 		syWait := func() (das.SyncNeeds, error) {
 			clock, err := cs.WaitForClock(ctx)
 			require.NoError(t, err)
-			return das.NewSyncNeeds(clock.CurrentSlot, nil, primitives.Epoch(0))
+			return das.NewSyncNeeds(clock.CurrentSlot, nil, primitives.Epoch(0), false)
 		}
 		s.cfg.SyncNeedsWaiter = syWait
 		return s, cs

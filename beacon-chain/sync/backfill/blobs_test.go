@@ -30,7 +30,7 @@ func testBlobGen(t *testing.T, start primitives.Slot, n int) ([]blocks.ROBlock, 
 
 func setupCurrentNeeds(t *testing.T, current primitives.Slot) das.SyncNeeds {
 	cs := func() primitives.Slot { return current }
-	sn, err := das.NewSyncNeeds(cs, nil, 0)
+	sn, err := das.NewSyncNeeds(cs, nil, 0, false)
 	require.NoError(t, err)
 	return sn
 }
