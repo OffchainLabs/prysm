@@ -3,7 +3,6 @@ package beacon_api
 import (
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -291,9 +290,12 @@ func TestGetVersion(t *testing.T) {
 }
 
 func TestIsReady(t *testing.T) {
+	const healthEndpoint = "/eth/v1/node/health"
+
 	testCases := []struct {
 		name           string
 		statusCode     int
+		err            error
 		expectedResult bool
 	}{
 		{
@@ -316,6 +318,11 @@ func TestIsReady(t *testing.T) {
 			statusCode:     http.StatusInternalServerError,
 			expectedResult: false,
 		},
+		{
+			name:           "returns false on error",
+			err:            errors.New("request failed"),
+			expectedResult: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -324,15 +331,11 @@ func TestIsReady(t *testing.T) {
 			defer ctrl.Finish()
 			ctx := t.Context()
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, "/eth/v1/node/health", r.URL.Path)
-				w.WriteHeader(tc.statusCode)
-			}))
-			defer server.Close()
-
 			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Host().Return(server.URL)
-			jsonRestHandler.EXPECT().HttpClient().Return(server.Client())
+			jsonRestHandler.EXPECT().GetStatusCode(
+				gomock.Any(),
+				healthEndpoint,
+			).Return(tc.statusCode, tc.err)
 
 			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
 			result := nodeClient.IsReady(ctx)
