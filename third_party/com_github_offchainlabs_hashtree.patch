@@ -80,7 +80,7 @@ diff -urN a/BUILD.bazel b/BUILD.bazel
 +        "src/sha256_sse_x1.S",
 +    ],
 +    hdrs = ["src/hashtree.h"],
-+    copts = ["-O3", "-Wall"],
++    copts = ["-O3", "-Wall", "-fno-integrated-as"],
 +    linkstatic = True,
 +    strip_include_prefix = "src",
 +    visibility = ["//visibility:public"],
