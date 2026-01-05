@@ -72,7 +72,10 @@ func TestService_Broadcast(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -186,7 +189,10 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -375,7 +381,15 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	_, err = tpHandle.Subscribe()
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond) // libp2p fails without this delay...
+	// This test specifically tests discovery-based peer finding, which requires
+	// time for nodes to discover each other. Using a fixed sleep here is intentional
+	// as we're testing the discovery timing behavior.
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify mesh establishment after discovery
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0 && len(p2.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	nodePeers := p.pubsub.ListPeers(topic)
 	nodePeers2 := p2.pubsub.ListPeers(topic)
@@ -444,7 +458,10 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -521,7 +538,10 @@ func TestService_BroadcastBlob(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -584,7 +604,10 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -660,7 +683,10 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond) // libp2p fails without this delay...
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(p.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Async listen for the pubsub, must be before the broadcast.
 	var wg sync.WaitGroup
@@ -771,8 +797,10 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
-	// libp2p fails without this delay
-	time.Sleep(50 * time.Millisecond)
+	// Wait for libp2p mesh to establish
+	require.Eventually(t, func() bool {
+		return len(service.pubsub.ListPeers(topic)) > 0
+	}, 5*time.Second, 10*time.Millisecond, "libp2p mesh did not establish")
 
 	// Broadcast to peers and wait.
 	err = service.BroadcastDataColumnSidecars(ctx, []blocks.VerifiedRODataColumn{verifiedRoSidecar})

@@ -70,7 +70,6 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 
 	topic := "/eth2/%x/beacon_block"
 	go r.startDiscoveryAndSubscriptions()
-	time.Sleep(100 * time.Millisecond)
 
 	var vr [32]byte
 	require.NoError(t, gs.SetClock(startup.NewClock(time.Now(), vr)))
@@ -83,9 +82,11 @@ func TestSyncHandlers_WaitToSync(t *testing.T) {
 	msg.Block.ParentRoot = util.Random32Bytes(t)
 	msg.Signature = sk.Sign([]byte("data")).Marshal()
 	p2p.ReceivePubSub(topic, msg)
-	// wait for chainstart to be sent
-	time.Sleep(400 * time.Millisecond)
-	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
+
+	// Wait for chainstart event to be processed
+	require.Eventually(t, func() bool {
+		return r.chainStarted.IsSet()
+	}, 5*time.Second, 50*time.Millisecond, "Did not receive chain start event.")
 }
 
 func TestSyncHandlers_WaitForChainStart(t *testing.T) {
@@ -217,20 +218,18 @@ func TestSyncService_StopCleanly(t *testing.T) {
 	p2p.Digest, err = r.currentForkDigest()
 	require.NoError(t, err)
 
-	// wait for chainstart to be sent
-	time.Sleep(2 * time.Second)
-	require.Equal(t, true, r.chainStarted.IsSet(), "Did not receive chain start event.")
-
-	require.NotEqual(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
-	require.NotEqual(t, 0, len(r.cfg.p2p.Host().Mux().Protocols()))
+	// Wait for chainstart and topics to be registered
+	require.Eventually(t, func() bool {
+		return r.chainStarted.IsSet() && len(r.cfg.p2p.PubSub().GetTopics()) > 0 && len(r.cfg.p2p.Host().Mux().Protocols()) > 0
+	}, 5*time.Second, 50*time.Millisecond, "Did not receive chain start event or topics not registered.")
 
 	// Both pubsub and rpc topics should be unsubscribed.
 	require.NoError(t, r.Stop())
 
-	// Sleep to allow pubsub topics to be deregistered.
-	time.Sleep(1 * time.Second)
-	require.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
-	require.Equal(t, 0, len(r.cfg.p2p.Host().Mux().Protocols()))
+	// Wait for pubsub topics to be deregistered.
+	require.Eventually(t, func() bool {
+		return len(r.cfg.p2p.PubSub().GetTopics()) == 0 && len(r.cfg.p2p.Host().Mux().Protocols()) == 0
+	}, 5*time.Second, 50*time.Millisecond, "Pubsub topics were not deregistered")
 }
 
 func TestService_Stop_SendsGoodbyeMessages(t *testing.T) {
