@@ -392,9 +392,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 		if hasPeer {
 			sidecarsWithPeers = append(sidecarsWithPeers, sidecar)
-		} else {
-			sidecarsWithoutPeers = append(sidecarsWithoutPeers, sidecar)
-		}
+			continue
+		} 
+		
+		sidecarsWithoutPeers = append(sidecarsWithoutPeers, sidecar)
 	}
 
 	var batchWg, individualWg sync.WaitGroup
