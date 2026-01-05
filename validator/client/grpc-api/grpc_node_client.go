@@ -34,9 +34,20 @@ func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Pee
 }
 
 func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
+	// First check if the node is available via health endpoint
 	_, err := c.getClient().GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
-		log.WithError(err).Error("Failed to get health of node")
+		log.WithError(err).Debug("Failed to get health of node")
+		return false
+	}
+	// Then check sync status - we only want fully synced nodes
+	syncStatus, err := c.getClient().GetSyncStatus(ctx, &empty.Empty{})
+	if err != nil {
+		log.WithError(err).Debug("Failed to get sync status of node")
+		return false
+	}
+	if syncStatus.Syncing {
+		log.Debug("Node is syncing, not fully synced")
 		return false
 	}
 	return true

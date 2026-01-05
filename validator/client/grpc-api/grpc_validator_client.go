@@ -385,14 +385,22 @@ func (c *grpcValidatorClient) Host() string {
 	return c.grpcClientManager.conn.GetGrpcConnectionProvider().CurrentHost()
 }
 
-func (c *grpcValidatorClient) SetHost(_ string) {
-	// For gRPC, host switching is done via the connection provider's NextHost() method,
-	// not by setting a specific host string. The validator's changeHost() logic
-	// uses the connection provider directly.
-	if c.grpcClientManager == nil || c.grpcClientManager.conn == nil || c.grpcClientManager.conn.GetGrpcConnectionProvider() == nil {
-		log.Debug("SetHost called but no gRPC connection provider configured")
+func (c *grpcValidatorClient) SetHost(host string) {
+	if c.grpcClientManager == nil || c.grpcClientManager.conn == nil {
 		return
 	}
-	// The actual host switching is managed by the connection provider
-	// which is called from FindHealthyHost/changeHost in validator.go
+	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
+	if provider == nil {
+		return
+	}
+	// Find the index of the requested host and switch to it
+	for i, h := range provider.Hosts() {
+		if h == host {
+			if err := provider.SetHost(i); err != nil {
+				log.WithError(err).WithField("host", host).Error("Failed to set gRPC host")
+			}
+			return
+		}
+	}
+	log.WithField("host", host).Warn("Requested gRPC host not found in configured endpoints")
 }

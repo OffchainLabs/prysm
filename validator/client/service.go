@@ -134,9 +134,16 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 
 	s.ctx = grpcutil.AppendHeaders(ctx, cfg.GRPCHeaders)
 
-	grpcProvider, err := validatorHelpers.NewGrpcConnectionProvider(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts)
-	if err != nil {
-		return s, errors.Wrap(err, "failed to create gRPC connection provider")
+	var grpcConn *grpc.ClientConn
+	var grpcProvider validatorHelpers.GrpcConnectionProvider
+
+	if cfg.BeaconNodeGRPCEndpoint != "" {
+		var err error
+		grpcProvider, err = validatorHelpers.NewGrpcConnectionProvider(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts)
+		if err != nil {
+			return s, errors.Wrap(err, "failed to create gRPC connection provider")
+		}
+		grpcConn = grpcProvider.CurrentConn()
 	}
 
 	if cfg.BeaconNodeCert != "" {
@@ -146,11 +153,13 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 	connOpts := []validatorHelpers.NodeConnectionOption{
 		validatorHelpers.WithBeaconApiHeaders(cfg.BeaconApiHeaders),
 		validatorHelpers.WithBeaconApiTimeout(cfg.BeaconApiTimeout),
-		validatorHelpers.WithGrpcConnectionProvider(grpcProvider),
+	}
+	if grpcProvider != nil {
+		connOpts = append(connOpts, validatorHelpers.WithGrpcConnectionProvider(grpcProvider))
 	}
 
 	s.conn = validatorHelpers.NewNodeConnection(
-		grpcProvider.CurrentConn(),
+		grpcConn,
 		cfg.BeaconApiEndpoint,
 		connOpts...,
 	)

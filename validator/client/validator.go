@@ -1263,53 +1263,63 @@ func (v *validator) Host() string {
 }
 
 func (v *validator) changeHost() {
-	if features.Get().EnableBeaconRESTApi {
-		// REST API mode: use the beaconNodeHosts array and validatorClient.SetHost
-		next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
-		log.WithFields(logrus.Fields{
-			"currentHost": v.beaconNodeHosts[v.currentHostIndex],
-			"nextHost":    v.beaconNodeHosts[next],
-		}).Warn("Beacon node is not responding, switching host")
-		v.validatorClient.SetHost(v.beaconNodeHosts[next])
-		v.currentHostIndex = next
-	} else if v.grpcConnectionProvider != nil {
-		// gRPC mode with multi-endpoint support: use the connection provider
-		v.grpcConnectionProvider.NextHost()
+	hosts := v.hosts()
+	if len(hosts) <= 1 {
+		return
 	}
+	next := (v.currentHostIndex + 1) % uint64(len(hosts))
+	log.WithFields(logrus.Fields{
+		"currentHost": hosts[v.currentHostIndex],
+		"nextHost":    hosts[next],
+	}).Warn("Beacon node is not responding, switching host")
+	v.validatorClient.SetHost(hosts[next])
+	v.currentHostIndex = next
+}
+
+// hosts returns the list of configured beacon node hosts for failover.
+func (v *validator) hosts() []string {
+	if features.Get().EnableBeaconRESTApi {
+		return v.beaconNodeHosts
+	}
+	if v.grpcConnectionProvider != nil {
+		return v.grpcConnectionProvider.Hosts()
+	}
+	return nil
 }
 
 // numHosts returns the number of configured beacon node hosts for failover.
 func (v *validator) numHosts() int {
-	if features.Get().EnableBeaconRESTApi {
-		return len(v.beaconNodeHosts)
-	}
-	if v.grpcConnectionProvider != nil {
-		return len(v.grpcConnectionProvider.Hosts())
-	}
-	return 1 // Single endpoint, no failover
+	return len(v.hosts())
 }
 
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
-	numHosts := v.numHosts()
+	hosts := v.hosts()
+	numHosts := len(hosts)
 
-	// Tail-recursive closure keeps retry count private.
-	var check func(remaining int) bool
-	check = func(remaining int) bool {
-		if v.nodeClient.IsHealthy(ctx) { // healthy → done
-			return true
-		}
-		if numHosts == 1 {
-			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
-			return false
-		}
-		if remaining == 0 {
-			return false // exhausted all hosts
-		}
-		v.changeHost()
-		return check(remaining - 1) // recurse
+	if numHosts == 0 {
+		return false
 	}
 
-	return check(numHosts)
+	// Check all hosts for a fully synced node
+	for i := 0; i < numHosts; i++ {
+		if v.nodeClient.IsHealthy(ctx) {
+			log.WithField("host", v.Host()).Debug("Found healthy beacon node")
+			return true
+		}
+		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
+
+		// Try next host if not the last iteration
+		if i < numHosts-1 {
+			v.changeHost()
+		}
+	}
+
+	if numHosts == 1 {
+		log.WithField("host", v.Host()).Warn("Beacon node is not fully synced, no backup node configured")
+	} else {
+		log.Warn("No fully synced beacon node found")
+	}
+	return false
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {
