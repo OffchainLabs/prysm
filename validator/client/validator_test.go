@@ -2792,6 +2792,10 @@ func TestValidator_Host(t *testing.T) {
 }
 
 func TestValidator_ChangeHost(t *testing.T) {
+	// Enable REST API mode for this test since changeHost only calls SetHost in REST API mode
+	resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: true})
+	defer resetCfg()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

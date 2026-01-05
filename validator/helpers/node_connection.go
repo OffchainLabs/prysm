@@ -14,14 +14,19 @@ type NodeConnection interface {
 	setBeaconApiHeaders(map[string][]string)
 	GetBeaconApiTimeout() time.Duration
 	setBeaconApiTimeout(time.Duration)
+	// GetGrpcConnectionProvider returns the gRPC connection provider for multi-endpoint support.
+	// Returns nil if no provider is configured (single endpoint mode).
+	GetGrpcConnectionProvider() GrpcConnectionProvider
+	setGrpcConnectionProvider(GrpcConnectionProvider)
 	dummy()
 }
 
 type nodeConnection struct {
-	grpcClientConn   *grpc.ClientConn
-	beaconApiUrl     string
-	beaconApiHeaders map[string][]string
-	beaconApiTimeout time.Duration
+	grpcClientConn         *grpc.ClientConn
+	grpcConnectionProvider GrpcConnectionProvider
+	beaconApiUrl           string
+	beaconApiHeaders       map[string][]string
+	beaconApiTimeout       time.Duration
 }
 
 // NodeConnectionOption is a functional option for configuring the node connection.
@@ -41,7 +46,18 @@ func WithBeaconApiTimeout(timeout time.Duration) NodeConnectionOption {
 	}
 }
 
+// WithGrpcConnectionProvider sets the gRPC connection provider for multi-endpoint support.
+func WithGrpcConnectionProvider(provider GrpcConnectionProvider) NodeConnectionOption {
+	return func(nc NodeConnection) {
+		nc.setGrpcConnectionProvider(provider)
+	}
+}
+
 func (c *nodeConnection) GetGrpcClientConn() *grpc.ClientConn {
+	// If a connection provider is configured, use its current connection
+	if c.grpcConnectionProvider != nil {
+		return c.grpcConnectionProvider.CurrentConn()
+	}
 	return c.grpcClientConn
 }
 
@@ -63,6 +79,14 @@ func (c *nodeConnection) GetBeaconApiTimeout() time.Duration {
 
 func (c *nodeConnection) setBeaconApiTimeout(timeout time.Duration) {
 	c.beaconApiTimeout = timeout
+}
+
+func (c *nodeConnection) GetGrpcConnectionProvider() GrpcConnectionProvider {
+	return c.grpcConnectionProvider
+}
+
+func (c *nodeConnection) setGrpcConnectionProvider(provider GrpcConnectionProvider) {
+	c.grpcConnectionProvider = provider
 }
 
 func (*nodeConnection) dummy() {}

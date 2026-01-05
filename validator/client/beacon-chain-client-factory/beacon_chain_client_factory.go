@@ -10,7 +10,13 @@ import (
 )
 
 func NewChainClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.RestHandler) iface.ChainClient {
-	grpcClient := grpcApi.NewGrpcChainClient(validatorConn.GetGrpcClientConn())
+	// Use connection-aware client if a connection provider is configured for gRPC failover support
+	var grpcClient iface.ChainClient
+	if validatorConn.GetGrpcConnectionProvider() != nil {
+		grpcClient = grpcApi.NewGrpcChainClientWithConnection(validatorConn)
+	} else {
+		grpcClient = grpcApi.NewGrpcChainClient(validatorConn.GetGrpcClientConn())
+	}
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewBeaconApiChainClientWithFallback(jsonRestHandler, grpcClient)
 	} else {
@@ -22,6 +28,10 @@ func NewPrysmChainClient(validatorConn validatorHelpers.NodeConnection, jsonRest
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewPrysmChainClient(jsonRestHandler, nodeClientFactory.NewNodeClient(validatorConn, jsonRestHandler))
 	} else {
+		// Use connection-aware client if a connection provider is configured for gRPC failover support
+		if validatorConn.GetGrpcConnectionProvider() != nil {
+			return grpcApi.NewGrpcPrysmChainClientWithConnection(validatorConn)
+		}
 		return grpcApi.NewGrpcPrysmChainClient(validatorConn.GetGrpcClientConn())
 	}
 }

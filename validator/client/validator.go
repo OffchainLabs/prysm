@@ -38,6 +38,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	dbCommon "github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
@@ -82,6 +83,7 @@ type validator struct {
 	graffitiOrderedIndex               uint64
 	beaconNodeHosts                    []string
 	currentHostIndex                   uint64
+	grpcConnectionProvider             validatorHelpers.GrpcConnectionProvider
 	validatorClient                    iface.ValidatorClient
 	chainClient                        iface.ChainClient
 	nodeClient                         iface.NodeClient
@@ -1261,34 +1263,53 @@ func (v *validator) Host() string {
 }
 
 func (v *validator) changeHost() {
-	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
-	log.WithFields(logrus.Fields{
-		"currentHost": v.beaconNodeHosts[v.currentHostIndex],
-		"nextHost":    v.beaconNodeHosts[next],
-	}).Warn("Beacon node is not responding, switching host")
-	v.validatorClient.SetHost(v.beaconNodeHosts[next])
-	v.currentHostIndex = next
+	if features.Get().EnableBeaconRESTApi {
+		// REST API mode: use the beaconNodeHosts array and validatorClient.SetHost
+		next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
+		log.WithFields(logrus.Fields{
+			"currentHost": v.beaconNodeHosts[v.currentHostIndex],
+			"nextHost":    v.beaconNodeHosts[next],
+		}).Warn("Beacon node is not responding, switching host")
+		v.validatorClient.SetHost(v.beaconNodeHosts[next])
+		v.currentHostIndex = next
+	} else if v.grpcConnectionProvider != nil {
+		// gRPC mode with multi-endpoint support: use the connection provider
+		v.grpcConnectionProvider.NextHost()
+	}
+}
+
+// numHosts returns the number of configured beacon node hosts for failover.
+func (v *validator) numHosts() int {
+	if features.Get().EnableBeaconRESTApi {
+		return len(v.beaconNodeHosts)
+	}
+	if v.grpcConnectionProvider != nil {
+		return len(v.grpcConnectionProvider.Hosts())
+	}
+	return 1 // Single endpoint, no failover
 }
 
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
+	numHosts := v.numHosts()
+
 	// Tail-recursive closure keeps retry count private.
 	var check func(remaining int) bool
 	check = func(remaining int) bool {
 		if v.nodeClient.IsHealthy(ctx) { // healthy → done
 			return true
 		}
-		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {
+		if numHosts == 1 {
 			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
 			return false
 		}
-		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
-			return false // exhausted or REST disabled
+		if remaining == 0 {
+			return false // exhausted all hosts
 		}
 		v.changeHost()
 		return check(remaining - 1) // recurse
 	}
 
-	return check(len(v.beaconNodeHosts))
+	return check(numHosts)
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {
