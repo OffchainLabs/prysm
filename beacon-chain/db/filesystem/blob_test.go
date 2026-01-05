@@ -224,10 +224,6 @@ func TestBlobStorageArchivalMode(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, storage)
 		require.Equal(t, true, storage.archival)
-
-		// Verify pruner is no-op by checking retention period is 0
-		// (This is an internal check - the actual pruner is encapsulated)
-		// We test the behavior: no pruning should occur
 	})
 
 	t.Run("non-archival mode creates normal pruner", func(t *testing.T) {
