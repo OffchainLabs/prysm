@@ -111,6 +111,10 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 	}
 }
 
+func (p TestP2P) Status() error {
+	return nil
+}
+
 // Connect two test peers together.
 func (p *TestP2P) Connect(b *TestP2P) {
 	if err := connect(p.BHost, b.BHost); err != nil {

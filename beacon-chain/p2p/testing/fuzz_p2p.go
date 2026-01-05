@@ -51,6 +51,10 @@ func (*FakeP2P) GossipDialer() gossipcrawler.GossipDialer {
 	return nil
 }
 
+func (*FakeP2P) Status() error {
+	return nil
+}
+
 // AddDisconnectionHandler -- fake.
 func (*FakeP2P) AddDisconnectionHandler(_ func(ctx context.Context, id peer.ID) error) {
 }

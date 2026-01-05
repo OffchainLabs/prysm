@@ -417,11 +417,11 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 		if s.cfg.p2p.Status() == nil {
 			break
 		}
-		log.Debug("p2p service not started yet; will retry in 100ms")
+		log.Debug("P2P service not started yet; will retry in 100ms")
 
 		select {
 		case <-s.ctx.Done():
-			log.WithError(s.ctx.Err()).Error("context closed while waiting for p2p service to start, exiting startDiscoveryAndSubscriptions routine")
+			log.WithError(s.ctx.Err()).Error("Context closed while waiting for P2P service to start, exiting startDiscoveryAndSubscriptions routine")
 			return
 		case <-time.After(100 * time.Millisecond):
 		}
