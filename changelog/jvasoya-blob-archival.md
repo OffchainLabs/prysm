@@ -1,0 +1,1 @@
+- Added `--blob-archival` flag to disable blob pruning and retain all blobs indefinitely (useful for archival nodes).
