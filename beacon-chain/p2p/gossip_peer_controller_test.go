@@ -442,7 +442,7 @@ func TestGossipPeerDialer_selectPeersForTopics(t *testing.T) {
 	}
 }
 
-func TestGossipPeerDialer_SoleProviderPeers(t *testing.T) {
+func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 	peerA := peer.ID("peerA")
 	peerB := peer.ID("peerB")
 	peerC := peer.ID("peerC")
@@ -472,10 +472,10 @@ func TestGossipPeerDialer_SoleProviderPeers(t *testing.T) {
 			expected:       []peer.ID{},
 		},
 		{
-			name:           "multiple peers for all topics",
+			name:           "multiple peers for all topics protects first peer from each",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 2, "topic/b": 2} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA, peerB}, "topic/b": {peerB, peerC}},
-			expected:       []peer.ID{},
+			expected:       []peer.ID{peerA, peerB},
 		},
 		{
 			name:           "single peer for one topic",
@@ -484,22 +484,22 @@ func TestGossipPeerDialer_SoleProviderPeers(t *testing.T) {
 			expected:       []peer.ID{peerA},
 		},
 		{
-			name:           "same peer is sole provider for multiple topics",
+			name:           "same peer is first for multiple topics",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 1} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerA}},
 			expected:       []peer.ID{peerA},
 		},
 		{
-			name:           "different sole providers for different topics",
+			name:           "different first peers for different topics",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 1} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB}},
 			expected:       []peer.ID{peerA, peerB},
 		},
 		{
-			name:           "mix of single and multiple peers",
+			name:           "protects first peer from each topic",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 2, "topic/c": 1} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB, peerC}, "topic/c": {peerC}},
-			expected:       []peer.ID{peerA, peerC},
+			expected:       []peer.ID{peerA, peerB, peerC},
 		},
 	}
 
@@ -514,7 +514,7 @@ func TestGossipPeerDialer_SoleProviderPeers(t *testing.T) {
 				listPeers:      listPeers,
 			}
 
-			got := dialer.SoleProviderPeers()
+			got := dialer.ProtectedPeers()
 
 			if tt.expected == nil {
 				require.Nil(t, got)

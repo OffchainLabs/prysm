@@ -303,33 +303,31 @@ func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode
 	return newPeers
 }
 
-// SoleProviderPeers returns peer IDs that are the sole provider for at least one topic.
-// A peer is considered a sole provider if it's the only connected peer for a topic (listPeers returns only this peer)
-//
-// These peers should be protected from pruning since losing them would mean
-// losing connectivity to that topic entirely.
-func (g *GossipPeerDialer) SoleProviderPeers() []peer.ID {
+// ProtectedPeers returns peer IDs that should be protected from pruning.
+// For each topic, one connected peer is marked as protected to ensure
+// we maintain connectivity to all subscribed topics.
+func (g *GossipPeerDialer) ProtectedPeers() []peer.ID {
 	if g.topicsProvider == nil {
 		return nil
 	}
 
 	topics := g.topicsProvider()
-	soleProviders := make(map[peer.ID]struct{})
+	protectedPeers := make(map[peer.ID]struct{})
 
 	for topic := range topics {
 		connectedPeers := g.listPeers(topic)
 
-		// Skip if no peers or more than one connected peer
-		if len(connectedPeers) != 1 {
+		// Skip if no peers connected
+		if len(connectedPeers) == 0 {
 			continue
 		}
 
-		// This peer is the sole known provider
-		soleProviders[connectedPeers[0]] = struct{}{}
+		// Protect the first peer for this topic
+		protectedPeers[connectedPeers[0]] = struct{}{}
 	}
 
-	result := make([]peer.ID, 0, len(soleProviders))
-	for pid := range soleProviders {
+	result := make([]peer.ID, 0, len(protectedPeers))
+	for pid := range protectedPeers {
 		result = append(result, pid)
 	}
 	return result

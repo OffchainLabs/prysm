@@ -248,9 +248,8 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 	dialer := s.cfg.p2p.GossipDialer()
 
 	if dialer != nil {
-		// Protect peers that are the sole provider for any gossip topic.
-		// These peers should not be pruned since we have no alternative.
-		for _, pid := range dialer.SoleProviderPeers() {
+		// ask the dialer for peers that should be protected from pruning.
+		for _, pid := range dialer.ProtectedPeers() {
 			peerMap[pid] = true
 		}
 	}
