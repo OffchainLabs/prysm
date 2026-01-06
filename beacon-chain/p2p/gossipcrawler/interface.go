@@ -20,6 +20,7 @@ type Crawler interface {
 	RemovePeerByPeerId(peerID peer.ID)
 	RemoveTopic(topic string)
 	PeersForTopic(topic string) []*enode.Node
+	TriggerCrawl()
 }
 
 // SubnetTopicsProvider returns the set of gossipsub topics the node

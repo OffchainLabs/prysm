@@ -266,6 +266,8 @@ type GossipPeerCrawler struct {
 	pingCh        chan enode.Node
 	pingSemaphore *semaphore.Weighted
 
+	triggerCrawlCh chan struct{}
+
 	once sync.Once
 }
 
@@ -334,6 +336,7 @@ func NewGossipPeerCrawler(
 	}
 	g.pingCh = make(chan enode.Node, pingBufferSizeScaleFactor*maxConcurrentPings)
 	g.pingSemaphore = semaphore.NewWeighted(maxConcurrentPings)
+	g.triggerCrawlCh = make(chan struct{}, 1)
 	g.crawledPeers = &crawledPeers{
 		peerNodeByEnode: make(map[enode.ID]*peerNode),
 		peerNodeByPid:   make(map[peer.ID]*peerNode),
@@ -432,10 +435,12 @@ func (g *GossipPeerCrawler) pingLoop() {
 }
 
 func (g *GossipPeerCrawler) crawlLoop() {
+
 	for {
 		g.crawl()
 		select {
 		case <-time.After(g.crawlInterval):
+		case <-g.triggerCrawlCh:
 		case <-g.ctx.Done():
 			return
 		}
@@ -536,6 +541,18 @@ func (g *GossipPeerCrawler) cleanup() {
 		if err != nil || len(topics) == 0 {
 			cp.removePeerByNodeId(p.node.ID())
 		}
+	}
+}
+
+// TriggerCrawl requests an immediate crawl. If a crawl trigger is already
+// pending, this call is ignored (non-blocking). This allows external systems
+// to request a crawl without waiting for the regular interval.
+func (g *GossipPeerCrawler) TriggerCrawl() {
+	select {
+	case g.triggerCrawlCh <- struct{}{}:
+		log.Info("Triggering crawl")
+	default:
+		// Channel full, crawl already triggered
 	}
 }
 

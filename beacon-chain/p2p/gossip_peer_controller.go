@@ -14,7 +14,8 @@ import (
 )
 
 const dialInterval = 1 * time.Second
-const peerCountLogInterval = 5 * time.Minute
+const peerCountLogInterval = 1 * time.Minute
+const topicMonitorInterval = 1 * time.Second
 
 // GossipPeerDialer maintains minimum peer counts for gossip topics by periodically
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
@@ -27,6 +28,8 @@ type GossipPeerDialer struct {
 
 	crawler        gossipcrawler.Crawler
 	topicsProvider gossipcrawler.SubnetTopicsProvider
+
+	cachedTopics map[string]int
 
 	once sync.Once
 }
@@ -77,8 +80,10 @@ func NewGossipPeerDialer(
 func (g *GossipPeerDialer) Start(provider gossipcrawler.SubnetTopicsProvider) error {
 	g.once.Do(func() {
 		g.topicsProvider = provider
+		g.cachedTopics = make(map[string]int)
 		go g.dialLoop()
 		go g.logPeerCountsLoop()
+		go g.topicMonitorLoop()
 	})
 
 	return nil
@@ -117,6 +122,39 @@ func (g *GossipPeerDialer) logPeerCountsLoop() {
 					WithField("currentPeers", currentPeers).
 					WithField("minPeers", minPeers).
 					Info("Gossip topic peer count")
+			}
+
+		case <-g.ctx.Done():
+			return
+		}
+	}
+}
+
+// topicsChanged compares the new topics with cached topics and returns true
+// if topics have been added or removed. Changes to min peer counts are ignored.
+func (g *GossipPeerDialer) topicsChanged(newTopics map[string]int) bool {
+	if len(newTopics) != len(g.cachedTopics) {
+		return true
+	}
+	for topic := range newTopics {
+		if _, ok := g.cachedTopics[topic]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *GossipPeerDialer) topicMonitorLoop() {
+	ticker := time.NewTicker(topicMonitorInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			topics := g.topicsProvider()
+			if g.topicsChanged(topics) {
+				g.cachedTopics = topics
+				g.crawler.TriggerCrawl()
 			}
 
 		case <-g.ctx.Done():
