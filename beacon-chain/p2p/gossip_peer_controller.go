@@ -13,7 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-const dialInterval = 1 * time.Second
+const dialInterval = 500 * time.Millisecond
 const peerCountLogInterval = 1 * time.Minute
 const topicMonitorInterval = 1 * time.Second
 
