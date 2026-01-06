@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // ProcessPendingConsolidations implements the spec definition below. This method makes mutating
@@ -278,12 +277,12 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if uint64(curEpoch) < e {
 			continue
 		}
-		bal, err := st.PendingBalanceToWithdraw(srcIdx)
+		hasBal, err := st.HasPendingBalanceToWithdraw(srcIdx)
 		if err != nil {
 			log.WithError(err).Error("Failed to fetch pending balance to withdraw")
 			continue
 		}
-		if bal > 0 {
+		if hasBal {
 			continue
 		}
 

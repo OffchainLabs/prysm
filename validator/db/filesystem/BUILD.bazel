@@ -8,6 +8,7 @@ go_library(
         "genesis.go",
         "graffiti.go",
         "import.go",
+        "log.go",
         "migration.go",
         "proposer_protection.go",
         "proposer_settings.go",

@@ -6,6 +6,7 @@ go_library(
         "aggregated.go",
         "block.go",
         "kv.go",
+        "log.go",
         "seen_bits.go",
         "unaggregated.go",
     ],

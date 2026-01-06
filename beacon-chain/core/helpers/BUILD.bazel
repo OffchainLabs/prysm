@@ -8,6 +8,7 @@ go_library(
         "block.go",
         "genesis.go",
         "legacy.go",
+        "log.go",
         "metrics.go",
         "randao.go",
         "ranges.go",

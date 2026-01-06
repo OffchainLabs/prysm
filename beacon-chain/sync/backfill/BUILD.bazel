@@ -10,6 +10,7 @@ go_library(
         "error.go",
         "fulu_transition.go",
         "log.go",
+        "log_helpers.go",
         "metrics.go",
         "pool.go",
         "service.go",

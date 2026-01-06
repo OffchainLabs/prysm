@@ -82,7 +82,6 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			cmd.BootstrapNode,
 			cmd.EnableUPnPFlag,
-			cmd.EnableAutoNATFlag,
 			cmd.NoDiscovery,
 			cmd.P2PAllowList,
 			cmd.P2PDenyList,
@@ -170,6 +169,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
 			flags.InteropMockEth1DataVotesFlag,
+			flags.DisableGetBlobsV2,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.

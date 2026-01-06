@@ -40,14 +40,11 @@ metaData
 jwt.hex
 execution/
 
-# local execution client data
-execution/
-
-# local documentation
-CLAUDE.md
-
 # manual testing
 tmp
 
 # spectest coverage reports
 report.txt
+
+# execution client data
+execution/

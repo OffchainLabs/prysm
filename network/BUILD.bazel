@@ -6,6 +6,7 @@ go_library(
         "auth.go",
         "endpoint.go",
         "external_ip.go",
+        "log.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/network",
     visibility = ["//visibility:public"],

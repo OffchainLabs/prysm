@@ -27,6 +27,13 @@ var (
 			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
 		},
 	)
+	getBlobsV2Latency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "get_blobs_v2_latency_milliseconds",
+			Help:    "Captures RPC latency for getBlobsV2 in milliseconds",
+			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
+		},
+	)
 	errParseCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "execution_parse_error_count",
 		Help: "The number of errors that occurred while parsing execution payload",

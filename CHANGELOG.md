@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.1.1](https://github.com/prysmaticlabs/prysm/compare/v7.1.0...v7.1.1) - 2025-12-18
+
+Release highlights:
+
+- Fixed potential deadlock scenario in data column batch verification
+- Improved processing and metrics for cells and proofs
+
+We are aware of [an issue](https://github.com/OffchainLabs/prysm/issues/16160) where Prysm struggles to sync from an out of sync state. We will have another release before the end of the year to address this issue.
+
+Our postmortem document from the December 4th mainnet issue has been published on our [documentation site](https://prysm.offchainlabs.com/docs/misc/mainnet-postmortems/)
+
+### Added
+
+- Track the dependent root of the latest finalized checkpoint in forkchoice. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16103)
+- Proposal design document to implement graffiti. Currently it is empty by default and the idea is to have it of the form GE168dPR63af. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15983)
+- Add support for detecting and logging per address reachability via libp2p AutoNAT v2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16100)
+- Static analyzer that ensures each `httputil.HandleError` call is followed by a `return` statement. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16134)
+- Prometheus histogram `cells_and_proofs_from_structured_computation_milliseconds` to track computation time for cells and proofs from structured blobs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+- Prometheus histogram `get_blobs_v2_latency_milliseconds` to track RPC latency for `getBlobsV2` calls to the execution layer. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+
+### Changed
+
+- Optimise migratetocold by not doing brute force for loop. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16101)
+- e2e sync committee evaluator now skips the first slot after startup, we already skip the fork epoch for checks here, this skip only applies on startup, due to altair always from 0 and validators need to warm up. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16145)
+- Run `ComputeCellsAndProofsFromFlat` in parallel to improve performance when computing cells and proofs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+- Run `ComputeCellsAndProofsFromStructured` in parallel to improve performance when computing cells and proofs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+
+### Removed
+
+- Unnecessary copy is removed from Eth1DataHasEnoughSupport. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16118)
+
+### Fixed
+
+- Incorrect constructor return type [#16084](https://github.com/OffchainLabs/prysm/pull/16084). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16084)
+- Fixed possible race when validating two attestations at the same time. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16105)
+- Fix missing return after version header check in SubmitAttesterSlashingsV2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16126)
+- Fix deadlock in data column gossip KZG batch verification when a caller times out preventing result delivery. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16141)
+- Fixed replay state issue in rest api caused by attester and sync committee duties endpoints. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16136)
+- Do not error when committee has been computed correctly but updating the cache failed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16142)
+- Prevent blocked sends to the KZG batch verifier when the caller context is already canceled, avoiding useless queueing and potential hangs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16144)
+
 ## [v7.1.0](https://github.com/prysmaticlabs/prysm/compare/v7.0.0...v7.1.0) - 2025-12-10
 
 This release includes several key features/fixes. If you are running v7.0.0 then you should update to v7.0.1 or later and remove the flag `--disable-last-epoch-targets`. 
