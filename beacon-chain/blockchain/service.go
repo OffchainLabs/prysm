@@ -509,10 +509,23 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	}
 
 	// If slot is before the fulu fork slot, then use the earliest stored slot as the reference slot.
+	// Pre-fulu, there's no data column sharding, so custody doesn't affect what we can serve.
 	if slot < fuluForkSlot {
 		slot, err = s.cfg.BeaconDB.EarliestSlot(s.ctx)
 		if err != nil {
 			return 0, 0, errors.Wrap(err, "earliest slot")
+		}
+	} else {
+		// Post-fulu: For restarts with increased custody count, use the head slot + 1
+		// instead of the finalized slot. This correctly represents when new custody
+		// groups become available, as we only start syncing new columns from the
+		// current head onward.
+		// HeadSlot() + 1 is used because:
+		// - For checkpoint sync: head = finalized slot, so we use finalized + 1
+		// - For restart: head = loaded head from DB, so we use head + 1 (the first new slot)
+		headSlotPlusOne := s.HeadSlot() + 1
+		if headSlotPlusOne > slot {
+			slot = headSlotPlusOne
 		}
 	}
 

@@ -810,4 +810,54 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		// With low validator requirements (4), should use semi-supernode minimum (64)
 		require.Equal(t, semiSupernodeCustody, actualCgc)
 	})
+
+	t.Run("Restart with higher custody uses head slot plus one", func(t *testing.T) {
+		// This test simulates a restart scenario where:
+		// 1. Node was running with lower custody count
+		// 2. Node stops and waits (new blocks are produced)
+		// 3. Node restarts with higher custody count
+		// In this case, the head slot is higher than the finalized slot,
+		// so we should use head + 1 as the earliest available slot.
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Create a block at a higher slot to simulate the head after restart
+		// This represents the head block that was loaded from DB
+		fc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+		headSlot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 100 // Slot 420 (well after fulu fork)
+		headState, headBlock, err := prepareForkchoiceState(ctx, headSlot, [32]byte{'h', 'e', 'a', 'd'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, fc, fc)
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, headState, headBlock))
+
+		// Set the head on the service (simulating what initializeHead does)
+		// ROBlock embeds ReadOnlySignedBeaconBlock, so we can use it directly
+		require.NoError(t, service.setHead(&head{
+			root:  headBlock.Root(),
+			block: headBlock,
+			state: headState,
+			slot:  headSlot,
+		}))
+
+		// Verify that HeadSlot is now the head slot
+		require.Equal(t, headSlot, service.HeadSlot())
+
+		// Enable supernode (simulating restart with increased custody)
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Call updateCustodyInfoInDB with a lower "finalized" slot
+		// The function should use head + 1 instead
+		finalizedSlot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 10 // Slot 330 (lower than head)
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(finalizedSlot)
+		require.NoError(t, err)
+
+		// The earliest available slot should be head + 1, not the finalized slot
+		expectedEas := headSlot + 1 // 421
+		require.Equal(t, expectedEas, actualEas, "Expected head + 1, not finalized slot")
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+	})
 }
