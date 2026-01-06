@@ -9,28 +9,28 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -388,7 +388,7 @@ func TestBlocksFetcher_scheduleRequest(t *testing.T) {
 
 	t.Run("unblock on context cancellation", func(t *testing.T) {
 		fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{})
-		for i := 0; i < maxPendingRequests; i++ {
+		for range maxPendingRequests {
 			assert.NoError(t, fetcher.scheduleRequest(t.Context(), 1, blockBatchLimit))
 		}
 
@@ -516,7 +516,10 @@ func TestBlocksFetcher_requestBeaconBlocksByRange(t *testing.T) {
 			p2p:   p2p,
 		})
 
-	_, peerIDs := p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, slots.ToEpoch(mc.HeadSlot()))
+	_, peerIDs := p2p.Peers().BestFinalized(slots.ToEpoch(mc.HeadSlot()))
+	if len(peerIDs) > params.BeaconConfig().MaxPeersToSync {
+		peerIDs = peerIDs[:params.BeaconConfig().MaxPeersToSync]
+	}
 	req := &ethpb.BeaconBlocksByRangeRequest{
 		StartSlot: 1,
 		Step:      1,
@@ -601,7 +604,7 @@ func TestBlocksFetcher_RequestBlocksRateLimitingLocks(t *testing.T) {
 		// p3 responded w/o waiting for rate limiter's lock (on which p2 spins).
 	}
 	// Make sure that p2 has been rate limited.
-	require.LogsContain(t, hook, fmt.Sprintf("msg=\"Slowing down for rate limit\" peer=%s", p2.PeerID()))
+	require.LogsContain(t, hook, fmt.Sprintf("msg=\"Slowing down for rate limit\" package=beacon-chain/sync/initial-sync peer=%s", p2.PeerID()))
 }
 
 func TestBlocksFetcher_WaitForBandwidth(t *testing.T) {
@@ -1366,16 +1369,16 @@ func TestFetchSidecars(t *testing.T) {
 	})
 
 	t.Run("Nominal", func(t *testing.T) {
-		beaconConfig := params.BeaconConfig()
-		numberOfColumns := beaconConfig.NumberOfColumns
-		samplesPerSlot := beaconConfig.SamplesPerSlot
+		const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+		cfg := params.BeaconConfig()
+		samplesPerSlot := cfg.SamplesPerSlot
 
 		// Define "now" to be one epoch after genesis time + retention period.
 		genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
-		secondsPerSlot := beaconConfig.SecondsPerSlot
-		slotsPerEpoch := beaconConfig.SlotsPerEpoch
+		secondsPerSlot := cfg.SecondsPerSlot
+		slotsPerEpoch := cfg.SlotsPerEpoch
 		secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
-		retentionEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
+		retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
 		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
 		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
 

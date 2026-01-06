@@ -21,3 +21,4 @@ var ErrUnsupportedMediaType = errors.Wrap(ErrNotOK, "The media type in \"Content
 
 // ErrNotAcceptable specifically means that a '406 - Not Acceptable' was received from the API.
 var ErrNotAcceptable = errors.Wrap(ErrNotOK, "The accept header value is not acceptable")
+var ErrBadGateway = errors.Wrap(ErrNotOK, "recv 502 BadGateway response from API")

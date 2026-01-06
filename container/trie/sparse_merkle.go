@@ -6,9 +6,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	protodb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	protodb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -82,7 +82,7 @@ func GenerateTrieFromItems(items [][]byte, depth uint64) (*SparseMerkleTrie, err
 		transformedLeaves[i] = arr[:]
 	}
 	layers[0] = transformedLeaves
-	for i := uint64(0); i < depth; i++ {
+	for i := range depth {
 		if len(layers[i])%2 == 1 {
 			layers[i] = append(layers[i], ZeroHashes[i][:])
 		}

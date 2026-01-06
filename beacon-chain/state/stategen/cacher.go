@@ -1,7 +1,7 @@
 package stategen
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/pkg/errors"
 )
 

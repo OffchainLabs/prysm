@@ -3,13 +3,13 @@ package initialsync
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func BenchmarkStateMachine_trigger(b *testing.B) {
 	sm := newStateMachineManager()
 
-	handlerFn := func(m *stateMachine, in interface{}) (id stateID, err error) {
+	handlerFn := func(m *stateMachine, in any) (id stateID, err error) {
 		response, ok := in.(*fetchRequestParams)
 		if !ok {
 			return 0, errInputNotFetchRequestParams
@@ -26,9 +26,8 @@ func BenchmarkStateMachine_trigger(b *testing.B) {
 	sm.addStateMachine(64)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		data := &fetchRequestParams{
 			start: 23,
 			count: 32,

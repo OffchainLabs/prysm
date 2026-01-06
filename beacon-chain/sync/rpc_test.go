@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	prysmP2P "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	prysmP2P "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -59,7 +59,7 @@ func TestRegisterRPC_ReceivesValidMessage(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	topic := "/testing/foobar/1"
-	handler := func(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 		m, ok := msg.(*ethpb.Fork)
 		if !ok {
 			t.Error("Object is not of type *pb.TestSimpleMessage")
@@ -95,7 +95,7 @@ func TestRPC_ReceivesInvalidMessage(t *testing.T) {
 	}
 
 	topic := "/testing/foobar/1"
-	handler := func(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+	handler := func(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 		m, ok := msg.(*ethpb.Fork)
 		if !ok {
 			t.Error("Object is not of type *pb.Fork")

@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,7 +21,7 @@ func addLogWriter(w io.Writer) {
 }
 
 // ConfigurePersistentLogging adds a log-to-file writer. File content is identical to stdout.
-func ConfigurePersistentLogging(logFileName string) error {
+func ConfigurePersistentLogging(logFileName string, format string) error {
 	logrus.WithField("logFileName", logFileName).Info("Logs will be made persistent")
 	if err := file.MkdirAll(filepath.Dir(logFileName)); err != nil {
 		return err
@@ -30,7 +31,25 @@ func ConfigurePersistentLogging(logFileName string) error {
 		return err
 	}
 
-	addLogWriter(f)
+	if format != "text" {
+		addLogWriter(f)
+
+		logrus.Info("File logging initialized")
+		return nil
+	}
+
+	// Create formatter and writer hook
+	formatter := new(prefixed.TextFormatter)
+	formatter.TimestampFormat = "2006-01-02 15:04:05.00"
+	formatter.FullTimestamp = true
+	// If persistent log files are written - we disable the log messages coloring because
+	// the colors are ANSI codes and seen as gibberish in the log files.
+	formatter.DisableColors = true
+
+	logrus.AddHook(&WriterHook{
+		Formatter: formatter,
+		Writer:    f,
+	})
 
 	logrus.Info("File logging initialized")
 	return nil

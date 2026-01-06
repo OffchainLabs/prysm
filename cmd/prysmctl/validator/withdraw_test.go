@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
@@ -219,8 +219,8 @@ func TestCallWithdrawalEndpoint_Errors(t *testing.T) {
 		if r.Method == http.MethodPost && r.RequestURI == "/eth/v1/beacon/pool/bls_to_execution_changes" {
 			w.WriteHeader(400)
 			w.Header().Set("Content-Type", "application/json")
-			err = json.NewEncoder(w).Encode(&server.IndexedVerificationFailureError{
-				Failures: []*server.IndexedVerificationFailure{
+			err = json.NewEncoder(w).Encode(&server.IndexedErrorContainer{
+				Failures: []*server.IndexedError{
 					{Index: 0, Message: "Could not validate SignedBLSToExecutionChange"},
 				},
 			})

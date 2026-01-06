@@ -3,6 +3,8 @@
 package types
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -32,8 +34,8 @@ type AggregateAndProofV2SignRequest struct {
 
 // AggregateAndProofV2 is a wrapper object for AggregateAndProofV2SignRequest
 type AggregateAndProofV2 struct {
-	Version string                    `json:"version" validate:"required"`
-	Data    *AggregateAndProofElectra `json:"data" validate:"required"` // specifies Electra for now
+	Version string          `json:"version" validate:"required"`
+	Data    json.RawMessage `json:"data" validate:"required"`
 }
 
 // AttestationSignRequest is a request object for web3signer sign api.

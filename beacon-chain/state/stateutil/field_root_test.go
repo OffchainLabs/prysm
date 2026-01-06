@@ -3,7 +3,7 @@ package stateutil
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
 
 func TestArraysTreeRoot_OnlyPowerOf2(t *testing.T) {

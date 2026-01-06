@@ -1,10 +1,11 @@
 package testutil
 
 import (
+	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/query"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -14,7 +15,7 @@ func RunStructTest(t *testing.T, spec TestSpec) {
 		require.NoError(t, err)
 
 		testInstance := spec.Instance
-		err = query.PopulateVariableLengthInfo(info, testInstance)
+		err = query.PopulateVariableLengthInfo(info, reflect.ValueOf(testInstance))
 		require.NoError(t, err)
 
 		marshaller, ok := testInstance.(ssz.Marshaler)

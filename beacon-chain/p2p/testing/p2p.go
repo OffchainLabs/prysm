@@ -11,18 +11,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
@@ -70,6 +70,11 @@ type TestP2P struct {
 
 // NewTestP2P initializes a new p2p test service.
 func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
+	return NewTestP2PWithPubsubOptions(t, nil, userOptions...)
+}
+
+// NewTestP2PWithPubsubOptions initializes a new p2p test service with custom pubsub options.
+func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userOptions ...config.Option) *TestP2P {
 	ctx := context.Background()
 	options := []config.Option{
 		libp2p.ResourceManager(&network.NullResourceManager{}),
@@ -84,10 +89,14 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 
 	h, err := libp2p.New(options...)
 	require.NoError(t, err)
-	ps, err := pubsub.NewFloodSub(ctx, h,
+
+	defaultPubsubOpts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
-	)
+	}
+	allPubsubOpts := append(defaultPubsubOpts, pubsubOpts...)
+
+	ps, err := pubsub.NewGossipSub(ctx, h, allPubsubOpts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +380,7 @@ func (p *TestP2P) AddDisconnectionHandler(f func(ctx context.Context, id peer.ID
 }
 
 // Send a message to a specific peer.
-func (p *TestP2P) Send(ctx context.Context, msg interface{}, topic string, pid peer.ID) (network.Stream, error) {
+func (p *TestP2P) Send(ctx context.Context, msg any, topic string, pid peer.ID) (network.Stream, error) {
 	metadataTopics := map[string]bool{metadataV1Topic: true, metadataV2Topic: true, metadataV3Topic: true}
 
 	t := topic
@@ -497,6 +506,15 @@ func (s *TestP2P) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 	s.custodyGroupCount = custodyGroupCount
 
 	return s.earliestAvailableSlot, s.custodyGroupCount, nil
+}
+
+// UpdateEarliestAvailableSlot .
+func (s *TestP2P) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	s.custodyInfoMut.Lock()
+	defer s.custodyInfoMut.Unlock()
+
+	s.earliestAvailableSlot = earliestAvailableSlot
+	return nil
 }
 
 // CustodyGroupCountFromPeer retrieves custody group count from a peer.

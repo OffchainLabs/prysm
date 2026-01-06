@@ -5,20 +5,20 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -182,12 +182,6 @@ func ProcessBlockNoVerifyAnySig(
 		return nil, nil, err
 	}
 
-	sig := signed.Signature()
-	bSet, err := b.BlockSignatureBatch(st, blk.ProposerIndex(), sig[:], blk.HashTreeRoot)
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return nil, nil, errors.Wrap(err, "could not retrieve block signature set")
-	}
 	randaoReveal := signed.Block().Body().RandaoReveal()
 	rSet, err := b.RandaoSignatureBatch(ctx, st, randaoReveal[:])
 	if err != nil {
@@ -201,7 +195,7 @@ func ProcessBlockNoVerifyAnySig(
 
 	// Merge beacon block, randao and attestations signatures into a set.
 	set := bls.NewSet()
-	set.Join(bSet).Join(rSet).Join(aSet)
+	set.Join(rSet).Join(aSet)
 
 	if blk.Version() >= version.Capella {
 		changes, err := signed.Block().Body().BLSToExecutionChanges()

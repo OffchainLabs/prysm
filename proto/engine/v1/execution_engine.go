@@ -1,6 +1,6 @@
 package enginev1
 
-import "github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+import "github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 
 type copier[T any] interface {
 	Copy() T
@@ -9,7 +9,7 @@ type copier[T any] interface {
 func copySlice[T any, C copier[T]](original []C) []T {
 	// Create a new slice with the same length as the original
 	newSlice := make([]T, len(original))
-	for i := 0; i < len(newSlice); i++ {
+	for i := range newSlice {
 		newSlice[i] = original[i].Copy()
 	}
 	return newSlice

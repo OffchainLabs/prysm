@@ -5,19 +5,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	p2pTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestLightClientStore(t *testing.T) {
@@ -366,7 +366,7 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		s := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			newBlock := util.NewBeaconBlock()
 			newBlock.Block.Slot = primitives.Slot(32 + uint64(i))
 			newBlock.Block.ParentRoot = finalizedBlockRoot[:]
@@ -394,7 +394,7 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		s := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			newBlock := util.NewBeaconBlock()
 			newBlock.Block.Slot = primitives.Slot(32 + uint64(i))
 			newBlock.Block.ParentRoot = finalizedBlockRoot[:]
@@ -844,7 +844,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 		updates, err := s.LightClientUpdates(ctx, 1, 5, headBlock)
 		require.NoError(t, err)
 		require.Equal(t, 5, len(updates))
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			require.DeepEqual(t, update, updates[i], "Expected to find the update in the store")
 		}
 	})
@@ -899,7 +899,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 5, len(updates))
 		// first two updates should be update1
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			require.DeepEqual(t, update1, updates[i], "Expected to find the update in the store")
 		}
 		// next three updates should be update2 - as cache overrides db

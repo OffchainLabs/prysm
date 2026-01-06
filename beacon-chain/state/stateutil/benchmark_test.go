@@ -3,14 +3,14 @@ package stateutil_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func BenchmarkMerkleize_Buffered(b *testing.B) {
 	roots := make([][32]byte, 8192)
-	for i := 0; i < 8192; i++ {
+	for i := range 8192 {
 		roots[0] = [32]byte{byte(i)}
 	}
 
@@ -21,9 +21,8 @@ func BenchmarkMerkleize_Buffered(b *testing.B) {
 		return ssz.Merkleize(ssz.NewHasherFunc(hash.CustomSHA256Hasher()), count, limit, leafIndexer), nil
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := newMerkleize(roots, 8192, 8192)
 		require.NoError(b, err)
 	}

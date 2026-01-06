@@ -5,8 +5,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type mediaRange struct {
@@ -56,7 +54,7 @@ func ParseAccept(header string) []mediaRange {
 	}
 
 	var out []mediaRange
-	for _, field := range strings.Split(header, ",") {
+	for field := range strings.SplitSeq(header, ",") {
 		if r, ok := parseMediaRange(field); ok {
 			out = append(out, r)
 		}

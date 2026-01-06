@@ -5,8 +5,8 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -39,7 +39,7 @@ var (
 )
 
 // hashKeyFn takes the hex string representation as the key for a headerInfo.
-func hashKeyFn(obj interface{}) (string, error) {
+func hashKeyFn(obj any) (string, error) {
 	hInfo, ok := obj.(*types.HeaderInfo)
 	if !ok {
 		return "", ErrNotAHeaderInfo
@@ -50,7 +50,7 @@ func hashKeyFn(obj interface{}) (string, error) {
 
 // heightKeyFn takes the string representation of the block header number as the key
 // for a headerInfo.
-func heightKeyFn(obj interface{}) (string, error) {
+func heightKeyFn(obj any) (string, error) {
 	hInfo, ok := obj.(*types.HeaderInfo)
 	if !ok {
 		return "", ErrNotAHeaderInfo
@@ -164,6 +164,6 @@ func trim(queue *cache.FIFO, maxSize uint64) {
 }
 
 // popProcessNoopFunc is a no-op function that never returns an error.
-func popProcessNoopFunc(_ interface{}, _ bool) error {
+func popProcessNoopFunc(_ any, _ bool) error {
 	return nil
 }

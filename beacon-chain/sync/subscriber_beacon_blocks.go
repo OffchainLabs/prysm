@@ -7,18 +7,19 @@ import (
 	"path"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -47,7 +48,14 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
+	go func() {
+		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"root": fmt.Sprintf("%#x", root),
+				"slot": block.Slot(),
+			}).Error("Failed to process sidecars from execution from block")
+		}
+	}()
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -68,28 +76,37 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
+
 	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
 		return errors.Wrap(err, "process pending atts for block")
 	}
+
 	return nil
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
-			log.WithError(err).Error("Failed to process data column sidecars from execution")
-			return
+			// Do not log if the context was cancelled on purpose.
+			// (Still log other context errors such as deadlines exceeded).
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+
+			return errors.Wrap(err, "process data column sidecars from execution")
 		}
 
-		return
+		return nil
 	}
 
 	if roBlock.Version() >= version.Deneb {
 		s.processBlobSidecarsFromExecution(ctx, roBlock)
-		return
+		return nil
 	}
+
+	return nil
 }
 
 // processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
@@ -165,11 +182,8 @@ func (s *Service) processBlobSidecarsFromExecution(ctx context.Context, block in
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
 func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, source peerdas.ConstructionPopulator) error {
 	key := fmt.Sprintf("%#x", source.Root())
-	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (interface{}, error) {
+	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
-		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
-
-		numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 		commitments, err := source.Commitments()
 		if err != nil {
@@ -187,13 +201,33 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
 
-		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
-		defer cancel()
+		log := log.WithFields(logrus.Fields{
+			"root":          fmt.Sprintf("%#x", source.Root()),
+			"slot":          source.Slot(),
+			"proposerIndex": source.ProposerIndex(),
+			"type":          source.Type(),
+		})
 
+		var constructedSidecarCount uint64
 		for iteration := uint64(0); ; /*no stop condition*/ iteration++ {
+			log = log.WithField("iteration", iteration)
+
 			// Exit early if all sidecars to sample have been seen.
 			if s.haveAllSidecarsBeenSeen(source.Slot(), source.ProposerIndex(), columnIndicesToSample) {
+				if iteration > 0 && constructedSidecarCount == 0 {
+					log.Debug("No data column sidecars constructed from the execution client")
+				}
+
 				return nil, nil
+			}
+
+			// Return if the context is done.
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
+			if iteration == 0 {
+				dataColumnsRecoveredFromELAttempts.Inc()
 			}
 
 			// Try to reconstruct data column constructedSidecars from the execution client.
@@ -203,19 +237,11 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// No sidecars are retrieved from the EL, retry later
-			sidecarCount := uint64(len(constructedSidecars))
-			if sidecarCount == 0 {
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
-
-				time.Sleep(delay)
-				continue
-			}
+			constructedCount := uint64(len(constructedSidecars))
 
 			// Boundary check.
-			if sidecarCount != numberOfColumns {
-				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", sidecarCount, numberOfColumns)
+			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
+				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
 			unseenIndices, err := s.broadcastAndReceiveUnseenDataColumnSidecars(ctx, source.Slot(), source.ProposerIndex(), columnIndicesToSample, constructedSidecars)
@@ -223,7 +249,9 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
 
-			if len(unseenIndices) > 0 {
+			if constructedCount > 0 {
+				dataColumnsRecoveredFromELTotal.Inc()
+
 				log.WithFields(logrus.Fields{
 					"root":          fmt.Sprintf("%#x", source.Root()),
 					"slot":          source.Slot(),
@@ -233,9 +261,12 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 					"count":         len(unseenIndices),
 					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
 				}).Debug("Constructed data column sidecars from the execution client")
+
+				return nil, nil
 			}
 
-			return nil, nil
+			// Wait before retrying.
+			time.Sleep(delay)
 		}
 	}); err != nil {
 		return err
@@ -268,6 +299,11 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 
 		unseenSidecars = append(unseenSidecars, sidecar)
 		unseenIndices[sidecar.Index] = true
+	}
+
+	// Exit early if there are no nothing to broadcast or receive.
+	if len(unseenSidecars) == 0 {
+		return nil, nil
 	}
 
 	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).

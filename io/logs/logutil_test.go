@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 var urltests = []struct {
@@ -34,13 +34,13 @@ func TestConfigurePersistantLogging(t *testing.T) {
 	logFileName := "test.log"
 	existingDirectory := "test-1-existing-testing-dir"
 
-	err := ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, logFileName))
+	err := ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, logFileName), "text")
 	require.NoError(t, err)
 
 	// 2. Test creation of file along with parent directory
 	nonExistingDirectory := "test-2-non-existing-testing-dir"
 
-	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, nonExistingDirectory, logFileName))
+	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, nonExistingDirectory, logFileName), "text")
 	require.NoError(t, err)
 
 	// 3. Test creation of file in an existing parent directory with a non-existing sub-directory
@@ -51,7 +51,7 @@ func TestConfigurePersistantLogging(t *testing.T) {
 		return
 	}
 
-	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory, logFileName))
+	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory, logFileName), "text")
 	require.NoError(t, err)
 
 	//4. Create log file in a directory without 700 permissions

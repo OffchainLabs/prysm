@@ -7,15 +7,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/pkg/errors"
@@ -28,10 +28,10 @@ const (
 )
 
 // blockReceiverFn defines block receiving function.
-type blockReceiverFn func(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error
+type blockReceiverFn func(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error
 
 // batchBlockReceiverFn defines batch receiving function.
-type batchBlockReceiverFn func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityStore) error
+type batchBlockReceiverFn func(ctx context.Context, blks []blocks.ROBlock, avs das.AvailabilityChecker) error
 
 // Round Robin sync looks at the latest peer statuses and syncs up to the highest known epoch.
 //
@@ -175,7 +175,7 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 	blocksWithDataColumns := bwb[fistDataColumnIndex:]
 
 	blobBatchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-	lazilyPersistentStoreBlobs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier)
+	avs := das.NewLazilyPersistentStore(s.cfg.BlobStorage, blobBatchVerifier, s.blobRetentionChecker)
 
 	log := log.WithField("firstSlot", data.bwb[0].Block.Block().Slot())
 	logBlobs, logDataColumns := log, log
@@ -185,12 +185,12 @@ func (s *Service) processFetchedDataRegSync(ctx context.Context, data *blocksQue
 	}
 
 	for i, b := range blocksWithBlobs {
-		if err := lazilyPersistentStoreBlobs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
+		if err := avs.Persist(s.clock.CurrentSlot(), b.Blobs...); err != nil {
 			logBlobs.WithError(err).WithFields(syncFields(b.Block)).Warning("Batch failure due to BlobSidecar issues")
 			return uint64(i), err
 		}
 
-		if err := s.processBlock(ctx, s.genesisTime, b, s.cfg.Chain.ReceiveBlock, lazilyPersistentStoreBlobs); err != nil {
+		if err := s.processBlock(ctx, s.genesisTime, b, s.cfg.Chain.ReceiveBlock, avs); err != nil {
 			if errors.Is(err, errParentDoesNotExist) {
 				logBlobs.WithField("missingParent", fmt.Sprintf("%#x", b.Block.Block().ParentRoot())).
 					WithFields(syncFields(b.Block)).Debug("Could not process batch blocks due to missing parent")
@@ -313,7 +313,7 @@ func (s *Service) processBlock(
 	genesis time.Time,
 	bwb blocks.BlockWithROSidecars,
 	blockReceiver blockReceiverFn,
-	avs das.AvailabilityStore,
+	avs das.AvailabilityChecker,
 ) error {
 	blk := bwb.Block
 	blkRoot := blk.Root()
@@ -404,7 +404,7 @@ func (s *Service) processBlocksWithBlobs(ctx context.Context, bwbs []blocks.Bloc
 	}
 
 	batchVerifier := verification.NewBlobBatchVerifier(s.newBlobVerifier, verification.InitsyncBlobSidecarRequirements)
-	persistentStore := das.NewLazilyPersistentStore(s.cfg.BlobStorage, batchVerifier)
+	persistentStore := das.NewLazilyPersistentStore(s.cfg.BlobStorage, batchVerifier, s.blobRetentionChecker)
 	s.logBatchSyncStatus(firstBlock, bwbCount)
 
 	for _, bwb := range bwbs {

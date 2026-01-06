@@ -8,11 +8,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -33,7 +33,7 @@ func Test_genesisStateFromJSONValidators(t *testing.T) {
 func createGenesisDepositData(t *testing.T, numKeys int) []*depositDataJSON {
 	pubKeys := make([]bls.PublicKey, numKeys)
 	privKeys := make([]bls.SecretKey, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		randKey, err := bls.RandKey()
 		require.NoError(t, err)
 		privKeys[i] = randKey
@@ -42,7 +42,7 @@ func createGenesisDepositData(t *testing.T, numKeys int) []*depositDataJSON {
 	dataList, _, err := interop.DepositDataFromKeys(privKeys, pubKeys)
 	require.NoError(t, err)
 	jsonData := make([]*depositDataJSON, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		dataRoot, err := dataList[i].HashTreeRoot()
 		require.NoError(t, err)
 		jsonData[i] = &depositDataJSON{

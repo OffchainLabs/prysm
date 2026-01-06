@@ -1,11 +1,10 @@
 package attestations
 
 import (
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // attList represents list of attestations, defined for easier en masse operations (filtering, sorting).
@@ -16,8 +15,6 @@ type attList []ethpb.Att
 // substituted for benchmarks which analyze AggregateAttestations.
 var aggregateSignatures = bls.AggregateSignatures
 var signatureFromBytes = bls.SignatureFromBytesNoValidation
-
-var _ = logrus.WithField("prefix", "aggregation.attestations")
 
 // ErrInvalidAttestationCount is returned when insufficient number
 // of attestations is provided for aggregation.
@@ -60,7 +57,7 @@ func AggregateDisjointOneBitAtts(atts []ethpb.Att) (ethpb.Att, error) {
 		}
 	}
 	keys := make([]int, len(atts))
-	for i := 0; i < len(atts); i++ {
+	for i := range atts {
 		keys[i] = i
 	}
 	idx, err := aggregateAttestations(atts, keys, coverage)

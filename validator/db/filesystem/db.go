@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -72,9 +72,6 @@ type (
 
 // Ensure the filesystem store implements the interface.
 var _ = iface.ValidatorDB(&Store{})
-
-// Logging.
-var log = logrus.WithField("prefix", "db")
 
 // NewStore creates a new filesystem store.
 func NewStore(databaseParentPath string, config *Config) (*Store, error) {

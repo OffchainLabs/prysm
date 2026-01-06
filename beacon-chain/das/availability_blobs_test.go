@@ -5,17 +5,21 @@ import (
 	"context"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	errors "github.com/pkg/errors"
 )
+
+func testShouldRetainAlways(s primitives.Slot) bool {
+	return true
+}
 
 func Test_commitmentsToCheck(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -26,15 +30,16 @@ func Test_commitmentsToCheck(t *testing.T) {
 	windowSlots = windowSlots + primitives.Slot(params.BeaconConfig().FuluForkEpoch)
 	maxBlobs := params.LastNetworkScheduleEntry().MaxBlobsPerBlock
 	commits := make([][]byte, maxBlobs+1)
-	for i := 0; i < len(commits); i++ {
+	for i := range commits {
 		commits[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 	}
 	cases := []struct {
-		name    string
-		commits [][]byte
-		block   func(*testing.T) blocks.ROBlock
-		slot    primitives.Slot
-		err     error
+		name         string
+		commits      [][]byte
+		block        func(*testing.T) blocks.ROBlock
+		slot         primitives.Slot
+		err          error
+		shouldRetain RetentionChecker
 	}{
 		{
 			name: "pre deneb",
@@ -51,16 +56,21 @@ func Test_commitmentsToCheck(t *testing.T) {
 			name: "commitments within da",
 			block: func(t *testing.T) blocks.ROBlock {
 				d := util.NewBeaconBlockFulu()
-				d.Block.Body.BlobKzgCommitments = commits[:maxBlobs]
 				d.Block.Slot = fulu + 100
+				mb := params.GetNetworkScheduleEntry(slots.ToEpoch(d.Block.Slot)).MaxBlobsPerBlock
+				d.Block.Body.BlobKzgCommitments = commits[:mb]
 				sb, err := blocks.NewSignedBeaconBlock(d)
 				require.NoError(t, err)
 				rb, err := blocks.NewROBlock(sb)
 				require.NoError(t, err)
 				return rb
 			},
-			commits: commits[:maxBlobs],
-			slot:    fulu + 100,
+			shouldRetain: testShouldRetainAlways,
+			commits: func() [][]byte {
+				mb := params.GetNetworkScheduleEntry(slots.ToEpoch(fulu + 100)).MaxBlobsPerBlock
+				return commits[:mb]
+			}(),
+			slot: fulu + 100,
 		},
 		{
 			name: "commitments outside da",
@@ -75,7 +85,8 @@ func Test_commitmentsToCheck(t *testing.T) {
 				require.NoError(t, err)
 				return rb
 			},
-			slot: fulu + windowSlots + 1,
+			shouldRetain: func(s primitives.Slot) bool { return false },
+			slot:         fulu + windowSlots + 1,
 		},
 		{
 			name: "excessive commitments",
@@ -93,14 +104,15 @@ func Test_commitmentsToCheck(t *testing.T) {
 				require.Equal(t, true, len(c) > params.BeaconConfig().MaxBlobsPerBlock(sb.Block().Slot()))
 				return rb
 			},
-			slot: windowSlots + 1,
-			err:  errIndexOutOfBounds,
+			shouldRetain: testShouldRetainAlways,
+			slot:         windowSlots + 1,
+			err:          errIndexOutOfBounds,
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			b := c.block(t)
-			co, err := commitmentsToCheck(b, c.slot)
+			co, err := commitmentsToCheck(b, c.shouldRetain)
 			if c.err != nil {
 				require.ErrorIs(t, err, c.err)
 			} else {
@@ -122,7 +134,7 @@ func TestLazilyPersistent_Missing(t *testing.T) {
 	blk, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 3)
 
 	mbv := &mockBlobBatchVerifier{t: t, scs: blobSidecars}
-	as := NewLazilyPersistentStore(store, mbv)
+	as := NewLazilyPersistentStore(store, mbv, testShouldRetainAlways)
 
 	// Only one commitment persisted, should return error with other indices
 	require.NoError(t, as.Persist(ds, blobSidecars[2]))
@@ -149,7 +161,7 @@ func TestLazilyPersistent_Mismatch(t *testing.T) {
 
 	mbv := &mockBlobBatchVerifier{t: t, err: errors.New("kzg check should not run")}
 	blobSidecars[0].KzgCommitment = bytesutil.PadTo([]byte("nope"), 48)
-	as := NewLazilyPersistentStore(store, mbv)
+	as := NewLazilyPersistentStore(store, mbv, testShouldRetainAlways)
 
 	// Only one commitment persisted, should return error with other indices
 	require.NoError(t, as.Persist(ds, blobSidecars[0]))
@@ -162,11 +174,11 @@ func TestLazyPersistOnceCommitted(t *testing.T) {
 	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	_, blobSidecars := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 6)
 
-	as := NewLazilyPersistentStore(filesystem.NewEphemeralBlobStorage(t), &mockBlobBatchVerifier{})
+	as := NewLazilyPersistentStore(filesystem.NewEphemeralBlobStorage(t), &mockBlobBatchVerifier{}, testShouldRetainAlways)
 	// stashes as expected
 	require.NoError(t, as.Persist(ds, blobSidecars...))
 	// ignores duplicates
-	require.ErrorIs(t, as.Persist(ds, blobSidecars...), ErrDuplicateSidecar)
+	require.ErrorIs(t, as.Persist(ds, blobSidecars...), errDuplicateSidecar)
 
 	// ignores index out of bound
 	blobSidecars[0].Index = 6
@@ -179,7 +191,7 @@ func TestLazyPersistOnceCommitted(t *testing.T) {
 	require.NoError(t, as.Persist(slotOOB, moreBlobSidecars[0]))
 
 	// doesn't ignore new sidecars with a different block root
-	require.NoError(t, as.Persist(ds, moreBlobSidecars...))
+	require.NoError(t, as.Persist(ds, moreBlobSidecars[1:]...))
 }
 
 type mockBlobBatchVerifier struct {

@@ -5,9 +5,12 @@ import (
 	"reflect"
 	"testing"
 
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	v1alpha1 "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	bitfield "github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	v1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestCopySignedBeaconBlock(t *testing.T) {
@@ -98,6 +101,49 @@ func TestCopySyncCommitteeContribution(t *testing.T) {
 		t.Errorf("CopySyncCommitteeContribution() = %v, want %v", got, scc)
 	}
 	assert.NotEmpty(t, got, "Copied sync committee contribution has empty fields")
+}
+
+func TestCopySignedBeaconBlockGloasNil(t *testing.T) {
+	if got := v1alpha1.CopySignedBeaconBlockGloas(nil); got != nil {
+		t.Fatalf("CopySignedBeaconBlockGloas(nil) = %v, want nil", got)
+	}
+}
+
+func TestCopySignedBeaconBlockGloasDeepCopy(t *testing.T) {
+	original := genSignedBeaconBlockGloas()
+
+	copied := v1alpha1.CopySignedBeaconBlockGloas(original)
+	if copied == original {
+		t.Fatalf("CopySignedBeaconBlockGloas returned the original pointer")
+	}
+	if !reflect.DeepEqual(copied, original) {
+		t.Fatalf("CopySignedBeaconBlockGloas() = %v, want %v", copied, original)
+	}
+
+	want := proto.Clone(copied).(*v1alpha1.SignedBeaconBlockGloas)
+
+	original.Signature[0] ^= 0xFF
+	original.Block.ParentRoot[0] ^= 0xFF
+	original.Block.StateRoot[0] ^= 0xFF
+	original.Block.Body.RandaoReveal[0] ^= 0xFF
+	original.Block.Body.Graffiti[0] ^= 0xFF
+	original.Block.Body.SyncAggregate.SyncCommitteeSignature[0] ^= 0xFF
+	original.Block.Body.SignedExecutionPayloadBid.Signature[0] ^= 0xFF
+	original.Block.Body.SignedExecutionPayloadBid.Message.BlockHash[0] ^= 0xFF
+	original.Block.Body.PayloadAttestations[0].Signature[0] ^= 0xFF
+	original.Block.Body.PayloadAttestations[0].Data.BeaconBlockRoot[0] ^= 0xFF
+	original.Block.Body.PayloadAttestations = append(original.Block.Body.PayloadAttestations, &v1alpha1.PayloadAttestation{})
+	original.Block.Body.BlsToExecutionChanges[0].Message.ValidatorIndex++
+
+	if !reflect.DeepEqual(want, copied) {
+		t.Fatalf("copy mutated after modifying source: got %v, want %v", copied, want)
+	}
+	if copied.Block == original.Block {
+		t.Fatal("expected copied block pointer to differ from original")
+	}
+	if copied.Block.Body == original.Block.Body {
+		t.Fatal("expected copied block body pointer to differ from original")
+	}
 }
 
 func TestCopyPendingAttestationSlice(t *testing.T) {
@@ -312,7 +358,7 @@ func TestCopyBlindedBeaconBlockBodyDeneb(t *testing.T) {
 
 func bytes(length int) []byte {
 	b := make([]byte, length)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		b[i] = uint8(rand.Int31n(255) + 1)
 	}
 	return b
@@ -382,7 +428,7 @@ func genAttestation() *v1alpha1.Attestation {
 
 func genAttestations(num int) []*v1alpha1.Attestation {
 	atts := make([]*v1alpha1.Attestation, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		atts[i] = genAttestation()
 	}
 	return atts
@@ -461,7 +507,7 @@ func genProposerSlashing() *v1alpha1.ProposerSlashing {
 
 func genProposerSlashings(num int) []*v1alpha1.ProposerSlashing {
 	ps := make([]*v1alpha1.ProposerSlashing, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		ps[i] = genProposerSlashing()
 	}
 	return ps
@@ -484,7 +530,7 @@ func genIndexedAttestation() *v1alpha1.IndexedAttestation {
 
 func genAttesterSlashings(num int) []*v1alpha1.AttesterSlashing {
 	as := make([]*v1alpha1.AttesterSlashing, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		as[i] = genAttesterSlashing()
 	}
 	return as
@@ -525,7 +571,7 @@ func genDeposit() *v1alpha1.Deposit {
 
 func genDeposits(num int) []*v1alpha1.Deposit {
 	d := make([]*v1alpha1.Deposit, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		d[i] = genDeposit()
 	}
 	return d
@@ -547,7 +593,7 @@ func genSignedVoluntaryExit() *v1alpha1.SignedVoluntaryExit {
 
 func genSignedVoluntaryExits(num int) []*v1alpha1.SignedVoluntaryExit {
 	sv := make([]*v1alpha1.SignedVoluntaryExit, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		sv[i] = genSignedVoluntaryExit()
 	}
 	return sv
@@ -765,7 +811,7 @@ func genBlindedBeaconBlockBodyDeneb() *v1alpha1.BlindedBeaconBlockBodyDeneb {
 
 func getKZGCommitments(n int) [][]byte {
 	kzgs := make([][]byte, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		kzgs[i] = bytes(48)
 	}
 	return kzgs
@@ -941,7 +987,7 @@ func genWithdrawal() *enginev1.Withdrawal {
 
 func genBLSToExecutionChanges(num int) []*v1alpha1.SignedBLSToExecutionChange {
 	changes := make([]*v1alpha1.SignedBLSToExecutionChange, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		changes[i] = genBLSToExecutionChange()
 	}
 	return changes
@@ -969,7 +1015,7 @@ func genAttestationElectra() *v1alpha1.AttestationElectra {
 
 func genAttesterSlashingsElectra(num int) []*v1alpha1.AttesterSlashingElectra {
 	as := make([]*v1alpha1.AttesterSlashingElectra, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		as[i] = genAttesterSlashingElectra()
 	}
 	return as
@@ -992,7 +1038,7 @@ func genIndexedAttestationElectra() *v1alpha1.IndexedAttestationElectra {
 
 func genAttestationsElectra(num int) []*v1alpha1.AttestationElectra {
 	atts := make([]*v1alpha1.AttestationElectra, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		atts[i] = genAttestationElectra()
 	}
 	return atts
@@ -1078,7 +1124,7 @@ func genExecutionRequests() *enginev1.ExecutionRequests {
 
 func genDepositRequests(num int) []*enginev1.DepositRequest {
 	drs := make([]*enginev1.DepositRequest, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		drs[i] = genDepositRequest()
 	}
 	return drs
@@ -1096,7 +1142,7 @@ func genDepositRequest() *enginev1.DepositRequest {
 
 func genWithdrawalRequests(num int) []*enginev1.WithdrawalRequest {
 	wrs := make([]*enginev1.WithdrawalRequest, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		wrs[i] = genWithdrawalRequest()
 	}
 	return wrs
@@ -1112,7 +1158,7 @@ func genWithdrawalRequest() *enginev1.WithdrawalRequest {
 
 func genConsolidationRequests(num int) []*enginev1.ConsolidationRequest {
 	crs := make([]*enginev1.ConsolidationRequest, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		crs[i] = genConsolidationRequest()
 	}
 	return crs
@@ -1124,4 +1170,79 @@ func genConsolidationRequest() *enginev1.ConsolidationRequest {
 		SourcePubkey:  bytes(48),
 		TargetPubkey:  bytes(48),
 	}
+}
+
+func genSignedBeaconBlockGloas() *v1alpha1.SignedBeaconBlockGloas {
+	return &v1alpha1.SignedBeaconBlockGloas{
+		Block:     genBeaconBlockGloas(),
+		Signature: bytes(96),
+	}
+}
+
+func genBeaconBlockGloas() *v1alpha1.BeaconBlockGloas {
+	return &v1alpha1.BeaconBlockGloas{
+		Slot:          primitives.Slot(rand.Uint64()),
+		ProposerIndex: primitives.ValidatorIndex(rand.Uint64()),
+		ParentRoot:    bytes(32),
+		StateRoot:     bytes(32),
+		Body:          genBeaconBlockBodyGloas(),
+	}
+}
+
+func genBeaconBlockBodyGloas() *v1alpha1.BeaconBlockBodyGloas {
+	return &v1alpha1.BeaconBlockBodyGloas{
+		RandaoReveal:              bytes(96),
+		Eth1Data:                  genEth1Data(),
+		Graffiti:                  bytes(32),
+		ProposerSlashings:         genProposerSlashings(3),
+		AttesterSlashings:         genAttesterSlashingsElectra(3),
+		Attestations:              genAttestationsElectra(3),
+		Deposits:                  genDeposits(3),
+		VoluntaryExits:            genSignedVoluntaryExits(3),
+		SyncAggregate:             genSyncAggregate(),
+		BlsToExecutionChanges:     genBLSToExecutionChanges(2),
+		SignedExecutionPayloadBid: genSignedExecutionPayloadBidGloas(),
+		PayloadAttestations:       genPayloadAttestations(2),
+	}
+}
+
+func genSignedExecutionPayloadBidGloas() *v1alpha1.SignedExecutionPayloadBid {
+	return &v1alpha1.SignedExecutionPayloadBid{
+		Message:   genExecutionPayloadBidGloas(),
+		Signature: bytes(96),
+	}
+}
+
+func genExecutionPayloadBidGloas() *v1alpha1.ExecutionPayloadBid {
+	return &v1alpha1.ExecutionPayloadBid{
+		ParentBlockHash:        bytes(32),
+		ParentBlockRoot:        bytes(32),
+		BlockHash:              bytes(32),
+		FeeRecipient:           bytes(20),
+		GasLimit:               rand.Uint64(),
+		BuilderIndex:           primitives.ValidatorIndex(rand.Uint64()),
+		Slot:                   primitives.Slot(rand.Uint64()),
+		Value:                  primitives.Gwei(rand.Uint64()),
+		BlobKzgCommitmentsRoot: bytes(32),
+	}
+}
+
+func genPayloadAttestations(num int) []*v1alpha1.PayloadAttestation {
+	pas := make([]*v1alpha1.PayloadAttestation, num)
+	for i := range pas {
+		bits := bitfield.NewBitvector512()
+		bits.SetBitAt(uint64(i%512), true)
+
+		pas[i] = &v1alpha1.PayloadAttestation{
+			AggregationBits: bits,
+			Data: &v1alpha1.PayloadAttestationData{
+				BeaconBlockRoot:   bytes(32),
+				Slot:              primitives.Slot(rand.Uint64()),
+				PayloadPresent:    i%2 == 0,
+				BlobDataAvailable: i%2 == 1,
+			},
+			Signature: bytes(96),
+		}
+	}
+	return pas
 }

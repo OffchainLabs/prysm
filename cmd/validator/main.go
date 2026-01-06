@@ -5,27 +5,28 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	accountcommands "github.com/OffchainLabs/prysm/v6/cmd/validator/accounts"
-	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/validator/db"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	slashingprotectioncommands "github.com/OffchainLabs/prysm/v6/cmd/validator/slashing-protection"
-	walletcommands "github.com/OffchainLabs/prysm/v6/cmd/validator/wallet"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/web"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/io/logs"
-	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
-	"github.com/OffchainLabs/prysm/v6/runtime/debug"
-	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
-	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
-	"github.com/OffchainLabs/prysm/v6/runtime/tos"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/validator/node"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	accountcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/accounts"
+	dbcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/db"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	slashingprotectioncommands "github.com/OffchainLabs/prysm/v7/cmd/validator/slashing-protection"
+	walletcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/wallet"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/web"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/monitoring/journald"
+	"github.com/OffchainLabs/prysm/v7/runtime/debug"
+	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
+	_ "github.com/OffchainLabs/prysm/v7/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v7/runtime/tos"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/validator/node"
 	joonix "github.com/joonix/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -51,6 +52,7 @@ func startNode(ctx *cli.Context) error {
 var appFlags = []cli.Flag{
 	flags.BeaconRPCProviderFlag,
 	flags.BeaconRESTApiProviderFlag,
+	flags.BeaconRESTApiHeaders,
 	flags.CertFlag,
 	flags.GraffitiFlag,
 	flags.DisablePenaltyRewardLogFlag,
@@ -150,13 +152,20 @@ func main() {
 			format := ctx.String(cmd.LogFormat.Name)
 			switch format {
 			case "text":
+				// disabling logrus default output so we can control it via different hooks
+				logrus.SetOutput(io.Discard)
+
+				// create a custom formatter and hook for terminal output
 				formatter := new(prefixed.TextFormatter)
 				formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 				formatter.FullTimestamp = true
-				// If persistent log files are written - we disable the log messages coloring because
-				// the colors are ANSI codes and seen as gibberish in the log files.
-				formatter.DisableColors = logFileName != ""
-				logrus.SetFormatter(formatter)
+				formatter.ForceFormatting = true
+				formatter.ForceColors = true
+
+				logrus.AddHook(&logs.WriterHook{
+					Formatter: formatter,
+					Writer:    os.Stderr,
+				})
 			case "fluentd":
 				f := joonix.NewFormatter()
 				if err := joonix.DisableTimestampFormat(f); err != nil {
@@ -176,7 +185,7 @@ func main() {
 			}
 
 			if logFileName != "" {
-				if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+				if err := logs.ConfigurePersistentLogging(logFileName, format); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
 				}
 			}

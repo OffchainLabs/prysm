@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	pbrpc "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	pbrpc "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -95,6 +95,27 @@ func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte,
 			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
 		default:
 			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+// addToBatch joins (if necessary) a topic and adds the message to a message batch.
+func (s *Service) addToBatch(ctx context.Context, batch *pubsub.MessageBatch, topic string, data []byte, opts ...pubsub.PubOpt) error {
+	topicHandle, err := s.JoinTopic(topic)
+	if err != nil {
+		return fmt.Errorf("joining topic: %w", err)
+	}
+
+	// Wait for at least 1 peer to be available to receive the published message.
+	for {
+		if flags.Get().MinimumSyncPeers == 0 || len(topicHandle.ListPeers()) > 0 {
+			return topicHandle.AddToBatch(ctx, batch, data, opts...)
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Wrapf(ctx.Err(), "unable to find requisite number of peers for topic %s, 0 peers found to publish to", topic)
+		case <-time.After(100 * time.Millisecond):
+			// reenter the for loop after 100ms
 		}
 	}
 }
