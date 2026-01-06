@@ -19,6 +19,7 @@ go_library(
         "kv.go",
         "lightclient.go",
         "log.go",
+        "metrics.go",
         "migration.go",
         "migration_archived_index.go",
         "migration_block_slot_index.go",

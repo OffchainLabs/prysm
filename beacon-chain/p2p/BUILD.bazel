@@ -21,6 +21,7 @@ go_library(
         "log.go",
         "log_helpers.go",
         "message_id.go",
+        "metrics.go",
         "monitoring.go",
         "options.go",
         "pubsub.go",

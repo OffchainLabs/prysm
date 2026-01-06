@@ -70,6 +70,8 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 		"groupCount":            storedGroupCount,
 	}).Debug("Custody info")
 
+	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
+
 	return storedEarliestAvailableSlot, storedGroupCount, nil
 }
 
@@ -142,6 +144,8 @@ func (s *Store) UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailab
 	}
 
 	log.WithField("earliestAvailableSlot", storedEarliestAvailableSlot).Debug("Updated earliest available slot")
+
+	EarliestAvailableSlotMetric.Set(float64(storedEarliestAvailableSlot))
 
 	return nil
 }

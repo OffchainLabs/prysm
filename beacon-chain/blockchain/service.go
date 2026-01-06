@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	f "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
@@ -299,6 +300,8 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 	if err != nil {
 		return errors.Wrap(err, "could not get and save custody group count")
 	}
+
+	kv.EarliestAvailableSlotMetric.Set(float64(earliestAvailableSlot))
 
 	if _, _, err := s.cfg.P2P.UpdateCustodyInfo(earliestAvailableSlot, custodySubnetCount); err != nil {
 		return errors.Wrap(err, "update custody info")

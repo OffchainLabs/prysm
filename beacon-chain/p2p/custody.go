@@ -22,6 +22,8 @@ func (s *Service) EarliestAvailableSlot(ctx context.Context) (primitives.Slot, e
 		return 0, errors.Wrap(err, "wait for custody info")
 	}
 
+	EarliestAvailableSlotMetric.Set(float64(custodyInfo.earliestAvailableSlot))
+
 	return custodyInfo.earliestAvailableSlot, nil
 }
 
@@ -80,11 +82,15 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 		close(s.custodyInfoSet)
 
+		// Update P2P metric when initializing custody info
+		EarliestAvailableSlotMetric.Set(float64(earliestAvailableSlot))
+
 		return earliestAvailableSlot, custodyGroupCount, nil
 	}
 
 	inMemory := s.custodyInfo
 	if custodyGroupCount <= inMemory.groupCount {
+		EarliestAvailableSlotMetric.Set(float64(inMemory.earliestAvailableSlot))
 		return inMemory.earliestAvailableSlot, inMemory.groupCount, nil
 	}
 
@@ -97,6 +103,7 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 	if custodyGroupCount <= samplesPerSlot {
 		inMemory.groupCount = custodyGroupCount
+		EarliestAvailableSlotMetric.Set(float64(inMemory.earliestAvailableSlot))
 		return inMemory.earliestAvailableSlot, custodyGroupCount, nil
 	}
 
@@ -107,11 +114,15 @@ func (s *Service) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custo
 
 	if earliestAvailableSlot < fuluForkSlot {
 		inMemory.groupCount = custodyGroupCount
+		EarliestAvailableSlotMetric.Set(float64(inMemory.earliestAvailableSlot))
 		return inMemory.earliestAvailableSlot, custodyGroupCount, nil
 	}
 
 	inMemory.earliestAvailableSlot = earliestAvailableSlot
 	inMemory.groupCount = custodyGroupCount
+
+	EarliestAvailableSlotMetric.Set(float64(earliestAvailableSlot))
+
 	return earliestAvailableSlot, custodyGroupCount, nil
 }
 
@@ -133,6 +144,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	// Allow decrease (for backfill scenarios)
 	if earliestAvailableSlot < s.custodyInfo.earliestAvailableSlot {
 		s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
+		EarliestAvailableSlotMetric.Set(float64(earliestAvailableSlot))
 		return nil
 	}
 
@@ -163,6 +175,7 @@ func (s *Service) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.S
 	}
 
 	s.custodyInfo.earliestAvailableSlot = earliestAvailableSlot
+	EarliestAvailableSlotMetric.Set(float64(earliestAvailableSlot))
 	return nil
 }
 
