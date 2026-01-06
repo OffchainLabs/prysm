@@ -42,6 +42,7 @@ func CopyBuilder(builder *Builder) *Builder {
 	}
 	return &Builder{
 		Pubkey:            bytesutil.SafeCopyBytes(builder.Pubkey),
+		Version:           bytesutil.SafeCopyBytes(builder.Version),
 		ExecutionAddress:  bytesutil.SafeCopyBytes(builder.ExecutionAddress),
 		Balance:           builder.Balance,
 		DepositEpoch:      builder.DepositEpoch,
