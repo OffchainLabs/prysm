@@ -303,6 +303,44 @@ func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode
 	return newPeers
 }
 
+// SoleProviderPeers returns peer IDs that are the sole provider for at least one topic.
+// A peer is considered a sole provider if:
+// 1. It's the only connected peer for a topic (listPeers returns only this peer)
+// 2. The crawler has no other known peers for that topic
+//
+// These peers should be protected from pruning since losing them would mean
+// losing connectivity to that topic entirely.
+func (g *GossipPeerDialer) SoleProviderPeers() []peer.ID {
+	if g.topicsProvider == nil {
+		return nil
+	}
+
+	topics := g.topicsProvider()
+	soleProviders := make(map[peer.ID]struct{})
+
+	for topic := range topics {
+		connectedPeers := g.listPeers(topic)
+
+		// Skip if no peers or more than one connected peer
+		if len(connectedPeers) != 1 {
+			continue
+		}
+
+		// Check if crawler knows of any other peers for this topic
+		crawlerPeers := g.crawler.PeersForTopic(topic)
+		if len(crawlerPeers) == 0 {
+			// This peer is the sole known provider
+			soleProviders[connectedPeers[0]] = struct{}{}
+		}
+	}
+
+	result := make([]peer.ID, 0, len(soleProviders))
+	for pid := range soleProviders {
+		result = append(result, pid)
+	}
+	return result
+}
+
 func (g *GossipPeerDialer) dialPeersWithRatelimiting(peers []*enode.Node) {
 	// Dial new peers in batches.
 	maxConcurrentDials := math.MaxInt

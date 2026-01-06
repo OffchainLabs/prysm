@@ -245,6 +245,16 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		}
 	}
 
+	dialer := s.cfg.p2p.GossipDialer()
+
+	if dialer != nil {
+		// Protect peers that are the sole provider for any gossip topic.
+		// These peers should not be pruned since we have no alternative.
+		for _, pid := range dialer.SoleProviderPeers() {
+			peerMap[pid] = true
+		}
+	}
+
 	// Clear out necessary peers from the peers to prune.
 	newPeers := make([]peer.ID, 0, len(pids))
 
