@@ -380,7 +380,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 	topicFunc := func(sidecar blocks.VerifiedRODataColumn) (topic string, wrappedSubIdx uint64, subnet uint64) {
 		subnet = peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-		topic = dataColumnSubnetToTopic(subnet, forkDigest)
+		topic = DataColumnSubnetTopic(forkDigest, subnet)
 		wrappedSubIdx = subnet + dataColumnSubnetVal
 		return
 	}
@@ -396,7 +396,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		// Check if we have a peer for this subnet (use RLock for read-only check).
 		mu := s.subnetLocker(wrappedSubIdx)
 		mu.RLock()
-		hasPeer := s.hasPeerWithSubnet(topic)
+		hasPeer := s.hasPeerWithTopic(topic)
 		mu.RUnlock()
 
 		if hasPeer {
@@ -439,10 +439,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			ctx := trace.NewContext(s.ctx, span)
 			defer span.End()
 
-			topic, wrappedSubIdx, subnet := topicFunc(sidecar)
+			topic, wrappedSubIdx, _ := topicFunc(sidecar)
 
 			// Find peers for this sidecar's subnet.
-			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot find peers if needed")
 				return
@@ -560,22 +560,22 @@ func (s *Service) findPeersIfNeeded(
 
 // encodeGossipMessage encodes an object for gossip transmission.
 // It returns the encoded bytes and the full topic with protocol suffix.
-func (s *Service) encodeGossipMessage(obj ssz.Marshaler, topic string) ([]byte, string, error) {
+func (s *Service) encodeGossipMessage(obj ssz.Marshaler) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if _, err := s.Encoding().EncodeGossip(buf, obj); err != nil {
-		return nil, "", fmt.Errorf("could not encode message: %w", err)
+		return nil, fmt.Errorf("could not encode message: %w", err)
 	}
-	return buf.Bytes(), topic + s.Encoding().ProtocolSuffix(), nil
+	return buf.Bytes(), nil
 }
 
 // broadcastObject broadcasts a message to other peers in our gossip mesh.
-func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
+func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, fullTopic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
 	defer span.End()
 
-	span.SetAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", fullTopic))
 
-	data, fullTopic, err := s.encodeGossipMessage(obj, topic)
+	data, err := s.encodeGossipMessage(obj)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
@@ -599,13 +599,13 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 
 // batchObject adds an object to a message batch for a future broadcast.
 // The caller MUST publish the batch after all messages have been added.
-func (s *Service) batchObject(ctx context.Context, batch *pubsub.MessageBatch, obj ssz.Marshaler, topic string) error {
+func (s *Service) batchObject(ctx context.Context, batch *pubsub.MessageBatch, obj ssz.Marshaler, fullTopic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.batchObject")
 	defer span.End()
 
-	span.SetAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", fullTopic))
 
-	data, fullTopic, err := s.encodeGossipMessage(obj, topic)
+	data, err := s.encodeGossipMessage(obj)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
