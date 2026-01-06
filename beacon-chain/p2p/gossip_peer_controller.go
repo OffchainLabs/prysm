@@ -14,6 +14,7 @@ import (
 )
 
 const dialInterval = 1 * time.Second
+const peerCountLogInterval = 5 * time.Minute
 
 // GossipPeerDialer maintains minimum peer counts for gossip topics by periodically
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
@@ -77,6 +78,7 @@ func (g *GossipPeerDialer) Start(provider gossipcrawler.SubnetTopicsProvider) er
 	g.once.Do(func() {
 		g.topicsProvider = provider
 		go g.dialLoop()
+		go g.logPeerCountsLoop()
 	})
 
 	return nil
@@ -94,6 +96,28 @@ func (g *GossipPeerDialer) dialLoop() {
 				continue
 			}
 			g.dialPeersWithRatelimiting(peersToDial)
+
+		case <-g.ctx.Done():
+			return
+		}
+	}
+}
+
+func (g *GossipPeerDialer) logPeerCountsLoop() {
+	ticker := time.NewTicker(peerCountLogInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			topics := g.topicsProvider()
+			for topic, minPeers := range topics {
+				currentPeers := len(g.listPeers(topic))
+				log.WithField("topic", topic).
+					WithField("currentPeers", currentPeers).
+					WithField("minPeers", minPeers).
+					Info("Gossip topic peer count")
+			}
 
 		case <-g.ctx.Done():
 			return
@@ -238,7 +262,6 @@ func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode
 	if len(newPeers) > missing {
 		newPeers = newPeers[:missing]
 	}
-
 	return newPeers
 }
 
