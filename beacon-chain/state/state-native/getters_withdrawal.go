@@ -133,11 +133,22 @@ func (b *BeaconState) appendPendingPartialWithdrawals(withdrawalIndex uint64, wi
 		return withdrawalIndex, 0, nil
 	}
 
+	cfg := params.BeaconConfig()
+	withdrawalsLimit := min(
+		uint64(len(*withdrawals))+cfg.MaxPendingPartialsPerWithdrawalsSweep,
+		cfg.MaxWithdrawalsPerPayload-1,
+	)
+	if uint64(len(*withdrawals)) > withdrawalsLimit {
+		return withdrawalIndex, 0, fmt.Errorf("prior withdrawals length %d exceeds limit %d", len(*withdrawals), withdrawalsLimit)
+	}
+
 	ws := *withdrawals
 	epoch := slots.ToEpoch(b.slot)
 	var processedPartialWithdrawalsCount uint64
 	for _, w := range b.pendingPartialWithdrawals {
-		if w.WithdrawableEpoch > epoch || len(ws) >= int(params.BeaconConfig().MaxPendingPartialsPerWithdrawalsSweep) {
+		isWithdrawable := w.WithdrawableEpoch <= epoch
+		hasReachedLimit := uint64(len(ws)) >= withdrawalsLimit
+		if !isWithdrawable || hasReachedLimit {
 			break
 		}
 
@@ -149,7 +160,7 @@ func (b *BeaconState) appendPendingPartialWithdrawals(withdrawalIndex uint64, wi
 		if err != nil {
 			return withdrawalIndex, 0, fmt.Errorf("could not retrieve balance at index %d: %w", w.Index, err)
 		}
-		hasSufficientEffectiveBalance := v.EffectiveBalance() >= params.BeaconConfig().MinActivationBalance
+		hasSufficientEffectiveBalance := v.EffectiveBalance() >= cfg.MinActivationBalance
 		var totalWithdrawn uint64
 		for _, wi := range ws {
 			if wi.ValidatorIndex == w.Index {
@@ -160,9 +171,9 @@ func (b *BeaconState) appendPendingPartialWithdrawals(withdrawalIndex uint64, wi
 		if err != nil {
 			return withdrawalIndex, 0, errors.Wrapf(err, "failed to subtract balance %d with total withdrawn %d", vBal, totalWithdrawn)
 		}
-		hasExcessBalance := balance > params.BeaconConfig().MinActivationBalance
-		if v.ExitEpoch() == params.BeaconConfig().FarFutureEpoch && hasSufficientEffectiveBalance && hasExcessBalance {
-			amount := min(balance-params.BeaconConfig().MinActivationBalance, w.Amount)
+		hasExcessBalance := balance > cfg.MinActivationBalance
+		if v.ExitEpoch() == cfg.FarFutureEpoch && hasSufficientEffectiveBalance && hasExcessBalance {
+			amount := min(balance-cfg.MinActivationBalance, w.Amount)
 			ws = append(ws, &enginev1.Withdrawal{
 				Index:          withdrawalIndex,
 				ValidatorIndex: w.Index,

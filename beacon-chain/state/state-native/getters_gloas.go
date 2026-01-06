@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"bytes"
 	"fmt"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -9,6 +10,22 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
+
+// IsParentBlockFull returns true when the latest bid was fulfilled with a payload.
+func (b *BeaconState) IsParentBlockFull() (bool, error) {
+	if b.version < version.Gloas {
+		return false, errNotSupported("IsParentBlockFull", b.version)	
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.latestExecutionPayloadBid == nil {
+		return false, nil
+	}
+
+	return bytes.Equal(b.latestExecutionPayloadBid.BlockHash, b.latestBlockHash), nil
+}
 
 // LatestBlockHash returns the hash of the latest execution block.
 func (b *BeaconState) LatestBlockHash() ([32]byte, error) {
@@ -146,4 +163,57 @@ func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, 
 	defer b.lock.RUnlock()
 
 	return b.builderPendingPaymentsVal(), nil
+}
+
+// BuilderPendingWithdrawals returns the builder pending withdrawals queue.
+func (b *BeaconState) BuilderPendingWithdrawals() ([]*ethpb.BuilderPendingWithdrawal, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingWithdrawals", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingWithdrawalsVal(), nil
+}
+
+// BuildersCount returns the number of builders in the registry.
+func (b *BeaconState) BuildersCount() int {
+	if b.version < version.Gloas {
+		return 0
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return len(b.builders)
+}
+
+// Builders returns the builders registry.
+func (b *BeaconState) Builders() ([]*ethpb.Builder, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("Builders", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	builders := make([]*ethpb.Builder, len(b.builders))
+	for i := range b.builders {
+		builders[i] = ethpb.CopyBuilder(b.builders[i])
+	}
+
+	return builders, nil
+}
+
+// NextWithdrawalBuilderIndex returns the next builder index for the withdrawals sweep.
+func (b *BeaconState) NextWithdrawalBuilderIndex() (primitives.BuilderIndex, error) {
+	if b.version < version.Gloas {
+		return 0, errNotSupported("NextWithdrawalBuilderIndex", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.nextWithdrawalBuilderIndex, nil
 }

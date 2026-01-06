@@ -44,6 +44,56 @@ func TestLatestBlockHash(t *testing.T) {
 	})
 }
 
+func TestIsParentBlockFull(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		st, _ := util.DeterministicGenesisState(t, 1)
+		_, err := st.IsParentBlockFull()
+		require.ErrorContains(t, "is not supported", err)
+	})
+
+	t.Run("returns false when bid is unset", func(t *testing.T) {
+		st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestBlockHash: bytes.Repeat([]byte{0xAB}, 32),
+		})
+		require.NoError(t, err)
+
+		full, err := st.IsParentBlockFull()
+		require.NoError(t, err)
+		require.Equal(t, false, full)
+	})
+
+	t.Run("returns true when bid block hash matches latest block hash", func(t *testing.T) {
+		hashBytes := bytes.Repeat([]byte{0xAB}, 32)
+		st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestBlockHash: hashBytes,
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: hashBytes,
+			},
+		})
+		require.NoError(t, err)
+
+		full, err := st.IsParentBlockFull()
+		require.NoError(t, err)
+		require.Equal(t, true, full)
+	})
+
+	t.Run("returns false when bid block hash does not match latest block hash", func(t *testing.T) {
+		latest := bytes.Repeat([]byte{0xAB}, 32)
+		bid := bytes.Repeat([]byte{0xCD}, 32)
+		st, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			LatestBlockHash: latest,
+			LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+				BlockHash: bid,
+			},
+		})
+		require.NoError(t, err)
+
+		full, err := st.IsParentBlockFull()
+		require.NoError(t, err)
+		require.Equal(t, false, full)
+	})
+}
+
 func TestBuilderPubkey(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		stIface, _ := util.DeterministicGenesisState(t, 1)

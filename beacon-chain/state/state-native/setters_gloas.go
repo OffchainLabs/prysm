@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
@@ -8,9 +9,25 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
+
+// SetPayloadExpectedWithdrawals stores the expected withdrawals for the next payload.
+func (b *BeaconState) SetPayloadExpectedWithdrawals(withdrawals []*enginev1.Withdrawal) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetPayloadExpectedWithdrawals", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.payloadExpectedWithdrawals = withdrawals
+	b.markFieldAsDirty(types.PayloadExpectedWithdrawals)
+
+	return nil
+}
 
 // RotateBuilderPendingPayments rotates the queue by dropping slots per epoch payments from the
 // front and appending slots per epoch empty payments to the end.
@@ -66,6 +83,38 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 
 	b.builderPendingWithdrawals = append(pendingWithdrawals, withdrawals...)
 	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
+	return nil
+}
+
+// DequeueBuilderPendingWithdrawals removes processed builder withdrawals from the front of the queue.
+func (b *BeaconState) DequeueBuilderPendingWithdrawals(n uint64) error {
+	if b.version < version.Gloas {
+		return errNotSupported("DequeueBuilderPendingWithdrawals", b.version)
+	}
+
+	if n > uint64(len(b.builderPendingWithdrawals)) {
+		return errors.New("cannot dequeue more builder withdrawals than are in the queue")
+	}
+
+	if n == 0 {
+		return nil
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	if b.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs() > 1 {
+		withdrawals := make([]*ethpb.BuilderPendingWithdrawal, len(b.builderPendingWithdrawals))
+		copy(withdrawals, b.builderPendingWithdrawals)
+		b.builderPendingWithdrawals = withdrawals
+		b.sharedFieldReferences[types.BuilderPendingWithdrawals].MinusRef()
+		b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1)
+	}
+
+	b.builderPendingWithdrawals = b.builderPendingWithdrawals[n:]
+	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
+	b.rebuildTrie[types.BuilderPendingWithdrawals] = true
+
 	return nil
 }
 
@@ -159,5 +208,67 @@ func (b *BeaconState) UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val 
 	}
 
 	b.markFieldAsDirty(types.ExecutionPayloadAvailability)
+	return nil
+}
+
+// SetNextWithdrawalBuilderIndex sets the next builder index for the withdrawals sweep.
+func (b *BeaconState) SetNextWithdrawalBuilderIndex(index primitives.BuilderIndex) error {
+	if b.version < version.Gloas {
+		return errNotSupported("SetNextWithdrawalBuilderIndex", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.nextWithdrawalBuilderIndex = index
+	b.markFieldAsDirty(types.NextWithdrawalBuilderIndex)
+	return nil
+}
+
+// DecreaseBuilderBalance decreases the builder's balance by amount (saturating at 0).
+func (b *BeaconState) DecreaseBuilderBalance(builderIndex primitives.BuilderIndex, amount uint64) error {
+	if b.version < version.Gloas {
+		return errNotSupported("DecreaseBuilderBalance", b.version)
+	}
+	if amount == 0 {
+		return nil
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	idx := uint64(builderIndex)
+	if idx >= uint64(len(b.builders)) {
+		return fmt.Errorf("builder index %d out of range (len=%d)", builderIndex, len(b.builders))
+	}
+
+	// Copy-on-write for shared builders registry.
+	if b.sharedFieldReferences[types.Builders].Refs() > 1 {
+		builders := make([]*ethpb.Builder, len(b.builders))
+		copy(builders, b.builders)
+		b.builders = builders
+		b.sharedFieldReferences[types.Builders].MinusRef()
+		b.sharedFieldReferences[types.Builders] = stateutil.NewRef(1)
+
+		// Ensure we don't mutate a shared builder pointer.
+		if b.builders[idx] != nil {
+			b.builders[idx] = ethpb.CopyBuilder(b.builders[idx])
+		}
+	}
+
+	builder := b.builders[idx]
+	if builder == nil {
+		return fmt.Errorf("builder at index %d is nil", builderIndex)
+	}
+
+	bal := uint64(builder.Balance)
+	if amount >= bal {
+		builder.Balance = 0
+	} else {
+		builder.Balance = primitives.Gwei(bal - amount)
+	}
+
+	b.markFieldAsDirty(types.Builders)
+	b.addDirtyIndices(types.Builders, []uint64{idx})
 	return nil
 }

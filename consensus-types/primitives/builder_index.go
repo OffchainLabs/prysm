@@ -13,6 +13,15 @@ var _ fssz.Unmarshaler = (*BuilderIndex)(nil)
 // BuilderIndex is an index into the builder registry.
 type BuilderIndex uint64
 
+// ToValidatorIndex sets the builder flag on a builder index.
+//
+// Spec v1.6.1 (pseudocode):
+// def convert_builder_index_to_validator_index(builder_index: BuilderIndex) -> ValidatorIndex:
+//     return ValidatorIndex(builder_index | BUILDER_INDEX_FLAG)
+func (b BuilderIndex) ToValidatorIndex() ValidatorIndex {
+	return ValidatorIndex(uint64(b) | BuilderIndexFlag)
+}
+
 // HashTreeRoot returns the SSZ hash tree root of the index.
 func (b BuilderIndex) HashTreeRoot() ([32]byte, error) {
 	return fssz.HashWithDefaultHasher(b)
