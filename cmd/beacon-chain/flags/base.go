@@ -356,4 +356,9 @@ var (
 		Usage: "A comma-separated list of exponents (of 2) in decreasing order, defining the state diff hierarchy levels. The last exponent must be greater than or equal to 5.",
 		Value: cli.NewIntSlice(21, 18, 16, 13, 11, 9, 5),
 	}
+	// DisableGetBlobsV2 disables the engine_getBlobsV2 usage.
+	DisableGetBlobsV2 = &cli.BoolFlag{
+		Name:  "disable-get-blobs-v2",
+		Usage: "Disables the engine_getBlobsV2 usage.",
+	}
 )

@@ -32,6 +32,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -786,4 +788,191 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	var result ethpb.DataColumnSidecar
 	require.NoError(t, service.Encoding().DecodeGossip(msg.Data, &result))
 	require.DeepEqual(t, &result, verifiedRoSidecar)
+}
+
+type topicInvoked struct {
+	topic string
+	pid   peer.ID
+}
+
+// rpcOrderTracer is a RawTracer implementation that captures the order of SendRPC calls.
+// It records the topics of messages sent via pubsub to verify round-robin ordering.
+type rpcOrderTracer struct {
+	mu      sync.Mutex
+	invoked []*topicInvoked
+	byTopic map[string][]peer.ID
+}
+
+func (t *rpcOrderTracer) SendRPC(rpc *pubsub.RPC, pid peer.ID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, msg := range rpc.GetPublish() {
+		invoked := &topicInvoked{topic: msg.GetTopic(), pid: pid}
+		t.invoked = append(t.invoked, invoked)
+		t.byTopic[invoked.topic] = append(t.byTopic[invoked.topic], invoked.pid)
+	}
+}
+
+func newRpcOrderTracer() *rpcOrderTracer {
+	return &rpcOrderTracer{byTopic: make(map[string][]peer.ID)}
+}
+
+func (t *rpcOrderTracer) getTopics() []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	result := make([]string, len(t.invoked))
+	for i := range t.invoked {
+		result[i] = t.invoked[i].topic
+	}
+	return result
+}
+
+// No-op implementations for other RawTracer methods.
+func (*rpcOrderTracer) AddPeer(peer.ID, protocol.ID)          {}
+func (*rpcOrderTracer) RemovePeer(peer.ID)                    {}
+func (*rpcOrderTracer) Join(string)                           {}
+func (*rpcOrderTracer) Leave(string)                          {}
+func (*rpcOrderTracer) Graft(peer.ID, string)                 {}
+func (*rpcOrderTracer) Prune(peer.ID, string)                 {}
+func (*rpcOrderTracer) ValidateMessage(*pubsub.Message)       {}
+func (*rpcOrderTracer) DeliverMessage(*pubsub.Message)        {}
+func (*rpcOrderTracer) RejectMessage(*pubsub.Message, string) {}
+func (*rpcOrderTracer) DuplicateMessage(*pubsub.Message)      {}
+func (*rpcOrderTracer) ThrottlePeer(peer.ID)                  {}
+func (*rpcOrderTracer) RecvRPC(*pubsub.RPC)                   {}
+func (*rpcOrderTracer) DropRPC(*pubsub.RPC, peer.ID)          {}
+func (*rpcOrderTracer) UndeliverableMessage(*pubsub.Message)  {}
+
+// TestService_BroadcastDataColumnRoundRobin verifies that when broadcasting multiple
+// data column sidecars, messages are interleaved in round-robin order by column index
+// rather than sending all copies of one column before the next.
+//
+// Without batch publishing: A,A,A,A,B,B,B,B (all peers for column A, then all for column B)
+// With batch publishing:    A,B,A,B,A,B,A,B (interleaved by message ID)
+func TestService_BroadcastDataColumnRoundRobin(t *testing.T) {
+	const (
+		port        = 2100
+		topicFormat = DataColumnSubnetTopicFormat
+	)
+
+	ctx := t.Context()
+
+	// Load the KZG trust setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	gFlags := new(flags.GlobalFlags)
+	gFlags.MinimumPeersPerSubnet = 1
+	flags.Init(gFlags)
+	defer flags.Init(new(flags.GlobalFlags))
+
+	// Create a tracer to capture the order of SendRPC calls.
+	tracer := newRpcOrderTracer()
+
+	// Create the publisher node with the tracer injected.
+	p1 := p2ptest.NewTestP2PWithPubsubOptions(t, []pubsub.Option{pubsub.WithRawTracer(tracer)})
+
+	// Create subscriber peers.
+	expectedPeers := []*p2ptest.TestP2P{
+		p2ptest.NewTestP2P(t),
+		p2ptest.NewTestP2P(t),
+	}
+
+	// Connect peers.
+	for _, p := range expectedPeers {
+		p1.Connect(p)
+	}
+	require.NotEqual(t, 0, len(p1.BHost.Network().Peers()), "No peers")
+
+	// Create a host for discovery.
+	_, pkey, ipAddr := createHost(t, port)
+
+	// Create a shared DB for the service.
+	db := testDB.SetupDB(t)
+
+	// Create and close the custody info channel immediately since custodyInfo is already set.
+	custodyInfoSet := make(chan struct{})
+	close(custodyInfoSet)
+
+	service := &Service{
+		ctx:                   ctx,
+		host:                  p1.BHost,
+		pubsub:                p1.PubSub(),
+		joinedTopics:          map[string]*pubsub.Topic{},
+		cfg:                   &Config{DB: db},
+		genesisTime:           time.Now(),
+		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		subnetsLockLock:       sync.Mutex{},
+		peers:                 peers.NewStatus(ctx, &peers.StatusConfig{ScorerParams: &scorers.Config{}}),
+		custodyInfo:           &custodyInfo{},
+		custodyInfoSet:        custodyInfoSet,
+	}
+
+	// Create a listener for discovery.
+	listener, err := service.startDiscoveryV5(ipAddr, pkey)
+	require.NoError(t, err)
+	service.dv5Listener = listener
+
+	digest, err := service.currentForkDigest()
+	require.NoError(t, err)
+
+	// Create multiple data column sidecars with different column indices.
+	// Use indices that map to different subnets: 0, 32, 64 (assuming 128 columns and 64 subnets).
+	columnIndices := []uint64{0, 32, 64}
+	params := make([]util.DataColumnParam, len(columnIndices))
+	for i, idx := range columnIndices {
+		params[i] = util.DataColumnParam{Index: idx}
+	}
+	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, params)
+
+	expectedTopics := make(map[string]bool)
+	// Subscribe peers to the relevant topics.
+	for _, idx := range columnIndices {
+		subnet := peerdas.ComputeSubnetForDataColumnSidecar(idx)
+		topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+		for _, p := range expectedPeers {
+			_, err = p.SubscribeToTopic(topic)
+			require.NoError(t, err)
+		}
+		expectedTopics[topic] = true
+	}
+	// libp2p needs some time to establish mesh connections.
+	time.Sleep(100 * time.Millisecond)
+
+	// Broadcast all sidecars.
+	err = service.BroadcastDataColumnSidecars(ctx, verifiedRoSidecars)
+	require.NoError(t, err)
+	// Give some time for messages to be sent.
+	time.Sleep(100 * time.Millisecond)
+
+	topics := tracer.getTopics()
+	if len(topics) == 0 {
+		t.Fatal("Expected at least one message for each topic to be sent to each peer")
+	}
+
+	unseen := make(map[string]bool)
+	for k := range expectedTopics {
+		unseen[k] = true
+	}
+	// Verify round-robin invariant: before all message IDs are seen, no message ID may be repeated.
+	// In round-robin order, we should see each topic once before any topic repeats.
+	for _, topic := range topics {
+		if !expectedTopics[topic] {
+			continue
+		}
+		if !unseen[topic] {
+			t.Errorf("Topic %s repeated before all topics were seen once. This violates round-robin ordering.", topic)
+		}
+		delete(unseen, topic)
+		if len(unseen) == 0 {
+			break // all have been seen
+		}
+	}
+	require.Equal(t, 0, len(unseen))
+
+	// Verify that we actually saw all expected topics.
+	for topic := range expectedTopics {
+		require.Equal(t, len(expectedPeers), len(tracer.byTopic[topic]))
+	}
 }

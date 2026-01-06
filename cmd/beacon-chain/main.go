@@ -148,6 +148,7 @@ var appFlags = []cli.Flag{
 	flags.SlasherDirFlag,
 	flags.SlasherFlag,
 	flags.JwtId,
+	flags.DisableGetBlobsV2,
 	storage.BlobStoragePathFlag,
 	storage.DataColumnStoragePathFlag,
 	storage.BlobStorageLayout,
