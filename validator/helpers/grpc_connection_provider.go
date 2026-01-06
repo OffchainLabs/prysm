@@ -92,7 +92,7 @@ func parseEndpoints(endpoint string) []string {
 		return nil
 	}
 	var endpoints []string
-	for _, p := range strings.Split(endpoint, ",") {
+	for p := range strings.SplitSeq(endpoint, ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			endpoints = append(endpoints, p)
 		}
