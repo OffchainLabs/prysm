@@ -51,8 +51,8 @@ func (*FakeP2P) GossipDialer() gossipcrawler.GossipDialer {
 	return nil
 }
 
-func (*FakeP2P) Status() error {
-	return nil
+func (*FakeP2P) Started() bool {
+	return true
 }
 
 // AddDisconnectionHandler -- fake.

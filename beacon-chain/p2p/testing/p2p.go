@@ -598,6 +598,9 @@ func (m *MockCrawler) PeersForTopic(topic string) []*enode.Node {
 	return []*enode.Node{}
 }
 
+// TriggerCrawl does nothing as this is a mock
+func (m *MockCrawler) TriggerCrawl() {}
+
 // Crawler returns a mock crawler implementation for testing.
 func (*TestP2P) Crawler() gossipcrawler.Crawler {
 	return &MockCrawler{}

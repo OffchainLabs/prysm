@@ -156,6 +156,25 @@ func (cp *crawledPeers) recordMetricsUnlocked() {
 	gossipCrawlerTopicsCount.Set(float64(len(cp.peersByTopic)))
 }
 
+func (cp *crawledPeers) logPeerCounts() {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+
+	for topic, peers := range cp.peersByTopic {
+		// Count only pinged peers (verified reachable)
+		pingedCount := 0
+		for pnode := range peers {
+			if pnode.isPinged {
+				pingedCount++
+			}
+		}
+		log.WithField("topic", topic).
+			WithField("totalPeers", len(peers)).
+			WithField("pingedPeers", pingedCount).
+			Info("Crawler indexed peers for topic")
+	}
+}
+
 func (cp *crawledPeers) cleanupPeer(pnode *peerNode) {
 	delete(cp.peerNodeByPid, pnode.peerID)
 	delete(cp.peerNodeByEnode, pnode.node.ID())
@@ -274,6 +293,9 @@ type GossipPeerCrawler struct {
 // cleanupInterval controls how frequently we sweep crawled peers and prune
 // those that are no longer useful.
 const cleanupInterval = 5 * time.Minute
+
+// crawlerLogInterval controls how frequently we log peer counts per topic.
+const crawlerLogInterval = 10 * time.Minute
 
 // PeerScoreFunc calculates a reputation score for a given peer ID.
 // Higher scores indicate more desirable peers. This function is used by PeersForTopic
@@ -404,6 +426,7 @@ func (g *GossipPeerCrawler) Start(te gossipcrawler.TopicExtractor) error {
 		go g.crawlLoop()
 		go g.pingLoop()
 		go g.cleanupLoop()
+		go g.logPeerCountsLoop()
 	})
 
 	return nil
@@ -540,6 +563,20 @@ func (g *GossipPeerCrawler) cleanup() {
 		topics, err := g.topicExtractor(g.ctx, p.node)
 		if err != nil || len(topics) == 0 {
 			cp.removePeerByNodeId(p.node.ID())
+		}
+	}
+}
+
+func (g *GossipPeerCrawler) logPeerCountsLoop() {
+	ticker := time.NewTicker(crawlerLogInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			g.crawledPeers.logPeerCounts()
+		case <-g.ctx.Done():
+			return
 		}
 	}
 }

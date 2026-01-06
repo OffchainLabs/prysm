@@ -442,6 +442,173 @@ func TestGossipPeerDialer_selectPeersForTopics(t *testing.T) {
 	}
 }
 
+func TestGossipPeerDialer_SoleProviderPeers(t *testing.T) {
+	peerA := peer.ID("peerA")
+	peerB := peer.ID("peerB")
+	peerC := peer.ID("peerC")
+
+	tests := []struct {
+		name           string
+		topicsProvider func() map[string]int
+		connectedPeers map[string][]peer.ID // topic -> connected peers
+		expected       []peer.ID
+	}{
+		{
+			name:           "nil topics provider",
+			topicsProvider: nil,
+			connectedPeers: map[string][]peer.ID{},
+			expected:       nil,
+		},
+		{
+			name:           "no topics",
+			topicsProvider: func() map[string]int { return map[string]int{} },
+			connectedPeers: map[string][]peer.ID{},
+			expected:       []peer.ID{},
+		},
+		{
+			name:           "no peers for any topic",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 1} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {}, "topic/b": {}},
+			expected:       []peer.ID{},
+		},
+		{
+			name:           "multiple peers for all topics",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 2, "topic/b": 2} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {peerA, peerB}, "topic/b": {peerB, peerC}},
+			expected:       []peer.ID{},
+		},
+		{
+			name:           "single peer for one topic",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}},
+			expected:       []peer.ID{peerA},
+		},
+		{
+			name:           "same peer is sole provider for multiple topics",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 1} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerA}},
+			expected:       []peer.ID{peerA},
+		},
+		{
+			name:           "different sole providers for different topics",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 1} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB}},
+			expected:       []peer.ID{peerA, peerB},
+		},
+		{
+			name:           "mix of single and multiple peers",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 2, "topic/c": 1} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB, peerC}, "topic/c": {peerC}},
+			expected:       []peer.ID{peerA, peerC},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listPeers := func(topic string) []peer.ID {
+				return tt.connectedPeers[topic]
+			}
+
+			dialer := &GossipPeerDialer{
+				topicsProvider: tt.topicsProvider,
+				listPeers:      listPeers,
+			}
+
+			got := dialer.SoleProviderPeers()
+
+			if tt.expected == nil {
+				require.Nil(t, got)
+				return
+			}
+
+			require.NotNil(t, got)
+			require.Equal(t, len(tt.expected), len(got), "expected %d peers, got %d", len(tt.expected), len(got))
+
+			if len(tt.expected) == 0 {
+				return
+			}
+
+			// Check all expected peers are present (order may vary due to map iteration)
+			expectedSet := make(map[peer.ID]struct{})
+			for _, p := range tt.expected {
+				expectedSet[p] = struct{}{}
+			}
+			for _, p := range got {
+				_, ok := expectedSet[p]
+				require.True(t, ok, "unexpected peer %s in result", p)
+			}
+		})
+	}
+}
+
+func TestGossipPeerDialer_topicsChanged(t *testing.T) {
+	tests := []struct {
+		name         string
+		cachedTopics map[string]int
+		newTopics    map[string]int
+		expected     bool
+	}{
+		{
+			name:         "both empty",
+			cachedTopics: map[string]int{},
+			newTopics:    map[string]int{},
+			expected:     false,
+		},
+		{
+			name:         "same topics",
+			cachedTopics: map[string]int{"topic/a": 1, "topic/b": 2},
+			newTopics:    map[string]int{"topic/a": 1, "topic/b": 2},
+			expected:     false,
+		},
+		{
+			name:         "same topics different min peer counts",
+			cachedTopics: map[string]int{"topic/a": 1, "topic/b": 2},
+			newTopics:    map[string]int{"topic/a": 5, "topic/b": 10},
+			expected:     false,
+		},
+		{
+			name:         "new topic added",
+			cachedTopics: map[string]int{"topic/a": 1},
+			newTopics:    map[string]int{"topic/a": 1, "topic/b": 2},
+			expected:     true,
+		},
+		{
+			name:         "topic removed",
+			cachedTopics: map[string]int{"topic/a": 1, "topic/b": 2},
+			newTopics:    map[string]int{"topic/a": 1},
+			expected:     true,
+		},
+		{
+			name:         "same length different topics",
+			cachedTopics: map[string]int{"topic/a": 1, "topic/b": 2},
+			newTopics:    map[string]int{"topic/a": 1, "topic/c": 2},
+			expected:     true,
+		},
+		{
+			name:         "from empty to non-empty",
+			cachedTopics: map[string]int{},
+			newTopics:    map[string]int{"topic/a": 1},
+			expected:     true,
+		},
+		{
+			name:         "from non-empty to empty",
+			cachedTopics: map[string]int{"topic/a": 1},
+			newTopics:    map[string]int{},
+			expected:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dialer := &GossipPeerDialer{
+				cachedTopics: tt.cachedTopics,
+			}
+			got := dialer.topicsChanged(tt.newTopics)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 type mockCrawler struct {
 	mu      sync.Mutex
 	peers   map[string][]*enode.Node
@@ -455,6 +622,7 @@ func (m *mockCrawler) Start(gossipcrawler.TopicExtractor) error {
 func (m *mockCrawler) Stop()                      {}
 func (m *mockCrawler) RemovePeerByPeerId(peer.ID) {}
 func (m *mockCrawler) RemoveTopic(string)         {}
+func (m *mockCrawler) TriggerCrawl()              {}
 func (m *mockCrawler) PeersForTopic(topic string) []*enode.Node {
 	m.mu.Lock()
 	defer m.mu.Unlock()

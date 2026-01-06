@@ -304,9 +304,7 @@ func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode
 }
 
 // SoleProviderPeers returns peer IDs that are the sole provider for at least one topic.
-// A peer is considered a sole provider if:
-// 1. It's the only connected peer for a topic (listPeers returns only this peer)
-// 2. The crawler has no other known peers for that topic
+// A peer is considered a sole provider if it's the only connected peer for a topic (listPeers returns only this peer)
 //
 // These peers should be protected from pruning since losing them would mean
 // losing connectivity to that topic entirely.
@@ -326,12 +324,8 @@ func (g *GossipPeerDialer) SoleProviderPeers() []peer.ID {
 			continue
 		}
 
-		// Check if crawler knows of any other peers for this topic
-		crawlerPeers := g.crawler.PeersForTopic(topic)
-		if len(crawlerPeers) == 0 {
-			// This peer is the sole known provider
-			soleProviders[connectedPeers[0]] = struct{}{}
-		}
+		// This peer is the sole known provider
+		soleProviders[connectedPeers[0]] = struct{}{}
 	}
 
 	result := make([]peer.ID, 0, len(soleProviders))

@@ -414,7 +414,7 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	go s.subscriptionController.Start()
 
 	for {
-		if s.cfg.p2p.Status() == nil {
+		if s.cfg.p2p.Started() {
 			break
 		}
 		log.Debug("P2P service not started yet; will retry in 100ms")
