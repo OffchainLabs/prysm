@@ -29,7 +29,7 @@ import (
 
 func TestService_decodePubsubMessage(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.BeaconConfig().InitializeForkSchedule()
+	require.NoError(t, params.BeaconConfig().InitializeForkSchedule())
 	entry := params.GetNetworkScheduleEntry(params.BeaconConfig().GenesisEpoch)
 	tests := []struct {
 		name    string
@@ -118,7 +118,7 @@ func TestService_decodePubsubMessage(t *testing.T) {
 func TestExtractDataType(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
-	params.BeaconConfig().InitializeForkSchedule()
+	require.NoError(t, params.BeaconConfig().InitializeForkSchedule())
 
 	type args struct {
 		digest [4]byte
@@ -307,7 +307,7 @@ func TestExtractDataType(t *testing.T) {
 func TestExtractDataTypeFromTypeMapInvalid(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
-	params.BeaconConfig().InitializeForkSchedule()
+	require.NoError(t, params.BeaconConfig().InitializeForkSchedule())
 	chain := &mock.ChainService{ValidatorsRoot: [32]byte{}}
 	_, err := extractDataTypeFromTypeMap(types.BlockMap, []byte{0x00, 0x01}, chain)
 	require.ErrorIs(t, err, errInvalidDigest)

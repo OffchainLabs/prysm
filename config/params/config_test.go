@@ -132,7 +132,7 @@ func TestMaxBlobsJumbled(t *testing.T) {
 		schedule = append(schedule, params.BlobScheduleEntry{Epoch: epoch, MaxBlobsPerBlock: maxBlobs[epoch]})
 	}
 	cfg.BlobSchedule = schedule
-	cfg.InitializeForkSchedule()
+	require.NoError(t, cfg.InitializeForkSchedule())
 	for i := 1; i < len(cfg.BlobSchedule); i++ {
 		beforeEpoch, epoch := cfg.BlobSchedule[i-1].Epoch, cfg.BlobSchedule[i].Epoch
 		before, after := maxBlobs[beforeEpoch], maxBlobs[epoch]
@@ -165,7 +165,7 @@ func TestFirstBPOAtFork(t *testing.T) {
 		{Epoch: cfg.FuluForkEpoch, MaxBlobsPerBlock: electraMaxBlobs + 1},
 		{Epoch: cfg.FuluForkEpoch + 1, MaxBlobsPerBlock: electraMaxBlobs + 2},
 	}
-	cfg.InitializeForkSchedule()
+	require.NoError(t, cfg.InitializeForkSchedule())
 	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
 	require.Equal(t, electraMaxBlobs+1, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch)))
 	require.Equal(t, electraMaxBlobs+2, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch+2)))
@@ -176,7 +176,7 @@ func TestMaxBlobsNoSchedule(t *testing.T) {
 	cfg := params.MainnetConfig()
 	electraMaxBlobs := uint64(cfg.DeprecatedMaxBlobsPerBlockElectra)
 	cfg.BlobSchedule = nil
-	cfg.InitializeForkSchedule()
+	require.NoError(t, cfg.InitializeForkSchedule())
 	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.FuluForkEpoch-1)))
 	require.Equal(t, electraMaxBlobs, uint64(cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch)))
 	require.Equal(t, cfg.DeprecatedMaxBlobsPerBlock, cfg.MaxBlobsPerBlockAtEpoch(cfg.ElectraForkEpoch-1))
@@ -333,7 +333,7 @@ func TestEntryWithForkDigest(t *testing.T) {
 		three: testConfigForSchedule(three),
 	}
 	for _, cfg := range configs {
-		cfg.InitializeForkSchedule()
+		require.NoError(t, cfg.InitializeForkSchedule())
 	}
 	cases := []struct {
 		epoch    primitives.Epoch
@@ -395,7 +395,7 @@ func testConfigForSchedule(gvr [32]byte) *params.BeaconChainConfig {
 func TestFilterFarFuture(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().FarFutureEpoch
-	params.BeaconConfig().InitializeForkSchedule()
+	require.NoError(t, params.BeaconConfig().InitializeForkSchedule())
 	last := params.LastNetworkScheduleEntry()
 	require.Equal(t, [4]byte(params.BeaconConfig().ElectraForkVersion), last.ForkVersion)
 }

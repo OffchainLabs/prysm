@@ -387,20 +387,17 @@ func (b *BeaconChainConfig) ApplyOptions(opts ...Option) {
 }
 
 // InitializeForkSchedule initializes the scheduled forks and BPOs baked into the config.
-func (b *BeaconChainConfig) InitializeForkSchedule() {
-	// TODO: this needs to be able to return an error. The network schedule code has
-	// to implement weird fallbacks when it is not initialized properly, it would be better
-	// if the beacon node could crash if there isn't a valid fork schedule
-	// at the return of this function.
+func (b *BeaconChainConfig) InitializeForkSchedule() error {
 	b.ForkVersionSchedule = configForkSchedule(b)
 	b.ForkVersionNames = configForkNames(b)
 	b.forkSchedule = initForkSchedule(b)
 	b.bpoSchedule = initBPOSchedule(b)
 	combined := b.forkSchedule.merge(b.bpoSchedule)
 	if err := combined.prepare(b); err != nil {
-		log.WithError(err).Error("Failed to prepare network schedule")
+		return err
 	}
 	b.networkSchedule = combined
+	return nil
 }
 
 func LogDigests(b *BeaconChainConfig) {

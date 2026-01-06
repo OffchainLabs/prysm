@@ -12,7 +12,9 @@ import (
 // MainnetConfig returns the configuration to be used in the main network.
 func MainnetConfig() *BeaconChainConfig {
 	if mainnetBeaconConfig.ForkVersionSchedule == nil {
-		mainnetBeaconConfig.InitializeForkSchedule()
+		if err := mainnetBeaconConfig.InitializeForkSchedule(); err != nil {
+			panic(err)
+		}
 	}
 	return mainnetBeaconConfig.Copy()
 }

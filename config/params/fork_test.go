@@ -94,7 +94,7 @@ func TestRetrieveForkDataFromDigest(t *testing.T) {
 
 func TestNextForkData(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	params.BeaconConfig().InitializeForkSchedule()
+	require.NoError(t, params.BeaconConfig().InitializeForkSchedule())
 	cfg := params.BeaconConfig()
 	require.Equal(t, true, params.LastForkEpoch() < cfg.FarFutureEpoch)
 	tests := []struct {
@@ -163,7 +163,7 @@ func TestForkFromConfig_UsesPassedConfig(t *testing.T) {
 	testCfg.AltairForkVersion = []byte{0x02, 0x00, 0x00, 0x00}
 	testCfg.GenesisForkVersion = []byte{0x03, 0x00, 0x00, 0x00}
 	testCfg.AltairForkEpoch = 100
-	testCfg.InitializeForkSchedule()
+	require.NoError(t, testCfg.InitializeForkSchedule())
 
 	// Test at Altair fork epoch - should use the passed config's versions
 	fork := params.ForkFromConfig(testCfg, testCfg.AltairForkEpoch)

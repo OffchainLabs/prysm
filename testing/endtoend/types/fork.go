@@ -73,6 +73,8 @@ func InitForkCfg(start, end int, c *params.BeaconChainConfig) *params.BeaconChai
 			Epoch: c.ElectraForkEpoch, MaxBlobsPerBlock: uint64(c.DeprecatedMaxBlobsPerBlockElectra),
 		})
 	}
-	c.InitializeForkSchedule()
+	if err := c.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return c
 }

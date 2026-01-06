@@ -66,7 +66,9 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 	// recompute SqrRootSlotsPerEpoch constant to handle non-standard values of SlotsPerEpoch
 	conf.SqrRootSlotsPerEpoch = primitives.Slot(math.IntegerSquareRoot(uint64(conf.SlotsPerEpoch)))
 	// Recompute the fork schedule
-	conf.InitializeForkSchedule()
+	if err := conf.InitializeForkSchedule(); err != nil {
+		return nil, errors.Wrap(err, "Failed to initialize fork schedule from yaml config")
+	}
 	log.Debugf("Config file values: %+v", conf)
 	return conf, nil
 }

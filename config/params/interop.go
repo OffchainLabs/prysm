@@ -14,6 +14,8 @@ func InteropConfig() *BeaconChainConfig {
 	c.ElectraForkVersion = []byte{5, 0, 0, 235}
 	c.FuluForkVersion = []byte{6, 0, 0, 235}
 
-	c.InitializeForkSchedule()
+	if err := c.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return c
 }

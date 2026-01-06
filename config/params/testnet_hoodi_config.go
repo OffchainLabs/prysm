@@ -60,6 +60,8 @@ func HoodiConfig() *BeaconChainConfig {
 		},
 	}
 	cfg.DefaultBuilderGasLimit = uint64(60000000)
-	cfg.InitializeForkSchedule()
+	if err := cfg.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return cfg
 }

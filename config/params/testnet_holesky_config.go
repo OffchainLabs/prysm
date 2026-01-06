@@ -54,6 +54,8 @@ func HoleskyConfig() *BeaconChainConfig {
 			Epoch:            167936, // 2025-10-13 21:10:24 UTC
 		},
 	}
-	cfg.InitializeForkSchedule()
+	if err := cfg.InitializeForkSchedule(); err != nil {
+		panic(err)
+	}
 	return cfg
 }
