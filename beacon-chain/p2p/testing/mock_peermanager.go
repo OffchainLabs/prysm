@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -19,6 +19,7 @@ type MockPeerManager struct {
 	BHost             host.Host
 	DiscoveryAddr     []multiaddr.Multiaddr
 	FailDiscoveryAddr bool
+	Dialer            gossipcrawler.GossipDialer
 }
 
 // Disconnect .
@@ -46,6 +47,11 @@ func (m MockPeerManager) NodeID() enode.ID {
 	return enode.ID{}
 }
 
+// GossipDialer returns the configured dialer mock, if any.
+func (m MockPeerManager) GossipDialer() gossipcrawler.GossipDialer {
+	return m.Dialer
+}
+
 // DiscoveryAddresses .
 func (m *MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	if m.FailDiscoveryAddr {
@@ -57,10 +63,15 @@ func (m *MockPeerManager) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 // RefreshPersistentSubnets .
 func (*MockPeerManager) RefreshPersistentSubnets() {}
 
-// FindAndDialPeersWithSubnet .
-func (*MockPeerManager) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
-	return nil
+// DialPeers
+func (p *MockPeerManager) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	return 0
 }
 
 // AddPingMethod .
 func (*MockPeerManager) AddPingMethod(_ func(ctx context.Context, id peer.ID) error) {}
+
+// Crawler.
+func (*MockPeerManager) Crawler() gossipcrawler.Crawler {
+	return nil
+}

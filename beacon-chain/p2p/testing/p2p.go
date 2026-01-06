@@ -13,9 +13,9 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -66,6 +66,7 @@ type TestP2P struct {
 	earliestAvailableSlot primitives.Slot
 	custodyGroupCount     uint64
 	enr                   *enr.Record
+	dialer                gossipcrawler.GossipDialer
 }
 
 // NewTestP2P initializes a new p2p test service.
@@ -117,6 +118,10 @@ func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userO
 		peers:        peerStatuses,
 		enr:          new(enr.Record),
 	}
+}
+
+func (p *TestP2P) Status() error {
+	return nil
 }
 
 // Connect two test peers together.
@@ -192,11 +197,7 @@ func (p *TestP2P) ReceivePubSub(topic string, msg proto.Message) {
 	if _, err := p.Encoding().EncodeGossip(buf, castedMsg); err != nil {
 		p.t.Fatalf("Failed to encode message: %v", err)
 	}
-	digest, err := p.ForkDigest()
-	if err != nil {
-		p.t.Fatal(err)
-	}
-	topicHandle, err := ps.Join(fmt.Sprintf(topic, digest) + p.Encoding().ProtocolSuffix())
+	topicHandle, err := ps.Join(topic)
 	if err != nil {
 		p.t.Fatal(err)
 	}
@@ -288,6 +289,9 @@ func (p *TestP2P) SubscribeToTopic(topic string, opts ...pubsub.SubOpt) (*pubsub
 // LeaveTopic closes topic and removes corresponding handler from list of joined topics.
 // This method will return error if there are outstanding event handlers or subscriptions.
 func (p *TestP2P) LeaveTopic(topic string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if t, ok := p.joinedTopics[topic]; ok {
 		if err := t.Close(); err != nil {
 			return err
@@ -428,9 +432,8 @@ func (p *TestP2P) Peers() *peers.Status {
 	return p.peers
 }
 
-// FindAndDialPeersWithSubnets mocks the p2p func.
-func (*TestP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
-	return nil
+func (p *TestP2P) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	return 0
 }
 
 // RefreshPersistentSubnets mocks the p2p func.
@@ -566,4 +569,44 @@ func (s *TestP2P) custodyGroupCountFromPeerENR(pid peer.ID) uint64 {
 	}
 
 	return custodyGroupCount
+}
+
+// MockCrawler is a minimal mock implementation of PeerCrawler for testing
+type MockCrawler struct{}
+
+// Start does nothing as this is a mock
+func (m *MockCrawler) Start(gossipcrawler.TopicExtractor) error {
+	return nil
+}
+
+// Stop does nothing as this is a mock
+func (m *MockCrawler) Stop() {}
+
+// SetTopicExtractor does nothing as this is a mock
+func (m *MockCrawler) SetTopicExtractor(extractor func(context.Context, *enode.Node) ([]string, error)) error {
+	return nil
+}
+
+// RemoveTopic does nothing as this is a mock
+func (m *MockCrawler) RemoveTopic(topic string) {}
+
+// RemovePeerID does nothing as this is a mock
+func (m *MockCrawler) RemovePeerByPeerId(pid peer.ID) {}
+
+// PeersForTopic returns empty list as this is a mock
+func (m *MockCrawler) PeersForTopic(topic string) []*enode.Node {
+	return []*enode.Node{}
+}
+
+// TriggerCrawl does nothing as this is a mock
+func (m *MockCrawler) TriggerCrawl() {}
+
+// Crawler returns a mock crawler implementation for testing.
+func (*TestP2P) Crawler() gossipcrawler.Crawler {
+	return &MockCrawler{}
+}
+
+// GossipDialer returns nil for tests that do not exercise dialer behaviour.
+func (p *TestP2P) GossipDialer() gossipcrawler.GossipDialer {
+	return p.dialer
 }

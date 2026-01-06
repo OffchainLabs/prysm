@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -41,6 +41,20 @@ func (*FakeP2P) AddConnectionHandler(_, _ func(ctx context.Context, id peer.ID) 
 
 }
 
+// Crawler -- fake.
+func (*FakeP2P) Crawler() gossipcrawler.Crawler {
+	return &MockCrawler{}
+}
+
+// GossipDialer -- fake.
+func (*FakeP2P) GossipDialer() gossipcrawler.GossipDialer {
+	return nil
+}
+
+func (*FakeP2P) Started() bool {
+	return true
+}
+
 // AddDisconnectionHandler -- fake.
 func (*FakeP2P) AddDisconnectionHandler(_ func(ctx context.Context, id peer.ID) error) {
 }
@@ -70,11 +84,6 @@ func (*FakeP2P) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 	return nil, nil
 }
 
-// FindAndDialPeersWithSubnets mocks the p2p func.
-func (*FakeP2P) FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error {
-	return nil
-}
-
 // RefreshPersistentSubnets mocks the p2p func.
 func (*FakeP2P) RefreshPersistentSubnets() {}
 
@@ -91,6 +100,11 @@ func (*FakeP2P) Metadata() metadata.Metadata {
 // Peers -- fake.
 func (*FakeP2P) Peers() *peers.Status {
 	return nil
+}
+
+// DialPeers -- fake.
+func (*FakeP2P) DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint {
+	return 0
 }
 
 // PublishToTopic -- fake.

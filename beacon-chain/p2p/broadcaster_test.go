@@ -30,6 +30,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -111,6 +112,7 @@ func TestService_Attestation_Subnet(t *testing.T) {
 	if gtm := GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]; gtm != AttestationSubnetTopicFormat {
 		t.Errorf("Constant is out of date. Wanted %s, got %s", AttestationSubnetTopicFormat, gtm)
 	}
+	s := Service{}
 
 	tests := []struct {
 		att   *ethpb.Attestation
@@ -123,7 +125,7 @@ func TestService_Attestation_Subnet(t *testing.T) {
 					Slot:           2,
 				},
 			},
-			topic: "/eth2/00000000/beacon_attestation_2",
+			topic: "/eth2/00000000/beacon_attestation_2" + s.Encoding().ProtocolSuffix(),
 		},
 		{
 			att: &ethpb.Attestation{
@@ -132,7 +134,7 @@ func TestService_Attestation_Subnet(t *testing.T) {
 					Slot:           10,
 				},
 			},
-			topic: "/eth2/00000000/beacon_attestation_21",
+			topic: "/eth2/00000000/beacon_attestation_21" + s.Encoding().ProtocolSuffix(),
 		},
 		{
 			att: &ethpb.Attestation{
@@ -141,12 +143,12 @@ func TestService_Attestation_Subnet(t *testing.T) {
 					Slot:           529,
 				},
 			},
-			topic: "/eth2/00000000/beacon_attestation_8",
+			topic: "/eth2/00000000/beacon_attestation_8" + s.Encoding().ProtocolSuffix(),
 		},
 	}
 	for _, tt := range tests {
 		subnet := helpers.ComputeSubnetFromCommitteeAndSlot(100, tt.att.Data.CommitteeIndex, tt.att.Data.Slot)
-		assert.Equal(t, tt.topic, attestationToTopic(subnet, [4]byte{} /* fork digest */), "Wrong topic")
+		assert.Equal(t, tt.topic, AttestationSubnetTopic([4]byte{}, subnet), "Wrong topic")
 	}
 }
 
@@ -175,14 +177,12 @@ func TestService_BroadcastAttestation(t *testing.T) {
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
 	subnet := uint64(5)
 
-	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = AttestationSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := AttestationSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -228,6 +228,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// Setup bootnode.
 	cfg := &Config{PingInterval: testPingInterval, DB: db}
 	cfg.UDPPort = uint(port)
+	cfg.TCPPort = uint(port)
 	_, pkey := createAddrAndPrivKey(t)
 	ipAddr := net.ParseIP("127.0.0.1")
 	genesisTime := time.Now()
@@ -253,8 +254,9 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 
 	var listeners []*listenerWrapper
 	var hosts []host.Host
+	var configs []*Config
 	// setup other nodes.
-	cfg = &Config{
+	baseCfg := &Config{
 		Discv5BootStrapAddrs: []string{bootNode.String()},
 		MaxPeers:             2,
 		PingInterval:         testPingInterval,
@@ -263,11 +265,21 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	// Setup 2 different hosts
 	for i := uint(1); i <= 2; i++ {
 		h, pkey, ipAddr := createHost(t, port+i)
-		cfg.UDPPort = uint(port + i)
-		cfg.TCPPort = uint(port + i)
+
+		// Create a new config for each service to avoid shared mutations
+		cfg := &Config{
+			Discv5BootStrapAddrs: baseCfg.Discv5BootStrapAddrs,
+			MaxPeers:             baseCfg.MaxPeers,
+			PingInterval:         baseCfg.PingInterval,
+			DB:                   baseCfg.DB,
+			UDPPort:              uint(port + i),
+			TCPPort:              uint(port + i),
+		}
+
 		if len(listeners) > 0 {
 			cfg.Discv5BootStrapAddrs = append(cfg.Discv5BootStrapAddrs, listeners[len(listeners)-1].Self().String())
 		}
+
 		s := &Service{
 			cfg:                   cfg,
 			genesisTime:           genesisTime,
@@ -280,18 +292,22 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		close(s.custodyInfoSet)
 
 		listener, err := s.startDiscoveryV5(ipAddr, pkey)
-		// Set for 2nd peer
+		assert.NoError(t, err, "Could not start discovery for node")
+
+		// Set listener for the service
+		s.dv5Listener = listener
+		s.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
+
+		// Set subnet for 2nd peer
 		if i == 2 {
-			s.dv5Listener = listener
-			s.metaData = wrapper.WrappedMetadataV0(new(ethpb.MetaDataV0))
 			bitV := bitfield.NewBitvector64()
 			bitV.SetBitAt(subnet, true)
 			err := s.updateSubnetRecordWithMetadata(bitV)
 			require.NoError(t, err)
 		}
-		assert.NoError(t, err, "Could not start discovery for node")
 		listeners = append(listeners, listener)
 		hosts = append(hosts, h)
+		configs = append(configs, cfg)
 	}
 	defer func() {
 		// Close down all peers.
@@ -326,7 +342,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		pubsub:                ps1,
 		dv5Listener:           listeners[0],
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   cfg,
+		cfg:                   configs[0],
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
@@ -342,7 +358,7 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 		pubsub:                ps2,
 		dv5Listener:           listeners[1],
 		joinedTopics:          map[string]*pubsub.Topic{},
-		cfg:                   cfg,
+		cfg:                   configs[1],
 		genesisTime:           time.Now(),
 		genesisValidatorsRoot: bytesutil.PadTo([]byte{'A'}, 32),
 		subnetsLock:           make(map[uint64]*sync.RWMutex),
@@ -355,14 +371,12 @@ func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
 	go p2.listenForNewNodes()
 
 	msg := util.HydrateAttestation(&ethpb.Attestation{AggregationBits: bitfield.NewBitlist(7)})
-	topic := AttestationSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()] = AttestationSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := AttestationSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	// We don't use our internal subscribe method
 	// due to using floodsub over here.
 	tpHandle, err := p2.JoinTopic(topic)
@@ -433,14 +447,12 @@ func TestService_BroadcastSyncCommittee(t *testing.T) {
 	msg := util.HydrateSyncCommittee(&ethpb.SyncCommitteeMessage{})
 	subnet := uint64(5)
 
-	topic := SyncCommitteeSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SyncCommitteeMessage]()] = SyncCommitteeSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := SyncCommitteeSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -510,14 +522,12 @@ func TestService_BroadcastBlob(t *testing.T) {
 	}
 	subnet := uint64(0)
 
-	topic := BlobSubnetTopicFormat
-	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = topic
+	GossipTypeMapping[reflect.TypeFor[*ethpb.BlobSidecar]()] = BlobSubnetTopicFormat
 	digest, err := p.currentForkDigest()
 	require.NoError(t, err)
-	topic = fmt.Sprintf(topic, digest, subnet)
+	topic := BlobSubnetTopic(digest, subnet)
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -577,10 +587,9 @@ func TestService_BroadcastLightClientOptimisticUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientOptimisticUpdateTopicFormat
-	topic := fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
+	topic := LcOptimisticToTopic(params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -653,10 +662,9 @@ func TestService_BroadcastLightClientFinalityUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	GossipTypeMapping[reflect.TypeOf(msg)] = LightClientFinalityUpdateTopicFormat
-	topic := fmt.Sprintf(LightClientFinalityUpdateTopicFormat, params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
+	topic := LcFinalityToTopic(params.ForkDigest(slots.ToEpoch(msg.AttestedHeader().Beacon().Slot)))
 
 	// External peer subscribes to the topic.
-	topic += p.Encoding().ProtocolSuffix()
 	sub, err := p2.SubscribeToTopic(topic)
 	require.NoError(t, err)
 
@@ -704,7 +712,6 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	const (
 		port        = 2000
 		columnIndex = 12
-		topicFormat = DataColumnSubnetTopicFormat
 	)
 
 	ctx := t.Context()
@@ -762,7 +769,17 @@ func TestService_BroadcastDataColumn(t *testing.T) {
 	require.NoError(t, err)
 
 	subnet := peerdas.ComputeSubnetForDataColumnSidecar(columnIndex)
-	topic := fmt.Sprintf(topicFormat, digest, subnet) + service.Encoding().ProtocolSuffix()
+	topic := DataColumnSubnetTopic(digest, subnet)
+
+	crawler, err := NewGossipPeerCrawler(t.Context(), service, listener, 1*time.Second, 1*time.Second, 10,
+		func(n *enode.Node) bool { return true },
+		service.Peers().Scorers().Score)
+	require.NoError(t, err)
+	err = crawler.Start(func(ctx context.Context, node *enode.Node) ([]string, error) {
+		return []string{topic}, nil
+	})
+	require.NoError(t, err)
+	service.gossipDialer = NewGossipPeerDialer(t.Context(), crawler, service.PubSub().ListPeers, service.DialPeers)
 
 	_, verifiedRoSidecars := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{{Index: columnIndex}})
 	verifiedRoSidecar := verifiedRoSidecars[0]

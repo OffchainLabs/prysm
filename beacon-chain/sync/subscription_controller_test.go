@@ -1,0 +1,545 @@
+package sync
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+)
+
+var _ DynamicShardedTopicFamily = (*testDynFamly)(nil)
+
+// testDynFamly is a test implementation of a dynamic-subnet topic family.
+type testDynFamly struct {
+	baseTopicFamily
+	topics             []string
+	name               string
+	topicsWithMinPeers map[string]int
+}
+
+func (f *testDynFamly) Name() string {
+	return f.name
+}
+
+func (f *testDynFamly) Validator() wrappedVal {
+	return nil
+}
+
+func (f *testDynFamly) Handler() subHandler {
+	return noopHandler
+}
+
+func (f *testDynFamly) GetFullTopicString(subnet uint64) string {
+	return fmt.Sprintf("topic-%d", subnet)
+}
+
+func (f *testDynFamly) TopicsToSubscribeForSlot(_ primitives.Slot) []string {
+	return f.topics
+}
+
+func (f *testDynFamly) ExtractTopicsForNode(_ *enode.Node) ([]string, error) {
+	return f.topics, nil
+}
+
+func (f *testDynFamly) SubscribeForSlot(_ primitives.Slot) {
+	f.baseTopicFamily.subscribeToTopics(f.topics)
+}
+
+func (f *testDynFamly) UnsubscribeForSlot(_ primitives.Slot) {}
+
+func (f *testDynFamly) TopicsWithMinPeerCount(_ primitives.Slot) map[string]int {
+	return f.topicsWithMinPeers
+}
+
+type staticTopicFamily struct {
+	*baseTopicFamily
+	name   string
+	topics []string
+}
+
+func (f *staticTopicFamily) Name() string {
+	return f.name
+}
+
+func (f *staticTopicFamily) Validator() wrappedVal {
+	return f.validator
+}
+
+func (f *staticTopicFamily) Handler() subHandler {
+	return f.handler
+}
+
+func (f *staticTopicFamily) Subscribe() {
+	f.baseTopicFamily.subscribeToTopics(f.topics)
+}
+
+func testSubscriptionControllerService(t *testing.T, current primitives.Epoch) *Service {
+	closedChan := make(chan struct{})
+	close(closedChan)
+	peer2peer := p2ptest.NewTestP2P(t)
+	chainService := &mockChain.ChainService{
+		Genesis:        genesis.Time(),
+		ValidatorsRoot: genesis.ValidatorsRoot(),
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	r := &Service{
+		ctx:    ctx,
+		cancel: cancel,
+		cfg: &config{
+			p2p:         peer2peer,
+			chain:       chainService,
+			clock:       defaultClockWithTimeAtEpoch(current),
+			initialSync: &mockSync.Sync{IsSyncing: false},
+		},
+		chainStarted:        abool.New(),
+		subHandler:          newSubTopicHandler(),
+		initialSyncComplete: closedChan,
+	}
+	r.subscriptionController = NewSubscriptionController(context.Background(), r)
+	return r
+}
+
+func TestSubscriptionController_CheckForNextEpochForkSubscriptions(t *testing.T) {
+	closedChan := make(chan struct{})
+	close(closedChan)
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
+	params.BeaconConfig().InitializeForkSchedule()
+
+	cfg := params.BeaconConfig()
+	altairForkEpoch := cfg.AltairForkEpoch
+	bellatrixForkEpoch := cfg.BellatrixForkEpoch
+	capellaForkEpoch := cfg.CapellaForkEpoch
+	denebForkEpoch := cfg.DenebForkEpoch
+	electraForkEpoch := cfg.ElectraForkEpoch
+	fuluForkEpoch := cfg.FuluForkEpoch
+	blobsidecarSubnetCount := cfg.BlobsidecarSubnetCount
+	blobsidecarSubnetCountElectra := cfg.BlobsidecarSubnetCountElectra
+
+	// Pre-compute digests using current config state
+	altairDigest := params.ForkDigest(altairForkEpoch)
+	bellatrixDigest := params.ForkDigest(bellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(capellaForkEpoch)
+	denebDigest := params.ForkDigest(denebForkEpoch)
+	electraDigest := params.ForkDigest(electraForkEpoch)
+	fuluDigest := params.ForkDigest(fuluForkEpoch)
+
+	tests := []struct {
+		name                string
+		svcCreator          func(t *testing.T) *Service
+		checkRegistration   func(t *testing.T, s *Service)
+		epochAtRegistration func(primitives.Epoch) primitives.Epoch
+		forkEpoch           primitives.Epoch
+		nextForkEpoch       primitives.Epoch
+		forkDigest          [4]byte
+		nextForkDigest      [4]byte
+	}{
+		{
+			name:                "no fork in the next epoch",
+			forkEpoch:           altairForkEpoch,
+			forkDigest:          altairDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 2 },
+			nextForkEpoch:       bellatrixForkEpoch,
+			nextForkDigest:      bellatrixDigest,
+			checkRegistration:   func(t *testing.T, s *Service) {},
+		},
+		{
+			name:                "altair fork in the next epoch",
+			forkEpoch:           altairForkEpoch,
+			forkDigest:          altairDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
+			nextForkEpoch:       bellatrixForkEpoch,
+			nextForkDigest:      bellatrixDigest,
+			checkRegistration: func(t *testing.T, s *Service) {
+				expected := fmt.Sprintf(p2p.SyncContributionAndProofSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), altairDigest)
+				assert.Equal(t, true, s.subHandler.topicExists(expected), "subnet topic doesn't exist")
+			},
+		},
+		{
+			name:                "capella fork in the next epoch",
+			forkEpoch:           capellaForkEpoch,
+			forkDigest:          capellaDigest,
+			nextForkEpoch:       denebForkEpoch,
+			nextForkDigest:      denebDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
+			checkRegistration: func(t *testing.T, s *Service) {
+				expected := fmt.Sprintf(p2p.BlsToExecutionChangeSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), capellaDigest)
+				assert.Equal(t, true, s.subHandler.topicExists(expected), "subnet topic doesn't exist")
+			},
+		},
+		{
+			name:                "deneb fork in the next epoch",
+			forkEpoch:           denebForkEpoch,
+			forkDigest:          denebDigest,
+			nextForkEpoch:       electraForkEpoch,
+			nextForkDigest:      electraDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
+			checkRegistration: func(t *testing.T, s *Service) {
+				subIndices := mapFromCount(blobsidecarSubnetCount)
+				for idx := range subIndices {
+					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, denebDigest, idx)
+					expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
+					assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
+				}
+			},
+		},
+		{
+			name:                "electra fork in the next epoch",
+			forkEpoch:           electraForkEpoch,
+			forkDigest:          electraDigest,
+			nextForkEpoch:       fuluForkEpoch,
+			nextForkDigest:      fuluDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
+			checkRegistration: func(t *testing.T, s *Service) {
+				subIndices := mapFromCount(blobsidecarSubnetCountElectra)
+				for idx := range subIndices {
+					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, electraDigest, idx)
+					expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
+					assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
+				}
+			},
+		},
+		{
+			name:                "fulu fork in the next epoch; should not have blob topics",
+			forkEpoch:           fuluForkEpoch,
+			forkDigest:          fuluDigest,
+			nextForkEpoch:       fuluForkEpoch,
+			nextForkDigest:      fuluDigest,
+			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
+			checkRegistration: func(t *testing.T, s *Service) {
+				// Advance to two epochs after Fulu activation and assert no blob topics remain.
+				target := fuluForkEpoch + 2
+				s.cfg.clock = defaultClockWithTimeAtEpoch(target)
+				s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
+
+				for _, topic := range s.subHandler.allTopics() {
+					if strings.Contains(topic, "/"+p2p.GossipBlobSidecarMessage) {
+						t.Fatalf("blob topic still exists after Fulu+2: %s", topic)
+					}
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := tt.epochAtRegistration(tt.forkEpoch)
+			s := testSubscriptionControllerService(t, current)
+			s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
+			tt.checkRegistration(t, s)
+
+			if current != tt.forkEpoch-1 {
+				return
+			}
+
+			// Ensure the topics were registered for the upcoming fork
+			// Use pre-computed digest from test struct to avoid race with parallel tests
+			assert.Equal(t, true, s.subHandler.digestExists(tt.forkDigest))
+
+			// After this point we are checking deregistration, which doesn't apply if there isn't a higher
+			// nextForkEpoch.
+			if tt.forkEpoch >= tt.nextForkEpoch {
+				return
+			}
+
+			// Move the clock to just before the next fork epoch and ensure deregistration is correct
+			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
+			s.subscriptionController.updateActiveTopicFamilies(s.cfg.clock.CurrentEpoch())
+
+			s.subscriptionController.updateActiveTopicFamilies(tt.nextForkEpoch)
+			assert.Equal(t, true, s.subHandler.digestExists(tt.forkDigest))
+			// deregister as if it is the epoch after the next fork epoch
+			s.subscriptionController.updateActiveTopicFamilies(tt.nextForkEpoch + 1)
+			assert.Equal(t, false, s.subHandler.digestExists(tt.forkDigest))
+			assert.Equal(t, true, s.subHandler.digestExists(tt.nextForkDigest))
+		})
+	}
+}
+
+func TestSubscriptionController_ExtractTopics(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+
+	type tc struct {
+		name    string
+		setup   func(*SubscriptionController)
+		ctx     func() context.Context
+		node    *enode.Node
+		want    []string
+		wantErr bool
+	}
+
+	dummyNode := new(enode.Node)
+
+	tests := []tc{
+		{
+			name:    "nil node returns error",
+			setup:   func(g *SubscriptionController) {},
+			ctx:     func() context.Context { return context.Background() },
+			node:    nil,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "no families yields empty",
+			setup:   func(g *SubscriptionController) {},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{},
+			wantErr: false,
+		},
+		{
+			name: "static family ignored",
+			setup: func(g *SubscriptionController) {
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{},
+			wantErr: false,
+		},
+		{
+			name: "single dynamic family topics returned",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{topics: []string{"t1", "t2"}, name: "Dyn1"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{"t1", "t2"},
+			wantErr: false,
+		},
+		{
+			name: "multiple dynamic families de-dup",
+			setup: func(g *SubscriptionController) {
+				f1 := &testDynFamly{topics: []string{"t1", "t2"}, name: "Dyn1"}
+				f2 := &testDynFamly{topics: []string{"t2", "t3"}, name: "Dyn2"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{"t1", "t2", "t3"},
+			wantErr: false,
+		},
+		{
+			name: "mixed static and dynamic",
+			setup: func(g *SubscriptionController) {
+				f1 := &testDynFamly{topics: []string{"a", "b"}, name: "Dyn"}
+				s1 := &staticTopicFamily{name: "Static"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{9}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{9}}] = s1
+				g.mu.Unlock()
+			},
+			ctx:     func() context.Context { return context.Background() },
+			node:    dummyNode,
+			want:    []string{"a", "b"},
+			wantErr: false,
+		},
+	}
+
+	s := &Service{}
+	g := NewSubscriptionController(context.Background(), s)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset families for each subtest
+			g.mu.Lock()
+			g.activeTopicFamilies = make(map[topicFamilyKey]TopicFamily)
+			g.mu.Unlock()
+
+			tt.setup(g)
+			topics, err := g.ExtractTopics(tt.ctx(), tt.node)
+			if tt.wantErr {
+				require.NotNil(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			got := map[string]bool{}
+			for _, tpc := range topics {
+				got[tpc] = true
+			}
+			want := map[string]bool{}
+			for _, tpc := range tt.want {
+				want[tpc] = true
+			}
+			require.Equal(t, len(want), len(got))
+			for k := range want {
+				require.Equal(t, true, got[k], "missing topic %s", k)
+			}
+		})
+	}
+}
+
+func TestSubscriptionController_GetCurrentActiveTopicsWithMinPeerCount(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
+
+	tests := []struct {
+		name  string
+		setup func(*SubscriptionController)
+		want  map[string]int
+	}{
+		{
+			name:  "no families yields empty map",
+			setup: func(_ *SubscriptionController) {},
+			want:  map[string]int{},
+		},
+		{
+			name: "static family ignored",
+			setup: func(g *SubscriptionController) {
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{1, 2, 3, 4}}] = &staticTopicFamily{name: "StaticFam"}
+				g.mu.Unlock()
+			},
+			want: map[string]int{},
+		},
+		{
+			name: "single dynamic family returns topics with min peer counts",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "Dyn1",
+					topicsWithMinPeers: map[string]int{"topic/a": 8, "topic/b": 6},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/a": 8, "topic/b": 6},
+		},
+		{
+			name: "dynamic family with nil topicsWithMinPeers returns empty",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "DynNil",
+					topicsWithMinPeers: nil,
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dynnil", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{},
+		},
+		{
+			name: "dynamic family with empty topicsWithMinPeers returns empty",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "DynEmpty",
+					topicsWithMinPeers: map[string]int{},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dynempty", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{},
+		},
+		{
+			name: "multiple dynamic families with disjoint topics",
+			setup: func(g *SubscriptionController) {
+				f1 := &testDynFamly{
+					name:               "Dyn1",
+					topicsWithMinPeers: map[string]int{"topic/a": 8, "topic/b": 6},
+				}
+				f2 := &testDynFamly{
+					name:               "Dyn2",
+					topicsWithMinPeers: map[string]int{"topic/c": 4, "topic/d": 2},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/a": 8, "topic/b": 6, "topic/c": 4, "topic/d": 2},
+		},
+		{
+			name: "multiple dynamic families with overlapping topics - counts are summed",
+			setup: func(g *SubscriptionController) {
+				f1 := &testDynFamly{
+					name:               "Dyn1",
+					topicsWithMinPeers: map[string]int{"topic/shared": 5, "topic/a": 3},
+				}
+				f2 := &testDynFamly{
+					name:               "Dyn2",
+					topicsWithMinPeers: map[string]int{"topic/shared": 7, "topic/b": 2},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn1", forkDigest: [4]byte{0}}] = f1
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn2", forkDigest: [4]byte{0}}] = f2
+				g.mu.Unlock()
+			},
+			// topic/shared: 5 + 7 = 12
+			want: map[string]int{"topic/shared": 12, "topic/a": 3, "topic/b": 2},
+		},
+		{
+			name: "mixed static and dynamic families - only dynamic counted",
+			setup: func(g *SubscriptionController) {
+				dynFam := &testDynFamly{
+					name:               "Dyn",
+					topicsWithMinPeers: map[string]int{"topic/dyn": 8},
+				}
+				staticFam := &staticTopicFamily{name: "Static"}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dyn", forkDigest: [4]byte{9}}] = dynFam
+				g.activeTopicFamilies[topicFamilyKey{topicName: "static", forkDigest: [4]byte{9}}] = staticFam
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/dyn": 8},
+		},
+		{
+			name: "single topic with zero peer count",
+			setup: func(g *SubscriptionController) {
+				fam := &testDynFamly{
+					name:               "DynZero",
+					topicsWithMinPeers: map[string]int{"topic/zero": 0},
+				}
+				g.mu.Lock()
+				g.activeTopicFamilies[topicFamilyKey{topicName: "dynzero", forkDigest: [4]byte{0}}] = fam
+				g.mu.Unlock()
+			},
+			want: map[string]int{"topic/zero": 0},
+		},
+	}
+
+	current := params.BeaconConfig().AltairForkEpoch
+	s := testSubscriptionControllerService(t, current)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset families for each subtest
+			s.subscriptionController.mu.Lock()
+			s.subscriptionController.activeTopicFamilies = make(map[topicFamilyKey]TopicFamily)
+			s.subscriptionController.mu.Unlock()
+
+			tt.setup(s.subscriptionController)
+			got := s.subscriptionController.GetCurrentActiveTopicsWithMinPeerCount()
+
+			require.Equal(t, len(tt.want), len(got), "result length mismatch")
+			for topic, expectedCount := range tt.want {
+				actualCount, exists := got[topic]
+				require.Equal(t, true, exists, "expected topic %s not found in result", topic)
+				require.Equal(t, expectedCount, actualCount, "peer count mismatch for topic %s", topic)
+			}
+		})
+	}
+}

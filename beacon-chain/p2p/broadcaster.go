@@ -61,7 +61,10 @@ func (s *Service) Broadcast(ctx context.Context, msg proto.Message) error {
 	if !ok {
 		return errors.Errorf("message of %T does not support marshaller interface", msg)
 	}
-	return s.broadcastObject(ctx, castMsg, fmt.Sprintf(topic, forkDigest))
+
+	fullTopic := fmt.Sprintf(topic, forkDigest) + s.Encoding().ProtocolSuffix()
+
+	return s.broadcastObject(ctx, castMsg, fullTopic)
 }
 
 // BroadcastAttestation broadcasts an attestation to the p2p network, the message is assumed to be
@@ -107,6 +110,7 @@ func (s *Service) BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint
 }
 
 func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint64, att ethpb.Att, forkDigest [fieldparams.VersionLength]byte) {
+	topic := AttestationSubnetTopic(forkDigest, subnet)
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastAttestation")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -117,7 +121,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 
 	// Ensure we have peers with this subnet.
 	s.subnetLocker(subnet).RLock()
-	hasPeer := s.hasPeerWithSubnet(attestationToTopic(subnet, forkDigest))
+	hasPeer := s.hasPeerWithTopic(topic)
 	s.subnetLocker(subnet).RUnlock()
 
 	span.SetAttributes(
@@ -132,7 +136,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 			s.subnetLocker(subnet).Lock()
 			defer s.subnetLocker(subnet).Unlock()
 
-			if err := s.FindAndDialPeersWithSubnets(ctx, AttestationSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -154,13 +158,14 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 		return
 	}
 
-	if err := s.broadcastObject(ctx, att, attestationToTopic(subnet, forkDigest)); err != nil {
+	if err := s.broadcastObject(ctx, att, topic); err != nil {
 		log.WithError(err).Error("Failed to broadcast attestation")
 		tracing.AnnotateError(span, err)
 	}
 }
 
 func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage, forkDigest [fieldparams.VersionLength]byte) {
+	topic := SyncCommitteeSubnetTopic(forkDigest, subnet)
 	_, span := trace.StartSpan(ctx, "p2p.broadcastSyncCommittee")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -174,7 +179,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 	// to ensure that we can reuse the same subnet locker.
 	wrappedSubIdx := subnet + syncLockerVal
 	s.subnetLocker(wrappedSubIdx).RLock()
-	hasPeer := s.hasPeerWithSubnet(syncCommitteeToTopic(subnet, forkDigest))
+	hasPeer := s.hasPeerWithTopic(topic)
 	s.subnetLocker(wrappedSubIdx).RUnlock()
 
 	span.SetAttributes(
@@ -188,7 +193,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		if err := func() error {
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
-			if err := s.FindAndDialPeersWithSubnets(ctx, SyncCommitteeSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -206,7 +211,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 		return
 	}
 
-	if err := s.broadcastObject(ctx, sMsg, syncCommitteeToTopic(subnet, forkDigest)); err != nil {
+	if err := s.broadcastObject(ctx, sMsg, topic); err != nil {
 		log.WithError(err).Error("Failed to broadcast sync committee message")
 		tracing.AnnotateError(span, err)
 	}
@@ -234,6 +239,7 @@ func (s *Service) BroadcastBlob(ctx context.Context, subnet uint64, blob *ethpb.
 }
 
 func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blobSidecar *ethpb.BlobSidecar, forkDigest [fieldparams.VersionLength]byte) {
+	topic := BlobSubnetTopic(forkDigest, subnet)
 	_, span := trace.StartSpan(ctx, "p2p.internalBroadcastBlob")
 	defer span.End()
 	ctx = trace.NewContext(context.Background(), span) // clear parent context / deadline.
@@ -244,7 +250,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 
 	wrappedSubIdx := subnet + blobSubnetLockerVal
 	s.subnetLocker(wrappedSubIdx).RLock()
-	hasPeer := s.hasPeerWithSubnet(blobSubnetToTopic(subnet, forkDigest))
+	hasPeer := s.hasPeerWithTopic(topic)
 	s.subnetLocker(wrappedSubIdx).RUnlock()
 
 	if !hasPeer {
@@ -253,7 +259,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 			s.subnetLocker(wrappedSubIdx).Lock()
 			defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-			if err := s.FindAndDialPeersWithSubnets(ctx, BlobSubnetTopicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+			if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 				return errors.Wrap(err, "find peers with subnets")
 			}
 
@@ -265,7 +271,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 		}
 	}
 
-	if err := s.broadcastObject(ctx, blobSidecar, blobSubnetToTopic(subnet, forkDigest)); err != nil {
+	if err := s.broadcastObject(ctx, blobSidecar, topic); err != nil {
 		log.WithError(err).Error("Failed to broadcast blob sidecar")
 		tracing.AnnotateError(span, err)
 	}
@@ -294,7 +300,7 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 	}
 
 	digest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
-	if err := s.broadcastObject(ctx, update, lcOptimisticToTopic(digest)); err != nil {
+	if err := s.broadcastObject(ctx, update, LcOptimisticToTopic(digest)); err != nil {
 		log.WithError(err).Debug("Failed to broadcast light client optimistic update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
@@ -328,7 +334,7 @@ func (s *Service) BroadcastLightClientFinalityUpdate(ctx context.Context, update
 	}
 
 	forkDigest := params.ForkDigest(slots.ToEpoch(update.AttestedHeader().Beacon().Slot))
-	if err := s.broadcastObject(ctx, update, lcFinalityToTopic(forkDigest)); err != nil {
+	if err := s.broadcastObject(ctx, update, LcFinalityToTopic(forkDigest)); err != nil {
 		log.WithError(err).Debug("Failed to broadcast light client finality update")
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
@@ -374,7 +380,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 	topicFunc := func(sidecar blocks.VerifiedRODataColumn) (topic string, wrappedSubIdx uint64, subnet uint64) {
 		subnet = peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
-		topic = dataColumnSubnetToTopic(subnet, forkDigest)
+		topic = DataColumnSubnetTopic(forkDigest, subnet)
 		wrappedSubIdx = subnet + dataColumnSubnetVal
 		return
 	}
@@ -390,7 +396,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		// Check if we have a peer for this subnet (use RLock for read-only check).
 		mu := s.subnetLocker(wrappedSubIdx)
 		mu.RLock()
-		hasPeer := s.hasPeerWithSubnet(topic)
+		hasPeer := s.hasPeerWithTopic(topic)
 		mu.RUnlock()
 
 		if hasPeer {
@@ -433,10 +439,10 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 			ctx := trace.NewContext(s.ctx, span)
 			defer span.End()
 
-			topic, wrappedSubIdx, subnet := topicFunc(sidecar)
+			topic, wrappedSubIdx, _ := topicFunc(sidecar)
 
 			// Find peers for this sidecar's subnet.
-			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, topic); err != nil {
 				tracing.AnnotateError(span, err)
 				log.WithError(err).Error("Cannot find peers if needed")
 				return
@@ -539,41 +545,37 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 func (s *Service) findPeersIfNeeded(
 	ctx context.Context,
 	wrappedSubIdx uint64,
-	topicFormat string,
-	forkDigest [fieldparams.VersionLength]byte,
-	subnet uint64,
+	topic string,
 ) error {
 	// Sending a data column sidecar to only one peer is not ideal,
 	// but it ensures at least one peer receives it.
 	s.subnetLocker(wrappedSubIdx).Lock()
 	defer s.subnetLocker(wrappedSubIdx).Unlock()
 
-	// No peers found, attempt to find peers with this subnet.
-	if err := s.FindAndDialPeersWithSubnets(ctx, topicFormat, forkDigest, minimumPeersPerSubnetForBroadcast, map[uint64]bool{subnet: true}); err != nil {
+	if err := s.gossipDialer.DialPeersForTopicBlocking(ctx, topic, minimumPeersPerSubnetForBroadcast); err != nil {
 		return errors.Wrap(err, "find peers with subnet")
 	}
-
 	return nil
 }
 
 // encodeGossipMessage encodes an object for gossip transmission.
 // It returns the encoded bytes and the full topic with protocol suffix.
-func (s *Service) encodeGossipMessage(obj ssz.Marshaler, topic string) ([]byte, string, error) {
+func (s *Service) encodeGossipMessage(obj ssz.Marshaler) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if _, err := s.Encoding().EncodeGossip(buf, obj); err != nil {
-		return nil, "", fmt.Errorf("could not encode message: %w", err)
+		return nil, fmt.Errorf("could not encode message: %w", err)
 	}
-	return buf.Bytes(), topic + s.Encoding().ProtocolSuffix(), nil
+	return buf.Bytes(), nil
 }
 
 // broadcastObject broadcasts a message to other peers in our gossip mesh.
-func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
+func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, fullTopic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
 	defer span.End()
 
-	span.SetAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", fullTopic))
 
-	data, fullTopic, err := s.encodeGossipMessage(obj, topic)
+	data, err := s.encodeGossipMessage(obj)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
@@ -597,13 +599,13 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 
 // batchObject adds an object to a message batch for a future broadcast.
 // The caller MUST publish the batch after all messages have been added.
-func (s *Service) batchObject(ctx context.Context, batch *pubsub.MessageBatch, obj ssz.Marshaler, topic string) error {
+func (s *Service) batchObject(ctx context.Context, batch *pubsub.MessageBatch, obj ssz.Marshaler, fullTopic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.batchObject")
 	defer span.End()
 
-	span.SetAttributes(trace.StringAttribute("topic", topic))
+	span.SetAttributes(trace.StringAttribute("topic", fullTopic))
 
-	data, fullTopic, err := s.encodeGossipMessage(obj, topic)
+	data, err := s.encodeGossipMessage(obj)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
@@ -623,28 +625,4 @@ func (s *Service) batchObject(ctx context.Context, batch *pubsub.MessageBatch, o
 		return err
 	}
 	return nil
-}
-
-func attestationToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
-	return fmt.Sprintf(AttestationSubnetTopicFormat, forkDigest, subnet)
-}
-
-func syncCommitteeToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
-	return fmt.Sprintf(SyncCommitteeSubnetTopicFormat, forkDigest, subnet)
-}
-
-func blobSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
-	return fmt.Sprintf(BlobSubnetTopicFormat, forkDigest, subnet)
-}
-
-func lcOptimisticToTopic(forkDigest [4]byte) string {
-	return fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, forkDigest)
-}
-
-func lcFinalityToTopic(forkDigest [4]byte) string {
-	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest)
-}
-
-func dataColumnSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
-	return fmt.Sprintf(DataColumnSubnetTopicFormat, forkDigest, subnet)
 }

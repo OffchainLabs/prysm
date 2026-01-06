@@ -2,8 +2,6 @@ package sync
 
 import (
 	"context"
-	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -44,34 +42,9 @@ func testForkWatcherService(t *testing.T, current primitives.Epoch) *Service {
 			initialSync: &mockSync.Sync{IsSyncing: false},
 		},
 		chainStarted:        abool.New(),
-		subHandler:          newSubTopicHandler(),
 		initialSyncComplete: closedChan,
 	}
 	return r
-}
-
-func TestRegisterSubscriptions_Idempotent(t *testing.T) {
-	params.SetupTestConfigCleanup(t)
-	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
-	fulu := params.BeaconConfig().ElectraForkEpoch + 4096*2
-	params.BeaconConfig().FuluForkEpoch = fulu
-	params.BeaconConfig().InitializeForkSchedule()
-
-	current := fulu - 1
-	s := testForkWatcherService(t, current)
-	next := params.GetNetworkScheduleEntry(fulu)
-	wg := attachSpawner(s)
-	require.Equal(t, true, s.registerSubscribers(next))
-	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
-	select {
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for subscriptions to be registered")
-	case <-done:
-	}
-	// the goal of this callback is just to assert that spawn is never called.
-	s.subscriptionSpawner = func(func()) { t.Error("registration routines spawned twice for the same digest") }
-	require.NoError(t, s.ensureRegistrationsForEpoch(fulu))
 }
 
 func TestService_CheckForNextEpochFork(t *testing.T) {
@@ -103,7 +76,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 			nextForkEpoch:       params.BeaconConfig().BellatrixForkEpoch,
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 					rpcMap[string(p)] = true
@@ -111,8 +83,6 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				assert.Equal(t, true, rpcMap[p2p.RPCBlocksByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
 				assert.Equal(t, true, rpcMap[p2p.RPCBlocksByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
 				assert.Equal(t, true, rpcMap[p2p.RPCMetaDataTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
-				expected := fmt.Sprintf(p2p.SyncContributionAndProofSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), digest)
-				assert.Equal(t, true, s.subHandler.topicExists(expected), "subnet topic doesn't exist")
 				// TODO: we should check subcommittee indices here but we need to work with the committee cache to do it properly
 				/*
 					subIndices := mapFromCount(params.BeaconConfig().SyncCommitteeSubnetCount)
@@ -127,14 +97,10 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 		{
 			name: "capella fork in the next epoch",
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 					rpcMap[string(p)] = true
 				}
-
-				expected := fmt.Sprintf(p2p.BlsToExecutionChangeSubnetTopicFormat+s.cfg.p2p.Encoding().ProtocolSuffix(), digest)
-				assert.Equal(t, true, s.subHandler.topicExists(expected), "subnet topic doesn't exist")
 			},
 			forkEpoch:           params.BeaconConfig().CapellaForkEpoch,
 			nextForkEpoch:       params.BeaconConfig().DenebForkEpoch,
@@ -143,16 +109,9 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 		{
 			name: "deneb fork in the next epoch",
 			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
 				rpcMap := make(map[string]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 					rpcMap[string(p)] = true
-				}
-				subIndices := mapFromCount(params.BeaconConfig().BlobsidecarSubnetCount)
-				for idx := range subIndices {
-					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, digest, idx)
-					expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
-					assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
 				}
 				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRangeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
 				assert.Equal(t, true, rpcMap[p2p.RPCBlobSidecarsByRootTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
@@ -162,16 +121,8 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
 		},
 		{
-			name: "electra fork in the next epoch",
-			checkRegistration: func(t *testing.T, s *Service) {
-				digest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
-				subIndices := mapFromCount(params.BeaconConfig().BlobsidecarSubnetCountElectra)
-				for idx := range subIndices {
-					topic := fmt.Sprintf(p2p.BlobSubnetTopicFormat, digest, idx)
-					expected := topic + s.cfg.p2p.Encoding().ProtocolSuffix()
-					assert.Equal(t, true, s.subHandler.topicExists(expected), fmt.Sprintf("subnet topic %s doesn't exist", expected))
-				}
-			},
+			name:                "electra fork in the next epoch",
+			checkRegistration:   func(t *testing.T, s *Service) {},
 			forkEpoch:           params.BeaconConfig().ElectraForkEpoch,
 			nextForkEpoch:       params.BeaconConfig().FuluForkEpoch,
 			epochAtRegistration: func(e primitives.Epoch) primitives.Epoch { return e - 1 },
@@ -194,18 +145,12 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			current := tt.epochAtRegistration(tt.forkEpoch)
 			s := testForkWatcherService(t, current)
-			wg := attachSpawner(s)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
-			wg.Wait()
+			require.NoError(t, s.ensureRPCRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 			tt.checkRegistration(t, s)
 
 			if current != tt.forkEpoch-1 {
 				return
 			}
-
-			// Ensure the topics were registered for the upcoming fork
-			digest := params.ForkDigest(tt.forkEpoch)
-			assert.Equal(t, true, s.subHandler.digestExists(digest))
 
 			// After this point we are checking deregistration, which doesn't apply if there isn't a higher
 			// nextForkEpoch.
@@ -213,31 +158,13 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				return
 			}
 
-			nextDigest := params.ForkDigest(tt.nextForkEpoch)
 			// Move the clock to just before the next fork epoch and ensure deregistration is correct
-			wg = attachSpawner(s)
 			s.cfg.clock = defaultClockWithTimeAtEpoch(tt.nextForkEpoch - 1)
-			require.NoError(t, s.ensureRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
-			wg.Wait()
+			require.NoError(t, s.ensureRPCRegistrationsForEpoch(s.cfg.clock.CurrentEpoch()))
 
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch))
-			assert.Equal(t, true, s.subHandler.digestExists(digest))
-			// deregister as if it is the epoch after the next fork epoch
-			require.NoError(t, s.ensureDeregistrationForEpoch(tt.nextForkEpoch+1))
-			assert.Equal(t, false, s.subHandler.digestExists(digest))
-			assert.Equal(t, true, s.subHandler.digestExists(nextDigest))
+			require.NoError(t, s.ensureRPCDeregistrationForEpoch(tt.nextForkEpoch))
 		})
 	}
-}
-
-func attachSpawner(s *Service) *sync.WaitGroup {
-	wg := new(sync.WaitGroup)
-	s.subscriptionSpawner = func(f func()) {
-		wg.Go(func() {
-			f()
-		})
-	}
-	return wg
 }
 
 // oneEpoch returns the duration of one epoch.

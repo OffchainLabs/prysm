@@ -181,7 +181,7 @@ type Service struct {
 	lcStore                          *lightClient.Store
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
-	subscriptionSpawner              func(func()) // see Service.spawn for details
+	subscriptionController           *SubscriptionController
 }
 
 // NewService initializes new regular sync service.
@@ -198,6 +198,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		dataColumnLogCh:       make(chan dataColumnLogEntry, 1000),
 		reconstructionRandGen: rand.NewGenerator(),
 	}
+	r.subscriptionController = NewSubscriptionController(ctx, r)
 
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
@@ -232,6 +233,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 			delete(r.seenPendingBlocks, root)
 		}
 	})
+
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 	r.initCaches()
@@ -323,9 +325,10 @@ func (s *Service) Stop() error {
 	for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
 		s.cfg.p2p.Host().RemoveStreamHandler(p)
 	}
-	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
-		s.unSubscribeFromTopic(t)
-	}
+
+	// Stop the gossipsub controller.
+	s.subscriptionController.Stop()
+
 	return nil
 }
 
@@ -405,7 +408,50 @@ func (s *Service) startDiscoveryAndSubscriptions() {
 	}
 
 	// Start the fork watcher.
-	go s.p2pHandlerControlLoop()
+	go s.rpcHandlerControlLoop()
+
+	// Start the gossipsub controller.
+	go s.subscriptionController.Start()
+
+	for {
+		if s.cfg.p2p.Started() {
+			break
+		}
+		log.Debug("P2P service not started yet; will retry in 100ms")
+
+		select {
+		case <-s.ctx.Done():
+			log.WithError(s.ctx.Err()).Error("Context closed while waiting for P2P service to start, exiting startDiscoveryAndSubscriptions routine")
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	// Configure the crawler and dialer with the topic extractor / subnet topics
+	// provider if available.
+	crawler := s.cfg.p2p.Crawler()
+	if crawler == nil {
+		log.Error("No crawler available, topic extraction disabled")
+		return
+	}
+
+	// Start the crawler now that it has the extractor.
+	if err := crawler.Start(s.subscriptionController.ExtractTopics); err != nil {
+		log.WithError(err).Warn("Failed to start peer crawler")
+		return
+	}
+
+	// Start the gossipsub dialer if available.
+	if dialer := s.cfg.p2p.GossipDialer(); dialer != nil {
+		provider := func() map[string]int {
+			return s.subscriptionController.GetCurrentActiveTopicsWithMinPeerCount()
+		}
+		if err := dialer.Start(provider); err != nil {
+			log.WithError(err).Warn("Failed to start gossip peer dialer")
+		}
+	} else {
+		log.Error("No gossip peer dialer available")
+	}
 }
 
 func (s *Service) writeErrorResponseToStream(responseCode byte, reason string, stream libp2pcore.Stream) {

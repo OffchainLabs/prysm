@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -33,7 +32,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -60,11 +58,10 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 	require.NoError(t, err)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	topic := "/eth2/%x/voluntary_exit"
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	handler := func(_ context.Context, msg proto.Message) error {
 		m, ok := msg.(*pb.SignedVoluntaryExit)
 		assert.Equal(t, true, ok, "Object is not of type *pb.SignedVoluntaryExit")
 		if m.Exit == nil || m.Exit.Epoch != 55 {
@@ -72,10 +69,15 @@ func TestSubscribe_ReceivesValidMessage(t *testing.T) {
 		}
 		wg.Done()
 		return nil
-	}, nse)
-	r.markForChainStart()
+	}
 
-	p2pService.ReceivePubSub(topic, &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	tf := NewVoluntaryExitTopicFamily(&r, nse)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, handler, tf)
+	tf.baseTopicFamily = base
+
+	tf.Subscribe()
+	r.markForChainStart()
+	p2pService.ReceivePubSub(tf.getFullTopicString(), &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
@@ -110,19 +112,22 @@ func TestSubscribe_UnsubscribeTopic(t *testing.T) {
 	p2pService.Digest = nse.ForkDigest
 	topic := "/eth2/%x/voluntary_exit"
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
-		return nil
-	}, nse)
+	tf := staticTopicFamily{
+		name:   "VoluntaryExitTopicFamily",
+		topics: []string{topic},
+	}
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, noopHandler, &tf)
+	tf.baseTopicFamily = base
+
+	tf.Subscribe()
 	r.markForChainStart()
-
-	fullTopic := fmt.Sprintf(topic, p2pService.Digest) + p2pService.Encoding().ProtocolSuffix()
-	assert.Equal(t, true, r.subHandler.topicExists(fullTopic))
+	assert.Equal(t, true, r.subHandler.topicExists(topic))
 	topics := p2pService.PubSub().GetTopics()
-	assert.Equal(t, fullTopic, topics[0])
+	assert.Equal(t, topic, topics[0])
 
-	r.unSubscribeFromTopic(fullTopic)
+	tf.UnsubscribeAll()
 
-	assert.Equal(t, false, r.subHandler.topicExists(fullTopic))
+	assert.Equal(t, false, r.subHandler.topicExists(topic))
 	assert.Equal(t, 0, len(p2pService.PubSub().GetTopics()))
 
 }
@@ -157,16 +162,20 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
-	topic := "/eth2/%x/attester_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+
+	tf := NewAttesterSlashingTopicFamily(&r, nse)
+	tf.baseTopicFamily.validator = r.noopValidator
+	tf.baseTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.attesterSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
-	}, nse)
+	}
+	tf.Subscribe()
+
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	chainService.State = beaconState
 	r.markForChainStart()
@@ -178,7 +187,7 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	require.NoError(t, err, "Error generating attester slashing")
 	err = r.cfg.beaconDB.SaveState(ctx, beaconState, bytesutil.ToBytes32(attesterSlashing.FirstAttestation().GetData().BeaconBlockRoot))
 	require.NoError(t, err)
-	p2pService.ReceivePubSub(topic, attesterSlashing)
+	p2pService.ReceivePubSub(tf.getFullTopicString(), attesterSlashing)
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
@@ -210,18 +219,22 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 		subHandler:                newSubTopicHandler(),
 	}
 	markInitSyncComplete(t, &r)
-	topic := "/eth2/%x/proposer_slashing"
 	var wg sync.WaitGroup
 	wg.Add(1)
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p2pService.Digest = nse.ForkDigest
-	r.subscribe(topic, r.noopValidator, func(ctx context.Context, msg proto.Message) error {
+
+	tf := NewProposerSlashingTopicFamily(&r, nse)
+	tf.baseTopicFamily.validator = r.noopValidator
+	tf.baseTopicFamily.handler = func(ctx context.Context, msg proto.Message) error {
 		require.NoError(t, r.proposerSlashingSubscriber(ctx, msg))
 		wg.Done()
 		return nil
-	}, nse)
+	}
+	tf.Subscribe()
+
 	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
 	chainService.State = beaconState
 	r.markForChainStart()
@@ -232,7 +245,7 @@ func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	)
 	require.NoError(t, err, "Error generating proposer slashing")
 
-	p2pService.ReceivePubSub(topic, proposerSlashing)
+	p2pService.ReceivePubSub(tf.getFullTopicString(), proposerSlashing)
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
@@ -262,68 +275,25 @@ func TestSubscribe_HandlesPanic(t *testing.T) {
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
 	p.Digest = nse.ForkDigest
 
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*pb.SignedVoluntaryExit]()]
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	r.subscribe(topic, r.noopValidator, func(_ context.Context, msg proto.Message) error {
+	tf := NewVoluntaryExitTopicFamily(&r, nse)
+	handler := func(_ context.Context, msg proto.Message) error {
 		defer wg.Done()
 		panic("bad")
-	}, nse)
+	}
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, handler, tf)
+	tf.baseTopicFamily = base
+
+	tf.Subscribe()
+
 	r.markForChainStart()
-	p.ReceivePubSub(topic, &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
+	p.ReceivePubSub(tf.getFullTopicString(), &pb.SignedVoluntaryExit{Exit: &pb.VoluntaryExit{Epoch: 55}, Signature: make([]byte, fieldparams.BLSSignatureLength)})
 
 	if util.WaitTimeout(&wg, time.Second) {
 		t.Fatal("Did not receive PubSub in 1 second")
 	}
-}
-
-func TestRevalidateSubscription_CorrectlyFormatsTopic(t *testing.T) {
-	p := p2ptest.NewTestP2P(t)
-	hook := logTest.NewGlobal()
-	chain := &mockChain.ChainService{
-		Genesis:        time.Now(),
-		ValidatorsRoot: [32]byte{'A'},
-	}
-	r := Service{
-		ctx: t.Context(),
-		cfg: &config{
-			chain: chain,
-			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			p2p:   p,
-		},
-		chainStarted: abool.New(),
-		subHandler:   newSubTopicHandler(),
-	}
-	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
-
-	params := subscribeParameters{
-		topicFormat: "/eth2/testing/%#x/committee%d",
-		nse:         nse,
-	}
-	tracker := newSubnetTracker(params)
-
-	// committee index 1
-	c1 := uint64(1)
-	fullTopic := params.fullTopic(c1, r.cfg.p2p.Encoding().ProtocolSuffix())
-	_, topVal := r.wrapAndReportValidation(fullTopic, r.noopValidator)
-	require.NoError(t, r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal))
-	sub1, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
-	require.NoError(t, err)
-	tracker.track(c1, sub1)
-
-	// committee index 2
-	c2 := uint64(2)
-	fullTopic = params.fullTopic(c2, r.cfg.p2p.Encoding().ProtocolSuffix())
-	_, topVal = r.wrapAndReportValidation(fullTopic, r.noopValidator)
-	err = r.cfg.p2p.PubSub().RegisterTopicValidator(fullTopic, topVal)
-	require.NoError(t, err)
-	sub2, err := r.cfg.p2p.SubscribeToTopic(fullTopic)
-	require.NoError(t, err)
-	tracker.track(c2, sub2)
-
-	r.pruneNotWanted(tracker, map[uint64]bool{c2: true})
-	require.LogsDoNotContain(t, hook, "Could not unregister topic validator")
 }
 
 func Test_wrapAndReportValidation(t *testing.T) {
@@ -446,11 +416,15 @@ func TestFilterSubnetPeers(t *testing.T) {
 	cfg.SlotDurationMilliseconds = 1000
 	params.OverrideBeaconConfig(cfg)
 
+	// Save the current flags to restore them after the test
+	resetFlags := flags.Get()
+	defer func() {
+		flags.Init(resetFlags)
+	}()
+
 	gFlags := new(flags.GlobalFlags)
 	gFlags.MinimumPeersPerSubnet = 4
 	flags.Init(gFlags)
-	// Reset config.
-	defer flags.Init(new(flags.GlobalFlags))
 	p := p2ptest.NewTestP2P(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -480,6 +454,7 @@ func TestFilterSubnetPeers(t *testing.T) {
 		chainStarted: abool.New(),
 		subHandler:   newSubTopicHandler(),
 	}
+	r.subscriptionController = NewSubscriptionController(ctx, &r)
 	markInitSyncComplete(t, &r)
 	// Empty cache at the end of the test.
 	defer cache.SubnetIDs.EmptyAllCaches()
@@ -553,11 +528,12 @@ func TestSubscribeWithSyncSubnets_DynamicOK(t *testing.T) {
 	currEpoch := slots.ToEpoch(slot)
 	cache.SyncSubnetIDs.AddSyncCommitteeSubnets([]byte("pubkey"), currEpoch, []uint64{0, 1}, 10*time.Second)
 	nse := params.GetNetworkScheduleEntry(r.cfg.clock.CurrentEpoch())
-	go r.subscribeWithParameters(subscribeParameters{
-		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
-		nse:              nse,
-		getSubnetsToJoin: r.activeSyncSubnetIndices,
-	})
+
+	tfDyn := NewSyncCommitteeTopicFamily(&r, nse)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn)
+	tfDyn.baseTopicFamily = base
+	tfDyn.SubscribeForSlot(slot)
+
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
@@ -602,12 +578,11 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, [4]byte(params.BeaconConfig().DenebForkVersion), nse.ForkVersion)
 	require.Equal(t, params.BeaconConfig().DenebForkEpoch, nse.Epoch)
 
-	sp := newSubnetTracker(subscribeParameters{
-		topicFormat:      p2p.SyncCommitteeSubnetTopicFormat,
-		nse:              nse,
-		getSubnetsToJoin: r.activeSyncSubnetIndices,
-	})
-	r.trySubscribeSubnets(sp)
+	tfDyn2 := NewSyncCommitteeTopicFamily(&r, nse)
+	base := newBaseTopicFamily(&r, nse, r.noopValidator, noopHandler, tfDyn2)
+	tfDyn2.baseTopicFamily = base
+	tfDyn2.SubscribeForSlot(r.cfg.clock.CurrentSlot())
+
 	assert.Equal(t, 2, len(r.cfg.p2p.PubSub().GetTopics()))
 	topicMap := map[string]bool{}
 	for _, t := range r.cfg.p2p.PubSub().GetTopics() {
@@ -626,11 +601,14 @@ func TestSubscribeWithSyncSubnets_DynamicSwitchFork(t *testing.T) {
 	require.Equal(t, [4]byte(params.BeaconConfig().ElectraForkVersion), nse.ForkVersion)
 	require.Equal(t, params.BeaconConfig().ElectraForkEpoch, nse.Epoch)
 
-	sp.nse = nse
+	tfDyn2.nse = nse
 	// clear the cache and re-subscribe to subnets.
 	// this should result in the subscriptions being removed
 	cache.SyncSubnetIDs.EmptyAllCaches()
-	r.trySubscribeSubnets(sp)
+
+	slot := r.cfg.clock.CurrentSlot()
+	tfDyn2.UnsubscribeForSlot(slot)
+	tfDyn2.SubscribeForSlot(r.cfg.clock.CurrentSlot())
 	assert.Equal(t, 0, len(r.cfg.p2p.PubSub().GetTopics()))
 }
 

@@ -97,6 +97,20 @@ var (
 		Help: "The number of data column sidecar message broadcast attempts.",
 	})
 
+	// Gossip Peer Crawler Metrics
+	gossipCrawlerPeersByEnodeCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_gossip_crawler_peers_by_enode_count",
+		Help: "The number of peers tracked by enode ID in the gossip peer crawler.",
+	})
+	gossipCrawlerPeersByPidCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_gossip_crawler_peers_by_pid_count",
+		Help: "The number of peers tracked by peer ID in the gossip peer crawler.",
+	})
+	gossipCrawlerTopicsCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "p2p_gossip_crawler_topics_count",
+		Help: "The number of topics tracked in the gossip peer crawler.",
+	})
+
 	// Gossip Tracer Metrics
 	pubsubTopicsActive = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "p2p_pubsub_topic_active",

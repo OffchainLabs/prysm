@@ -6,11 +6,13 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
@@ -61,6 +63,10 @@ var (
 	// for the current peer limit status for the time period
 	// defined below.
 	pollingPeriod = 6 * time.Second
+
+	crawlTimeout       = 30 * time.Second
+	crawlInterval      = 1 * time.Second
+	maxConcurrentDials = int64(256)
 )
 
 // Service for managing peer to peer (p2p) networking.
@@ -95,6 +101,8 @@ type Service struct {
 	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
 	custodyInfoSet           chan struct{}
 	allForkDigests           map[[4]byte]struct{}
+	crawler                  gossipcrawler.Crawler
+	gossipDialer             gossipcrawler.GossipDialer
 }
 
 type custodyInfo struct {
@@ -163,7 +171,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 
 	s.host = h
 
-	// Gossipsub registration is done before we add in any new peers
+	// Gossip registration is done before we add in any new peers
 	// due to libp2p's gossipsub implementation not taking into
 	// account previously added peers when creating the gossipsub
 	// object.
@@ -241,6 +249,25 @@ func (s *Service) Start() {
 
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
+		crawler, err := NewGossipPeerCrawler(
+			s.ctx,
+			s,
+			s.dv5Listener,
+			crawlTimeout,
+			crawlInterval,
+			maxConcurrentDials,
+			s.filterPeer,
+			s.Peers().Scorers().Score,
+		)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to create peer crawler")
+			s.startupErr = err
+			return
+		}
+		s.crawler = crawler
+		// Initialise the gossipsub dialer which will be started
+		// once the sync service is ready to provide subnet topics.
+		s.gossipDialer = NewGossipPeerDialer(s.ctx, s.crawler, s.PubSub().ListPeers, s.DialPeers)
 	}
 
 	s.started = true
@@ -311,10 +338,23 @@ func (s *Service) Start() {
 func (s *Service) Stop() error {
 	defer s.cancel()
 	s.started = false
+
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
 	}
+
 	return nil
+}
+
+// Crawler returns the p2p service's peer crawler.
+func (s *Service) Crawler() gossipcrawler.Crawler {
+	return s.crawler
+}
+
+// GossipDialer returns the dialer responsible for maintaining
+// peer counts per gossipsub topic, if discovery is enabled.
+func (s *Service) GossipDialer() gossipcrawler.GossipDialer {
+	return s.gossipDialer
 }
 
 // Status of the p2p service. Will return an error if the service is considered unhealthy to
@@ -556,4 +596,81 @@ func (s *Service) isInitialized() bool {
 func (s *Service) downscorePeer(peerID peer.ID, reason string) {
 	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
+func AttestationSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return attestationSubnets(record)
+}
+
+func SyncSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return syncSubnets(record)
+}
+
+func DataColumnSubnets(nodeID enode.ID, node *enode.Node, record *enr.Record) (map[uint64]bool, error) {
+	return dataColumnSubnets(nodeID, record)
+}
+
+func DataColumnSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(DataColumnSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func SyncCommitteeSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(SyncCommitteeSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func AttestationSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(AttestationSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func BlobSubnetTopic(digest [4]byte, subnet uint64) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(BlobSubnetTopicFormat, digest, subnet) + e.ProtocolSuffix()
+}
+
+func LcOptimisticToTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(LightClientOptimisticUpdateTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func LcFinalityToTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(LightClientFinalityUpdateTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func BlockSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(BlockSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func AggregateAndProofSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(AggregateAndProofSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func VoluntaryExitSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(ExitSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func ProposerSlashingSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(ProposerSlashingSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func AttesterSlashingSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(AttesterSlashingSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func SyncContributionAndProofSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(SyncContributionAndProofSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
+}
+
+func BlsToExecutionChangeSubnetTopic(forkDigest [4]byte) string {
+	e := &encoder.SszNetworkEncoder{}
+	return fmt.Sprintf(BlsToExecutionChangeSubnetTopicFormat, forkDigest) + e.ProtocolSuffix()
 }

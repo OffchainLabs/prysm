@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/gossipcrawler"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -35,6 +35,7 @@ type (
 		PeersProvider
 		MetadataProvider
 		CustodyManager
+		Started() bool
 	}
 
 	// Accessor provides access to the Broadcaster, PeerManager and CustodyManager interfaces.
@@ -98,11 +99,13 @@ type (
 		PeerID() peer.ID
 		Host() host.Host
 		ENR() *enr.Record
+		GossipDialer() gossipcrawler.GossipDialer
 		NodeID() enode.ID
 		DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 		RefreshPersistentSubnets()
-		FindAndDialPeersWithSubnets(ctx context.Context, topicFormat string, digest [fieldparams.VersionLength]byte, minimumPeersPerSubnet int, subnets map[uint64]bool) error
+		DialPeers(ctx context.Context, maxConcurrentDials int, nodes []*enode.Node) uint
 		AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
+		Crawler() gossipcrawler.Crawler
 	}
 
 	// Sender abstracts the sending functionality from libp2p.
