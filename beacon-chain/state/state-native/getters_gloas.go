@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -13,6 +14,7 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -263,6 +265,28 @@ func withdrawalsEqual(a, b []*enginev1.Withdrawal) bool {
 	return true
 }
 
+// IsParentBlockFull returns true if the last committed payload bid was fulfilled with a payload,
+// which can only happen when both beacon block and payload were present.
+// This function must be called on a beacon state before processing the execution payload bid in the block.
+// Spec v1.7.0-alpha.2 (pseudocode):
+// def is_parent_block_full(state: BeaconState) -> bool:
+//
+//	return state.latest_execution_payload_bid.block_hash == state.latest_block_hash
+func (b *BeaconState) IsParentBlockFull() (bool, error) {
+	if b.version < version.Gloas {
+		return false, errNotSupported("IsParentBlockFull", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.latestExecutionPayloadBid == nil {
+		return false, nil
+	}
+
+	return bytes.Equal(b.latestExecutionPayloadBid.BlockHash, b.latestBlockHash), nil
+}
+
 // ExecutionPayloadAvailability returns the execution payload availability bit for the given slot.
 func (b *BeaconState) ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error) {
 	if b.version < version.Gloas {
@@ -313,4 +337,202 @@ func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]b
 		}
 	}
 	return 0, false
+}
+
+// ExpectedWithdrawalsGloas returns the withdrawals that a proposer will need to pack in the next block
+// applied to the current state. It is also used by validators to check that the execution payload carried
+// the right number of withdrawals.
+//
+// Spec v1.7.0-alpha.1:
+//
+//	def get_expected_withdrawals(state: BeaconState) -> ExpectedWithdrawals:
+//	    withdrawal_index = state.next_withdrawal_index
+//	    withdrawals: List[Withdrawal] = []
+//
+//	    # [New in Gloas:EIP7732]
+//	    # Get builder withdrawals
+//	    builder_withdrawals, withdrawal_index, processed_builder_withdrawals_count = (
+//	        get_builder_withdrawals(state, withdrawal_index, withdrawals)
+//	    )
+//	    withdrawals.extend(builder_withdrawals)
+//
+//	    # Get partial withdrawals
+//	    partial_withdrawals, withdrawal_index, processed_partial_withdrawals_count = (
+//	        get_pending_partial_withdrawals(state, withdrawal_index, withdrawals)
+//	    )
+//	    withdrawals.extend(partial_withdrawals)
+//
+//	    # [New in Gloas:EIP7732]
+//	    # Get builders sweep withdrawals
+//	    builders_sweep_withdrawals, withdrawal_index, processed_builders_sweep_count = (
+//	        get_builders_sweep_withdrawals(state, withdrawal_index, withdrawals)
+//	    )
+//	    withdrawals.extend(builders_sweep_withdrawals)
+//
+//	    # Get validators sweep withdrawals
+//	    validators_sweep_withdrawals, withdrawal_index, processed_validators_sweep_count = (
+//	        get_validators_sweep_withdrawals(state, withdrawal_index, withdrawals)
+//	    )
+//	    withdrawals.extend(validators_sweep_withdrawals)
+//
+//	    return ExpectedWithdrawals(
+//	        withdrawals,
+//	        # [New in Gloas:EIP7732]
+//	        processed_builder_withdrawals_count,
+//	        processed_partial_withdrawals_count,
+//	        # [New in Gloas:EIP7732]
+//	        processed_builders_sweep_count,
+//	        processed_validators_sweep_count,
+//	    )
+func (b *BeaconState) ExpectedWithdrawalsGloas() (state.ExpectedWithdrawalsGloasResult, error) {
+	if b.version < version.Gloas {
+		return state.ExpectedWithdrawalsGloasResult{}, errNotSupported("ExpectedWithdrawalsGloas", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	cfg := params.BeaconConfig()
+	withdrawals := make([]*enginev1.Withdrawal, 0, cfg.MaxWithdrawalsPerPayload)
+	withdrawalIndex := b.nextWithdrawalIndex
+
+	withdrawalIndex, processedBuilderWithdrawalsCount, err := b.appendBuilderWithdrawals(withdrawalIndex, &withdrawals)
+	if err != nil {
+		return state.ExpectedWithdrawalsGloasResult{}, err
+	}
+
+	withdrawalIndex, processedPartialWithdrawalsCount, err := b.appendPendingPartialWithdrawals(withdrawalIndex, &withdrawals)
+	if err != nil {
+		return state.ExpectedWithdrawalsGloasResult{}, err
+	}
+
+	withdrawalIndex, nextBuilderIndex, err := b.appendBuildersSweepWithdrawals(withdrawalIndex, &withdrawals)
+	if err != nil {
+		return state.ExpectedWithdrawalsGloasResult{}, err
+	}
+
+	err = b.appendValidatorsSweepWithdrawals(withdrawalIndex, &withdrawals)
+	if err != nil {
+		return state.ExpectedWithdrawalsGloasResult{}, err
+	}
+
+	return state.ExpectedWithdrawalsGloasResult{
+		Withdrawals:                      withdrawals,
+		ProcessedBuilderWithdrawalsCount: processedBuilderWithdrawalsCount,
+		ProcessedPartialWithdrawalsCount: processedPartialWithdrawalsCount,
+		NextWithdrawalBuilderIndex:       nextBuilderIndex,
+	}, nil
+}
+
+// appendBuilderWithdrawals returns builder pending withdrawals, the updated withdrawal index,
+// and the processed count, following spec v1.7.0-alpha.2:
+//
+//	def get_builder_withdrawals(state, withdrawal_index, prior_withdrawals):
+//	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
+//	    assert len(prior_withdrawals) <= withdrawals_limit
+//	    processed_count = 0
+//	    withdrawals = []
+//	    for withdrawal in state.builder_pending_withdrawals:
+//	        if len(prior_withdrawals + withdrawals) >= withdrawals_limit:
+//	            break
+//	        withdrawals.append(Withdrawal(
+//	            index=withdrawal_index,
+//	            validator_index=convert_builder_index_to_validator_index(withdrawal.builder_index),
+//	            address=withdrawal.fee_recipient,
+//	            amount=withdrawal.amount,
+//	        ))
+//	        withdrawal_index += 1
+//	        processed_count += 1
+//	    return withdrawals, withdrawal_index, processed_count
+func (b *BeaconState) appendBuilderWithdrawals(withdrawalIndex uint64, withdrawals *[]*enginev1.Withdrawal) (uint64, uint64, error) {
+	cfg := params.BeaconConfig()
+	withdrawalsLimit := int(cfg.MaxWithdrawalsPerPayload - 1)
+	ws := *withdrawals
+	if len(ws) > withdrawalsLimit {
+		return withdrawalIndex, 0, fmt.Errorf("prior withdrawals length %d exceeds limit %d", len(ws), withdrawalsLimit)
+	}
+
+	var processedCount uint64
+	for _, w := range b.builderPendingWithdrawals {
+		if len(ws) >= withdrawalsLimit {
+			break
+		}
+
+		ws = append(ws, &enginev1.Withdrawal{
+			Index:          withdrawalIndex,
+			ValidatorIndex: w.BuilderIndex.ToValidatorIndex(),
+			Address:        w.FeeRecipient,
+			Amount:         uint64(w.Amount),
+		})
+		withdrawalIndex++
+		processedCount++
+	}
+
+	*withdrawals = ws
+	return withdrawalIndex, processedCount, nil
+}
+
+// appendBuildersSweepWithdrawals returns builder sweep withdrawals, the updated withdrawal index,
+// and the processed count, following spec v1.7.0-alpha.2:
+//
+//	def get_builders_sweep_withdrawals(state, withdrawal_index, prior_withdrawals):
+//	    epoch = get_current_epoch(state)
+//	    builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
+//	    withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
+//	    assert len(prior_withdrawals) <= withdrawals_limit
+//	    processed_count = 0
+//	    withdrawals = []
+//	    builder_index = state.next_withdrawal_builder_index
+//	    for _ in range(builders_limit):
+//	        if len(prior_withdrawals + withdrawals) >= withdrawals_limit:
+//	            break
+//	        builder = state.builders[builder_index]
+//	        if builder.withdrawable_epoch <= epoch and builder.balance > 0:
+//	            withdrawals.append(Withdrawal(
+//	                index=withdrawal_index,
+//	                validator_index=convert_builder_index_to_validator_index(builder_index),
+//	                address=builder.execution_address,
+//	                amount=builder.balance,
+//	            ))
+//	            withdrawal_index += 1
+//	        builder_index = BuilderIndex((builder_index + 1) % len(state.builders))
+//	        processed_count += 1
+//	    return withdrawals, withdrawal_index, processed_count
+func (b *BeaconState) appendBuildersSweepWithdrawals(withdrawalIndex uint64, withdrawals *[]*enginev1.Withdrawal) (uint64, primitives.BuilderIndex, error) {
+	cfg := params.BeaconConfig()
+	withdrawalsLimit := int(cfg.MaxWithdrawalsPerPayload - 1)
+	if len(*withdrawals) > withdrawalsLimit {
+		return withdrawalIndex, 0, fmt.Errorf("prior withdrawals length %d exceeds limit %d", len(*withdrawals), withdrawalsLimit)
+	}
+
+	ws := *withdrawals
+
+	buildersLimit := len(b.builders)
+	if maxBuilders := int(cfg.MaxBuildersPerWithdrawalsSweep); buildersLimit > maxBuilders {
+		buildersLimit = maxBuilders
+	}
+
+	builderIndex := b.nextWithdrawalBuilderIndex
+	epoch := slots.ToEpoch(b.slot)
+	for i := 0; i < buildersLimit; i++ {
+		if len(ws) >= withdrawalsLimit {
+			break
+		}
+
+		builder := b.builders[builderIndex]
+		if builder != nil && builder.WithdrawableEpoch <= epoch && builder.Balance > 0 {
+			ws = append(ws, &enginev1.Withdrawal{
+				Index:          withdrawalIndex,
+				ValidatorIndex: builderIndex.ToValidatorIndex(),
+				Address:        builder.ExecutionAddress,
+				Amount:         uint64(builder.Balance),
+			})
+			withdrawalIndex++
+		}
+
+		builderIndex = primitives.BuilderIndex((uint64(builderIndex) + 1) % uint64(len(b.builders)))
+	}
+
+	*withdrawals = ws
+	return withdrawalIndex, builderIndex, nil
 }

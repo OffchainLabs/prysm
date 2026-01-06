@@ -10,8 +10,33 @@ var _ fssz.HashRoot = (ValidatorIndex)(0)
 var _ fssz.Marshaler = (*ValidatorIndex)(nil)
 var _ fssz.Unmarshaler = (*ValidatorIndex)(nil)
 
+// BuilderIndexFlag marks a ValidatorIndex as a BuilderIndex when the bit is set.
+//
+// Spec v1.6.1: BUILDER_INDEX_FLAG.
+const BuilderIndexFlag uint64 = 1 << 40
+
 // ValidatorIndex in eth2.
 type ValidatorIndex uint64
+
+// IsBuilderIndex returns true when the BuilderIndex flag is set on the validator index.
+//
+// Spec v1.6.1 (pseudocode):
+// def is_builder_index(validator_index: ValidatorIndex) -> bool:
+//
+//	return (validator_index & BUILDER_INDEX_FLAG) != 0
+func (v ValidatorIndex) IsBuilderIndex() bool {
+	return uint64(v)&BuilderIndexFlag != 0
+}
+
+// ToBuilderIndex strips the builder flag from a validator index.
+//
+// Spec v1.6.1 (pseudocode):
+// def convert_validator_index_to_builder_index(validator_index: ValidatorIndex) -> BuilderIndex:
+//
+//	return BuilderIndex(validator_index & ~BUILDER_INDEX_FLAG)
+func (v ValidatorIndex) ToBuilderIndex() BuilderIndex {
+	return BuilderIndex(uint64(v) & ^BuilderIndexFlag)
+}
 
 // Div divides validator index by x.
 // This method panics if dividing by zero!

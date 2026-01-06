@@ -84,6 +84,8 @@ func TestGetSpec(t *testing.T) {
 	config.FuluForkVersion = []byte("FuluForkVersion")
 	config.FuluForkEpoch = 109
 	config.GloasForkEpoch = 110
+	config.BuilderIndexFlag = 111
+	config.MaxBuildersPerWithdrawalsSweep = 112
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.BuilderWithdrawalPrefixByte = byte('e')
@@ -221,7 +223,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 192, len(data))
+	assert.Equal(t, 194, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -303,6 +305,10 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "109", v)
 			case "GLOAS_FORK_EPOCH":
 				assert.Equal(t, "110", v)
+			case "BUILDER_INDEX_FLAG":
+				assert.Equal(t, "111", v)
+			case "MAX_BUILDERS_PER_WITHDRAWALS_SWEEP":
+				assert.Equal(t, "112", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":
