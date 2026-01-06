@@ -28,8 +28,8 @@ var BuilderIsActive = e2etypes.Evaluator{
 
 // maxNonBuilderBlocks is the maximum number of blocks that can be built locally
 // instead of by the builder before the test fails. This allows tolerance for
-// occasional builder timeouts under heavy blob transaction load.
-const maxNonBuilderBlocks = 5
+// occasional builder timeouts or failures.
+const maxNonBuilderBlocks = 2
 
 func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]

@@ -34,11 +34,12 @@ const txCount = 20
 var fundedAccount *keystore.Key
 
 type TransactionGenerator struct {
-	keystore string
-	seed     int64
-	started  chan struct{}
-	cancel   context.CancelFunc
-	paused   bool
+	keystore      string
+	seed          int64
+	started       chan struct{}
+	cancel        context.CancelFunc
+	paused        bool
+	useLargeBlobs bool // Use large blob transactions (6 blobs per tx) for BPO testing
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
@@ -47,8 +48,8 @@ func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
 	return &os.Process{}
 }
 
-func NewTransactionGenerator(keystore string, seed int64) *TransactionGenerator {
-	return &TransactionGenerator{keystore: keystore, seed: seed}
+func NewTransactionGenerator(keystore string, seed int64, useLargeBlobs bool) *TransactionGenerator {
+	return &TransactionGenerator{keystore: keystore, seed: seed, useLargeBlobs: useLargeBlobs}
 }
 
 func (t *TransactionGenerator) Start(ctx context.Context) error {
@@ -113,7 +114,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false)
+			err = SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false, t.useLargeBlobs)
 			if err != nil {
 				return err
 			}
@@ -127,7 +128,7 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 	return s.started
 }
 
-func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool) error {
+func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
 	sender := common.HexToAddress(addr)
 	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
 	if err != nil {
@@ -161,7 +162,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		for index := range uint64(5) {
 
 			g.Go(func() error {
-				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
+				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
 					return errors.Wrap(err, "Could not create blob cell tx")
 				}
@@ -181,7 +182,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		for index := range uint64(5) {
 
 			g.Go(func() error {
-				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al)
+				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
 				if err != nil {
 					logrus.WithError(err).Error("Could not create blob tx")
 					// In the event the transaction constructed is not valid, we continue with the routine
@@ -284,7 +285,7 @@ func (t *TransactionGenerator) Stop() error {
 	return nil
 }
 
-func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
+func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool, useLargeBlobs bool) (*types.Transaction, error) {
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
@@ -316,6 +317,14 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 		mod = 1
 	}
 
+	// Helper to get blob data based on config
+	getBlobData := func() ([]byte, error) {
+		if useLargeBlobs {
+			return randomBlobDataLarge()
+		}
+		return randomBlobData()
+	}
+
 	// #nosec G404 -- Test code uses deterministic randomness
 	switch mathRand.Intn(mod) {
 	case 0:
@@ -325,9 +334,9 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 			return nil, errors.Wrap(err, "getCaps")
 		}
 
-		data, err := randomBlobData()
+		data, err := getBlobData()
 		if err != nil {
-			return nil, errors.Wrap(err, "randomBlobData")
+			return nil, errors.Wrap(err, "getBlobData")
 		}
 
 		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0))
@@ -362,9 +371,9 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
-		data, err := randomBlobData()
+		data, err := getBlobData()
 		if err != nil {
-			return nil, errors.Wrap(err, "randomBlobData")
+			return nil, errors.Wrap(err, "getBlobData")
 		}
 
 		return New4844CellTx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al)
@@ -373,7 +382,7 @@ func RandomBlobCellTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasP
 	return nil, nil
 }
 
-func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool) (*types.Transaction, error) {
+func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice, chainID *big.Int, al bool, useLargeBlobs bool) (*types.Transaction, error) {
 	// Set fields if non-nil
 	if rpc != nil {
 		client := ethclient.NewClient(rpc)
@@ -401,6 +410,15 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 	if al {
 		mod = 1
 	}
+
+	// Helper to get blob data based on config
+	getBlobData := func() ([]byte, error) {
+		if useLargeBlobs {
+			return randomBlobDataLarge()
+		}
+		return randomBlobData()
+	}
+
 	// #nosec G404 -- Test code uses deterministic randomness
 	switch mathRand.Intn(mod) {
 	case 0:
@@ -411,9 +429,9 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 			return nil, errors.Wrap(err, "getCaps")
 		}
 
-		data, err := randomBlobData()
+		data, err := getBlobData()
 		if err != nil {
-			return nil, errors.Wrap(err, "randomBlobData")
+			return nil, errors.Wrap(err, "getBlobData")
 		}
 		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, make(types.AccessList, 0)), nil
 	case 1:
@@ -447,9 +465,9 @@ func RandomBlobTx(rpc *rpc.Client, sender common.Address, nonce uint64, gasPrice
 		if err != nil {
 			return nil, errors.Wrap(err, "getCaps")
 		}
-		data, err := randomBlobData()
+		data, err := getBlobData()
 		if err != nil {
-			return nil, errors.Wrap(err, "randomBlobData")
+			return nil, errors.Wrap(err, "getBlobData")
 		}
 		return New4844Tx(nonce, &to, gas, chainID, tip, feecap, value, code, big.NewInt(1000000), data, *al), nil
 	}
@@ -656,11 +674,25 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 }
 
 func randomBlobData() ([]byte, error) {
-	// Always generate 6 blobs worth of data to properly test BPO limits.
-	// With 10 blob txs per slot * 6 blobs = 60 blobs submitted per slot,
-	// we can easily hit any BPO limit (up to 21 blobs per block).
+	// Generate random data for up to 1 blob. This is used for pre-Fulu tests.
+	size := mathRand.Intn(fieldparams.BlobSize) // #nosec G404
+	data := make([]byte, size)
+	n, err := mathRand.Read(data) // #nosec G404
+	if err != nil {
+		return nil, err
+	}
+	if n != size {
+		return nil, fmt.Errorf("could not create random blob data with size %d: %w", size, err)
+	}
+	return data, nil
+}
+
+// randomBlobDataLarge generates 6 blobs worth of data for BPO testing.
+// This is used post-Fulu to ensure we can test increased blob limits.
+// With 5 blob txs per slot × 6 blobs = 30 max blobs submitted,
+// which exceeds the highest BPO limit (21) and ensures we can hit it.
+func randomBlobDataLarge() ([]byte, error) {
 	const numBlobs = 6
-	// Generate enough data to fill all 6 blobs
 	size := (numBlobs-1)*fieldparams.BlobSize + 1
 	data := make([]byte, size)
 	n, err := mathRand.Read(data) // #nosec G404

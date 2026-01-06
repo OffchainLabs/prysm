@@ -59,6 +59,15 @@ func WithBuilder() E2EConfigOpt {
 	}
 }
 
+// WithLargeBlobs configures the transaction generator to use large blob
+// transactions (6 blobs per tx) for testing BPO limits. Without this option,
+// small blob transactions (1 blob per tx) are used by default.
+func WithLargeBlobs() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.UseLargeBlobs = true
+	}
+}
+
 func WithSSZOnly() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		if err := os.Setenv(params.EnvNameOverrideAccept, api.OctetStreamMediaType); err != nil {
@@ -89,6 +98,7 @@ type E2EConfig struct {
 	UseValidatorCrossClient bool
 	UseBeaconRestApi        bool
 	UseBuilder              bool
+	UseLargeBlobs           bool // Use large blob transactions (6 blobs per tx) for BPO testing
 	EpochsToRun             uint64
 	ExitEpoch               primitives.Epoch // Custom epoch for voluntary exit submission (0 means use default)
 	Seed                    int64

@@ -38,7 +38,8 @@ func TestEndToEnd_MinimalConfig(t *testing.T) {
 	r := e2eMinimal(t, cfg,
 		types.WithCheckpointSync(),
 		types.WithEpochs(10),
-		types.WithExitEpoch(4), // Minimum due to ShardCommitteePeriod=4
+		types.WithExitEpoch(4),    // Minimum due to ShardCommitteePeriod=4
+		types.WithLargeBlobs(),    // Use large blob transactions for BPO testing
 	)
 	r.run()
 }
