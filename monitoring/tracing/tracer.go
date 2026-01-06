@@ -44,7 +44,7 @@ func Setup(ctx context.Context, serviceName, processName, endpoint string, sampl
 		trace.WithBatcher(
 			exporter,
 			trace.WithMaxExportBatchSize(trace.DefaultMaxExportBatchSize),
-			trace.WithBatchTimeout(trace.DefaultScheduleDelay*time.Millisecond)
+			trace.WithBatchTimeout(trace.DefaultScheduleDelay*time.Millisecond),
 		),
 		trace.WithResource(
 			resource.NewWithAttributes(
