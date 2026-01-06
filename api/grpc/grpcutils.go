@@ -32,7 +32,7 @@ func LogRequests(
 	)
 	start := time.Now()
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	logrus.WithField("backend", header["x-backend"]).
+	log.WithField("backend", header["x-backend"]).
 		WithField("method", method).WithField("duration", time.Since(start)).
 		Debug("gRPC request finished.")
 	return err
@@ -58,7 +58,7 @@ func LogStream(
 		grpc.Header(&header),
 	)
 	strm, err := streamer(ctx, sd, conn, method, opts...)
-	logrus.WithField("backend", header["x-backend"]).
+	log.WithField("backend", header["x-backend"]).
 		WithField("method", method).
 		Debug("gRPC stream started.")
 	return strm, err
@@ -71,7 +71,7 @@ func AppendHeaders(parent context.Context, headers []string) context.Context {
 		if h != "" {
 			keyValue := strings.Split(h, "=")
 			if len(keyValue) < 2 {
-				logrus.Warnf("Incorrect gRPC header flag format. Skipping %v", keyValue[0])
+				log.Warnf("Incorrect gRPC header flag format. Skipping %v", keyValue[0])
 				continue
 			}
 			parent = metadata.AppendToOutgoingContext(parent, keyValue[0], strings.Join(keyValue[1:], "=")) // nolint:fatcontext

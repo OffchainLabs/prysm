@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	log "github.com/sirupsen/logrus"
 )
 
 func TestNewEventStream(t *testing.T) {

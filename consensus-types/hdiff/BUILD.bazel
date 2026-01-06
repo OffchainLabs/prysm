@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["state_diff.go"],
+    srcs = [
+        "log.go",
+        "state_diff.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/consensus-types/hdiff",
     visibility = ["//visibility:public"],
     deps = [

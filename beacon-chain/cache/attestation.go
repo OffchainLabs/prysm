@@ -9,7 +9,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 type attGroup struct {

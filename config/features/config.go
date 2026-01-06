@@ -28,11 +28,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "flags")
 
 const enabledFeatureFlag = "Enabled feature flag"
 const disabledFeatureFlag = "Disabled feature flag"

@@ -18,7 +18,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // ProcessDeposits is one of the operations performed on each processed

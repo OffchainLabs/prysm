@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["pruner.go"],
+    srcs = [
+        "log.go",
+        "pruner.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/db/pruner",
     visibility = [
         "//beacon-chain:__subpackages__",
