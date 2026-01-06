@@ -282,7 +282,7 @@ consensus_spec_tests(
     flavors = {
         "general": "sha256-b+rJOuVqq+Dy53quPcNYcQwPFoMU7Wp7tdUVe7n0g8w=",
         "minimal": "sha256-qxRIxtjPxVsVCY90WsBJKhk0027XDSmhjnRvRN14V1c=",
-        "mainnet": "sha256-NsuOQG3LzeiEE1TrWuvQ6vu6BboHv7h7f/RTS0pWkCs=",	
+        "mainnet": "sha256-NsuOQG3LzeiEE1TrWuvQ6vu6BboHv7h7f/RTS0pWkCs=",
     },
     version = consensus_spec_version,
 )
