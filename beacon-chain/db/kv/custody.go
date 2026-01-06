@@ -16,7 +16,7 @@ import (
 
 // UpdateCustodyInfo atomically updates the custody group count only if it is greater than the stored one.
 // When the custody group count increases, the earliest available slot is set to the maximum of the
-// incoming value and the stored value, ensuring the slot never decreases when increasing custody.
+// incoming value and the stored value, ensuring the earliest available slot never decreases when increasing custody.
 // It returns the (potentially updated) custody group count and earliest available slot.
 func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateCustodyInfo")
