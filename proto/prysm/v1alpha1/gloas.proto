@@ -323,7 +323,7 @@ message BeaconStateGloas {
   repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14005 [(ethereum.eth.ext.ssz_max) = "1048576"];
   bytes latest_block_hash = 14006 [ (ethereum.eth.ext.ssz_size) = "32" ];
   repeated ethereum.engine.v1.Withdrawal payload_expected_withdrawals = 14007
-  [ (ethereum.eth.ext.ssz_max) = "max_withdrawal_requests_per_payload.size" ];
+  [ (ethereum.eth.ext.ssz_max) = "withdrawal.size" ];
 }
 
 // BuilderPendingPayment represents a pending payment to a builder.
