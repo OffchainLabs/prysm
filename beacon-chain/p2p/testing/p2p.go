@@ -120,7 +120,7 @@ func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userO
 	}
 }
 
-func (p TestP2P) Status() error {
+func (p *TestP2P) Status() error {
 	return nil
 }
 
