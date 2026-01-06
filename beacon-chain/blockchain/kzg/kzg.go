@@ -1,7 +1,10 @@
 package kzg
 
 import (
+	"runtime"
+
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -24,6 +27,9 @@ type Cell [BytesPerCell]byte
 
 // Commitment represent a KZG commitment to a Blob.
 type Commitment [48]byte
+
+// errInvalidProof is returned when KZG proof verification fails.
+var errInvalidProof = errors.New("invalid KZG proof")
 
 // Proof represents a KZG proof that attests to the validity of a Blob or parts of it.
 type Proof [BytesPerProof]byte
@@ -103,16 +109,69 @@ func ComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
 	return cells, proofs, nil
 }
 
-// VerifyCellKZGProofBatch verifies the KZG proofs for a given slice of commitments, cells indices, cells and proofs.
-// Note: It is way more efficient to call once this function with big slices than calling it multiple times with small slices.
-func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, cells []Cell, proofsBytes []Bytes48) (bool, error) {
-	// Convert `Cell` type to `ckzg4844.Cell`
-	ckzgCells := make([]ckzg4844.Cell, len(cells))
+// chunkBounds represents the start and end indices of a chunk.
+type chunkBounds struct {
+	start, end int
+}
 
+// VerifyCellKZGProofBatch verifies the KZG proofs for a given slice of commitments, cells indices, cells and proofs.
+// The verification is parallelized across CPU cores by splitting the input into chunks.
+func VerifyCellKZGProofBatch(commitmentsBytes []Bytes48, cellIndices []uint64, cells []Cell, proofsBytes []Bytes48) (bool, error) {
+	count := len(cells)
+
+	// Validate all input slices have the same length
+	if len(commitmentsBytes) != count || len(cellIndices) != count || len(proofsBytes) != count {
+		return false, errors.New("input slices must have equal length")
+	}
+
+	// Convert `Cell` type to `ckzg4844.Cell`
+	ckzgCells := make([]ckzg4844.Cell, count)
 	for i := range cells {
 		copy(ckzgCells[i][:], cells[i][:])
 	}
-	return ckzg4844.VerifyCellKZGProofBatch(commitmentsBytes, cellIndices, ckzgCells, proofsBytes)
+
+	if count == 0 {
+		return true, nil
+	}
+
+	workerCount := min(count, runtime.GOMAXPROCS(0))
+	chunks := computeChunkBounds(count, workerCount)
+
+	var wg errgroup.Group
+	for workerIdx := range workerCount {
+		bounds := chunks[workerIdx]
+
+		wg.Go(func() error {
+			// Verify this chunk
+			valid, err := ckzg4844.VerifyCellKZGProofBatch(
+				commitmentsBytes[bounds.start:bounds.end],
+				cellIndices[bounds.start:bounds.end],
+				ckzgCells[bounds.start:bounds.end],
+				proofsBytes[bounds.start:bounds.end],
+			)
+
+			if err != nil {
+				return err
+			}
+
+			if !valid {
+				return errInvalidProof
+			}
+
+			return nil
+		})
+	}
+
+	// Wait for all workers to complete
+	if err := wg.Wait(); err != nil {
+		if errors.Is(err, errInvalidProof) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return true, nil
 }
 
 // RecoverCells recovers the complete cells from a given set of cell indices and partial cells.
@@ -163,4 +222,31 @@ func RecoverCellsAndKZGProofs(cellIndices []uint64, partialCells []Cell) ([]Cell
 	}
 
 	return cells, proofs, nil
+}
+
+// computeChunkBounds calculates evenly distributed chunk boundaries for parallel processing.
+// It splits itemsCount into chunks, distributing any remainder across the first chunks.
+func computeChunkBounds(itemsCount, workerCount int) []chunkBounds {
+	actualWorkers := min(itemsCount, workerCount)
+
+	if actualWorkers == 0 {
+		return []chunkBounds{}
+	}
+
+	chunkSize := itemsCount / actualWorkers
+	remainder := itemsCount % actualWorkers
+
+	chunks := make([]chunkBounds, 0, actualWorkers)
+	offset := 0
+	for i := range actualWorkers {
+		size := chunkSize
+		if i < remainder {
+			size++
+		}
+
+		chunks = append(chunks, chunkBounds{start: offset, end: offset + size})
+		offset += size
+	}
+
+	return chunks
 }
