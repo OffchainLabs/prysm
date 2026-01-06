@@ -13,6 +13,7 @@ go_library(
         "field_root_validator.go",
         "field_root_vector.go",
         "historical_summaries_root.go",
+        "log.go",
         "participation_bit_root.go",
         "pending_attestation_root.go",
         "pending_consolidations_root.go",

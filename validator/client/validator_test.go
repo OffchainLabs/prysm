@@ -775,7 +775,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 30,
 				},
 			},
-			log:    "Validator deposited, entering activation queue after finalization\" prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
+			log:    "Validator deposited, entering activation queue after finalization\" package=validator/client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
 			active: false,
 		},
 		{
@@ -789,7 +789,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 6,
 				},
 			},
-			log:    "Waiting for activation... Check validator queue status in a block explorer\" prefix=client pubkey=0x000000000000 status=PENDING validatorIndex=50",
+			log:    "Waiting for activation... Check validator queue status in a block explorer\" package=validator/client pubkey=0x000000000000 status=PENDING validatorIndex=50",
 			active: false,
 		},
 		{

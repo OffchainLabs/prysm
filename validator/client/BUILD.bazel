@@ -8,6 +8,7 @@ go_library(
         "health_monitor.go",
         "key_reload.go",
         "log.go",
+        "log_helpers.go",
         "metrics.go",
         "multiple_endpoints_grpc_resolver.go",
         "propose.go",

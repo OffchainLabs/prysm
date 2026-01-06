@@ -13,8 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("prefix", "db-pruner")
-
 const (
 	// defaultPrunableBatchSize is the number of slots that can be pruned at once.
 	defaultPrunableBatchSize = 32

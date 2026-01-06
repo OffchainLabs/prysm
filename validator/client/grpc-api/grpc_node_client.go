@@ -6,7 +6,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/golang/protobuf/ptypes/empty"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -34,7 +33,7 @@ func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Pee
 	return c.nodeClient.ListPeers(ctx, in)
 }
 
-func (c *grpcNodeClient) IsHealthy(ctx context.Context) bool {
+func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
 	_, err := c.nodeClient.GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
 		log.WithError(err).Error("Failed to get health of node")

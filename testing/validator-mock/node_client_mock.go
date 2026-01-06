@@ -56,18 +56,18 @@ func (mr *MockNodeClientMockRecorder) Genesis(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockNodeClient)(nil).Genesis), arg0, arg1)
 }
 
-// IsHealthy mocks base method.
-func (m *MockNodeClient) IsHealthy(arg0 context.Context) bool {
+// IsReady mocks base method.
+func (m *MockNodeClient) IsReady(arg0 context.Context) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsHealthy", arg0)
+	ret := m.ctrl.Call(m, "IsReady", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsHealthy indicates an expected call of IsHealthy.
-func (mr *MockNodeClientMockRecorder) IsHealthy(arg0 any) *gomock.Call {
+// IsReady indicates an expected call of IsReady.
+func (mr *MockNodeClientMockRecorder) IsReady(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHealthy", reflect.TypeOf((*MockNodeClient)(nil).IsHealthy), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsReady", reflect.TypeOf((*MockNodeClient)(nil).IsReady), arg0)
 }
 
 // Peers mocks base method.
