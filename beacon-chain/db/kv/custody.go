@@ -14,10 +14,38 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// CustodyInfo returns the stored earliest available slot and custody group count.
+func (s *Store) CustodyInfo(ctx context.Context) (primitives.Slot, uint64, error) {
+	_, span := trace.StartSpan(ctx, "BeaconDB.CustodyInfo")
+	defer span.End()
+
+	var storedGroupCount uint64
+	var storedEarliestAvailableSlot primitives.Slot
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(custodyBucket)
+		if bucket == nil {
+			return nil
+		}
+
+		if b := bucket.Get(groupCountKey); len(b) != 0 {
+			storedGroupCount = bytesutil.BytesToUint64BigEndian(b)
+		}
+		if b := bucket.Get(earliestAvailableSlotKey); len(b) != 0 {
+			storedEarliestAvailableSlot = primitives.Slot(bytesutil.BytesToUint64BigEndian(b))
+		}
+		return nil
+	}); err != nil {
+		return 0, 0, err
+	}
+
+	return storedEarliestAvailableSlot, storedGroupCount, nil
+}
+
 // UpdateCustodyInfo atomically updates the custody group count only if it is greater than the stored one.
-// When the custody group count increases, the earliest available slot is set to the maximum of the
-// incoming value and the stored value, ensuring the earliest available slot never decreases when increasing custody.
-// It returns the (potentially updated) custody group count and earliest available slot.
+// The earliest available slot is only updated if the new value is higher than the stored one,
+// preventing loss of availability for data we already have (e.g., when switching from normal to supernode).
+// It returns the (potentially updated) earliest available slot and custody group count.
 func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.UpdateCustodyInfo")
 	defer span.End()
@@ -54,9 +82,8 @@ func (s *Store) UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot pri
 			return errors.Wrap(err, "put custody group count")
 		}
 
-		// Only update earliestAvailableSlot if the incoming value is higher.
-		// This prevents losing availability for data we already have when switching modes
-		// (e.g., from normal to semi-supernode or supernode).
+		// Only update earliestAvailableSlot if the new value is higher.
+		// This prevents losing availability for data we already have.
 		if earliestAvailableSlot > storedEarliestAvailableSlot {
 			storedEarliestAvailableSlot = earliestAvailableSlot
 			bytes = bytesutil.Uint64ToBytesBigEndian(uint64(earliestAvailableSlot))

@@ -295,7 +295,7 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return nil
 	}
 
-	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(saved.Slot())
+	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB()
 	if err != nil {
 		return errors.Wrap(err, "could not get and save custody group count")
 	}
@@ -468,14 +468,10 @@ func (s *Service) removeStartupState() {
 	s.cfg.FinalizedStateAtStartUp = nil
 }
 
-// UpdateCustodyInfoInDB updates the custody information in the database.
-// It returns the (potentially updated) custody group count and the earliest available slot.
-func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
+// updateCustodyInfoInDB updates the custody information in the database.
+// It returns the (potentially updated) earliest available slot and custody group count.
+func (s *Service) updateCustodyInfoInDB() (primitives.Slot, uint64, error) {
 	isSupernode := flags.Get().Supernode
-	isSemiSupernode := flags.Get().SemiSupernode
-
-	cfg := params.BeaconConfig()
-	custodyRequirement := cfg.CustodyRequirement
 
 	// Check if the node was previously subscribed to all data subnets, and if so,
 	// store the new status accordingly.
@@ -484,55 +480,85 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		return 0, 0, errors.Wrap(err, "update subscribed to all data subnets")
 	}
 
-	// Compute the target custody group count based on current flag configuration.
-	targetCustodyGroupCount := custodyRequirement
+	targetCustodyGroupCount, err := computeTargetCustodyGroupCount()
+	if err != nil {
+		return 0, 0, err
+	}
 
-	// Supernode: custody all groups (either currently set or previously enabled)
+	// Query current custody info to determine if this is checkpoint sync vs restart.
+	_, storedCustodyCount, err := s.cfg.BeaconDB.CustodyInfo(s.ctx)
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "custody info")
+	}
+
+	// Determine the slot to use based on whether we're pre-fulu or post-fulu.
+	// - Pre-fulu: use earliest stored slot (no data column sharding)
+	// - Post-fulu checkpoint sync (storedCustodyCount == 0): use headSlot
+	// - Post-fulu restart with custody increase: use headSlot + 1
+	//   (we don't have data columns for new custody groups at the current head)
+	fuluSlot, err := fuluForkSlot()
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "fulu fork slot")
+	}
+	headSlot := s.HeadSlot()
+
+	var earliestAvailableSlot primitives.Slot
+	if headSlot >= fuluSlot {
+		if storedCustodyCount > 0 && targetCustodyGroupCount > storedCustodyCount {
+			// Restart with custody increase: new groups only have data from headSlot + 1
+			earliestAvailableSlot = headSlot + 1
+		} else {
+			// Checkpoint sync or no custody increase
+			earliestAvailableSlot = headSlot
+		}
+	} else {
+		earliestAvailableSlot, err = s.cfg.BeaconDB.EarliestSlot(s.ctx)
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "earliest slot")
+		}
+	}
+
+	storedEarliestSlot, actualCustodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(
+		s.ctx, earliestAvailableSlot, targetCustodyGroupCount)
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "update custody info")
+	}
+
+	logCustodyStatus(wasSupernode, actualCustodyGroupCount)
+
+	return storedEarliestSlot, actualCustodyGroupCount, nil
+}
+
+// computeTargetCustodyGroupCount returns the custody group count based on current flag configuration.
+func computeTargetCustodyGroupCount() (uint64, error) {
+	isSupernode := flags.Get().Supernode
+	isSemiSupernode := flags.Get().SemiSupernode
+	cfg := params.BeaconConfig()
+
+	// Default to custody requirement
+	targetCustodyGroupCount := cfg.CustodyRequirement
+
+	// Supernode: custody all groups
 	if isSupernode {
-		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
+		return cfg.NumberOfCustodyGroups, nil
 	}
 
 	// Semi-supernode: custody minimum needed for reconstruction, or custody requirement if higher
 	if isSemiSupernode {
 		semiSupernodeCustody, err := peerdas.MinimumCustodyGroupCountToReconstruct()
 		if err != nil {
-			return 0, 0, errors.Wrap(err, "minimum custody group count")
+			return 0, errors.Wrap(err, "minimum custody group count")
 		}
-
-		targetCustodyGroupCount = max(custodyRequirement, semiSupernodeCustody)
+		targetCustodyGroupCount = max(cfg.CustodyRequirement, semiSupernodeCustody)
 	}
 
-	// Safely compute the fulu fork slot.
-	fuluForkSlot, err := fuluForkSlot()
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "fulu fork slot")
-	}
+	return targetCustodyGroupCount, nil
+}
 
-	// If slot is before the fulu fork slot, then use the earliest stored slot as the reference slot.
-	// Pre-fulu, there's no data column sharding, so custody doesn't affect what we can serve.
-	if slot < fuluForkSlot {
-		slot, err = s.cfg.BeaconDB.EarliestSlot(s.ctx)
-		if err != nil {
-			return 0, 0, errors.Wrap(err, "earliest slot")
-		}
-	} else {
-		// Post-fulu: For restarts with increased custody count, use the head slot + 1
-		// instead of the finalized slot. This correctly represents when new custody
-		// groups become available, as we only start syncing new columns from the
-		// current head onward.
-		// HeadSlot() + 1 is used because:
-		// - For checkpoint sync: head = finalized slot, so we use finalized + 1
-		// - For restart: head = loaded head from DB, so we use head + 1 (the first new slot)
-		headSlotPlusOne := s.HeadSlot() + 1
-		if headSlotPlusOne > slot {
-			slot = headSlotPlusOne
-		}
-	}
-
-	earliestAvailableSlot, actualCustodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, targetCustodyGroupCount)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "update custody info")
-	}
+// logCustodyStatus logs information about the custody configuration.
+func logCustodyStatus(wasSupernode bool, actualCustodyGroupCount uint64) {
+	isSupernode := flags.Get().Supernode
+	cfg := params.BeaconConfig()
 
 	if isSupernode {
 		log.WithFields(logrus.Fields{
@@ -544,8 +570,6 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 	if wasSupernode && !isSupernode {
 		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.Supernode.Name)
 	}
-
-	return earliestAvailableSlot, actualCustodyGroupCount, nil
 }
 
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {

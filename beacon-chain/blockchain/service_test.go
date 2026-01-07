@@ -621,37 +621,54 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 	roBlock, err := blocks.NewROBlock(signedBeaconBlock)
 	require.NoError(t, err)
 
+	fuluForkSlot := fuluForkEpoch * primitives.Slot(cfg.SlotsPerEpoch)
+
+	// Helper to set up forkchoice and head at a specific slot.
+	// Returns the block root so it can be used as parent for subsequent calls.
+	setupHead := func(t *testing.T, service *Service, slot primitives.Slot, parentRoot [32]byte) [32]byte {
+		fc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+		blockRoot := [32]byte{byte(slot)}
+		headState, headBlock, err := prepareForkchoiceState(ctx, slot, blockRoot, parentRoot, params.BeaconConfig().ZeroHash, fc, fc)
+		require.NoError(t, err)
+		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, headState, headBlock))
+		require.NoError(t, service.setHead(&head{
+			root:  headBlock.Root(),
+			block: headBlock,
+			state: headState,
+			slot:  slot,
+		}))
+		return blockRoot
+	}
+
 	t.Run("CGC increases before fulu", func(t *testing.T) {
 		service, requirements := minimalTestService(t)
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
 
-		// Before Fulu
-		// -----------
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(15)
+		// Set head to pre-fulu slot
+		preFuluSlot := primitives.Slot(15)
+		setupHead(t, service, preFuluSlot, params.BeaconConfig().ZeroHash)
+
+		// Before Fulu - should use earliest stored slot
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
 		require.Equal(t, earliestStoredSlot, actualEas)
 		require.Equal(t, custodyRequirement, actualCgc)
 
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(17)
+		// Call again to ensure idempotency
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
 		require.Equal(t, earliestStoredSlot, actualEas)
 		require.Equal(t, custodyRequirement, actualCgc)
 
+		// Enable supernode while still pre-fulu
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
 		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(19)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, numberOfCustodyGroups, actualCgc)
-
-		// After Fulu
-		// ----------
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1)
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
 		require.Equal(t, earliestStoredSlot, actualEas)
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
@@ -662,35 +679,36 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
 
-		// Before Fulu
-		// -----------
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(15)
+		// Start pre-fulu
+		preFuluSlot := primitives.Slot(15)
+		preFuluRoot := setupHead(t, service, preFuluSlot, params.BeaconConfig().ZeroHash)
+
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
 		require.Equal(t, earliestStoredSlot, actualEas)
 		require.Equal(t, custodyRequirement, actualCgc)
 
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(17)
-		require.NoError(t, err)
-		require.Equal(t, earliestStoredSlot, actualEas)
-		require.Equal(t, custodyRequirement, actualCgc)
-
-		// After Fulu
-		// ----------
+		// Move to post-fulu and enable supernode
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
 		gFlags.Supernode = true
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot)
+		postFuluSlot := fuluForkSlot + 1
+		postFuluRoot := setupHead(t, service, postFuluSlot, preFuluRoot)
+
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
+		require.Equal(t, postFuluSlot+1, actualEas) // head + 1
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
 
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		// Call again - earliest available slot shouldn't change
+		laterSlot := postFuluSlot + 10
+		setupHead(t, service, laterSlot, postFuluRoot)
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
+		require.Equal(t, postFuluSlot+1, actualEas) // Still the original EAS
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
 	})
 
@@ -699,16 +717,19 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
 
+		postFuluSlot := fuluForkSlot + 1
+		postFuluRoot := setupHead(t, service, postFuluSlot, params.BeaconConfig().ZeroHash)
+
 		// Enable supernode
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
 		gFlags.Supernode = true
 		flags.Init(gFlags)
 
-		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		// First call - checkpoint sync scenario (no existing custody)
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
+		require.Equal(t, postFuluSlot, actualEas) // headSlot (checkpoint sync)
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
 
 		// Try to downgrade by removing flag
@@ -716,10 +737,14 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		// Should still be supernode
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		// Move head forward
+		laterSlot := postFuluSlot + 10
+		setupHead(t, service, laterSlot, postFuluRoot)
+
+		// Should still be supernode (custody count shouldn't decrease)
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
+		require.Equal(t, postFuluSlot, actualEas)          // Original EAS preserved
 		require.Equal(t, numberOfCustodyGroups, actualCgc) // Still 64, not downgraded
 	})
 
@@ -728,29 +753,36 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
 
+		postFuluSlot := fuluForkSlot + 1
+		postFuluRoot := setupHead(t, service, postFuluSlot, params.BeaconConfig().ZeroHash)
+
 		// Enable semi-supernode
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
 		gFlags.SemiSupernode = true
 		flags.Init(gFlags)
 
-		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		// First call - checkpoint sync scenario (no existing custody)
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
-		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
-		require.Equal(t, semiSupernodeCustody, actualCgc) // Semi-supernode custodies 64 groups
+		require.Equal(t, postFuluSlot, actualEas) // headSlot (checkpoint sync)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 32
+		require.Equal(t, semiSupernodeCustody, actualCgc)
 
 		// Try to downgrade by removing flag
 		gFlags.SemiSupernode = false
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		// UpdateCustodyInfo should prevent downgrade - custody count should remain at 64
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		// Move head forward
+		laterSlot := postFuluSlot + 10
+		setupHead(t, service, laterSlot, postFuluRoot)
+
+		// UpdateCustodyInfo should prevent downgrade
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
-		require.Equal(t, semiSupernodeCustody, actualCgc) // Still 64 due to downgrade prevention by UpdateCustodyInfo
+		require.Equal(t, postFuluSlot, actualEas)         // Original EAS preserved
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Still 32
 	})
 
 	t.Run("Semi-supernode to supernode upgrade allowed", func(t *testing.T) {
@@ -758,18 +790,21 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
 
+		postFuluSlot := fuluForkSlot + 1
+		postFuluRoot := setupHead(t, service, postFuluSlot, params.BeaconConfig().ZeroHash)
+
 		// Start with semi-supernode
 		resetFlags := flags.Get()
 		gFlags := new(flags.GlobalFlags)
 		gFlags.SemiSupernode = true
 		flags.Init(gFlags)
 
-		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		// First call - checkpoint sync scenario (no existing custody)
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
-		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
-		require.Equal(t, semiSupernodeCustody, actualCgc) // Semi-supernode custodies 64 groups
+		require.Equal(t, postFuluSlot, actualEas) // headSlot (checkpoint sync)
+		semiSupernodeCustody := numberOfCustodyGroups / 2
+		require.Equal(t, semiSupernodeCustody, actualCgc)
 
 		// Upgrade to full supernode
 		gFlags.SemiSupernode = false
@@ -777,18 +812,24 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		// Should upgrade to full supernode
-		upgradeSlot := slot + 2
-		actualEas, actualCgc, err = service.updateCustodyInfoInDB(upgradeSlot)
+		// Move head forward for upgrade
+		upgradeSlot := postFuluSlot + 10
+		setupHead(t, service, upgradeSlot, postFuluRoot)
+
+		// Second call - restart with custody increase
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, upgradeSlot, actualEas)           // Earliest slot updates when upgrading
-		require.Equal(t, numberOfCustodyGroups, actualCgc) // Upgraded to 128
+		require.Equal(t, upgradeSlot+1, actualEas)         // headSlot + 1 (restart with custody increase)
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Upgraded to 64
 	})
 
 	t.Run("Semi-supernode with high validator requirements uses higher custody", func(t *testing.T) {
 		service, requirements := minimalTestService(t)
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
+
+		postFuluSlot := fuluForkSlot + 1
+		setupHead(t, service, postFuluSlot, params.BeaconConfig().ZeroHash)
 
 		// Enable semi-supernode
 		resetFlags := flags.Get()
@@ -797,17 +838,12 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		// Mock a high custody requirement (simulating many validators)
-		// We need to override the custody requirement calculation
-		// For this test, we'll verify the logic by checking if custodyRequirement > 64
-		// Since custodyRequirement in minimalTestService is 4, we can't test the high case here
-		// This would require a different test setup with actual validators
-		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		// First call - checkpoint sync scenario (no existing custody)
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.Equal(t, slot, actualEas)
-		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
-		// With low validator requirements (4), should use semi-supernode minimum (64)
+		require.Equal(t, postFuluSlot, actualEas) // headSlot (checkpoint sync)
+		semiSupernodeCustody := numberOfCustodyGroups / 2
+		// With low validator requirements (4), should use semi-supernode minimum (32)
 		require.Equal(t, semiSupernodeCustody, actualCgc)
 	})
 
@@ -816,30 +852,29 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		// 1. Node was running with lower custody count
 		// 2. Node stops and waits (new blocks are produced)
 		// 3. Node restarts with higher custody count
-		// In this case, the head slot is higher than the finalized slot,
-		// so we should use head + 1 as the earliest available slot.
+		// In this case, we should use head + 1 as the earliest available slot.
 		service, requirements := minimalTestService(t)
 		err = requirements.db.SaveBlock(ctx, roBlock)
 		require.NoError(t, err)
 
-		// Create a block at a higher slot to simulate the head after restart
-		// This represents the head block that was loaded from DB
-		fc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
-		headSlot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 100 // Slot 420 (well after fulu fork)
-		headState, headBlock, err := prepareForkchoiceState(ctx, headSlot, [32]byte{'h', 'e', 'a', 'd'}, params.BeaconConfig().ZeroHash, params.BeaconConfig().ZeroHash, fc, fc)
+		// First, establish existing custody in the DB (simulates previous run)
+		initialSlot := fuluForkSlot + 10
+		initialRoot := setupHead(t, service, initialSlot, params.BeaconConfig().ZeroHash)
+
+		// Initial call with default custody (simulates first run checkpoint sync)
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
 		require.NoError(t, err)
-		require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, headState, headBlock))
+		require.Equal(t, initialSlot, actualEas) // First time = headSlot
+		require.Equal(t, custodyRequirement, actualCgc)
 
-		// Set the head on the service (simulating what initializeHead does)
-		// ROBlock embeds ReadOnlySignedBeaconBlock, so we can use it directly
-		require.NoError(t, service.setHead(&head{
-			root:  headBlock.Root(),
-			block: headBlock,
-			state: headState,
-			slot:  headSlot,
-		}))
+		// Verify existing custody is stored (calling with 0 reads without modifying)
+		_, storedCount, err := requirements.db.UpdateCustodyInfo(ctx, 0, 0)
+		require.NoError(t, err)
+		require.Equal(t, custodyRequirement, storedCount)
 
-		// Verify that HeadSlot is now the head slot
+		// Now simulate restart at a higher head slot with increased custody
+		headSlot := fuluForkSlot + 100
+		setupHead(t, service, headSlot, initialRoot)
 		require.Equal(t, headSlot, service.HeadSlot())
 
 		// Enable supernode (simulating restart with increased custody)
@@ -849,15 +884,46 @@ func TestUpdateCustodyInfoInDB(t *testing.T) {
 		flags.Init(gFlags)
 		defer flags.Init(resetFlags)
 
-		// Call updateCustodyInfoInDB with a lower "finalized" slot
-		// The function should use head + 1 instead
-		finalizedSlot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 10 // Slot 330 (lower than head)
-		actualEas, actualCgc, err := service.updateCustodyInfoInDB(finalizedSlot)
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB()
 		require.NoError(t, err)
 
-		// The earliest available slot should be head + 1, not the finalized slot
-		expectedEas := headSlot + 1 // 421
-		require.Equal(t, expectedEas, actualEas, "Expected head + 1, not finalized slot")
+		// The earliest available slot should be head + 1 (restart scenario)
+		expectedEas := headSlot + 1
+		require.Equal(t, expectedEas, actualEas, "Expected head + 1 for restart with custody increase")
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+	})
+
+	t.Run("Checkpoint sync uses head slot without plus one", func(t *testing.T) {
+		// This test verifies checkpoint sync behavior:
+		// When syncing from a checkpoint with no existing custody info,
+		// the earliest available slot should be the checkpoint slot itself
+		// (not +1), because we download the checkpoint block's data columns.
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Set up head at checkpoint slot (simulates checkpoint sync)
+		checkpointSlot := fuluForkSlot + 50
+		setupHead(t, service, checkpointSlot, params.BeaconConfig().ZeroHash)
+		require.Equal(t, checkpointSlot, service.HeadSlot())
+
+		// Verify no existing custody in DB (calling with 0 reads without modifying)
+		_, storedCount, err := requirements.db.UpdateCustodyInfo(ctx, 0, 0)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), storedCount)
+
+		// Enable supernode for checkpoint sync
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB()
+		require.NoError(t, err)
+
+		// For checkpoint sync, EAS should be the checkpoint slot (not +1)
+		require.Equal(t, checkpointSlot, actualEas, "Checkpoint sync should use headSlot, not headSlot+1")
 		require.Equal(t, numberOfCustodyGroups, actualCgc)
 	})
 }
