@@ -108,13 +108,13 @@ func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
 
 // BlobStorage is the concrete implementation of the filesystem backend for saving and retrieving BlobSidecars.
 type BlobStorage struct {
-	fsync           bool
-	cache           *blobStorageSummaryCache
-	retentionEpochs primitives.Epoch
-	layout          fsLayout
-	fs              afero.Fs
-	layoutName      string
 	base            string
+	retentionEpochs primitives.Epoch
+	layoutName      string
+	fsync           bool
+	fs              afero.Fs
+	layout          fsLayout
+	cache           *blobStorageSummaryCache
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache

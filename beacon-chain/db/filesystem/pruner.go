@@ -30,21 +30,11 @@ func newBlobPruner(retain primitives.Epoch) *blobPruner {
 	return p
 }
 
-// newNoOpBlobPruner returns a pruner that does nothing when notify is called.
-// This is used for archival mode where all blobs should be retained indefinitely.
-func newNoOpBlobPruner() *blobPruner {
-	return &blobPruner{retentionPeriod: 0}
-}
-
 // notify returns a channel that is closed when the pruning operation is complete.
 // This is useful for tests, but at runtime fsLayouts or BlobStorage should not wait for completion.
 func (p *blobPruner) notify(latest primitives.Epoch, layout fsLayout) chan struct{} {
 	done := make(chan struct{})
-	// No-op: if retentionPeriod is 0, this is an archival pruner that should never prune.
-	if p.retentionPeriod == 0 {
-		close(done)
-		return done
-	}
+
 	floor := periodFloor(latest, p.retentionPeriod)
 	if primitives.Epoch(p.prunedBefore.Swap(uint64(floor))) >= floor {
 		// Only trigger pruning if the atomic swap changed the previous value of prunedBefore.
