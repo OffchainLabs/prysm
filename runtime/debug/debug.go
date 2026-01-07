@@ -18,6 +18,7 @@ package debug
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -37,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/cmd"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -78,6 +80,11 @@ var (
 		Name:  "blockprofilerate",
 		Usage: "Turns on block profiling with the given rate.",
 	}
+	// HeapDumpThresholdFlag sets the memory threshold in MB for automatic heap dumps.
+	HeapDumpThresholdFlag = &cli.Uint64Flag{
+		Name:  "heap-dump-threshold-mb",
+		Usage: "If set to a value > 0, automatically dump heap profile when heap memory exceeds this threshold in MB.",
+	}
 )
 
 // HandlerT implements the debugging API.
@@ -91,6 +98,20 @@ type HandlerT struct {
 	traceFile string
 }
 
+// memoryMonitor tracks heap memory and triggers dumps when threshold exceeded.
+type memoryMonitor struct {
+	ctx            context.Context
+	thresholdBytes uint64
+	dumpDir        string
+	latestDumpTime time.Time
+	mu             sync.Mutex
+}
+
+const (
+	heapDumpCooldownPeriod  = 5 * time.Minute
+	heapCheckIntervalPeriod = 5 * time.Second
+)
+
 // MemStats returns detailed runtime memory statistics.
 func (*HandlerT) MemStats() *runtime.MemStats {
 	s := new(runtime.MemStats)
@@ -103,6 +124,107 @@ func (*HandlerT) GcStats() *debug.GCStats {
 	s := new(debug.GCStats)
 	debug.ReadGCStats(s)
 	return s
+}
+
+// startMemoryMonitoring initializes and starts the memory monitoring goroutine.
+func startMemoryMonitoring(ctx context.Context, thresholdMB uint64, dumpDir string) error {
+	// Ensure dump directory exists
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		return fmt.Errorf("failed to create heap dump directory: %w", err)
+	}
+
+	monitor := &memoryMonitor{
+		ctx:            ctx,
+		thresholdBytes: thresholdMB * 1024 * 1024,
+		dumpDir:        dumpDir,
+		latestDumpTime: time.Time{}, // zero time means never dumped
+	}
+
+	go monitor.monitorLoop()
+
+	log.WithFields(log.Fields{
+		"thresholdMB":         thresholdMB,
+		"cooldownPeriod":      heapDumpCooldownPeriod,
+		"dumpDirectory":       dumpDir,
+		"checkIntervalPeriod": heapCheckIntervalPeriod,
+	}).Info("Started heap dump monitoring")
+
+	return nil
+}
+
+// monitorLoop periodically checks heap memory and triggers dumps.
+func (m *memoryMonitor) monitorLoop() {
+	ticker := time.NewTicker(heapCheckIntervalPeriod)
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			log.Debug("Context done, stopping heap memory monitoring")
+			return
+		case <-ticker.C:
+			m.checkAndDumpIfNeeded()
+		}
+	}
+}
+
+// checkAndDumpIfNeeded checks current heap size and dumps if threshold exceeded.
+func (m *memoryMonitor) checkAndDumpIfNeeded() {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	heapInUseMB := memStats.HeapInuse / (1024 * 1024)
+
+	// Use HeapInuse (currently allocated from OS) as the threshold metric
+	// This is more stable than HeapAlloc which fluctuates with GC
+	if memStats.HeapInuse < m.thresholdBytes {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check cooldown period
+	if time.Since(m.latestDumpTime) < heapDumpCooldownPeriod {
+		log.WithFields(log.Fields{
+			"heapInUseMB":         heapInUseMB,
+			"thresholdMB":         m.thresholdBytes / (1024 * 1024),
+			"timeSinceLatestDump": time.Since(m.latestDumpTime).String(),
+			"cooldown":            heapDumpCooldownPeriod,
+		}).Debug("Heap threshold exceeded but in cooldown period")
+		return
+	}
+
+	// Create timestamped filename
+	timestamp := time.Now().Format("20060102-150405")
+	basename := fmt.Sprintf("heap-%s-%dmb.prof", timestamp, heapInUseMB)
+	basepath := filepath.Join(m.dumpDir, basename)
+
+	log.WithFields(log.Fields{
+		"heapInUseMB": heapInUseMB,
+		"thresholdMB": m.thresholdBytes / (1024 * 1024),
+	}).Warning("Heap memory threshold exceeded, dumping profiles")
+
+	if err := Handler.WriteMemProfile(fmt.Sprintf("%s-heap.prof", basepath)); err != nil {
+		log.WithError(err).Error("Failed to write automatic heap dump")
+		return
+	}
+
+	if err := Handler.WriteBlockProfile(fmt.Sprintf("%s-block.prof", basepath)); err != nil {
+		log.WithError(err).Error("Failed to write automatic block dump")
+		return
+	}
+
+	if err := Handler.WriteGoroutineProfile(fmt.Sprintf("%s-goroutine.prof", basepath)); err != nil {
+		log.WithError(err).Error("Failed to write automatic goroutine dump")
+		return
+	}
+
+	if err := Handler.WriteMutexProfile(fmt.Sprintf("%s-mutex.prof", basepath)); err != nil {
+		log.WithError(err).Error("Failed to write automatic mutex dump")
+		return
+	}
+
+	m.latestDumpTime = time.Now()
 }
 
 // CPUProfile turns on CPU profiling for nsec seconds and writes
@@ -253,6 +375,11 @@ func (*HandlerT) WriteMemProfile(file string) error {
 	return writeProfile("heap", file)
 }
 
+// WriteMutexProfile writes a goroutine profile to the given file.
+func (*HandlerT) WriteGoroutineProfile(file string) error {
+	return writeProfile("goroutine", file)
+}
+
 // Stacks returns a printed representation of the stacks of all goroutines.
 func (*HandlerT) Stacks() string {
 	buf := new(bytes.Buffer)
@@ -275,7 +402,11 @@ func (*HandlerT) SetGCPercent(v int) int {
 
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
-	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
+	log.WithFields(log.Fields{
+		"count": p.Count(),
+		"type":  name,
+		"dump":  file,
+	}).Info("Writing profile records")
 	f, err := os.Create(expandHome(file))
 	if err != nil {
 		return err
@@ -322,6 +453,15 @@ func Setup(ctx *cli.Context) error {
 	if ctx.Bool(PProfFlag.Name) {
 		address := fmt.Sprintf("%s:%d", ctx.String(PProfAddrFlag.Name), ctx.Int(PProfPortFlag.Name))
 		startPProf(address)
+	}
+	// automatic heap dump monitoring
+	thresholdMB := ctx.Uint64(HeapDumpThresholdFlag.Name)
+	if thresholdMB > 0 {
+		dataDir := ctx.String(cmd.DataDirFlag.Name)
+		dumpDir := filepath.Join(dataDir, "pprof-dumps")
+		if err := startMemoryMonitoring(ctx.Context, thresholdMB, dumpDir); err != nil {
+			return fmt.Errorf("failed to start memory monitoring: %w", err)
+		}
 	}
 	return nil
 }

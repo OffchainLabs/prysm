@@ -130,6 +130,7 @@ var appFlags = []cli.Flag{
 	debug.MemProfileRateFlag,
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
+	debug.HeapDumpThresholdFlag,
 	cmd.LogFileName,
 	cmd.EnableUPnPFlag,
 	cmd.ConfigFileFlag,
