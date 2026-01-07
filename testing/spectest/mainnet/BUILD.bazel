@@ -278,6 +278,7 @@ go_test(
         "//testing/spectest/shared/fulu/rewards:go_default_library",
         "//testing/spectest/shared/fulu/sanity:go_default_library",
         "//testing/spectest/shared/fulu/ssz_static:go_default_library",
+        "//testing/spectest/shared/gloas/ssz_static:go_default_library",
         "//testing/spectest/shared/phase0/epoch_processing:go_default_library",
         "//testing/spectest/shared/phase0/finality:go_default_library",
         "//testing/spectest/shared/phase0/operations:go_default_library",
