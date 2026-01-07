@@ -229,6 +229,7 @@ var appHelpFlagGroups = []flagGroup{
 			debug.PProfAddrFlag,
 			debug.PProfFlag,
 			debug.PProfPortFlag,
+			debug.HeapDumpThresholdFlag,
 			flags.SetGCPercent,
 		},
 	},
