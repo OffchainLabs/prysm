@@ -1293,17 +1293,10 @@ func (v *validator) numHosts() int {
 }
 
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
-	hosts := v.hosts()
-	numHosts := len(hosts)
-
-	if numHosts == 0 {
-		return false
-	}
-
-	// Check all hosts for a fully synced node
-	for i := 0; i < numHosts; i++ {
-		if v.nodeClient.IsHealthy(ctx) {
-			log.WithField("host", v.Host()).Debug("Found healthy beacon node")
+	// Tail-recursive closure keeps retry count private.
+	var check func(remaining int) bool
+	check = func(remaining int) bool {
+		if v.nodeClient.IsReady(ctx) { // ready → done
 			return true
 		}
 		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
