@@ -11,9 +11,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/libp2p/go-libp2p"
 	mplex "github.com/libp2p/go-libp2p-mplex"
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	libp2pquic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	libp2ptcp "github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -59,22 +59,6 @@ func MultiAddressBuilder(ip net.IP, tcpPort, quicPort uint) ([]ma.Multiaddr, err
 	return multiaddrs, nil
 }
 
-// setConnManagerOption sets the connection manager option for libp2p based on the
-// MaxPeers setting in the p2p config. If MaxPeers is set to a value higher than the
-// default high water mark, we create a new connection manager with a high water mark
-// that is higher than MaxPeers. Otherwise, we do not set a connection manager option
-// and allow the libp2p fallback defaults to be applied. Rationale below:
-// see: https://github.com/OffchainLabs/prysm/issues/15607
-func setConnManagerOption(cfg *Config, opts []libp2p.Option) ([]libp2p.Option, error) {
-	low, high := cfg.connManagerLowHigh()
-	cm, err := connmgr.NewConnManager(low, high)
-	if err != nil {
-		return nil, errors.Wrap(err, "new ConnManager")
-	}
-	opts = append(opts, libp2p.ConnectionManager(cm))
-	return opts, nil
-}
-
 // buildOptions for the libp2p host.
 func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) ([]libp2p.Option, error) {
 	cfg := s.cfg
@@ -113,10 +97,9 @@ func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) ([]libp2p.Op
 		libp2p.Muxer("/mplex/6.7.0", mplex.DefaultTransport),
 		libp2p.Security(noise.ID, noise.New),
 		libp2p.Ping(false), // Disable Ping Service.
-	}
-	options, err = setConnManagerOption(s.cfg, options)
-	if err != nil {
-		return nil, errors.Wrap(err, "set connection manager option")
+		// Disable the libp2p connection manager - peer management is handled
+		// by Prysm's own connection management logic in "maintainPeerStatuses" in rpc_status.go.
+		libp2p.ConnectionManager(&connmgr.NullConnMgr{}),
 	}
 
 	if features.Get().EnableQUIC {
