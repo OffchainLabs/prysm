@@ -64,7 +64,7 @@ var (
 	// defined below.
 	pollingPeriod = 6 * time.Second
 
-	crawlTimeout       = 30 * time.Second
+	crawlTimeout       = 5 * time.Second
 	crawlInterval      = 1 * time.Second
 	maxConcurrentDials = int64(256)
 )

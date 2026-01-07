@@ -14,8 +14,8 @@ import (
 )
 
 const dialInterval = 500 * time.Millisecond
-const peerCountLogInterval = 1 * time.Minute
-const topicMonitorInterval = 1 * time.Second
+const peerCountLogInterval = 5 * time.Minute
+const topicMonitorInterval = 200 * time.Millisecond
 
 // GossipPeerDialer maintains minimum peer counts for gossip topics by periodically
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
@@ -121,7 +121,7 @@ func (g *GossipPeerDialer) logPeerCountsLoop() {
 				log.WithField("topic", topic).
 					WithField("currentPeers", currentPeers).
 					WithField("minPeers", minPeers).
-					Info("Gossip topic peer count")
+					Debug("Gossip topic peer count")
 			}
 
 		case <-g.ctx.Done():

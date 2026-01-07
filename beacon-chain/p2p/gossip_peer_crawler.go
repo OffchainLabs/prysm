@@ -171,7 +171,7 @@ func (cp *crawledPeers) logPeerCounts() {
 		log.WithField("topic", topic).
 			WithField("totalPeers", len(peers)).
 			WithField("pingedPeers", pingedCount).
-			Info("Crawler indexed peers for topic")
+			Debug("Crawler indexed peers for topic")
 	}
 }
 
