@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.1.2](https://github.com/prysmaticlabs/prysm/compare/v7.1.1...v7.1.2) - 2026-01-07
+
+Happy new year! This patch release is very small. The main improvement is better management of pending attestation aggregation via [PR 16153](https://github.com/OffchainLabs/prysm/pull/16153).
+
+### Added
+
+- `primitives.BuilderIndex`: SSZ `uint64` wrapper for builder registry indices. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16169)
+
+### Changed
+
+- the /eth/v2/beacon/pool/attestations and /eth/v1/beacon/pool/sync_committees now returns a 503 error if the node is still syncing, the rest api is also working in a similar process to gRPC broadcasting immediately now. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16152)
+- `validateDataColumn`: Remove error logs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16157)
+- Pending aggregates: When multiple aggregated attestations only differing by the aggregator index are in the pending queue, only process one of them. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16153)
+
+### Fixed
+
+- Fix the missing fork version object mapping for Fulu in light client p2p. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16151)
+- Do not process slots and copy states for next epoch proposers after Fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16168)
+
 ## [v7.1.1](https://github.com/prysmaticlabs/prysm/compare/v7.1.0...v7.1.1) - 2025-12-18
 
 Release highlights:
