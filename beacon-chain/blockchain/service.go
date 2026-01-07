@@ -485,37 +485,21 @@ func (s *Service) updateCustodyInfoInDB() (primitives.Slot, uint64, error) {
 		return 0, 0, err
 	}
 
-	// Query current custody info to determine if this is checkpoint sync vs restart.
-	_, storedCustodyCount, err := s.cfg.BeaconDB.CustodyInfo(s.ctx)
+	// Query current custody info.
+	storedEarliestSlot, storedCustodyCount, err := s.cfg.BeaconDB.CustodyInfo(s.ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "custody info")
 	}
 
-	// Determine the slot to use based on whether we're pre-fulu or post-fulu.
-	// - Pre-fulu: use earliest stored slot (no data column sharding)
-	// - Post-fulu checkpoint sync (storedCustodyCount == 0): use headSlot
-	// - Post-fulu restart with custody increase: use headSlot + 1
-	//   (we don't have data columns for new custody groups at the current head)
-	fuluSlot, err := fuluForkSlot()
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "fulu fork slot")
+	// If custody was already initialized and no increase needed, return stored values.
+	if storedCustodyCount > 0 && targetCustodyGroupCount <= storedCustodyCount {
+		logCustodyStatus(wasSupernode, storedCustodyCount)
+		return storedEarliestSlot, storedCustodyCount, nil
 	}
-	headSlot := s.HeadSlot()
 
-	var earliestAvailableSlot primitives.Slot
-	if headSlot >= fuluSlot {
-		if storedCustodyCount > 0 && targetCustodyGroupCount > storedCustodyCount {
-			// Restart with custody increase: new groups only have data from headSlot + 1
-			earliestAvailableSlot = headSlot + 1
-		} else {
-			// Checkpoint sync or no custody increase
-			earliestAvailableSlot = headSlot
-		}
-	} else {
-		earliestAvailableSlot, err = s.cfg.BeaconDB.EarliestSlot(s.ctx)
-		if err != nil {
-			return 0, 0, errors.Wrap(err, "earliest slot")
-		}
+	earliestAvailableSlot, err := s.earliestAvailableSlotForCustodyIncrease(storedCustodyCount)
+	if err != nil {
+		return 0, 0, err
 	}
 
 	storedEarliestSlot, actualCustodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(
@@ -527,6 +511,37 @@ func (s *Service) updateCustodyInfoInDB() (primitives.Slot, uint64, error) {
 	logCustodyStatus(wasSupernode, actualCustodyGroupCount)
 
 	return storedEarliestSlot, actualCustodyGroupCount, nil
+}
+
+// earliestAvailableSlotForCustodyIncrease determines the earliest available slot when custody is increasing.
+// - Pre-fulu: use earliest block slot (no data column sharding)
+// - Post-fulu checkpoint sync (storedCustodyCount == 0): use headSlot
+// - Post-fulu restart with custody increase: use headSlot + 1
+//
+//	(we don't have data columns for new custody groups at the current head)
+func (s *Service) earliestAvailableSlotForCustodyIncrease(storedCustodyCount uint64) (primitives.Slot, error) {
+	fuluSlot, err := fuluForkSlot()
+	if err != nil {
+		return 0, errors.Wrap(err, "fulu fork slot")
+	}
+
+	headSlot := s.HeadSlot()
+
+	if headSlot >= fuluSlot {
+		if storedCustodyCount > 0 {
+			// Restart with custody increase: new groups only have data from headSlot + 1
+			return headSlot + 1, nil
+		}
+		// Checkpoint sync: we download data columns for the checkpoint block
+		return headSlot, nil
+	}
+
+	// Pre-fulu: use earliest block slot
+	earliestAvailableSlot, err := s.cfg.BeaconDB.EarliestSlot(s.ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "earliest slot")
+	}
+	return earliestAvailableSlot, nil
 }
 
 // computeTargetCustodyGroupCount returns the custody group count based on current flag configuration.
