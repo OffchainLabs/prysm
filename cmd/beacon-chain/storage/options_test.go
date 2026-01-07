@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/urfave/cli/v2"
 )
 
@@ -62,11 +63,17 @@ func TestConfigureBlobRetentionEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Epoch(expectedChange), epochs)
 
-	// Test case: Input epoch is less than spec value.
+	// Test case: Input epoch is less than spec value (but not 0).
 	expectedChange = specMinEpochs - 1
 	require.NoError(t, set.Set(das.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expectedChange)))
 	_, err = blobRetentionEpoch(cliCtx)
 	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
+
+	// Test case: 0 value for archival mode
+	require.NoError(t, set.Set(das.BlobRetentionEpochFlag.Name, "0"))
+	epochs, err = blobRetentionEpoch(cliCtx)
+	require.NoError(t, err)
+	require.Equal(t, slots.MaxSafeEpoch(), epochs)
 }
 
 func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
@@ -96,7 +103,7 @@ func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, primitives.Epoch(expected), actual)
 
-	// Test case: Input epoch is less than specification value.
+	// Test case: Input epoch is less than specification value (but not 0).
 	expected = specValue - 1
 
 	err = set.Set(das.BlobRetentionEpochFlag.Name, fmt.Sprintf("%d", expected))
@@ -105,26 +112,12 @@ func TestConfigureDataColumnRetentionEpoch(t *testing.T) {
 	actual, err = dataColumnRetentionEpoch(cliCtx)
 	require.ErrorIs(t, err, errInvalidBlobRetentionEpochs)
 	require.Equal(t, specValue, actual)
-}
 
-func TestBlobArchivalFlag(t *testing.T) {
-	app := cli.App{}
-	set := flag.NewFlagSet("test", 0)
-	cliCtx := cli.NewContext(&app, set, nil)
-
-	// Manually define the flag in the set
-	set.Bool(das.BlobArchivalFlag.Name, false, "")
-
-	// Test case: Flag not set (default false)
-	require.Equal(t, false, cliCtx.Bool(das.BlobArchivalFlag.Name))
-
-	// Test case: Flag set to true
-	require.NoError(t, set.Set(das.BlobArchivalFlag.Name, "true"))
-	require.Equal(t, true, cliCtx.Bool(das.BlobArchivalFlag.Name))
-
-	// Test case: Flag set to false
-	require.NoError(t, set.Set(das.BlobArchivalFlag.Name, "false"))
-	require.Equal(t, false, cliCtx.Bool(das.BlobArchivalFlag.Name))
+	// Test case: 0 value for archival mode
+	require.NoError(t, set.Set(das.BlobRetentionEpochFlag.Name, "0"))
+	actual, err = dataColumnRetentionEpoch(cliCtx)
+	require.NoError(t, err)
+	require.Equal(t, slots.MaxSafeEpoch(), actual)
 }
 
 func TestDataColumnStoragePath_FlagSpecified(t *testing.T) {

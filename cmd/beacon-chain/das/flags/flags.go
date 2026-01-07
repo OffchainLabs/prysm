@@ -13,18 +13,13 @@ var (
 	}
 	BlobRetentionEpochFlag = &cli.Uint64Flag{
 		Name:    "blob-retention-epochs",
-		Usage:   "Override the default blob retention period (measured in epochs). The node will exit with an error at startup if the value is less than the default of 4096 epochs.",
+		Usage:   "Override the default blob retention period (measured in epochs). The node will exit with an error at startup if the value is less than the default of 4096 epochs. Use 0 to retain all blobs indefinitely (archival mode).",
 		Value:   uint64(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
 		Aliases: []string{"extend-blob-retention-epoch"},
-	}
-	BlobArchivalFlag = &cli.BoolFlag{
-		Name:  "blob-archival",
-		Usage: "Disable blob pruning to retain all blobs indefinitely (useful for archival nodes).",
 	}
 )
 
 var Flags = []cli.Flag{
 	BackfillOldestSlot,
 	BlobRetentionEpochFlag,
-	BlobArchivalFlag,
 }

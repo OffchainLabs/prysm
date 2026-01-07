@@ -41,12 +41,11 @@ type SyncNeeds struct {
 	blobRetentionFlag primitives.Epoch
 	blobRetention     primitives.Epoch
 	colRetention      primitives.Epoch
-	archival          bool
 }
 
 type CurrentSlotter func() primitives.Slot
 
-func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, blobRetentionFlag primitives.Epoch, archival bool) (SyncNeeds, error) {
+func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, blobRetentionFlag primitives.Epoch) (SyncNeeds, error) {
 	deneb, err := slots.EpochStart(params.BeaconConfig().DenebForkEpoch)
 	if err != nil {
 		return SyncNeeds{}, errors.Wrap(err, "deneb fork slot")
@@ -61,17 +60,10 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 		deneb:             deneb,
 		fulu:              fulu,
 		blobRetentionFlag: blobRetentionFlag,
-		archival:          archival,
 	}
 	// We apply the --blob-retention-epochs flag to both blob and column retention.
-	// For archival mode, we still use spec minimum for sync logic to avoid overflow issues.
-	if archival {
-		sn.blobRetention = params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
-		sn.colRetention = params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
-	} else {
-		sn.blobRetention = max(sn.blobRetentionFlag, params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
-		sn.colRetention = max(sn.blobRetentionFlag, params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
-	}
+	sn.blobRetention = max(sn.blobRetentionFlag, params.BeaconConfig().MinEpochsForBlobsSidecarsRequest)
+	sn.colRetention = max(sn.blobRetentionFlag, params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest)
 
 	// Override spec minimum block retention with user-provided flag only if it is lower than the spec minimum.
 	sn.blockRetention = primitives.Epoch(params.BeaconConfig().MinEpochsForBlockRequests)
@@ -94,19 +86,9 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr *primitives.Slot, bl
 // is the result of calling initialize.
 func (n SyncNeeds) Currently() CurrentNeeds {
 	current := n.current()
-	var blobBegin primitives.Slot
-	var blobEnd primitives.Slot
-	if n.archival {
-		// In archival mode, retain all blobs from Deneb fork onwards, no retention limit
-		blobBegin = n.deneb
-		blobEnd = current
-	} else {
-		blobBegin = syncEpochOffset(current, n.blobRetention)
-		blobEnd = n.fulu
-	}
 	c := CurrentNeeds{
 		Block: n.blockSpan(current),
-		Blob:  NeedSpan{Begin: blobBegin, End: blobEnd},
+		Blob:  NeedSpan{Begin: syncEpochOffset(current, n.blobRetention), End: n.fulu},
 		Col:   NeedSpan{Begin: syncEpochOffset(current, n.colRetention), End: current},
 	}
 	// Adjust the minimums forward to the slots where the sidecar types were introduced
@@ -125,12 +107,6 @@ func (n SyncNeeds) blockSpan(current primitives.Slot) NeedSpan {
 
 func (n SyncNeeds) BlobRetentionChecker() RetentionChecker {
 	return func(slot primitives.Slot) bool {
-		if n.archival {
-			// In archival mode, always retain all blobs from Deneb fork onwards
-			current := n.current()
-			denebSlot := n.deneb
-			return slot >= denebSlot && slot <= current
-		}
 		current := n.Currently()
 		return current.Blob.At(slot)
 	}

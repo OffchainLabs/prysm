@@ -125,7 +125,6 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.RestoreTargetDirFlag,
 			das.BackfillOldestSlot,
 			das.BlobRetentionEpochFlag,
-			das.BlobArchivalFlag,
 			flags.BeaconDBPruning,
 			flags.PrunerRetentionEpochs,
 			flags.SlotsPerArchivedPoint,

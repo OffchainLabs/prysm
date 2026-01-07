@@ -157,7 +157,6 @@ var appFlags = []cli.Flag{
 	bflags.BackfillWorkerCount,
 	dasFlags.BackfillOldestSlot,
 	dasFlags.BlobRetentionEpochFlag,
-	dasFlags.BlobArchivalFlag,
 	flags.BatchVerifierLimit,
 }
 
