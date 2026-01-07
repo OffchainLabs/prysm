@@ -34,7 +34,6 @@ func newBlobPruner(retain primitives.Epoch) *blobPruner {
 // This is useful for tests, but at runtime fsLayouts or BlobStorage should not wait for completion.
 func (p *blobPruner) notify(latest primitives.Epoch, layout fsLayout) chan struct{} {
 	done := make(chan struct{})
-
 	floor := periodFloor(latest, p.retentionPeriod)
 	if primitives.Epoch(p.prunedBefore.Swap(uint64(floor))) >= floor {
 		// Only trigger pruning if the atomic swap changed the previous value of prunedBefore.

@@ -171,7 +171,7 @@ var errInvalidBlobRetentionEpochs = errors.New("value is smaller than spec minim
 // blobRetentionEpoch returns the spec default MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUEST
 // or a user-specified flag overriding this value. If a user-specified override is
 // smaller than the spec default, an error will be returned. A value of 0 is treated
-// as a special sentinel meaning infinite retention (archival mode) and is converted
+// as a special value for infinite retention (archival mode) and is converted
 // to MaxSafeEpoch().
 func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	spec := params.BeaconConfig().MinEpochsForBlobsSidecarsRequest
@@ -195,7 +195,7 @@ func blobRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 // dataColumnRetentionEpoch returns the spec default MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUEST
 // or a user-specified flag overriding this value. If a user-specified override is
 // smaller than the spec default, an error will be returned. A value of 0 is treated
-// as a special sentinel meaning infinite retention (archival mode) and is converted
+// as a special value for infinite retention (archival mode) and is converted
 // to MaxSafeEpoch().
 func dataColumnRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	defaultValue := params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest
@@ -206,7 +206,7 @@ func dataColumnRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	// We use on purpose the same retention flag for both blobs and data columns.
 	customValue := primitives.Epoch(cliCtx.Uint64(das.BlobRetentionEpochFlag.Name))
 
-	// Special sentinel value: 0 means infinite retention (archival mode)
+	// 0 means infinite retention (archival mode)
 	if customValue == 0 {
 		return slots.MaxSafeEpoch(), nil
 	}
