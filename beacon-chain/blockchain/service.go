@@ -295,10 +295,19 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return nil
 	}
 
+	// Track supernode subscription status for logging purposes.
+	isSupernode := flags.Get().Supernode
+	wasSupernode, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
+	if err != nil {
+		return errors.Wrap(err, "update subscribed to all data subnets")
+	}
+
 	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB()
 	if err != nil {
 		return errors.Wrap(err, "could not get and save custody group count")
 	}
+
+	logCustodyStatus(wasSupernode, custodySubnetCount)
 
 	if _, _, err := s.cfg.P2P.UpdateCustodyInfo(earliestAvailableSlot, custodySubnetCount); err != nil {
 		return errors.Wrap(err, "update custody info")
@@ -471,15 +480,6 @@ func (s *Service) removeStartupState() {
 // updateCustodyInfoInDB updates the custody information in the database.
 // It returns the (potentially updated) earliest available slot and custody group count.
 func (s *Service) updateCustodyInfoInDB() (primitives.Slot, uint64, error) {
-	isSupernode := flags.Get().Supernode
-
-	// Check if the node was previously subscribed to all data subnets, and if so,
-	// store the new status accordingly.
-	wasSupernode, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "update subscribed to all data subnets")
-	}
-
 	targetCustodyGroupCount, err := computeTargetCustodyGroupCount()
 	if err != nil {
 		return 0, 0, err
@@ -493,7 +493,6 @@ func (s *Service) updateCustodyInfoInDB() (primitives.Slot, uint64, error) {
 
 	// If custody was already initialized and no increase needed, return stored values.
 	if storedCustodyCount > 0 && targetCustodyGroupCount <= storedCustodyCount {
-		logCustodyStatus(wasSupernode, storedCustodyCount)
 		return storedEarliestSlot, storedCustodyCount, nil
 	}
 
@@ -507,8 +506,6 @@ func (s *Service) updateCustodyInfoInDB() (primitives.Slot, uint64, error) {
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "update custody info")
 	}
-
-	logCustodyStatus(wasSupernode, actualCustodyGroupCount)
 
 	return storedEarliestSlot, actualCustodyGroupCount, nil
 }
