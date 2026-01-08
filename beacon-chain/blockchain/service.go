@@ -14,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -30,7 +29,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -291,28 +289,6 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return errors.Wrap(err, "failed to initialize blockchain service")
 	}
 
-	if !params.FuluEnabled() {
-		return nil
-	}
-
-	roHeadBlock, err := s.cfg.BeaconDB.HeadBlock(s.ctx)
-	if err != nil {
-		return errors.Wrap(err, "could not get head block")
-	}
-
-	if roHeadBlock == nil || roHeadBlock.IsNil() {
-		return errors.New("head block is nil")
-	}
-
-	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(roHeadBlock.Block().Slot())
-	if err != nil {
-		return errors.Wrap(err, "could not get and save custody group count")
-	}
-
-	if _, _, err := s.cfg.P2P.UpdateCustodyInfo(earliestAvailableSlot, custodySubnetCount); err != nil {
-		return errors.Wrap(err, "update custody info")
-	}
-
 	return nil
 }
 
@@ -477,73 +453,6 @@ func (s *Service) removeStartupState() {
 	s.cfg.FinalizedStateAtStartUp = nil
 }
 
-// UpdateCustodyInfoInDB updates the custody information in the database.
-// It returns the (potentially updated) custody group count and the earliest available slot.
-func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
-	isSupernode := flags.Get().Supernode
-	isSemiSupernode := flags.Get().SemiSupernode
-
-	cfg := params.BeaconConfig()
-	custodyRequirement := cfg.CustodyRequirement
-
-	// Check if the node was previously subscribed to all data subnets, and if so,
-	// store the new status accordingly.
-	wasSupernode, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "update subscribed to all data subnets")
-	}
-
-	// Compute the target custody group count based on current flag configuration.
-	targetCustodyGroupCount := custodyRequirement
-
-	// Supernode: custody all groups (either currently set or previously enabled)
-	if isSupernode {
-		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
-	}
-
-	// Semi-supernode: custody minimum needed for reconstruction, or custody requirement if higher
-	if isSemiSupernode {
-		semiSupernodeCustody, err := peerdas.MinimumCustodyGroupCountToReconstruct()
-		if err != nil {
-			return 0, 0, errors.Wrap(err, "minimum custody group count")
-		}
-
-		targetCustodyGroupCount = max(custodyRequirement, semiSupernodeCustody)
-	}
-
-	// Safely compute the fulu fork slot.
-	fuluForkSlot, err := fuluForkSlot()
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "fulu fork slot")
-	}
-
-	// If slot is before the fulu fork slot, then use the earliest stored slot as the reference slot.
-	if slot < fuluForkSlot {
-		slot, err = s.cfg.BeaconDB.EarliestSlot(s.ctx)
-		if err != nil {
-			return 0, 0, errors.Wrap(err, "earliest slot")
-		}
-	}
-
-	earliestAvailableSlot, actualCustodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, targetCustodyGroupCount)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "update custody info")
-	}
-
-	if isSupernode {
-		log.WithFields(logrus.Fields{
-			"current": actualCustodyGroupCount,
-			"target":  cfg.NumberOfCustodyGroups,
-		}).Info("Supernode mode enabled. Will custody all data columns going forward.")
-	}
-
-	if wasSupernode && !isSupernode {
-		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.Supernode.Name)
-	}
-
-	return earliestAvailableSlot, actualCustodyGroupCount, nil
-}
-
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {
 	currentTime := prysmTime.Now()
 	if currentTime.After(genesisTime) {
@@ -559,20 +468,4 @@ func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db d
 		log.WithError(err).Fatal("Could not hash tree root genesis state")
 	}
 	go slots.CountdownToGenesis(ctx, genesisTime, uint64(gState.NumValidators()), gRoot)
-}
-
-func fuluForkSlot() (primitives.Slot, error) {
-	cfg := params.BeaconConfig()
-
-	fuluForkEpoch := cfg.FuluForkEpoch
-	if fuluForkEpoch == cfg.FarFutureEpoch {
-		return cfg.FarFutureSlot, nil
-	}
-
-	forkFuluSlot, err := slots.EpochStart(fuluForkEpoch)
-	if err != nil {
-		return 0, errors.Wrap(err, "epoch start")
-	}
-
-	return forkFuluSlot, nil
 }
