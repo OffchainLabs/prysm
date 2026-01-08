@@ -978,11 +978,12 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 }
 
 func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
-	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	attesterKeys := make([][]string, slotsPerEpoch)
 	for i := range attesterKeys {
 		attesterKeys[i] = make([]string, 0)
 	}
-	proposerKeys := make([]string, params.BeaconConfig().SlotsPerEpoch)
+	proposerKeys := make([]string, slotsPerEpoch)
 	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
 	if err != nil {
 		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
@@ -1003,7 +1004,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 
 		truncatedPubkey := fmt.Sprintf("%#x", bytesutil.Trunc(duty.PublicKey))
 		attesterSlotInEpoch := duty.AttesterSlot - epochStartSlot
-		if attesterSlotInEpoch >= params.BeaconConfig().SlotsPerEpoch {
+		if attesterSlotInEpoch >= slotsPerEpoch {
 			log.WithField("duty", duty).Warn("Invalid attester slot")
 		} else {
 			attesterKeys[attesterSlotInEpoch] = append(attesterKeys[attesterSlotInEpoch], truncatedPubkey)
@@ -1021,7 +1022,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 
 		for _, proposerSlot := range duty.ProposerSlots {
 			proposerSlotInEpoch := proposerSlot - epochStartSlot
-			if proposerSlotInEpoch >= params.BeaconConfig().SlotsPerEpoch {
+			if proposerSlotInEpoch >= slotsPerEpoch {
 				log.WithField("duty", duty).Warn("Invalid proposer slot")
 			} else {
 				proposerKeys[proposerSlotInEpoch] = truncatedPubkey
@@ -1054,7 +1055,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		"proposerCount": totalProposingKeys,
 		"attesterCount": totalAttestingKeys,
 	}).Infof("Schedule for epoch %d", slots.ToEpoch(slot))
-	for i := primitives.Slot(0); i < params.BeaconConfig().SlotsPerEpoch; i++ {
+	for i := primitives.Slot(0); i < slotsPerEpoch; i++ {
 		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
 		if err != nil {
 			log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to log duties!")
@@ -1071,7 +1072,7 @@ func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.
 		if isAttester {
 			slotLog = slotLog.WithFields(logrus.Fields{
 				"slot":            epochStartSlot + i,
-				"slotInEpoch":     (epochStartSlot + i) % params.BeaconConfig().SlotsPerEpoch,
+				"slotInEpoch":     (epochStartSlot + i) % slotsPerEpoch,
 				"attesterCount":   len(attesterKeys[i]),
 				"attesterPubkeys": attesterKeys[i],
 			})
