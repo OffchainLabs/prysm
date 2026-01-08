@@ -109,7 +109,6 @@ require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/DataDog/zstd v1.5.5 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/OffchainLabs/hashtree v0.2.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
