@@ -295,7 +295,16 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return nil
 	}
 
-	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(saved.Slot())
+	roHeadBlock, err := s.cfg.BeaconDB.HeadBlock(s.ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head block")
+	}
+
+	if roHeadBlock == nil || roHeadBlock.IsNil() {
+		return errors.New("head block is nil")
+	}
+
+	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(roHeadBlock.Block().Slot())
 	if err != nil {
 		return errors.Wrap(err, "could not get and save custody group count")
 	}
