@@ -112,9 +112,9 @@ type validator struct {
 	blacklistedPubkeysLock             sync.RWMutex
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
+	attestationDataCacheLock           sync.RWMutex
 	attestationDataCache               *ethpb.AttestationData
 	attestationDataCacheSlot           primitives.Slot
-	attestationDataCacheLock           sync.RWMutex
 	disableDutiesPolling               bool
 	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                      chan *eventClient.Event
