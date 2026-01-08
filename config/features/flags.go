@@ -135,7 +135,7 @@ var (
 	}
 	enableHashtree = &cli.BoolFlag{
 		Name:  "enable-hashtree",
-		Usage: "(Experimental): Enables the hashthree hashing library.",
+		Usage: "(Experimental): Enables the hashtree hashing library.",
 	}
 	disableVerboseSigVerification = &cli.BoolFlag{
 		Name:  "disable-verbose-sig-verification",
