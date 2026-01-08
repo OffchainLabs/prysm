@@ -3,7 +3,6 @@
 package logs
 
 import (
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -68,7 +67,7 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 
 // ConfigureEphemeralLogFile adds a log file that keeps 24 hours of logs with >debug verbosity.
 func ConfigureEphemeralLogFile(datadirPath string, app string) error {
-	logFilePath := fmt.Sprintf("%s/logs/%s.log", datadirPath, app)
+	logFilePath := filepath.Join(datadirPath, "logs", app+".log")
 	if err := file.MkdirAll(filepath.Dir(logFilePath)); err != nil {
 		return errors.Wrap(err, "failed to create directory")
 	}
