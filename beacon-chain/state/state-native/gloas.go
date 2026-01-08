@@ -1,6 +1,7 @@
 package state_native
 
 import (
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
@@ -47,6 +48,22 @@ func (b *BeaconState) builderPendingWithdrawalsVal() []*ethpb.BuilderPendingWith
 	return withdrawals
 }
 
+// buildersVal returns a copy of the builders registry.
+// This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) buildersVal() []*ethpb.Builder {
+	if b.builders == nil {
+		return nil
+	}
+
+	builders := make([]*ethpb.Builder, len(b.builders))
+	for i := range builders {
+		builder := b.builders[i]
+		builders[i] = ethpb.CopyBuilder(builder)
+	}
+
+	return builders
+}
+
 // latestBlockHashVal returns a copy of the latest block hash.
 // This assumes that a lock is already held on BeaconState.
 func (b *BeaconState) latestBlockHashVal() []byte {
@@ -60,15 +77,17 @@ func (b *BeaconState) latestBlockHashVal() []byte {
 	return hash
 }
 
-// latestWithdrawalsRootVal returns a copy of the latest withdrawals root.
+// payloadExpectedWithdrawalsVal returns a copy of the payload expected withdrawals.
 // This assumes that a lock is already held on BeaconState.
-func (b *BeaconState) latestWithdrawalsRootVal() []byte {
-	if b.latestWithdrawalsRoot == nil {
+func (b *BeaconState) payloadExpectedWithdrawalsVal() []*enginev1.Withdrawal {
+	if b.payloadExpectedWithdrawals == nil {
 		return nil
 	}
 
-	root := make([]byte, len(b.latestWithdrawalsRoot))
-	copy(root, b.latestWithdrawalsRoot)
+	withdrawals := make([]*enginev1.Withdrawal, len(b.payloadExpectedWithdrawals))
+	for i, withdrawal := range b.payloadExpectedWithdrawals {
+		withdrawals[i] = withdrawal.Copy()
+	}
 
-	return root
+	return withdrawals
 }

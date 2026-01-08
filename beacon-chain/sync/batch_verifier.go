@@ -161,12 +161,16 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 
 	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 	verificationSet := &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
-	s.kzgChan <- verificationSet
-
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	select {
+	case s.kzgChan <- verificationSet:
+	case <-ctx.Done():
+		return pubsub.ValidationIgnore, ctx.Err()
+	}
 
 	select {
 	case <-ctx.Done():

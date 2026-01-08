@@ -614,11 +614,10 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 		},
 	}
 
-	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers.
-	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
-		_ = err
-		t.Fatal("Validated status is true")
-	}
+	require.Eventually(t, func() bool {
+		res, _ := r.validateAggregateAndProof(t.Context(), "", msg)
+		return res != pubsub.ValidationAccept
+	}, time.Second, 10*time.Millisecond, "Expected validation to reject duplicate aggregate")
 }
 
 func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
@@ -800,4 +799,28 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 	res, err := r.validateAggregateAndProof(t.Context(), "", msg)
 	assert.NotNil(t, err)
 	assert.Equal(t, pubsub.ValidationReject, res)
+}
+
+func Test_SetAggregatorIndexEpochSeen(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+
+	r := &Service{
+		cfg: &config{
+			p2p:      p,
+			beaconDB: db,
+		},
+		seenAggregatedAttestationCache: lruwrpr.New(10),
+	}
+
+	aggIndex := primitives.ValidatorIndex(42)
+	epoch := primitives.Epoch(7)
+
+	require.Equal(t, false, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
+	first := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
+	require.Equal(t, true, first)
+	require.Equal(t, true, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
+
+	second := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
+	require.Equal(t, false, second)
 }

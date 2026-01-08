@@ -102,11 +102,13 @@ func ValidatorsCustodyRequirement(state beaconState.ReadOnlyBeaconState, validat
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_block and
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#get_data_column_sidecars_from_column_sidecar
 func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.RODataColumn, error) {
+	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+
 	if len(cellsPerBlob) == 0 {
 		return nil, nil
 	}
 	start := time.Now()
-	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, params.BeaconConfig().NumberOfColumns)
+	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
 	}
@@ -115,9 +117,8 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 		return nil, errors.Wrap(err, "extract block info")
 	}
 
-	maxIdx := params.BeaconConfig().NumberOfColumns
-	roSidecars := make([]blocks.RODataColumn, 0, maxIdx)
-	for idx := range maxIdx {
+	roSidecars := make([]blocks.RODataColumn, 0, numberOfColumns)
+	for idx := range numberOfColumns {
 		sidecar := &ethpb.DataColumnSidecar{
 			Index:                        idx,
 			Column:                       cells[idx],

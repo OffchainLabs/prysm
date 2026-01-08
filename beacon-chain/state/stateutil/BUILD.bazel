@@ -6,6 +6,7 @@ go_library(
         "block_header_root.go",
         "builder_pending_payments_root.go",
         "builder_pending_withdrawals_root.go",
+        "builders_root.go",
         "eth1_root.go",
         "execution_payload_availability_root.go",
         "field_root_attestation.go",

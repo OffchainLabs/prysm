@@ -4,6 +4,151 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [v7.1.2](https://github.com/prysmaticlabs/prysm/compare/v7.1.1...v7.1.2) - 2026-01-07
+
+Happy new year! This patch release is very small. The main improvement is better management of pending attestation aggregation via [PR 16153](https://github.com/OffchainLabs/prysm/pull/16153).
+
+### Added
+
+- `primitives.BuilderIndex`: SSZ `uint64` wrapper for builder registry indices. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16169)
+
+### Changed
+
+- the /eth/v2/beacon/pool/attestations and /eth/v1/beacon/pool/sync_committees now returns a 503 error if the node is still syncing, the rest api is also working in a similar process to gRPC broadcasting immediately now. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16152)
+- `validateDataColumn`: Remove error logs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16157)
+- Pending aggregates: When multiple aggregated attestations only differing by the aggregator index are in the pending queue, only process one of them. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16153)
+
+### Fixed
+
+- Fix the missing fork version object mapping for Fulu in light client p2p. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16151)
+- Do not process slots and copy states for next epoch proposers after Fulu. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16168)
+
+## [v7.1.1](https://github.com/prysmaticlabs/prysm/compare/v7.1.0...v7.1.1) - 2025-12-18
+
+Release highlights:
+
+- Fixed potential deadlock scenario in data column batch verification
+- Improved processing and metrics for cells and proofs
+
+We are aware of [an issue](https://github.com/OffchainLabs/prysm/issues/16160) where Prysm struggles to sync from an out of sync state. We will have another release before the end of the year to address this issue.
+
+Our postmortem document from the December 4th mainnet issue has been published on our [documentation site](https://prysm.offchainlabs.com/docs/misc/mainnet-postmortems/)
+
+### Added
+
+- Track the dependent root of the latest finalized checkpoint in forkchoice. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16103)
+- Proposal design document to implement graffiti. Currently it is empty by default and the idea is to have it of the form GE168dPR63af. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15983)
+- Add support for detecting and logging per address reachability via libp2p AutoNAT v2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16100)
+- Static analyzer that ensures each `httputil.HandleError` call is followed by a `return` statement. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16134)
+- Prometheus histogram `cells_and_proofs_from_structured_computation_milliseconds` to track computation time for cells and proofs from structured blobs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+- Prometheus histogram `get_blobs_v2_latency_milliseconds` to track RPC latency for `getBlobsV2` calls to the execution layer. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+
+### Changed
+
+- Optimise migratetocold by not doing brute force for loop. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16101)
+- e2e sync committee evaluator now skips the first slot after startup, we already skip the fork epoch for checks here, this skip only applies on startup, due to altair always from 0 and validators need to warm up. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16145)
+- Run `ComputeCellsAndProofsFromFlat` in parallel to improve performance when computing cells and proofs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+- Run `ComputeCellsAndProofsFromStructured` in parallel to improve performance when computing cells and proofs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16115)
+
+### Removed
+
+- Unnecessary copy is removed from Eth1DataHasEnoughSupport. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16118)
+
+### Fixed
+
+- Incorrect constructor return type [#16084](https://github.com/OffchainLabs/prysm/pull/16084). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16084)
+- Fixed possible race when validating two attestations at the same time. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16105)
+- Fix missing return after version header check in SubmitAttesterSlashingsV2. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16126)
+- Fix deadlock in data column gossip KZG batch verification when a caller times out preventing result delivery. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16141)
+- Fixed replay state issue in rest api caused by attester and sync committee duties endpoints. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16136)
+- Do not error when committee has been computed correctly but updating the cache failed. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16142)
+- Prevent blocked sends to the KZG batch verifier when the caller context is already canceled, avoiding useless queueing and potential hangs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16144)
+
+## [v7.1.0](https://github.com/prysmaticlabs/prysm/compare/v7.0.0...v7.1.0) - 2025-12-10
+
+This release includes several key features/fixes. If you are running v7.0.0 then you should update to v7.0.1 or later and remove the flag `--disable-last-epoch-targets`. 
+
+Release highlights:
+
+- Backfill is now supported in Fulu. Backfill from checkpoint sync now supports data columns. Run with `--enable-backfill` when using checkpoint sync.
+- A new node configuration to custody enough data columns to reconstruct blobs. Use flag `--semi-supernode` to custody at least 50% of the data columns.
+- Critical fixes in attestation processing.
+
+A post mortem doc with full details on the mainnet attestation processing issue from December 4th is expected in the coming days. 
+
+### Added
+
+- add fulu support to light client processing. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15995)
+- Record data column gossip KZG batch verification latency in both the pooled worker and fallback paths so the `beacon_kzg_verification_data_column_batch_milliseconds` histogram reflects gossip traffic, annotated with `path` labels to distinguish the sources. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16018)
+- Implement Gloas state. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15611)
+- Add initial configs for the state-diff feature. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15903)
+- Add kv functions for the state-diff feature. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15903)
+- Add supported version for fork versions. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16030)
+- prometheus metric `gossip_attestation_verification_milliseconds` to track attestation gossip topic validation latency. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15785)
+- Integrate state-diff into `State()`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16033)
+- Implement Gloas fork support in consensus-types/blocks with factory methods, getters, setters, and proto handling. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15618)
+- Integrate state-diff into `HasState()`. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16045)
+- Added `--semi-supernode` flag to custody half of a super node's datacolumn requirements but allowing for reconstruction for blob retrieval. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16029)
+- Data column backfill. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15580)
+- Backfill metrics for columns: backfill_data_column_sidecar_downloaded, backfill_data_column_sidecar_downloaded_bytes, backfill_batch_columns_download_ms, backfill_batch_columns_verify_ms. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15580)
+- prometheus summary `gossip_data_column_sidecar_arrival_milliseconds` to track data column sidecar arrival latency since slot start. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16099)
+
+### Changed
+
+- Improve readability in slashing import and remove duplicated code. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15957)
+- Use dependent root instead of target when possible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15996)
+- Changed `--subscribe-all-data-subnets` flag to `--supernode` and aliased `--subscribe-all-data-subnets` for existing users. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16012)
+- Use explicit slot component timing configs. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15999)
+- Downgraded log level from INFO to DEBUG on PrepareBeaconProposer updated fee recipients. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15998)
+- Change the logging behaviour of Updated fee recipients to only log count of validators at Debug level and all validator indices at Trace level. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15998)
+- Stop emitting payload attribute events during late block handling when we are not proposing the next slot. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16026)
+- Initialize the `ExecutionRequests` field in gossip block map. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16047)
+- Avoid redundant WithHttpEndpoint when JWT is provided. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16032)
+- Removed dead slot parameter from blobCacheEntry.filter. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16021)
+- Added log prefix to the `genesis` package. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16075)
+- Added log prefix to the `params` package. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16075)
+- `WithGenesisValidatorsRoot`: Use camelCase for log field param. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16075)
+- Move `Origin checkpoint found in db` from WARN to INFO, since it is the expected behaviour. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16075)
+- backfill metrics that changed name and/or histogram buckets: backfill_batch_time_verify -> backfill_batch_verify_ms, backfill_batch_time_waiting -> backfill_batch_waiting_ms, backfill_batch_time_roundtrip -> backfill_batch_roundtrip_ms, backfill_blocks_bytes_downloaded -> backfill_blocks_downloaded_bytes, backfill_batch_time_verify -> backfill_batch_verify_ms, backfill_batch_blocks_time_download -> backfill_batch_blocks_download_ms, backfill_batch_blobs_time_download -> backfill_batch_blobs_download_ms, backfill_blobs_bytes_downloaded -> backfill_blocks_downloaded_bytes. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15580)
+- Move the "Not enough connected peers" (for a given subnet) from WARN to DEBUG. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16087)
+- `blobsDataFromStoredDataColumns`: Ask the use to use the `--supernode` flag and shorten the error mesage. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16097)
+- Introduced flag `--ignore-unviable-attestations` (replaces and deprecates `--disable-last-epoch-targets`) to drop attestations whose target state is not viable; default remains to process them unless explicitly enabled. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16094)
+
+### Removed
+
+- Remove validator cross-client from end-to-end tests. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16025)
+- `NUMBER_OF_COLUMNS` configuration (not in the specification any more, replaced by a preset). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16073)
+- `MAX_CELLS_IN_EXTENDED_MATRIX` configuration (not in the specification any more). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16073)
+
+### Fixed
+
+- Nil check for block if it doesn't exist in the DB in fetchOriginSidecars. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16006)
+- Fix proposals progress bar count [#16020](https://github.com/OffchainLabs/prysm/pull/16020). [[PR]](https://github.com/prysmaticlabs/prysm/pull/16020)
+- Move `BlockGossipReceived` event to the end of gossip validation. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16031)
+- Fix state diff repetitive anchor slot bug. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16037)
+- Check the JWT secret length is exactly 256 bits (32 bytes) as per Engine API specification. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15939)
+- http_error_count now matches the other cases by listing the endpoint name rather than the actual URL requested. This improves metrics cardinality. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16055)
+- Fix array out of bounds in static analyzer. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16058)
+- fixes E2E tests to be able to start from Electra genesis fork or future forks. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16048)
+- Use head state to validate attestations for old blocks if they are compatible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16095)
+
+## [v7.0.1](https://github.com/prysmaticlabs/prysm/compare/v7.0.0...v7.0.1) - 2025-12-08
+
+This patch release contains 4 cherry-picked changes to address the mainnet attestation processing issue from 2025-12-04. Operators are encouraged to update to this release as soon as practical. As of this release, the feature flag `--disable-last-epoch-targets` has been deprecated and can be safely removed from your node configuration. 
+
+A post mortem doc with full details is expected to be published later this week.
+
+### Changed
+
+- Move the "Not enough connected peers" (for a given subnet) from WARN to DEBUG. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16087)
+- Use dependent root instead of target when possible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/15996)
+- Introduced flag `--ignore-unviable-attestations` (replaces and deprecates `--disable-last-epoch-targets`) to drop attestations whose target state is not viable; default remains to process them unless explicitly enabled. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16094)
+
+### Fixed
+
+- Use head state to validate attestations for old blocks if they are compatible. [[PR]](https://github.com/prysmaticlabs/prysm/pull/16095)
+
+
 ## [v7.0.0](https://github.com/prysmaticlabs/prysm/compare/v6.1.4...v7.0.0) - 2025-11-10
 
 This is our initial mainnet release for the Ethereum mainnet Fulu fork on December 3rd, 2025. All operators MUST update to v7.0.0 or later release prior to the fulu fork epoch `411392`. See the [Ethereum Foundation blog post](https://blog.ethereum.org/2025/11/06/fusaka-mainnet-announcement) for more information on Fulu.

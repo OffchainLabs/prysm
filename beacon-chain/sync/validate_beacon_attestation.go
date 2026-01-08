@@ -104,7 +104,8 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	}
 
 	if !s.slasherEnabled {
-		// Verify this the first attestation received for the participating validator for the slot.
+		// Verify this the first attestation received for the participating validator for the slot. This verification is here to return early if we've already seen this attestation.
+		// This verification is carried again later after all other validations to avoid TOCTOU issues.
 		if s.hasSeenUnaggregatedAtt(attKey) {
 			return pubsub.ValidationIgnore, nil
 		}
@@ -228,7 +229,10 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		Data: eventData,
 	})
 
-	s.setSeenUnaggregatedAtt(attKey)
+	if first := s.setSeenUnaggregatedAtt(attKey); !first {
+		// Another concurrent validation processed the same attestation meanwhile
+		return pubsub.ValidationIgnore, nil
+	}
 
 	// Attach final validated attestation to the message for further pipeline use
 	msg.ValidatorData = attForValidation
@@ -385,11 +389,16 @@ func (s *Service) hasSeenUnaggregatedAtt(key string) bool {
 }
 
 // Set an incoming attestation as seen for the participating validator for the slot.
-func (s *Service) setSeenUnaggregatedAtt(key string) {
+// Returns false if the attestation was already seen.
+func (s *Service) setSeenUnaggregatedAtt(key string) bool {
 	s.seenUnAggregatedAttestationLock.Lock()
 	defer s.seenUnAggregatedAttestationLock.Unlock()
-
+	_, seen := s.seenUnAggregatedAttestationCache.Get(key)
+	if seen {
+		return false
+	}
 	s.seenUnAggregatedAttestationCache.Add(key, true)
+	return true
 }
 
 // hasBlockAndState returns true if the beacon node knows about a block and associated state in the

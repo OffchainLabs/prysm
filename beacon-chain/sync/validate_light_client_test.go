@@ -54,11 +54,13 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 	cfg.CapellaForkEpoch = 3
 	cfg.DenebForkEpoch = 4
 	cfg.ElectraForkEpoch = 5
+	cfg.FuluForkEpoch = 6
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	cfg.ForkVersionSchedule[[4]byte{2, 0, 0, 0}] = 2
 	cfg.ForkVersionSchedule[[4]byte{3, 0, 0, 0}] = 3
 	cfg.ForkVersionSchedule[[4]byte{4, 0, 0, 0}] = 4
 	cfg.ForkVersionSchedule[[4]byte{5, 0, 0, 0}] = 5
+	cfg.ForkVersionSchedule[[4]byte{6, 0, 0, 0}] = 6
 	params.OverrideBeaconConfig(cfg)
 
 	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
@@ -101,7 +103,10 @@ func TestValidateLightClientOptimisticUpdate(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		for v := 1; v < 6; v++ {
+		for v := range version.All() {
+			if v == version.Phase0 {
+				continue
+			}
 			t.Run(test.name+"_"+version.String(v), func(t *testing.T) {
 				ctx := t.Context()
 				p := p2ptest.NewTestP2P(t)
@@ -180,11 +185,13 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 	cfg.CapellaForkEpoch = 3
 	cfg.DenebForkEpoch = 4
 	cfg.ElectraForkEpoch = 5
+	cfg.FuluForkEpoch = 6
 	cfg.ForkVersionSchedule[[4]byte{1, 0, 0, 0}] = 1
 	cfg.ForkVersionSchedule[[4]byte{2, 0, 0, 0}] = 2
 	cfg.ForkVersionSchedule[[4]byte{3, 0, 0, 0}] = 3
 	cfg.ForkVersionSchedule[[4]byte{4, 0, 0, 0}] = 4
 	cfg.ForkVersionSchedule[[4]byte{5, 0, 0, 0}] = 5
+	cfg.ForkVersionSchedule[[4]byte{6, 0, 0, 0}] = 6
 	params.OverrideBeaconConfig(cfg)
 
 	secondsPerSlot := int(params.BeaconConfig().SecondsPerSlot)
@@ -227,7 +234,10 @@ func TestValidateLightClientFinalityUpdate(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		for v := 1; v < 6; v++ {
+		for v := range version.All() {
+			if v == version.Phase0 {
+				continue
+			}
 			t.Run(test.name+"_"+version.String(v), func(t *testing.T) {
 				ctx := t.Context()
 				p := p2ptest.NewTestP2P(t)
