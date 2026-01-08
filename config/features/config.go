@@ -80,6 +80,7 @@ type Flags struct {
 	SaveInvalidBlob  bool // SaveInvalidBlob saves invalid blob to temp.
 
 	EnableDiscoveryReboot bool // EnableDiscoveryReboot allows the node to have its local listener to be rebooted in the event of discovery issues.
+	LowValcountSweep      bool // LowValcountSweep bounds withdrawal sweep by validator count.
 
 	// KeystoreImportDebounceInterval specifies the time duration the validator waits to reload new keys if they have
 	// changed on disk. This feature is for advanced use cases only.
@@ -283,6 +284,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 	if ctx.IsSet(ignoreUnviableAttestations.Name) && ctx.Bool(ignoreUnviableAttestations.Name) {
 		logEnabled(ignoreUnviableAttestations)
 		cfg.IgnoreUnviableAttestations = true
+	}
+	if ctx.Bool(lowValcountSweep.Name) {
+		logEnabled(lowValcountSweep)
+		cfg.LowValcountSweep = true
 	}
 
 	if ctx.IsSet(EnableStateDiff.Name) {

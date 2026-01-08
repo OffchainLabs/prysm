@@ -211,6 +211,13 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
+	// lowValcountSweep bounds withdrawal sweep by validator count.
+	lowValcountSweep = &cli.BoolFlag{
+		Name:   "low-valcount-sweep",
+		Usage:  "Uses validator count bound for withdrawal sweep when validator count is less than MaxValidatorsPerWithdrawalsSweep.",
+		Value:  false,
+		Hidden: true,
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -272,6 +279,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
+	lowValcountSweep,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {
