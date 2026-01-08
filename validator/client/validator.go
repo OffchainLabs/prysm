@@ -112,6 +112,9 @@ type validator struct {
 	blacklistedPubkeysLock             sync.RWMutex
 	attSelectionLock                   sync.Mutex
 	dutiesLock                         sync.RWMutex
+	attestationDataCache               *ethpb.AttestationData
+	attestationDataCacheSlot           primitives.Slot
+	attestationDataCacheLock           sync.RWMutex
 	disableDutiesPolling               bool
 	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                      chan *eventClient.Event
@@ -975,6 +978,55 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	v.domainDataCache.Set(key, proto.Clone(res), 1)
 
 	return res, nil
+}
+
+// getAttestationData fetches attestation data from the beacon node with caching for post-Electra.
+// Post-Electra, attestation data is identical for all validators in the same slot (committee index is always 0),
+// so we cache it to avoid redundant beacon node requests.
+func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) (*ethpb.AttestationData, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.getAttestationData")
+	defer span.End()
+
+	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+
+	// Pre-Electra: no caching since committee index varies per validator
+	if !postElectra {
+		return v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
+			Slot:           slot,
+			CommitteeIndex: committeeIndex,
+		})
+	}
+
+	// Post-Electra: check cache first (committee index is always 0)
+	v.attestationDataCacheLock.RLock()
+	if v.attestationDataCacheSlot == slot && v.attestationDataCache != nil {
+		data := v.attestationDataCache
+		v.attestationDataCacheLock.RUnlock()
+		return data, nil
+	}
+	v.attestationDataCacheLock.RUnlock()
+
+	// Cache miss - acquire write lock and fetch
+	v.attestationDataCacheLock.Lock()
+	defer v.attestationDataCacheLock.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine may have filled the cache)
+	if v.attestationDataCacheSlot == slot && v.attestationDataCache != nil {
+		return v.attestationDataCache, nil
+	}
+
+	data, err := v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
+		Slot:           slot,
+		CommitteeIndex: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	v.attestationDataCache = data
+	v.attestationDataCacheSlot = slot
+
+	return data, nil
 }
 
 func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
