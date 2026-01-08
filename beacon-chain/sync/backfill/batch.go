@@ -146,34 +146,17 @@ func (b batch) ensureParent(expected [32]byte) error {
 }
 
 func (b batch) blockRequest() *eth.BeaconBlocksByRangeRequest {
-	// Defensive check: if end <= begin, return a request with Count=0 to avoid
-	// unsigned integer underflow which would produce an astronomically large Count.
-	if b.end <= b.begin {
-		return &eth.BeaconBlocksByRangeRequest{
-			StartSlot: b.begin,
-			Count:     0,
-			Step:      1,
-		}
-	}
 	return &eth.BeaconBlocksByRangeRequest{
 		StartSlot: b.begin,
-		Count:     uint64(b.end - b.begin),
+		Count:     uint64(b.end.FlooredSubSlot(b.begin)),
 		Step:      1,
 	}
 }
 
 func (b batch) blobRequest() *eth.BlobSidecarsByRangeRequest {
-	// Defensive check: if end <= begin, return a request with Count=0 to avoid
-	// unsigned integer underflow which would produce an astronomically large Count.
-	if b.end <= b.begin {
-		return &eth.BlobSidecarsByRangeRequest{
-			StartSlot: b.begin,
-			Count:     0,
-		}
-	}
 	return &eth.BlobSidecarsByRangeRequest{
 		StartSlot: b.begin,
-		Count:     uint64(b.end - b.begin),
+		Count:     uint64(b.end.FlooredSubSlot(b.begin)),
 	}
 }
 
