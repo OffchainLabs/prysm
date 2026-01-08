@@ -59,8 +59,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506 h1:d/SJkN8/9Ca+1YmuDiUJxAiV4w/a9S8NcsG7GMQSrVI=
 github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506/go.mod h1:6TZI4FU6zT8x6ZfWa1J8YQ2NgW0wLV/W3fHRca8ISBo=
-github.com/OffchainLabs/hashtree v0.2.2 h1:R6DAjgAUwwfgji3jEI4WUxtZ3eJ+FbRHjW21UPMBJyo=
-github.com/OffchainLabs/hashtree v0.2.2/go.mod h1:b07+cRZs+eAR8TR57CB9TQlt5Gnl/06Xs76xt/1wq0M=
+github.com/OffchainLabs/hashtree v0.2.3 h1:nM8dBAQZzHLzzM14FaAHXnHTAXZIst69v5xWuS48y/c=
+github.com/OffchainLabs/hashtree v0.2.3/go.mod h1:b07+cRZs+eAR8TR57CB9TQlt5Gnl/06Xs76xt/1wq0M=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/sarama v1.26.1/go.mod h1:NbSGBSSndYaIhRcBtY9V0U7AyH+x71bG668AuWys/yU=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
