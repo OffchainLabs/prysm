@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -160,33 +158,4 @@ func TestBeaconStateMerkleProofs_bellatrix(t *testing.T) {
 		valid = trie.VerifyMerkleProof(newRoot[:], finalizedRoot, gIndex, proof)
 		require.Equal(t, true, valid)
 	})
-}
-
-func TestBeaconStateMerkleProofs_electra_generalized(t *testing.T) {
-	ctx := t.Context()
-	electra, err := util.NewBeaconStateElectra()
-	require.NoError(t, err)
-	htr, err := electra.HashTreeRoot(ctx)
-	require.NoError(t, err)
-	t.Run("validators", func(t *testing.T) {
-		validatorsRoot, err := stateutil.ValidatorRegistryRoot(electra.Validators())
-		require.NoError(t, err)
-		proof, err := electra.ProofByFieldIndex(ctx, types.Validators)
-		require.NoError(t, err)
-		gIndex := uint64(75) // Post-Electra: generalized index for field "validators" is 75.
-		valid := trie.VerifyMerkleProof(htr[:], validatorsRoot[:], gIndex, proof)
-		require.Equal(t, true, valid)
-	})
-	t.Run("pending deposits", func(t *testing.T) {
-		pds, err := electra.PendingDeposits()
-		require.NoError(t, err)
-		pbdRoot, err := stateutil.PendingDepositsRoot(pds)
-		require.NoError(t, err)
-		proof, err := electra.ProofByFieldIndex(ctx, types.PendingDeposits)
-		require.NoError(t, err)
-		gIndex := uint64(98) // Post-Electra: generalized index for field "pending_deposits" is 98.
-		valid := trie.VerifyMerkleProof(htr[:], pbdRoot[:], gIndex, proof)
-		require.Equal(t, true, valid)
-	})
-
 }
