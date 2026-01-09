@@ -3,16 +3,16 @@ package validator
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -53,8 +53,26 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	span.SetAttributes(trace.Int64Attribute("num_pubkeys", int64(len(req.PublicKeys))))
 	defer span.End()
 
-	// Load committee and proposer metadata
-	meta, err := loadDutiesMetadata(ctx, s, req.Epoch)
+	// Collect validator indices from public keys and cache the lookups
+	type validatorInfo struct {
+		index primitives.ValidatorIndex
+		found bool
+	}
+	validatorLookup := make(map[string]validatorInfo, len(req.PublicKeys))
+	requestIndices := make([]primitives.ValidatorIndex, 0, len(req.PublicKeys))
+
+	for _, pubKey := range req.PublicKeys {
+		key := string(pubKey)
+		if _, exists := validatorLookup[key]; !exists {
+			idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
+			validatorLookup[key] = validatorInfo{index: idx, found: ok}
+			if ok {
+				requestIndices = append(requestIndices, idx)
+			}
+		}
+	}
+
+	meta, err := loadDutiesMetadata(ctx, s, req.Epoch, requestIndices)
 	if err != nil {
 		return nil, err
 	}
@@ -62,35 +80,32 @@ func (vs *Server) dutiesv2(ctx context.Context, req *ethpb.DutiesRequest) (*ethp
 	validatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesV2Response_Duty, 0, len(req.PublicKeys))
 
-	// start loop for assignments for current and next epochs
+	// Build duties using cached validator index lookups
 	for _, pubKey := range req.PublicKeys {
 		if ctx.Err() != nil {
 			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())
 		}
 
-		idx, ok := s.ValidatorIndexByPubkey(bytesutil.ToBytes48(pubKey))
-		if !ok {
-			// Unknown validator: still append placeholder duty with UNKNOWN_STATUS
-			validatorAssignments = append(validatorAssignments, &ethpb.DutiesV2Response_Duty{
+		info := validatorLookup[string(pubKey)]
+		if !info.found {
+			unknownDuty := &ethpb.DutiesV2Response_Duty{
 				PublicKey: pubKey,
 				Status:    ethpb.ValidatorStatus_UNKNOWN_STATUS,
-			})
-			nextValidatorAssignments = append(nextValidatorAssignments, &ethpb.DutiesV2Response_Duty{
-				PublicKey: pubKey,
-				Status:    ethpb.ValidatorStatus_UNKNOWN_STATUS,
-			})
+			}
+			validatorAssignments = append(validatorAssignments, unknownDuty)
+			nextValidatorAssignments = append(nextValidatorAssignments, unknownDuty)
 			continue
 		}
 
-		meta.current.liteAssignment = helpers.AssignmentForValidator(meta.current.committeesBySlot, meta.current.startSlot, idx)
-		meta.next.liteAssignment = helpers.AssignmentForValidator(meta.next.committeesBySlot, meta.next.startSlot, idx)
+		currentAssignment := vs.getValidatorAssignment(meta.current, info.index)
+		nextAssignment := vs.getValidatorAssignment(meta.next, info.index)
 
-		assignment, nextAssignment, err := vs.buildValidatorDuty(pubKey, idx, s, req.Epoch, meta)
+		assignment, nextDuty, err := vs.buildValidatorDuty(pubKey, info.index, s, req.Epoch, meta, currentAssignment, nextAssignment)
 		if err != nil {
 			return nil, err
 		}
 		validatorAssignments = append(validatorAssignments, assignment)
-		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
+		nextValidatorAssignments = append(nextValidatorAssignments, nextDuty)
 	}
 
 	// Dependent roots for fork choice
@@ -143,17 +158,15 @@ type dutiesMetadata struct {
 }
 
 type metadata struct {
-	committeesAtSlot uint64
-	proposalSlots    map[primitives.ValidatorIndex][]primitives.Slot
-	startSlot        primitives.Slot
-	committeesBySlot [][][]primitives.ValidatorIndex
-	liteAssignment   *helpers.LiteAssignment
+	committeesAtSlot     uint64
+	proposalSlots        map[primitives.ValidatorIndex][]primitives.Slot
+	committeeAssignments map[primitives.ValidatorIndex]*helpers.CommitteeAssignment
 }
 
-func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*dutiesMetadata, error) {
+func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*dutiesMetadata, error) {
 	meta := &dutiesMetadata{}
 	var err error
-	meta.current, err = loadMetadata(ctx, s, reqEpoch)
+	meta.current, err = loadMetadata(ctx, s, reqEpoch, requestIndices)
 	if err != nil {
 		return nil, err
 	}
@@ -163,14 +176,14 @@ func loadDutiesMetadata(ctx context.Context, s state.BeaconState, reqEpoch primi
 		return nil, status.Errorf(codes.Internal, "Could not compute proposer slots: %v", err)
 	}
 
-	meta.next, err = loadMetadata(ctx, s, reqEpoch+1)
+	meta.next, err = loadMetadata(ctx, s, reqEpoch+1, requestIndices)
 	if err != nil {
 		return nil, err
 	}
 	return meta, nil
 }
 
-func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch) (*metadata, error) {
+func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.Epoch, requestIndices []primitives.ValidatorIndex) (*metadata, error) {
 	meta := &metadata{}
 
 	if err := helpers.VerifyAssignmentEpoch(reqEpoch, s); err != nil {
@@ -183,17 +196,36 @@ func loadMetadata(ctx context.Context, s state.BeaconState, reqEpoch primitives.
 	}
 	meta.committeesAtSlot = helpers.SlotCommitteeCount(activeValidatorCount)
 
-	meta.startSlot, err = slots.EpochStart(reqEpoch)
+	// Use CommitteeAssignments which only computes committees for requested validators
+	meta.committeeAssignments, err = helpers.CommitteeAssignments(ctx, s, reqEpoch, requestIndices)
 	if err != nil {
-		return nil, err
-	}
-
-	meta.committeesBySlot, err = helpers.PrecomputeCommittees(ctx, s, meta.startSlot)
-	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "Could not compute committee assignments: %v", err)
 	}
 
 	return meta, nil
+}
+
+// findValidatorIndexInCommittee finds the position of a validator in a committee.
+func findValidatorIndexInCommittee(committee []primitives.ValidatorIndex, validatorIndex primitives.ValidatorIndex) uint64 {
+	for i, vIdx := range committee {
+		if vIdx == validatorIndex {
+			return uint64(i)
+		}
+	}
+	return 0
+}
+
+// getValidatorAssignment retrieves the assignment for a validator from CommitteeAssignments.
+func (vs *Server) getValidatorAssignment(meta *metadata, validatorIndex primitives.ValidatorIndex) *helpers.LiteAssignment {
+	if assignment, exists := meta.committeeAssignments[validatorIndex]; exists {
+		return &helpers.LiteAssignment{
+			AttesterSlot:            assignment.AttesterSlot,
+			CommitteeIndex:          assignment.CommitteeIndex,
+			CommitteeLength:         uint64(len(assignment.Committee)),
+			ValidatorCommitteeIndex: findValidatorIndexInCommittee(assignment.Committee, validatorIndex),
+		}
+	}
+	return &helpers.LiteAssignment{}
 }
 
 // buildValidatorDuty builds both current‑epoch and next‑epoch V2 duty objects
@@ -204,21 +236,23 @@ func (vs *Server) buildValidatorDuty(
 	s state.BeaconState,
 	reqEpoch primitives.Epoch,
 	meta *dutiesMetadata,
+	currentAssignment *helpers.LiteAssignment,
+	nextAssignment *helpers.LiteAssignment,
 ) (*ethpb.DutiesV2Response_Duty, *ethpb.DutiesV2Response_Duty, error) {
 	assignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
-	nextAssignment := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
+	nextDuty := &ethpb.DutiesV2Response_Duty{PublicKey: pubKey}
 
 	statusEnum := assignmentStatus(s, idx)
 	assignment.ValidatorIndex = idx
 	assignment.Status = statusEnum
 	assignment.CommitteesAtSlot = meta.current.committeesAtSlot
 	assignment.ProposerSlots = meta.current.proposalSlots[idx]
-	populateCommitteeFields(assignment, meta.current.liteAssignment)
+	populateCommitteeFields(assignment, currentAssignment)
 
-	nextAssignment.ValidatorIndex = idx
-	nextAssignment.Status = statusEnum
-	nextAssignment.CommitteesAtSlot = meta.next.committeesAtSlot
-	populateCommitteeFields(nextAssignment, meta.next.liteAssignment)
+	nextDuty.ValidatorIndex = idx
+	nextDuty.Status = statusEnum
+	nextDuty.CommitteesAtSlot = meta.next.committeesAtSlot
+	populateCommitteeFields(nextDuty, nextAssignment)
 
 	// Sync committee flags
 	if coreTime.HigherEqualThanAltairVersionAndEpoch(s, reqEpoch) {
@@ -227,7 +261,7 @@ func (vs *Server) buildValidatorDuty(
 			return nil, nil, status.Errorf(codes.Internal, "Could not determine current epoch sync committee: %v", err)
 		}
 		assignment.IsSyncCommittee = inSync
-		nextAssignment.IsSyncCommittee = inSync
+		nextDuty.IsSyncCommittee = inSync
 		if inSync {
 			if err := core.RegisterSyncSubnetCurrentPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
 				return nil, nil, status.Errorf(codes.Internal, "Could not register sync subnet current period: %v", err)
@@ -246,21 +280,23 @@ func (vs *Server) buildValidatorDuty(
 			if err != nil {
 				return nil, nil, status.Errorf(codes.Internal, "Could not determine next epoch sync committee: %v", err)
 			}
-			nextAssignment.IsSyncCommittee = nextInSync
+			nextDuty.IsSyncCommittee = nextInSync
 			if nextInSync {
-				go func() {
-					if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
-						log.WithError(err).Warn("Could not register sync subnet next period")
-					}
-				}()
+				if err := core.RegisterSyncSubnetNextPeriodProto(s, reqEpoch, pubKey, statusEnum); err != nil {
+					log.WithError(err).Warn("Could not register sync subnet next period")
+				}
 			}
 		}
 	}
 
-	return assignment, nextAssignment, nil
+	return assignment, nextDuty, nil
 }
 
 func populateCommitteeFields(duty *ethpb.DutiesV2Response_Duty, la *helpers.LiteAssignment) {
+	if duty == nil || la == nil {
+		// should never be the case as previous functions should set
+		return
+	}
 	duty.CommitteeLength = la.CommitteeLength
 	duty.CommitteeIndex = la.CommitteeIndex
 	duty.ValidatorCommitteeIndex = la.ValidatorCommitteeIndex

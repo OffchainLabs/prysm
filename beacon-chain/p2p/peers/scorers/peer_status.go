@@ -5,10 +5,10 @@ import (
 	"math"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -112,7 +112,7 @@ func (s *PeerStatusScorer) BadPeers() []peer.ID {
 }
 
 // SetPeerStatus sets chain state data for a given peer.
-func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *pb.Status, validationError error) {
+func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *pb.StatusV2, validationError error) {
 	s.store.Lock()
 	defer s.store.Unlock()
 
@@ -130,14 +130,14 @@ func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *pb.Status, val
 // PeerStatus gets the chain state of the given remote peer.
 // This can return nil if there is no known chain state for the peer.
 // This will error if the peer does not exist.
-func (s *PeerStatusScorer) PeerStatus(pid peer.ID) (*pb.Status, error) {
+func (s *PeerStatusScorer) PeerStatus(pid peer.ID) (*pb.StatusV2, error) {
 	s.store.RLock()
 	defer s.store.RUnlock()
 	return s.peerStatusNoLock(pid)
 }
 
 // peerStatusNoLock lock-free version of PeerStatus.
-func (s *PeerStatusScorer) peerStatusNoLock(pid peer.ID) (*pb.Status, error) {
+func (s *PeerStatusScorer) peerStatusNoLock(pid peer.ID) (*pb.StatusV2, error) {
 	if peerData, ok := s.store.PeerData(pid); ok {
 		if peerData.ChainState == nil {
 			return nil, peerdata.ErrNoPeerStatus

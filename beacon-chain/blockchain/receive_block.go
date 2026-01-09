@@ -6,28 +6,27 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,8 +39,8 @@ var epochsSinceFinalityExpandCache = primitives.Epoch(4)
 
 // BlockReceiver interface defines the methods of chain service for receiving and processing new blocks.
 type BlockReceiver interface {
-	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error
-	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityStore) error
+	ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error
+	ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityChecker) error
 	HasBlock(ctx context.Context, root [32]byte) bool
 	RecentBlockSlot(root [32]byte) (primitives.Slot, error)
 	BlockBeingSynced([32]byte) bool
@@ -70,7 +69,7 @@ type SlashingReceiver interface {
 //  1. Validate block, apply state transition and update checkpoints
 //  2. Apply fork choice to the processed block
 //  3. Save latest head info
-func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityStore) error {
+func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlock")
 	defer span.End()
 	// Return early if the block is blacklisted
@@ -84,12 +83,16 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 
 	receivedTime := time.Now()
-	s.blockBeingSynced.set(blockRoot)
+	err := s.blockBeingSynced.set(blockRoot)
+	if errors.Is(err, errBlockBeingSynced) {
+		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Debug("Ignoring block currently being synced")
+		return nil
+	}
 	defer s.blockBeingSynced.unset(blockRoot)
 
 	blockCopy, err := block.Copy()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "block copy")
 	}
 
 	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
@@ -100,17 +103,17 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	currentCheckpoints := s.saveCurrentCheckpoints(preState)
 	roblock, err := blocks.NewROBlockWithRoot(blockCopy, blockRoot)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "new ro block with root")
 	}
 
 	postState, isValidPayload, err := s.validateExecutionAndConsensus(ctx, preState, roblock)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "validator execution and consensus")
 	}
 
-	daWaitedTime, err := s.handleDA(ctx, blockCopy, blockRoot, avs)
+	daWaitedTime, err := s.handleDA(ctx, avs, roblock)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "handle da")
 	}
 
 	// Defragment the state before continuing block processing.
@@ -131,10 +134,10 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	if err := s.postBlockProcess(args); err != nil {
 		err := errors.Wrap(err, "could not process block")
 		tracing.AnnotateError(span, err)
-		return err
+		return errors.Wrap(err, "post block process")
 	}
 	if err := s.updateCheckpoints(ctx, currentCheckpoints, preState, postState, blockRoot); err != nil {
-		return err
+		return errors.Wrap(err, "update checkpoints")
 	}
 	// If slasher is configured, forward the attestations in the block via an event feed for processing.
 	if s.slasherEnabled {
@@ -148,12 +151,12 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 
 	// Have we been finalizing? Should we start saving hot states to db?
 	if err := s.checkSaveHotStateDB(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "check save hot state db")
 	}
 
 	// We apply the same heuristic to some of our more important caches.
 	if err := s.handleCaches(); err != nil {
-		return err
+		return errors.Wrap(err, "handle caches")
 	}
 	s.reportPostBlockProcessing(blockCopy, blockRoot, receivedTime, daWaitedTime)
 	return nil
@@ -183,7 +186,7 @@ func (s *Service) updateCheckpoints(
 			return errors.Wrap(err, "could not get head state")
 		}
 		if err := reportEpochMetrics(ctx, postState, headSt); err != nil {
-			log.WithError(err).Error("could not report epoch metrics")
+			log.WithError(err).Error("Could not report epoch metrics")
 		}
 	}
 	if err := s.updateJustificationOnBlock(ctx, preState, postState, cp.j); err != nil {
@@ -216,6 +219,9 @@ func (s *Service) validateExecutionAndConsensus(
 	eg.Go(func() error {
 		var err error
 		postState, err = s.validateStateTransition(ctx, preState, block)
+		if errors.Is(err, ErrNotDescendantOfFinalized) {
+			return invalidBlock{error: err, root: block.Root()}
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to validate consensus state transition function")
 		}
@@ -236,37 +242,19 @@ func (s *Service) validateExecutionAndConsensus(
 	return postState, isValidPayload, nil
 }
 
-func (s *Service) handleDA(
-	ctx context.Context,
-	block interfaces.SignedBeaconBlock,
-	blockRoot [fieldparams.RootLength]byte,
-	avs das.AvailabilityStore,
-) (elapsed time.Duration, err error) {
-	defer func(start time.Time) {
-		elapsed = time.Since(start)
-
-		if err == nil {
-			dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
-		}
-	}(time.Now())
-
-	if avs == nil {
-		if err = s.isDataAvailable(ctx, blockRoot, block); err != nil {
-			return
-		}
-
-		return
+func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityChecker, block blocks.ROBlock) (time.Duration, error) {
+	var err error
+	start := time.Now()
+	if avs != nil {
+		err = avs.IsDataAvailable(ctx, s.CurrentSlot(), block)
+	} else {
+		err = s.isDataAvailable(ctx, block)
 	}
-
-	var rob blocks.ROBlock
-	rob, err = blocks.NewROBlockWithRoot(block, blockRoot)
-	if err != nil {
-		return
+	elapsed := time.Since(start)
+	if err == nil {
+		dataAvailWaitedTime.Observe(float64(elapsed.Milliseconds()))
 	}
-
-	err = avs.IsDataAvailable(ctx, s.CurrentSlot(), rob)
-
-	return
+	return elapsed, err
 }
 
 func (s *Service) reportPostBlockProcessing(
@@ -283,7 +271,7 @@ func (s *Service) reportPostBlockProcessing(
 	// Log block sync status.
 	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	justified := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, uint64(s.genesisTime.Unix()), daWaitedTime); err != nil {
+	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
 		log.WithError(err).Error("Unable to log block sync status")
 	}
 	// Log payload data
@@ -300,21 +288,51 @@ func (s *Service) reportPostBlockProcessing(
 
 func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedState state.BeaconState) {
 	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+
+	// Send finalization event
 	go func() {
 		s.sendNewFinalizedEvent(ctx, finalizedState)
 	}()
 
+	// Insert finalized deposits into finalized deposit trie
 	depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
 	go func() {
 		s.insertFinalizedDepositsAndPrune(depCtx, finalized.Root)
 		cancel()
 	}()
+
+	if features.Get().EnableLightClient {
+		// Save a light client bootstrap for the finalized checkpoint
+		go func() {
+			st, err := s.cfg.StateGen.StateByRoot(ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not retrieve state for finalized root to save light client bootstrap")
+				return
+			}
+			err = s.lcStore.SaveLightClientBootstrap(s.ctx, finalized.Root, st)
+			if err != nil {
+				log.WithError(err).Error("Could not save light client bootstrap by block root")
+			} else {
+				log.Debugf("Saved light client bootstrap for finalized root %#x", finalized.Root)
+			}
+		}()
+
+		// Clean up the light client store caches
+		go func() {
+			err := s.lcStore.MigrateToCold(s.ctx, finalized.Root)
+			if err != nil {
+				log.WithError(err).Error("Could not migrate light client store to cold storage")
+			} else {
+				log.Debugf("Migrated light client store to cold storage for finalized root %#x", finalized.Root)
+			}
+		}()
+	}
 }
 
 // ReceiveBlockBatch processes the whole block batch at once, assuming the block batch is linear ,transitioning
 // the state, performing batch verification of all collected signatures and then performing the appropriate
 // actions for a block post-transition.
-func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityStore) error {
+func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlockBatch")
 	defer span.End()
 
@@ -570,17 +588,17 @@ func (s *Service) sendNewFinalizedEvent(ctx context.Context, postState state.Bea
 func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySignedBeaconBlock, preState state.BeaconState) {
 	// Feed the indexed attestation to slasher if enabled. This action
 	// is done in the background to avoid adding more load to this critical code path.
-	ctx := context.TODO()
+	ctx := s.ctx
 	for _, att := range signed.Block().Body().Attestations() {
 		committees, err := helpers.AttestationCommitteesFromState(ctx, preState, att)
 		if err != nil {
 			log.WithError(err).Error("Could not get attestation committees")
-			return
+			continue
 		}
 		indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committees...)
 		if err != nil {
 			log.WithError(err).Error("Could not convert to indexed attestation")
-			return
+			continue
 		}
 		s.cfg.SlasherAttestationsFeed.Send(&types.WrappedIndexedAtt{IndexedAtt: indexedAtt})
 	}

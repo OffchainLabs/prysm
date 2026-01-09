@@ -1,7 +1,7 @@
 package state_native
 
 import (
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // Eth1Data corresponding to the proof-of-work chain information stored in the beacon state.
@@ -48,7 +48,7 @@ func (b *BeaconState) eth1DataVotesVal() []*ethpb.Eth1Data {
 	}
 
 	res := make([]*ethpb.Eth1Data, len(b.eth1DataVotes))
-	for i := 0; i < len(res); i++ {
+	for i := range res {
 		res[i] = b.eth1DataVotes[i].Copy()
 	}
 	return res

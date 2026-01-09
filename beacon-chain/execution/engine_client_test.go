@@ -13,22 +13,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	mocks "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	mocks "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -54,7 +56,7 @@ func (RPCClientBad) BatchCall([]rpc.BatchElem) error {
 	return errors.New("rpc client is not initialized")
 }
 
-func (RPCClientBad) CallContext(context.Context, interface{}, string, ...interface{}) error {
+func (RPCClientBad) CallContext(context.Context, any, string, ...any) error {
 	return ethereum.NotFound
 }
 
@@ -167,6 +169,7 @@ func TestClient_HTTP(t *testing.T) {
 	cfg.CapellaForkEpoch = 1
 	cfg.DenebForkEpoch = 2
 	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
 	params.OverrideBeaconConfig(cfg)
 
 	t.Run(GetPayloadMethod, func(t *testing.T) {
@@ -189,7 +192,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -235,7 +238,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -288,7 +291,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -317,11 +320,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.KzgCommitments)
+		require.DeepEqual(t, commitments, resp.BlobsBundler.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.Proofs)
+		require.DeepEqual(t, proofs, resp.BlobsBundler.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.Blobs)
+		require.DeepEqual(t, blobs, resp.BlobsBundler.GetBlobs())
 	})
 	t.Run(GetPayloadMethodV4, func(t *testing.T) {
 		payloadId := [8]byte{1}
@@ -343,7 +346,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, string(reqArg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -372,11 +375,11 @@ func TestClient_HTTP(t *testing.T) {
 		require.DeepEqual(t, uint64(2), g)
 
 		commitments := [][]byte{bytesutil.PadTo([]byte("commitment1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("commitment2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, commitments, resp.BlobsBundle.KzgCommitments)
+		require.DeepEqual(t, commitments, resp.BlobsBundler.GetKzgCommitments())
 		proofs := [][]byte{bytesutil.PadTo([]byte("proof1"), fieldparams.BLSPubkeyLength), bytesutil.PadTo([]byte("proof2"), fieldparams.BLSPubkeyLength)}
-		require.DeepEqual(t, proofs, resp.BlobsBundle.Proofs)
+		require.DeepEqual(t, proofs, resp.BlobsBundler.GetProofs())
 		blobs := [][]byte{bytesutil.PadTo([]byte("a"), fieldparams.BlobLength), bytesutil.PadTo([]byte("b"), fieldparams.BlobLength)}
-		require.DeepEqual(t, blobs, resp.BlobsBundle.Blobs)
+		require.DeepEqual(t, blobs, resp.BlobsBundler.GetBlobs())
 		requests := &pb.ExecutionRequests{
 			Deposits: []*pb.DepositRequest{
 				{
@@ -405,7 +408,52 @@ func TestClient_HTTP(t *testing.T) {
 
 		require.DeepEqual(t, requests, resp.ExecutionRequests)
 	})
+	t.Run(GetPayloadMethodV5, func(t *testing.T) {
+		payloadId := [8]byte{1}
+		want, ok := fix["ExecutionBundleFulu"].(*pb.GetPayloadV5ResponseJson)
+		require.Equal(t, true, ok)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			defer func() {
+				require.NoError(t, r.Body.Close())
+			}()
+			enc, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			jsonRequestString := string(enc)
 
+			reqArg, err := json.Marshal(pb.PayloadIDBytes(payloadId))
+			require.NoError(t, err)
+
+			// We expect the JSON string RPC request contains the right arguments.
+			require.Equal(t, true, strings.Contains(
+				jsonRequestString, string(reqArg),
+			))
+			resp := map[string]any{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result":  want,
+			}
+			err = json.NewEncoder(w).Encode(resp)
+			require.NoError(t, err)
+		}))
+		defer srv.Close()
+
+		rpcClient, err := rpc.DialHTTP(srv.URL)
+		require.NoError(t, err)
+		defer rpcClient.Close()
+
+		client := &Service{}
+		client.rpcClient = rpcClient
+
+		// We call the RPC method via HTTP and expect a proper result.
+		resp, err := client.GetPayload(ctx, payloadId, 4*params.BeaconConfig().SlotsPerEpoch)
+		require.NoError(t, err)
+		_, ok = resp.BlobsBundler.(*pb.BlobsBundleV2)
+		if !ok {
+			t.Logf("resp.BlobsBundler has unexpected type: %T", resp.BlobsBundler)
+		}
+		require.Equal(t, ok, true)
+	})
 	t.Run(ForkchoiceUpdatedMethod+" VALID status", func(t *testing.T) {
 		forkChoiceState := &pb.ForkchoiceState{
 			HeadBlockHash:      []byte("head"),
@@ -880,7 +928,7 @@ func TestClient_HTTP(t *testing.T) {
 		wrappedPayload, err := blocks.WrappedExecutionPayload(execPayload)
 		require.NoError(t, err)
 		resp, err := client.NewPayload(ctx, wrappedPayload, []common.Hash{}, &common.Hash{}, nil)
-		require.ErrorIs(t, ErrUnknownPayloadStatus, err)
+		require.ErrorIs(t, err, ErrUnknownPayloadStatus)
 		require.DeepEqual(t, []uint8(nil), resp)
 	})
 	t.Run(BlockByNumberMethod, func(t *testing.T) {
@@ -891,7 +939,7 @@ func TestClient_HTTP(t *testing.T) {
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -929,7 +977,7 @@ func TestClient_HTTP(t *testing.T) {
 			require.Equal(t, true, strings.Contains(
 				jsonRequestString, fmt.Sprintf("%#x", arg),
 			))
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  want,
@@ -991,7 +1039,7 @@ func TestReconstructFullBellatrixBlock(t *testing.T) {
 		payload, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 
-		jsonPayload := make(map[string]interface{})
+		jsonPayload := make(map[string]any)
 		tx := gethtypes.NewTransaction(
 			0,
 			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -1016,10 +1064,10 @@ func TestReconstructFullBellatrixBlock(t *testing.T) {
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			respJSON := map[string]interface{}{
+			respJSON := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  []map[string]interface{}{jsonPayload},
+				"result":  []map[string]any{jsonPayload},
 			}
 			require.NoError(t, json.NewEncoder(w).Encode(respJSON))
 		}))
@@ -1083,7 +1131,7 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 		payload, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 
-		jsonPayload := make(map[string]interface{})
+		jsonPayload := make(map[string]any)
 		tx := gethtypes.NewTransaction(
 			0,
 			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -1120,10 +1168,10 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 				require.NoError(t, r.Body.Close())
 			}()
 
-			respJSON := map[string]interface{}{
+			respJSON := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  []map[string]interface{}{jsonPayload},
+				"result":  []map[string]any{jsonPayload},
 			}
 			require.NoError(t, json.NewEncoder(w).Encode(respJSON))
 
@@ -1158,7 +1206,7 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 		payload, ok := fix["ExecutionPayload"].(*pb.ExecutionPayload)
 		require.Equal(t, true, ok)
 
-		jsonPayload := make(map[string]interface{})
+		jsonPayload := make(map[string]any)
 		tx := gethtypes.NewTransaction(
 			0,
 			common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
@@ -1193,10 +1241,10 @@ func TestReconstructFullBellatrixBlockBatch(t *testing.T) {
 				require.NoError(t, r.Body.Close())
 			}()
 
-			respJSON := map[string]interface{}{
+			respJSON := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  []map[string]interface{}{},
+				"result":  []map[string]any{},
 			}
 			require.NoError(t, json.NewEncoder(w).Encode(respJSON))
 
@@ -1425,7 +1473,7 @@ func (c *customError) Timeout() bool {
 
 type dataError struct {
 	code int
-	data interface{}
+	data any
 }
 
 func (c *dataError) ErrorCode() int {
@@ -1436,7 +1484,7 @@ func (*dataError) Error() string {
 	return "something went wrong"
 }
 
-func (c *dataError) ErrorData() interface{} {
+func (c *dataError) ErrorData() any {
 	return c.data
 }
 
@@ -1528,9 +1576,9 @@ func newTestIPCServer(t *testing.T) *rpc.Server {
 	return server
 }
 
-func fixtures() map[string]interface{} {
+func fixtures() map[string]any {
 	s := fixturesStruct()
-	return map[string]interface{}{
+	return map[string]any{
 		"ExecutionBlock":                    s.ExecutionBlock,
 		"ExecutionPayloadBody":              s.ExecutionPayloadBody,
 		"ExecutionPayload":                  s.ExecutionPayload,
@@ -1539,6 +1587,7 @@ func fixtures() map[string]interface{} {
 		"ExecutionPayloadCapellaWithValue":  s.ExecutionPayloadWithValueCapella,
 		"ExecutionPayloadDenebWithValue":    s.ExecutionPayloadWithValueDeneb,
 		"ExecutionBundleElectra":            s.ExecutionBundleElectra,
+		"ExecutionBundleFulu":               s.ExecutionBundleFulu,
 		"ValidPayloadStatus":                s.ValidPayloadStatus,
 		"InvalidBlockHashStatus":            s.InvalidBlockHashStatus,
 		"AcceptedStatus":                    s.AcceptedStatus,
@@ -1774,6 +1823,36 @@ func fixturesStruct() *payloadFixtures {
 			append([]byte{pb.WithdrawalRequestType}, withdrawalRequestBytes...),
 			append([]byte{pb.ConsolidationRequestType}, consolidationRequestBytes...)},
 	}
+	executionBundleFixtureFulu := &pb.GetPayloadV5ResponseJson{
+		ShouldOverrideBuilder: true,
+		ExecutionPayload: &pb.ExecutionPayloadDenebJSON{
+			ParentHash:    &common.Hash{'a'},
+			FeeRecipient:  &common.Address{'b'},
+			StateRoot:     &common.Hash{'c'},
+			ReceiptsRoot:  &common.Hash{'d'},
+			LogsBloom:     &hexutil.Bytes{'e'},
+			PrevRandao:    &common.Hash{'f'},
+			BaseFeePerGas: "0x123",
+			BlockHash:     &common.Hash{'g'},
+			Transactions:  []hexutil.Bytes{{'h'}},
+			Withdrawals:   []*pb.Withdrawal{},
+			BlockNumber:   &hexUint,
+			GasLimit:      &hexUint,
+			GasUsed:       &hexUint,
+			Timestamp:     &hexUint,
+			BlobGasUsed:   &bgu,
+			ExcessBlobGas: &ebg,
+		},
+		BlockValue: "0x11fffffffff",
+		BlobsBundle: &pb.BlobBundleV2JSON{
+			Commitments: []hexutil.Bytes{[]byte("commitment1"), []byte("commitment2")},
+			Proofs:      []hexutil.Bytes{[]byte("proof1"), []byte("proof2")},
+			Blobs:       []hexutil.Bytes{{'a'}, {'b'}},
+		},
+		ExecutionRequests: []hexutil.Bytes{append([]byte{pb.DepositRequestType}, depositRequestBytes...),
+			append([]byte{pb.WithdrawalRequestType}, withdrawalRequestBytes...),
+			append([]byte{pb.ConsolidationRequestType}, consolidationRequestBytes...)},
+	}
 	parent := bytesutil.PadTo([]byte("parentHash"), fieldparams.RootLength)
 	sha3Uncles := bytesutil.PadTo([]byte("sha3Uncles"), fieldparams.RootLength)
 	miner := bytesutil.PadTo([]byte("miner"), fieldparams.FeeRecipientLength)
@@ -1868,6 +1947,7 @@ func fixturesStruct() *payloadFixtures {
 		ExecutionPayloadWithValueCapella:  executionPayloadWithValueFixtureCapella,
 		ExecutionPayloadWithValueDeneb:    executionPayloadWithValueFixtureDeneb,
 		ExecutionBundleElectra:            executionBundleFixtureElectra,
+		ExecutionBundleFulu:               executionBundleFixtureFulu,
 		ValidPayloadStatus:                validStatus,
 		InvalidBlockHashStatus:            inValidBlockHashStatus,
 		AcceptedStatus:                    acceptedStatus,
@@ -1892,6 +1972,7 @@ type payloadFixtures struct {
 	ExecutionPayloadWithValueCapella  *pb.GetPayloadV2ResponseJson
 	ExecutionPayloadWithValueDeneb    *pb.GetPayloadV3ResponseJson
 	ExecutionBundleElectra            *pb.GetPayloadV4ResponseJson
+	ExecutionBundleFulu               *pb.GetPayloadV5ResponseJson
 	ValidPayloadStatus                *pb.PayloadStatus
 	InvalidBlockHashStatus            *pb.PayloadStatus
 	AcceptedStatus                    *pb.PayloadStatus
@@ -2092,7 +2173,7 @@ func forkchoiceUpdateSetup(t *testing.T, fcs *pb.ForkchoiceState, att *pb.Payloa
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(payloadAttrsReq),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  res,
@@ -2131,7 +2212,7 @@ func forkchoiceUpdateSetupV2(t *testing.T, fcs *pb.ForkchoiceState, att *pb.Payl
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(payloadAttrsReq),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  res,
@@ -2165,7 +2246,7 @@ func newPayloadSetup(t *testing.T, status *pb.PayloadStatus, payload *pb.Executi
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(reqArg),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2199,7 +2280,7 @@ func newPayloadV2Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(reqArg),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2233,7 +2314,7 @@ func newPayloadV3Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 		require.Equal(t, true, strings.Contains(
 			jsonRequestString, string(reqArg),
 		))
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2281,7 +2362,7 @@ func newPayloadV4Setup(t *testing.T, status *pb.PayloadStatus, payload *pb.Execu
 			jsonRequestString, string(jsonRequests),
 		))
 
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  status,
@@ -2337,7 +2418,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 			defer func() {
 				require.NoError(t, r.Body.Close())
 			}()
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  []string{},
@@ -2361,7 +2442,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 		for _, item := range results {
 			require.NotNil(t, item)
 		}
-		assert.LogsContain(t, logHook, "Please update client, detected the following unsupported engine methods:")
+		assert.LogsContain(t, logHook, "Connected execution client does not support some requested engine methods")
 	})
 	t.Run("list of items", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2370,7 +2451,7 @@ func Test_ExchangeCapabilities(t *testing.T) {
 				require.NoError(t, r.Body.Close())
 			}()
 
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result":  []string{"A", "B", "C"},
@@ -2424,11 +2505,11 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	t.Run("get-blobs end point is not supported", func(t *testing.T) {
 		hi := mockSummary(t, []bool{true, true, true, true, true, false})
 		verifiedBlobs, err := client.ReconstructBlobSidecars(ctx, sb, r, hi)
-		require.NoError(t, err)
+		require.ErrorContains(t, "engine_getBlobsV1 is not supported", err)
 		require.Equal(t, 0, len(verifiedBlobs))
 	})
 
-	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
 
 	t.Run("recovered 6 missing blobs", func(t *testing.T) {
 		srv := createBlobServer(t, 6)
@@ -2476,6 +2557,78 @@ func TestReconstructBlobSidecars(t *testing.T) {
 	})
 }
 
+func TestConstructDataColumnSidecars(t *testing.T) {
+	// Start the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup right fork epoch
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.CapellaForkEpoch = 1
+	cfg.DenebForkEpoch = 2
+	cfg.ElectraForkEpoch = 3
+	cfg.FuluForkEpoch = 4
+	params.OverrideBeaconConfig(cfg)
+
+	client := &Service{capabilityCache: &capabilityCache{}}
+	b := util.NewBeaconBlockFulu()
+	b.Block.Slot = 4 * params.BeaconConfig().SlotsPerEpoch
+	kzgCommitments := createRandomKzgCommitments(t, 6)
+	b.Block.Body.BlobKzgCommitments = kzgCommitments
+	r, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	sb, err := blocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+
+	roBlock, err := blocks.NewROBlockWithRoot(sb, r)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	t.Run("GetBlobsV2 is not supported", func(t *testing.T) {
+		_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		require.ErrorContains(t, "engine_getBlobsV2 is not supported", err)
+	})
+
+	t.Run("nothing received", func(t *testing.T) {
+		srv := createBlobServerV2(t, 0, []bool{})
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+		require.Equal(t, 0, len(dataColumns))
+	})
+
+	t.Run("receiving all blobs", func(t *testing.T) {
+		blobMasks := []bool{true, true, true, true, true, true}
+		srv := createBlobServerV2(t, 6, blobMasks)
+		defer srv.Close()
+
+		rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+		defer rpcClient.Close()
+
+		dataColumns, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+		require.NoError(t, err)
+		require.Equal(t, 128, len(dataColumns))
+	})
+
+	// t.Run("missing some blobs", func(t *testing.T) {
+	// 	blobMasks := []bool{false, true, true, true, true, true}
+	// 	srv := createBlobServerV2(t, 6, blobMasks)
+	// 	defer srv.Close()
+
+	// 	rpcClient, client := setupRpcClientV2(t, srv.URL, client)
+	// 	defer rpcClient.Close()
+
+	// 	_, err := client.ConstructDataColumnSidecars(ctx, peerdas.PopulateFromBlock(roBlock))
+	// 	require.ErrorContains(t, "fetch cells and proofs from execution client", err)
+	// })
+}
+
 func createRandomKzgCommitments(t *testing.T, num int) [][]byte {
 	kzgCommitments := make([][]byte, num)
 	for i := range kzgCommitments {
@@ -2499,10 +2652,10 @@ func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *http
 
 		blobs := make([]pb.BlobAndProofJson, numBlobs)
 		for i := range blobs {
-			blobs[i] = pb.BlobAndProofJson{Blob: []byte(fmt.Sprintf("blob%d", i+1)), KzgProof: []byte(fmt.Sprintf("proof%d", i+1))}
+			blobs[i] = pb.BlobAndProofJson{Blob: fmt.Appendf(nil, "blob%d", i+1), KzgProof: fmt.Appendf(nil, "proof%d", i+1)}
 		}
 
-		respJSON := map[string]interface{}{
+		respJSON := map[string]any{
 			"jsonrpc": "2.0",
 			"id":      1,
 			"result":  blobs,
@@ -2511,14 +2664,56 @@ func createBlobServer(t *testing.T, numBlobs int, callbackFuncs ...func()) *http
 	}))
 }
 
+func createBlobServerV2(t *testing.T, numBlobs int, blobMasks []bool) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		defer func() {
+			require.NoError(t, r.Body.Close())
+		}()
+
+		require.Equal(t, len(blobMasks), numBlobs)
+
+		blobAndCellProofs := make([]*pb.BlobAndProofV2Json, numBlobs)
+		for i := range blobAndCellProofs {
+			if !blobMasks[i] {
+				continue
+			}
+
+			blobAndCellProofs[i] = &pb.BlobAndProofV2Json{
+				Blob:      []byte("0xblob"),
+				KzgProofs: []hexutil.Bytes{},
+			}
+			for range fieldparams.NumberOfColumns {
+				cellProof := make([]byte, 48)
+				blobAndCellProofs[i].KzgProofs = append(blobAndCellProofs[i].KzgProofs, cellProof)
+			}
+		}
+
+		respJSON := map[string]any{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result":  blobAndCellProofs,
+		}
+
+		err := json.NewEncoder(w).Encode(respJSON)
+		require.NoError(t, err)
+	}))
+}
+
 func setupRpcClient(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
 	rpcClient, err := rpc.DialHTTP(url)
 	require.NoError(t, err)
 
 	client.rpcClient = rpcClient
-	client.capabilityCache = &capabilityCache{capabilities: map[string]interface{}{GetBlobsV1: nil}}
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV1: nil}}
 	client.blobVerifier = testNewBlobVerifier()
 
+	return rpcClient, client
+}
+
+func setupRpcClientV2(t *testing.T, url string, client *Service) (*rpc.Client, *Service) {
+	rpcClient, client := setupRpcClient(t, url, client)
+	client.capabilityCache = &capabilityCache{capabilities: map[string]any{GetBlobsV2: nil}}
 	return rpcClient, client
 }
 

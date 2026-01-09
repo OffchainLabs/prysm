@@ -2,13 +2,15 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["pruner.go"],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/db/pruner",
+    srcs = [
+        "log.go",
+        "pruner.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/db/pruner",
     visibility = [
         "//beacon-chain:__subpackages__",
     ],
     deps = [
-        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/iface:go_default_library",
         "//config/params:go_default_library",
@@ -29,6 +31,7 @@ go_test(
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "//time/slots/testing:go_default_library",

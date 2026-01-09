@@ -7,15 +7,15 @@ import (
 	"context"
 	"io"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	slashertypes "github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/backup"
-	"github.com/OffchainLabs/prysm/v6/proto/dbval"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/backup"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -28,11 +28,13 @@ type ReadOnlyDatabase interface {
 	BlocksBySlot(ctx context.Context, slot primitives.Slot) ([]interfaces.ReadOnlySignedBeaconBlock, error)
 	BlockRootsBySlot(ctx context.Context, slot primitives.Slot) (bool, [][32]byte, error)
 	HasBlock(ctx context.Context, blockRoot [32]byte) bool
+	AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[[32]byte]bool
 	GenesisBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	GenesisBlockRoot(ctx context.Context) ([32]byte, error)
 	IsFinalizedBlock(ctx context.Context, blockRoot [32]byte) bool
 	FinalizedChildBlock(ctx context.Context, blockRoot [32]byte) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HighestRootsBelowSlot(ctx context.Context, slot primitives.Slot) (primitives.Slot, [][32]byte, error)
+	EarliestSlot(ctx context.Context) (primitives.Slot, error)
 	// State related methods.
 	State(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
 	StateOrError(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error)
@@ -56,14 +58,25 @@ type ReadOnlyDatabase interface {
 	// Fee recipients operations.
 	FeeRecipientByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (common.Address, error)
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
-	// light client operations
+	// Light client operations
 	LightClientUpdates(ctx context.Context, startPeriod, endPeriod uint64) (map[uint64]interfaces.LightClientUpdate, error)
 	LightClientUpdate(ctx context.Context, period uint64) (interfaces.LightClientUpdate, error)
 	LightClientBootstrap(ctx context.Context, blockRoot []byte) (interfaces.LightClientBootstrap, error)
-
-	// origin checkpoint sync support
+	// Origin checkpoint sync support
 	OriginCheckpointBlockRoot(ctx context.Context) ([32]byte, error)
 	BackfillStatus(context.Context) (*dbval.BackfillStatus, error)
+
+	// P2P Metadata operations.
+	MetadataSeqNum(ctx context.Context) (uint64, error)
+}
+
+// ReadOnlyDatabaseWithSeqNum defines a struct which has read access to database methods
+// and also has read/write access to the p2p metadata sequence number.
+// Only used for the p2p service.
+type ReadOnlyDatabaseWithSeqNum interface {
+	ReadOnlyDatabase
+
+	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
 }
 
 // NoHeadAccessDatabase defines a struct without access to chain head data.
@@ -102,6 +115,25 @@ type NoHeadAccessDatabase interface {
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error
 	DeleteHistoricalDataBeforeSlot(ctx context.Context, slot primitives.Slot, batchSize int) (int, error)
+
+	// Genesis operations.
+	LoadGenesis(ctx context.Context, stateBytes []byte) error
+	SaveGenesisData(ctx context.Context, state state.BeaconState) error
+	EnsureEmbeddedGenesis(ctx context.Context) error
+
+	// Support for checkpoint sync and backfill.
+	SaveOriginCheckpointBlockRoot(ctx context.Context, blockRoot [32]byte) error
+	SaveOrigin(ctx context.Context, serState, serBlock []byte) error
+	SaveBackfillStatus(context.Context, *dbval.BackfillStatus) error
+	BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBlock, finalizedChildRoot [32]byte) error
+
+	// Custody operations.
+	UpdateCustodyInfo(ctx context.Context, earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error)
+	UpdateEarliestAvailableSlot(ctx context.Context, earliestAvailableSlot primitives.Slot) error
+	UpdateSubscribedToAllDataSubnets(ctx context.Context, subscribed bool) (bool, error)
+
+	// P2P Metadata operations.
+	SaveMetadataSeqNum(ctx context.Context, seqNum uint64) error
 }
 
 // HeadAccessDatabase defines a struct with access to reading chain head data.
@@ -112,16 +144,6 @@ type HeadAccessDatabase interface {
 	HeadBlock(ctx context.Context) (interfaces.ReadOnlySignedBeaconBlock, error)
 	HeadBlockRoot() ([32]byte, error)
 	SaveHeadBlockRoot(ctx context.Context, blockRoot [32]byte) error
-
-	// Genesis operations.
-	LoadGenesis(ctx context.Context, stateBytes []byte) error
-	SaveGenesisData(ctx context.Context, state state.BeaconState) error
-	EnsureEmbeddedGenesis(ctx context.Context) error
-
-	// Support for checkpoint sync and backfill.
-	SaveOrigin(ctx context.Context, serState, serBlock []byte) error
-	SaveBackfillStatus(context.Context, *dbval.BackfillStatus) error
-	BackfillFinalizedIndex(ctx context.Context, blocks []blocks.ROBlock, finalizedChildRoot [32]byte) error
 }
 
 // SlasherDatabase interface for persisting data related to detecting slashable offenses on Ethereum.

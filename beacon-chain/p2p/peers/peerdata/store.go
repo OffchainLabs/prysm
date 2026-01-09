@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -54,7 +54,7 @@ type PeerData struct {
 	NextValidTime time.Time
 	// Chain related data.
 	MetaData                  metadata.Metadata
-	ChainState                *ethpb.Status
+	ChainState                *ethpb.StatusV2
 	ChainStateLastUpdated     time.Time
 	ChainStateValidationError error
 	// Scorers internal data.

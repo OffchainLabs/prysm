@@ -7,8 +7,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 )
 
 func TestToBytes(t *testing.T) {
@@ -254,7 +254,7 @@ func TestUint32ToBytes4(t *testing.T) {
 }
 
 func TestUint64ToBytes_RoundTrip(t *testing.T) {
-	for i := uint64(0); i < 10000; i++ {
+	for i := range uint64(10000) {
 		b := bytesutil.Uint64ToBytesBigEndian(i)
 		if got := bytesutil.BytesToUint64BigEndian(b); got != i {
 			t.Error("Round trip did not match original value")

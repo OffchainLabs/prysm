@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 )
 
 type copier[T any] interface {
@@ -11,7 +11,7 @@ type copier[T any] interface {
 func CopySlice[T any, C copier[T]](original []C) []T {
 	// Create a new slice with the same length as the original
 	newSlice := make([]T, len(original))
-	for i := 0; i < len(newSlice); i++ {
+	for i := range newSlice {
 		newSlice[i] = original[i].Copy()
 	}
 	return newSlice
@@ -32,6 +32,21 @@ func CopyValidator(val *Validator) *Validator {
 		ActivationEpoch:            val.ActivationEpoch,
 		ExitEpoch:                  val.ExitEpoch,
 		WithdrawableEpoch:          val.WithdrawableEpoch,
+	}
+}
+
+// CopyBuilder copies the provided builder.
+func CopyBuilder(builder *Builder) *Builder {
+	if builder == nil {
+		return nil
+	}
+	return &Builder{
+		Pubkey:            bytesutil.SafeCopyBytes(builder.Pubkey),
+		Version:           bytesutil.SafeCopyBytes(builder.Version),
+		ExecutionAddress:  bytesutil.SafeCopyBytes(builder.ExecutionAddress),
+		Balance:           builder.Balance,
+		DepositEpoch:      builder.DepositEpoch,
+		WithdrawableEpoch: builder.WithdrawableEpoch,
 	}
 }
 
@@ -60,4 +75,117 @@ func CopySyncCommitteeContribution(c *SyncCommitteeContribution) *SyncCommitteeC
 		AggregationBits:   bytesutil.SafeCopyBytes(c.AggregationBits),
 		Signature:         bytesutil.SafeCopyBytes(c.Signature),
 	}
+}
+
+// CopySignedBeaconBlockGloas copies the provided signed beacon block Gloas object.
+func CopySignedBeaconBlockGloas(sb *SignedBeaconBlockGloas) *SignedBeaconBlockGloas {
+	if sb == nil {
+		return nil
+	}
+	return &SignedBeaconBlockGloas{
+		Block:     copyBeaconBlockGloas(sb.Block),
+		Signature: bytesutil.SafeCopyBytes(sb.Signature),
+	}
+}
+
+// copyBeaconBlockGloas copies the provided beacon block Gloas object.
+func copyBeaconBlockGloas(b *BeaconBlockGloas) *BeaconBlockGloas {
+	if b == nil {
+		return nil
+	}
+	return &BeaconBlockGloas{
+		Slot:          b.Slot,
+		ProposerIndex: b.ProposerIndex,
+		ParentRoot:    bytesutil.SafeCopyBytes(b.ParentRoot),
+		StateRoot:     bytesutil.SafeCopyBytes(b.StateRoot),
+		Body:          copyBeaconBlockBodyGloas(b.Body),
+	}
+}
+
+// copyPayloadAttestation copies the provided payload attestation object.
+func copyPayloadAttestation(pa *PayloadAttestation) *PayloadAttestation {
+	if pa == nil {
+		return nil
+	}
+	copied := &PayloadAttestation{
+		AggregationBits: pa.AggregationBits,
+		Signature:       bytesutil.SafeCopyBytes(pa.Signature),
+	}
+	if pa.Data != nil {
+		copied.Data = &PayloadAttestationData{
+			BeaconBlockRoot:   bytesutil.SafeCopyBytes(pa.Data.BeaconBlockRoot),
+			Slot:              pa.Data.Slot,
+			PayloadPresent:    pa.Data.PayloadPresent,
+			BlobDataAvailable: pa.Data.BlobDataAvailable,
+		}
+	}
+	return copied
+}
+
+// copyPayloadAttestations copies a slice of payload attestations.
+func copyPayloadAttestations(pas []*PayloadAttestation) []*PayloadAttestation {
+	if len(pas) == 0 {
+		return nil
+	}
+	copied := make([]*PayloadAttestation, len(pas))
+	for i, pa := range pas {
+		copied[i] = copyPayloadAttestation(pa)
+	}
+	return copied
+}
+
+// copySignedExecutionPayloadBid copies the provided signed execution payload header.
+func copySignedExecutionPayloadBid(header *SignedExecutionPayloadBid) *SignedExecutionPayloadBid {
+	if header == nil {
+		return nil
+	}
+	copied := &SignedExecutionPayloadBid{
+		Signature: bytesutil.SafeCopyBytes(header.Signature),
+	}
+	if header.Message != nil {
+		copied.Message = &ExecutionPayloadBid{
+			ParentBlockHash:        bytesutil.SafeCopyBytes(header.Message.ParentBlockHash),
+			ParentBlockRoot:        bytesutil.SafeCopyBytes(header.Message.ParentBlockRoot),
+			BlockHash:              bytesutil.SafeCopyBytes(header.Message.BlockHash),
+			FeeRecipient:           bytesutil.SafeCopyBytes(header.Message.FeeRecipient),
+			GasLimit:               header.Message.GasLimit,
+			BuilderIndex:           header.Message.BuilderIndex,
+			Slot:                   header.Message.Slot,
+			Value:                  header.Message.Value,
+			BlobKzgCommitmentsRoot: bytesutil.SafeCopyBytes(header.Message.BlobKzgCommitmentsRoot),
+		}
+	}
+	return copied
+}
+
+// copyBeaconBlockBodyGloas copies the provided beacon block body Gloas object.
+func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas {
+	if body == nil {
+		return nil
+	}
+
+	copied := &BeaconBlockBodyGloas{
+		RandaoReveal: bytesutil.SafeCopyBytes(body.RandaoReveal),
+		Graffiti:     bytesutil.SafeCopyBytes(body.Graffiti),
+	}
+
+	if body.Eth1Data != nil {
+		copied.Eth1Data = body.Eth1Data.Copy()
+	}
+
+	if body.SyncAggregate != nil {
+		copied.SyncAggregate = body.SyncAggregate.Copy()
+	}
+
+	copied.ProposerSlashings = CopySlice(body.ProposerSlashings)
+	copied.AttesterSlashings = CopySlice(body.AttesterSlashings)
+	copied.Attestations = CopySlice(body.Attestations)
+	copied.Deposits = CopySlice(body.Deposits)
+	copied.VoluntaryExits = CopySlice(body.VoluntaryExits)
+	copied.BlsToExecutionChanges = CopySlice(body.BlsToExecutionChanges)
+
+	copied.SignedExecutionPayloadBid = copySignedExecutionPayloadBid(body.SignedExecutionPayloadBid)
+	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
+
+	return copied
 }

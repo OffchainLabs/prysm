@@ -3,21 +3,23 @@ package sync
 import (
 	"context"
 	"fmt"
-	"math"
+	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/logging"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
@@ -25,7 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
 func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
 	const dataColumnSidecarSubTopic = "/data_column_sidecar_%d/"
 
@@ -44,20 +46,18 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 
 	// Reject messages with a nil topic.
 	if msg.Topic == nil {
-		return pubsub.ValidationReject, errInvalidTopic
+		return pubsub.ValidationReject, p2p.ErrInvalidTopic
 	}
 
 	// Decode the message, reject if it fails.
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
-		log.WithError(err).Error("Failed to decode message")
 		return pubsub.ValidationReject, err
 	}
 
 	// Reject messages that are not of the expected type.
 	dcsc, ok := m.(*eth.DataColumnSidecar)
 	if !ok {
-		log.WithField("message", m).Error("Message is not of type *eth.DataColumnSidecar")
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
@@ -74,7 +74,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	verifier := s.newColumnsVerifier(roDataColumns, verification.GossipDataColumnSidecarRequirements)
 
 	// Start the verification process.
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#the-gossip-domain-gossipsub
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
 
 	// [REJECT] The sidecar is valid as verified by `verify_data_column_sidecar(sidecar)`.
 	if err := verifier.ValidFields(); err != nil {
@@ -86,7 +86,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY`` allowance
+	// [IGNORE] The sidecar is not from a future slot (with a `MAXIMUM_GOSSIP_CLOCK_DISPARITY` allowance)
 	//  -- i.e. validate that `block_header.slot <= current_slot` (a client MAY queue future sidecars for processing at the appropriate slot).
 	if err := verifier.NotFromFutureSlot(); err != nil {
 		return pubsub.ValidationIgnore, err
@@ -132,21 +132,24 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationReject, err
 	}
 
-	// [REJECT] The current finalized_checkpoint is an ancestor of the sidecar's block
+	// [REJECT] The current `finalized_checkpoint` is an ancestor of the sidecar's block
 	// -- i.e. `get_checkpoint_block(store, block_header.parent_root, store.finalized_checkpoint.epoch) == store.finalized_checkpoint.root`.
 	if err := verifier.SidecarDescendsFromFinalized(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	// [REJECT] The sidecar's kzg_commitments field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
+	// [REJECT] The sidecar's `kzg_commitments` field inclusion proof is valid as verified by `verify_data_column_sidecar_inclusion_proof(sidecar)`.
 	if err := verifier.SidecarInclusionProven(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// [REJECT] The sidecar's column data is valid as verified by `verify_data_column_sidecar_kzg_proofs(sidecar)`.
-	if err := verifier.SidecarKzgProofVerified(); err != nil {
-		return pubsub.ValidationReject, err
+	validationResult, err := s.validateWithKzgBatchVerifier(ctx, roDataColumns)
+	if validationResult != pubsub.ValidationAccept {
+		return validationResult, err
 	}
+	// Mark KZG verification as satisfied since we did it via batch verifier
+	verifier.SatisfyRequirement(verification.RequireSidecarKzgProofVerified)
 
 	// [IGNORE] The sidecar is the first sidecar for the tuple `(block_header.slot, block_header.proposer_index, sidecar.index)`
 	// with valid header signature, sidecar inclusion proof, and kzg proof.
@@ -154,7 +157,7 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by block_header.parent_root/block_header.slot).
+	// [REJECT] The sidecar is proposed by the expected `proposer_index` for the block's slot in the context of the current shuffling (defined by `block_header.parent_root`/`block_header.slot`).
 	// If the `proposer_index` cannot immediately be verified against the expected shuffling, the sidecar MAY be queued for later processing while proposers for the block's branch are calculated
 	// -- in such a case do not REJECT, instead IGNORE this message.
 	if err := verifier.SidecarProposerExpected(ctx); err != nil {
@@ -180,28 +183,23 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	dataColumnSidecarVerificationSuccessesCounter.Inc()
 
 	// Get the time at slot start.
-	startTime, err := slots.ToTime(uint64(s.cfg.chain.GenesisTime().Unix()), roDataColumn.SignedBlockHeader.Header.Slot)
+	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), roDataColumn.SignedBlockHeader.Header.Slot)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
 	sinceSlotStartTime := receivedTime.Sub(startTime)
 	validationTime := s.cfg.clock.Now().Sub(receivedTime)
+	dataColumnSidecarArrivalGossipSummary.Observe(float64(sinceSlotStartTime.Milliseconds()))
 	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
-
-	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
 
 	select {
 	case s.dataColumnLogCh <- dataColumnLogEntry{
-		Slot:            roDataColumn.Slot(),
-		ColIdx:          roDataColumn.Index,
-		PropIdx:         roDataColumn.ProposerIndex(),
-		BlockRoot:       roDataColumn.BlockRoot(),
-		ParentRoot:      roDataColumn.ParentRoot(),
-		PeerSuffix:      pid.String()[len(pid.String())-6:],
-		PeerGossipScore: peerGossipScore,
-		validationTime:  validationTime,
-		sinceStartTime:  sinceSlotStartTime,
+		slot:           roDataColumn.Slot(),
+		index:          roDataColumn.Index,
+		root:           roDataColumn.BlockRoot(),
+		validationTime: validationTime,
+		sinceStartTime: sinceSlotStartTime,
 	}:
 	default:
 		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
@@ -232,7 +230,7 @@ func (s *Service) hasSeenDataColumnIndex(slot primitives.Slot, proposerIndex pri
 // Sets the data column with the same slot, proposer index, and data column index as seen.
 func (s *Service) setSeenDataColumnIndex(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) {
 	key := computeCacheKey(slot, proposerIndex, index)
-	s.seenDataColumnCache.Add(key, true)
+	s.seenDataColumnCache.Add(slot, key, true)
 }
 
 func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorIndex, index uint64) string {
@@ -246,68 +244,69 @@ func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorInd
 }
 
 type dataColumnLogEntry struct {
-	Slot            primitives.Slot
-	ColIdx          uint64
-	PropIdx         primitives.ValidatorIndex
-	BlockRoot       [32]byte
-	ParentRoot      [32]byte
-	PeerSuffix      string
-	PeerGossipScore float64
-	validationTime  time.Duration
-	sinceStartTime  time.Duration
+	slot           primitives.Slot
+	index          uint64
+	root           [32]byte
+	validationTime time.Duration
+	sinceStartTime time.Duration
 }
 
 func (s *Service) processDataColumnLogs() {
 	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	slotStats := make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+	slotStats := make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 
 	for {
 		select {
-		case entry := <-s.dataColumnLogCh:
-			cols := slotStats[entry.Slot]
-			cols[entry.ColIdx] = entry
-			slotStats[entry.Slot] = cols
+		case col := <-s.dataColumnLogCh:
+			cols := slotStats[col.root]
+			cols = append(cols, col)
+			slotStats[col.root] = cols
 		case <-ticker.C:
-			for slot, columns := range slotStats {
-				var (
-					colIndices      = make([]uint64, 0, fieldparams.NumberOfColumns)
-					peers           = make([]string, 0, fieldparams.NumberOfColumns)
-					gossipScores    = make([]float64, 0, fieldparams.NumberOfColumns)
-					validationTimes = make([]string, 0, fieldparams.NumberOfColumns)
-					sinceStartTimes = make([]string, 0, fieldparams.NumberOfColumns)
-				)
+			for root, columns := range slotStats {
+				indices := make([]uint64, 0, fieldparams.NumberOfColumns)
+				minValidationTime, maxValidationTime, sumValidationTime := time.Duration(0), time.Duration(0), time.Duration(0)
+				minSinceStartTime, maxSinceStartTime, sumSinceStartTime := time.Duration(0), time.Duration(0), time.Duration(0)
 
 				totalReceived := 0
-				for _, entry := range columns {
-					if entry.PeerSuffix == "" {
+				for _, column := range columns {
+					indices = append(indices, column.index)
+
+					sumValidationTime += column.validationTime
+					sumSinceStartTime += column.sinceStartTime
+
+					if totalReceived == 0 {
+						minValidationTime, maxValidationTime = column.validationTime, column.validationTime
+						minSinceStartTime, maxSinceStartTime = column.sinceStartTime, column.sinceStartTime
+						totalReceived++
 						continue
 					}
-					colIndices = append(colIndices, entry.ColIdx)
-					peers = append(peers, entry.PeerSuffix)
-					gossipScores = append(gossipScores, roundFloat(entry.PeerGossipScore, 2))
-					validationTimes = append(validationTimes, fmt.Sprintf("%.2fms", float64(entry.validationTime.Milliseconds())))
-					sinceStartTimes = append(sinceStartTimes, fmt.Sprintf("%.2fms", float64(entry.sinceStartTime.Milliseconds())))
+
+					minValidationTime, maxValidationTime = min(minValidationTime, column.validationTime), max(maxValidationTime, column.validationTime)
+					minSinceStartTime, maxSinceStartTime = min(minSinceStartTime, column.sinceStartTime), max(maxSinceStartTime, column.sinceStartTime)
 					totalReceived++
 				}
 
-				log.WithFields(logrus.Fields{
-					"slot":            slot,
-					"receivedCount":   totalReceived,
-					"columnIndices":   colIndices,
-					"peers":           peers,
-					"gossipScores":    gossipScores,
-					"validationTimes": validationTimes,
-					"sinceStartTimes": sinceStartTimes,
-				}).Debug("Accepted data column sidecars summary")
+				if totalReceived > 0 {
+					slices.Sort(indices)
+					avgValidationTime := sumValidationTime / time.Duration(totalReceived)
+					avgSinceStartTime := sumSinceStartTime / time.Duration(totalReceived)
+
+					log.WithFields(logrus.Fields{
+						"slot":           columns[0].slot,
+						"root":           fmt.Sprintf("%#x", root),
+						"count":          totalReceived,
+						"indices":        helpers.PrettySlice(indices),
+						"validationTime": prettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
+						"sinceStartTime": prettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
+					}).Debug("Accepted data column sidecars summary")
+				}
 			}
-			slotStats = make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+
+			slotStats = make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 		}
 	}
 }
 
-func roundFloat(f float64, decimals int) float64 {
-	mult := math.Pow(10, float64(decimals))
-	return math.Round(f*mult) / mult
+func prettyMinMaxAverage(min, max, average time.Duration) string {
+	return fmt.Sprintf("[min: %v, avg: %v, max: %v]", min, average, max)
 }

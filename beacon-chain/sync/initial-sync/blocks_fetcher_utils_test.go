@@ -7,23 +7,23 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2pm "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	p2pm "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -35,7 +35,7 @@ func TestBlocksFetcher_nonSkippedSlotAfter(t *testing.T) {
 		blocks = append(blocks, 55000)
 		blocks = append(blocks, makeSequence(57000, 57256)...)
 		var peersData []*peerData
-		for i := 0; i < size; i++ {
+		for range size {
 			peersData = append(peersData, &peerData{
 				blocks:         blocks,
 				finalizedEpoch: 1800,
@@ -177,7 +177,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 		DB:    beaconDB,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: finalizedEpoch,
-			Root:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{},
@@ -199,7 +199,7 @@ func TestBlocksFetcher_findFork(t *testing.T) {
 	// Consume all chain1 blocks from many peers (alternative fork will be featured by a single peer,
 	// and should still be enough to explore alternative paths).
 	peers := make([]peer.ID, 0)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		peers = append(peers, connectPeerHavingBlocks(t, p2p, chain1, finalizedSlot, p2p.Peers()))
 	}
 
@@ -387,7 +387,7 @@ func TestBlocksFetcher_findForkWithPeer(t *testing.T) {
 		defer func() {
 			assert.NoError(t, p1.Disconnect(p2.PeerID()))
 		}()
-		p1.Peers().SetChainState(p2.PeerID(), &ethpb.Status{
+		p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{
 			HeadRoot: nil,
 			HeadSlot: 0,
 		})
@@ -487,7 +487,7 @@ func TestBlocksFetcher_findAncestor(t *testing.T) {
 		DB:    beaconDB,
 		FinalizedCheckPoint: &ethpb.Checkpoint{
 			Epoch: finalizedEpoch,
-			Root:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{},

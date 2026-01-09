@@ -2,27 +2,40 @@ package initialsync
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	testp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	prysmSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -138,12 +151,9 @@ func TestService_InitStartStop(t *testing.T) {
 		},
 	}
 
-	p := p2pt.NewTestP2P(t)
+	p := p2ptest.NewTestP2P(t)
 	connectPeers(t, p, []*peerData{}, p.Peers())
-	for i, tt := range tests {
-		if i == 0 {
-			continue
-		}
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer hook.Reset()
 			ctx, cancel := context.WithCancel(t.Context())
@@ -162,7 +172,9 @@ func TestService_InitStartStop(t *testing.T) {
 				StateNotifier:       &mock.MockStateNotifier{},
 				InitialSyncComplete: make(chan struct{}),
 			})
-			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil)
+			s.verifierWaiter = verification.NewInitializerWaiter(gs, nil, nil, nil)
+
+			s.blobRetentionChecker = func(primitives.Slot) bool { return true }
 			time.Sleep(500 * time.Millisecond)
 			assert.NotNil(t, s)
 			if tt.setGenesis != nil {
@@ -170,11 +182,9 @@ func TestService_InitStartStop(t *testing.T) {
 			}
 
 			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				s.Start()
-				wg.Done()
-			}()
+			})
 
 			go func() {
 				// Allow to exit from test (on no head loop waiting for head is started).
@@ -197,15 +207,22 @@ func TestService_waitForStateInitialization(t *testing.T) {
 		cs := startup.NewClockSynchronizer()
 		ctx, cancel := context.WithCancel(ctx)
 		s := &Service{
-			cfg:          &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{})},
-			ctx:          ctx,
-			cancel:       cancel,
-			synced:       abool.New(),
-			chainStarted: abool.New(),
-			counter:      ratecounter.NewRateCounter(counterSeconds * time.Second),
-			genesisChan:  make(chan time.Time),
+			cfg:                  &Config{Chain: mc, StateNotifier: mc.StateNotifier(), ClockWaiter: cs, InitialSyncComplete: make(chan struct{})},
+			ctx:                  ctx,
+			cancel:               cancel,
+			synced:               abool.New(),
+			chainStarted:         abool.New(),
+			counter:              ratecounter.NewRateCounter(counterSeconds * time.Second),
+			genesisChan:          make(chan time.Time),
+			blobRetentionChecker: func(primitives.Slot) bool { return true },
 		}
-		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil)
+		s.verifierWaiter = verification.NewInitializerWaiter(cs, nil, nil, nil)
+		syWait := func() (das.SyncNeeds, error) {
+			clock, err := cs.WaitForClock(ctx)
+			require.NoError(t, err)
+			return das.NewSyncNeeds(clock.CurrentSlot, nil, primitives.Epoch(0))
+		}
+		s.cfg.SyncNeedsWaiter = syWait
 		return s, cs
 	}
 
@@ -215,12 +232,11 @@ func TestService_waitForStateInitialization(t *testing.T) {
 		defer cancel()
 
 		s, _ := newService(ctx, &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}})
+		s.blobRetentionChecker = func(primitives.Slot) bool { return true }
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			s.Start()
-			wg.Done()
-		}()
+		})
 		go func() {
 			time.AfterFunc(500*time.Millisecond, func() {
 				cancel()
@@ -231,7 +247,7 @@ func TestService_waitForStateInitialization(t *testing.T) {
 			t.Fatalf("Test should have exited by now, timed out")
 		}
 		assert.LogsContain(t, hook, "Waiting for state to be initialized")
-		assert.LogsContain(t, hook, "initial-sync failed to receive startup event")
+		assert.LogsContain(t, hook, "Initial-sync failed to receive startup event")
 		assert.LogsDoNotContain(t, hook, "Subscription to state notifier failed")
 	})
 
@@ -242,16 +258,15 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		st, err := util.NewBeaconState()
 		require.NoError(t, err)
-		gt := time.Unix(int64(st.GenesisTime()), 0)
+		gt := st.GenesisTime()
 		s, gs := newService(ctx, &mock.ChainService{State: st, Genesis: gt, ValidatorsRoot: [32]byte{}})
+		s.blobRetentionChecker = func(primitives.Slot) bool { return true }
 
 		expectedGenesisTime := gt
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			s.Start()
-			wg.Done()
-		}()
+		})
 		rg := func() time.Time { return gt.Add(time.Second * 12) }
 		go func() {
 			time.AfterFunc(200*time.Millisecond, func() {
@@ -278,15 +293,13 @@ func TestService_waitForStateInitialization(t *testing.T) {
 
 		expectedGenesisTime := time.Now().Add(60 * time.Second)
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			time.AfterFunc(500*time.Millisecond, func() {
 				var vr [32]byte
 				require.NoError(t, gs.SetClock(startup.NewClock(expectedGenesisTime, vr)))
 			})
 			s.Start()
-			wg.Done()
-		}()
+		})
 
 		if util.WaitTimeout(wg, time.Second*5) {
 			t.Fatalf("Test should have exited by now, timed out")
@@ -328,7 +341,7 @@ func TestService_markSynced(t *testing.T) {
 }
 
 func TestService_Resync(t *testing.T) {
-	p := p2pt.NewTestP2P(t)
+	p := p2ptest.NewTestP2P(t)
 	connectPeers(t, p, []*peerData{
 		{blocks: makeSequence(1, 160), finalizedEpoch: 5, headSlot: 160},
 	}, p.Peers())
@@ -356,7 +369,8 @@ func TestService_Resync(t *testing.T) {
 				st, err := util.NewBeaconState()
 				require.NoError(t, err)
 				futureSlot := primitives.Slot(160)
-				require.NoError(t, st.SetGenesisTime(uint64(makeGenesisTime(futureSlot).Unix())))
+				genesis := makeGenesisTime(futureSlot)
+				require.NoError(t, st.SetGenesisTime(genesis))
 				return &mock.ChainService{
 					State: st,
 					Root:  genesisRoot[:],
@@ -364,7 +378,7 @@ func TestService_Resync(t *testing.T) {
 					FinalizedCheckPoint: &eth.Checkpoint{
 						Epoch: slots.ToEpoch(futureSlot),
 					},
-					Genesis:        time.Now(),
+					Genesis:        genesis,
 					ValidatorsRoot: [32]byte{},
 				}
 			},
@@ -392,6 +406,7 @@ func TestService_Resync(t *testing.T) {
 				BlobStorage:   filesystem.NewEphemeralBlobStorage(t),
 			})
 			assert.NotNil(t, s)
+			s.genesisTime = mc.Genesis
 			assert.Equal(t, primitives.Slot(0), s.cfg.Chain.HeadSlot())
 			err := s.Resync()
 			if tt.wantedErr != "" {
@@ -425,6 +440,7 @@ func TestService_Synced(t *testing.T) {
 }
 
 func TestMissingBlobRequest(t *testing.T) {
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	cases := []struct {
 		name  string
 		setup func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage)
@@ -462,7 +478,7 @@ func TestMissingBlobRequest(t *testing.T) {
 		{
 			name: "2 commitments, 1 missing",
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
-				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 1))
 				return bk, fs
@@ -472,7 +488,7 @@ func TestMissingBlobRequest(t *testing.T) {
 		{
 			name: "2 commitments, 0 missing",
 			setup: func(t *testing.T) (blocks.ROBlock, *filesystem.BlobStorage) {
-				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 2)
+				bk, _ := util.GenerateTestDenebBlockWithSidecar(t, [32]byte{}, ds, 2)
 				bm, fs := filesystem.NewEphemeralBlobStorageWithMocker(t)
 				require.NoError(t, bm.CreateFakeIndices(bk.Root(), bk.Block().Slot(), 0, 1))
 				return bk, fs
@@ -509,5 +525,319 @@ func TestOriginOutsideRetention(t *testing.T) {
 	require.NoError(t, concreteDB.SaveOriginCheckpointBlockRoot(ctx, blk.Root()))
 	// This would break due to missing service dependencies, but will return nil fast due to being outside retention.
 	require.Equal(t, false, params.WithinDAPeriod(slots.ToEpoch(blk.Block().Slot()), slots.ToEpoch(clock.CurrentSlot())))
-	require.NoError(t, s.fetchOriginBlobs([]peer.ID{}))
+	require.NoError(t, s.fetchOriginSidecars([]peer.ID{}))
+}
+
+func TestFetchOriginSidecars(t *testing.T) {
+	ctx := t.Context()
+
+	cfg := params.BeaconConfig()
+	genesisTime := time.Date(2025, time.August, 10, 0, 0, 0, 0, time.UTC)
+	secondsPerSlot := cfg.SecondsPerSlot
+	slotsPerEpoch := cfg.SlotsPerEpoch
+	secondsPerEpoch := uint64(slotsPerEpoch.Mul(secondsPerSlot))
+	retentionEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
+
+	genesisValidatorRoot := [fieldparams.RootLength]byte{}
+
+	t.Run("out of retention period", func(t *testing.T) {
+		// Create an origin block.
+		block := util.NewBeaconBlockFulu()
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(signedBlock)
+		require.NoError(t, err)
+
+		// Save the block.
+		db := dbtest.SetupDB(t)
+		err = db.SaveOriginCheckpointBlockRoot(ctx, roBlock.Root())
+		require.NoError(t, err)
+		err = db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Define "now" to be one epoch after genesis time + retention period.
+		nowWrtGenesisSecs := retentionEpochs.Add(1).Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		service := &Service{
+			cfg: &Config{
+				DB: db,
+			},
+			clock: clock,
+		}
+
+		err = service.fetchOriginSidecars(nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("no commitments", func(t *testing.T) {
+		// Create an origin block.
+		block := util.NewBeaconBlockFulu()
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(signedBlock)
+		require.NoError(t, err)
+
+		// Save the block.
+		db := dbtest.SetupDB(t)
+		err = db.SaveOriginCheckpointBlockRoot(ctx, roBlock.Root())
+		require.NoError(t, err)
+		err = db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Define "now" to be after genesis time + retention period.
+		nowWrtGenesisSecs := retentionEpochs.Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		service := &Service{
+			cfg: &Config{
+				DB:  db,
+				P2P: p2ptest.NewTestP2P(t),
+			},
+			clock: clock,
+		}
+
+		err = service.fetchOriginSidecars(nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("nominal", func(t *testing.T) {
+		samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+
+		// Start the trusted setup.
+		err := kzg.Start()
+		require.NoError(t, err)
+
+		// Create block and sidecars.
+		const blobCount = 1
+		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+
+		// Save the block.
+		db := dbtest.SetupDB(t)
+		err = db.SaveOriginCheckpointBlockRoot(ctx, roBlock.Root())
+		require.NoError(t, err)
+
+		err = db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Create a data columns storage.
+		dir := t.TempDir()
+		dataColumnStorage, err := filesystem.NewDataColumnStorage(ctx, filesystem.WithDataColumnBasePath(dir))
+		require.NoError(t, err)
+
+		// Compute the columns to request.
+		p2p := p2ptest.NewTestP2P(t)
+		custodyGroupCount, err := p2p.CustodyGroupCount(t.Context())
+		require.NoError(t, err)
+
+		samplingSize := max(custodyGroupCount, samplesPerSlot)
+		info, _, err := peerdas.Info(p2p.NodeID(), samplingSize)
+		require.NoError(t, err)
+
+		// Save all sidecars except what we need.
+		toSave := make([]blocks.VerifiedRODataColumn, 0, uint64(len(verifiedRoSidecars))-samplingSize)
+		for _, sidecar := range verifiedRoSidecars {
+			if !info.CustodyColumns[sidecar.Index] {
+				toSave = append(toSave, sidecar)
+			}
+		}
+
+		err = dataColumnStorage.Save(toSave)
+		require.NoError(t, err)
+
+		// Define "now" to be after genesis time + retention period.
+		nowWrtGenesisSecs := retentionEpochs.Mul(secondsPerEpoch)
+		now := genesisTime.Add(time.Duration(nowWrtGenesisSecs) * time.Second)
+		nower := func() time.Time { return now }
+		clock := startup.NewClock(genesisTime, genesisValidatorRoot, startup.WithNower(nower))
+
+		service := &Service{
+			cfg: &Config{
+				DB:                db,
+				P2P:               p2p,
+				DataColumnStorage: dataColumnStorage,
+			},
+			clock: clock,
+		}
+
+		err = service.fetchOriginSidecars(nil)
+		require.NoError(t, err)
+
+		// Check that needed sidecars are saved.
+		summary := dataColumnStorage.Summary(roBlock.Root())
+		for index := range info.CustodyColumns {
+			require.Equal(t, true, summary.HasIndex(index))
+		}
+	})
+}
+
+func TestFetchOriginColumns(t *testing.T) {
+	// Load the trusted setup.
+	err := kzg.Start()
+	require.NoError(t, err)
+
+	// Setup test environment
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.FuluForkEpoch = 0
+	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
+	params.OverrideBeaconConfig(cfg)
+
+	const (
+		delay     = 0
+		blobCount = 1
+	)
+
+	t.Run("block has no commitments", func(t *testing.T) {
+		service := new(Service)
+
+		// Create a block with no blob commitments
+		block := util.NewBeaconBlockFulu()
+		signedBlock, err := blocks.NewSignedBeaconBlock(block)
+		require.NoError(t, err)
+		roBlock, err := blocks.NewROBlock(signedBlock)
+		require.NoError(t, err)
+
+		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
+		require.NoError(t, err)
+	})
+
+	t.Run("FetchDataColumnSidecars succeeds immediately", func(t *testing.T) {
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
+		p2p := p2ptest.NewTestP2P(t)
+
+		service := &Service{
+			cfg: &Config{
+				P2P:               p2p,
+				DataColumnStorage: storage,
+			},
+		}
+
+		// Create a block with blob commitments and sidecars
+		roBlock, _, verifiedSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+
+		// Store all sidecars in advance so FetchDataColumnSidecars succeeds immediately
+		err := storage.Save(verifiedSidecars)
+		require.NoError(t, err)
+
+		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
+		require.NoError(t, err)
+	})
+
+	t.Run("first attempt to FetchDataColumnSidecars fails but second attempt succeeds", func(t *testing.T) {
+		numberOfCustodyGroups := params.BeaconConfig().NumberOfCustodyGroups
+		storage := filesystem.NewEphemeralDataColumnStorage(t)
+
+		// Custody columns with this private key and 4-cgc: 31, 81, 97, 105
+		privateKeyBytes := [32]byte{1}
+		privateKey, err := crypto.UnmarshalSecp256k1PrivateKey(privateKeyBytes[:])
+		require.NoError(t, err)
+
+		protocol := fmt.Sprintf("%s/ssz_snappy", p2p.RPCDataColumnSidecarsByRangeTopicV1)
+
+		p2p, other := testp2p.NewTestP2P(t), testp2p.NewTestP2P(t, libp2p.Identity(privateKey))
+		p2p.Peers().SetConnectionState(other.PeerID(), peers.Connected)
+		p2p.Connect(other)
+
+		p2p.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{
+			HeadSlot: 5,
+		})
+
+		other.ENR().Set(peerdas.Cgc(numberOfCustodyGroups))
+		p2p.Peers().UpdateENR(other.ENR(), other.PeerID())
+
+		allBut42 := make([]uint64, 0, numberOfCustodyGroups-1)
+		for i := range numberOfCustodyGroups {
+			if i != 42 {
+				allBut42 = append(allBut42, i)
+			}
+		}
+
+		expectedRequests := []*ethpb.DataColumnSidecarsByRangeRequest{
+			{
+				StartSlot: 0,
+				Count:     1,
+				Columns:   []uint64{1, 17, 19, 42, 75, 87, 102, 117},
+			},
+			{
+				StartSlot: 0,
+				Count:     1,
+				Columns:   allBut42,
+			},
+			{
+				StartSlot: 0,
+				Count:     1,
+				Columns:   []uint64{1, 17, 19, 75, 87, 102, 117},
+			},
+		}
+
+		toRespondByAttempt := [][]uint64{
+			{42},
+			{},
+			{1, 17, 19, 75, 87, 102, 117},
+		}
+
+		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
+
+		gs := startup.NewClockSynchronizer()
+		err = gs.SetClock(startup.NewClock(time.Unix(4113849600, 0), [fieldparams.RootLength]byte{}))
+		require.NoError(t, err)
+
+		waiter := verification.NewInitializerWaiter(gs, nil, nil, nil)
+		initializer, err := waiter.WaitForInitializer(t.Context())
+		require.NoError(t, err)
+
+		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
+
+		// Create a block with blob commitments and sidecars
+		roBlock, _, verifiedRoSidecars := util.GenerateTestFuluBlockWithSidecars(t, blobCount)
+
+		ctxMap, err := prysmSync.ContextByteVersionsForValRoot(params.BeaconConfig().GenesisValidatorsRoot)
+		require.NoError(t, err)
+
+		service := &Service{
+			ctx:                    t.Context(),
+			clock:                  clock,
+			newDataColumnsVerifier: newDataColumnsVerifier,
+			cfg: &Config{
+				P2P:               p2p,
+				DataColumnStorage: storage,
+			},
+			ctxMap: ctxMap,
+		}
+
+		// Do not respond any sidecar on the first attempt, and respond everything requested on the second one.
+		attempt := 0
+		other.SetStreamHandler(protocol, func(stream network.Stream) {
+			actualRequest := new(ethpb.DataColumnSidecarsByRangeRequest)
+			err := other.Encoding().DecodeWithMaxLength(stream, actualRequest)
+			assert.NoError(t, err)
+			assert.DeepEqual(t, expectedRequests[attempt], actualRequest)
+
+			for _, column := range toRespondByAttempt[attempt] {
+				err = prysmSync.WriteDataColumnSidecarChunk(stream, clock, other.Encoding(), verifiedRoSidecars[column].DataColumnSidecar)
+				assert.NoError(t, err)
+			}
+
+			err = stream.CloseWrite()
+			assert.NoError(t, err)
+
+			attempt++
+		})
+
+		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
+		require.NoError(t, err)
+
+		// Check all corresponding sidecars are saved in the store.
+		summary := storage.Summary(roBlock.Root())
+		for _, indices := range toRespondByAttempt {
+			for _, index := range indices {
+				require.Equal(t, true, summary.HasIndex(index))
+			}
+		}
+	})
 }

@@ -3,22 +3,22 @@ package sync
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // metaDataHandler reads the incoming metadata RPC request from the peer.
-func (s *Service) metaDataHandler(_ context.Context, _ interface{}, stream libp2pcore.Stream) error {
+func (s *Service) metaDataHandler(_ context.Context, _ any, stream libp2pcore.Stream) error {
 	SetRPCStreamDeadlines(stream)
 
 	// Validate the incoming request regarding rate limiting.
@@ -161,7 +161,7 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	}
 
 	// Send the METADATA request to the peer.
-	message := new(interface{})
+	message := new(any)
 	stream, err := s.cfg.p2p.Send(ctx, message, topic, peerID)
 	if err != nil {
 		return nil, errors.Wrap(err, "send metadata request")
@@ -172,26 +172,18 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 	// Read the METADATA response from the peer.
 	code, errMsg, err := ReadStatusCode(stream, s.cfg.p2p.Encoding())
 	if err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		s.downscorePeer(peerID, "MetadataReadStatusCodeError")
 		return nil, errors.Wrap(err, "read status code")
 	}
 
 	if code != 0 {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+		s.downscorePeer(peerID, "NonNullMetadataReadStatusCode")
 		return nil, errors.New(errMsg)
 	}
 
-	// Get the genesis validators root.
-	valRoot := s.cfg.clock.GenesisValidatorsRoot()
-
-	// Get the fork digest from the current epoch and the genesis validators root.
-	rpcCtx, err := forks.ForkDigestFromEpoch(currentEpoch, valRoot[:])
-	if err != nil {
-		return nil, errors.Wrap(err, "fork digest from epoch")
-	}
-
+	digest := params.ForkDigest(currentEpoch)
 	// Instantiate zero value of the metadata.
-	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, rpcCtx[:], s.cfg.clock)
+	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, digest[:], s.cfg.clock)
 	if err != nil {
 		return nil, errors.Wrap(err, "extract data type from type map")
 	}
@@ -214,8 +206,8 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 
 	// Decode the metadata from the peer.
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, msg); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
-		return nil, err
+		s.downscorePeer(peerID, "MetadataDecodeError")
+		return nil, errors.Wrap(err, "decode with max length")
 	}
 
 	return msg, nil

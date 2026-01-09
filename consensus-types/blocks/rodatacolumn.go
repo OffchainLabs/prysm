@@ -1,10 +1,10 @@
 package blocks
 
 import (
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 // RODataColumn represents a read-only data column sidecar with its block root.
@@ -66,14 +66,14 @@ func (dc *RODataColumn) Slot() primitives.Slot {
 	return dc.SignedBlockHeader.Header.Slot
 }
 
-// ParentRoot returns the parent root of the data column sidecar.
-func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
-	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.ParentRoot)
-}
-
 // ProposerIndex returns the proposer index of the data column sidecar.
 func (dc *RODataColumn) ProposerIndex() primitives.ValidatorIndex {
 	return dc.SignedBlockHeader.Header.ProposerIndex
+}
+
+// ParentRoot returns the parent root of the data column sidecar.
+func (dc *RODataColumn) ParentRoot() [fieldparams.RootLength]byte {
+	return bytesutil.ToBytes32(dc.SignedBlockHeader.Header.ParentRoot)
 }
 
 // VerifiedRODataColumn represents an RODataColumn that has undergone full verification (eg block sig, inclusion proof, commitment check).

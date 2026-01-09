@@ -12,7 +12,7 @@ exports_files([
     "LICENSE.md",
 ])
 
-# gazelle:prefix github.com/OffchainLabs/prysm/v6
+# gazelle:prefix github.com/OffchainLabs/prysm/v7
 # gazelle:map_kind go_library go_library @prysm//tools/go:def.bzl
 # gazelle:map_kind go_test go_test @prysm//tools/go:def.bzl
 # gazelle:map_kind go_repository go_repository @prysm//tools/go:def.bzl
@@ -193,9 +193,30 @@ nogo(
         "//tools/analyzers/featureconfig:go_default_library",
         "//tools/analyzers/gocognit:go_default_library",
         "//tools/analyzers/ineffassign:go_default_library",
+        "//tools/analyzers/httpwriter:go_default_library",
         "//tools/analyzers/interfacechecker:go_default_library",
+        "//tools/analyzers/logcapitalization:go_default_library",
         "//tools/analyzers/logruswitherror:go_default_library",
         "//tools/analyzers/maligned:go_default_library",
+        "//tools/analyzers/modernize/any:go_default_library",
+        "//tools/analyzers/modernize/appendclipped:go_default_library",
+        "//tools/analyzers/modernize/bloop:go_default_library",
+        "//tools/analyzers/modernize/fmtappendf:go_default_library",
+        "//tools/analyzers/modernize/forvar:go_default_library",
+        "//tools/analyzers/modernize/mapsloop:go_default_library",
+        "//tools/analyzers/modernize/minmax:go_default_library",
+        #"//tools/analyzers/modernize/newexpr:go_default_library", # Disabled until go 1.26.
+        "//tools/analyzers/modernize/omitzero:go_default_library",
+        "//tools/analyzers/modernize/rangeint:go_default_library",
+        "//tools/analyzers/modernize/reflecttypefor:go_default_library",
+        "//tools/analyzers/modernize/slicescontains:go_default_library",
+        #"//tools/analyzers/modernize/slicesdelete:go_default_library", # Disabled, see https://go.dev/issue/73686
+        "//tools/analyzers/modernize/slicessort:go_default_library",
+        "//tools/analyzers/modernize/stringsbuilder:go_default_library",
+        "//tools/analyzers/modernize/stringscutprefix:go_default_library",
+        "//tools/analyzers/modernize/stringsseq:go_default_library",
+        "//tools/analyzers/modernize/testingcontext:go_default_library",
+        "//tools/analyzers/modernize/waitgroup:go_default_library",
         "//tools/analyzers/nop:go_default_library",
         "//tools/analyzers/nopanic:go_default_library",
         "//tools/analyzers/properpermissions:go_default_library",

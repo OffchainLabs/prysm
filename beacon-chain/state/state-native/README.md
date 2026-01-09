@@ -13,9 +13,7 @@ Add the new getter and setter to `/beacon-chain/state/interfaces.go`.
 - Update `spec_parameters.go`.
 - Update `state_trie.go`:
   - Add a `[version]Fields` variable that contains all fields of the new state version.
-  - Add a `[version]SharedFieldRefCount` constant that represents the number of fields whose references are shared between states.
-  - Add an `experimentalState[Version]SharedFieldCountRef` constant that represents the number of **non multi-value slice** fields whose references are shared
-between states.
+  - Add a `[version]SharedFieldRefCount` constant that represents the number of fields whose references are shared between states. Multi-value slice references are not shared in this way so don't include them.
   - Add the following functions: `InitializeFromProto[Version]()`, `InitializeFromProtoUnsafe[Version]()`.
   - Update the following functions: `Copy()`, `initializeMerkleLayers()`, `RecordStateMetrics()` (applies only to multi-value slice fields), `rootSelector()`,
 `finalizerCleanup()` (applies only to multi-value slice fields).

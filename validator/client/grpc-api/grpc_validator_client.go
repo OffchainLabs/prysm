@@ -5,19 +5,18 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	eventClient "github.com/OffchainLabs/prysm/v6/api/client/event"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,21 +28,21 @@ type grpcValidatorClient struct {
 }
 
 func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesRequest) (*ethpb.ValidatorDutiesContainer, error) {
-	if features.Get().EnableDutiesV2 {
-		dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
-		if err != nil {
-			if status.Code(err) == codes.Unimplemented {
-				log.Warn("beaconNodeValidatorClient.GetDutiesV2() returned status code unavailable, falling back to GetDuties")
-				return c.getDuties(ctx, in)
-			}
-			return nil, errors.Wrap(
-				client.ErrConnectionIssue,
-				errors.Wrap(err, "getDutiesV2").Error(),
-			)
-		}
-		return toValidatorDutiesContainerV2(dutiesResponse)
+	if features.Get().DisableDutiesV2 {
+		return c.getDuties(ctx, in)
 	}
-	return c.getDuties(ctx, in)
+	dutiesResponse, err := c.beaconNodeValidatorClient.GetDutiesV2(ctx, in)
+	if err != nil {
+		if status.Code(err) == codes.Unimplemented {
+			log.Warn("GetDutiesV2 returned status code unavailable, falling back to GetDuties")
+			return c.getDuties(ctx, in)
+		}
+		return nil, errors.Wrap(
+			client.ErrConnectionIssue,
+			errors.Wrap(err, "getDutiesV2").Error(),
+		)
+	}
+	return toValidatorDutiesContainerV2(dutiesResponse)
 }
 
 // getDuties is calling the v1 of get duties

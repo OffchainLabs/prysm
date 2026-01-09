@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/kr/pretty"
 	"github.com/pkg/errors"
 	fssz "github.com/prysmaticlabs/fastssz"
@@ -303,7 +303,7 @@ var stateTransitionCommand = &cli.Command{
 
 func main() {
 	customFormatter := new(prefixed.TextFormatter)
-	customFormatter.TimestampFormat = time.DateTime
+	customFormatter.TimestampFormat = "2006-01-02 15:04:05.00"
 	customFormatter.FullTimestamp = true
 	log.SetFormatter(customFormatter)
 	app := cli.App{}
@@ -393,7 +393,7 @@ func benchmarkHash(sszPath string, sszType string) {
 		runtime.ReadMemStats(stat)
 		root, err := stateTrieState.HashTreeRoot(context.Background())
 		if err != nil {
-			log.Fatal("couldn't hash")
+			log.Fatal("Couldn't hash")
 		}
 		newStat := &runtime.MemStats{}
 		runtime.ReadMemStats(newStat)

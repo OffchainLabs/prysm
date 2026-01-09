@@ -3,10 +3,10 @@ package util_test
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func TestLightClientUtils(t *testing.T) {
@@ -53,7 +53,7 @@ func TestLightClientUtils(t *testing.T) {
 		for i := 1; i < 6; i++ {
 			t.Run(version.String(i), func(t *testing.T) {
 				l1 := util.NewTestLightClient(t, i)
-				l2 := util.NewTestLightClient(t, i, util.WithSupermajority())
+				l2 := util.NewTestLightClient(t, i, util.WithSupermajority(0))
 				l1SyncAgg, err := l1.Block.Block().Body().SyncAggregate()
 				require.NoError(t, err)
 				l1Bits := l1SyncAgg.SyncCommitteeBits.Count()

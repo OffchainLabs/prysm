@@ -5,12 +5,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 )
 
@@ -145,13 +146,14 @@ func TestEnsureEmbeddedGenesis(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	// Embedded Genesis works with Mainnet config
 	cfg := params.MainnetConfig()
-	cfg.SecondsPerSlot = 1
+	cfg.SlotDurationMilliseconds = 1000
 	undo, err := params.SetActiveWithUndo(cfg)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, undo())
 	}()
 
+	genesis.StoreEmbeddedDuringTest(t, params.BeaconConfig().ConfigName)
 	ctx := t.Context()
 	db := setupDB(t)
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -88,11 +88,11 @@ func NewEphemeralBlobStorageWithMocker(t testing.TB) (*BlobMocker, *BlobStorage)
 	return &BlobMocker{fs: fs, bs: bs}, bs
 }
 
-func NewMockBlobStorageSummarizer(t *testing.T, set map[[32]byte][]int) BlobStorageSummarizer {
+func NewMockBlobStorageSummarizer(t *testing.T, epoch primitives.Epoch, set map[[32]byte][]int) BlobStorageSummarizer {
 	c := newBlobStorageCache()
 	for k, v := range set {
 		for i := range v {
-			if err := c.ensure(blobIdent{root: k, epoch: 0, index: uint64(v[i])}); err != nil {
+			if err := c.ensure(blobIdent{root: k, epoch: epoch, index: uint64(v[i])}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -126,7 +126,7 @@ func NewWarmedEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts 
 
 func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...DataColumnStorageOption) *DataColumnStorage {
 	opts = append(opts,
-		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForBlobsSidecarsRequest),
+		WithDataColumnRetentionEpochs(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest),
 		WithDataColumnFs(fs),
 	)
 
@@ -143,15 +143,4 @@ func NewEphemeralDataColumnStorageUsingFs(t testing.TB, fs afero.Fs, opts ...Dat
 func NewEphemeralDataColumnStorageWithMocker(t testing.TB) (*DataColumnMocker, *DataColumnStorage) {
 	fs, dcs := NewEphemeralDataColumnStorageAndFs(t)
 	return &DataColumnMocker{fs: fs, dcs: dcs}, dcs
-}
-
-func NewMockDataColumnStorageSummarizer(t *testing.T, set map[[fieldparams.RootLength]byte][]uint64) DataColumnStorageSummarizer {
-	c := newDataColumnStorageSummaryCache()
-	for root, indices := range set {
-		if err := c.set(DataColumnsIdent{Root: root, Epoch: 0, Indices: indices}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return c
 }

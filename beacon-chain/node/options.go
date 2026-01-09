@@ -1,10 +1,11 @@
 package node
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 )
 
 // Option for beacon node configuration.
@@ -47,6 +48,13 @@ func WithBlobStorage(bs *filesystem.BlobStorage) Option {
 func WithBlobStorageOptions(opt ...filesystem.BlobStorageOption) Option {
 	return func(bn *BeaconNode) error {
 		bn.BlobStorageOptions = append(bn.BlobStorageOptions, opt...)
+		return nil
+	}
+}
+
+func WithConfigOptions(opt ...params.Option) Option {
+	return func(bn *BeaconNode) error {
+		bn.ConfigOptions = append(bn.ConfigOptions, opt...)
 		return nil
 	}
 }

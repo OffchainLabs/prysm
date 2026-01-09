@@ -4,13 +4,13 @@ import (
 	"math"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 func Test_BaseReward(t *testing.T) {
@@ -31,7 +31,7 @@ func Test_BaseReward(t *testing.T) {
 			valIdx:    2,
 			st:        genState(1),
 			want:      0,
-			errString: "validator index 2 does not exist",
+			errString: "index 2 out of bounds",
 		},
 		{
 			name:      "active balance is 32eth",
@@ -89,7 +89,7 @@ func Test_BaseRewardWithTotalBalance(t *testing.T) {
 			valIdx:        2,
 			activeBalance: 1,
 			want:          0,
-			errString:     "validator index 2 does not exist",
+			errString:     "index 2 out of bounds",
 		},
 		{
 			name:          "active balance is 1",

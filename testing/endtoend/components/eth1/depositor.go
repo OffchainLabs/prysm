@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -170,7 +170,7 @@ func (d *Depositor) SendAndMine(ctx context.Context, offset, nvals int, batch ty
 
 	// This is the "AndMine" part of the function. WaitForBlocks will spam transactions to/from the given key
 	// to advance the EL chain and until the chain has advanced the requested amount.
-	if err = WaitForBlocks(d.Client, d.Key, params.BeaconConfig().Eth1FollowDistance); err != nil {
+	if err = WaitForBlocks(ctx, d.Client, d.Key, params.BeaconConfig().Eth1FollowDistance); err != nil {
 		return fmt.Errorf("failed to mine blocks %w", err)
 	}
 	return nil
@@ -198,7 +198,7 @@ func (d *Depositor) SendAndMineByBatch(ctx context.Context, offset, nvals, batch
 	}
 	numBatch := len(deposits) / batchSize
 	log.WithField("numDeposits", len(deposits)).WithField("batchSize", batchSize).WithField("numBatches", numBatch).WithField("balance", balance.String()).WithField("account", d.Key.Address.Hex()).Info("SendAndMineByBatch check")
-	for i := 0; i < numBatch; i++ {
+	for i := range numBatch {
 		txo, err := d.txops(ctx)
 		if err != nil {
 			return err
@@ -210,7 +210,7 @@ func (d *Depositor) SendAndMineByBatch(ctx context.Context, offset, nvals, batch
 		}
 		// This is the "AndMine" part of the function. WaitForBlocks will spam transactions to/from the given key
 		// to advance the EL chain and until the chain has advanced the requested amount.
-		if err = WaitForBlocks(d.Client, d.Key, 1); err != nil {
+		if err = WaitForBlocks(ctx, d.Client, d.Key, 1); err != nil {
 			return fmt.Errorf("failed to mine blocks %w", err)
 		}
 	}
@@ -226,7 +226,7 @@ func (d *Depositor) SendAndMineByBatch(ctx context.Context, offset, nvals, batch
 	}
 	// This is the "AndMine" part of the function. WaitForBlocks will spam transactions to/from the given key
 	// to advance the EL chain and until the chain has advanced the requested amount.
-	if err = WaitForBlocks(d.Client, d.Key, 1); err != nil {
+	if err = WaitForBlocks(ctx, d.Client, d.Key, 1); err != nil {
 		return fmt.Errorf("failed to mine blocks %w", err)
 	}
 	return nil

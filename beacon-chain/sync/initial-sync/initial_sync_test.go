@@ -8,28 +8,27 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -102,14 +101,19 @@ func initializeTestServices(t *testing.T, slots []primitives.Slot, peers []*peer
 
 // makeGenesisTime where now is the current slot.
 func makeGenesisTime(currentSlot primitives.Slot) time.Time {
-	return prysmTime.Now().Add(-1 * time.Second * time.Duration(currentSlot) * time.Duration(params.BeaconConfig().SecondsPerSlot))
+	now := time.Now()
+	s, err := slots.StartTime(now, currentSlot)
+	if err != nil {
+		panic(err) // lint:nopanic -- This is test code and should never overflow.
+	}
+	return now.Add(now.Sub(s))
 }
 
 // sanity test on helper function
 func TestMakeGenesisTime(t *testing.T) {
 	currentSlot := primitives.Slot(64)
 	gt := makeGenesisTime(currentSlot)
-	require.Equal(t, currentSlot, slots.Since(gt))
+	require.Equal(t, currentSlot, slots.CurrentSlot(gt))
 }
 
 // helper function for sequences of block slots
@@ -228,9 +232,9 @@ func connectPeer(t *testing.T, host *p2pt.TestP2P, datum *peerData, peerStatus *
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
 	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
-	peerStatus.SetChainState(p.PeerID(), &ethpb.Status{
+	peerStatus.SetChainState(p.PeerID(), &ethpb.StatusV2{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
-		FinalizedRoot:  []byte(fmt.Sprintf("finalized_root %d", datum.finalizedEpoch)),
+		FinalizedRoot:  fmt.Appendf(nil, "finalized_root %d", datum.finalizedEpoch),
 		FinalizedEpoch: datum.finalizedEpoch,
 		HeadRoot:       bytesutil.PadTo([]byte("head_root"), 32),
 		HeadSlot:       datum.headSlot,
@@ -327,9 +331,9 @@ func connectPeerHavingBlocks(
 
 	peerStatus.Add(new(enr.Record), p.PeerID(), nil, network.DirOutbound)
 	peerStatus.SetConnectionState(p.PeerID(), peers.Connected)
-	peerStatus.SetChainState(p.PeerID(), &ethpb.Status{
+	peerStatus.SetChainState(p.PeerID(), &ethpb.StatusV2{
 		ForkDigest:     params.BeaconConfig().GenesisForkVersion,
-		FinalizedRoot:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+		FinalizedRoot:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		FinalizedEpoch: finalizedEpoch,
 		HeadRoot:       headRoot[:],
 		HeadSlot:       blks[len(blks)-1].Block.Slot,

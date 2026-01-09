@@ -8,7 +8,7 @@ go_library(
         "log.go",
         "weak-subjectivity.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/checkpoint",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/checkpoint",
     visibility = ["//visibility:public"],
     deps = [
         "//api/client:go_default_library",
@@ -46,7 +46,6 @@ go_test(
         "//consensus-types/blocks/testing:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/ssz/detect:go_default_library",
-        "//network/forks:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",
         "//testing/require:go_default_library",

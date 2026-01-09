@@ -1,14 +1,13 @@
 package params
 
 import (
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/mohae/deepcopy"
 )
 
 // NetworkConfig defines the spec based network parameters.
 type NetworkConfig struct {
 	// DiscoveryV5 Config
-	ETH2Key                    string // ETH2Key is the ENR key of the Ethereum consensus object.
 	AttSubnetKey               string // AttSubnetKey is the ENR key of the subnet bitfield.
 	SyncCommsSubnetKey         string // SyncCommsSubnetKey is the ENR key of the sync committee subnet bitfield.
 	CustodyGroupCountKey       string // CustodyGroupsCountKey is the ENR key of the custody group count.

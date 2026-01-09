@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // ProcessWithdrawalRequests processes the validator withdrawals from the provided execution payload
@@ -91,6 +91,18 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 	ctx, span := trace.StartSpan(ctx, "electra.ProcessWithdrawalRequests")
 	defer span.End()
 	currentEpoch := slots.ToEpoch(st.Slot())
+	if len(wrs) == 0 {
+		return st, nil
+	}
+	// It is correct to compute exitInfo once for all withdrawals in the block, as the ExitInfo pointer is
+	// updated within InitiateValidatorExit which is the only function that uses it.
+	var exitInfo *validators.ExitInfo
+	if st.Version() < version.Electra {
+		exitInfo = validators.ExitInformation(st)
+	} else {
+		// After Electra, the function InitiateValidatorExit ignores the exitInfo passed to it and recomputes it anyway.
+		exitInfo = &validators.ExitInfo{}
+	}
 	for _, wr := range wrs {
 		if wr == nil {
 			return nil, errors.New("nil execution layer withdrawal request")
@@ -102,13 +114,13 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			return nil, err
 		} else if n == params.BeaconConfig().PendingPartialWithdrawalsLimit && !isFullExitRequest {
 			// if the PendingPartialWithdrawalsLimit is met, the user would have paid for a partial withdrawal that's not included
-			log.Debugln("Skipping execution layer withdrawal request, PendingPartialWithdrawalsLimit reached")
+			log.Debug("Skipping execution layer withdrawal request, PendingPartialWithdrawalsLimit reached")
 			continue
 		}
 
 		vIdx, exists := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(wr.ValidatorPubkey))
 		if !exists {
-			log.Debugf("Skipping execution layer withdrawal request, validator index for %s not found\n", hexutil.Encode(wr.ValidatorPubkey))
+			log.WithField("validator", hexutil.Encode(wr.ValidatorPubkey)).Debug("Skipping execution layer withdrawal request, validator index not found")
 			continue
 		}
 		validator, err := st.ValidatorAtIndexReadOnly(vIdx)
@@ -120,23 +132,23 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		wc := validator.GetWithdrawalCredentials()
 		isCorrectSourceAddress := bytes.Equal(wc[12:], wr.SourceAddress)
 		if !hasCorrectCredential || !isCorrectSourceAddress {
-			log.Debugln("Skipping execution layer withdrawal request, wrong withdrawal credentials")
+			log.Debug("Skipping execution layer withdrawal request, wrong withdrawal credentials")
 			continue
 		}
 
 		// Verify the validator is active.
 		if !helpers.IsActiveValidatorUsingTrie(validator, currentEpoch) {
-			log.Debugln("Skipping execution layer withdrawal request, validator not active")
+			log.Debug("Skipping execution layer withdrawal request, validator not active")
 			continue
 		}
 		// Verify the validator has not yet submitted an exit.
 		if validator.ExitEpoch() != params.BeaconConfig().FarFutureEpoch {
-			log.Debugln("Skipping execution layer withdrawal request, validator has submitted an exit already")
+			log.Debug("Skipping execution layer withdrawal request, validator has submitted an exit already")
 			continue
 		}
 		// Verify the validator has been active long enough.
 		if currentEpoch < validator.ActivationEpoch().AddEpoch(params.BeaconConfig().ShardCommitteePeriod) {
-			log.Debugln("Skipping execution layer withdrawal request, validator has not been active long enough")
+			log.Debug("Skipping execution layer withdrawal request, validator has not been active long enough")
 			continue
 		}
 
@@ -147,9 +159,9 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		if isFullExitRequest {
 			// Only exit validator if it has no pending withdrawals in the queue
 			if pendingBalanceToWithdraw == 0 {
-				maxExitEpoch, churn := validators.MaxExitEpochAndChurn(st)
 				var err error
-				st, _, err = validators.InitiateValidatorExit(ctx, st, vIdx, maxExitEpoch, churn)
+				// exitInfo is updated within InitiateValidatorExit
+				st, err = validators.InitiateValidatorExit(ctx, st, vIdx, exitInfo)
 				if err != nil {
 					return nil, err
 				}

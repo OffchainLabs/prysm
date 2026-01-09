@@ -2,12 +2,13 @@ package beacon_api
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -284,6 +285,62 @@ func TestGetVersion(t *testing.T) {
 			} else {
 				assert.DeepEqual(t, testCase.expectedResponse, version)
 			}
+		})
+	}
+}
+
+func TestIsReady(t *testing.T) {
+	const healthEndpoint = "/eth/v1/node/health"
+
+	testCases := []struct {
+		name           string
+		statusCode     int
+		err            error
+		expectedResult bool
+	}{
+		{
+			name:           "returns true for 200 OK (fully synced)",
+			statusCode:     http.StatusOK,
+			expectedResult: true,
+		},
+		{
+			name:           "returns false for 206 Partial Content (syncing)",
+			statusCode:     http.StatusPartialContent,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false for 503 Service Unavailable",
+			statusCode:     http.StatusServiceUnavailable,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false for 500 Internal Server Error",
+			statusCode:     http.StatusInternalServerError,
+			expectedResult: false,
+		},
+		{
+			name:           "returns false on error",
+			err:            errors.New("request failed"),
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ctx := t.Context()
+
+			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			jsonRestHandler.EXPECT().GetStatusCode(
+				gomock.Any(),
+				healthEndpoint,
+			).Return(tc.statusCode, tc.err)
+
+			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			result := nodeClient.IsReady(ctx)
+
+			assert.Equal(t, tc.expectedResult, result)
 		})
 	}
 }

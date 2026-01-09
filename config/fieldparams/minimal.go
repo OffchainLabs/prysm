@@ -9,6 +9,7 @@ const (
 	RandaoMixesLength                     = 64                // EPOCHS_PER_HISTORICAL_VECTOR
 	HistoricalRootsLength                 = 16777216          // HISTORICAL_ROOTS_LIMIT
 	ValidatorRegistryLimit                = 1099511627776     // VALIDATOR_REGISTRY_LIMIT
+	BuilderRegistryLimit                  = 1099511627776     // BUILDER_REGISTRY_LIMIT
 	Eth1DataVotesLength                   = 32                // SLOTS_PER_ETH1_VOTING_PERIOD
 	PreviousEpochAttestationsLength       = 1024              // MAX_ATTESTATIONS * SLOTS_PER_EPOCH
 	CurrentEpochAttestationsLength        = 1024              // MAX_ATTESTATIONS * SLOTS_PER_EPOCH
@@ -26,13 +27,13 @@ const (
 	SyncCommitteeAggregationBytesLength   = 1                 // SyncCommitteeAggregationBytesLength defines the sync committee aggregate bytes.
 	SyncAggregateSyncCommitteeBytesLength = 4                 // SyncAggregateSyncCommitteeBytesLength defines the length of sync committee bytes in a sync aggregate.
 	MaxWithdrawalsPerPayload              = 4                 // MaxWithdrawalsPerPayloadLength defines the maximum number of withdrawals that can be included in a payload.
-	MaxBlobCommitmentsPerBlock            = 32                // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
-	LogMaxBlobCommitments                 = 5                 // Log_2 of MaxBlobCommitmentsPerBlock
+	MaxBlobCommitmentsPerBlock            = 4096              // MaxBlobCommitmentsPerBlock defines the theoretical limit of blobs can be included in a block.
+	LogMaxBlobCommitments                 = 12                // Log_2 of MaxBlobCommitmentsPerBlock
 	BlobLength                            = 131072            // BlobLength defines the byte length of a blob.
 	BlobSize                              = 131072            // defined to match blob.size in bazel ssz codegen
 	BlobSidecarSize                       = 131928            // defined to match blob sidecar size in bazel ssz codegen
 	KzgCommitmentSize                     = 48                // KzgCommitmentSize defines the byte length of a KZG commitment.
-	KzgCommitmentInclusionProofDepth      = 10                // Merkle proof depth for blob_kzg_commitments list item
+	KzgCommitmentInclusionProofDepth      = 17                // Merkle proof depth for blob_kzg_commitments list item
 	ExecutionBranchDepth                  = 4                 // ExecutionBranchDepth defines the number of leaves in a merkle proof of the execution payload header.
 	SyncCommitteeBranchDepth              = 5                 // SyncCommitteeBranchDepth defines the number of leaves in a merkle proof of a sync committee.
 	SyncCommitteeBranchDepthElectra       = 6                 // SyncCommitteeBranchDepthElectra defines the number of leaves in a merkle proof of a sync committee.
@@ -44,6 +45,7 @@ const (
 	MaxAttesterSlashingsElectra           = 1                 // Maximum number of attester slashings in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // Maximum value for a random value using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // Maximum value for a random value using for proposer and sync committee sampling.
+	BuilderPendingWithdrawalsLimit        = 1048576           // Maximum number of builder pending withdrawals.
 
 	// Introduced in Fulu network upgrade.
 	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.

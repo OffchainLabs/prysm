@@ -3,20 +3,10 @@ package blockchain
 import (
 	"testing"
 
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
-
-func TestReportEpochMetrics_BadHeadState(t *testing.T) {
-	s, err := util.NewBeaconState()
-	require.NoError(t, err)
-	h, err := util.NewBeaconState()
-	require.NoError(t, err)
-	require.NoError(t, h.SetValidators(nil))
-	err = reportEpochMetrics(t.Context(), s, h)
-	require.ErrorContains(t, "failed to initialize precompute: state has nil validator slice", err)
-}
 
 func TestReportEpochMetrics_BadAttestation(t *testing.T) {
 	s, err := util.NewBeaconState()

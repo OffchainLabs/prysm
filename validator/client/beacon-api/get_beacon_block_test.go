@@ -7,15 +7,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/mock"
-	testhelpers "github.com/OffchainLabs/prysm/v6/validator/client/beacon-api/test-helpers"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/mock"
+	testhelpers "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api/test-helpers"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -44,7 +43,7 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 func TestGetBeaconBlock_Error(t *testing.T) {
 	testCases := []struct {
 		name                 string
-		beaconBlock          interface{}
+		beaconBlock          any
 		expectedErrorMessage string
 		consensusVersion     string
 		blinded              bool
@@ -215,11 +214,6 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	proto := testhelpers.GenerateProtoBellatrixBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
 	require.NoError(t, err)
@@ -261,11 +255,6 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoBlindedBellatrixBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
@@ -309,11 +298,6 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	proto := testhelpers.GenerateProtoCapellaBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
 	require.NoError(t, err)
@@ -355,11 +339,6 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoBlindedCapellaBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
@@ -403,11 +382,6 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	proto := testhelpers.GenerateProtoDenebBeaconBlockContents()
 	bytes, err := proto.MarshalSSZ()
 	require.NoError(t, err)
@@ -449,11 +423,6 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoBlindedDenebBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
@@ -497,11 +466,6 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	proto := testhelpers.GenerateProtoElectraBeaconBlockContents()
 	bytes, err := proto.MarshalSSZ()
 	require.NoError(t, err)
@@ -543,11 +507,6 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoBlindedElectraBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
@@ -591,11 +550,6 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
@@ -624,11 +578,6 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoBellatrixBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
@@ -663,11 +612,6 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	proto := testhelpers.GenerateProtoBellatrixBeaconBlock()
 	bytes, err := proto.MarshalSSZ()
 	require.NoError(t, err)
@@ -701,11 +645,6 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
-
 	const slot = primitives.Slot(1)
 	randaoReveal := []byte{2}
 	graffiti := []byte{3}
@@ -730,11 +669,6 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoPhase0BeaconBlock()
 	bytes, err := proto.MarshalSSZ()
@@ -777,11 +711,6 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	resetFn := features.InitWithReset(&features.Flags{
-		SSZOnly: true,
-	})
-	defer resetFn()
 
 	proto := testhelpers.GenerateProtoAltairBeaconBlock()
 	bytes, err := proto.MarshalSSZ()

@@ -5,7 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/sirupsen/logrus"
 )
 
 var urltests = []struct {
@@ -34,13 +35,13 @@ func TestConfigurePersistantLogging(t *testing.T) {
 	logFileName := "test.log"
 	existingDirectory := "test-1-existing-testing-dir"
 
-	err := ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, logFileName))
+	err := ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, logFileName), "text", logrus.InfoLevel)
 	require.NoError(t, err)
 
 	// 2. Test creation of file along with parent directory
 	nonExistingDirectory := "test-2-non-existing-testing-dir"
 
-	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, nonExistingDirectory, logFileName))
+	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, nonExistingDirectory, logFileName), "text", logrus.InfoLevel)
 	require.NoError(t, err)
 
 	// 3. Test creation of file in an existing parent directory with a non-existing sub-directory
@@ -51,7 +52,7 @@ func TestConfigurePersistantLogging(t *testing.T) {
 		return
 	}
 
-	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory, logFileName))
+	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory, logFileName), "text", logrus.InfoLevel)
 	require.NoError(t, err)
 
 	//4. Create log file in a directory without 700 permissions
@@ -60,4 +61,39 @@ func TestConfigurePersistantLogging(t *testing.T) {
 	if err != nil {
 		return
 	}
+}
+
+func TestConfigureEphemeralLogFile(t *testing.T) {
+	testParentDir := t.TempDir()
+
+	// 1. Test creation of file in an existing parent directory
+	existingDirectory := "test-1-existing-testing-dir"
+
+	err := ConfigureEphemeralLogFile(fmt.Sprintf("%s/%s", testParentDir, existingDirectory), "beacon-chain")
+	require.NoError(t, err)
+
+	// 2. Test creation of file along with parent directory
+	nonExistingDirectory := "test-2-non-existing-testing-dir"
+
+	err = ConfigureEphemeralLogFile(fmt.Sprintf("%s/%s", testParentDir, nonExistingDirectory), "beacon-chain")
+	require.NoError(t, err)
+
+	// 3. Test creation of file in an existing parent directory with a non-existing sub-directory
+	existingDirectory = "test-3-existing-testing-dir"
+	nonExistingSubDirectory := "test-3-non-existing-sub-dir"
+	err = os.Mkdir(fmt.Sprintf("%s/%s", testParentDir, existingDirectory), 0700)
+	if err != nil {
+		return
+	}
+	err = ConfigureEphemeralLogFile(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory), "beacon-chain")
+	require.NoError(t, err)
+
+	//4. Create log file in a directory without 700 permissions
+	existingDirectory = "test-4-existing-testing-dir"
+	err = os.Mkdir(fmt.Sprintf("%s/%s", testParentDir, existingDirectory), 0750)
+	if err != nil {
+		return
+	}
+	err = ConfigureEphemeralLogFile(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory), "beacon-chain")
+	require.NoError(t, err)
 }

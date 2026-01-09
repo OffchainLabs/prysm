@@ -11,6 +11,7 @@ type Step struct {
 	PayloadStatus    *MockEngineResp `json:"payload_status"`
 	PowBlock         *string         `json:"pow_block"`
 	Check            *Check          `json:"checks"`
+	DataColumns      []*string       `json:"columns"`
 }
 
 type Check struct {

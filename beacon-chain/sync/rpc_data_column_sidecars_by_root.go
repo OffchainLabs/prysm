@@ -7,15 +7,16 @@ import (
 	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -27,55 +28,42 @@ var (
 )
 
 // dataColumnSidecarByRootRPCHandler handles the data column sidecars by root RPC request.
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
-func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyroot-v1
+func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.dataColumnSidecarByRootRPCHandler")
 	defer span.End()
 
 	batchSize := flags.Get().DataColumnBatchLimit
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
 
 	// Check if the message type is the one expected.
-	ref, ok := msg.(*types.DataColumnsByRootIdentifiers)
+	ref, ok := msg.(types.DataColumnsByRootIdentifiers)
 	if !ok {
 		return notDataColumnsByRootIdentifiersError
 	}
 
-	requestedColumnIdents := *ref
-	remotePeerId := stream.Conn().RemotePeer()
+	requestedColumnIdents := ref
+	remotePeer := stream.Conn().RemotePeer()
 
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 
 	SetRPCStreamDeadlines(stream)
 
+	// Count the total number of requested data column sidecars.
+	totalRequested := 0
+	for _, ident := range requestedColumnIdents {
+		totalRequested += len(ident.Columns)
+	}
+
+	if err := s.rateLimiter.validateRequest(stream, uint64(totalRequested)); err != nil {
+		return errors.Wrap(err, "rate limiter validate request")
+	}
+
 	// Penalize peers that send invalid requests.
-	if err := validateDataColumnsByRootRequest(requestedColumnIdents); err != nil {
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(remotePeerId)
+	if err := validateDataColumnsByRootRequest(totalRequested); err != nil {
+		s.downscorePeer(remotePeer, "dataColumnSidecarByRootRPCHandlerValidationError")
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
 		return errors.Wrap(err, "validate data columns by root request")
-	}
-
-	requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
-	for _, columnIdent := range requestedColumnIdents {
-		var root [fieldparams.RootLength]byte
-		copy(root[:], columnIdent.BlockRoot)
-		requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], columnIdent.Columns...)
-	}
-
-	// Sort by column index for each root.
-	for _, columns := range requestedColumnsByRoot {
-		slices.Sort(columns)
-	}
-
-	// Format nice logs.
-	requestedColumnsByRootLog := make(map[string]interface{})
-	for root, columns := range requestedColumnsByRoot {
-		rootStr := fmt.Sprintf("%#x", root)
-		requestedColumnsByRootLog[rootStr] = "all"
-		if uint64(len(columns)) != numberOfColumns {
-			requestedColumnsByRootLog[rootStr] = columns
-		}
 	}
 
 	// Compute the oldest slot we'll allow a peer to request, based on the current slot.
@@ -84,10 +72,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		return errors.Wrapf(err, "data columns RPC min valid slot")
 	}
 
-	log := log.WithFields(logrus.Fields{
-		"peer":    remotePeerId,
-		"columns": requestedColumnsByRootLog,
-	})
+	log := log.WithField("peer", remotePeer)
 
 	defer closeStream(stream, log)
 
@@ -96,8 +81,36 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 		ticker = time.NewTicker(tickerDelay)
 	}
 
-	log.Debug("Serving data column sidecar by root request")
+	if log.Logger.Level >= logrus.TraceLevel {
+		requestedColumnsByRoot := make(map[[fieldparams.RootLength]byte][]uint64)
+		for _, ident := range requestedColumnIdents {
+			root := bytesutil.ToBytes32(ident.BlockRoot)
+			requestedColumnsByRoot[root] = append(requestedColumnsByRoot[root], ident.Columns...)
+		}
 
+		// We optimistially assume the peer requests the same set of columns for all roots,
+		// pre-sizing the map accordingly.
+		requestedRootsByColumnSet := make(map[string][]string, 1)
+		for root, columns := range requestedColumnsByRoot {
+			slices.Sort(columns)
+			prettyColumns := helpers.PrettySlice(columns)
+			requestedRootsByColumnSet[prettyColumns] = append(requestedRootsByColumnSet[prettyColumns], fmt.Sprintf("%#x", root))
+		}
+
+		log.WithField("requested", requestedRootsByColumnSet).Trace("Serving data column sidecars by root")
+	}
+
+	// Extract all requested roots.
+	roots := make([][fieldparams.RootLength]byte, 0, len(requestedColumnIdents))
+	for _, ident := range requestedColumnIdents {
+		root := bytesutil.ToBytes32(ident.BlockRoot)
+		roots = append(roots, root)
+	}
+
+	// Filter all available roots in block storage.
+	availableRoots := s.cfg.beaconDB.AvailableBlocks(ctx, roots)
+
+	// Serve each requested data column sidecar.
 	count := 0
 	for _, ident := range requestedColumnIdents {
 		if err := ctx.Err(); err != nil {
@@ -119,6 +132,12 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 
 		s.rateLimiter.add(stream, int64(len(columns)))
 
+		// Do not serve a blob sidecar if the corresponding block is not available.
+		if !availableRoots[root] {
+			log.Trace("Peer requested blob sidecar by root but corresponding block not found in db")
+			continue
+		}
+
 		// Retrieve the requested sidecars from the store.
 		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(root, columns)
 		if err != nil {
@@ -133,7 +152,7 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 			}
 
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.chain, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
+			if chunkErr := WriteDataColumnSidecarChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), verifiedRODataColumn.DataColumnSidecar); chunkErr != nil {
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 				tracing.AnnotateError(span, chunkErr)
 				return chunkErr
@@ -145,13 +164,8 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg int
 }
 
 // validateDataColumnsByRootRequest checks if the request for data column sidecars is valid.
-func validateDataColumnsByRootRequest(colIdents types.DataColumnsByRootIdentifiers) error {
-	total := uint64(0)
-	for _, id := range colIdents {
-		total += uint64(len(id.Columns))
-	}
-
-	if total > params.BeaconConfig().MaxRequestDataColumnSidecars {
+func validateDataColumnsByRootRequest(count int) error {
+	if uint64(count) > params.BeaconConfig().MaxRequestDataColumnSidecars {
 		return types.ErrMaxDataColumnReqExceeded
 	}
 
@@ -165,9 +179,9 @@ func dataColumnsRPCMinValidSlot(currentSlot primitives.Slot) (primitives.Slot, e
 		return primitives.Slot(math.MaxUint64), nil
 	}
 
-	beaconConfig := params.BeaconConfig()
-	minReqEpochs := beaconConfig.MinEpochsForDataColumnSidecarsRequest
-	minStartEpoch := beaconConfig.FuluForkEpoch
+	cfg := params.BeaconConfig()
+	minReqEpochs := cfg.MinEpochsForDataColumnSidecarsRequest
+	minStartEpoch := cfg.FuluForkEpoch
 
 	currEpoch := slots.ToEpoch(currentSlot)
 	if currEpoch > minReqEpochs && currEpoch-minReqEpochs > minStartEpoch {

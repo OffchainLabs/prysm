@@ -4,19 +4,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 )
 
 // lightClientBootstrapRPCHandler handles the /eth2/beacon_chain/req/light_client_bootstrap/1/ RPC request.
-func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientBootstrapRPCHandler")
 	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -26,7 +26,7 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -38,11 +38,11 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 	}
 	blkRoot := *rawMsg
 
-	bootstrap, err := s.cfg.beaconDB.LightClientBootstrap(ctx, blkRoot[:])
+	bootstrap, err := s.lcStore.LightClientBootstrap(ctx, blkRoot)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
-		logger.WithError(err).Error("s.cfg.beaconDB.LightClientBootstrap")
+		logger.WithError(err).Error("Cannot bootstrap light client")
 		return err
 	}
 	if bootstrap == nil {
@@ -67,17 +67,18 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg interf
 }
 
 // lightClientUpdatesByRangeRPCHandler handles the /eth2/beacon_chain/req/light_client_updates_by_range/1/ RPC request.
-func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg interface{}, stream libp2pcore.Stream) error {
+func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientUpdatesByRangeRPCHandler")
 	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
 
 	logger := log.WithField("handler", p2p.LightClientUpdatesByRangeName[1:])
+	remotePeer := stream.Conn().RemotePeer()
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -90,7 +91,8 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 	if r.Count == 0 {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, "count is 0", stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.downscorePeer(remotePeer, "lightClientUpdatesByRangeRPCHandlerCount0")
+
 		logger.Error("Count is 0")
 		return nil
 	}
@@ -102,7 +104,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 	endPeriod, err := math.Add64(r.StartPeriod, r.Count-1)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeInvalidRequest, err.Error(), stream)
-		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
+		s.downscorePeer(remotePeer, "lightClientUpdatesByRangeRPCHandlerEndPeriodOverflow")
 		tracing.AnnotateError(span, err)
 		logger.WithError(err).Error("End period overflows")
 		return err
@@ -110,11 +112,19 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 
 	logger.Infof("LC: requesting updates by range (StartPeriod: %d, EndPeriod: %d)", r.StartPeriod, r.StartPeriod+r.Count-1)
 
-	updates, err := s.cfg.beaconDB.LightClientUpdates(ctx, r.StartPeriod, endPeriod)
+	headBlock, err := s.cfg.chain.HeadBlock(ctx)
 	if err != nil {
 		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 		tracing.AnnotateError(span, err)
-		logger.WithError(err).Error("s.cfg.beaconDB.LightClientUpdates")
+		logger.WithError(err).Error("Cannot retrieve head block")
+		return err
+	}
+
+	updates, err := s.lcStore.LightClientUpdates(ctx, r.StartPeriod, endPeriod, headBlock)
+	if err != nil {
+		s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
+		tracing.AnnotateError(span, err)
+		logger.WithError(err).Error("Cannot retrieve light client updates")
 		return err
 	}
 
@@ -125,12 +135,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 		return nil
 	}
 
-	for i := r.StartPeriod; i <= endPeriod; i++ {
-		u, ok := updates[i]
-		if !ok {
-			break
-		}
-
+	for _, u := range updates {
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
 		if err = WriteLightClientUpdateChunk(stream, s.cfg.clock, s.cfg.p2p.Encoding(), u); err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
@@ -148,7 +153,7 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg i
 }
 
 // lightClientFinalityUpdateRPCHandler handles the /eth2/beacon_chain/req/light_client_finality_update/1/ RPC request.
-func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ interface{}, stream libp2pcore.Stream) error {
+func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientFinalityUpdateRPCHandler")
 	defer span.End()
 	_, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -158,7 +163,7 @@ func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ int
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -184,7 +189,7 @@ func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ int
 }
 
 // lightClientOptimisticUpdateRPCHandler handles the /eth2/beacon_chain/req/light_client_optimistic_update/1/ RPC request.
-func (s *Service) lightClientOptimisticUpdateRPCHandler(ctx context.Context, _ interface{}, stream libp2pcore.Stream) error {
+func (s *Service) lightClientOptimisticUpdateRPCHandler(ctx context.Context, _ any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.lightClientOptimisticUpdateRPCHandler")
 	defer span.End()
 	_, cancel := context.WithTimeout(ctx, ttfbTimeout)
@@ -196,7 +201,7 @@ func (s *Service) lightClientOptimisticUpdateRPCHandler(ctx context.Context, _ i
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("s.rateLimiter.validateRequest")
+		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)

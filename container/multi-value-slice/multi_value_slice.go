@@ -101,6 +101,9 @@ import (
 // fragmented.
 const fragmentationLimit = 50000
 
+// ErrOutOfBounds happens when the provided index is higher than the largest index of the slice.
+var ErrOutOfBounds = errors.New("out of bounds")
+
 // Id is an object identifier.
 type Id = uint64
 
@@ -255,7 +258,7 @@ func (s *Slice[V]) At(obj Identifiable, index uint64) (V, error) {
 
 	if index >= uint64(len(s.sharedItems)+len(s.appendedItems)) {
 		var def V
-		return def, fmt.Errorf("index %d out of bounds", index)
+		return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 	}
 
 	isOriginal := index < uint64(len(s.sharedItems))
@@ -265,24 +268,20 @@ func (s *Slice[V]) At(obj Identifiable, index uint64) (V, error) {
 			return s.sharedItems[index], nil
 		}
 		for _, v := range ind.Values {
-			for _, id := range v.ids {
-				if id == obj.Id() {
-					return v.val, nil
-				}
+			if slices.Contains(v.ids, obj.Id()) {
+				return v.val, nil
 			}
 		}
 		return s.sharedItems[index], nil
 	} else {
 		item := s.appendedItems[index-uint64(len(s.sharedItems))]
 		for _, v := range item.Values {
-			for _, id := range v.ids {
-				if id == obj.Id() {
-					return v.val, nil
-				}
+			if slices.Contains(v.ids, obj.Id()) {
+				return v.val, nil
 			}
 		}
 		var def V
-		return def, fmt.Errorf("index %d out of bounds", index)
+		return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 	}
 }
 
@@ -292,7 +291,7 @@ func (s *Slice[V]) UpdateAt(obj Identifiable, index uint64, val V) error {
 	defer s.lock.Unlock()
 
 	if index >= uint64(len(s.sharedItems)+len(s.appendedItems)) {
-		return fmt.Errorf("index %d out of bounds", index)
+		return fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 	}
 
 	isOriginal := index < uint64(len(s.sharedItems))
@@ -560,7 +559,7 @@ func (s *Slice[V]) updateAppendedItem(obj Identifiable, index uint64, val V) err
 		}
 	}
 	if !found {
-		return fmt.Errorf("index %d out of bounds", index)
+		return fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 	}
 
 	newValue := true
@@ -606,7 +605,7 @@ func (e EmptyMVSlice[V]) Len(_ Identifiable) int {
 func (e EmptyMVSlice[V]) At(_ Identifiable, index uint64) (V, error) {
 	if index >= uint64(len(e.fullSlice)) {
 		var def V
-		return def, errors.Errorf("index %d out of bounds", index)
+		return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 	}
 	return e.fullSlice[index], nil
 }

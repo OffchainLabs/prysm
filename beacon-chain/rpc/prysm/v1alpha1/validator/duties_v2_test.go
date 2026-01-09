@@ -4,25 +4,25 @@ import (
 	"testing"
 	"time"
 
-	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestGetDutiesV2_OK(t *testing.T) {
@@ -39,7 +39,7 @@ func TestGetDutiesV2_OK(t *testing.T) {
 
 	pubKeys := make([][]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 		indices[i] = uint64(i)
 	}
@@ -117,7 +117,7 @@ func TestGetAltairDutiesV2_SyncCommitteeOK(t *testing.T) {
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	pubKeys := make([][]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 		indices[i] = uint64(i)
 	}
@@ -221,7 +221,7 @@ func TestGetBellatrixDutiesV2_SyncCommitteeOK(t *testing.T) {
 	require.NoError(t, bs.SetCurrentSyncCommittee(syncCommittee))
 	pubKeys := make([][]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = deposits[i].Data.PublicKey
 		indices[i] = uint64(i)
 	}
@@ -428,7 +428,7 @@ func TestGetDutiesV2_CurrentEpoch_ShouldNotFail(t *testing.T) {
 
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = bytesutil.ToBytes48(deposits[i].Data.PublicKey)
 		indices[i] = uint64(i)
 	}
@@ -468,7 +468,7 @@ func TestGetDutiesV2_MultipleKeys_OK(t *testing.T) {
 
 	pubKeys := make([][fieldparams.BLSPubkeyLength]byte, len(deposits))
 	indices := make([]uint64, len(deposits))
-	for i := 0; i < len(deposits); i++ {
+	for i := range deposits {
 		pubKeys[i] = bytesutil.ToBytes48(deposits[i].Data.PublicKey)
 		indices[i] = uint64(i)
 	}
@@ -558,4 +558,36 @@ func TestGetDutiesV2_SyncNotReady(t *testing.T) {
 	}
 	_, err := vs.GetDutiesV2(t.Context(), &ethpb.DutiesRequest{})
 	assert.ErrorContains(t, "Syncing to latest head", err)
+}
+
+func TestGetValidatorAssignment(t *testing.T) {
+	start := primitives.Slot(100)
+
+	// Test using CommitteeAssignments
+	committeeAssignments := map[primitives.ValidatorIndex]*helpers.CommitteeAssignment{
+		5: {
+			Committee:      []primitives.ValidatorIndex{4, 5, 6},
+			AttesterSlot:   start + 1,
+			CommitteeIndex: primitives.CommitteeIndex(0),
+		},
+	}
+
+	meta := &metadata{
+		committeeAssignments: committeeAssignments,
+	}
+
+	vs := &Server{}
+
+	// Test existing validator
+	assignment := vs.getValidatorAssignment(meta, primitives.ValidatorIndex(5))
+	require.NotNil(t, assignment)
+	assert.Equal(t, start+1, assignment.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
+	assert.Equal(t, uint64(1), assignment.ValidatorCommitteeIndex)
+
+	// Test non-existent validator should return empty assignment
+	assignment = vs.getValidatorAssignment(meta, primitives.ValidatorIndex(99))
+	require.NotNil(t, assignment)
+	assert.Equal(t, primitives.Slot(0), assignment.AttesterSlot)
+	assert.Equal(t, primitives.CommitteeIndex(0), assignment.CommitteeIndex)
 }

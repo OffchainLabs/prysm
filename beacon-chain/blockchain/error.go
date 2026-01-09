@@ -3,7 +3,7 @@ package blockchain
 import (
 	stderrors "errors"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	"github.com/pkg/errors"
 )
 
@@ -30,7 +30,7 @@ var (
 	// errWSBlockNotFoundInEpoch is returned when a block is not found in the WS cache or DB within epoch.
 	errWSBlockNotFoundInEpoch = errors.New("weak subjectivity root not found in db within epoch")
 	// ErrNotDescendantOfFinalized is returned when a block is not a descendant of the finalized checkpoint
-	ErrNotDescendantOfFinalized = invalidBlock{error: errors.New("not descendant of finalized checkpoint")}
+	ErrNotDescendantOfFinalized = errors.New("not descendant of finalized checkpoint")
 	// ErrNotCheckpoint is returned when a given checkpoint is not a
 	// checkpoint in any chain known to forkchoice
 	ErrNotCheckpoint = errors.New("not a checkpoint in forkchoice")
@@ -44,6 +44,8 @@ var (
 	errMaxBlobsExceeded = verification.AsVerificationFailure(errors.New("expected commitments in block exceeds MAX_BLOBS_PER_BLOCK"))
 	// errMaxDataColumnsExceeded is returned when the number of data columns exceeds the maximum allowed.
 	errMaxDataColumnsExceeded = verification.AsVerificationFailure(errors.New("expected data columns for node exceeds NUMBER_OF_COLUMNS"))
+	// errBlockBeingSynced is returned when a block is being synced.
+	errBlockBeingSynced = errors.New("block is being synced")
 )
 
 // An invalid block is the block that fails state transition based on the core protocol rules.

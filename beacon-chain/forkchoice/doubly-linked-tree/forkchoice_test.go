@@ -5,21 +5,20 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
-	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
 
 // prepareForkchoiceState prepares a beacon State with the given data to mock
@@ -631,14 +630,15 @@ func TestStore_InsertChain(t *testing.T) {
 			FinalizedCheckpoint: &ethpb.Checkpoint{Epoch: 1, Root: params.BeaconConfig().ZeroHash[:]},
 		})
 	}
-	args := make([]*forkchoicetypes.BlockAndCheckpoints, 10)
-	for i := 0; i < len(blks); i++ {
-		args[i] = blks[10-i-1]
-	}
-	require.NoError(t, f.InsertChain(t.Context(), args))
+	// InsertChain now expects blocks in increasing slot order
+	require.NoError(t, f.InsertChain(t.Context(), blks))
 
+	// Test partial insertion: first insert the foundation blocks, then a subset
 	f = setup(1, 1)
-	require.NoError(t, f.InsertChain(t.Context(), args[2:]))
+	// Insert first 2 blocks to establish a chain from genesis
+	require.NoError(t, f.InsertChain(t.Context(), blks[:2]))
+	// Then insert the remaining blocks
+	require.NoError(t, f.InsertChain(t.Context(), blks[2:]))
 }
 
 func TestForkChoice_UpdateCheckpoints(t *testing.T) {
@@ -691,7 +691,7 @@ func TestForkChoice_UpdateCheckpoints(t *testing.T) {
 			fcs := setup(tt.justified.Epoch, tt.finalized.Epoch)
 			fcs.store.justifiedCheckpoint = tt.justified
 			fcs.store.finalizedCheckpoint = tt.finalized
-			fcs.store.genesisTime = uint64(time.Now().Unix()) - uint64(tt.currentSlot)*params.BeaconConfig().SecondsPerSlot
+			driftGenesisTime(fcs, tt.currentSlot, 0)
 
 			st, roblock, err := prepareForkchoiceState(ctx, 32, [32]byte{'f'},
 				[32]byte{}, [32]byte{}, tt.finalized.Epoch, tt.finalized.Epoch)
@@ -813,9 +813,10 @@ func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, true, viable)
 
+	// Last epoch blocks are still viable
 	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk.Root(), Epoch: 1})
 	require.NoError(t, err)
-	require.Equal(t, false, viable)
+	require.Equal(t, true, viable)
 
 	// No Children but impossible checkpoint
 	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root()})
@@ -835,9 +836,10 @@ func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
+	// Last epoch blocks are still viable
 	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root(), Epoch: 1})
 	require.NoError(t, err)
-	require.Equal(t, false, viable)
+	require.Equal(t, true, viable)
 
 	st, blk4, err := prepareForkchoiceState(ctx, params.BeaconConfig().SlotsPerEpoch, [32]byte{'d'}, blk2.Root(), [32]byte{'D'}, 0, 0)
 	require.NoError(t, err)
@@ -848,9 +850,10 @@ func TestForkChoiceIsViableForCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, viable)
 
+	// Last epoch blocks are still viable
 	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk2.Root(), Epoch: 1})
 	require.NoError(t, err)
-	require.Equal(t, false, viable)
+	require.Equal(t, true, viable)
 
 	// Boundary block
 	viable, err = f.IsViableForCheckpoint(&forkchoicetypes.Checkpoint{Root: blk4.Root(), Epoch: 1})

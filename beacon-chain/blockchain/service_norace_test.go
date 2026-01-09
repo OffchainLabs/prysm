@@ -4,10 +4,9 @@ import (
 	"io"
 	"testing"
 
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,10 +16,7 @@ func init() {
 }
 
 func TestChainService_SaveHead_DataRace(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
-	s := &Service{
-		cfg: &config{BeaconDB: beaconDB},
-	}
+	s := testServiceWithDB(t)
 	b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	st, _ := util.DeterministicGenesisState(t, 1)
 	require.NoError(t, err)

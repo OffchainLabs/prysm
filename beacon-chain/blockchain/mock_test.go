@@ -3,14 +3,15 @@ package blockchain
 import (
 	"testing"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func testServiceOptsWithDB(t *testing.T) []Option {
+func testServiceOptsWithDB(t testing.TB) []Option {
 	beaconDB := testDB.SetupDB(t)
 	fcs := doublylinkedtree.New()
 	cs := startup.NewClockSynchronizer()
@@ -30,4 +31,16 @@ func testServiceOptsWithDB(t *testing.T) []Option {
 func testServiceOptsNoDB() []Option {
 	cs := startup.NewClockSynchronizer()
 	return []Option{WithClockSynchronizer(cs)}
+}
+
+func testServiceNoDB(t testing.TB) *Service {
+	s, err := NewService(t.Context(), testServiceOptsNoDB()...)
+	require.NoError(t, err)
+	return s
+}
+
+func testServiceWithDB(t testing.TB) *Service {
+	s, err := NewService(t.Context(), testServiceOptsWithDB(t)...)
+	require.NoError(t, err)
+	return s
 }

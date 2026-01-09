@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/contracts/deposit/mock"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/contracts/deposit/mock"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -226,7 +226,7 @@ func TestService_BlockNumberByTimestamp(t *testing.T) {
 	params.OverrideBeaconConfig(conf)
 	initialHead, err := testAcc.Backend.Client().HeaderByNumber(ctx, nil)
 	require.NoError(t, err)
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		testAcc.Backend.Commit()
 	}
 
@@ -258,7 +258,7 @@ func TestService_BlockNumberByTimestampLessTargetTime(t *testing.T) {
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		testAcc.Backend.Commit()
 	}
 	ctx := t.Context()
@@ -296,7 +296,7 @@ func TestService_BlockNumberByTimestampMoreTargetTime(t *testing.T) {
 	web3Service = setDefaultMocks(web3Service)
 	web3Service.rpcClient = &mockExecution.RPCClient{Backend: testAcc.Backend}
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		testAcc.Backend.Commit()
 	}
 	ctx := t.Context()

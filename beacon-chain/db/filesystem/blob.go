@@ -7,12 +7,12 @@ import (
 	"path"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/logging"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -122,18 +122,18 @@ type BlobStorage struct {
 func (bs *BlobStorage) WarmCache() {
 	start := time.Now()
 	if bs.layoutName == LayoutNameFlat {
-		log.Info("Blob filesystem cache warm-up started. This may take a few minutes.")
+		log.Info("Blob filesystem cache warm-up started. This may take a few minutes")
 	} else {
-		log.Info("Blob filesystem cache warm-up started.")
+		log.Info("Blob filesystem cache warm-up started")
 	}
 
 	if err := warmCache(bs.layout, bs.cache); err != nil {
-		log.WithError(err).Error("Error encountered while warming up blob filesystem cache.")
+		log.WithError(err).Error("Error encountered while warming up blob filesystem cache")
 	}
 	if err := bs.migrateLayouts(); err != nil {
-		log.WithError(err).Error("Error encountered while migrating blob storage.")
+		log.WithError(err).Error("Error encountered while migrating blob storage")
 	}
-	log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete.")
+	log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete")
 }
 
 // If any blob storage directories are found for layouts besides the configured layout, migrate them.

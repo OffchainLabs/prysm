@@ -3,17 +3,17 @@ package types
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
 
 // MapForkInfo maps the eth2.ForkInfo proto to the Web3Signer spec.
 func MapForkInfo(slot primitives.Slot, genesisValidatorsRoot []byte) (*ForkInfo, error) {
-	fork, err := forks.Fork(slots.ToEpoch(slot))
+	fork, err := params.Fork(slots.ToEpoch(slot))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get fork info")
 	}

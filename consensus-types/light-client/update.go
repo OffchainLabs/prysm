@@ -3,13 +3,13 @@ package light_client
 import (
 	"fmt"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensustypes "github.com/OffchainLabs/prysm/v6/consensus-types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	consensustypes "github.com/OffchainLabs/prysm/v7/consensus-types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -87,6 +87,10 @@ func NewWrappedUpdateAltair(p *pb.LightClientUpdateAltair) (interfaces.LightClie
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
 	}, nil
+}
+
+func (u *updateAltair) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 func (u *updateAltair) MarshalSSZTo(dst []byte) ([]byte, error) {
@@ -256,6 +260,10 @@ func NewWrappedUpdateCapella(p *pb.LightClientUpdateCapella) (interfaces.LightCl
 	}, nil
 }
 
+func (u *updateCapella) IsNil() bool {
+	return u == nil || u.p == nil
+}
+
 func (u *updateCapella) MarshalSSZTo(dst []byte) ([]byte, error) {
 	return u.p.MarshalSSZTo(dst)
 }
@@ -421,6 +429,10 @@ func NewWrappedUpdateDeneb(p *pb.LightClientUpdateDeneb) (interfaces.LightClient
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
 	}, nil
+}
+
+func (u *updateDeneb) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 func (u *updateDeneb) MarshalSSZTo(dst []byte) ([]byte, error) {
@@ -589,6 +601,10 @@ func NewWrappedUpdateElectra(p *pb.LightClientUpdateElectra) (interfaces.LightCl
 		finalizedHeader:         finalizedHeader,
 		finalityBranch:          finalityBranch,
 	}, nil
+}
+
+func (u *updateElectra) IsNil() bool {
+	return u == nil || u.p == nil
 }
 
 func (u *updateElectra) MarshalSSZTo(dst []byte) ([]byte, error) {

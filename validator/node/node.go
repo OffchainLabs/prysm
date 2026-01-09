@@ -17,30 +17,30 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/middleware"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/config/proposer"
-	"github.com/OffchainLabs/prysm/v6/config/proposer/loader"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/monitoring/prometheus"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	"github.com/OffchainLabs/prysm/v6/runtime/prereqs"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v6/validator/client"
-	"github.com/OffchainLabs/prysm/v6/validator/db"
-	"github.com/OffchainLabs/prysm/v6/validator/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/validator/db/iface"
-	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
-	g "github.com/OffchainLabs/prysm/v6/validator/graffiti"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
-	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
-	"github.com/OffchainLabs/prysm/v6/validator/rpc"
+	"github.com/OffchainLabs/prysm/v7/api/server/middleware"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/config/proposer/loader"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/client"
+	"github.com/OffchainLabs/prysm/v7/validator/db"
+	"github.com/OffchainLabs/prysm/v7/validator/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/validator/db/iface"
+	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
+	g "github.com/OffchainLabs/prysm/v7/validator/graffiti"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v7/validator/rpc"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -58,6 +58,7 @@ type ValidatorClient struct {
 	wallet                *wallet.Wallet
 	walletInitializedFeed *event.Feed
 	stop                  chan struct{} // Channel to wait for termination notifications.
+	once                  sync.Once
 }
 
 // NewValidatorClient creates a new instance of the Prysm validator client.
@@ -73,13 +74,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 	); err != nil {
 		return nil, err
 	}
-
-	verbosity := cliCtx.String(cmd.VerbosityFlag.Name)
-	level, err := logrus.ParseLevel(verbosity)
-	if err != nil {
-		return nil, err
-	}
-	logrus.SetLevel(level)
 
 	// Warn if user's platform is not supported
 	prereqs.WarnIfPlatformNotSupported(cliCtx.Context)
@@ -161,13 +155,15 @@ func (c *ValidatorClient) Start() {
 
 // Close handles graceful shutdown of the system.
 func (c *ValidatorClient) Close() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.once.Do(func() { // runs exactly one time
+		c.lock.Lock()
+		defer c.lock.Unlock()
 
-	c.services.StopAll()
-	log.Info("Stopping Prysm validator")
-	c.cancel()
-	close(c.stop)
+		c.services.StopAll()
+		log.Info("Stopping Prysm validator")
+		c.cancel()
+		close(c.stop)
+	})
 }
 
 // checkLegacyDatabaseLocation checks is a database exists in the specified location.
@@ -222,7 +218,7 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 
 func getWallet(cliCtx *cli.Context) (*wallet.Wallet, error) {
 	if cliCtx.IsSet(flags.InteropNumValidators.Name) {
-		log.Info("no wallet required for interop validation")
+		log.Info("No wallet required for interop validation")
 		return nil, nil
 	}
 	if cliCtx.IsSet(flags.Web3SignerURLFlag.Name) {
@@ -430,6 +426,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		BeaconNodeGRPCEndpoint:  cliCtx.String(flags.BeaconRPCProviderFlag.Name),
 		BeaconNodeCert:          cliCtx.String(flags.CertFlag.Name),
 		BeaconApiEndpoint:       cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
+		BeaconApiHeaders:        parseBeaconApiHeaders(cliCtx.String(flags.BeaconRESTApiHeaders.Name)),
 		BeaconApiTimeout:        time.Second * 30,
 		Graffiti:                g.ParseHexGraffiti(cliCtx.String(flags.GraffitiFlag.Name)),
 		GraffitiStruct:          graffitiStruct,
@@ -441,6 +438,8 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		LogValidatorPerformance: !cliCtx.Bool(flags.DisablePenaltyRewardLogFlag.Name),
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             cliCtx.Bool(flags.EnableDistributed.Name),
+		CloseClientFunc:         c.Close,
+		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})
 	if err != nil {
 		return errors.Wrap(err, "could not initialize validator service")
@@ -547,6 +546,7 @@ func (c *ValidatorClient) registerRPCService(cliCtx *cli.Context) error {
 		GRPCHeaders:            strings.Split(cliCtx.String(flags.GRPCHeadersFlag.Name), ","),
 		BeaconNodeGRPCEndpoint: cliCtx.String(flags.BeaconRPCProviderFlag.Name),
 		BeaconApiEndpoint:      cliCtx.String(flags.BeaconRESTApiProviderFlag.Name),
+		BeaconAPIHeaders:       parseBeaconApiHeaders(cliCtx.String(flags.BeaconRESTApiHeaders.Name)),
 		BeaconApiTimeout:       time.Second * 30,
 		BeaconNodeCert:         cliCtx.String(flags.CertFlag.Name),
 		DB:                     c.db,
@@ -630,4 +630,24 @@ func clearDB(ctx context.Context, dataDir string, force bool, isDatabaseMinimal 
 	}
 
 	return nil
+}
+
+func parseBeaconApiHeaders(rawHeaders string) map[string][]string {
+	result := make(map[string][]string)
+	pairs := strings.SplitSeq(rawHeaders, ",")
+	for pair := range pairs {
+		key, value, found := strings.Cut(pair, "=")
+		if !found {
+			// Skip malformed pairs
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			// Skip malformed pairs
+			continue
+		}
+		result[key] = append(result[key], value)
+	}
+	return result
 }

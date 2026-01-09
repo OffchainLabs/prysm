@@ -3,7 +3,7 @@ package features
 import (
 	"time"
 
-	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
+	backfill "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill/flags"
 	"github.com/urfave/cli/v2"
 )
 
@@ -32,10 +32,6 @@ var (
 	devModeFlag = &cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Enables experimental features still in development. These features may not be stable.",
-	}
-	disableExperimentalState = &cli.BoolFlag{
-		Name:  "disable-experimental-state",
-		Usage: "Turns off the latest and greatest changes to the beacon state. Disabling this is safe to do after the feature has been enabled.",
 	}
 	writeSSZStateTransitionsFlag = &cli.BoolFlag{
 		Name:  "interop-write-ssz-state-transitions",
@@ -91,9 +87,9 @@ var (
 		Name:  "disable-broadcast-slashings",
 		Usage: "Disables broadcasting slashings submitted to the beacon node.",
 	}
-	attestTimely = &cli.BoolFlag{
-		Name:  "attest-timely",
-		Usage: "Fixes validator can attest timely after current block processes. See #8185 for more details.",
+	disableAttestTimely = &cli.BoolFlag{
+		Name:  "disable-attest-timely",
+		Usage: "Disable validator attesting timely after current block processes. See #8185 for more details.",
 	}
 	enableSlashingProtectionPruning = &cli.BoolFlag{
 		Name:  "enable-slashing-protection-history-pruning",
@@ -176,6 +172,10 @@ var (
 		Name:  "enable-experimental-attestation-pool",
 		Usage: "Enables an experimental attestation pool design.",
 	}
+	EnableStateDiff = &cli.BoolFlag{
+		Name:  "enable-state-diff",
+		Usage: "Enables the experimental state diff feature.",
+	}
 	// forceHeadFlag is a flag to force the head of the beacon chain to a specific block.
 	forceHeadFlag = &cli.StringFlag{
 		Name: "sync-from",
@@ -189,10 +189,10 @@ var (
 		Usage: "A comma-separatted list of 0x-prefixed hexstrings. Declares blocks with the given blockroots to be invalid. It downscores peers that send these blocks.",
 	}
 
-	// EnableDutiesV2 sets the validator client to use the get duties v2 grpc endpoint
-	EnableDutiesV2 = &cli.BoolFlag{
-		Name:  "enable-duties-v2",
-		Usage: "Forces use of get duties v2 endpoint.",
+	// DisableDutiesV2 sets the validator client to use the get duties grpc endpoint
+	DisableDutiesV2 = &cli.BoolFlag{
+		Name:  "disable-duties-v2",
+		Usage: "Forces use of get duties endpoint instead of v2.",
 	}
 
 	// EnableWebFlag enables controlling the validator client via the Prysm web ui. This is a work in progress.
@@ -201,11 +201,22 @@ var (
 		Usage: "(Work in progress): Enables the web portal for the validator client.",
 		Value: false,
 	}
-
-	// SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled
-	SSZOnly = &cli.BoolFlag{
-		Name:  "ssz-only",
-		Usage: "(debug): Forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled",
+	// deprecatedDisableLastEpochTargets is a flag to disable processing of attestations for old blocks.
+	deprecatedDisableLastEpochTargets = &cli.BoolFlag{
+		Name:  "disable-last-epoch-targets",
+		Usage: "Deprecated: disables processing of last epoch targets.",
+	}
+	// ignoreUnviableAttestations flag to skip attestations whose target state is not viable with respect to head (from lagging nodes).
+	ignoreUnviableAttestations = &cli.BoolFlag{
+		Name:  "ignore-unviable-attestations",
+		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
+	}
+	// lowValcountSweep bounds withdrawal sweep by validator count.
+	lowValcountSweep = &cli.BoolFlag{
+		Name:   "low-valcount-sweep",
+		Usage:  "Uses validator count bound for withdrawal sweep when validator count is less than MaxValidatorsPerWithdrawalsSweep.",
+		Value:  false,
+		Hidden: true,
 	}
 )
 
@@ -222,14 +233,13 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	HoodiTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
-	attestTimely,
+	disableAttestTimely,
 	enableSlashingProtectionPruning,
 	EnableMinimalSlashingProtection,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
-	EnableDutiesV2,
+	DisableDutiesV2,
 	EnableWebFlag,
-	SSZOnly,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -240,7 +250,6 @@ var E2EValidatorFlags = []string{
 // BeaconChainFlags contains a list of all the feature flags that apply to the beacon-chain client.
 var BeaconChainFlags = combinedFlags([]cli.Flag{
 	devModeFlag,
-	disableExperimentalState,
 	writeSSZStateTransitionsFlag,
 	saveInvalidBlockTempFlag,
 	saveInvalidBlobTempFlag,
@@ -254,6 +263,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	disableStakinContractCheck,
 	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
+	ignoreUnviableAttestations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
 	prepareAllPayloads,
@@ -269,6 +279,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
+	lowValcountSweep,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

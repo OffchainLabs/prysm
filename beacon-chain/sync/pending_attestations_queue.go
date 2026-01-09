@@ -3,249 +3,412 @@ package sync
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
-	"sync"
+	"fmt"
+	"slices"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-// This defines how often a node cleans up and processes pending attestations in the queue.
-var processPendingAttsPeriod = slots.DivideSlotBy(2 /* twice per slot */)
-var pendingAttsLimit = 10000
+const pendingAttsLimit = 32768
 
-// This processes pending attestation queues on every `processPendingAttsPeriod`.
-func (s *Service) processPendingAttsQueue() {
-	// Prevents multiple queue processing goroutines (invoked by RunEvery) from contending for data.
-	mutex := new(sync.Mutex)
-	async.RunEvery(s.ctx, processPendingAttsPeriod, func() {
-		mutex.Lock()
-		if err := s.processPendingAtts(s.ctx); err != nil {
-			log.WithError(err).Debugf("Could not process pending attestation: %v", err)
-		}
-		mutex.Unlock()
-	})
-}
+// aggregatorIndexFilter defines how aggregator index should be handled in equality checks.
+type aggregatorIndexFilter int
 
-// This defines how pending attestations are processed. It contains features:
-// 1. Clean up invalid pending attestations from the queue.
-// 2. Check if pending attestations can be processed when the block has arrived.
-// 3. Request block from a random peer if unable to proceed step 2.
-func (s *Service) processPendingAtts(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "processPendingAtts")
+const (
+	// ignoreAggregatorIndex means aggregates differing only by aggregator index are considered equal.
+	ignoreAggregatorIndex aggregatorIndexFilter = iota
+	// includeAggregatorIndex means aggregator index must also match for aggregates to be considered equal.
+	includeAggregatorIndex
+)
+
+// This method processes pending attestations as a "known" block as arrived. With validations,
+// the valid attestations get saved into the operation mem pool, and the invalid attestations gets deleted
+// from the sync pending pool.
+func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte) error {
+	ctx, span := trace.StartSpan(ctx, "processPendingAttsForBlock")
 	defer span.End()
+
+	// Confirm that the pending attestation's missing block arrived and the node processed the block.
+	if !s.cfg.beaconDB.HasBlock(ctx, bRoot) || !(s.cfg.beaconDB.HasState(ctx, bRoot) || s.cfg.beaconDB.HasStateSummary(ctx, bRoot)) || !s.cfg.chain.InForkchoice(bRoot) {
+		return fmt.Errorf("could not process unknown block root %#x", bRoot)
+	}
 
 	// Before a node processes pending attestations queue, it verifies
 	// the attestations in the queue are still valid. Attestations will
-	// be deleted from the queue if invalid (ie. getting staled from falling too many slots behind).
+	// be deleted from the queue if invalid (i.e. getting stalled from falling too many slots behind).
 	s.validatePendingAtts(ctx, s.cfg.clock.CurrentSlot())
 
 	s.pendingAttsLock.RLock()
-	roots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
-	for br := range s.blkRootToPendingAtts {
-		roots = append(roots, br)
-	}
+	attestations := s.blkRootToPendingAtts[bRoot]
 	s.pendingAttsLock.RUnlock()
 
-	var pendingRoots [][32]byte
-	randGen := rand.NewGenerator()
-	for _, bRoot := range roots {
-		s.pendingAttsLock.RLock()
-		attestations := s.blkRootToPendingAtts[bRoot]
-		s.pendingAttsLock.RUnlock()
-		// has the pending attestation's missing block arrived and the node processed block yet?
-		if s.cfg.beaconDB.HasBlock(ctx, bRoot) && (s.cfg.beaconDB.HasState(ctx, bRoot) || s.cfg.beaconDB.HasStateSummary(ctx, bRoot)) {
-			s.processAttestations(ctx, attestations)
-			log.WithFields(logrus.Fields{
-				"blockRoot":        hex.EncodeToString(bytesutil.Trunc(bRoot[:])),
-				"pendingAttsCount": len(attestations),
-			}).Debug("Verified and saved pending attestations to pool")
+	s.processAttestations(ctx, attestations)
 
-			// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
-			s.pendingAttsLock.Lock()
-			delete(s.blkRootToPendingAtts, bRoot)
-			s.pendingAttsLock.Unlock()
-		} else {
-			s.pendingQueueLock.RLock()
-			seen := s.seenPendingBlocks[bRoot]
-			s.pendingQueueLock.RUnlock()
-			if !seen {
-				pendingRoots = append(pendingRoots, bRoot)
-			}
+	randGen := rand.NewGenerator()
+	// Delete the missing block root key from pending attestation queue so a node will not request for the block again.
+	s.pendingAttsLock.Lock()
+	delete(s.blkRootToPendingAtts, bRoot)
+	pendingRoots := make([][32]byte, 0, len(s.blkRootToPendingAtts))
+	s.pendingQueueLock.RLock()
+	for r := range s.blkRootToPendingAtts {
+		if !s.seenPendingBlocks[r] {
+			pendingRoots = append(pendingRoots, r)
 		}
 	}
+	s.pendingQueueLock.RUnlock()
+	s.pendingAttsLock.Unlock()
+
+	//  Request the blocks for the pending attestations that could not be processed.
 	return s.sendBatchRootRequest(ctx, pendingRoots, randGen)
 }
 
-func (s *Service) processAttestations(ctx context.Context, attestations []ethpb.SignedAggregateAttAndProof) {
-	for _, signedAtt := range attestations {
-		att := signedAtt.AggregateAttestationAndProof().AggregateVal()
-		// The pending attestations can arrive in both aggregated and unaggregated forms,
-		// each from has distinct validation steps.
-		if att.IsAggregated() {
-			s.processAggregated(ctx, signedAtt)
-		} else {
-			s.processUnaggregated(ctx, att)
+// processAttestations processes a list of attestations.
+// It assumes (for logging purposes only) that all attestations pertain to the same block.
+func (s *Service) processAttestations(ctx context.Context, attestations []any) {
+	if len(attestations) == 0 {
+		return
+	}
+
+	firstAttestation := attestations[0]
+	var blockRoot []byte
+	switch v := firstAttestation.(type) {
+	case ethpb.Att:
+		blockRoot = v.GetData().BeaconBlockRoot
+	case ethpb.SignedAggregateAttAndProof:
+		blockRoot = v.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot
+	default:
+		log.Warnf("Unexpected attestation type %T, skipping processing", v)
+		return
+	}
+
+	validAggregates := make([]ethpb.SignedAggregateAttAndProof, 0, len(attestations))
+	startAggregate := time.Now()
+	atts := make([]ethpb.Att, 0, len(attestations))
+	aggregateAttAndProofCount := 0
+	for _, att := range attestations {
+		switch v := att.(type) {
+		case ethpb.Att:
+			atts = append(atts, v)
+		case ethpb.SignedAggregateAttAndProof:
+			aggregateAttAndProofCount++
+			// Avoid processing multiple aggregates only differing by aggregator index.
+			if slices.ContainsFunc(validAggregates, func(other ethpb.SignedAggregateAttAndProof) bool {
+				return pendingAggregatesAreEqual(v, other, ignoreAggregatorIndex)
+			}) {
+				continue
+			}
+
+			if err := s.processAggregate(ctx, v); err != nil {
+				log.WithError(err).Debug("Pending aggregate attestation could not be processed")
+				continue
+			}
+
+			validAggregates = append(validAggregates, v)
+		default:
+			log.Warnf("Unexpected attestation type %T, skipping", v)
 		}
 	}
+	durationAggregateAttAndProof := time.Since(startAggregate)
+
+	startAtts := time.Now()
+	for _, bucket := range bucketAttestationsByData(atts) {
+		s.processAttestationBucket(ctx, bucket)
+	}
+
+	durationAtts := time.Since(startAtts)
+
+	log.WithFields(logrus.Fields{
+		"blockRoot":                       fmt.Sprintf("%#x", blockRoot),
+		"totalCount":                      len(attestations),
+		"aggregateAttAndProofCount":       aggregateAttAndProofCount,
+		"uniqueAggregateAttAndProofCount": len(validAggregates),
+		"attCount":                        len(atts),
+		"durationTotal":                   durationAggregateAttAndProof + durationAtts,
+		"durationAggregateAttAndProof":    durationAggregateAttAndProof,
+		"durationAtts":                    durationAtts,
+	}).Debug("Verified and saved pending attestations to pool")
 }
 
-func (s *Service) processAggregated(ctx context.Context, att ethpb.SignedAggregateAttAndProof) {
-	aggregate := att.AggregateAttestationAndProof().AggregateVal()
-
-	// Save the pending aggregated attestation to the pool if it passes the aggregated
-	// validation steps.
-	valRes, err := s.validateAggregatedAtt(ctx, att)
-	if err != nil {
-		log.WithError(err).Debug("Pending aggregated attestation failed validation")
-	}
-	aggValid := pubsub.ValidationAccept == valRes
-	if s.validateBlockInAttestation(ctx, att) && aggValid {
-		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.cfg.attestationCache.Add(aggregate); err != nil {
-				log.WithError(err).Debug("Could not save aggregate attestation")
-				return
-			}
-		} else {
-			if err := s.cfg.attPool.SaveAggregatedAttestation(aggregate); err != nil {
-				log.WithError(err).Debug("Could not save aggregate attestation")
-				return
-			}
-		}
-
-		s.setAggregatorIndexEpochSeen(aggregate.GetData().Target.Epoch, att.AggregateAttestationAndProof().GetAggregatorIndex())
-
-		// Broadcasting the signed attestation again once a node is able to process it.
-		if err := s.cfg.p2p.Broadcast(ctx, att); err != nil {
-			log.WithError(err).Debug("Could not broadcast")
-		}
-	}
+// attestationBucket groups attestations with the same AttestationData for batch processing.
+type attestationBucket struct {
+	dataHash     [32]byte
+	data         *ethpb.AttestationData
+	attestations []ethpb.Att
 }
 
-func (s *Service) processUnaggregated(ctx context.Context, att ethpb.Att) {
-	data := att.GetData()
+// processAttestationBucket processes a bucket of attestations with shared AttestationData.
+func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestationBucket) {
+	if bucket == nil || len(bucket.attestations) == 0 {
+		return
+	}
 
-	// This is an important validation before retrieving attestation pre state to defend against
-	// attestation's target intentionally referencing a checkpoint that's long ago.
+	data := bucket.data
+
+	// Shared validations for the entire bucket.
 	if !s.cfg.chain.InForkchoice(bytesutil.ToBytes32(data.BeaconBlockRoot)) {
-		log.WithError(blockchain.ErrNotDescendantOfFinalized).Debug("Could not verify finalized consistency")
+		log.WithError(blockchain.ErrNotDescendantOfFinalized).WithField("root", fmt.Sprintf("%#x", data.BeaconBlockRoot)).Debug("Failed forkchoice check for bucket")
 		return
 	}
-	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, att); err != nil {
-		log.WithError(err).Debug("Could not verify FFG consistency")
-		return
-	}
+
 	preState, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
-		log.WithError(err).Debug("Could not retrieve attestation prestate")
-		return
-	}
-	committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
-	if err != nil {
-		log.WithError(err).Debug("Could not retrieve committee from state")
-		return
-	}
-	valid, err := validateAttesterData(ctx, att, committee)
-	if err != nil {
-		log.WithError(err).Debug("Could not validate attester data")
-		return
-	} else if valid != pubsub.ValidationAccept {
-		log.Debug("Attestation failed attester data validation")
+		log.WithError(err).Debug("Failed to get attestation prestate for bucket")
 		return
 	}
 
-	// Decide if the attestation is an Electra SingleAttestation or a Phase0 unaggregated attestation
-	var (
-		attForValidation ethpb.Att
-		broadcastAtt     ethpb.Att
-		eventType        feed.EventType
-		eventData        interface{}
-	)
-
-	if att.Version() >= version.Electra {
-		singleAtt, ok := att.(*ethpb.SingleAttestation)
-		if !ok {
-			log.Debugf("Attestation has wrong type (expected %T, got %T)", &ethpb.SingleAttestation{}, att)
-			return
-		}
-		// Convert Electra SingleAttestation to unaggregated ElectraAttestation. This is needed because many parts of the codebase assume that attestations have a certain structure and SingleAttestation validates these assumptions.
-		attForValidation = singleAtt.ToAttestationElectra(committee)
-		broadcastAtt = singleAtt
-		eventType = operation.SingleAttReceived
-		eventData = &operation.SingleAttReceivedData{
-			Attestation: singleAtt,
-		}
-	} else {
-		// Phase0 attestation
-		attForValidation = att
-		broadcastAtt = att
-		eventType = operation.UnaggregatedAttReceived
-		eventData = &operation.UnAggregatedAttReceivedData{
-			Attestation: att,
-		}
-	}
-
-	valid, err = s.validateUnaggregatedAttWithState(ctx, attForValidation, preState)
-	if err != nil {
-		log.WithError(err).Debug("Pending unaggregated attestation failed validation")
+	if err := s.cfg.chain.VerifyLmdFfgConsistency(ctx, bucket.attestations[0]); err != nil {
+		log.WithError(err).Debug("Failed FFG consistency check for bucket")
 		return
 	}
 
-	if valid == pubsub.ValidationAccept {
-		if features.Get().EnableExperimentalAttestationPool {
-			if err = s.cfg.attestationCache.Add(attForValidation); err != nil {
-				log.WithError(err).Debug("Could not save unaggregated attestation")
-				return
-			}
-		} else {
-			if err := s.cfg.attPool.SaveUnaggregatedAttestation(attForValidation); err != nil {
-				log.WithError(err).Debug("Could not save unaggregated attestation")
-				return
-			}
-		}
+	// Collect valid attestations for both single and electra formats.
+	// Broadcast takes single format but attestation pool and batch signature verification take electra format.
+	forBroadcast := make([]ethpb.Att, 0, len(bucket.attestations))
+	forPool := make([]ethpb.Att, 0, len(bucket.attestations))
 
-		s.setSeenUnaggregatedAtt(att)
-
-		valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
+	for _, att := range bucket.attestations {
+		committee, err := helpers.BeaconCommitteeFromState(ctx, preState, data.Slot, att.GetCommitteeIndex())
 		if err != nil {
-			log.WithError(err).Debug("Could not retrieve active validator count")
-			return
+			log.WithError(err).Debug("Failed to get committee from state")
+			continue
 		}
 
-		// Broadcast the final 'broadcastAtt' object
-		if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, broadcastAtt), broadcastAtt); err != nil {
-			log.WithError(err).Debug("Could not broadcast")
+		valid, err := validateAttesterData(ctx, att, committee)
+		if err != nil {
+			log.WithError(err).Debug("Failed attester data validation")
+			continue
+		}
+		if valid != pubsub.ValidationAccept {
+			log.Debug("Pending attestation rejected due to invalid data")
+			continue
 		}
 
-		// Feed event notification for other services
-		s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
-			Type: eventType,
-			Data: eventData,
-		})
+		var conv ethpb.Att
+		if att.Version() >= version.Electra {
+			single, ok := att.(*ethpb.SingleAttestation)
+			if !ok {
+				log.Debugf("Wrong type: expected %T, got %T", &ethpb.SingleAttestation{}, att)
+				continue
+			}
+			conv = single.ToAttestationElectra(committee)
+		} else {
+			conv = att
+		}
+
+		forBroadcast = append(forBroadcast, att)
+		forPool = append(forPool, conv)
+	}
+
+	if len(forPool) == 0 {
+		return
+	}
+
+	verified := s.batchVerifyAttestationSignatures(ctx, forPool, preState)
+	verifiedSet := make(map[ethpb.Att]struct{}, len(verified))
+	for _, att := range verified {
+		verifiedSet[att] = struct{}{}
+	}
+
+	for i, poolAtt := range forPool {
+		if _, ok := verifiedSet[poolAtt]; ok {
+			s.processVerifiedAttestation(ctx, forBroadcast[i], poolAtt, preState)
+		}
 	}
 }
 
-// This defines how pending attestations is saved in the map. The key is the
-// root of the missing block. The value is the list of pending attestations
+// batchVerifyAttestationSignatures attempts batch verification, with individual fallback on failure.
+func (s *Service) batchVerifyAttestationSignatures(
+	ctx context.Context,
+	attestations []ethpb.Att,
+	preState state.ReadOnlyBeaconState,
+) []ethpb.Att {
+	const fallbackMsg = "batch verification failed, using individual checks"
+
+	set, err := blocks.AttestationSignatureBatch(ctx, preState, attestations)
+	if err != nil {
+		log.WithError(err).Debug(fallbackMsg)
+		return s.fallbackToIndividualVerification(ctx, attestations, preState)
+	}
+
+	ok, err := set.Verify()
+	if err != nil || !ok {
+		if err != nil {
+			log.WithError(err).Debug(fallbackMsg)
+		} else {
+			log.Debug(fallbackMsg)
+		}
+		return s.fallbackToIndividualVerification(ctx, attestations, preState)
+	}
+
+	return attestations
+}
+
+// fallbackToIndividualVerification verifies each attestation individually if batch verification fails.
+func (s *Service) fallbackToIndividualVerification(
+	ctx context.Context,
+	attestations []ethpb.Att,
+	preState state.ReadOnlyBeaconState,
+) []ethpb.Att {
+	verified := make([]ethpb.Att, 0, len(attestations))
+
+	for _, att := range attestations {
+		res, err := s.validateUnaggregatedAttWithState(ctx, att, preState)
+		if err != nil {
+			log.WithError(err).Debug("Individual signature verification error")
+			continue
+		}
+		if res == pubsub.ValidationAccept {
+			verified = append(verified, att)
+		}
+	}
+
+	return verified
+}
+
+// saveAttestation saves an attestation to the appropriate pool.
+func (s *Service) saveAttestation(att ethpb.Att) error {
+	if features.Get().EnableExperimentalAttestationPool {
+		return s.cfg.attestationCache.Add(att)
+	}
+	if att.IsAggregated() {
+		return s.cfg.attPool.SaveAggregatedAttestation(att)
+	}
+	return s.cfg.attPool.SaveUnaggregatedAttestation(att)
+}
+
+// processVerifiedAttestation handles a signature-verified attestation.
+func (s *Service) processVerifiedAttestation(
+	ctx context.Context,
+	broadcastAtt ethpb.Att,
+	poolAtt ethpb.Att,
+	preState state.ReadOnlyBeaconState,
+) {
+	data := broadcastAtt.GetData()
+
+	if err := s.saveAttestation(poolAtt); err != nil {
+		log.WithError(err).Debug("Failed to save unaggregated attestation")
+		return
+	}
+
+	if key, err := generateUnaggregatedAttCacheKey(broadcastAtt); err != nil {
+		log.WithError(err).Error("Failed to generate cache key for attestation tracking")
+	} else {
+		_ = s.setSeenUnaggregatedAtt(key)
+	}
+
+	valCount, err := helpers.ActiveValidatorCount(ctx, preState, slots.ToEpoch(data.Slot))
+	if err != nil {
+		log.WithError(err).Debug("Failed to retrieve active validator count")
+		return
+	}
+
+	if err := s.cfg.p2p.BroadcastAttestation(ctx, helpers.ComputeSubnetForAttestation(valCount, broadcastAtt), broadcastAtt); err != nil {
+		log.WithError(err).Debug("Failed to broadcast attestation")
+	}
+
+	var (
+		eventType feed.EventType
+		eventData any
+	)
+
+	switch {
+	case broadcastAtt.Version() >= version.Electra:
+		if sa, ok := broadcastAtt.(*ethpb.SingleAttestation); ok {
+			eventType = operation.SingleAttReceived
+			eventData = &operation.SingleAttReceivedData{Attestation: sa}
+			break
+		}
+		fallthrough
+	default:
+		eventType = operation.UnaggregatedAttReceived
+		eventData = &operation.UnAggregatedAttReceivedData{Attestation: broadcastAtt}
+	}
+
+	// Send event notification
+	s.cfg.attestationNotifier.OperationFeed().Send(&feed.Event{
+		Type: eventType,
+		Data: eventData,
+	})
+}
+
+func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAggregateAttAndProof) error {
+	res, err := s.validateAggregatedAtt(ctx, aggregate)
+	if err != nil {
+		log.WithError(err).Debug("Pending aggregated attestation failed validation")
+		return errors.Wrap(err, "validate aggregated att")
+	}
+
+	if res != pubsub.ValidationAccept || !s.validateBlockInAttestation(ctx, aggregate) {
+		return errors.New("Pending aggregated attestation failed validation")
+	}
+
+	att := aggregate.AggregateAttestationAndProof().AggregateVal()
+	if err := s.saveAttestation(att); err != nil {
+		return errors.Wrap(err, "save attestation")
+	}
+
+	_ = s.setAggregatorIndexEpochSeen(att.GetData().Target.Epoch, aggregate.AggregateAttestationAndProof().GetAggregatorIndex())
+
+	if err := s.cfg.p2p.Broadcast(ctx, aggregate); err != nil {
+		log.WithError(err).Debug("Could not broadcast aggregated attestation")
+	}
+
+	return nil
+}
+
+// This defines how pending aggregates are saved in the map. The key is the
+// root of the missing block. The value is the list of pending attestations/aggregates
+// that voted for that block root. The caller of this function is responsible
+// for not sending repeated aggregates to the pending queue.
+func (s *Service) savePendingAggregate(agg ethpb.SignedAggregateAttAndProof) {
+	root := bytesutil.ToBytes32(agg.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
+
+	s.savePending(root, agg, func(other any) bool {
+		a, ok := other.(ethpb.SignedAggregateAttAndProof)
+		return ok && pendingAggregatesAreEqual(agg, a, includeAggregatorIndex)
+	})
+}
+
+// This defines how pending attestations are saved in the map. The key is the
+// root of the missing block. The value is the list of pending attestations/aggregates
 // that voted for that block root. The caller of this function is responsible
 // for not sending repeated attestations to the pending queue.
-func (s *Service) savePendingAtt(att ethpb.SignedAggregateAttAndProof) {
-	root := bytesutil.ToBytes32(att.AggregateAttestationAndProof().AggregateVal().GetData().BeaconBlockRoot)
+func (s *Service) savePendingAtt(att ethpb.Att) {
+	if att.Version() >= version.Electra && !att.IsSingle() {
+		log.Debug("Non-single attestation sent to pending attestation pool. Attestation will be ignored")
+		return
+	}
 
+	root := bytesutil.ToBytes32(att.GetData().BeaconBlockRoot)
+
+	s.savePending(root, att, func(other any) bool {
+		a, ok := other.(ethpb.Att)
+		return ok && pendingAttsAreEqual(att, a)
+	})
+}
+
+// We want to avoid saving duplicate items, which is the purpose of the passed-in closure.
+// It is the responsibility of the caller to provide a function that correctly determines quality
+// in the context of the pending queue.
+func (s *Service) savePending(root [32]byte, pending any, isEqual func(other any) bool) {
 	s.pendingAttsLock.Lock()
 	defer s.pendingAttsLock.Unlock()
 
@@ -261,62 +424,64 @@ func (s *Service) savePendingAtt(att ethpb.SignedAggregateAttAndProof) {
 	_, ok := s.blkRootToPendingAtts[root]
 	if !ok {
 		pendingAttCount.Inc()
-		s.blkRootToPendingAtts[root] = []ethpb.SignedAggregateAttAndProof{att}
+		s.blkRootToPendingAtts[root] = []any{pending}
 		return
 	}
-	// Skip if the attestation from the same aggregator already exists in
+
+	// Skip if the attestation/aggregate from the same validator already exists in
 	// the pending queue.
-	for _, a := range s.blkRootToPendingAtts[root] {
-		if attsAreEqual(att, a) {
-			return
-		}
+	if slices.ContainsFunc(s.blkRootToPendingAtts[root], isEqual) {
+		return
 	}
+
 	pendingAttCount.Inc()
-	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], att)
+	s.blkRootToPendingAtts[root] = append(s.blkRootToPendingAtts[root], pending)
 }
 
-func attsAreEqual(a, b ethpb.SignedAggregateAttAndProof) bool {
+// pendingAggregatesAreEqual checks if two pending aggregate attestations are equal.
+// The filter parameter controls whether aggregator index is considered in the equality check.
+func pendingAggregatesAreEqual(a, b ethpb.SignedAggregateAttAndProof, filter aggregatorIndexFilter) bool {
 	if a.Version() != b.Version() {
 		return false
 	}
 
-	if a.GetSignature() != nil {
-		return b.GetSignature() != nil && a.AggregateAttestationAndProof().GetAggregatorIndex() == b.AggregateAttestationAndProof().GetAggregatorIndex()
+	if filter == includeAggregatorIndex {
+		if a.AggregateAttestationAndProof().GetAggregatorIndex() != b.AggregateAttestationAndProof().GetAggregatorIndex() {
+			return false
+		}
 	}
-	if b.GetSignature() != nil {
+
+	aAtt := a.AggregateAttestationAndProof().AggregateVal()
+	bAtt := b.AggregateAttestationAndProof().AggregateVal()
+	if aAtt.GetData().Slot != bAtt.GetData().Slot {
 		return false
 	}
-
-	aAggregate := a.AggregateAttestationAndProof().AggregateVal()
-	bAggregate := b.AggregateAttestationAndProof().AggregateVal()
-	aData := aAggregate.GetData()
-	bData := bAggregate.GetData()
-
-	if aData.Slot != bData.Slot {
+	if aAtt.GetCommitteeIndex() != bAtt.GetCommitteeIndex() {
 		return false
 	}
+	return bytes.Equal(aAtt.GetAggregationBits(), bAtt.GetAggregationBits())
+}
 
+func pendingAttsAreEqual(a, b ethpb.Att) bool {
+	if a.Version() != b.Version() {
+		return false
+	}
+	if a.GetData().Slot != b.GetData().Slot {
+		return false
+	}
 	if a.Version() >= version.Electra {
-		if aAggregate.IsSingle() != bAggregate.IsSingle() {
-			return false
-		}
-		if aAggregate.IsSingle() && aAggregate.GetAttestingIndex() != bAggregate.GetAttestingIndex() {
-			return false
-		}
-		if !bytes.Equal(aAggregate.CommitteeBitsVal().Bytes(), bAggregate.CommitteeBitsVal().Bytes()) {
-			return false
-		}
-	} else if aData.CommitteeIndex != bData.CommitteeIndex {
+		return a.GetAttestingIndex() == b.GetAttestingIndex()
+	}
+	if a.GetCommitteeIndex() != b.GetCommitteeIndex() {
 		return false
 	}
-
-	return bytes.Equal(aAggregate.GetAggregationBits(), bAggregate.GetAggregationBits())
+	return bytes.Equal(a.GetAggregationBits(), b.GetAggregationBits())
 }
 
 // This validates the pending attestations in the queue are still valid.
-// If not valid, a node will remove it in the queue in place. The validity
-// check specifies the pending attestation could not fall one epoch behind
-// of the current slot.
+// If not valid, a node will remove it from the queue in place. The validity
+// check specifies the pending attestation cannot fall one epoch behind
+// the current slot.
 func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot) {
 	_, span := trace.StartSpan(ctx, "validatePendingAtts")
 	defer span.End()
@@ -326,9 +491,23 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 
 	for bRoot, atts := range s.blkRootToPendingAtts {
 		for i := len(atts) - 1; i >= 0; i-- {
-			if slot >= atts[i].AggregateAttestationAndProof().AggregateVal().GetData().Slot+params.BeaconConfig().SlotsPerEpoch {
-				// Remove the pending attestation from the list in place.
-				atts = append(atts[:i], atts[i+1:]...)
+			var attSlot primitives.Slot
+			switch t := atts[i].(type) {
+			case ethpb.Att:
+				attSlot = t.GetData().Slot
+			case ethpb.SignedAggregateAttAndProof:
+				attSlot = t.AggregateAttestationAndProof().AggregateVal().GetData().Slot
+			default:
+				log.Debugf("Unexpected item of type %T in pending attestation queue. Item will be removed", t)
+				// Remove the pending attestation from the map in place.
+				atts[i] = atts[len(atts)-1]
+				atts = atts[:len(atts)-1]
+				continue
+			}
+			if slot >= attSlot+params.BeaconConfig().SlotsPerEpoch {
+				// Remove the pending attestation from the map in place.
+				atts[i] = atts[len(atts)-1]
+				atts = atts[:len(atts)-1]
 			}
 		}
 		s.blkRootToPendingAtts[bRoot] = atts
@@ -339,4 +518,30 @@ func (s *Service) validatePendingAtts(ctx context.Context, slot primitives.Slot)
 			delete(s.blkRootToPendingAtts, bRoot)
 		}
 	}
+}
+
+// bucketAttestationsByData groups attestations by their AttestationData hash.
+func bucketAttestationsByData(attestations []ethpb.Att) map[[32]byte]*attestationBucket {
+	bucketMap := make(map[[32]byte]*attestationBucket)
+
+	for _, att := range attestations {
+		data := att.GetData()
+		dataHash, err := data.HashTreeRoot()
+		if err != nil {
+			log.WithError(err).Debug("Failed to hash attestation data, skipping attestation")
+			continue
+		}
+
+		if bucket, ok := bucketMap[dataHash]; ok {
+			bucket.attestations = append(bucket.attestations, att)
+		} else {
+			bucketMap[dataHash] = &attestationBucket{
+				dataHash:     dataHash,
+				data:         data,
+				attestations: []ethpb.Att{att},
+			}
+		}
+	}
+
+	return bucketMap
 }

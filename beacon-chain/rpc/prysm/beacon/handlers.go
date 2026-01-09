@@ -8,18 +8,18 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 )
@@ -186,6 +186,7 @@ func (s *Server) GetChainHead(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, response)
 }
 
+// Warning: no longer supported post Fulu blobs
 func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlobs")
 	defer span.End()
@@ -213,6 +214,15 @@ func (s *Server) PublishBlobs(w http.ResponseWriter, r *http.Request) {
 		sc, err := blobSidecar.ToConsensus()
 		if err != nil {
 			httputil.HandleError(w, "Could not decode blob sidecar: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		scEpoch := slots.ToEpoch(sc.SignedBlockHeader.Header.Slot)
+		if scEpoch < params.BeaconConfig().DenebForkEpoch {
+			httputil.HandleError(w, "Blob sidecars not supported for pre deneb", http.StatusBadRequest)
+			return
+		}
+		if scEpoch > params.BeaconConfig().FuluForkEpoch {
+			httputil.HandleError(w, "Blob sidecars not supported for post fulu blobs", http.StatusBadRequest)
 			return
 		}
 

@@ -9,29 +9,30 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -292,35 +293,6 @@ func (s *Server) getBlockResponseBodyJson(ctx context.Context, blk interfaces.Re
 	}, nil
 }
 
-// Deprecated: use GetBlockAttestationsV2 instead
-// GetBlockAttestations retrieves attestation included in requested block.
-func (s *Server) GetBlockAttestations(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockAttestations")
-	defer span.End()
-
-	blk, isOptimistic, root := s.blockData(ctx, w, r)
-	if blk == nil {
-		return
-	}
-	consensusAtts := blk.Block().Body().Attestations()
-	atts := make([]*structs.Attestation, len(consensusAtts))
-	for i, att := range consensusAtts {
-		a, ok := att.(*eth.Attestation)
-		if ok {
-			atts[i] = structs.AttFromConsensus(a)
-		} else {
-			httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations of type %T", att), http.StatusInternalServerError)
-			return
-		}
-	}
-	resp := &structs.GetBlockAttestationsResponse{
-		Data:                atts,
-		ExecutionOptimistic: isOptimistic,
-		Finalized:           s.FinalizationFetcher.IsFinalized(ctx, root),
-	}
-	httputil.WriteJson(w, resp)
-}
-
 // GetBlockAttestationsV2 retrieves attestation included in requested block.
 func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) {
 	ctx, span := trace.StartSpan(r.Context(), "beacon.GetBlockAttestationsV2")
@@ -333,26 +305,26 @@ func (s *Server) GetBlockAttestationsV2(w http.ResponseWriter, r *http.Request) 
 	consensusAtts := blk.Block().Body().Attestations()
 
 	v := blk.Block().Version()
-	var attStructs []interface{}
+	attStructs := make([]any, len(consensusAtts))
 	if v >= version.Electra {
-		for _, att := range consensusAtts {
+		for index, att := range consensusAtts {
 			a, ok := att.(*eth.AttestationElectra)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestations electra of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttElectraFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStructs[index] = attStruct
 		}
 	} else {
-		for _, att := range consensusAtts {
+		for index, att := range consensusAtts {
 			a, ok := att.(*eth.Attestation)
 			if !ok {
 				httputil.HandleError(w, fmt.Sprintf("unable to convert consensus attestation of type %T", att), http.StatusInternalServerError)
 				return
 			}
 			attStruct := structs.AttFromConsensus(a)
-			attStructs = append(attStructs, attStruct)
+			attStructs[index] = attStruct
 		}
 	}
 
@@ -393,28 +365,6 @@ func (s *Server) blockData(ctx context.Context, w http.ResponseWriter, r *http.R
 		return nil, false, [32]byte{}
 	}
 	return blk, isOptimistic, root
-}
-
-// Deprecated: use PublishBlindedBlockV2 instead
-// PublishBlindedBlock instructs the beacon node to use the components of the `SignedBlindedBeaconBlock` to construct
-// and publish a SignedBeaconBlock by swapping out the transactions_root for the corresponding full list of `transactions`.
-// The beacon node should broadcast a newly constructed SignedBeaconBlock to the beacon network, to be included in the
-// beacon chain. The beacon node is not required to validate the signed BeaconBlock, and a successful response (20X)
-// only indicates that the broadcast has been successful. The beacon node is expected to integrate the new block into
-// its state, and therefore validate the block internally, however blocks which fail the validation are still broadcast
-// but a different status code is returned (202). Pre-Bellatrix, this endpoint will accept a SignedBeaconBlock. After
-// Deneb, this additionally instructs the beacon node to broadcast all given signed blobs.
-func (s *Server) PublishBlindedBlock(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlindedBlock")
-	defer span.End()
-	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
-		return
-	}
-	if httputil.IsRequestSsz(r) {
-		s.publishBlindedBlockSSZ(ctx, w, r, false)
-	} else {
-		s.publishBlindedBlock(ctx, w, r, false)
-	}
 }
 
 // PublishBlindedBlockV2 instructs the beacon node to use the components of the `SignedBlindedBeaconBlock` to construct and publish a
@@ -626,28 +576,6 @@ func decodeBlindedBellatrixJSON(body []byte) (*eth.GenericSignedBeaconBlock, err
 	)
 }
 
-// Deprecated: use PublishBlockV2 instead
-// PublishBlock instructs the beacon node to broadcast a newly signed beacon block to the beacon network,
-// to be included in the beacon chain. A success response (20x) indicates that the block
-// passed gossip validation and was successfully broadcast onto the network.
-// The beacon node is also expected to integrate the block into state, but may broadcast it
-// before doing so, so as to aid timely delivery of the block. Should the block fail full
-// validation, a separate success response code (202) is used to indicate that the block was
-// successfully broadcast but failed integration. After Deneb, this additionally instructs the
-// beacon node to broadcast all given signed blobs.
-func (s *Server) PublishBlock(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlock")
-	defer span.End()
-	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
-		return
-	}
-	if httputil.IsRequestSsz(r) {
-		s.publishBlockSSZ(ctx, w, r, false)
-	} else {
-		s.publishBlock(ctx, w, r, false)
-	}
-}
-
 // PublishBlockV2 instructs the beacon node to broadcast a newly signed beacon block to the beacon network,
 // to be included in the beacon chain. A success response (20x) indicates that the block
 // passed gossip validation and was successfully broadcast onto the network.
@@ -658,6 +586,12 @@ func (s *Server) PublishBlock(w http.ResponseWriter, r *http.Request) {
 // broadcast all given signed blobs. The broadcast behaviour may be adjusted via the
 // `broadcast_validation` query parameter.
 func (s *Server) PublishBlockV2(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Milliseconds()
+		publishBlockV2Duration.Observe(float64(duration))
+	}()
+
 	ctx, span := trace.StartSpan(r.Context(), "beacon.PublishBlockV2")
 	defer span.End()
 	if shared.IsSyncing(r.Context(), w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
@@ -694,7 +628,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -848,7 +782,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 	// Validate and optionally broadcast sidecars on equivocation.
 	if err := s.validateBroadcast(ctx, r, genericBlock); err != nil {
 		if errors.Is(err, errEquivocatedBlock) {
-			b, err := blocks.NewSignedBeaconBlock(genericBlock)
+			b, err := blocks.NewSignedBeaconBlock(genericBlock.Block)
 			if err != nil {
 				httputil.HandleError(w, err.Error(), http.StatusBadRequest)
 				return
@@ -935,14 +869,13 @@ func decodePhase0JSON(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 // broadcastSidecarsIfSupported broadcasts blob sidecars when an equivocated block occurs.
 func broadcastSidecarsIfSupported(ctx context.Context, s *Server, b interfaces.SignedBeaconBlock, gb *eth.GenericSignedBeaconBlock, versionHeader string) error {
 	switch versionHeader {
-	case version.String(version.Fulu):
-		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetFulu().Blobs, gb.GetFulu().KzgProofs)
 	case version.String(version.Electra):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetElectra().Blobs, gb.GetElectra().KzgProofs)
 	case version.String(version.Deneb):
 		return s.broadcastSeenBlockSidecars(ctx, b, gb.GetDeneb().Blobs, gb.GetDeneb().KzgProofs)
 	default:
 		// other forks before Deneb do not support blob sidecars
+		// forks after fulu do not support blob sidecars, instead support data columns, no need to rebroadcast
 		return nil
 	}
 }
@@ -955,7 +888,7 @@ func (s *Server) proposeBlock(ctx context.Context, w http.ResponseWriter, blk *e
 	}
 }
 
-func unmarshalStrict(data []byte, v interface{}) error {
+func unmarshalStrict(data []byte, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
@@ -1001,9 +934,36 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 	}
 
 	parentStateRoot := parentBlock.Block().StateRoot()
-	parentState, err := s.Stater.State(ctx, parentStateRoot[:])
+	// Check if the state is already cached
+	parentState := transition.NextSlotState(parentBlockRoot[:], blk.Block().Slot())
+	if parentState == nil {
+		// The state is not advanced in the NSC, check first if the parent post-state is head
+		headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+		if err != nil {
+			return errors.Wrap(err, "could not get head root")
+		}
+		if bytes.Equal(headRoot, parentBlockRoot[:]) {
+			parentState, err = s.HeadFetcher.HeadState(ctx)
+			if err != nil {
+				return errors.Wrap(err, "could not get head state")
+			}
+			parentState, err = transition.ProcessSlots(ctx, parentState, blk.Block().Slot())
+			if err != nil {
+				return errors.Wrap(err, "could not process slots to get parent state")
+			}
+		} else {
+			parentState, err = s.Stater.State(ctx, parentStateRoot[:])
+			if err != nil {
+				return errors.Wrap(err, "could not get parent state")
+			}
+		}
+	}
+	blockRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
-		return errors.Wrap(err, "could not get parent state")
+		return errors.Wrap(err, "could not hash block")
+	}
+	if err := coreblocks.VerifyBlockSignatureUsingCurrentFork(parentState, blk, blockRoot); err != nil {
+		return errors.Wrap(err, "could not verify block signature")
 	}
 	_, err = transition.ExecuteStateTransition(ctx, parentState, blk)
 	if err != nil {
@@ -1026,7 +986,7 @@ func (s *Server) validateConsensus(ctx context.Context, b *eth.GenericSignedBeac
 		return nil
 	}
 
-	if err := s.validateBlobSidecars(blk, blobs, proofs); err != nil {
+	if err := s.validateBlobs(blk, blobs, proofs); err != nil {
 		return err
 	}
 
@@ -1040,23 +1000,42 @@ func (s *Server) validateEquivocation(blk interfaces.ReadOnlyBeaconBlock) error 
 	return nil
 }
 
-func (s *Server) validateBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+func (s *Server) validateBlobs(blk interfaces.SignedBeaconBlock, blobs [][]byte, proofs [][]byte) error {
+	const numberOfColumns = fieldparams.NumberOfColumns
+
 	if blk.Version() < version.Deneb {
 		return nil
 	}
-	kzgs, err := blk.Block().Body().BlobKzgCommitments()
+	commitments, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
 		return errors.Wrap(err, "could not get blob kzg commitments")
 	}
-	if len(blobs) != len(proofs) || len(blobs) != len(kzgs) {
-		return errors.New("number of blobs, proofs, and commitments do not match")
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(blk.Block().Slot())
+	if len(blobs) > maxBlobsPerBlock {
+		return fmt.Errorf("number of blobs over max, %d > %d", len(blobs), maxBlobsPerBlock)
 	}
-	for i, blob := range blobs {
-		b := kzg4844.Blob(blob)
-		if err := kzg4844.VerifyBlobProof(&b, kzg4844.Commitment(kzgs[i]), kzg4844.Proof(proofs[i])); err != nil {
-			return errors.Wrap(err, "could not verify blob proof")
+	if blk.Version() >= version.Fulu {
+		// For Fulu blocks, proofs are cell proofs (blobs * numberOfColumns)
+		expectedProofsCount := uint64(len(blobs)) * numberOfColumns
+		if uint64(len(proofs)) != expectedProofsCount || len(blobs) != len(commitments) {
+			return fmt.Errorf("number of blobs (%d), cell proofs (%d), and commitments (%d) do not match (expected %d cell proofs)", len(blobs), len(proofs), len(commitments), expectedProofsCount)
+		}
+		// For Fulu blocks, proofs are cell proofs from execution client's BlobsBundleV2
+		// Verify cell proofs directly without reconstructing data column sidecars
+		if err := kzg.VerifyCellKZGProofBatchFromBlobData(blobs, commitments, proofs, numberOfColumns); err != nil {
+			return errors.Wrap(err, "could not verify cell proofs")
+		}
+	} else {
+		// For pre-Fulu blocks, proofs are blob proofs (1:1 with blobs)
+		if len(blobs) != len(proofs) || len(blobs) != len(commitments) {
+			return errors.Errorf("number of blobs (%d), proofs (%d), and commitments (%d) do not match", len(blobs), len(proofs), len(commitments))
+		}
+		// Use batch verification for better performance
+		if err := kzg.VerifyBlobKZGProofBatch(blobs, commitments, proofs); err != nil {
+			return errors.Wrap(err, "could not verify blob proofs")
 		}
 	}
+
 	return nil
 }
 
@@ -1193,7 +1172,7 @@ func (s *Server) GetStateFork(w http.ResponseWriter, r *http.Request) {
 	fork := st.Fork()
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status"+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1304,7 +1283,7 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 
@@ -1421,8 +1400,7 @@ func (s *Server) GetBlockHeader(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blk, err := s.Blocker.Block(ctx, []byte(blockID))
-	ok := shared.WriteBlockFetchError(w, blk, err)
-	if !ok {
+	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
 	blockHeader, err := blk.Header()
@@ -1485,7 +1463,7 @@ func (s *Server) GetFinalityCheckpoints(w http.ResponseWriter, r *http.Request) 
 	}
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
-		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		helpers.HandleIsOptimisticError(w, err)
 		return
 	}
 	blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1546,48 +1524,6 @@ func (s *Server) GetGenesis(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJson(w, resp)
 }
 
-// Deprecated: no longer needed post Electra
-// GetDepositSnapshot retrieves the EIP-4881 Deposit Tree Snapshot. Either a JSON or,
-// if the Accept header was added, bytes serialized by SSZ will be returned.
-func (s *Server) GetDepositSnapshot(w http.ResponseWriter, r *http.Request) {
-	ctx, span := trace.StartSpan(r.Context(), "beacon.GetDepositSnapshot")
-	defer span.End()
-
-	eth1data, err := s.BeaconDB.ExecutionChainData(ctx)
-	if err != nil {
-		httputil.HandleError(w, "Could not retrieve execution chain data: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if eth1data == nil {
-		httputil.HandleError(w, "Could not retrieve execution chain data: empty Eth1Data", http.StatusInternalServerError)
-		return
-	}
-	snapshot := eth1data.DepositSnapshot
-	if snapshot == nil || len(snapshot.Finalized) == 0 {
-		httputil.HandleError(w, "No finalized snapshot available", http.StatusNotFound)
-		return
-	}
-	if len(snapshot.Finalized) > depositsnapshot.DepositContractDepth {
-		httputil.HandleError(w, "Retrieved invalid deposit snapshot", http.StatusInternalServerError)
-		return
-	}
-	if httputil.RespondWithSsz(r) {
-		sszData, err := snapshot.MarshalSSZ()
-		if err != nil {
-			httputil.HandleError(w, "Could not marshal deposit snapshot into SSZ: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		httputil.WriteSsz(w, sszData)
-		return
-	}
-	httputil.WriteJson(
-		w,
-		&structs.GetDepositSnapshotResponse{
-			Data: structs.DepositSnapshotFromConsensus(snapshot),
-		},
-	)
-}
-
 // Broadcast blob sidecars even if the block of the same slot has been imported.
 // To ensure safety, we will only broadcast blob sidecars if the header references the same block that was previously seen.
 // Otherwise, a proposer could get slashed through a different blob sidecar header reference.
@@ -1600,6 +1536,8 @@ func (s *Server) broadcastSeenBlockSidecars(
 	if err != nil {
 		return err
 	}
+
+	// Broadcast blob sidecars with forkchoice checking
 	for _, sc := range scs {
 		r, err := sc.SignedBlockHeader.Header.HashTreeRoot()
 		if err != nil {
@@ -1659,7 +1597,7 @@ func (s *Server) GetPendingConsolidations(w http.ResponseWriter, r *http.Request
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1715,7 +1653,7 @@ func (s *Server) GetPendingDeposits(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1771,7 +1709,7 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 	} else {
 		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 		if err != nil {
-			httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+			helpers.HandleIsOptimisticError(w, err)
 			return
 		}
 		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
@@ -1785,6 +1723,63 @@ func (s *Server) GetPendingPartialWithdrawals(w http.ResponseWriter, r *http.Req
 			ExecutionOptimistic: isOptimistic,
 			Finalized:           isFinalized,
 			Data:                structs.PendingPartialWithdrawalsFromConsensus(ppw),
+		}
+		httputil.WriteJson(w, resp)
+	}
+}
+
+func (s *Server) GetProposerLookahead(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.GetProposerLookahead")
+	defer span.End()
+
+	stateId := r.PathValue("state_id")
+	if stateId == "" {
+		httputil.HandleError(w, "state_id is required in URL params", http.StatusBadRequest)
+		return
+	}
+	st, err := s.Stater.State(ctx, []byte(stateId))
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+	if st.Version() < version.Fulu {
+		httputil.HandleError(w, "state_id is prior to fulu", http.StatusBadRequest)
+		return
+	}
+	pl, err := st.ProposerLookahead()
+	if err != nil {
+		httputil.HandleError(w, "Could not get proposer look ahead: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(api.VersionHeader, version.String(st.Version()))
+	if httputil.RespondWithSsz(r) {
+		sszLen := (*primitives.ValidatorIndex)(nil).SizeSSZ()
+		sszData := make([]byte, len(pl)*sszLen)
+		for i, idx := range pl {
+			copy(sszData[i*sszLen:(i+1)*sszLen], ssz.MarshalUint64([]byte{}, uint64(idx)))
+		}
+		httputil.WriteSsz(w, sszData)
+	} else {
+		isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
+		if err != nil {
+			helpers.HandleIsOptimisticError(w, err)
+			return
+		}
+		blockRoot, err := st.LatestBlockHeader().HashTreeRoot()
+		if err != nil {
+			httputil.HandleError(w, "Could not calculate root of latest block header: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isFinalized := s.FinalizationFetcher.IsFinalized(ctx, blockRoot)
+		vi := make([]string, len(pl))
+		for i, v := range pl {
+			vi[i] = strconv.FormatUint(uint64(v), 10)
+		}
+		resp := structs.GetProposerLookaheadResponse{
+			Version:             version.String(st.Version()),
+			ExecutionOptimistic: isOptimistic,
+			Finalized:           isFinalized,
+			Data:                vi,
 		}
 		httputil.WriteJson(w, resp)
 	}

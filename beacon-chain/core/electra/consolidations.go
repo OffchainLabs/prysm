@@ -5,19 +5,18 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // ProcessPendingConsolidations implements the spec definition below. This method makes mutating
@@ -194,11 +193,11 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if IsValidSwitchToCompoundingRequest(st, cr) {
 			srcIdx, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(cr.SourcePubkey))
 			if !ok {
-				log.Error("failed to find source validator index")
+				log.Error("Failed to find source validator index")
 				continue
 			}
 			if err := SwitchToCompoundingValidator(st, srcIdx); err != nil {
-				log.WithError(err).Error("failed to switch to compounding validator")
+				log.WithError(err).Error("Failed to switch to compounding validator")
 			}
 			continue
 		}
@@ -278,19 +277,19 @@ func ProcessConsolidationRequests(ctx context.Context, st state.BeaconState, req
 		if uint64(curEpoch) < e {
 			continue
 		}
-		bal, err := st.PendingBalanceToWithdraw(srcIdx)
+		hasBal, err := st.HasPendingBalanceToWithdraw(srcIdx)
 		if err != nil {
-			log.WithError(err).Error("failed to fetch pending balance to withdraw")
+			log.WithError(err).Error("Failed to fetch pending balance to withdraw")
 			continue
 		}
-		if bal > 0 {
+		if hasBal {
 			continue
 		}
 
 		// Initiate the exit of the source validator.
 		exitEpoch, err := ComputeConsolidationEpochAndUpdateChurn(ctx, st, primitives.Gwei(srcV.EffectiveBalance))
 		if err != nil {
-			log.WithError(err).Error("failed to compute consolidation epoch")
+			log.WithError(err).Error("Failed to compute consolidation epoch")
 			continue
 		}
 		srcV.ExitEpoch = exitEpoch

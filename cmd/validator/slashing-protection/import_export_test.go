@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/db/common"
-	dbTest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
-	"github.com/OffchainLabs/prysm/v6/validator/slashing-protection-history/format"
-	mocks "github.com/OffchainLabs/prysm/v6/validator/testing"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/db/common"
+	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/slashing-protection-history/format"
+	mocks "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/urfave/cli/v2"
 )
 
@@ -155,7 +155,7 @@ func TestImportExportSlashingProtectionCli_EmptyData(t *testing.T) {
 	require.NoError(t, err)
 	attestingHistory := make([][]*common.AttestationRecord, 0)
 	proposalHistory := make([]common.ProposalHistoryForPubkey, len(pubKeys))
-	for i := 0; i < len(pubKeys); i++ {
+	for i := range pubKeys {
 		proposalHistory[i].Proposals = make([]common.Proposal, 0)
 	}
 	mockJSON, err := mocks.MockSlashingProtectionJSON(pubKeys, attestingHistory, proposalHistory)

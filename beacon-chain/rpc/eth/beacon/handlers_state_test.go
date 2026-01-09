@@ -11,19 +11,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	chainMock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	dbTest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpbalpha "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpbalpha "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -192,8 +192,14 @@ func TestGetRandao(t *testing.T) {
 		assert.Equal(t, hexutil.Encode(mixOld[:]), resp.Data.Randao)
 	})
 	t.Run("head state below `EpochsPerHistoricalVector`", func(t *testing.T) {
-		s.Stater = &testutil.MockStater{
-			BeaconState: headSt,
+		s := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: headSt,
+			},
+			HeadFetcher:           chainService,
+			OptimisticModeFetcher: chainService,
+			FinalizationFetcher:   chainService,
+			BeaconDB:              db,
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao", nil)
@@ -303,6 +309,74 @@ func TestGetRandao(t *testing.T) {
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
 		assert.DeepEqual(t, true, resp.Finalized)
 	})
+	t.Run("early epoch scenario - epoch 0 from state at epoch (EpochsPerHistoricalVector - 1)", func(t *testing.T) {
+		// Create a state at early epoch
+		earlyEpochState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		earlyEpoch := params.BeaconConfig().EpochsPerHistoricalVector - 1
+		require.NoError(t, earlyEpochState.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(earlyEpoch)))
+
+		// Set up RANDAO mix for epoch 0
+		// In real networks, this would be the ETH1 block hash used for genesis
+		epoch0Randao := bytesutil.ToBytes32([]byte("epoch0"))
+		require.NoError(t, earlyEpochState.UpdateRandaoMixesAtIndex(0, epoch0Randao))
+
+		earlyServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: earlyEpochState,
+			},
+			HeadFetcher:           &chainMock.ChainService{},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+			FinalizationFetcher:   &chainMock.ChainService{},
+		}
+
+		// Query epoch 0 from state at epoch (EpochsPerHistoricalVector - 1) - should succeed
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=0", nil)
+		request.SetPathValue("state_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		earlyServer.GetRandao(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code, "Early epoch queries should succeed when within bounds")
+
+		resp := &structs.GetRandaoResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, hexutil.Encode(epoch0Randao[:]), resp.Data.Randao)
+	})
+	t.Run("early epoch scenario - epoch 0 from state at epoch EpochsPerHistoricalVector", func(t *testing.T) {
+		// Create a state at early epoch
+		earlyEpochState, err := util.NewBeaconState()
+		require.NoError(t, err)
+		earlyEpoch := params.BeaconConfig().EpochsPerHistoricalVector
+		require.NoError(t, earlyEpochState.SetSlot(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(earlyEpoch)))
+
+		// Set up RANDAO mix for epoch 0
+		// In real networks, this would be the ETH1 block hash used for genesis
+		epoch0Randao := bytesutil.ToBytes32([]byte("epoch0"))
+		require.NoError(t, earlyEpochState.UpdateRandaoMixesAtIndex(0, epoch0Randao))
+
+		earlyServer := &Server{
+			Stater: &testutil.MockStater{
+				BeaconState: earlyEpochState,
+			},
+			HeadFetcher:           &chainMock.ChainService{},
+			OptimisticModeFetcher: &chainMock.ChainService{},
+			FinalizationFetcher:   &chainMock.ChainService{},
+		}
+
+		// Query epoch 0 from state at epoch EpochsPerHistoricalVector - should fail
+		request := httptest.NewRequest(http.MethodGet, "http://example.com//eth/v1/beacon/states/{state_id}/randao?epoch=0", nil)
+		request.SetPathValue("state_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		earlyServer.GetRandao(writer, request)
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		e := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+		assert.Equal(t, http.StatusBadRequest, e.Code)
+		require.StringContains(t, "Epoch is out of range for the randao mixes of the state", e.Message)
+	})
 }
 
 func Test_currentCommitteeIndicesFromState(t *testing.T) {
@@ -310,7 +384,7 @@ func Test_currentCommitteeIndicesFromState(t *testing.T) {
 	vals := st.Validators()
 	wantedCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	wantedIndices := make([]string, len(wantedCommittee))
-	for i := 0; i < len(wantedCommittee); i++ {
+	for i := range wantedCommittee {
 		wantedIndices[i] = strconv.FormatUint(uint64(i), 10)
 		wantedCommittee[i] = vals[i].PublicKey
 	}
@@ -341,7 +415,7 @@ func Test_nextCommitteeIndicesFromState(t *testing.T) {
 	vals := st.Validators()
 	wantedCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	wantedIndices := make([]string, len(wantedCommittee))
-	for i := 0; i < len(wantedCommittee); i++ {
+	for i := range wantedCommittee {
 		wantedIndices[i] = strconv.FormatUint(uint64(i), 10)
 		wantedCommittee[i] = vals[i].PublicKey
 	}
@@ -371,7 +445,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetCurrentSyncCommittee(&ethpbalpha.SyncCommittee{
@@ -386,10 +460,7 @@ func Test_extractSyncSubcommittees(t *testing.T) {
 	for i := uint64(0); i < commSize; i += subCommSize {
 		sub := make([]string, 0)
 		start := i
-		end := i + subCommSize
-		if end > commSize {
-			end = commSize
-		}
+		end := min(i+subCommSize, commSize)
 		for j := start; j < end; j++ {
 			sub = append(sub, strconv.FormatUint(j, 10))
 		}
@@ -424,7 +495,7 @@ func TestGetSyncCommittees(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetCurrentSyncCommittee(&ethpbalpha.SyncCommittee{
@@ -583,11 +654,15 @@ func (m *futureSyncMockFetcher) StateBySlot(context.Context, primitives.Slot) (s
 	return m.BeaconState, nil
 }
 
+func (m *futureSyncMockFetcher) StateByEpoch(context.Context, primitives.Epoch) (state.BeaconState, error) {
+	return m.BeaconState, nil
+}
+
 func TestGetSyncCommittees_Future(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateAltair(t, params.BeaconConfig().SyncCommitteeSize)
 	syncCommittee := make([][]byte, params.BeaconConfig().SyncCommitteeSize)
 	vals := st.Validators()
-	for i := 0; i < len(syncCommittee); i++ {
+	for i := range syncCommittee {
 		syncCommittee[i] = vals[i].PublicKey
 	}
 	require.NoError(t, st.SetNextSyncCommittee(&ethpbalpha.SyncCommittee{

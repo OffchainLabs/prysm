@@ -3,16 +3,16 @@ package validator
 import (
 	"bytes"
 
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
-func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.BlobsBundle) ([]*ethpb.BlobSidecar, error) {
+func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle enginev1.BlobsBundler) ([]*ethpb.BlobSidecar, error) {
 	if block.Version() < version.Deneb {
 		return nil, nil
 	}
@@ -33,26 +33,30 @@ func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.B
 		return nil, err
 	}
 
+	kzgCommitments := bundle.GetKzgCommitments()
+	blobs := bundle.GetBlobs()
+	proofs := bundle.GetProofs()
+
 	// Ensure there are equal counts of blobs/commitments/proofs.
-	if len(bundle.KzgCommitments) != len(bundle.Blobs) {
+	if len(kzgCommitments) != len(blobs) {
 		return nil, errors.New("mismatch commitments count")
 	}
-	if len(bundle.Proofs) != len(bundle.Blobs) {
+	if len(proofs) != len(blobs) {
 		return nil, errors.New("mismatch proofs count")
 	}
 
 	// Verify that commitments in the bundle match the block.
-	if len(bundle.KzgCommitments) != len(blockCommitments) {
+	if len(kzgCommitments) != len(blockCommitments) {
 		return nil, errors.New("commitment count doesn't match block")
 	}
 	for i, commitment := range blockCommitments {
-		if !bytes.Equal(bundle.KzgCommitments[i], commitment) {
+		if !bytes.Equal(kzgCommitments[i], commitment) {
 			return nil, errors.New("commitment value doesn't match block")
 		}
 	}
 
-	sidecars := make([]*ethpb.BlobSidecar, len(bundle.Blobs))
-	for i, b := range bundle.Blobs {
+	sidecars := make([]*ethpb.BlobSidecar, len(blobs))
+	for i, b := range blobs {
 		proof, err := consensusblocks.MerkleProofKZGCommitment(body, i)
 		if err != nil {
 			return nil, err
@@ -60,8 +64,8 @@ func unblindBlobsSidecars(block interfaces.SignedBeaconBlock, bundle *enginev1.B
 		sidecars[i] = &ethpb.BlobSidecar{
 			Index:                    uint64(i),
 			Blob:                     bytesutil.SafeCopyBytes(b),
-			KzgCommitment:            bytesutil.SafeCopyBytes(bundle.KzgCommitments[i]),
-			KzgProof:                 bytesutil.SafeCopyBytes(bundle.Proofs[i]),
+			KzgCommitment:            bytesutil.SafeCopyBytes(kzgCommitments[i]),
+			KzgProof:                 bytesutil.SafeCopyBytes(proofs[i]),
 			SignedBlockHeader:        header,
 			CommitmentInclusionProof: proof,
 		}

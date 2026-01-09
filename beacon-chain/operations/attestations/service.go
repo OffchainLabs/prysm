@@ -8,10 +8,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -24,7 +24,7 @@ type Service struct {
 	cancel                  context.CancelFunc
 	err                     error
 	forkChoiceProcessedAtts *lru.Cache
-	genesisTime             uint64
+	genesisTime             time.Time
 }
 
 // Config options for the service.
@@ -95,6 +95,6 @@ func (s *Service) Status() error {
 }
 
 // SetGenesisTime sets genesis time for operation service to use.
-func (s *Service) SetGenesisTime(t uint64) {
-	s.genesisTime = t
+func (s *Service) SetGenesisTime(t time.Time) {
+	s.genesisTime = t.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }

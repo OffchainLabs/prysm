@@ -24,29 +24,30 @@ package peers
 
 import (
 	"context"
-	"math"
+	"net"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	pmath "github.com/OffchainLabs/prysm/v6/math"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	pmath "github.com/OffchainLabs/prysm/v7/math"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 const (
@@ -81,37 +82,44 @@ const (
 type InternetProtocol string
 
 const (
-	TCP  = "tcp"
-	QUIC = "quic"
+	TCP  = InternetProtocol("tcp")
+	QUIC = InternetProtocol("quic")
 )
 
-// Status is the structure holding the peer status information.
-type Status struct {
-	ctx       context.Context
-	scorers   *scorers.Service
-	store     *peerdata.Store
-	ipTracker map[string]uint64
-	rand      *rand.Rand
-}
+type (
+	// Status is the structure holding the peer status information.
+	Status struct {
+		ctx                   context.Context
+		scorers               *scorers.Service
+		store                 *peerdata.Store
+		ipTracker             map[string]uint64
+		rand                  *rand.Rand
+		ipColocationWhitelist []*net.IPNet
+	}
 
-// StatusConfig represents peer status service params.
-type StatusConfig struct {
-	// PeerLimit specifies maximum amount of concurrent peers that are expected to be connect to the node.
-	PeerLimit int
-	// ScorerParams holds peer scorer configuration params.
-	ScorerParams *scorers.Config
-}
+	// StatusConfig represents peer status service params.
+	StatusConfig struct {
+		// PeerLimit specifies maximum amount of concurrent peers that are expected to be connect to the node.
+		PeerLimit int
+		// ScorerParams holds peer scorer configuration params.
+		ScorerParams *scorers.Config
+		// IPColocationWhitelist contains CIDR ranges that are exempt from IP colocation limits.
+		IPColocationWhitelist []*net.IPNet
+	}
+)
 
 // NewStatus creates a new status entity.
 func NewStatus(ctx context.Context, config *StatusConfig) *Status {
 	store := peerdata.NewStore(ctx, &peerdata.StoreConfig{
 		MaxPeers: maxLimitBuffer + config.PeerLimit,
 	})
+
 	return &Status{
-		ctx:       ctx,
-		store:     store,
-		scorers:   scorers.NewService(ctx, store, config.ScorerParams),
-		ipTracker: map[string]uint64{},
+		ctx:                   ctx,
+		store:                 store,
+		scorers:               scorers.NewService(ctx, store, config.ScorerParams),
+		ipTracker:             map[string]uint64{},
+		ipColocationWhitelist: config.IPColocationWhitelist,
 		// Random generator used to calculate dial backoff period.
 		// It is ok to use deterministic generator, no need for true entropy.
 		rand: rand.NewDeterministicGenerator(),
@@ -205,14 +213,14 @@ func (p *Status) ENR(pid peer.ID) (*enr.Record, error) {
 }
 
 // SetChainState sets the chain state of the given remote peer.
-func (p *Status) SetChainState(pid peer.ID, chainState *pb.Status) {
+func (p *Status) SetChainState(pid peer.ID, chainState *pb.StatusV2) {
 	p.scorers.PeerStatusScorer().SetPeerStatus(pid, chainState, nil)
 }
 
 // ChainState gets the chain state of the given remote peer.
 // This will error if the peer does not exist.
 // This will error if there is no known chain state for the peer.
-func (p *Status) ChainState(pid peer.ID) (*pb.Status, error) {
+func (p *Status) ChainState(pid peer.ID) (*pb.StatusV2, error) {
 	return p.scorers.PeerStatusScorer().PeerStatus(pid)
 }
 
@@ -299,11 +307,8 @@ func (p *Status) SubscribedToSubnet(index uint64) []peer.ID {
 		connectedStatus := peerData.ConnState == Connecting || peerData.ConnState == Connected
 		if connectedStatus && peerData.MetaData != nil && !peerData.MetaData.IsNil() && peerData.MetaData.AttnetsBitfield() != nil {
 			indices := indicesFromBitfield(peerData.MetaData.AttnetsBitfield())
-			for _, idx := range indices {
-				if idx == index {
-					peers = append(peers, pid)
-					break
-				}
+			if slices.Contains(indices, index) {
+				peers = append(peers, pid)
 			}
 		}
 	}
@@ -393,7 +398,7 @@ func (p *Status) SetNextValidTime(pid peer.ID, nextTime time.Time) {
 	peerData.NextValidTime = nextTime
 }
 
-// RandomizeBackOff adds extra backoff period during which peer will not be dialed.
+// RandomizeBackOff adds extra backoff period during which peer won't be dialed.
 func (p *Status) RandomizeBackOff(pid peer.ID) {
 	p.store.Lock()
 	defer p.store.Unlock()
@@ -405,7 +410,7 @@ func (p *Status) RandomizeBackOff(pid peer.ID) {
 		return
 	}
 
-	duration := time.Duration(math.Max(MinBackOffDuration, float64(p.rand.Intn(MaxBackOffDuration)))) * time.Millisecond
+	duration := time.Duration(max(MinBackOffDuration, float64(p.rand.Intn(MaxBackOffDuration)))) * time.Millisecond
 	peerData.NextValidTime = time.Now().Add(duration)
 }
 
@@ -641,10 +646,7 @@ func (p *Status) Prune() {
 		return peersToPrune[i].score > peersToPrune[j].score
 	})
 
-	limitDiff := len(p.store.Peers()) - p.store.Config().MaxPeers
-	if limitDiff > len(peersToPrune) {
-		limitDiff = len(peersToPrune)
-	}
+	limitDiff := min(len(p.store.Peers())-p.store.Config().MaxPeers, len(peersToPrune))
 
 	peersToPrune = peersToPrune[:limitDiff]
 
@@ -693,10 +695,7 @@ func (p *Status) deprecatedPrune() {
 		return peersToPrune[i].badResp < peersToPrune[j].badResp
 	})
 
-	limitDiff := len(p.store.Peers()) - p.store.Config().MaxPeers
-	if limitDiff > len(peersToPrune) {
-		limitDiff = len(peersToPrune)
-	}
+	limitDiff := min(len(p.store.Peers())-p.store.Config().MaxPeers, len(peersToPrune))
 	peersToPrune = peersToPrune[:limitDiff]
 	// Delete peers from map.
 	for _, peerData := range peersToPrune {
@@ -705,85 +704,90 @@ func (p *Status) deprecatedPrune() {
 	p.tallyIPTracker()
 }
 
-// BestFinalized returns the highest finalized epoch equal to or higher than ours that is agreed
-// upon by the majority of peers. This method may not return the absolute highest finalized, but
-// the finalized epoch in which most peers can serve blocks (plurality voting).
-// Ideally, all peers would be reporting the same finalized epoch but some may be behind due to their
-// own latency, or because of their finalized epoch at the time we queried them.
-// Returns epoch number and list of peers that are at or beyond that epoch.
-func (p *Status) BestFinalized(maxPeers int, ourFinalizedEpoch primitives.Epoch) (primitives.Epoch, []peer.ID) {
+// BestFinalized groups all peers by their last known finalized epoch
+// and selects the epoch of the largest group as best.
+// Any peer with a finalized epoch < ourFinalized is excluded from consideration.
+// In the event of a tie in largest group size, the higher epoch is the tie breaker.
+// The selected epoch is returned, along with a list of peers with a finalized epoch >= the selected epoch.
+func (p *Status) BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch, []peer.ID) {
 	connected := p.Connected()
-	finalizedEpochVotes := make(map[primitives.Epoch]uint64)
-	pidEpoch := make(map[peer.ID]primitives.Epoch, len(connected))
-	pidHead := make(map[peer.ID]primitives.Slot, len(connected))
-	potentialPIDs := make([]peer.ID, 0, len(connected))
+	pids := make([]peer.ID, 0, len(connected))
+	views := make(map[peer.ID]*pb.StatusV2, len(connected))
+
+	votes := make(map[primitives.Epoch]uint64)
+	winner := primitives.Epoch(0)
 	for _, pid := range connected {
-		peerChainState, err := p.ChainState(pid)
-		if err == nil && peerChainState != nil && peerChainState.FinalizedEpoch >= ourFinalizedEpoch {
-			finalizedEpochVotes[peerChainState.FinalizedEpoch]++
-			pidEpoch[pid] = peerChainState.FinalizedEpoch
-			potentialPIDs = append(potentialPIDs, pid)
-			pidHead[pid] = peerChainState.HeadSlot
+		view, err := p.ChainState(pid)
+		if err != nil || view == nil || view.FinalizedEpoch < ourFinalized {
+			continue
+		}
+		pids = append(pids, pid)
+		views[pid] = view
+
+		votes[view.FinalizedEpoch]++
+		if winner == 0 {
+			winner = view.FinalizedEpoch
+			continue
+		}
+		e, v := view.FinalizedEpoch, votes[view.FinalizedEpoch]
+		if v > votes[winner] || v == votes[winner] && e > winner {
+			winner = e
 		}
 	}
 
-	// Select the target epoch, which is the epoch most peers agree upon.
-	var targetEpoch primitives.Epoch
-	var mostVotes uint64
-	for epoch, count := range finalizedEpochVotes {
-		if count > mostVotes || (count == mostVotes && epoch > targetEpoch) {
-			mostVotes = count
-			targetEpoch = epoch
+	// Descending sort by (finalized, head).
+	sort.Slice(pids, func(i, j int) bool {
+		iv, jv := views[pids[i]], views[pids[j]]
+		if iv.FinalizedEpoch == jv.FinalizedEpoch {
+			return iv.HeadSlot > jv.HeadSlot
 		}
-	}
 
-	// Sort PIDs by finalized epoch, in decreasing order.
-	sort.Slice(potentialPIDs, func(i, j int) bool {
-		if pidEpoch[potentialPIDs[i]] == pidEpoch[potentialPIDs[j]] {
-			return pidHead[potentialPIDs[i]] > pidHead[potentialPIDs[j]]
-		}
-		return pidEpoch[potentialPIDs[i]] > pidEpoch[potentialPIDs[j]]
+		return iv.FinalizedEpoch > jv.FinalizedEpoch
 	})
 
-	// Trim potential peers to those on or after target epoch.
-	for i, pid := range potentialPIDs {
-		if pidEpoch[pid] < targetEpoch {
-			potentialPIDs = potentialPIDs[:i]
-			break
-		}
-	}
+	// Find the first peer with finalized epoch < winner, trim and all following (lower) peers.
+	trim := sort.Search(len(pids), func(i int) bool {
+		return views[pids[i]].FinalizedEpoch < winner
+	})
+	pids = pids[:trim]
 
-	// Trim potential peers to at most maxPeers.
-	if len(potentialPIDs) > maxPeers {
-		potentialPIDs = potentialPIDs[:maxPeers]
-	}
-
-	return targetEpoch, potentialPIDs
+	return winner, pids
 }
 
 // BestNonFinalized returns the highest known epoch, higher than ours,
 // and is shared by at least minPeers.
 func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (primitives.Epoch, []peer.ID) {
 	connected := p.Connected()
-	epochVotes := make(map[primitives.Epoch]uint64)
-	pidEpoch := make(map[peer.ID]primitives.Epoch, len(connected))
-	pidHead := make(map[peer.ID]primitives.Slot, len(connected))
-	potentialPIDs := make([]peer.ID, 0, len(connected))
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	ourHeadSlot := slotsPerEpoch.Mul(uint64(ourHeadEpoch))
 
-	ourHeadSlot := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(ourHeadEpoch))
+	// key: head epoch, value: number of peers that support this epoch.
+	epochVotes := make(map[primitives.Epoch]uint64)
+
+	// key: peer ID, value: head epoch of the peer.
+	pidEpoch := make(map[peer.ID]primitives.Epoch, len(connected))
+
+	// key: peer ID, value: head slot of the peer.
+	pidHead := make(map[peer.ID]primitives.Slot, len(connected))
+
+	potentialPIDs := make([]peer.ID, 0, len(connected))
 	for _, pid := range connected {
 		peerChainState, err := p.ChainState(pid)
-		if err == nil && peerChainState != nil && peerChainState.HeadSlot > ourHeadSlot {
-			epoch := slots.ToEpoch(peerChainState.HeadSlot)
-			epochVotes[epoch]++
-			pidEpoch[pid] = epoch
-			pidHead[pid] = peerChainState.HeadSlot
-			potentialPIDs = append(potentialPIDs, pid)
+		// Skip if the peer's head epoch is not defined, or if the peer's head slot is
+		// lower or equal than ours.
+		if err != nil || peerChainState == nil || peerChainState.HeadSlot <= ourHeadSlot {
+			continue
 		}
+
+		epoch := slots.ToEpoch(peerChainState.HeadSlot)
+		epochVotes[epoch]++
+		pidEpoch[pid] = epoch
+		pidHead[pid] = peerChainState.HeadSlot
+		potentialPIDs = append(potentialPIDs, pid)
 	}
 
 	// Select the target epoch, which has enough peers' votes (>= minPeers).
-	var targetEpoch primitives.Epoch
+	targetEpoch := primitives.Epoch(0)
 	for epoch, votes := range epochVotes {
 		if votes >= uint64(minPeers) && targetEpoch < epoch {
 			targetEpoch = epoch
@@ -1019,7 +1023,17 @@ func (p *Status) isfromBadIP(pid peer.ID) error {
 
 	if val, ok := p.ipTracker[ip.String()]; ok {
 		if val > CollocationLimit {
-			return errors.Errorf("collocation limit exceeded: got %d - limit %d", val, CollocationLimit)
+			// Check if IP is in the whitelist
+			for _, ipNet := range p.ipColocationWhitelist {
+				if ipNet.Contains(ip) {
+					// IP is whitelisted, skip colocation limit check
+					return nil
+				}
+			}
+			return errors.Errorf(
+				"colocation limit exceeded: got %d - limit %d for peer %v with IP %v",
+				val, CollocationLimit, pid, ip.String(),
+			)
 		}
 	}
 
@@ -1087,7 +1101,7 @@ func sameIP(firstAddr, secondAddr ma.Multiaddr) bool {
 
 func indicesFromBitfield(bitV bitfield.Bitvector64) []uint64 {
 	committeeIdxs := make([]uint64, 0, bitV.Count())
-	for i := uint64(0); i < 64; i++ {
+	for i := range uint64(64) {
 		if bitV.BitAt(i) {
 			committeeIdxs = append(committeeIdxs, i)
 		}

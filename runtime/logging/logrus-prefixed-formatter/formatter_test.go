@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"testing"
 
-	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )

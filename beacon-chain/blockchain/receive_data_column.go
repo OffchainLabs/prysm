@@ -1,7 +1,7 @@
 package blockchain
 
 import (
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/pkg/errors"
 )
 
@@ -15,10 +15,9 @@ func (s *Service) ReceiveDataColumns(dataColumnSidecars []blocks.VerifiedRODataC
 }
 
 // ReceiveDataColumn receives a single data column.
-// (It is only a wrapper around ReceiveDataColumns.)
 func (s *Service) ReceiveDataColumn(dataColumnSidecar blocks.VerifiedRODataColumn) error {
 	if err := s.dataColumnStorage.Save([]blocks.VerifiedRODataColumn{dataColumnSidecar}); err != nil {
-		return errors.Wrap(err, "save data column sidecars")
+		return errors.Wrap(err, "save data column sidecar")
 	}
 
 	return nil

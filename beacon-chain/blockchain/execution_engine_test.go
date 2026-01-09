@@ -5,25 +5,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	bstate "github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	bstate "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -309,6 +310,7 @@ func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 		block: wba,
 	}
 
+	genesis.StoreStateDuringTest(t, st)
 	require.NoError(t, beaconDB.SaveState(ctx, st, bra))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, bra))
 	a := &fcuConfig{
@@ -403,6 +405,7 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 	require.NoError(t, err)
 
 	bState, _ := util.DeterministicGenesisState(t, 10)
+	genesis.StoreStateDuringTest(t, bState)
 	require.NoError(t, beaconDB.SaveState(ctx, bState, bra))
 	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
 	state, blkRoot, err = prepareForkchoiceState(ctx, 2, brb, bra, [32]byte{'B'}, ojc, ofc)
@@ -478,33 +481,12 @@ func Test_NotifyNewPayload(t *testing.T) {
 	phase0State, _ := util.DeterministicGenesisState(t, 1)
 	altairState, _ := util.DeterministicGenesisStateAltair(t, 1)
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
-	a := &ethpb.SignedBeaconBlockAltair{
-		Block: &ethpb.BeaconBlockAltair{
-			Body: &ethpb.BeaconBlockBodyAltair{},
-		},
-	}
+	a := util.NewBeaconBlockAltair()
 	altairBlk, err := consensusblocks.NewSignedBeaconBlock(a)
 	require.NoError(t, err)
-	blk := &ethpb.SignedBeaconBlockBellatrix{
-		Block: &ethpb.BeaconBlockBellatrix{
-			Slot: 1,
-			Body: &ethpb.BeaconBlockBodyBellatrix{
-				ExecutionPayload: &v1.ExecutionPayload{
-					BlockNumber:   1,
-					ParentHash:    make([]byte, fieldparams.RootLength),
-					FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-					StateRoot:     make([]byte, fieldparams.RootLength),
-					ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-					LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-					PrevRandao:    make([]byte, fieldparams.RootLength),
-					ExtraData:     make([]byte, 0),
-					BaseFeePerGas: make([]byte, fieldparams.RootLength),
-					BlockHash:     make([]byte, fieldparams.RootLength),
-					Transactions:  make([][]byte, 0),
-				},
-			},
-		},
-	}
+	blk := util.NewBeaconBlockBellatrix()
+	blk.Block.Slot = 1
+	blk.Block.Body.ExecutionPayload.BlockNumber = 1
 	bellatrixBlk, err := consensusblocks.NewSignedBeaconBlock(util.HydrateSignedBeaconBlockBellatrix(blk))
 	require.NoError(t, err)
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
@@ -542,12 +524,6 @@ func Test_NotifyNewPayload(t *testing.T) {
 			isValidPayload: true,
 		},
 		{
-			name:           "nil beacon block",
-			postState:      bellatrixState,
-			errString:      "signed beacon block can't be nil",
-			isValidPayload: false,
-		},
-		{
 			name:           "new payload with optimistic block",
 			postState:      bellatrixState,
 			blk:            bellatrixBlk,
@@ -573,15 +549,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "altair pre state, happy case",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -592,24 +561,7 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "not at merge transition",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash:    make([]byte, fieldparams.RootLength),
-								FeeRecipient:  make([]byte, fieldparams.FeeRecipientLength),
-								StateRoot:     make([]byte, fieldparams.RootLength),
-								ReceiptsRoot:  make([]byte, fieldparams.RootLength),
-								LogsBloom:     make([]byte, fieldparams.LogsBloomLength),
-								PrevRandao:    make([]byte, fieldparams.RootLength),
-								ExtraData:     make([]byte, 0),
-								BaseFeePerGas: make([]byte, fieldparams.RootLength),
-								BlockHash:     make([]byte, fieldparams.RootLength),
-								Transactions:  make([][]byte, 0),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -620,15 +572,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "happy case",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -639,15 +584,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "undefined error from ee",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -659,15 +597,8 @@ func Test_NotifyNewPayload(t *testing.T) {
 			name:      "invalid block hash error from ee",
 			postState: bellatrixState,
 			blk: func() interfaces.ReadOnlySignedBeaconBlock {
-				blk := &ethpb.SignedBeaconBlockBellatrix{
-					Block: &ethpb.BeaconBlockBellatrix{
-						Body: &ethpb.BeaconBlockBodyBellatrix{
-							ExecutionPayload: &v1.ExecutionPayload{
-								ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-							},
-						},
-					},
-				}
+				blk := util.NewBeaconBlockBellatrix()
+				blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 				b, err := consensusblocks.NewSignedBeaconBlock(blk)
 				require.NoError(t, err)
 				return b
@@ -698,7 +629,9 @@ func Test_NotifyNewPayload(t *testing.T) {
 			require.NoError(t, service.cfg.ForkChoiceStore.InsertNode(ctx, state, blkRoot))
 			postVersion, postHeader, err := getStateVersionAndPayload(tt.postState)
 			require.NoError(t, err)
-			isValidPayload, err := service.notifyNewPayload(ctx, postVersion, postHeader, tt.blk)
+			rob, err := consensusblocks.NewROBlock(tt.blk)
+			require.NoError(t, err)
+			isValidPayload, err := service.notifyNewPayload(ctx, postVersion, postHeader, rob)
 			if tt.errString != "" {
 				require.ErrorContains(t, tt.errString, err)
 				if tt.invalidBlock {
@@ -722,16 +655,11 @@ func Test_NotifyNewPayload_SetOptimisticToValid(t *testing.T) {
 	ctx := tr.ctx
 
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
-	blk := &ethpb.SignedBeaconBlockBellatrix{
-		Block: &ethpb.BeaconBlockBellatrix{
-			Body: &ethpb.BeaconBlockBodyBellatrix{
-				ExecutionPayload: &v1.ExecutionPayload{
-					ParentHash: bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength),
-				},
-			},
-		},
-	}
+	blk := util.NewBeaconBlockBellatrix()
+	blk.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'a'}, fieldparams.RootLength)
 	bellatrixBlk, err := consensusblocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	rob, err := consensusblocks.NewROBlock(bellatrixBlk)
 	require.NoError(t, err)
 	e := &mockExecution.EngineClient{BlockByHashMap: map[[32]byte]*v1.ExecutionBlock{}}
 	e.BlockByHashMap[[32]byte{'a'}] = &v1.ExecutionBlock{
@@ -749,7 +677,7 @@ func Test_NotifyNewPayload_SetOptimisticToValid(t *testing.T) {
 	service.cfg.ExecutionEngineCaller = e
 	postVersion, postHeader, err := getStateVersionAndPayload(bellatrixState)
 	require.NoError(t, err)
-	validated, err := service.notifyNewPayload(ctx, postVersion, postHeader, bellatrixBlk)
+	validated, err := service.notifyNewPayload(ctx, postVersion, postHeader, rob)
 	require.NoError(t, err)
 	require.Equal(t, true, validated)
 }
@@ -1124,41 +1052,4 @@ func TestKZGCommitmentToVersionedHashes(t *testing.T) {
 	require.Equal(t, 2, len(vhs))
 	require.Equal(t, vhs[0].String(), vh0)
 	require.Equal(t, vhs[1].String(), vh1)
-}
-
-func TestComputePayloadAttribute(t *testing.T) {
-	service, tr := minimalTestService(t, WithPayloadIDCache(cache.NewPayloadIDCache()))
-	ctx := tr.ctx
-
-	st, _ := util.DeterministicGenesisStateBellatrix(t, 1)
-
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, Index: 0})
-	// Cache hit, advance state, no fee recipient
-	slot := primitives.Slot(1)
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
-	blk := util.NewBeaconBlockBellatrix()
-	signed, err := consensusblocks.NewSignedBeaconBlock(blk)
-	require.NoError(t, err)
-	roblock, err := consensusblocks.NewROBlockWithRoot(signed, [32]byte{'a'})
-	require.NoError(t, err)
-	cfg := &postBlockProcessConfig{
-		ctx:     ctx,
-		roblock: roblock,
-	}
-	fcu := &fcuConfig{
-		headState:     st,
-		proposingSlot: slot,
-		headRoot:      [32]byte{},
-	}
-	require.NoError(t, service.computePayloadAttributes(cfg, fcu))
-	require.Equal(t, false, fcu.attributes.IsEmpty())
-	require.Equal(t, params.BeaconConfig().EthBurnAddressHex, common.BytesToAddress(fcu.attributes.SuggestedFeeRecipient()).String())
-
-	// Cache hit, advance state, has fee recipient
-	suggestedAddr := common.HexToAddress("123")
-	service.cfg.TrackedValidatorsCache.Set(cache.TrackedValidator{Active: true, FeeRecipient: primitives.ExecutionAddress(suggestedAddr), Index: 0})
-	service.cfg.PayloadIDCache.Set(slot, [32]byte{}, [8]byte{})
-	require.NoError(t, service.computePayloadAttributes(cfg, fcu))
-	require.Equal(t, false, fcu.attributes.IsEmpty())
-	require.Equal(t, suggestedAddr, common.BytesToAddress(fcu.attributes.SuggestedFeeRecipient()))
 }

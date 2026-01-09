@@ -6,22 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/peerdata"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestStatus(t *testing.T) {
@@ -183,7 +183,7 @@ func TestPeerCommitteeIndices(t *testing.T) {
 	record.Set(enr.WithEntry("test", []byte{'a'}))
 	p.Add(record, id, address, direction)
 	bitV := bitfield.NewBitvector64()
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		if i == 2 || i == 8 || i == 9 {
 			bitV.SetBitAt(uint64(i), true)
 		}
@@ -218,7 +218,7 @@ func TestPeerSubscribedToSubnet(t *testing.T) {
 	}
 	expectedPeer := p.All()[1]
 	bitV := bitfield.NewBitvector64()
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		if i == 2 || i == 8 || i == 9 {
 			bitV.SetBitAt(uint64(i), true)
 		}
@@ -289,7 +289,7 @@ func TestPeerChainState(t *testing.T) {
 	require.NoError(t, err)
 
 	finalizedEpoch := primitives.Epoch(123)
-	p.SetChainState(id, &pb.Status{FinalizedEpoch: finalizedEpoch})
+	p.SetChainState(id, &pb.StatusV2{FinalizedEpoch: finalizedEpoch})
 
 	resChainState, err := p.ChainState(id)
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestPeerWithNilChainState(t *testing.T) {
 
 	resChainState, err := p.ChainState(id)
 	require.Equal(t, peerdata.ErrNoPeerStatus, err)
-	var nothing *pb.Status
+	var nothing *pb.StatusV2
 	require.Equal(t, resChainState, nothing)
 }
 
@@ -391,7 +391,7 @@ func TestAddMetaData(t *testing.T) {
 
 	// Add some peers with different states
 	numPeers := 5
-	for i := 0; i < numPeers; i++ {
+	for range numPeers {
 		addPeer(t, p, peers.Connected)
 	}
 	newPeer := p.All()[2]
@@ -420,19 +420,19 @@ func TestPeerConnectionStatuses(t *testing.T) {
 
 	// Add some peers with different states
 	numPeersDisconnected := 11
-	for i := 0; i < numPeersDisconnected; i++ {
+	for range numPeersDisconnected {
 		addPeer(t, p, peers.Disconnected)
 	}
 	numPeersConnecting := 7
-	for i := 0; i < numPeersConnecting; i++ {
+	for range numPeersConnecting {
 		addPeer(t, p, peers.Connecting)
 	}
 	numPeersConnected := 43
-	for i := 0; i < numPeersConnected; i++ {
+	for range numPeersConnected {
 		addPeer(t, p, peers.Connected)
 	}
 	numPeersDisconnecting := 4
-	for i := 0; i < numPeersDisconnecting; i++ {
+	for range numPeersDisconnecting {
 		addPeer(t, p, peers.Disconnecting)
 	}
 
@@ -461,7 +461,7 @@ func TestPeerValidTime(t *testing.T) {
 	})
 
 	numPeersConnected := 6
-	for i := 0; i < numPeersConnected; i++ {
+	for range numPeersConnected {
 		addPeer(t, p, peers.Connected)
 	}
 
@@ -564,7 +564,7 @@ func TestPeerIPTracker(t *testing.T) {
 
 	badIP := "211.227.218.116"
 	var badPeers []peer.ID
-	for i := 0; i < peers.CollocationLimit+10; i++ {
+	for i := range peers.CollocationLimit + 10 {
 		port := strconv.Itoa(3000 + i)
 		addr, err := ma.NewMultiaddr("/ip4/" + badIP + "/tcp/" + port)
 		if err != nil {
@@ -616,7 +616,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 1
 	pid1 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid1, &pb.Status{
+	p.SetChainState(pid1, &pb.StatusV2{
 		HeadSlot:       3 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 3,
 		FinalizedRoot:  mockroot3[:],
@@ -624,7 +624,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 2
 	pid2 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid2, &pb.Status{
+	p.SetChainState(pid2, &pb.StatusV2{
 		HeadSlot:       4 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 4,
 		FinalizedRoot:  mockroot4[:],
@@ -632,7 +632,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 3
 	pid3 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid3, &pb.Status{
+	p.SetChainState(pid3, &pb.StatusV2{
 		HeadSlot:       5 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 5,
 		FinalizedRoot:  mockroot5[:],
@@ -640,7 +640,7 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 4
 	pid4 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid4, &pb.Status{
+	p.SetChainState(pid4, &pb.StatusV2{
 		HeadSlot:       2 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 2,
 		FinalizedRoot:  mockroot2[:],
@@ -648,15 +648,16 @@ func TestTrimmedOrderedPeers(t *testing.T) {
 
 	// Peer 5
 	pid5 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid5, &pb.Status{
+	p.SetChainState(pid5, &pb.StatusV2{
 		HeadSlot:       2 * params.BeaconConfig().SlotsPerEpoch,
 		FinalizedEpoch: 2,
 		FinalizedRoot:  mockroot2[:],
 	})
 
-	target, pids := p.BestFinalized(maxPeers, 0)
+	target, pids := p.BestFinalized(0)
 	assert.Equal(t, expectedTarget, target, "Incorrect target epoch retrieved")
-	assert.Equal(t, maxPeers, len(pids), "Incorrect number of peers retrieved")
+	// addPeer called 5 times above
+	assert.Equal(t, 5, len(pids), "Incorrect number of peers retrieved")
 
 	// Expect the returned list to be ordered by finalized epoch and trimmed to max peers.
 	assert.Equal(t, pid3, pids[0], "Incorrect first peer")
@@ -685,12 +686,12 @@ func TestAtInboundPeerLimit(t *testing.T) {
 			},
 		},
 	})
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
 	assert.Equal(t, false, p.IsAboveInboundLimit(), "Inbound limit exceeded")
-	for i := 0; i < 31; i++ {
+	for range 31 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -710,7 +711,7 @@ func TestPrunePeers(t *testing.T) {
 			},
 		},
 	})
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -718,7 +719,7 @@ func TestPrunePeers(t *testing.T) {
 	peersToPrune := p.PeersToPrune()
 	assert.Equal(t, 0, len(peersToPrune))
 
-	for i := 0; i < 18; i++ {
+	for range 18 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -728,7 +729,7 @@ func TestPrunePeers(t *testing.T) {
 	assert.Equal(t, 3, len(peersToPrune))
 
 	// Add in more peers.
-	for i := 0; i < 13; i++ {
+	for range 13 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -738,7 +739,7 @@ func TestPrunePeers(t *testing.T) {
 	for i, pid := range inboundPeers {
 		modulo := i % 5
 		// Increment bad scores for peers.
-		for j := 0; j < modulo; j++ {
+		for range modulo {
 			p.Scorers().BadResponsesScorer().Increment(pid)
 		}
 	}
@@ -772,7 +773,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 		},
 	})
 
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -780,7 +781,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	peersToPrune := p.PeersToPrune()
 	assert.Equal(t, 0, len(peersToPrune))
 
-	for i := 0; i < 18; i++ {
+	for range 18 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -790,7 +791,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	assert.Equal(t, 3, len(peersToPrune))
 
 	// Add in more peers.
-	for i := 0; i < 13; i++ {
+	for range 13 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -801,7 +802,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	for i, pid := range inboundPeers {
 		modulo := i % 5
 		// Increment bad scores for peers.
-		for j := 0; j < modulo; j++ {
+		for range modulo {
 			p.Scorers().BadResponsesScorer().Increment(pid)
 		}
 		if modulo == 4 {
@@ -826,7 +827,7 @@ func TestPrunePeers_TrustedPeers(t *testing.T) {
 	}
 
 	// Add more peers to check if trusted peers can be pruned after they are deleted from trusted peer set.
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		// Peer added to peer handler.
 		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
 	}
@@ -1012,12 +1013,15 @@ func TestStatus_BestPeer(t *testing.T) {
 				},
 			})
 			for _, peerConfig := range tt.peers {
-				p.SetChainState(addPeer(t, p, peers.Connected), &pb.Status{
+				p.SetChainState(addPeer(t, p, peers.Connected), &pb.StatusV2{
 					FinalizedEpoch: peerConfig.finalizedEpoch,
 					HeadSlot:       peerConfig.headSlot,
 				})
 			}
-			epoch, pids := p.BestFinalized(tt.limitPeers, tt.ourFinalizedEpoch)
+			epoch, pids := p.BestFinalized(tt.ourFinalizedEpoch)
+			if len(pids) > tt.limitPeers {
+				pids = pids[:tt.limitPeers]
+			}
 			assert.Equal(t, tt.targetEpoch, epoch, "Unexpected epoch retrieved")
 			assert.Equal(t, tt.targetEpochSupport, len(pids), "Unexpected number of peers supporting retrieved epoch")
 		})
@@ -1039,12 +1043,15 @@ func TestBestFinalized_returnsMaxValue(t *testing.T) {
 	for i := 0; i <= maxPeers+100; i++ {
 		p.Add(new(enr.Record), peer.ID(rune(i)), nil, network.DirOutbound)
 		p.SetConnectionState(peer.ID(rune(i)), peers.Connected)
-		p.SetChainState(peer.ID(rune(i)), &pb.Status{
+		p.SetChainState(peer.ID(rune(i)), &pb.StatusV2{
 			FinalizedEpoch: 10,
 		})
 	}
 
-	_, pids := p.BestFinalized(maxPeers, 0)
+	_, pids := p.BestFinalized(0)
+	if len(pids) > maxPeers {
+		pids = pids[:maxPeers]
+	}
 	assert.Equal(t, maxPeers, len(pids), "Wrong number of peers returned")
 }
 
@@ -1062,7 +1069,7 @@ func TestStatus_BestNonFinalized(t *testing.T) {
 	for i, headSlot := range peerSlots {
 		p.Add(new(enr.Record), peer.ID(rune(i)), nil, network.DirOutbound)
 		p.SetConnectionState(peer.ID(rune(i)), peers.Connected)
-		p.SetChainState(peer.ID(rune(i)), &pb.Status{
+		p.SetChainState(peer.ID(rune(i)), &pb.StatusV2{
 			HeadSlot: headSlot,
 		})
 	}
@@ -1085,17 +1092,17 @@ func TestStatus_CurrentEpoch(t *testing.T) {
 	})
 	// Peer 1
 	pid1 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid1, &pb.Status{
+	p.SetChainState(pid1, &pb.StatusV2{
 		HeadSlot: params.BeaconConfig().SlotsPerEpoch * 4,
 	})
 	// Peer 2
 	pid2 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid2, &pb.Status{
+	p.SetChainState(pid2, &pb.StatusV2{
 		HeadSlot: params.BeaconConfig().SlotsPerEpoch * 5,
 	})
 	// Peer 3
 	pid3 := addPeer(t, p, peers.Connected)
-	p.SetChainState(pid3, &pb.Status{
+	p.SetChainState(pid3, &pb.StatusV2{
 		HeadSlot: params.BeaconConfig().SlotsPerEpoch * 4,
 	})
 

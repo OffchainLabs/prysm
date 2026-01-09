@@ -4,29 +4,33 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2pTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -51,6 +55,7 @@ type mockBroadcaster struct {
 
 type mockAccessor struct {
 	mockBroadcaster
+	mockCustodyManager
 	p2pTesting.MockPeerManager
 }
 
@@ -84,7 +89,7 @@ func (mb *mockBroadcaster) BroadcastLightClientFinalityUpdate(_ context.Context,
 	return nil
 }
 
-func (mb *mockBroadcaster) BroadcastDataColumn(_ [fieldparams.RootLength]byte, _ uint64, _ *ethpb.DataColumnSidecar, _ ...chan<- bool) error {
+func (mb *mockBroadcaster) BroadcastDataColumnSidecars(_ context.Context, _ []blocks.VerifiedRODataColumn) error {
 	mb.broadcastCalled = true
 	return nil
 }
@@ -93,6 +98,51 @@ func (mb *mockBroadcaster) BroadcastBLSChanges(_ context.Context, _ []*ethpb.Sig
 }
 
 var _ p2p.Broadcaster = (*mockBroadcaster)(nil)
+
+// mockCustodyManager is a mock implementation of p2p.CustodyManager
+type mockCustodyManager struct {
+	mut                   sync.RWMutex
+	earliestAvailableSlot primitives.Slot
+	custodyGroupCount     uint64
+}
+
+func (dch *mockCustodyManager) EarliestAvailableSlot(context.Context) (primitives.Slot, error) {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.earliestAvailableSlot, nil
+}
+
+func (dch *mockCustodyManager) CustodyGroupCount(context.Context) (uint64, error) {
+	dch.mut.RLock()
+	defer dch.mut.RUnlock()
+
+	return dch.custodyGroupCount, nil
+}
+
+func (dch *mockCustodyManager) UpdateCustodyInfo(earliestAvailableSlot primitives.Slot, custodyGroupCount uint64) (primitives.Slot, uint64, error) {
+	dch.mut.Lock()
+	defer dch.mut.Unlock()
+
+	dch.earliestAvailableSlot = earliestAvailableSlot
+	dch.custodyGroupCount = custodyGroupCount
+
+	return earliestAvailableSlot, custodyGroupCount, nil
+}
+
+func (dch *mockCustodyManager) UpdateEarliestAvailableSlot(earliestAvailableSlot primitives.Slot) error {
+	dch.mut.Lock()
+	defer dch.mut.Unlock()
+
+	dch.earliestAvailableSlot = earliestAvailableSlot
+	return nil
+}
+
+func (dch *mockCustodyManager) CustodyGroupCountFromPeer(peer.ID) uint64 {
+	return 0
+}
+
+var _ p2p.CustodyManager = (*mockCustodyManager)(nil)
 
 type testServiceRequirements struct {
 	ctx     context.Context
@@ -109,8 +159,10 @@ type testServiceRequirements struct {
 
 func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceRequirements) {
 	ctx := t.Context()
+	genesis := time.Now().Add(-1 * 4 * time.Duration(params.BeaconConfig().SlotsPerEpoch*primitives.Slot(params.BeaconConfig().SecondsPerSlot)) * time.Second) // Genesis was 4 epochs ago.
 	beaconDB := testDB.SetupDB(t)
 	fcs := doublylinkedtree.New()
+	fcs.SetGenesisTime(genesis)
 	sg := stategen.New(beaconDB, fcs)
 	notif := &mockBeaconNode{}
 	fcs.SetBalancesByRooter(sg.ActiveNonSlashedBalancesByRoot)
@@ -149,6 +201,7 @@ func minimalTestService(t *testing.T, opts ...Option) (*Service, *testServiceReq
 		WithExecutionEngineCaller(&mockExecution.EngineClient{}),
 		WithP2PBroadcaster(&mockAccessor{}),
 		WithLightClientStore(&lightclient.Store{}),
+		WithGenesisTime(genesis),
 	}
 	// append the variadic opts so they override the defaults by being processed afterwards
 	opts = append(defOpts, opts...)

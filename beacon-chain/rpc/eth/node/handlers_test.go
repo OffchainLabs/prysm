@@ -9,25 +9,26 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	syncmock "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	syncmock "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 type dummyIdentity enode.ID
@@ -144,7 +145,14 @@ func TestGetIdentity(t *testing.T) {
 	require.NoError(t, err)
 	attnets := bitfield.NewBitvector64()
 	attnets.SetBitAt(1, true)
-	metadataProvider := &mockp2p.MockMetadataProvider{Data: wrapper.WrappedMetadataV0(&pb.MetaDataV0{SeqNumber: 1, Attnets: attnets})}
+	syncnets := bitfield.NewBitvector4()
+	syncnets.SetBitAt(1, true)
+	metadataProvider := &mockp2p.MockMetadataProvider{Data: wrapper.WrappedMetadataV2(&pb.MetaDataV2{
+		SeqNumber:         1,
+		Attnets:           attnets,
+		Syncnets:          syncnets,
+		CustodyGroupCount: 2,
+	})}
 
 	t.Run("OK", func(t *testing.T) {
 		peerManager := &mockp2p.MockPeerManager{
@@ -154,8 +162,9 @@ func TestGetIdentity(t *testing.T) {
 			DiscoveryAddr: []ma.Multiaddr{discAddr1, discAddr2},
 		}
 		s := &Server{
-			PeerManager:      peerManager,
-			MetadataProvider: metadataProvider,
+			PeerManager:        peerManager,
+			MetadataProvider:   metadataProvider,
+			GenesisTimeFetcher: &mock.ChainService{},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/identity", nil)
@@ -186,6 +195,33 @@ func TestGetIdentity(t *testing.T) {
 		assert.Equal(t, true, ipv6Found, "IPv6 discovery address not found")
 		assert.Equal(t, discAddr1.String(), resp.Data.DiscoveryAddresses[0])
 		assert.Equal(t, discAddr2.String(), resp.Data.DiscoveryAddresses[1])
+	})
+	t.Run("OK Fulu", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig()
+		cfg.FuluForkEpoch = 0
+		params.OverrideBeaconConfig(cfg)
+		peerManager := &mockp2p.MockPeerManager{
+			Enr:           enrRecord,
+			PID:           "foo",
+			BHost:         &mockp2p.MockHost{Addresses: []ma.Multiaddr{p2pAddr}},
+			DiscoveryAddr: []ma.Multiaddr{discAddr1, discAddr2},
+		}
+		s := &Server{
+			PeerManager:        peerManager,
+			MetadataProvider:   metadataProvider,
+			GenesisTimeFetcher: &mock.ChainService{},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/eth/v1/node/identity", nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetIdentity(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetIdentityResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		require.Equal(t, "2", resp.Data.Metadata.Cgc)
 	})
 
 	t.Run("ENR failure", func(t *testing.T) {

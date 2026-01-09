@@ -1,19 +1,16 @@
 package peerdas
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 )
 
-const (
-	CustodyGroupCountEnrKey = "cgc"
-	kzgPosition             = 11 // The index of the KZG commitment list in the Body
-)
+const kzgPosition = 11 // The index of the KZG commitment list in the Body
 
 var (
 	ErrIndexTooLarge               = errors.New("column index is larger than the specified columns count")
@@ -27,23 +24,29 @@ var (
 	ErrCannotLoadCustodyGroupCount = errors.New("cannot load the custody group count from peer")
 )
 
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#custody-group-count
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#custody-group-count
 type Cgc uint64
 
-func (Cgc) ENRKey() string { return CustodyGroupCountEnrKey }
+func (Cgc) ENRKey() string { return params.BeaconNetworkConfig().CustodyGroupCountKey }
 
 // VerifyDataColumnSidecar verifies if the data column sidecar is valid.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar
 func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 	// The sidecar index must be within the valid range.
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-	if sidecar.Index >= numberOfColumns {
+	if sidecar.Index >= fieldparams.NumberOfColumns {
 		return ErrIndexTooLarge
 	}
 
 	// A sidecar for zero blobs is invalid.
 	if len(sidecar.KzgCommitments) == 0 {
 		return ErrNoKzgCommitments
+	}
+
+	// A sidecar with more commitments than the max blob count for this block is invalid.
+	slot := sidecar.Slot()
+	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
+	if len(sidecar.KzgCommitments) > maxBlobsPerBlock {
+		return ErrTooManyCommitments
 	}
 
 	// The column length must be equal to the number of commitments/proofs.
@@ -60,7 +63,7 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // while we are verifying all the KZG proofs from multiple sidecars in a batch.
 // This is done to improve performance since the internal KZG library is way more
 // efficient when verifying in batch.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
 func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 	// Compute the total count.
 	count := 0
@@ -75,10 +78,30 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 
 	for _, sidecar := range sidecars {
 		for i := range sidecar.Column {
-			commitments = append(commitments, kzg.Bytes48(sidecar.KzgCommitments[i]))
+			var (
+				commitment kzg.Bytes48
+				cell       kzg.Cell
+				proof      kzg.Bytes48
+			)
+
+			commitmentBytes := sidecar.KzgCommitments[i]
+			cellBytes := sidecar.Column[i]
+			proofBytes := sidecar.KzgProofs[i]
+
+			if len(commitmentBytes) != len(commitment) ||
+				len(cellBytes) != len(cell) ||
+				len(proofBytes) != len(proof) {
+				return ErrMismatchLength
+			}
+
+			copy(commitment[:], commitmentBytes)
+			copy(cell[:], cellBytes)
+			copy(proof[:], proofBytes)
+
+			commitments = append(commitments, commitment)
 			indices = append(indices, sidecar.Index)
-			cells = append(cells, kzg.Cell(sidecar.Column[i]))
-			proofs = append(proofs, kzg.Bytes48(sidecar.KzgProofs[i]))
+			cells = append(cells, cell)
+			proofs = append(proofs, proof)
 		}
 	}
 
@@ -96,7 +119,7 @@ func VerifyDataColumnsSidecarKZGProofs(sidecars []blocks.RODataColumn) error {
 }
 
 // VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
 func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
 		return ErrNilBlockHeader
@@ -128,7 +151,7 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 }
 
 // ComputeSubnetForDataColumnSidecar computes the subnet for a data column sidecar.
-// https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.5/specs/fulu/p2p-interface.md#compute_subnet_for_data_column_sidecar
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#compute_subnet_for_data_column_sidecar
 func ComputeSubnetForDataColumnSidecar(columnIndex uint64) uint64 {
 	dataColumnSidecarSubnetCount := params.BeaconConfig().DataColumnSidecarSubnetCount
 	return columnIndex % dataColumnSidecarSubnetCount

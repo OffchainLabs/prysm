@@ -7,20 +7,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	pb "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	pb "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -44,10 +47,17 @@ var (
 		GetPayloadMethodV3,
 		GetPayloadBodiesByHashV1,
 		GetPayloadBodiesByRangeV1,
+		GetBlobsV1,
 	}
+
 	electraEngineEndpoints = []string{
 		NewPayloadMethodV4,
 		GetPayloadMethodV4,
+	}
+
+	fuluEngineEndpoints = []string{
+		GetPayloadMethodV5,
+		GetBlobsV2,
 	}
 )
 
@@ -73,6 +83,8 @@ const (
 	GetPayloadMethodV3 = "engine_getPayloadV3"
 	// GetPayloadMethodV4 is the get payload method added for electra
 	GetPayloadMethodV4 = "engine_getPayloadV4"
+	// GetPayloadMethodV5 is the get payload method added for fulu
+	GetPayloadMethodV5 = "engine_getPayloadV5"
 	// BlockByHashMethod request string for JSON-RPC.
 	BlockByHashMethod = "eth_getBlockByHash"
 	// BlockByNumberMethod request string for JSON-RPC.
@@ -85,6 +97,8 @@ const (
 	ExchangeCapabilities = "engine_exchangeCapabilities"
 	// GetBlobsV1 request string for JSON-RPC.
 	GetBlobsV1 = "engine_getBlobsV1"
+	// GetBlobsV2 request string for JSON-RPC.
+	GetBlobsV2 = "engine_getBlobsV2"
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -107,7 +121,8 @@ type Reconstructor interface {
 	ReconstructFullBellatrixBlockBatch(
 		ctx context.Context, blindedBlocks []interfaces.ReadOnlySignedBeaconBlock,
 	) ([]interfaces.SignedBeaconBlock, error)
-	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
+	ReconstructBlobSidecars(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, blockRoot [fieldparams.RootLength]byte, hi func(uint64) bool) ([]blocks.VerifiedROBlob, error)
+	ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error)
 }
 
 // EngineCaller defines a client that can interact with an Ethereum
@@ -128,10 +143,9 @@ var ErrEmptyBlockHash = errors.New("Block hash is empty 0x0000...")
 func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests) ([]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.NewPayload")
 	defer span.End()
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		newPayloadLatency.Observe(float64(time.Since(start).Milliseconds()))
-	}()
+	}(time.Now())
 
 	d := time.Now().Add(time.Duration(params.BeaconConfig().ExecutionEngineTimeoutValue) * time.Second)
 	ctx, cancel := context.WithDeadline(ctx, d)
@@ -169,7 +183,10 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 		return nil, errors.New("unknown execution data type")
 	}
 	if result.ValidationError != "" {
-		log.WithError(errors.New(result.ValidationError)).Error("Got a validation error in newPayload")
+		log.WithField("status", result.Status.String()).
+			WithField("parentRoot", fmt.Sprintf("%#x", parentBlockRoot)).
+			WithError(errors.New(result.ValidationError)).
+			Error("Got a validation error in newPayload")
 	}
 	switch result.Status {
 	case pb.PayloadStatus_INVALID_BLOCK_HASH:
@@ -181,7 +198,7 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	case pb.PayloadStatus_VALID:
 		return result.LatestValidHash, nil
 	default:
-		return nil, ErrUnknownPayloadStatus
+		return nil, errors.Wrapf(ErrUnknownPayloadStatus, "unknown payload status: %s", result.Status.String())
 	}
 }
 
@@ -256,14 +273,17 @@ func (s *Service) ForkchoiceUpdated(
 }
 
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
-	pe := slots.ToEpoch(slot)
-	if pe >= params.BeaconConfig().ElectraForkEpoch {
+	epoch := slots.ToEpoch(slot)
+	if epoch >= params.BeaconConfig().FuluForkEpoch {
+		return GetPayloadMethodV5, &pb.ExecutionBundleFulu{}
+	}
+	if epoch >= params.BeaconConfig().ElectraForkEpoch {
 		return GetPayloadMethodV4, &pb.ExecutionBundleElectra{}
 	}
-	if pe >= params.BeaconConfig().DenebForkEpoch {
+	if epoch >= params.BeaconConfig().DenebForkEpoch {
 		return GetPayloadMethodV3, &pb.ExecutionPayloadDenebWithValueAndBlobsBundle{}
 	}
-	if pe >= params.BeaconConfig().CapellaForkEpoch {
+	if epoch >= params.BeaconConfig().CapellaForkEpoch {
 		return GetPayloadMethodV2, &pb.ExecutionPayloadCapellaWithValue{}
 	}
 	return GetPayloadMethod, &pb.ExecutionPayload{}
@@ -289,7 +309,7 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	}
 	res, err := blocks.NewGetPayloadResponse(result)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "new get payload response")
 	}
 	return res, nil
 }
@@ -298,33 +318,36 @@ func (s *Service) ExchangeCapabilities(ctx context.Context) ([]string, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.ExchangeCapabilities")
 	defer span.End()
 
-	// Only check for electra related engine methods if it has been activated.
 	if params.ElectraEnabled() {
 		supportedEngineEndpoints = append(supportedEngineEndpoints, electraEngineEndpoints...)
 	}
-	var result []string
-	err := s.rpcClient.CallContext(ctx, &result, ExchangeCapabilities, supportedEngineEndpoints)
-	if err != nil {
+
+	if params.FuluEnabled() {
+		supportedEngineEndpoints = append(supportedEngineEndpoints, fuluEngineEndpoints...)
+	}
+
+	elSupportedEndpointsSlice := make([]string, len(supportedEngineEndpoints))
+	if err := s.rpcClient.CallContext(ctx, &elSupportedEndpointsSlice, ExchangeCapabilities, supportedEngineEndpoints); err != nil {
 		return nil, handleRPCError(err)
 	}
 
-	var unsupported []string
-	for _, s1 := range supportedEngineEndpoints {
-		supported := false
-		for _, s2 := range result {
-			if s1 == s2 {
-				supported = true
-				break
-			}
-		}
-		if !supported {
-			unsupported = append(unsupported, s1)
+	elSupportedEndpoints := make(map[string]bool, len(elSupportedEndpointsSlice))
+	for _, method := range elSupportedEndpointsSlice {
+		elSupportedEndpoints[method] = true
+	}
+
+	unsupported := make([]string, 0)
+	for _, method := range supportedEngineEndpoints {
+		if !elSupportedEndpoints[method] {
+			unsupported = append(unsupported, method)
 		}
 	}
+
 	if len(unsupported) != 0 {
-		log.Warnf("Please update client, detected the following unsupported engine methods: %s", unsupported)
+		log.WithField("methods", unsupported).Warning("Connected execution client does not support some requested engine methods")
 	}
-	return result, handleRPCError(err)
+
+	return elSupportedEndpointsSlice, nil
 }
 
 // GetTerminalBlockHash returns the valid terminal block hash based on total difficulty.
@@ -453,7 +476,7 @@ func (s *Service) ExecutionBlocksByHashes(ctx context.Context, hashes []common.H
 		newH := h
 		elems = append(elems, gethRPC.BatchElem{
 			Method: BlockByHashMethod,
-			Args:   []interface{}{newH, withTxs},
+			Args:   []any{newH, withTxs},
 			Result: blk,
 			Error:  error(nil),
 		})
@@ -495,13 +518,38 @@ func (s *Service) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 func (s *Service) GetBlobs(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProof, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobs")
 	defer span.End()
+
 	// If the execution engine does not support `GetBlobsV1`, return early to prevent encountering an error later.
 	if !s.capabilityCache.has(GetBlobsV1) {
-		return nil, nil
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV1))
 	}
 
 	result := make([]*pb.BlobAndProof, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV1, versionedHashes)
+	return result, handleRPCError(err)
+}
+
+func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV2")
+	defer span.End()
+
+	start := time.Now()
+
+	if !s.capabilityCache.has(GetBlobsV2) {
+		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
+	}
+
+	if flags.Get().DisableGetBlobsV2 {
+		return []*pb.BlobAndProofV2{}, nil
+	}
+
+	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
+	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV2, versionedHashes)
+
+	if len(result) != 0 {
+		getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
+	}
+
 	return result, handleRPCError(err)
 }
 
@@ -584,7 +632,7 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 		blobIndex := kzgIndexes[i]
 		proof, err := blocks.MerkleProofKZGCommitment(blockBody, blobIndex)
 		if err != nil {
-			log.WithError(err).WithField("index", blobIndex).Error("failed to get Merkle proof for KZG commitment")
+			log.WithError(err).WithField("index", blobIndex).Error("Failed to get Merkle proof for KZG commitment")
 			continue
 		}
 		sidecar := &ethpb.BlobSidecar{
@@ -598,14 +646,14 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 
 		roBlob, err := blocks.NewROBlobWithRoot(sidecar, blockRoot)
 		if err != nil {
-			log.WithError(err).WithField("index", blobIndex).Error("failed to create RO blob with root")
+			log.WithError(err).WithField("index", blobIndex).Error("Failed to create RO blob with root")
 			continue
 		}
 
 		v := s.blobVerifier(roBlob, verification.ELMemPoolRequirements)
 		verifiedBlob, err := v.VerifiedROBlob()
 		if err != nil {
-			log.WithError(err).WithField("index", blobIndex).Error("failed to verify RO blob")
+			log.WithError(err).WithField("index", blobIndex).Error("Failed to verify RO blob")
 			continue
 		}
 
@@ -613,6 +661,78 @@ func (s *Service) ReconstructBlobSidecars(ctx context.Context, block interfaces.
 	}
 
 	return verifiedBlobs, nil
+}
+
+func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator peerdas.ConstructionPopulator) ([]blocks.VerifiedRODataColumn, error) {
+	root := populator.Root()
+
+	// Fetch cells and proofs from the execution client using the KZG commitments from the sidecar.
+	commitments, err := populator.Commitments()
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, root, "commitments")
+	}
+
+	cellsPerBlob, proofsPerBlob, err := s.fetchCellsAndProofsFromExecution(ctx, commitments)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, root, "fetch cells and proofs from execution client")
+	}
+
+	// Return early if nothing is returned from the EL.
+	if len(cellsPerBlob) == 0 {
+		return nil, nil
+	}
+
+	// Construct data column sidears from the signed block and cells and proofs.
+	roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
+	if err != nil {
+		return nil, wrapWithBlockRoot(err, populator.Root(), "data column sidcars from column sidecar")
+	}
+
+	// Upgrade the sidecars to verified sidecars.
+	// We trust the execution layer we are connected to, so we can upgrade the sidecar into a verified one.
+	verifiedROSidecars := upgradeSidecarsToVerifiedSidecars(roSidecars)
+
+	return verifiedROSidecars, nil
+}
+
+// fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
+func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) ([][]kzg.Cell, [][]kzg.Proof, error) {
+	// Collect KZG hashes for all blobs.
+	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))
+	for _, commitment := range kzgCommitments {
+		versionedHash := primitives.ConvertKzgCommitmentToVersionedHash(commitment)
+		versionedHashes = append(versionedHashes, versionedHash)
+	}
+
+	// Fetch all blobsAndCellsProofs from the execution client.
+	blobAndProofV2s, err := s.GetBlobsV2(ctx, versionedHashes)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "get blobs V2")
+	}
+
+	// Return early if nothing is returned from the EL.
+	if len(blobAndProofV2s) == 0 {
+		return nil, nil, nil
+	}
+
+	// Compute cells and proofs from the blobs and cell proofs.
+	cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(blobAndProofV2s)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "compute cells and proofs")
+	}
+
+	return cellsPerBlob, proofsPerBlob, nil
+}
+
+// upgradeSidecarsToVerifiedSidecars upgrades a list of data column sidecars into verified data column sidecars.
+func upgradeSidecarsToVerifiedSidecars(roSidecars []blocks.RODataColumn) []blocks.VerifiedRODataColumn {
+	verifiedRODataColumns := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
+	for _, roSidecar := range roSidecars {
+		verifiedRODataColumn := blocks.NewVerifiedRODataColumn(roSidecar)
+		verifiedRODataColumns = append(verifiedRODataColumns, verifiedRODataColumn)
+	}
+
+	return verifiedRODataColumns
 }
 
 func fullPayloadFromPayloadBody(
@@ -901,4 +1021,9 @@ func toBlockNumArg(number *big.Int) string {
 		return "safe"
 	}
 	return hexutil.EncodeBig(number)
+}
+
+// wrapWithBlockRoot returns a new error with the given block root.
+func wrapWithBlockRoot(err error, blockRoot [fieldparams.RootLength]byte, message string) error {
+	return errors.Wrap(err, fmt.Sprintf("%s for block %#x", message, blockRoot))
 }

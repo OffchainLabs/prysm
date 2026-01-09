@@ -2,11 +2,12 @@ package doublylinkedtree
 
 import (
 	"sync"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 // ForkChoice defines the overall fork choice store which includes all block nodes, validator's latest votes and balances.
@@ -30,6 +31,7 @@ type Store struct {
 	proposerBoostRoot             [fieldparams.RootLength]byte           // latest block root that was boosted after being received in a timely manner.
 	previousProposerBoostRoot     [fieldparams.RootLength]byte           // previous block root that was boosted after being received in a timely manner.
 	previousProposerBoostScore    uint64                                 // previous proposer boosted root score.
+	finalizedDependentRoot        [fieldparams.RootLength]byte           // dependent root at finalized checkpoint.
 	committeeWeight               uint64                                 // tracks the total active validator balance divided by the number of slots per Epoch.
 	treeRootNode                  *Node                                  // the root node of the store tree.
 	headNode                      *Node                                  // last head Node
@@ -37,7 +39,7 @@ type Store struct {
 	nodeByPayload                 map[[fieldparams.RootLength]byte]*Node // nodes indexed by payload Hash
 	slashedIndices                map[primitives.ValidatorIndex]bool     // the list of equivocating validator indices
 	originRoot                    [fieldparams.RootLength]byte           // The genesis block root
-	genesisTime                   uint64
+	genesisTime                   time.Time
 	highestReceivedNode           *Node                                      // The highest slot node.
 	receivedBlocksLastEpoch       [fieldparams.SlotsPerEpoch]primitives.Slot // Using `highestReceivedSlot`. The slot of blocks received in the last epoch.
 	allTipsAreInvalid             bool                                       // tracks if all tips are not viable for head
@@ -60,7 +62,7 @@ type Node struct {
 	weight                   uint64                       // weight of this node: the total balance including children
 	bestDescendant           *Node                        // bestDescendant node of this node.
 	optimistic               bool                         // whether the block has been fully validated or not
-	timestamp                uint64                       // The timestamp when the node was inserted.
+	timestamp                time.Time                    // The timestamp when the node was inserted.
 }
 
 // Vote defines an individual validator's vote.

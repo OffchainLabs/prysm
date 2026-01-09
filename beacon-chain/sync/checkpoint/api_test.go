@@ -6,22 +6,22 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	blocktest "github.com/OffchainLabs/prysm/v6/consensus-types/blocks/testing"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	blocktest "github.com/OffchainLabs/prysm/v7/consensus-types/blocks/testing"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
 func TestDownloadFinalizedData(t *testing.T) {
 	ctx := t.Context()
 	cfg := params.MainnetConfig()
+	cfg.InitializeForkSchedule()
 
 	// avoid the altair zone because genesis tests are easier to set up
 	epoch := cfg.AltairForkEpoch - 1
@@ -30,7 +30,7 @@ func TestDownloadFinalizedData(t *testing.T) {
 	require.NoError(t, err)
 	st, err := util.NewBeaconState()
 	require.NoError(t, err)
-	fork, err := forks.ForkForEpochFromConfig(cfg, epoch)
+	fork := params.ForkFromConfig(cfg, epoch)
 	require.NoError(t, err)
 	require.NoError(t, st.SetFork(fork))
 	require.NoError(t, st.SetSlot(slot))

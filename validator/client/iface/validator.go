@@ -4,15 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon/health"
-	"github.com/OffchainLabs/prysm/v6/api/client/event"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/proposer"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/api/client/event"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 )
 
 // ValidatorRole defines the validator role.
@@ -36,12 +35,12 @@ const (
 // Validator interface defines the primary methods of a validator client.
 type Validator interface {
 	Done()
+	GenesisTime() time.Time
 	EventsChan() <-chan *event.Event
 	AccountsChangedChan() <-chan [][fieldparams.BLSPubkeyLength]byte
 	WaitForChainStart(ctx context.Context) error
 	WaitForSync(ctx context.Context) error
 	WaitForActivation(ctx context.Context) error
-	CanonicalHeadSlot(ctx context.Context) (primitives.Slot, error)
 	NextSlot() <-chan primitives.Slot
 	SlotDeadline(slot primitives.Slot) time.Time
 	LogValidatorGainsAndLosses(ctx context.Context, slot primitives.Slot) error
@@ -69,9 +68,9 @@ type Validator interface {
 	Graffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) ([]byte, error)
 	SetGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, graffiti []byte) error
 	DeleteGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte) error
-	HealthTracker() health.Tracker
 	Host() string
-	ChangeHost()
+	FindHealthyHost(ctx context.Context) bool
+	SetTicker()
 }
 
 // SigningFunc interface defines a type for the function that signs a message

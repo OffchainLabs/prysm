@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 )
 
 // ProcessRegistryUpdates processes all validators eligible for the activation queue, all validators
@@ -84,8 +84,8 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	// Handle validator ejections.
 	for _, idx := range eligibleForEjection {
 		var err error
-		// exitQueueEpoch and churn arguments are not used in electra.
-		st, _, err = validators.InitiateValidatorExit(ctx, st, idx, 0 /*exitQueueEpoch*/, 0 /*churn*/)
+		// exit info is not used in electra
+		st, err = validators.InitiateValidatorExit(ctx, st, idx, &validators.ExitInfo{})
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return fmt.Errorf("failed to initiate validator exit at index %d: %w", idx, err)
 		}

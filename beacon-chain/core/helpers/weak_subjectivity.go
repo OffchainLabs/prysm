@@ -8,15 +8,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
-	v1alpha1 "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	v1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // ComputeWeakSubjectivityPeriod returns weak subjectivity period for the active validator count and finalized epoch.
@@ -95,7 +94,7 @@ func ComputeWeakSubjectivityPeriod(ctx context.Context, st state.ReadOnlyBeaconS
 	if T*(200+3*D) < t*(200+12*D) {
 		epochsForValidatorSetChurn := N * (t*(200+12*D) - T*(200+3*D)) / (600 * delta * (2*t + T))
 		epochsForBalanceTopUps := N * (200 + 3*D) / (600 * Delta)
-		wsp += math.Max(epochsForValidatorSetChurn, epochsForBalanceTopUps)
+		wsp += max(epochsForValidatorSetChurn, epochsForBalanceTopUps)
 	} else {
 		wsp += 3 * N * D * t / (200 * Delta * (T - t))
 	}
@@ -201,15 +200,4 @@ func ParseWeakSubjectivityInputString(wsCheckpointString string) (*v1alpha1.Chec
 		Epoch: primitives.Epoch(epoch),
 		Root:  bRoot,
 	}, nil
-}
-
-// MinEpochsForBlockRequests computes the number of epochs of block history that we need to maintain,
-// relative to the current epoch, per the p2p specs. This is used to compute the slot where backfill is complete.
-// value defined:
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#configuration
-// MIN_VALIDATOR_WITHDRAWABILITY_DELAY + CHURN_LIMIT_QUOTIENT // 2 (= 33024, ~5 months)
-// detailed rationale: https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/p2p-interface.md#why-are-blocksbyrange-requests-only-required-to-be-served-for-the-latest-min_epochs_for_block_requests-epochs
-func MinEpochsForBlockRequests() primitives.Epoch {
-	return params.BeaconConfig().MinValidatorWithdrawabilityDelay +
-		primitives.Epoch(params.BeaconConfig().ChurnLimitQuotient/2)
 }

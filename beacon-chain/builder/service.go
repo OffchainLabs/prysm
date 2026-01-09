@@ -5,17 +5,17 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/api/client/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -24,7 +24,8 @@ var ErrNoBuilder = errors.New("builder endpoint not configured")
 
 // BlockBuilder defines the interface for interacting with the block builder
 type BlockBuilder interface {
-	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error)
+	SubmitBlindedBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error)
+	SubmitBlindedBlockPostFulu(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) error
 	GetHeader(ctx context.Context, slot primitives.Slot, parentHash [32]byte, pubKey [48]byte) (builder.SignedBid, error)
 	RegisterValidator(ctx context.Context, reg []*ethpb.SignedValidatorRegistrationV1) error
 	RegistrationByValidatorID(ctx context.Context, id primitives.ValidatorIndex) (*ethpb.ValidatorRegistrationV1, error)
@@ -68,7 +69,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 			log.WithError(err).Error("Failed to check builder status")
 		} else {
 			log.WithField("endpoint", s.c.NodeURL()).Info("Builder has been configured")
-			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time.  " +
+			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time. " +
 				"Builder-constructed blocks or fallback blocks may get orphaned. Use at your own risk!")
 		}
 	}
@@ -87,7 +88,7 @@ func (s *Service) Stop() error {
 }
 
 // SubmitBlindedBlock submits a blinded block to the builder relay network.
-func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
+func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) (interfaces.ExecutionData, v1.BlobsBundler, error) {
 	ctx, span := trace.StartSpan(ctx, "builder.SubmitBlindedBlock")
 	defer span.End()
 	start := time.Now()
@@ -99,6 +100,22 @@ func (s *Service) SubmitBlindedBlock(ctx context.Context, b interfaces.ReadOnlyS
 	}
 
 	return s.c.SubmitBlindedBlock(ctx, b)
+}
+
+// SubmitBlindedBlockPostFulu submits a blinded block to the builder relay network post-Fulu.
+// After Fulu, relays only return status codes (no payload).
+func (s *Service) SubmitBlindedBlockPostFulu(ctx context.Context, b interfaces.ReadOnlySignedBeaconBlock) error {
+	ctx, span := trace.StartSpan(ctx, "builder.SubmitBlindedBlockPostFulu")
+	defer span.End()
+	start := time.Now()
+	defer func() {
+		submitBlindedBlockLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+	if s.c == nil {
+		return ErrNoBuilder
+	}
+
+	return s.c.SubmitBlindedBlockPostFulu(ctx, b)
 }
 
 // GetHeader retrieves the header for a given slot and parent hash from the builder relay network.
@@ -149,7 +166,7 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 	indexToRegistration := make(map[primitives.ValidatorIndex]*ethpb.ValidatorRegistrationV1)
 
 	valid := make([]*ethpb.SignedValidatorRegistrationV1, 0)
-	for i := 0; i < len(reg); i++ {
+	for i := range reg {
 		r := reg[i]
 		nx, exists := s.cfg.headFetcher.HeadPublicKeyToValidatorIndex(bytesutil.ToBytes48(r.Message.Pubkey))
 		if !exists {

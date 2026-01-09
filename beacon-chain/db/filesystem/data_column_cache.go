@@ -3,9 +3,9 @@ package filesystem
 import (
 	"sync"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
 )
 
@@ -35,8 +35,9 @@ func (s DataColumnStorageSummary) HasIndex(index uint64) bool {
 
 // HasAtLeastOneIndex returns true if at least one of the DataColumnSidecars at the given indices is available in the filesystem.
 func (s DataColumnStorageSummary) HasAtLeastOneIndex(indices []uint64) bool {
+	size := uint64(len(s.mask))
 	for _, index := range indices {
-		if s.mask[index] {
+		if index < size && s.mask[index] {
 			return true
 		}
 	}
@@ -84,12 +85,6 @@ func (s DataColumnStorageSummary) Stored() map[uint64]bool {
 	return stored
 }
 
-// DataColumnStorageSummarizer can be used to receive a summary of metadata about data columns on disk for a given root.
-// The DataColumnStorageSummary can be used to check which indices (if any) are available for a given block by root.
-type DataColumnStorageSummarizer interface {
-	Summary(root [fieldparams.RootLength]byte) DataColumnStorageSummary
-}
-
 type dataColumnStorageSummaryCache struct {
 	mu                 sync.RWMutex
 	dataColumnCount    float64
@@ -97,8 +92,6 @@ type dataColumnStorageSummaryCache struct {
 	highestCachedEpoch primitives.Epoch
 	cache              map[[fieldparams.RootLength]byte]DataColumnStorageSummary
 }
-
-var _ DataColumnStorageSummarizer = &dataColumnStorageSummaryCache{}
 
 func newDataColumnStorageSummaryCache() *dataColumnStorageSummaryCache {
 	return &dataColumnStorageSummaryCache{
@@ -124,8 +117,6 @@ func (sc *dataColumnStorageSummaryCache) HighestEpoch() primitives.Epoch {
 
 // set updates the cache.
 func (sc *dataColumnStorageSummaryCache) set(dataColumnsIdent DataColumnsIdent) error {
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -134,7 +125,7 @@ func (sc *dataColumnStorageSummaryCache) set(dataColumnsIdent DataColumnsIdent) 
 
 	count := uint64(0)
 	for _, index := range dataColumnsIdent.Indices {
-		if index >= numberOfColumns {
+		if index >= fieldparams.NumberOfColumns {
 			return errDataColumnIndexOutOfBounds
 		}
 

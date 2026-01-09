@@ -7,14 +7,17 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -34,7 +37,7 @@ func TestGet(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		marshalledJson, err := json.Marshal(genesisJson)
 		require.NoError(t, err)
-
+		assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
 		w.Header().Set("Content-Type", api.JsonMediaType)
 		_, err = w.Write(marshalledJson)
 		require.NoError(t, err)
@@ -68,6 +71,7 @@ func TestGetSSZ(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			assert.StringContains(t, api.OctetStreamMediaType, r.Header.Get("Accept"))
+			assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
 			w.Header().Set("Content-Type", api.OctetStreamMediaType)
 			_, err := w.Write(expectedBody)
 			require.NoError(t, err)
@@ -143,6 +147,25 @@ func TestGetSSZ(t *testing.T) {
 	})
 }
 
+func TestAcceptOverrideSSZ(t *testing.T) {
+	name := "TestAcceptOverride"
+	orig := os.Getenv(params.EnvNameOverrideAccept)
+	defer func() {
+		require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, orig))
+	}()
+	require.NoError(t, os.Setenv(params.EnvNameOverrideAccept, name))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, name, r.Header.Get("Accept"))
+		w.WriteHeader(200)
+		_, err := w.Write([]byte("ok"))
+		require.NoError(t, err)
+	}))
+	defer srv.Close()
+	c := NewBeaconApiRestHandler(http.Client{Timeout: time.Second * 5}, srv.URL)
+	_, _, err := c.GetSSZ(t.Context(), "/test")
+	require.NoError(t, err)
+}
+
 func TestPost(t *testing.T) {
 	ctx := t.Context()
 	const endpoint = "/example/rest/api/endpoint"
@@ -161,6 +184,7 @@ func TestPost(t *testing.T) {
 	mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 		// Make sure the request headers have been set
 		assert.Equal(t, "bar", r.Header.Get("foo"))
+		assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
 		assert.Equal(t, api.JsonMediaType, r.Header.Get("Content-Type"))
 
 		// Make sure the data matches
@@ -319,5 +343,82 @@ func Test_decodeResp(t *testing.T) {
 		}
 		err = decodeResp(r, nil)
 		assert.ErrorContains(t, "failed to decode response body into error json", err)
+	})
+	t.Run("500 not JSON", func(t *testing.T) {
+		body := bytes.Buffer{}
+		_, err := body.WriteString("foo")
+		require.NoError(t, err)
+		r := &http.Response{
+			Status:     "500",
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(&body),
+			Header:     map[string][]string{"Content-Type": {"text/plain"}},
+			Request:    &http.Request{},
+		}
+		err = decodeResp(r, nil)
+		assert.ErrorContains(t, "HTTP request unsuccessful (500: foo)", err)
+	})
+}
+
+func TestGetStatusCode(t *testing.T) {
+	ctx := t.Context()
+	const endpoint = "/eth/v1/node/health"
+
+	testCases := []struct {
+		name               string
+		serverStatusCode   int
+		expectedStatusCode int
+	}{
+		{
+			name:               "returns 200 OK",
+			serverStatusCode:   http.StatusOK,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "returns 206 Partial Content",
+			serverStatusCode:   http.StatusPartialContent,
+			expectedStatusCode: http.StatusPartialContent,
+		},
+		{
+			name:               "returns 503 Service Unavailable",
+			serverStatusCode:   http.StatusServiceUnavailable,
+			expectedStatusCode: http.StatusServiceUnavailable,
+		},
+		{
+			name:               "returns 500 Internal Server Error",
+			serverStatusCode:   http.StatusInternalServerError,
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
+				w.WriteHeader(tc.serverStatusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			jsonRestHandler := BeaconApiRestHandler{
+				client: http.Client{Timeout: time.Second * 5},
+				host:   server.URL,
+			}
+
+			statusCode, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedStatusCode, statusCode)
+		})
+	}
+
+	t.Run("returns error on connection failure", func(t *testing.T) {
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Millisecond * 100},
+			host:   "http://localhost:99999", // Invalid port
+		}
+
+		_, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+		require.ErrorContains(t, "failed to perform request", err)
 	})
 }

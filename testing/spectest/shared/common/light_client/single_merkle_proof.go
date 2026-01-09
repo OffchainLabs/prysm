@@ -8,15 +8,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/golang/snappy"
 )
 
@@ -84,6 +84,11 @@ func runLightClientSingleMerkleProofTestBeaconState(t *testing.T, testFolderPath
 		beaconStateBase := &ethpb.BeaconStateElectra{}
 		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
 		beaconState, err = state_native.InitializeFromProtoElectra(beaconStateBase)
+		require.NoError(t, err)
+	case version.Fulu:
+		beaconStateBase := &ethpb.BeaconStateFulu{}
+		require.NoError(t, beaconStateBase.UnmarshalSSZ(beaconStateSSZ), "Failed to unmarshal")
+		beaconState, err = state_native.InitializeFromProtoFulu(beaconStateBase)
 		require.NoError(t, err)
 	default:
 		t.Fatalf("Unsupported version: %d", v)
@@ -157,7 +162,7 @@ func runLightClientSingleMerkleProofTestBeaconBlockBody(t *testing.T, testFolder
 		require.NoError(t, err)
 		executionPayloadRoot, err = beaconBlockBody.ExecutionPayload.HashTreeRoot()
 		require.NoError(t, err)
-	case version.Electra:
+	case version.Electra, version.Fulu:
 		beaconBlockBody := &ethpb.BeaconBlockBodyElectra{}
 		require.NoError(t, beaconBlockBody.UnmarshalSSZ(beaconBlockBodySSZ), "Failed to unmarshal")
 		beaconBlockBodyRoot, err = beaconBlockBody.HashTreeRoot()

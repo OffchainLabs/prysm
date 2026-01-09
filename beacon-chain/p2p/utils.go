@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/base64"
@@ -12,12 +13,15 @@ import (
 	"path"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/wrapper"
-	ecdsaprysm "github.com/OffchainLabs/prysm/v6/crypto/ecdsa"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/wrapper"
+	ecdsaprysm "github.com/OffchainLabs/prysm/v7/crypto/ecdsa"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
 	"github.com/btcsuite/btcd/btcec/v2"
 	gCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -25,13 +29,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 const keyPath = "network-keys"
-const metaDataPath = "metaData"
 
 const dialTimeout = 1 * time.Second
 
@@ -67,7 +68,10 @@ func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
 	}
 
 	if defaultKeysExist {
-		log.WithField("filePath", defaultKeyPath).Info("Reading static P2P private key from a file. To generate a new random private key at every start, please remove this file.")
+		if !params.FuluEnabled() {
+			log.WithField("filePath", defaultKeyPath).Info("Reading static P2P private key from a file. To generate a new random private key at every start, please remove this file.")
+		}
+
 		return privKeyFromFile(defaultKeyPath)
 	}
 
@@ -121,45 +125,24 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 	return ecdsaprysm.ConvertFromInterfacePrivKey(unmarshalledKey)
 }
 
-// Retrieves node p2p metadata from a set of configuration values
-// from the p2p service.
-// TODO: Figure out how to do a v1/v2 check.
-func metaDataFromConfig(cfg *Config) (metadata.Metadata, error) {
-	defaultKeyPath := path.Join(cfg.DataDir, metaDataPath)
-	metaDataPath := cfg.MetaDataDir
+// Retrieves metadata sequence number from DB and returns a Metadata(V0) object
+func metaDataFromDB(ctx context.Context, db db.ReadOnlyDatabaseWithSeqNum) (metadata.Metadata, error) {
+	seqNum, err := db.MetadataSeqNum(ctx)
+	// We can proceed if error is `kv.ErrNotFoundMetadataSeqNum` by using default value of 0 for sequence number.
+	if err != nil && !errors.Is(err, kv.ErrNotFoundMetadataSeqNum) {
+		return nil, err
+	}
 
-	_, err := os.Stat(defaultKeyPath)
-	defaultMetadataExist := !os.IsNotExist(err)
-	if err != nil && defaultMetadataExist {
-		return nil, err
-	}
-	if metaDataPath == "" && !defaultMetadataExist {
-		metaData := &pb.MetaDataV0{
-			SeqNumber: 0,
-			Attnets:   bitfield.NewBitvector64(),
-		}
-		dst, err := proto.Marshal(metaData)
-		if err != nil {
-			return nil, err
-		}
-		if err := file.WriteFile(defaultKeyPath, dst); err != nil {
-			return nil, err
-		}
-		return wrapper.WrappedMetadataV0(metaData), nil
-	}
-	if defaultMetadataExist && metaDataPath == "" {
-		metaDataPath = defaultKeyPath
-	}
-	src, err := os.ReadFile(metaDataPath) // #nosec G304
-	if err != nil {
-		log.WithError(err).Error("Error reading metadata from file")
-		return nil, err
-	}
-	metaData := &pb.MetaDataV0{}
-	if err := proto.Unmarshal(src, metaData); err != nil {
-		return nil, err
-	}
-	return wrapper.WrappedMetadataV0(metaData), nil
+	// NOTE: Load V0 metadata because:
+	// - As the p2p service accesses metadata as an interface, and all versions implement the interface,
+	//   there is no error in calling the fields of higher versions. It just returns the default value.
+	// - This approach allows us to avoid unnecessary code changes when the metadata version bumps.
+	// - `RefreshPersistentSubnets` runs twice every slot and it manages updating and saving metadata.
+	metadata := wrapper.WrappedMetadataV0(&pb.MetaDataV0{
+		SeqNumber: seqNum,
+		Attnets:   bitfield.NewBitvector64(),
+	})
+	return metadata, nil
 }
 
 // Attempt to dial an address to verify its connectivity

@@ -10,13 +10,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -89,7 +89,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 
 	gethJsonPath := path.Join(path.Dir(binaryPath), "genesis.json")
 	gen := interop.GethTestnetGenesis(e2e.TestParams.Eth1GenesisTime, params.BeaconConfig())
-	log.Infof("eth1 miner genesis timestamp=%d", e2e.TestParams.Eth1GenesisTime)
+	log.WithField("timestamp", e2e.TestParams.Eth1GenesisTime).Info("Eth1 miner genesis")
 	b, err := json.Marshal(gen)
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ func (m *Miner) initAttempt(ctx context.Context, attempt int) (*os.File, error) 
 	if err = helpers.WaitForTextInFile(minerLog, "Started P2P networking"); err != nil {
 		kerr := runCmd.Process.Kill()
 		if kerr != nil {
-			log.WithError(kerr).Error("error sending kill to failed miner command process")
+			log.WithError(kerr).Error("Error sending kill to failed miner command process")
 		}
 		return nil, fmt.Errorf("P2P log not found, this means the eth1 chain had issues starting: %w", err)
 	}
@@ -191,10 +191,10 @@ func (m *Miner) Start(ctx context.Context) error {
 	// give the miner start a couple of tries, since the p2p networking check is flaky
 	var retryErr error
 	var minerLog *os.File
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		minerLog, retryErr = m.initAttempt(ctx, attempt)
 		if retryErr == nil {
-			log.Infof("miner started after %d retries", attempt)
+			log.Infof("Miner started after %d retries", attempt)
 			break
 		}
 	}
@@ -236,7 +236,7 @@ func (m *Miner) Start(ctx context.Context) error {
 	}
 	dCount, err := depositContractCaller.GetDepositCount(&bind.CallOpts{})
 	if err != nil {
-		log.Error("failed to call get_deposit_count method of deposit contract")
+		log.Error("Failed to call get_deposit_count method of deposit contract")
 		return err
 	}
 	log.Infof("deposit contract count=%d", dCount)

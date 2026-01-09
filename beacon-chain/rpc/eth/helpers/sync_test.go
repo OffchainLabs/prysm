@@ -1,26 +1,30 @@
 package helpers
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 
-	chainmock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	chainmock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pkg/errors"
 )
 
 func TestIsOptimistic(t *testing.T) {
@@ -226,7 +230,67 @@ func TestIsOptimistic(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, true, o)
 		})
+		t.Run("State not found", func(t *testing.T) {
+			b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+			require.NoError(t, err)
+			b.SetStateRoot(bytesutil.PadTo([]byte("root"), 32))
+			db := dbtest.SetupDB(t)
+			require.NoError(t, db.SaveBlock(ctx, b))
+			chainSt, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, chainSt.SetSlot(fieldparams.SlotsPerEpoch))
+			bRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			cs := &chainmock.ChainService{State: chainSt, OptimisticRoots: map[[32]byte]bool{bRoot: true}}
+			mf := &testutil.MockStater{
+				CustomError: lookup.NewFetchStateError(nil),
+			}
+			_, err = IsOptimistic(ctx, []byte(hexutil.Encode(bytesutil.PadTo([]byte("root"), 32))), cs, mf, cs, db)
+			var fetchErr *lookup.FetchStateError
+			require.Equal(t, true, errors.As(err, &fetchErr))
+		})
+
+		t.Run("stateId invalid", func(t *testing.T) {
+			b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+			require.NoError(t, err)
+			b.SetStateRoot(bytesutil.PadTo([]byte("root"), 32))
+			db := dbtest.SetupDB(t)
+			require.NoError(t, db.SaveBlock(ctx, b))
+			chainSt, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, chainSt.SetSlot(fieldparams.SlotsPerEpoch))
+			bRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			cs := &chainmock.ChainService{State: chainSt, OptimisticRoots: map[[32]byte]bool{bRoot: true}}
+			mf := &testutil.MockStater{
+				CustomError: lookup.NewFetchStateError(nil),
+			}
+			_, err = IsOptimistic(ctx, []byte("0xabc"), cs, mf, cs, db)
+			var fetchErr *lookup.FetchStateError
+			require.Equal(t, false, errors.As(err, &fetchErr))
+		})
+		t.Run("block roots not found", func(t *testing.T) {
+			b, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+			require.NoError(t, err)
+			b.SetStateRoot(bytesutil.PadTo([]byte("root"), 32))
+			db := dbtest.SetupDB(t)
+			require.NoError(t, db.SaveBlock(ctx, b))
+			chainSt, err := util.NewBeaconState()
+			require.NoError(t, err)
+			require.NoError(t, chainSt.SetSlot(fieldparams.SlotsPerEpoch))
+			bRoot, err := b.Block().HashTreeRoot()
+			require.NoError(t, err)
+			cs := &chainmock.ChainService{State: chainSt, OptimisticRoots: map[[32]byte]bool{bRoot: true}}
+			st, err := util.NewBeaconState()
+			require.NoError(t, st.SetSlot(primitives.Slot(fieldparams.SlotsPerEpoch+1)))
+			require.NoError(t, err)
+			mf := &testutil.MockStater{BeaconState: st}
+			_, err = IsOptimistic(ctx, []byte(hexutil.Encode(bytesutil.PadTo([]byte("root"), 32))), cs, mf, cs, db)
+			var blockNotFoundErr *lookup.BlockNotFoundError
+			require.Equal(t, true, errors.As(err, &blockNotFoundErr))
+		})
 	})
+
 	t.Run("slot", func(t *testing.T) {
 		t.Run("head is not optimistic", func(t *testing.T) {
 			cs := &chainmock.ChainService{Optimistic: false}
@@ -316,6 +380,36 @@ func TestIsOptimistic(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, false, o)
 		})
+	})
+}
+
+func TestHandleIsOptimisticError(t *testing.T) {
+	t.Run("fetch-state error handled as 404", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		notFoundErr := lookup.StateNotFoundError{}
+		fetchErr := lookup.NewFetchStateError(&notFoundErr)
+		HandleIsOptimisticError(rr, fetchErr)
+
+		require.Equal(t, http.StatusNotFound, rr.Code)
+		require.StringContains(t, notFoundErr.Error(), rr.Body.String())
+	})
+	t.Run("no block roots error handled as 404", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		blockNotFoundErr := lookup.NewBlockNotFoundError("no block roots returned from the database")
+		HandleIsOptimisticError(rr, blockNotFoundErr)
+
+		require.Equal(t, http.StatusNotFound, rr.Code)
+		require.StringContains(t, blockNotFoundErr.Error(), rr.Body.String())
+	})
+
+	t.Run("generic error handled as 500", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		genericErr := errors.New("boom")
+
+		HandleIsOptimisticError(rr, genericErr)
+
+		require.Equal(t, http.StatusInternalServerError, rr.Code)
+		require.StringContains(t, "Could not check optimistic status: boom", rr.Body.String())
 	})
 }
 

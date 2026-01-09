@@ -2,16 +2,24 @@ load("@prysm//tools/go:def.bzl", "go_test")
 
 go_test(
     name = "go_default_test",
-    srcs = ["deneb__kzg__verify_blob_kzg_proof_batch_test.go"],
+    srcs = [
+        "deneb__kzg__verify_blob_kzg_proof_batch_test.go",
+        "fulu__kzg__compute_cells_and_kzg_proofs_test.go",
+        "fulu__kzg__compute_cells_test.go",
+        "fulu__kzg__recover_cells_and_kzg_proofs_test.go",
+        "fulu__kzg__verify_cell_kzg_proof_batch_test.go",
+    ],
     data = ["@consensus_spec_tests//:test_data"],
     tags = ["spectest"],
     deps = [
         "//beacon-chain/blockchain/kzg:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//testing/require:go_default_library",
         "//testing/spectest/utils:go_default_library",
         "//testing/util:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_ghodss_yaml//:go_default_library",
     ],
 )

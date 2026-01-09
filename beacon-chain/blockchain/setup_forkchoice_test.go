@@ -3,14 +3,14 @@ package blockchain
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -32,7 +32,7 @@ func Test_startupHeadRoot(t *testing.T) {
 		})
 		defer resetCfg()
 		require.Equal(t, service.startupHeadRoot(), gr)
-		require.LogsContain(t, hook, "could not get head block root, starting with finalized block as head")
+		require.LogsContain(t, hook, "Could not get head block root, starting with justified block as head")
 	})
 
 	st, _ := util.DeterministicGenesisState(t, 64)
@@ -124,5 +124,5 @@ func Test_setupForkchoiceTree_Head(t *testing.T) {
 	require.NotEqual(t, fRoot, root)
 	require.Equal(t, root, service.startupHeadRoot())
 	require.NoError(t, service.setupForkchoiceTree(st))
-	require.Equal(t, 2, service.cfg.ForkChoiceStore.NodeCount())
+	require.Equal(t, 3, service.cfg.ForkChoiceStore.NodeCount())
 }

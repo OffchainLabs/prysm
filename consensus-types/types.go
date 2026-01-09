@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	errors2 "github.com/pkg/errors"
 )
 
@@ -15,7 +15,6 @@ var (
 	// ErrUnsupportedField is returned when a getter/setter access is not supported.
 	ErrUnsupportedField = errors.New("unsupported getter")
 	// ErrOutOfBounds is returned when a slice or array index does not exist.
-	ErrOutOfBounds = errors.New("index out of bounds")
 )
 
 // ErrNotSupported constructs a message informing about an unsupported field access.
@@ -25,10 +24,10 @@ func ErrNotSupported(funcName string, ver int) error {
 
 // ThreadSafeEnumerator is a thread-safe counter of all objects created since the node's start.
 type ThreadSafeEnumerator struct {
-	counter uint64
+	counter atomic.Uint64
 }
 
 // Inc increments the enumerator and returns the new object count.
 func (c *ThreadSafeEnumerator) Inc() uint64 {
-	return atomic.AddUint64(&c.counter, 1)
+	return c.counter.Add(1)
 }

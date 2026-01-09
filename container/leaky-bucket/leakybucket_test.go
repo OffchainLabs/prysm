@@ -10,18 +10,18 @@ import (
 
 // Arbitrary start time.
 var start = time.Date(1990, 1, 2, 0, 0, 0, 0, time.UTC).Round(0)
-var elapsed int64
+var elapsed atomic.Int64
 
 // We provide atomic access to elapsed to avoid data races between multiple
 // concurrent goroutines during the tests.
 func getElapsed() time.Duration {
-	return time.Duration(atomic.LoadInt64(&elapsed))
+	return time.Duration(elapsed.Load())
 }
 func setElapsed(v time.Duration) {
-	atomic.StoreInt64(&elapsed, int64(v))
+	elapsed.Store(int64(v))
 }
 func addToElapsed(v time.Duration) {
-	atomic.AddInt64(&elapsed, int64(v))
+	elapsed.Add(int64(v))
 }
 
 func reset(t *testing.T, c *Collector) {
@@ -48,7 +48,7 @@ func TestNewLeakyBucket(t *testing.T) {
 type actionSet struct {
 	count  int64
 	action string
-	value  interface{}
+	value  any
 }
 
 type testSet struct {

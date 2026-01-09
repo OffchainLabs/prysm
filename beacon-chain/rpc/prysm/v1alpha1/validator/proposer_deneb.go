@@ -3,14 +3,14 @@ package validator
 import (
 	"errors"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // BuildBlobSidecars given a block, builds the blob sidecars for the block.
-func BuildBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, kzgProofs [][]byte) ([]*ethpb.BlobSidecar, error) {
+func BuildBlobSidecars(blk interfaces.ReadOnlySignedBeaconBlock, blobs [][]byte, kzgProofs [][]byte) ([]*ethpb.BlobSidecar, error) {
 	if blk.Version() < version.Deneb {
 		return nil, nil // No blobs before deneb.
 	}
@@ -28,8 +28,14 @@ func BuildBlobSidecars(blk interfaces.SignedBeaconBlock, blobs [][]byte, kzgProo
 		return nil, err
 	}
 	body := blk.Block().Body()
+	// Pre-compute subtrees once before the loop to avoid redundant calculations
+	proofComponents, err := blocks.PrecomputeMerkleProofComponents(body)
+	if err != nil {
+		return nil, err
+	}
+
 	for i := range blobSidecars {
-		proof, err := blocks.MerkleProofKZGCommitment(body, i)
+		proof, err := blocks.MerkleProofKZGCommitmentFromComponents(proofComponents, i)
 		if err != nil {
 			return nil, err
 		}

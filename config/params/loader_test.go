@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"gopkg.in/yaml.v2"
 )
@@ -24,8 +24,13 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
+	"AGGREGATE_DUE_BPS",
+	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
+	"ATTESTATION_DUE_BPS_GLOAS",
 	"BLOB_SIDECAR_SUBNET_COUNT_FULU",
+	"CELLS_PER_EXT_BLOB",
+	"CONTRIBUTION_DUE_BPS_GLOAS",
 	"EIP6110_FORK_EPOCH",
 	"EIP6110_FORK_VERSION",
 	"EIP7002_FORK_EPOCH",
@@ -36,16 +41,30 @@ var placeholderFields = []string{
 	"EIP7732_FORK_VERSION",
 	"EIP7805_FORK_EPOCH",
 	"EIP7805_FORK_VERSION",
+	"EIP7928_FORK_EPOCH",
+	"EIP7928_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
+	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
+	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
+	"GLOAS_FORK_EPOCH",
+	"GLOAS_FORK_VERSION",
+	"INCLUSION_LIST_SUBMISSION_DEADLINE",
+	"INCLUSION_LIST_SUBMISSION_DUE_BPS",
+	"KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH", // Configured in proto/ssz_proto_library.bzl
 	"MAX_BYTES_PER_INCLUSION_LIST",
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
-	"PROPOSER_INCLUSION_LIST_CUT_OFF",
-	"PROPOSER_SCORE_BOOST_EIP7732",
+	"MIN_BUILDER_WITHDRAWABILITY_DELAY",
+	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
+	"PAYLOAD_ATTESTATION_DUE_BPS",
+	"PROPOSER_INCLUSION_LIST_CUTOFF",
+	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
 	"PROPOSER_SELECTION_GAP",
+	"SYNC_MESSAGE_DUE_BPS_GLOAS",
 	"TARGET_NUMBER_OF_PEERS",
 	"UPDATE_TIMEOUT",
+	"VIEW_FREEZE_CUTOFF_BPS",
 	"VIEW_FREEZE_DEADLINE",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",
 	"WHISK_FORK_EPOCH",
@@ -79,6 +98,11 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.HysteresisQuotient, actual.HysteresisQuotient, "%s: HysteresisQuotient", name)
 	assert.Equal(t, expected.HysteresisDownwardMultiplier, actual.HysteresisDownwardMultiplier, "%s: HysteresisDownwardMultiplier", name)
 	assert.Equal(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier, "%s: HysteresisUpwardMultiplier", name)
+	assert.Equal(t, expected.AttestationDueBPS, actual.AttestationDueBPS, "%s: AttestationDueBPS", name)
+	assert.Equal(t, expected.AggregrateDueBPS, actual.AggregrateDueBPS, "%s: AggregrateDueBPS", name)
+	assert.Equal(t, expected.ContributionDueBPS, actual.ContributionDueBPS, "%s: ContributionDueBPS", name)
+	assert.Equal(t, expected.ProposerReorgCutoffBPS, actual.ProposerReorgCutoffBPS, "%s: ProposerReorgCutoffBPS", name)
+	assert.Equal(t, expected.SyncMessageDueBPS, actual.SyncMessageDueBPS, "%s: SyncMessageDueBPS", name)
 
 	// Validator params.
 	assert.Equal(t, expected.Eth1FollowDistance, actual.Eth1FollowDistance, "%s: Eth1FollowDistance", name)
@@ -106,6 +130,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	// Time parameters.
 	assert.Equal(t, expected.GenesisDelay, actual.GenesisDelay, "%s: GenesisDelay", name)
 	assert.Equal(t, expected.SecondsPerSlot, actual.SecondsPerSlot, "%s: SecondsPerSlot", name)
+	assert.Equal(t, expected.SlotDurationMilliseconds, actual.SlotDurationMilliseconds, "%s: SlotDurationMilliseconds", name)
 	assert.Equal(t, expected.MinAttestationInclusionDelay, actual.MinAttestationInclusionDelay, "%s: MinAttestationInclusionDelay", name)
 	assert.Equal(t, expected.SlotsPerEpoch, actual.SlotsPerEpoch, "%s: SlotsPerEpoch", name)
 	assert.Equal(t, expected.MinSeedLookahead, actual.MinSeedLookahead, "%s: MinSeedLookahead", name)
@@ -369,6 +394,7 @@ func presetsFilePath(t *testing.T, config string) []string {
 		path.Join(fPath, "presets", config, "capella.yaml"),
 		path.Join(fPath, "presets", config, "deneb.yaml"),
 		path.Join(fPath, "presets", config, "electra.yaml"),
+		path.Join(fPath, "presets", config, "fulu.yaml"),
 	}
 }
 
@@ -377,7 +403,7 @@ func fieldsFromYamls(t *testing.T, fps []string) []string {
 	for _, fp := range fps {
 		yamlFile, err := os.ReadFile(fp)
 		require.NoError(t, err)
-		m := make(map[string]interface{})
+		m := make(map[string]any)
 		require.NoError(t, yaml.Unmarshal(yamlFile, &m))
 
 		for k := range m {
@@ -397,7 +423,7 @@ func fieldsFromYamls(t *testing.T, fps []string) []string {
 
 func assertYamlFieldsMatch(t *testing.T, name string, fields []string, c1, c2 *params.BeaconChainConfig) {
 	// Ensure all fields from the yaml file exist, were set, and correctly match the expected value.
-	ft1 := reflect.TypeOf(*c1)
+	ft1 := reflect.TypeFor[params.BeaconChainConfig]()
 	for _, field := range fields {
 		var found bool
 		for i := 0; i < ft1.NumField(); i++ {

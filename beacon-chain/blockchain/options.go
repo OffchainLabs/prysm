@@ -3,24 +3,23 @@ package blockchain
 import (
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 type Option func(s *Service) error
@@ -29,6 +28,14 @@ type Option func(s *Service) error
 func WithMaxGoroutines(x int) Option {
 	return func(s *Service) error {
 		s.cfg.MaxRoutines = x
+		return nil
+	}
+}
+
+// WithLCStore for light client store access.
+func WithLCStore() Option {
+	return func(s *Service) error {
+		s.lcStore = lightclient.NewLightClientStore(s.cfg.P2P, s.cfg.StateNotifier.StateFeed(), s.cfg.BeaconDB)
 		return nil
 	}
 }
@@ -227,14 +234,6 @@ func WithSyncChecker(checker Checker) Option {
 	}
 }
 
-// WithCustodyInfo sets the custody info for the blockchain service.
-func WithCustodyInfo(custodyInfo *peerdas.CustodyInfo) Option {
-	return func(s *Service) error {
-		s.cfg.CustodyInfo = custodyInfo
-		return nil
-	}
-}
-
 // WithSlasherEnabled sets whether the slasher is enabled or not.
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
@@ -246,7 +245,7 @@ func WithSlasherEnabled(enabled bool) Option {
 // WithGenesisTime sets the genesis time for the blockchain service.
 func WithGenesisTime(genesisTime time.Time) Option {
 	return func(s *Service) error {
-		s.genesisTime = genesisTime
+		s.genesisTime = genesisTime.Truncate(time.Second) // Genesis time has a precision of 1 second.
 		return nil
 	}
 }

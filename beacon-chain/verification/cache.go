@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/sirupsen/logrus"
 )
@@ -51,6 +50,10 @@ type signatureData struct {
 	Slot      primitives.Slot
 }
 
+func (d signatureData) concat() string {
+	return string(d.Root[:]) + string(d.Signature[:])
+}
+
 func (d signatureData) logFields() logrus.Fields {
 	return logrus.Fields{
 		"root":       fmt.Sprintf("%#x", d.Root),
@@ -63,7 +66,7 @@ func (d signatureData) logFields() logrus.Fields {
 
 func newSigCache(vr []byte, size int, gf forkLookup) *sigCache {
 	if gf == nil {
-		gf = forks.Fork
+		gf = params.Fork
 	}
 	return &sigCache{Cache: lruwrpr.New(size), valRoot: vr, getFork: gf}
 }
@@ -88,7 +91,7 @@ func (c *sigCache) VerifySignature(sig signatureData, v validatorAtIndexer) (err
 		if err == nil {
 			c.Add(sig, true)
 		} else {
-			log.WithError(err).WithFields(sig.logFields()).Debug("caching failed signature verification result")
+			log.WithError(err).WithFields(sig.logFields()).Debug("Caching failed signature verification result")
 			c.Add(sig, false)
 		}
 	}()
@@ -134,7 +137,7 @@ func (c *sigCache) SignatureVerified(sig signatureData) (bool, error) {
 	}
 	verified, ok := val.(bool)
 	if !ok {
-		log.WithFields(sig.logFields()).Debug("ignoring invalid value found in signature cache")
+		log.WithFields(sig.logFields()).Debug("Ignoring invalid value found in signature cache")
 		// This shouldn't happen, and if it does, the caller should treat it as a cache miss and run verification
 		// again to correctly populate the cache key.
 		return false, nil

@@ -5,21 +5,53 @@ package helpers
 import (
 	"bytes"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
 	syncCommitteeCache = cache.NewSyncCommittee()
 )
+
+// CurrentPeriodPositions returns committee indices of the current period sync committee for input validators.
+func CurrentPeriodPositions(st state.BeaconState, indices []primitives.ValidatorIndex) ([][]primitives.CommitteeIndex, error) {
+	root, err := SyncPeriodBoundaryRoot(st)
+	if err != nil {
+		return nil, err
+	}
+	pos, err := syncCommitteeCache.CurrentPeriodPositions(root, indices)
+	if errors.Is(err, cache.ErrNonExistingSyncCommitteeKey) {
+		committee, err := st.CurrentSyncCommittee()
+		if err != nil {
+			return nil, err
+		}
+
+		// Fill in the cache on miss.
+		go func() {
+			if err := syncCommitteeCache.UpdatePositionsInCommittee(root, st); err != nil {
+				log.WithError(err).Error("Could not fill sync committee cache on miss")
+			}
+		}()
+
+		pos = make([][]primitives.CommitteeIndex, len(indices))
+		for i, idx := range indices {
+			pubkey := st.PubkeyAtIndex(idx)
+			pos[i] = findSubCommitteeIndices(pubkey[:], committee.Pubkeys)
+		}
+		return pos, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return pos, nil
+}
 
 // IsCurrentPeriodSyncCommittee returns true if the input validator index belongs in the current period sync committee
 // along with the sync committee root.

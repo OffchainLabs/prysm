@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -70,7 +71,7 @@ func (f *ForkChoice) Head(
 
 	jc := f.JustifiedCheckpoint()
 	fc := f.FinalizedCheckpoint()
-	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(f.store.genesisTime), 0))
+	currentEpoch := slots.EpochsSinceGenesis(f.store.genesisTime)
 	if err := f.store.treeRootNode.updateBestDescendant(ctx, jc.Epoch, fc.Epoch, currentEpoch); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
@@ -127,7 +128,7 @@ func (f *ForkChoice) InsertNode(ctx context.Context, state state.BeaconState, ro
 	if err := f.updateCheckpoints(ctx, jc, fc); err != nil {
 		_, remErr := f.store.removeNode(ctx, node)
 		if remErr != nil {
-			log.WithError(remErr).Error("could not remove node")
+			log.WithError(remErr).Error("Could not remove node")
 		}
 		return errors.Wrap(err, "could not update checkpoints")
 	}
@@ -239,9 +240,12 @@ func (f *ForkChoice) IsViableForCheckpoint(cp *forkchoicetypes.Checkpoint) (bool
 	if node.slot == epochStart {
 		return true, nil
 	}
-	nodeEpoch := slots.ToEpoch(node.slot)
-	if nodeEpoch >= cp.Epoch {
-		return false, nil
+	if !features.Get().IgnoreUnviableAttestations {
+		// Allow any node from the checkpoint epoch - 1 to be viable.
+		nodeEpoch := slots.ToEpoch(node.slot)
+		if nodeEpoch+1 == cp.Epoch {
+			return true, nil
+		}
 	}
 	for _, child := range node.children {
 		if child.slot > epochStart {
@@ -463,22 +467,20 @@ func (f *ForkChoice) CommonAncestor(ctx context.Context, r1 [32]byte, r2 [32]byt
 }
 
 // InsertChain inserts all nodes corresponding to blocks in the slice
-// `blocks`. This slice must be ordered from child to parent. It includes all
-// blocks **except** the first one (that is the one with the highest slot
-// number). All blocks are assumed to be a strict chain
-// where blocks[i].Parent = blocks[i+1]. Also, we assume that the parent of the
-// last block in this list is already included in forkchoice store.
+// `blocks`. This slice must be ordered in increasing slot order and
+// each consecutive entry must be a child of the previous one.
+// The parent of the first block in this list must already be present in forkchoice.
 func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.BlockAndCheckpoints) error {
 	if len(chain) == 0 {
 		return nil
 	}
-	for i := len(chain) - 1; i > 0; i-- {
+	for _, bcp := range chain {
 		if _, err := f.store.insert(ctx,
-			chain[i].Block,
-			chain[i].JustifiedCheckpoint.Epoch, chain[i].FinalizedCheckpoint.Epoch); err != nil {
+			bcp.Block,
+			bcp.JustifiedCheckpoint.Epoch, bcp.FinalizedCheckpoint.Epoch); err != nil {
 			return err
 		}
-		if err := f.updateCheckpoints(ctx, chain[i].JustifiedCheckpoint, chain[i].FinalizedCheckpoint); err != nil {
+		if err := f.updateCheckpoints(ctx, bcp.JustifiedCheckpoint, bcp.FinalizedCheckpoint); err != nil {
 			return err
 		}
 	}
@@ -486,8 +488,8 @@ func (f *ForkChoice) InsertChain(ctx context.Context, chain []*forkchoicetypes.B
 }
 
 // SetGenesisTime sets the genesisTime tracked by forkchoice
-func (f *ForkChoice) SetGenesisTime(genesisTime uint64) {
-	f.store.genesisTime = genesisTime
+func (f *ForkChoice) SetGenesisTime(genesis time.Time) {
+	f.store.genesisTime = genesis.Truncate(time.Second) // Genesis time has a precision of 1 second.
 }
 
 // SetOriginRoot sets the genesis block root
@@ -624,21 +626,30 @@ func (f *ForkChoice) Slot(root [32]byte) (primitives.Slot, error) {
 
 // DependentRoot returns the last root of the epoch prior to the requested ecoch in the canonical chain.
 func (f *ForkChoice) DependentRoot(epoch primitives.Epoch) ([32]byte, error) {
-	tr, err := f.TargetRootForEpoch(f.CachedHeadRoot(), epoch)
+	return f.DependentRootForEpoch(f.CachedHeadRoot(), epoch)
+}
+
+// DependentRootForEpoch return the last root of the epoch prior to the requested ecoch for the given root.
+func (f *ForkChoice) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	tr, err := f.TargetRootForEpoch(root, epoch)
 	if err != nil {
 		return [32]byte{}, err
 	}
 	if tr == [32]byte{} {
 		return [32]byte{}, nil
 	}
-	n, ok := f.store.nodeByRoot[tr]
-	if !ok || n == nil {
+	node, ok := f.store.nodeByRoot[tr]
+	if !ok || node == nil {
 		return [32]byte{}, ErrNilNode
 	}
-	if slots.ToEpoch(n.slot) == epoch && n.parent != nil {
-		n = n.parent
+	if slots.ToEpoch(node.slot) >= epoch {
+		if node.parent != nil {
+			node = node.parent
+		} else {
+			return f.store.finalizedDependentRoot, nil
+		}
 	}
-	return n.root, nil
+	return node.root, nil
 }
 
 // TargetRootForEpoch returns the root of the target block for a given epoch.

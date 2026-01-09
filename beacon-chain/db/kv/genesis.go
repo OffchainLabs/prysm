@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	dbIface "github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	dbIface "github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -97,8 +98,22 @@ func (s *Store) EnsureEmbeddedGenesis(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if gs != nil && !gs.IsNil() {
+	if !state.IsNil(gs) {
 		return s.SaveGenesisData(ctx, gs)
 	}
 	return nil
+}
+
+type LegacyGenesisProvider struct {
+	store *Store
+}
+
+func NewLegacyGenesisProvider(store *Store) *LegacyGenesisProvider {
+	return &LegacyGenesisProvider{store: store}
+}
+
+var _ genesis.Provider = &LegacyGenesisProvider{}
+
+func (p *LegacyGenesisProvider) Genesis(ctx context.Context) (state.BeaconState, error) {
+	return p.store.LegacyGenesisState(ctx)
 }

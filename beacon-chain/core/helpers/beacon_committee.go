@@ -5,25 +5,25 @@ package helpers
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 var (
@@ -317,23 +317,15 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 	}
 
 	proposerAssignments := make(map[primitives.ValidatorIndex][]primitives.Slot)
-
-	originalStateSlot := state.Slot()
-
 	for slot := startSlot; slot < startSlot+params.BeaconConfig().SlotsPerEpoch; slot++ {
 		// Skip proposer assignment for genesis slot.
 		if slot == 0 {
 			continue
 		}
-		// Set the state's current slot.
-		if err := state.SetSlot(slot); err != nil {
-			return nil, err
-		}
-
 		// Determine the proposer index for the current slot.
-		i, err := BeaconProposerIndex(ctx, state)
+		i, err := BeaconProposerIndexAtSlot(ctx, state, slot)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not check proposer at slot %d", state.Slot())
+			return nil, errors.Wrapf(err, "could not check proposer at slot %d", slot)
 		}
 
 		// Append the slot to the proposer's assignments.
@@ -342,12 +334,6 @@ func ProposerAssignments(ctx context.Context, state state.BeaconState, epoch pri
 		}
 		proposerAssignments[i] = append(proposerAssignments[i], slot)
 	}
-
-	// Reset state back to its original slot.
-	if err := state.SetSlot(originalStateSlot); err != nil {
-		return nil, err
-	}
-
 	return proposerAssignments, nil
 }
 
@@ -403,7 +389,7 @@ func AssignmentForValidator(
 			}
 		}
 	}
-	return nil // validator is not scheduled this epoch
+	return &LiteAssignment{} // validator is not scheduled this epoch
 }
 
 // CommitteeAssignments calculates committee assignments for each validator during the specified epoch.
@@ -413,7 +399,6 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	ctx, span := trace.StartSpan(ctx, "helpers.CommitteeAssignments")
 	defer span.End()
 
-	// Verify if the epoch is valid for assignment based on the provided state.
 	if err := VerifyAssignmentEpoch(epoch, state); err != nil {
 		return nil, err
 	}
@@ -421,12 +406,15 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 	if err != nil {
 		return nil, err
 	}
-	vals := make(map[primitives.ValidatorIndex]struct{})
+
+	// Deduplicate and make set for O(1) membership checks.
+	vals := make(map[primitives.ValidatorIndex]struct{}, len(validators))
 	for _, v := range validators {
 		vals[v] = struct{}{}
 	}
-	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment)
-	// Compute committee assignments for each slot in the epoch.
+	remaining := len(vals)
+
+	assignments := make(map[primitives.ValidatorIndex]*CommitteeAssignment, len(vals))
 	for slot := startSlot; slot < startSlot+params.BeaconConfig().SlotsPerEpoch; slot++ {
 		committees, err := BeaconCommittees(ctx, state, slot)
 		if err != nil {
@@ -434,7 +422,7 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 		}
 		for j, committee := range committees {
 			for _, vIndex := range committee {
-				if _, ok := vals[vIndex]; !ok { // Skip if the validator is not in the provided validators slice.
+				if _, ok := vals[vIndex]; !ok {
 					continue
 				}
 				if _, ok := assignments[vIndex]; !ok {
@@ -443,6 +431,11 @@ func CommitteeAssignments(ctx context.Context, state state.BeaconState, epoch pr
 				assignments[vIndex].Committee = committee
 				assignments[vIndex].AttesterSlot = slot
 				assignments[vIndex].CommitteeIndex = primitives.CommitteeIndex(j)
+				delete(vals, vIndex)
+				remaining--
+				if remaining == 0 {
+					return assignments, nil // early exit
+				}
 			}
 		}
 	}
@@ -522,9 +515,7 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	// used for failing verify signature fallback.
 	sortedIndices := make([]primitives.ValidatorIndex, len(shuffledIndices))
 	copy(sortedIndices, shuffledIndices)
-	sort.Slice(sortedIndices, func(i, j int) bool {
-		return sortedIndices[i] < sortedIndices[j]
-	})
+	slices.Sort(sortedIndices)
 
 	if err := committeeCache.AddCommitteeShuffledList(ctx, &cache.Committees{
 		ShuffledIndices: shuffledIndices,
@@ -669,11 +660,11 @@ func ComputeCommittee(
 // InitializeProposerLookahead computes the list of the proposer indices for the next MIN_SEED_LOOKAHEAD + 1 epochs.
 func InitializeProposerLookahead(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) ([]uint64, error) {
 	lookAhead := make([]uint64, 0, uint64(params.BeaconConfig().MinSeedLookahead+1)*uint64(params.BeaconConfig().SlotsPerEpoch))
-	indices, err := ActiveValidatorIndices(ctx, state, epoch)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get active indices")
-	}
 	for i := range params.BeaconConfig().MinSeedLookahead + 1 {
+		indices, err := ActiveValidatorIndices(ctx, state, epoch+i)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get active indices")
+		}
 		proposerIndices, err := PrecomputeProposerIndices(state, indices, epoch+i)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute proposer indices")

@@ -4,27 +4,27 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	payloadattribute "github.com/OffchainLabs/prysm/v6/consensus-types/payload-attribute"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	blocktypes "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	payloadattribute "github.com/OffchainLabs/prysm/v7/consensus-types/payload-attribute"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -141,7 +141,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			}
 
 			if err := s.saveHead(ctx, r, b, st); err != nil {
-				log.WithError(err).Error("could not save head after pruning invalid blocks")
+				log.WithError(err).Error("Could not save head after pruning invalid blocks")
 			}
 
 			log.WithFields(logrus.Fields{
@@ -174,6 +174,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *fcuConfig) (*
 			"payloadID": fmt.Sprintf("%#x", bytesutil.Trunc(payloadID[:])),
 		}).Info("Forkchoice updated with payload attributes for proposal")
 		s.cfg.PayloadIDCache.Set(nextSlot, arg.headRoot, pId)
+		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), arg.headBlock, arg.headRoot, nextSlot)
 	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
@@ -217,24 +218,18 @@ func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, er
 
 // notifyNewPayload signals execution engine on a new payload.
 // It returns true if the EL has returned VALID for the block
-func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
-	preStateHeader interfaces.ExecutionData, blk interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+// stVersion should represent the version of the pre-state; header should also be from the pre-state.
+func (s *Service) notifyNewPayload(ctx context.Context, stVersion int, header interfaces.ExecutionData, blk blocktypes.ROBlock) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewPayload")
 	defer span.End()
 
 	// Execution payload is only supported in Bellatrix and beyond. Pre
 	// merge blocks are never optimistic
-	if blk == nil {
-		return false, errors.New("signed beacon block can't be nil")
-	}
-	if preStateVersion < version.Bellatrix {
+	if stVersion < version.Bellatrix {
 		return true, nil
 	}
-	if err := consensusblocks.BeaconBlockIsNil(blk); err != nil {
-		return false, err
-	}
 	body := blk.Block().Body()
-	enabled, err := blocks.IsExecutionEnabledUsingHeader(preStateHeader, body)
+	enabled, err := blocks.IsExecutionEnabledUsingHeader(header, body)
 	if err != nil {
 		return false, errors.Wrap(invalidBlock{error: err}, "could not determine if execution is enabled")
 	}
@@ -267,28 +262,32 @@ func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
 			return false, errors.New("nil execution requests")
 		}
 	}
-	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
 
-	switch {
-	case err == nil:
+	lastValidHash, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, parentRoot, requests)
+	if err == nil {
 		newPayloadValidNodeCount.Inc()
 		return true, nil
-	case errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus):
+	}
+	logFields := logrus.Fields{
+		"slot":             blk.Block().Slot(),
+		"parentRoot":       fmt.Sprintf("%#x", parentRoot),
+		"root":             fmt.Sprintf("%#x", blk.Root()),
+		"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
+	}
+	if errors.Is(err, execution.ErrAcceptedSyncingPayloadStatus) {
 		newPayloadOptimisticNodeCount.Inc()
-		log.WithFields(logrus.Fields{
-			"slot":             blk.Block().Slot(),
-			"payloadBlockHash": fmt.Sprintf("%#x", bytesutil.Trunc(payload.BlockHash())),
-		}).Info("Called new payload with optimistic block")
+		log.WithFields(logFields).Info("Called new payload with optimistic block")
 		return false, nil
-	case errors.Is(err, execution.ErrInvalidPayloadStatus):
-		lvh := bytesutil.ToBytes32(lastValidHash)
+	}
+	if errors.Is(err, execution.ErrInvalidPayloadStatus) {
+		log.WithFields(logFields).WithError(err).Error("Invalid payload status")
 		return false, invalidBlock{
 			error:         ErrInvalidPayload,
-			lastValidHash: lvh,
+			lastValidHash: bytesutil.ToBytes32(lastValidHash),
 		}
-	default:
-		return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 	}
+	log.WithFields(logFields).WithError(err).Error("Unexpected execution engine error")
+	return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 }
 
 // reportInvalidBlock deals with the event that an invalid block was detected by the execution layer
@@ -324,14 +323,17 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	var ok bool
 	e := slots.ToEpoch(slot)
 	stateEpoch := slots.ToEpoch(st.Slot())
-	if e == stateEpoch {
+	fuluAndNextEpoch := st.Version() >= version.Fulu && e == stateEpoch+1
+	if e == stateEpoch || fuluAndNextEpoch {
 		val, ok = s.trackedProposer(st, slot)
 		if !ok {
 			return emptyAttri
 		}
 	}
-	st = st.Copy()
 	if slot > st.Slot() {
+		// At this point either we know we are proposing on a future slot or we need to still compute the
+		// right proposer index pre-Fulu, either way we need to copy the state to process it.
+		st = st.Copy()
 		var err error
 		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
 		if err != nil {
@@ -339,7 +341,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 			return emptyAttri
 		}
 	}
-	if e > stateEpoch {
+	if e > stateEpoch && !fuluAndNextEpoch {
 		emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 		val, ok = s.trackedProposer(st, slot)
 		if !ok {
@@ -354,7 +356,7 @@ func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState,
 	}
 
 	// Get timestamp.
-	t, err := slots.ToTime(uint64(s.genesisTime.Unix()), slot)
+	t, err := slots.StartTime(s.genesisTime, slot)
 	if err != nil {
 		log.WithError(err).Error("Could not get timestamp to get payload attribute")
 		return emptyAttri

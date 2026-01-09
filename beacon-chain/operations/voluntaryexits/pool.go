@@ -1,16 +1,15 @@
 package voluntaryexits
 
 import (
-	"math"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	doublylinkedlist "github.com/OffchainLabs/prysm/v6/container/doubly-linked-list"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	doublylinkedlist "github.com/OffchainLabs/prysm/v7/container/doubly-linked-list"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/sirupsen/logrus"
 )
 
@@ -63,7 +62,7 @@ func (p *Pool) PendingExits() ([]*ethpb.SignedVoluntaryExit, error) {
 // return more than the block enforced MaxVoluntaryExits.
 func (p *Pool) ExitsForInclusion(state state.ReadOnlyBeaconState, slot types.Slot) ([]*ethpb.SignedVoluntaryExit, error) {
 	p.lock.RLock()
-	length := int(math.Min(float64(params.BeaconConfig().MaxVoluntaryExits), float64(p.pending.Len())))
+	length := int(min(float64(params.BeaconConfig().MaxVoluntaryExits), float64(p.pending.Len())))
 	result := make([]*ethpb.SignedVoluntaryExit, 0, length)
 	node := p.pending.First()
 	for node != nil && len(result) < length {

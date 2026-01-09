@@ -9,6 +9,7 @@ const (
 	RandaoMixesLength                     = 65536             // EPOCHS_PER_HISTORICAL_VECTOR
 	HistoricalRootsLength                 = 16777216          // HISTORICAL_ROOTS_LIMIT
 	ValidatorRegistryLimit                = 1099511627776     // VALIDATOR_REGISTRY_LIMIT
+	BuilderRegistryLimit                  = 1099511627776     // BUILDER_REGISTRY_LIMIT
 	Eth1DataVotesLength                   = 2048              // SLOTS_PER_ETH1_VOTING_PERIOD
 	PreviousEpochAttestationsLength       = 4096              // MAX_ATTESTATIONS * SLOTS_PER_EPOCH
 	CurrentEpochAttestationsLength        = 4096              // MAX_ATTESTATIONS * SLOTS_PER_EPOCH
@@ -44,6 +45,7 @@ const (
 	MaxAttesterSlashingsElectra           = 1                 // Maximum number of attester slashings in a block.
 	MaxRandomByte                         = uint64(1<<8 - 1)  // MaxRandomByte defines max for a random byte using for proposer and sync committee sampling.
 	MaxRandomValueElectra                 = uint64(1<<16 - 1) // MaxRandomValueElectra defines max for a random value using for proposer and sync committee sampling.
+	BuilderPendingWithdrawalsLimit        = 1048576           // Maximum number of builder pending withdrawals.
 
 	// Introduced in Fulu network upgrade.
 	NumberOfColumns = 128 // NumberOfColumns refers to the specified number of data columns that can exist in a network.

@@ -2,13 +2,14 @@ package client
 
 import (
 	"testing"
+	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v6/validator/client/testutil"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
 	"github.com/pkg/errors"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
@@ -30,7 +31,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 		v := validator{
 			validatorClient:  client,
 			km:               newMockKeymanager(t, inactive),
-			genesisTime:      1,
+			genesisTime:      time.Unix(1, 0),
 			chainClient:      chainClient,
 			prysmChainClient: prysmChainClient,
 			pubkeyToStatus:   make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
@@ -63,7 +64,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 		v := validator{
 			validatorClient:  client,
 			km:               newMockKeymanager(t, kp),
-			genesisTime:      1,
+			genesisTime:      time.Unix(1, 0),
 			chainClient:      chainClient,
 			prysmChainClient: prysmChainClient,
 			pubkeyToStatus:   make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
@@ -91,7 +92,7 @@ func TestValidator_HandleKeyReload(t *testing.T) {
 		v := validator{
 			validatorClient: client,
 			km:              newMockKeymanager(t, kp),
-			genesisTime:     1,
+			genesisTime:     time.Unix(1, 0),
 			pubkeyToStatus:  make(map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus),
 		}
 

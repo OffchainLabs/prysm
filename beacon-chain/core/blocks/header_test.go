@@ -4,19 +4,19 @@ import (
 	"io"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -27,7 +27,7 @@ func init() {
 
 func TestProcessBlockHeader_ImproperBlockSlot(t *testing.T) {
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 32),
 			WithdrawalCredentials: make([]byte, 32),
@@ -104,7 +104,7 @@ func TestProcessBlockHeader_WrongProposerSig(t *testing.T) {
 
 func TestProcessBlockHeader_DifferentSlots(t *testing.T) {
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 32),
 			WithdrawalCredentials: make([]byte, 32),
@@ -148,7 +148,7 @@ func TestProcessBlockHeader_DifferentSlots(t *testing.T) {
 
 func TestProcessBlockHeader_PreviousBlockRootNotSignedRoot(t *testing.T) {
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -189,7 +189,7 @@ func TestProcessBlockHeader_PreviousBlockRootNotSignedRoot(t *testing.T) {
 
 func TestProcessBlockHeader_SlashedProposer(t *testing.T) {
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -233,7 +233,7 @@ func TestProcessBlockHeader_SlashedProposer(t *testing.T) {
 
 func TestProcessBlockHeader_OK(t *testing.T) {
 	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 32),
 			WithdrawalCredentials: make([]byte, 32),
@@ -289,53 +289,4 @@ func TestProcessBlockHeader_OK(t *testing.T) {
 		StateRoot:     zeroHash[:],
 	}
 	assert.Equal(t, true, proto.Equal(nsh, expected), "Expected %v, received %v", expected, nsh)
-}
-
-func TestBlockSignatureSet_OK(t *testing.T) {
-	validators := make([]*ethpb.Validator, params.BeaconConfig().MinGenesisActiveValidatorCount)
-	for i := 0; i < len(validators); i++ {
-		validators[i] = &ethpb.Validator{
-			PublicKey:             make([]byte, 32),
-			WithdrawalCredentials: make([]byte, 32),
-			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
-			Slashed:               true,
-		}
-	}
-
-	state, err := util.NewBeaconState()
-	require.NoError(t, err)
-	require.NoError(t, state.SetValidators(validators))
-	require.NoError(t, state.SetSlot(10))
-	require.NoError(t, state.SetLatestBlockHeader(util.HydrateBeaconHeader(&ethpb.BeaconBlockHeader{
-		Slot:          9,
-		ProposerIndex: 0,
-	})))
-
-	latestBlockSignedRoot, err := state.LatestBlockHeader().HashTreeRoot()
-	require.NoError(t, err)
-
-	currentEpoch := time.CurrentEpoch(state)
-	priv, err := bls.RandKey()
-	require.NoError(t, err)
-	pID, err := helpers.BeaconProposerIndex(t.Context(), state)
-	require.NoError(t, err)
-	block := util.NewBeaconBlock()
-	block.Block.Slot = 10
-	block.Block.ProposerIndex = pID
-	block.Block.Body.RandaoReveal = bytesutil.PadTo([]byte{'A', 'B', 'C'}, 96)
-	block.Block.ParentRoot = latestBlockSignedRoot[:]
-	block.Signature, err = signing.ComputeDomainAndSign(state, currentEpoch, block.Block, params.BeaconConfig().DomainBeaconProposer, priv)
-	require.NoError(t, err)
-	proposerIdx, err := helpers.BeaconProposerIndex(t.Context(), state)
-	require.NoError(t, err)
-	validators[proposerIdx].Slashed = false
-	validators[proposerIdx].PublicKey = priv.PublicKey().Marshal()
-	err = state.UpdateValidatorAtIndex(proposerIdx, validators[proposerIdx])
-	require.NoError(t, err)
-	set, err := blocks.BlockSignatureBatch(state, block.Block.ProposerIndex, block.Signature, block.Block.HashTreeRoot)
-	require.NoError(t, err)
-
-	verified, err := set.Verify()
-	require.NoError(t, err)
-	assert.Equal(t, true, verified, "Block signature set returned a set which was unable to be verified")
 }

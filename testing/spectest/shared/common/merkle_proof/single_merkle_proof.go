@@ -6,13 +6,13 @@ import (
 	"path"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/ssz_static"
-	"github.com/OffchainLabs/prysm/v6/testing/spectest/utils"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/shared/common/ssz_static"
+	"github.com/OffchainLabs/prysm/v7/testing/spectest/utils"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/snappy"
 	fssz "github.com/prysmaticlabs/fastssz"
@@ -80,7 +80,8 @@ func runSingleMerkleProofTests(t *testing.T, config, forkOrPhase string, unmarsh
 				if err != nil {
 					return
 				}
-				if index < consensus_blocks.KZGOffset || index > uint64(consensus_blocks.KZGOffset+params.BeaconConfig().MaxBlobsPerBlock(0)) {
+				maxBlobs := params.BeaconConfig().MaxBlobsPerBlockAtEpoch(params.BeaconConfig().DenebForkEpoch)
+				if index < consensus_blocks.KZGOffset || index > uint64(consensus_blocks.KZGOffset+maxBlobs) {
 					return
 				}
 				localProof, err := consensus_blocks.MerkleProofKZGCommitment(body, int(index-consensus_blocks.KZGOffset))

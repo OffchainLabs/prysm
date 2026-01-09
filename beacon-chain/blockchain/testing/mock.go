@@ -8,29 +8,28 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/epoch/precompute"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	forkchoice2 "github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	forkchoice2 "github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var ErrNilState = errors.New("nil state")
@@ -106,7 +105,7 @@ type EventFeedWrapper struct {
 	subscribed chan struct{} // this channel is closed once a subscription is made
 }
 
-func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
+func (w *EventFeedWrapper) Subscribe(channel any) event.Subscription {
 	select {
 	case <-w.subscribed:
 		break // already closed
@@ -116,7 +115,7 @@ func (w *EventFeedWrapper) Subscribe(channel interface{}) event.Subscription {
 	return w.feed.Subscribe(channel)
 }
 
-func (w *EventFeedWrapper) Send(value interface{}) int {
+func (w *EventFeedWrapper) Send(value any) int {
 	return w.feed.Send(value)
 }
 
@@ -267,7 +266,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 		if err := s.DB.SaveBlock(ctx, block); err != nil {
 			return err
 		}
-		logrus.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
+		log.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
 	}
 	s.Root = signingRoot[:]
 	s.Block = block
@@ -275,7 +274,7 @@ func (s *ChainService) ReceiveBlockInitialSync(ctx context.Context, block interf
 }
 
 // ReceiveBlockBatch processes blocks in batches from initial-sync.
-func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityStore) error {
+func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBlock, _ das.AvailabilityChecker) error {
 	if s.State == nil {
 		return ErrNilState
 	}
@@ -296,7 +295,7 @@ func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBl
 			if err := s.DB.SaveBlock(ctx, b); err != nil {
 				return err
 			}
-			logrus.Infof("Saved block with root: %#x at slot %d", signingRoot, b.Block().Slot())
+			log.Infof("Saved block with root: %#x at slot %d", signingRoot, b.Block().Slot())
 		}
 		s.Root = signingRoot[:]
 		s.Block = b
@@ -305,7 +304,7 @@ func (s *ChainService) ReceiveBlockBatch(ctx context.Context, blks []blocks.ROBl
 }
 
 // ReceiveBlock mocks ReceiveBlock method in chain service.
-func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, _ [32]byte, _ das.AvailabilityStore) error {
+func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock, _ [32]byte, _ das.AvailabilityChecker) error {
 	if s.ReceiveBlockMockErr != nil {
 		return s.ReceiveBlockMockErr
 	}
@@ -328,7 +327,7 @@ func (s *ChainService) ReceiveBlock(ctx context.Context, block interfaces.ReadOn
 		if err := s.DB.SaveBlock(ctx, block); err != nil {
 			return err
 		}
-		logrus.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
+		log.Infof("Saved block with root: %#x at slot %d", signingRoot, block.Block().Slot())
 	}
 	s.Root = signingRoot[:]
 	s.Block = block
@@ -472,6 +471,36 @@ func (s *ChainService) HasBlock(ctx context.Context, rt [32]byte) bool {
 	return s.InitSyncBlockRoots[rt]
 }
 
+func (s *ChainService) AvailableBlocks(ctx context.Context, blockRoots [][32]byte) map[[32]byte]bool {
+	if s.DB == nil {
+		return nil
+	}
+
+	count := len(blockRoots)
+	availableRoots := make(map[[32]byte]bool, count)
+	notInDBRoots := make([][32]byte, 0, count)
+	for _, root := range blockRoots {
+		if s.DB.HasBlock(ctx, root) {
+			availableRoots[root] = true
+			continue
+		}
+
+		notInDBRoots = append(notInDBRoots, root)
+	}
+
+	if s.InitSyncBlockRoots == nil {
+		return availableRoots
+	}
+
+	for _, root := range notInDBRoots {
+		if s.InitSyncBlockRoots[root] {
+			availableRoots[root] = true
+		}
+	}
+
+	return availableRoots
+}
+
 // RecentBlockSlot mocks the same method in the chain service.
 func (s *ChainService) RecentBlockSlot([32]byte) (primitives.Slot, error) {
 	return s.BlockSlot, nil
@@ -555,11 +584,11 @@ func (s *ChainService) UpdateHead(ctx context.Context, slot primitives.Slot) {
 	ojc := &ethpb.Checkpoint{}
 	st, root, err := prepareForkchoiceState(ctx, slot, bytesutil.ToBytes32(s.Root), [32]byte{}, [32]byte{}, ojc, ojc)
 	if err != nil {
-		logrus.WithError(err).Error("could not update head")
+		log.WithError(err).Error("Could not update head")
 	}
 	err = s.ForkChoiceStore.InsertNode(ctx, st, root)
 	if err != nil {
-		logrus.WithError(err).Error("could not insert node to forkchoice")
+		log.WithError(err).Error("Could not insert node to forkchoice")
 	}
 }
 
@@ -641,7 +670,7 @@ func (s *ChainService) GetProposerHead() [32]byte {
 }
 
 // SetForkChoiceGenesisTime mocks the same method in the chain service
-func (s *ChainService) SetForkChoiceGenesisTime(timestamp uint64) {
+func (s *ChainService) SetForkChoiceGenesisTime(timestamp time.Time) {
 	if s.ForkChoiceStore != nil {
 		s.ForkChoiceStore.SetGenesisTime(timestamp)
 	}
@@ -723,8 +752,14 @@ func (c *ChainService) ReceiveDataColumn(dc blocks.VerifiedRODataColumn) error {
 }
 
 // ReceiveDataColumns implements the same method in chain service
-func (*ChainService) ReceiveDataColumns(_ []blocks.VerifiedRODataColumn) error {
+func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) error {
+	c.DataColumns = append(c.DataColumns, dcs...)
 	return nil
+}
+
+// DependentRootForEpoch mocks the same method in the chain service
+func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+	return c.TargetRoot, nil
 }
 
 // TargetRootForEpoch mocks the same method in the chain service

@@ -158,15 +158,15 @@ oci_register_toolchains(
 
 http_archive(
     name = "io_bazel_rules_go",
-    integrity = "sha256-JD8o94crTb2DFiJJR8nMAGdBAW95zIENB4cbI+JnrI4=",
     patch_args = ["-p1"],
     patches = [
         # Expose internals of go_test for custom build transitions.
         "//third_party:io_bazel_rules_go_test.patch",
     ],
-    strip_prefix = "rules_go-cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9",
+    sha256 = "a729c8ed2447c90fe140077689079ca0acfb7580ec41637f312d650ce9d93d96",
     urls = [
-        "https://github.com/bazel-contrib/rules_go/archive/cf3c3af34bd869b864f5f2b98e2f41c2b220d6c9.tar.gz",
+        "https://mirror.bazel.build/github.com/bazel-contrib/rules_go/releases/download/v0.57.0/rules_go-v0.57.0.zip",
+        "https://github.com/bazel-contrib/rules_go/releases/download/v0.57.0/rules_go-v0.57.0.zip",
     ],
 )
 
@@ -190,7 +190,7 @@ load("@rules_oci//oci:pull.bzl", "oci_pull")
 # A multi-arch base image
 oci_pull(
     name = "linux_debian11_multiarch_base",  # Debian bullseye
-    digest = "sha256:b82f113425c5b5c714151aaacd8039bc141821cdcd3c65202d42bdf9c43ae60b",  # 2023-12-12
+    digest = "sha256:55a5e011b2c4246b4c51e01fcc2b452d151e03df052e357465f0392fcd59fddf",
     image = "gcr.io/prysmaticlabs/distroless/cc-debian11",
     platforms = [
         "linux/amd64",
@@ -205,10 +205,30 @@ prysm_image_deps()
 
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 
+# Override golang.org/x/tools to use v0.38.0 instead of v0.30.0
+# This is necessary as this dependency is required by rules_go and they do not accept dependency
+# update PRs. Instead, they ask downstream projects to override the dependency. To generate the
+# patches or update this dependency again, check out the rules_go repo then run the releaser tool.
+# bazel run //go/tools/releaser -- upgrade-dep -mirror=false org_golang_x_tools
+# Copy the patches and http_archive updates from rules_go here.
+http_archive(
+    name = "org_golang_x_tools",
+    patch_args = ["-p1"],
+    patches = [
+        "//third_party:org_golang_x_tools-deletegopls.patch",
+        "//third_party:org_golang_x_tools-gazelle.patch",
+    ],
+    sha256 = "8509908cd7fc35aa09ff49d8494e4fd25bab9e6239fbf57e0d8344f6bec5802b",
+    strip_prefix = "tools-0.38.0",
+    urls = [
+        "https://github.com/golang/tools/archive/refs/tags/v0.38.0.zip",
+    ],
+)
+
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.24.0",
+    go_version = "1.25.1",
     nogo = "@//:nogo",
 )
 
@@ -253,16 +273,16 @@ filegroup(
     url = "https://github.com/ethereum/EIPs/archive/5480440fe51742ed23342b68cf106cefd427e39d.tar.gz",
 )
 
-consensus_spec_version = "v1.6.0-alpha.1"
+consensus_spec_version = "v1.7.0-alpha.0"
 
 load("@prysm//tools:download_spectests.bzl", "consensus_spec_tests")
 
 consensus_spec_tests(
     name = "consensus_spec_tests",
     flavors = {
-        "general": "sha256-o4t9p3R+fQHF4KOykGmwlG3zDw5wUdVWprkzId8aIsk=",
-        "minimal": "sha256-sU7ToI8t3MR8x0vVjC8ERmAHZDWpEmnAC9FWIpHi5x4=",
-        "mainnet": "sha256-YKS4wngg0LgI9Upp4MYJ77aG+8+e/G4YeqEIlp06LZw=",
+        "general": "sha256-b+rJOuVqq+Dy53quPcNYcQwPFoMU7Wp7tdUVe7n0g8w=",
+        "minimal": "sha256-qxRIxtjPxVsVCY90WsBJKhk0027XDSmhjnRvRN14V1c=",
+        "mainnet": "sha256-NsuOQG3LzeiEE1TrWuvQ6vu6BboHv7h7f/RTS0pWkCs=",
     },
     version = consensus_spec_version,
 )
@@ -278,7 +298,7 @@ filegroup(
     visibility = ["//visibility:public"],
 )
     """,
-    integrity = "sha256-Nv4TEuEJPQIM4E6T9J0FOITsmappmXZjGtlhe1HEXnU=",
+    integrity = "sha256-hwNdUBgdBrkk6pWIpNYbzbwswUuOu6AMD2exN8uv+QQ=",
     strip_prefix = "consensus-specs-" + consensus_spec_version[1:],
     url = "https://github.com/ethereum/consensus-specs/archive/refs/tags/%s.tar.gz" % consensus_spec_version,
 )
@@ -301,22 +321,6 @@ filegroup(
 )
 
 http_archive(
-    name = "eth2_networks",
-    build_file_content = """
-filegroup(
-    name = "configs",
-    srcs = glob([
-        "shared/**/config.yaml",
-    ]),
-    visibility = ["//visibility:public"],
-)
-    """,
-    sha256 = "77e7e3ed65e33b7bb19d30131f4c2bb39e4dfeb188ab9ae84651c3cc7600131d",
-    strip_prefix = "eth2-networks-934c948e69205dcf2deb87e4ae6cc140c335f94d",
-    url = "https://github.com/eth-clients/eth2-networks/archive/934c948e69205dcf2deb87e4ae6cc140c335f94d.tar.gz",
-)
-
-http_archive(
     name = "holesky_testnet",
     build_file_content = """
 filegroup(
@@ -327,9 +331,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-YVFFrCmjoGZ3fXMWpsCpSsYbANy1grnqYwOLKIg2SsA=",
-    strip_prefix = "holesky-32a72e21c6e53c262f27d50dd540cb654517d03a",
-    url = "https://github.com/eth-clients/holesky/archive/32a72e21c6e53c262f27d50dd540cb654517d03a.tar.gz",  # 2025-03-17
+    integrity = "sha256-htyxg8Ln2o8eCiifFN7/hcHGZg8Ir9CPzCEx+FUnnCs=",
+    strip_prefix = "holesky-8aec65f11f0c986d6b76b2eb902420635eb9b815",
+    url = "https://github.com/eth-clients/holesky/archive/8aec65f11f0c986d6b76b2eb902420635eb9b815.tar.gz",
 )
 
 http_archive(
@@ -343,9 +347,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-NZr/gsQK9rBHRnznlPBiNzJpK8MPMrfUa3f+QYqn1+g=",
-    strip_prefix = "mainnet-978f1794eada6f85bee76e4d2d5959a5fb8e0cc5",
-    url = "https://github.com/eth-clients/mainnet/archive/978f1794eada6f85bee76e4d2d5959a5fb8e0cc5.tar.gz",
+    integrity = "sha256-+mqMXyboedVw8Yp0v+U9GDz98QoC1SZET8mjaKPX+AI=",
+    strip_prefix = "mainnet-980aee8893a2291d473c38f63797d5bc370fa381",
+    url = "https://github.com/eth-clients/mainnet/archive/980aee8893a2291d473c38f63797d5bc370fa381.tar.gz",
 )
 
 http_archive(
@@ -359,9 +363,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-b5F7Wg9LLMqGRIpP2uqb/YsSFVn2ynzlV7g/Nb1EFLk=",
-    strip_prefix = "sepolia-562d9938f08675e9ba490a1dfba21fb05843f39f",
-    url = "https://github.com/eth-clients/sepolia/archive/562d9938f08675e9ba490a1dfba21fb05843f39f.tar.gz",  # 2025-03-17
+    integrity = "sha256-+UZgfvBcea0K0sbvAJZOz5ZNmxdWZYbohP38heUuc6w=",
+    strip_prefix = "sepolia-f9158732adb1a2a6440613ad2232eb50e7384c4f",
+    url = "https://github.com/eth-clients/sepolia/archive/f9158732adb1a2a6440613ad2232eb50e7384c4f.tar.gz",
 )
 
 http_archive(
@@ -375,17 +379,17 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    integrity = "sha256-dPiEWUd8QvbYGwGtIm0QtCekitVLOLsW5rpQIGzz8PU=",
-    strip_prefix = "hoodi-828c2c940e1141092bd4bb979cef547ea926d272",
-    url = "https://github.com/eth-clients/hoodi/archive/828c2c940e1141092bd4bb979cef547ea926d272.tar.gz",
+    integrity = "sha256-G+4c9c/vci1OyPrQJnQCI+ZCv/E0cWN4hrHDY3i7ns0=",
+    strip_prefix = "hoodi-b6ee51b2045a5e7fe3efac52534f75b080b049c6",
+    url = "https://github.com/eth-clients/hoodi/archive/b6ee51b2045a5e7fe3efac52534f75b080b049c6.tar.gz",
 )
 
 http_archive(
     name = "com_google_protobuf",
-    sha256 = "9bd87b8280ef720d3240514f884e56a712f2218f0d693b48050c836028940a42",
-    strip_prefix = "protobuf-25.1",
+    sha256 = "7c3ebd7aaedd86fa5dc479a0fda803f602caaf78d8aff7ce83b89e1b8ae7442a",
+    strip_prefix = "protobuf-28.3",
     urls = [
-        "https://github.com/protocolbuffers/protobuf/archive/v25.1.tar.gz",
+        "https://github.com/protocolbuffers/protobuf/archive/v28.3.tar.gz",
     ],
 )
 

@@ -9,16 +9,14 @@ import (
 	"net/url"
 	"path"
 	"regexp"
-	"sort"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/client"
-	"github.com/OffchainLabs/prysm/v6/api/server"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/api/client"
+	"github.com/OffchainLabs/prysm/v7/api/server"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -135,24 +133,6 @@ func (c *Client) GetFork(ctx context.Context, stateId StateOrBlockId) (*ethpb.Fo
 	}
 
 	return fr.ToConsensus()
-}
-
-// GetForkSchedule retrieve all forks, past present and future, of which this node is aware.
-func (c *Client) GetForkSchedule(ctx context.Context) (forks.OrderedSchedule, error) {
-	body, err := c.Get(ctx, getForkSchedulePath)
-	if err != nil {
-		return nil, errors.Wrap(err, "error requesting fork schedule")
-	}
-	fsr := &forkScheduleResponse{}
-	err = json.Unmarshal(body, fsr)
-	if err != nil {
-		return nil, err
-	}
-	ofs, err := fsr.OrderedForkSchedule()
-	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("problem unmarshaling %s response", getForkSchedulePath))
-	}
-	return ofs, nil
 }
 
 // GetConfigSpec retrieve the current configs of the network used by the beacon node.
@@ -304,7 +284,7 @@ func (c *Client) SubmitChangeBLStoExecution(ctx context.Context, request []*stru
 	if resp.StatusCode != http.StatusOK {
 		decoder := json.NewDecoder(resp.Body)
 		decoder.DisallowUnknownFields()
-		errorJson := &server.IndexedVerificationFailureError{}
+		errorJson := &server.IndexedErrorContainer{}
 		if err := decoder.Decode(errorJson); err != nil {
 			return errors.Wrapf(err, "failed to decode error JSON for %s", resp.Request.URL)
 		}
@@ -333,32 +313,4 @@ func (c *Client) GetBLStoExecutionChanges(ctx context.Context) (*structs.BLSToEx
 		return nil, err
 	}
 	return poolResponse, nil
-}
-
-type forkScheduleResponse struct {
-	Data []structs.Fork
-}
-
-func (fsr *forkScheduleResponse) OrderedForkSchedule() (forks.OrderedSchedule, error) {
-	ofs := make(forks.OrderedSchedule, 0)
-	for _, d := range fsr.Data {
-		epoch, err := strconv.ParseUint(d.Epoch, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error parsing epoch %s", d.Epoch)
-		}
-		vSlice, err := hexutil.Decode(d.CurrentVersion)
-		if err != nil {
-			return nil, err
-		}
-		if len(vSlice) != 4 {
-			return nil, fmt.Errorf("got %d byte version, expected 4 bytes. version hex=%s", len(vSlice), d.CurrentVersion)
-		}
-		version := bytesutil.ToBytes4(vSlice)
-		ofs = append(ofs, forks.ForkScheduleEntry{
-			Version: version,
-			Epoch:   primitives.Epoch(epoch),
-		})
-	}
-	sort.Sort(ofs)
-	return ofs, nil
 }

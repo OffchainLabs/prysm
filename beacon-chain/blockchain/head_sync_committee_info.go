@@ -4,22 +4,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
-
-// Initialize the state cache for sync committees.
-var syncCommitteeHeadStateCache = cache.NewSyncCommitteeHeadState()
 
 // HeadSyncCommitteeFetcher is the interface that wraps the head sync committee related functions.
 // The head sync committee functions return callers sync committee indices and public keys with respect to current head state.
@@ -143,7 +140,7 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 	defer mLock.Unlock()
 
 	// If there's already a head state exists with the request slot, we don't need to process slots.
-	cachedState, err := syncCommitteeHeadStateCache.Get(slot)
+	cachedState, err := s.syncCommitteeHeadState.Get(slot)
 	switch {
 	case err == nil:
 		syncHeadStateHit.Inc()
@@ -166,7 +163,7 @@ func (s *Service) getSyncCommitteeHeadState(ctx context.Context, slot primitives
 			return nil, err
 		}
 		syncHeadStateMiss.Inc()
-		err = syncCommitteeHeadStateCache.Put(slot, headState)
+		err = s.syncCommitteeHeadState.Put(slot, headState)
 		return headState, err
 	default:
 		// In the event, we encounter another error

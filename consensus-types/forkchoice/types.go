@@ -1,8 +1,10 @@
 package forkchoice
 
 import (
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"time"
+
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
 
 type NodeValidity uint8
@@ -47,7 +49,7 @@ type Node struct {
 	UnrealizedFinalizedEpoch primitives.Epoch
 	Balance                  uint64
 	Weight                   uint64
-	Timestamp                uint64
+	Timestamp                time.Time
 	BlockRoot                []byte
 	ParentRoot               []byte
 	ExecutionBlockHash       []byte

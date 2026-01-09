@@ -2,30 +2,33 @@ package sync
 
 import (
 	"bytes"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
 func TestValidateDataColumn(t *testing.T) {
+	err := kzg.Start()
+	require.NoError(t, err)
+
 	ctx := t.Context()
 
 	t.Run("from self", func(t *testing.T) {
@@ -51,7 +54,7 @@ func TestValidateDataColumn(t *testing.T) {
 		s := &Service{cfg: &config{p2p: p, initialSync: &mockSync.Sync{}}}
 
 		result, err := s.validateDataColumn(ctx, "", &pubsub.Message{Message: &pb.Message{}})
-		require.ErrorIs(t, errInvalidTopic, err)
+		require.ErrorIs(t, p2p.ErrInvalidTopic, err)
 		require.Equal(t, result, pubsub.ValidationReject)
 	})
 
@@ -64,10 +67,14 @@ func TestValidateDataColumn(t *testing.T) {
 
 		clock := startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)
 		service := &Service{
-			cfg:                 &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService},
+			cfg:                 &config{p2p: p, initialSync: &mockSync.Sync{}, clock: clock, chain: chainService, batchVerifierLimit: 10},
+			ctx:                 ctx,
 			newColumnsVerifier:  newDataColumnsVerifier,
-			seenDataColumnCache: lruwrpr.New(seenDataColumnSize),
+			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
+			kzgChan:             make(chan *kzgVerifier, 100),
 		}
+		// Start the KZG verifier routine for batch verification
+		go service.kzgVerifierRoutine()
 
 		// Encode a `beaconBlock` message instead of expected.
 		buf := new(bytes.Buffer)
@@ -179,12 +186,6 @@ func TestValidateDataColumn(t *testing.T) {
 			expectedError:  genericError,
 		},
 		{
-			name:           "sidecar kzg proof verified",
-			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarKzgProofVerified: genericError}),
-			expectedResult: pubsub.ValidationReject,
-			expectedError:  genericError,
-		},
-		{
 			name:           "sidecar proposer expected",
 			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{ErrSidecarProposerExpected: genericError}),
 			expectedResult: pubsub.ValidationReject,
@@ -192,7 +193,7 @@ func TestValidateDataColumn(t *testing.T) {
 		},
 		{
 			name:           "nominal",
-			verifier:       testNewDataColumnSidecarsVerifier(verification.MockDataColumnsVerifier{}),
+			verifier:       testVerifierReturnsAll(&verification.MockDataColumnsVerifier{}),
 			expectedResult: pubsub.ValidationAccept,
 		},
 	}
@@ -219,5 +220,14 @@ func TestValidateDataColumn(t *testing.T) {
 func testNewDataColumnSidecarsVerifier(verifier verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
 	return func([]blocks.RODataColumn, []verification.Requirement) verification.DataColumnsVerifier {
 		return &verifier
+	}
+}
+
+func testVerifierReturnsAll(v *verification.MockDataColumnsVerifier) verification.NewDataColumnsVerifier {
+	return func(cols []blocks.RODataColumn, reqs []verification.Requirement) verification.DataColumnsVerifier {
+		for _, col := range cols {
+			v.AppendRODataColumns(col)
+		}
+		return v
 	}
 }

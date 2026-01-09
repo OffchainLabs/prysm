@@ -142,7 +142,6 @@ func TestCollector(t *testing.T) {
 
 	tests := []testSet{
 		collectorSimple,
-		collectorSimple,
 		collectorVaried,
 	}
 

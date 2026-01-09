@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -17,10 +17,19 @@ func TestServer_GetBeaconConfig(t *testing.T) {
 	res, err := bs.GetBeaconConfig(ctx, &emptypb.Empty{})
 	require.NoError(t, err)
 	conf := params.BeaconConfig()
-	numFields := reflect.TypeOf(conf).Elem().NumField()
+	confType := reflect.TypeFor[params.BeaconChainConfig]()
+	numFields := confType.NumField()
 
-	// Check if the result has the same number of items as our config struct.
-	assert.Equal(t, numFields, len(res.Config), "Unexpected number of items in config")
+	// Count only exported fields, as unexported fields are not included in the config
+	exportedFields := 0
+	for i := range numFields {
+		if confType.Field(i).IsExported() {
+			exportedFields++
+		}
+	}
+
+	// Check if the result has the same number of items as exported fields in our config struct.
+	assert.Equal(t, exportedFields, len(res.Config), "Unexpected number of items in config")
 	want := fmt.Sprintf("%d", conf.Eth1FollowDistance)
 
 	// Check that an element is properly populated from the config.

@@ -3,34 +3,33 @@ package blockchain
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/sirupsen/logrus"
 )
 
@@ -67,13 +66,10 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 	startTime := time.Now()
 	fcuArgs := &fcuConfig{}
 
-	if s.inRegularSync() {
-		defer s.handleSecondFCUCall(cfg, fcuArgs)
-	}
 	if features.Get().EnableLightClient && slots.ToEpoch(s.CurrentSlot()) >= params.BeaconConfig().AltairForkEpoch {
 		defer s.processLightClientUpdates(cfg)
 	}
-	defer s.sendStateFeedOnBlock(cfg)
+
 	defer reportProcessingTime(startTime)
 	defer reportAttestationInclusion(cfg.roblock.Block())
 
@@ -94,6 +90,8 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
+
+	defer s.sendStateFeedOnBlock(cfg) // only send event after successful insertion
 	start := time.Now()
 	cfg.headRoot, err = s.cfg.ForkChoiceStore.Head(ctx)
 	if err != nil {
@@ -104,14 +102,17 @@ func (s *Service) postBlockProcess(cfg *postBlockProcessConfig) error {
 		s.logNonCanonicalBlockReceived(cfg.roblock.Root(), cfg.headRoot)
 		return nil
 	}
-	if err := s.getFCUArgs(cfg, fcuArgs); err != nil {
-		log.WithError(err).Error("Could not get forkchoice update argument")
-		return nil
-	}
-	if err := s.sendFCU(cfg, fcuArgs); err != nil {
-		return errors.Wrap(err, "could not send FCU to engine")
-	}
+	s.sendFCU(cfg, fcuArgs)
 
+	// Pre-Fulu the caches are updated when computing the payload attributes
+	if cfg.postState.Version() >= version.Fulu {
+		go func() {
+			ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+			defer cancel()
+			cfg.ctx = ctx
+			s.updateCachesPostBlockProcessing(cfg)
+		}()
+	}
 	return nil
 }
 
@@ -133,7 +134,7 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 	return preStateVersion, preStateHeader, nil
 }
 
-func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityStore) error {
+func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlock, avs das.AvailabilityChecker) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
 
@@ -159,7 +160,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	}
 
 	// Fill in missing blocks
-	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.CurrentJustifiedCheckpoint(), preState.FinalizedCheckpoint()); err != nil {
+	if err := s.fillInForkChoiceMissingBlocks(ctx, blks[0], preState.FinalizedCheckpoint(), preState.CurrentJustifiedCheckpoint()); err != nil {
 		return errors.Wrap(err, "could not fill in missing blocks to forkchoice")
 	}
 
@@ -240,13 +241,14 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			}
 		}
 
-		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), b); err != nil {
-			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", b.Block().Slot())
+		if err := s.areSidecarsAvailable(ctx, avs, b); err != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability for block %#x at slot %d", b.Root(), b.Block().Slot())
 		}
+
 		args := &forkchoicetypes.BlockAndCheckpoints{Block: b,
 			JustifiedCheckpoint: jCheckpoints[i],
 			FinalizedCheckpoint: fCheckpoints[i]}
-		pendingNodes[len(blks)-i-1] = args
+		pendingNodes[i] = args
 		if err := s.saveInitSyncBlock(ctx, root, b); err != nil {
 			tracing.AnnotateError(span, err)
 			return err
@@ -283,13 +285,9 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 	if err := s.cfg.StateGen.SaveState(ctx, lastBR, preState); err != nil {
 		return err
 	}
-	// Insert all nodes but the last one to forkchoice
+	// Insert all nodes to forkchoice
 	if err := s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes); err != nil {
 		return errors.Wrap(err, "could not insert batch to forkchoice")
-	}
-	// Insert the last block to forkchoice
-	if err := s.cfg.ForkChoiceStore.InsertNode(ctx, preState, lastB); err != nil {
-		return errors.Wrap(err, "could not insert last block in batch to forkchoice")
 	}
 	// Set their optimistic status
 	if isValidPayload {
@@ -297,17 +295,34 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 			return errors.Wrap(err, "could not set optimistic block to valid")
 		}
 	}
-	arg := &fcuConfig{
-		headState: preState,
-		headRoot:  lastBR,
-		headBlock: lastB,
-	}
-	if _, err := s.notifyForkchoiceUpdate(ctx, arg); err != nil {
-		return err
-	}
 	return s.saveHeadNoDB(ctx, lastB, lastBR, preState, !isValidPayload)
 }
 
+func (s *Service) areSidecarsAvailable(ctx context.Context, avs das.AvailabilityChecker, roBlock consensusblocks.ROBlock) error {
+	blockVersion := roBlock.Version()
+	block := roBlock.Block()
+	slot := block.Slot()
+
+	if blockVersion >= version.Fulu {
+		if err := s.areDataColumnsAvailable(ctx, roBlock.Root(), block); err != nil {
+			return errors.Wrapf(err, "are data columns available for block %#x with slot %d", roBlock.Root(), slot)
+		}
+
+		return nil
+	}
+
+	if blockVersion >= version.Deneb {
+		if err := avs.IsDataAvailable(ctx, s.CurrentSlot(), roBlock); err != nil {
+			return errors.Wrapf(err, "could not validate sidecar availability at slot %d", slot)
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
+// the caller of this function must not hold a lock in forkchoice store.
 func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.BeaconState) error {
 	e := coreTime.CurrentEpoch(st)
 	if err := helpers.UpdateCommitteeCache(ctx, st, e); err != nil {
@@ -329,7 +344,7 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	// The latest block header is from the previous epoch
 	r, err := st.LatestBlockHeader().HashTreeRoot()
 	if err != nil {
-		log.WithError(err).Error("could not update proposer index state-root map")
+		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
 	}
 	// The proposer indices cache takes the target root for the previous
@@ -337,20 +352,22 @@ func (s *Service) updateEpochBoundaryCaches(ctx context.Context, st state.Beacon
 	if e > 0 {
 		e = e - 1
 	}
+	s.ForkChoicer().RLock()
 	target, err := s.cfg.ForkChoiceStore.TargetRootForEpoch(r, e)
+	s.ForkChoicer().RUnlock()
 	if err != nil {
-		log.WithError(err).Error("could not update proposer index state-root map")
+		log.WithError(err).Error("Could not update proposer index state-root map")
 		return nil
 	}
 	err = helpers.UpdateCachedCheckpointToStateRoot(st, &forkchoicetypes.Checkpoint{Epoch: e, Root: target})
 	if err != nil {
-		log.WithError(err).Error("could not update proposer index state-root map")
+		log.WithError(err).Error("Could not update proposer index state-root map")
 	}
 	return nil
 }
 
 // Epoch boundary tasks: it copies the headState and updates the epoch boundary
-// caches.
+// caches. The caller of this function must not hold a lock in forkchoice store.
 func (s *Service) handleEpochBoundary(ctx context.Context, slot primitives.Slot, headState state.BeaconState, blockRoot []byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.handleEpochBoundary")
 	defer span.End()
@@ -562,7 +579,7 @@ func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion
 // If there is not, it will call forkchoice updated with the correct payload attribute then cache the payload ID.
 func (s *Service) runLateBlockTasks() {
 	if err := s.waitForSync(); err != nil {
-		log.WithError(err).Error("failed to wait for initial sync")
+		log.WithError(err).Error("Failed to wait for initial sync")
 		return
 	}
 
@@ -584,7 +601,7 @@ func (s *Service) runLateBlockTasks() {
 // It returns a map where each key represents a missing BlobSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // BlobSidecars against the set of known missing sidecars.
-func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength]byte, expected [][]byte, slot primitives.Slot) (map[uint64]bool, error) {
+func missingBlobIndices(store *filesystem.BlobStorage, root [fieldparams.RootLength]byte, expected [][]byte, slot primitives.Slot) (map[uint64]bool, error) {
 	maxBlobsPerBlock := params.BeaconConfig().MaxBlobsPerBlock(slot)
 	if len(expected) == 0 {
 		return nil, nil
@@ -592,7 +609,7 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 	if len(expected) > maxBlobsPerBlock {
 		return nil, errMaxBlobsExceeded
 	}
-	indices := bs.Summary(root)
+	indices := store.Summary(root)
 	missing := make(map[uint64]bool, len(expected))
 	for i := range expected {
 		if len(expected[i]) > 0 && !indices.HasIndex(uint64(i)) {
@@ -607,19 +624,17 @@ func missingBlobIndices(bs *filesystem.BlobStorage, root [fieldparams.RootLength
 // It returns a map where each key represents a missing DataColumnSidecar index.
 // An empty map means we have all indices; a non-empty map can be used to compare incoming
 // DataColumns against the set of known missing sidecars.
-func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
+func missingDataColumnIndices(store *filesystem.DataColumnStorage, root [fieldparams.RootLength]byte, expected map[uint64]bool) (map[uint64]bool, error) {
 	if len(expected) == 0 {
 		return nil, nil
 	}
 
-	numberOfColumns := params.BeaconConfig().NumberOfColumns
-
-	if uint64(len(expected)) > numberOfColumns {
+	if len(expected) > fieldparams.NumberOfColumns {
 		return nil, errMaxDataColumnsExceeded
 	}
 
 	// Get a summary of the data columns stored in the database.
-	summary := bs.Summary(root)
+	summary := store.Summary(root)
 
 	// Check all expected data columns against the summary.
 	missing := make(map[uint64]bool)
@@ -639,14 +654,14 @@ func missingDataColumnIndices(bs *filesystem.DataColumnStorage, root [fieldparam
 // closed, the context hits cancellation/timeout, or notifications have been received for all the missing sidecars.
 func (s *Service) isDataAvailable(
 	ctx context.Context,
-	root [fieldparams.RootLength]byte,
-	signedBlock interfaces.ReadOnlySignedBeaconBlock,
+	roBlock consensusblocks.ROBlock,
 ) error {
-	block := signedBlock.Block()
+	block := roBlock.Block()
 	if block == nil {
 		return errors.New("invalid nil beacon block")
 	}
 
+	root := roBlock.Root()
 	blockVersion := block.Version()
 	if blockVersion >= version.Fulu {
 		return s.areDataColumnsAvailable(ctx, root, block)
@@ -666,10 +681,9 @@ func (s *Service) areDataColumnsAvailable(
 	root [fieldparams.RootLength]byte,
 	block interfaces.ReadOnlyBeaconBlock,
 ) error {
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+	// We are only required to check within MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
 	blockSlot, currentSlot := block.Slot(), s.CurrentSlot()
 	blockEpoch, currentEpoch := slots.ToEpoch(blockSlot), slots.ToEpoch(currentSlot)
-
 	if !params.WithinDAPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
@@ -690,16 +704,21 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// All columns to sample need to be available for the block to be considered available.
-	// https://github.com/ethereum/consensus-specs/blob/v1.5.0-alpha.10/specs/fulu/das-core.md#custody-sampling
 	nodeID := s.cfg.P2P.NodeID()
 
-	// Prevent custody group count to change during the rest of the function.
-	s.cfg.CustodyInfo.Mut.RLock()
-	defer s.cfg.CustodyInfo.Mut.RUnlock()
-
 	// Get the custody group sampling size for the node.
-	custodyGroupSamplingSize := s.cfg.CustodyInfo.CustodyGroupSamplingSize(peerdas.Actual)
-	peerInfo, _, err := peerdas.Info(nodeID, custodyGroupSamplingSize)
+	custodyGroupCount, err := s.cfg.P2P.CustodyGroupCount(ctx)
+	if err != nil {
+		return errors.Wrap(err, "custody group count")
+	}
+
+	// Compute the sampling size.
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
+	samplesPerSlot := params.BeaconConfig().SamplesPerSlot
+	samplingSize := max(samplesPerSlot, custodyGroupCount)
+
+	// Get the peer info for the node.
+	peerInfo, _, err := peerdas.Info(nodeID, samplingSize)
 	if err != nil {
 		return errors.Wrap(err, "peer info")
 	}
@@ -712,7 +731,7 @@ func (s *Service) areDataColumnsAvailable(
 	summary := s.dataColumnStorage.Summary(root)
 	storedDataColumnsCount := summary.Count()
 
-	minimumColumnCountToReconstruct := peerdas.MinimumColumnsCountToReconstruct()
+	minimumColumnCountToReconstruct := peerdas.MinimumColumnCountToReconstruct()
 
 	// As soon as we have enough data column sidecars, we can reconstruct the missing ones.
 	// We don't need to wait for the rest of the data columns to declare the block as available.
@@ -721,14 +740,14 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Get a map of data column indices that are not currently available.
-	missingMap, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
+	missing, err := missingDataColumnIndices(s.dataColumnStorage, root, peerInfo.CustodyColumns)
 	if err != nil {
 		return errors.Wrap(err, "missing data columns")
 	}
 
 	// If there are no missing indices, all data column sidecars are available.
 	// This is the happy path.
-	if len(missingMap) == 0 {
+	if len(missing) == 0 {
 		return nil
 	}
 
@@ -737,38 +756,25 @@ func (s *Service) areDataColumnsAvailable(
 	}
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		timer := time.AfterFunc(time.Until(nextSlot), func() {
-			missingMapCount := uint64(len(missingMap))
+			missingCount := uint64(len(missing))
 
-			if missingMapCount == 0 {
+			if missingCount == 0 {
 				return
-			}
-
-			var (
-				expected interface{} = "all"
-				missing  interface{} = "all"
-			)
-
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			colMapCount := uint64(len(peerInfo.CustodyColumns))
-
-			if colMapCount < numberOfColumns {
-				expected = uint64MapToSortedSlice(peerInfo.CustodyColumns)
-			}
-
-			if missingMapCount < numberOfColumns {
-				missing = uint64MapToSortedSlice(missingMap)
 			}
 
 			log.WithFields(logrus.Fields{
 				"slot":            block.Slot(),
 				"root":            fmt.Sprintf("%#x", root),
-				"columnsExpected": expected,
-				"columnsWaiting":  missing,
+				"columnsExpected": helpers.SortedPrettySliceFromMap(peerInfo.CustodyColumns),
+				"columnsWaiting":  helpers.SortedPrettySliceFromMap(missing),
 			}).Warning("Data columns still missing at slot end")
 		})
 		defer timer.Stop()
@@ -784,7 +790,7 @@ func (s *Service) areDataColumnsAvailable(
 
 			for _, index := range idents.Indices {
 				// This is a data column we are expecting.
-				if _, ok := missingMap[index]; ok {
+				if _, ok := missing[index]; ok {
 					storedDataColumnsCount++
 				}
 
@@ -795,24 +801,23 @@ func (s *Service) areDataColumnsAvailable(
 				}
 
 				// Remove the index from the missing map.
-				delete(missingMap, index)
+				delete(missing, index)
 
 				// Return if there is no more missing data columns.
-				if len(missingMap) == 0 {
+				if len(missing) == 0 {
 					return nil
 				}
 			}
 
 		case <-ctx.Done():
-			var missingIndices interface{} = "all"
-			numberOfColumns := params.BeaconConfig().NumberOfColumns
-			missingIndicesCount := uint64(len(missingMap))
+			var missingIndices any = "all"
+			missingIndicesCount := len(missing)
 
-			if missingIndicesCount < numberOfColumns {
-				missingIndices = uint64MapToSortedSlice(missingMap)
+			if missingIndicesCount < fieldparams.NumberOfColumns {
+				missingIndices = helpers.SortedPrettySliceFromMap(missing)
 			}
 
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
 		}
 	}
 }
@@ -855,7 +860,10 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 	nc := s.blobNotifiers.forRoot(root, block.Slot())
 
 	// Log for DA checks that cross over into the next slot; helpful for debugging.
-	nextSlot := slots.BeginsAt(block.Slot()+1, s.genesisTime)
+	nextSlot, err := slots.StartTime(s.genesisTime, block.Slot()+1)
+	if err != nil {
+		return fmt.Errorf("unable to determine slot start time: %w", err)
+	}
 	// Avoid logging if DA check is called after next slot start.
 	if nextSlot.After(time.Now()) {
 		nst := time.AfterFunc(time.Until(nextSlot), func() {
@@ -890,27 +898,15 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 	}
 }
 
-// uint64MapToSortedSlice produces a sorted uint64 slice from a map.
-func uint64MapToSortedSlice(input map[uint64]bool) []uint64 {
-	output := make([]uint64, 0, len(input))
-	for idx := range input {
-		output = append(output, idx)
-	}
-	slices.Sort[[]uint64](output)
-	return output
-}
-
 // lateBlockTasks  is called 4 seconds into the slot and performs tasks
 // related to late blocks. It emits a MissedSlot state feed event.
 // It calls FCU and sets the right attributes if we are proposing next slot
 // it also updates the next slot cache and the proposer index cache to deal with skipped slots.
 func (s *Service) lateBlockTasks(ctx context.Context) {
 	currentSlot := s.CurrentSlot()
-	if s.CurrentSlot() == s.HeadSlot() {
+	if currentSlot == s.HeadSlot() {
 		return
 	}
-	s.cfg.ForkChoiceStore.RLock()
-	defer s.cfg.ForkChoiceStore.RUnlock()
 	// return early if we are in init sync
 	if !s.inRegularSync() {
 		return
@@ -923,14 +919,32 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	if lastState == nil {
 		lastRoot, lastState = headRoot[:], headState
 	}
-	// Copy all the field tries in our cached state in the event of late
-	// blocks.
-	lastState.CopyAllTries()
-	if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
-		log.WithError(err).Debug("could not update next slot state cache")
-	}
-	if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
-		log.WithError(err).Error("lateBlockTasks: could not update epoch boundary caches")
+	// Before Fulu we need to process the next slot to find out if we are proposing.
+	if lastState.Version() < version.Fulu {
+		// Copy all the field tries in our cached state in the event of late
+		// blocks.
+		lastState.CopyAllTries()
+		if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+			log.WithError(err).Debug("Could not update next slot state cache")
+		}
+		if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
+			log.WithError(err).Error("Could not update epoch boundary caches")
+		}
+	} else {
+		// After Fulu, we can update the caches asynchronously after sending FCU to the engine
+		defer func() {
+			go func() {
+				ctx, cancel := context.WithTimeout(s.ctx, slotDeadline)
+				defer cancel()
+				lastState.CopyAllTries()
+				if err := transition.UpdateNextSlotCache(ctx, lastRoot, lastState); err != nil {
+					log.WithError(err).Debug("Could not update next slot state cache")
+				}
+				if err := s.handleEpochBoundary(ctx, currentSlot, headState, headRoot[:]); err != nil {
+					log.WithError(err).Error("Could not update epoch boundary caches")
+				}
+			}()
+		}()
 	}
 	// return early if we already started building a block for the current
 	// head root
@@ -942,13 +956,6 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 	attribute := s.getPayloadAttribute(ctx, headState, s.CurrentSlot()+1, headRoot[:])
 	// return early if we are not proposing next slot
 	if attribute.IsEmpty() {
-		headBlock, err := s.headBlock()
-		if err != nil {
-			log.WithError(err).WithField("head_root", headRoot).Error("unable to retrieve head block to fire payload attributes event")
-		}
-		// notifyForkchoiceUpdate fires the payload attribute event. But in this case, we won't
-		// call notifyForkchoiceUpdate, so the event is fired here.
-		go s.firePayloadAttributesEvent(s.cfg.StateNotifier.StateFeed(), headBlock, headRoot, s.CurrentSlot()+1)
 		return
 	}
 
@@ -967,6 +974,8 @@ func (s *Service) lateBlockTasks(ctx context.Context) {
 		headBlock:  headBlock,
 		attributes: attribute,
 	}
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
 	_, err = s.notifyForkchoiceUpdate(ctx, fcuArgs)
 	if err != nil {
 		log.WithError(err).Debug("could not perform late block tasks: failed to update forkchoice with engine")

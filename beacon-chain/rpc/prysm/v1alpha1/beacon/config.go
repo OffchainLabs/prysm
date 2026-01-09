@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -18,8 +18,11 @@ func (_ *Server) GetBeaconConfig(_ context.Context, _ *emptypb.Empty) (*ethpb.Be
 	val := reflect.ValueOf(conf).Elem()
 	numFields := val.Type().NumField()
 	res := make(map[string]string, numFields)
-	for i := 0; i < numFields; i++ {
-		res[val.Type().Field(i).Name] = fmt.Sprintf("%v", val.Field(i).Interface())
+	for i := range numFields {
+		field := val.Type().Field(i)
+		if field.IsExported() {
+			res[field.Name] = fmt.Sprintf("%v", val.Field(i).Interface())
+		}
 	}
 	return &ethpb.BeaconConfig{
 		Config: res,

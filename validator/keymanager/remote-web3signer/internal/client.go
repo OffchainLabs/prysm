@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -174,7 +174,7 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 			"status":   resp.StatusCode,
 			"request":  string(requestDump),
 			"response": string(responseDump),
-		}).Error("web3signer request failed")
+		}).Error("Web3signer request failed")
 	}
 	if resp.StatusCode == http.StatusInternalServerError {
 		err = fmt.Errorf("internal Web3Signer server error, Signing Request URL: %v Status: %v", fullPath, resp.StatusCode)
@@ -189,7 +189,7 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 }
 
 // unmarshalResponse is a utility method for unmarshalling responses.
-func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject interface{}) error {
+func unmarshalResponse(responseBody io.ReadCloser, unmarshalledResponseObject any) error {
 	defer closeBody(responseBody)
 	if err := json.NewDecoder(responseBody).Decode(&unmarshalledResponseObject); err != nil {
 		body, err := io.ReadAll(responseBody)
@@ -217,6 +217,6 @@ func unmarshalSignatureResponse(responseBody io.ReadCloser) (bls.Signature, erro
 // closeBody a utility method to wrap an error for closing
 func closeBody(body io.Closer) {
 	if err := body.Close(); err != nil {
-		log.WithError(err).Error("could not close response body")
+		log.WithError(err).Error("Could not close response body")
 	}
 }

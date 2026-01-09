@@ -5,22 +5,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	mockChain "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	db "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	db "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
@@ -43,6 +44,8 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -54,7 +57,7 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -62,17 +65,11 @@ func TestRPC_LightClientBootstrap(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
@@ -165,6 +162,8 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -176,7 +175,7 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -184,25 +183,20 @@ func TestRPC_LightClientOptimisticUpdate(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock)
+			update, err := lightClient.NewLightClientOptimisticUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock)
 			require.NoError(t, err)
 
-			r.lcStore.SetLastOptimisticUpdate(update)
+			r.lcStore.SetLastOptimisticUpdate(update, false)
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -285,6 +279,8 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 		Genesis:        time.Unix(time.Now().Unix(), 0),
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -296,7 +292,7 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -304,25 +300,20 @@ func TestRPC_LightClientFinalityUpdate(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
 			l := util.NewTestLightClient(t, i)
 
-			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+			update, err := lightClient.NewLightClientFinalityUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 			require.NoError(t, err)
 
-			r.lcStore.SetLastFinalityUpdate(update)
+			r.lcStore.SetLastFinalityUpdate(update, false)
 
 			var wg sync.WaitGroup
 			wg.Add(1)
@@ -400,11 +391,19 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 	p1.Connect(p2)
 	require.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
 
+	blk := util.NewBeaconBlock()
+	signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
 	chainService := &mockChain.ChainService{
 		ValidatorsRoot: [32]byte{'A'},
 		Genesis:        time.Unix(time.Now().Unix(), 0),
+		Block:          signedBlk,
 	}
 	d := db.SetupDB(t)
+	lcStore := lightClient.NewLightClientStore(&p2ptest.FakeP2P{}, new(event.Feed), d)
+	require.NoError(t, err)
+
 	r := Service{
 		ctx: ctx,
 		cfg: &config{
@@ -416,7 +415,7 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 			stateNotifier: &mockChain.MockStateNotifier{},
 		},
 		chainStarted: abool.New(),
-		lcStore:      &lightClient.Store{},
+		lcStore:      lcStore,
 		subHandler:   newSubTopicHandler(),
 		rateLimiter:  newRateLimiter(p1),
 	}
@@ -424,22 +423,17 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 	topic := string(pcl)
 	r.rateLimiter.limiterMap[topic] = leakybucket.NewCollector(10000, 10000, time.Second, false)
 
-	altairDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().AltairForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	bellatrixDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().BellatrixForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	capellaDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().CapellaForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	denebDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().DenebForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
-	electraDigest, err := forks.ForkDigestFromEpoch(params.BeaconConfig().ElectraForkEpoch, chainService.ValidatorsRoot[:])
-	require.NoError(t, err)
+	altairDigest := params.ForkDigest(params.BeaconConfig().AltairForkEpoch)
+	bellatrixDigest := params.ForkDigest(params.BeaconConfig().BellatrixForkEpoch)
+	capellaDigest := params.ForkDigest(params.BeaconConfig().CapellaForkEpoch)
+	denebDigest := params.ForkDigest(params.BeaconConfig().DenebForkEpoch)
+	electraDigest := params.ForkDigest(params.BeaconConfig().ElectraForkEpoch)
 
 	for i := 1; i <= 5; i++ {
 		t.Run(version.String(i), func(t *testing.T) {
-			for j := 0; j < 5; j++ {
+			for j := range 5 {
 				l := util.NewTestLightClient(t, i, util.WithIncreasedAttestedSlot(uint64(j)))
-				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State.Slot(), l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
+				update, err := lightClient.NewLightClientUpdateFromBeaconState(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock)
 				require.NoError(t, err)
 				require.NoError(t, r.cfg.beaconDB.SaveLightClientUpdate(ctx, uint64(j), update))
 			}
@@ -493,11 +487,11 @@ func TestRPC_LightClientUpdatesByRange(t *testing.T) {
 					t.Fatalf("unsupported version %d", i)
 				}
 
-				update, err := r.cfg.beaconDB.LightClientUpdates(ctx, 0, 4)
+				updates, err := r.lcStore.LightClientUpdates(ctx, 0, 4, signedBlk)
 				require.NoError(t, err)
-				bootstrapSSZ, err := update[uint64(responseCounter)].MarshalSSZ()
+				updateSSZ, err := updates[uint64(responseCounter)].MarshalSSZ()
 				require.NoError(t, err)
-				require.DeepSSZEqual(t, resSSZ, bootstrapSSZ)
+				require.DeepSSZEqual(t, resSSZ, updateSSZ)
 				responseCounter++
 			})
 

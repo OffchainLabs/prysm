@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 // WithElectraTimer includes functional options for the blockchain service related to CLI flags.
@@ -61,7 +61,7 @@ func (p *PoolService) run() {
 
 	p.waitForChainInitialization()
 
-	electraTime, err := slots.ToTime(uint64(p.clock.GenesisTime().Unix()), electraSlot)
+	electraTime, err := slots.StartTime(p.clock.GenesisTime(), electraSlot)
 	if err != nil {
 		return
 	}

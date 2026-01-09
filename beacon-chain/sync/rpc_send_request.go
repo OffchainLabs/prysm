@@ -6,22 +6,24 @@ import (
 	"io"
 	"slices"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	goPeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -44,6 +46,12 @@ var (
 	errDataColumnChunkedReadFailure          = errors.New("failed to read stream of chunk-encoded data columns")
 	errMaxRequestDataColumnSidecarsExceeded  = errors.New("count of requested data column sidecars exceeds MAX_REQUEST_DATA_COLUMN_SIDECARS")
 	errMaxResponseDataColumnSidecarsExceeded = errors.New("peer returned more data column sidecars than requested")
+
+	errSidecarRPCValidation     = errors.Wrap(ErrInvalidFetchedData, "DataColumnSidecar")
+	errSidecarSlotsUnordered    = errors.Wrap(errSidecarRPCValidation, "slots not in ascending order")
+	errSidecarIndicesUnordered  = errors.Wrap(errSidecarRPCValidation, "sidecar indices not in ascending order")
+	errSidecarSlotNotRequested  = errors.Wrap(errSidecarRPCValidation, "sidecar slot not in range")
+	errSidecarIndexNotRequested = errors.Wrap(errSidecarRPCValidation, "sidecar index not requested")
 )
 
 // ------
@@ -91,22 +99,72 @@ func SendBeaconBlocksByRangeRequest(
 		// The response MUST contain no more than `count` blocks, and no more than
 		// MAX_REQUEST_BLOCKS blocks.
 		currentEpoch := slots.ToEpoch(tor.CurrentSlot())
-		if i >= req.Count || i >= params.MaxRequestBlock(currentEpoch) {
+		maxBlocks := params.MaxRequestBlock(currentEpoch)
+		if i >= req.Count {
+			log.WithFields(logrus.Fields{
+				"blockIndex":     i,
+				"requestedCount": req.Count,
+				"blockSlot":      blk.Block().Slot(),
+				"peer":           pid,
+				"reason":         "exceeded requested count",
+			}).Debug("Peer returned invalid data: too many blocks")
+			return nil, ErrInvalidFetchedData
+		}
+		if i >= maxBlocks {
+			log.WithFields(logrus.Fields{
+				"blockIndex":   i,
+				"maxBlocks":    maxBlocks,
+				"currentEpoch": currentEpoch,
+				"blockSlot":    blk.Block().Slot(),
+				"peer":         pid,
+				"reason":       "exceeded MAX_REQUEST_BLOCKS",
+			}).Debug("Peer returned invalid data: exceeded protocol limit")
 			return nil, ErrInvalidFetchedData
 		}
 		// Returned blocks MUST be in the slot range [start_slot, start_slot + count * step).
-		if blk.Block().Slot() < req.StartSlot || blk.Block().Slot() >= req.StartSlot.Add(req.Count*req.Step) {
+		endSlot := req.StartSlot.Add(req.Count * req.Step)
+		if blk.Block().Slot() < req.StartSlot {
+			log.WithFields(logrus.Fields{
+				"blockSlot":      blk.Block().Slot(),
+				"requestedStart": req.StartSlot,
+				"peer":           pid,
+				"reason":         "block slot before requested start",
+			}).Debug("Peer returned invalid data: block too early")
+			return nil, ErrInvalidFetchedData
+		}
+		if blk.Block().Slot() >= endSlot {
+			log.WithFields(logrus.Fields{
+				"blockSlot":      blk.Block().Slot(),
+				"requestedStart": req.StartSlot,
+				"requestedEnd":   endSlot,
+				"requestedCount": req.Count,
+				"requestedStep":  req.Step,
+				"peer":           pid,
+				"reason":         "block slot >= start + count*step",
+			}).Debug("Peer returned invalid data: block beyond range")
 			return nil, ErrInvalidFetchedData
 		}
 		// Returned blocks, where they exist, MUST be sent in a consecutive order.
 		// Consecutive blocks MUST have values in `step` increments (slots may be skipped in between).
 		isSlotOutOfOrder := false
+		outOfOrderReason := ""
 		if prevSlot >= blk.Block().Slot() {
 			isSlotOutOfOrder = true
+			outOfOrderReason = "slot not increasing"
 		} else if req.Step != 0 && blk.Block().Slot().SubSlot(prevSlot).Mod(req.Step) != 0 {
 			isSlotOutOfOrder = true
+			slotDiff := blk.Block().Slot().SubSlot(prevSlot)
+			outOfOrderReason = fmt.Sprintf("slot diff %d not multiple of step %d", slotDiff, req.Step)
 		}
 		if !isFirstChunk && isSlotOutOfOrder {
+			log.WithFields(logrus.Fields{
+				"blockSlot":     blk.Block().Slot(),
+				"prevSlot":      prevSlot,
+				"requestedStep": req.Step,
+				"blockIndex":    i,
+				"peer":          pid,
+				"reason":        outOfOrderReason,
+			}).Debug("Peer returned invalid data: blocks out of order")
 			return nil, ErrInvalidFetchedData
 		}
 		prevSlot = blk.Block().Slot()
@@ -404,20 +462,16 @@ func readChunkedBlobSidecar(stream network.Stream, encoding encoder.NetworkEncod
 // SendDataColumnSidecarsByRangeRequest sends a request for data column sidecars by range
 // and returns the fetched data column sidecars.
 func SendDataColumnSidecarsByRangeRequest(
-	ctx context.Context,
-	tor blockchain.TemporalOracle,
-	p2pApi p2p.P2P,
+	p DataColumnSidecarsParams,
 	pid peer.ID,
-	ctxMap ContextByteVersions,
 	request *ethpb.DataColumnSidecarsByRangeRequest,
+	vfs ...DataColumnResponseValidation,
 ) ([]blocks.RODataColumn, error) {
 	// Return early if nothing to request.
 	if request == nil || request.Count == 0 || len(request.Columns) == 0 {
 		return nil, nil
 	}
 
-	beaconConfig := params.BeaconConfig()
-	numberOfColumns := beaconConfig.NumberOfColumns
 	maxRequestDataColumnSidecars := params.BeaconConfig().MaxRequestDataColumnSidecars
 
 	// Check if we do not request too many sidecars.
@@ -428,7 +482,7 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 
 	// Build the topic.
-	currentSlot := tor.CurrentSlot()
+	currentSlot := p.Tor.CurrentSlot()
 	currentEpoch := slots.ToEpoch(currentSlot)
 	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRangeName, currentEpoch)
 	if err != nil {
@@ -436,8 +490,8 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 
 	// Build the logs.
-	var columnsLog interface{} = "all"
-	if columnsCount < numberOfColumns {
+	var columnsLog any = "all"
+	if columnsCount < fieldparams.NumberOfColumns {
 		columns := request.Columns
 		slices.Sort(columns)
 		columnsLog = columns
@@ -453,34 +507,47 @@ func SendDataColumnSidecarsByRangeRequest(
 	})
 
 	// Send the request.
-	stream, err := p2pApi.Send(ctx, request, topic, pid)
+	stream, err := p.P2P.Send(p.Ctx, request, topic, pid)
 	if err != nil {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, pid, "cannotSendDataColumnSidecarsByRangeRequest")
+		}
+
 		return nil, errors.Wrap(err, "p2p send")
 	}
 	defer closeStream(stream, log)
+
+	requestedSlot, err := isSidecarSlotRequested(request)
+	if err != nil {
+		return nil, errors.Wrap(err, "is sidecar slot within bounds")
+	}
+	vfs = append([]DataColumnResponseValidation{
+		areSidecarsOrdered(),
+		isSidecarIndexRequested(request),
+		requestedSlot,
+	}, vfs...)
 
 	// Read the data column sidecars from the stream.
 	roDataColumns := make([]blocks.RODataColumn, 0, totalCount)
 	for range totalCount {
 		// Avoid reading extra chunks if the context is done.
-		if err := ctx.Err(); err != nil {
+		if err := p.Ctx.Err(); err != nil {
 			return nil, err
 		}
 
-		validatorSlotWithinBounds, err := isSidecarSlotWithinBounds(request)
-		if err != nil {
-			return nil, errors.Wrap(err, "is sidecar slot within bounds")
-		}
-
-		roDataColumn, err := readChunkedDataColumnSidecar(
-			stream, p2pApi, ctxMap,
-			validatorSlotWithinBounds,
-			isSidecarIndexRequested(request),
-		)
+		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, vfs...)
 		if errors.Is(err, io.EOF) {
+			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
+				downscorePeer(p.P2P, pid, "noReturnedSidecar")
+			}
+
 			return roDataColumns, nil
 		}
 		if err != nil {
+			if p.DownscorePeerOnRPCFault {
+				downscorePeer(p.P2P, pid, "readChunkedDataColumnSidecarError")
+			}
+
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
 		}
 
@@ -492,15 +559,19 @@ func SendDataColumnSidecarsByRangeRequest(
 	}
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
-	if _, err := readChunkedDataColumnSidecar(stream, p2pApi, ctxMap); !errors.Is(err, io.EOF) {
+	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, pid, "tooManyResponseDataColumnSidecars")
+		}
+
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", totalCount)
 	}
 
 	return roDataColumns, nil
 }
 
-// isSidecarSlotWithinBounds verifies that the slot of the data column sidecar is within the bounds of the request.
-func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) (DataColumnResponseValidation, error) {
+// isSidecarSlotRequested verifies that the slot of the data column sidecar is within the bounds of the request.
+func isSidecarSlotRequested(request *ethpb.DataColumnSidecarsByRangeRequest) (DataColumnResponseValidation, error) {
 	// endSlot is exclusive (while request.StartSlot is inclusive).
 	endSlot, err := request.StartSlot.SafeAdd(request.Count)
 	if err != nil {
@@ -511,13 +582,36 @@ func isSidecarSlotWithinBounds(request *ethpb.DataColumnSidecarsByRangeRequest) 
 		slot := sidecar.Slot()
 
 		if !(request.StartSlot <= slot && slot < endSlot) {
-			return errors.Errorf("data column sidecar slot %d out of range [%d, %d[", slot, request.StartSlot, endSlot)
+			return errors.Wrapf(errSidecarSlotNotRequested, "got=%d, want=[%d, %d)", slot, request.StartSlot, endSlot)
 		}
 
 		return nil
 	}
 
 	return validator, nil
+}
+
+// areSidecarsOrdered enforces the p2p spec rule:
+// "The following data column sidecars, where they exist, MUST be sent in (slot, column_index) order."
+// via https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#datacolumnsidecarsbyrange-v1
+func areSidecarsOrdered() DataColumnResponseValidation {
+	var prevSlot primitives.Slot
+	var prevIdx uint64
+
+	return func(sidecar blocks.RODataColumn) error {
+		if sidecar.Slot() < prevSlot {
+			return errors.Wrapf(errSidecarSlotsUnordered, "got=%d, want>=%d", sidecar.Slot(), prevSlot)
+		}
+		if sidecar.Slot() > prevSlot {
+			prevIdx = 0               // reset index tracking for new slot
+			prevSlot = sidecar.Slot() // move slot tracking to new slot
+		}
+		if sidecar.Index < prevIdx {
+			return errors.Wrapf(errSidecarIndicesUnordered, "got=%d, want>=%d", sidecar.Index, prevIdx)
+		}
+		prevIdx = sidecar.Index
+		return nil
+	}
 }
 
 // isSidecarIndexRequested verifies that the index of the data column sidecar is found in the requested indices.
@@ -530,7 +624,8 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 	return func(sidecar blocks.RODataColumn) error {
 		columnIndex := sidecar.Index
 		if !requestedIndices[columnIndex] {
-			return errors.Errorf("data column sidecar index %d not found in requested indices", columnIndex)
+			requested := helpers.SortedPrettySliceFromMap(requestedIndices)
+			return errors.Wrapf(errSidecarIndexNotRequested, "%d not in %v", columnIndex, requested)
 		}
 
 		return nil
@@ -539,22 +634,10 @@ func isSidecarIndexRequested(request *ethpb.DataColumnSidecarsByRangeRequest) Da
 
 // SendDataColumnSidecarsByRootRequest sends a request for data column sidecars by root
 // and returns the fetched data column sidecars.
-func SendDataColumnSidecarsByRootRequest(
-	ctx context.Context,
-	tor blockchain.TemporalOracle,
-	p2pApi p2p.P2P,
-	pid peer.ID,
-	ctxMap ContextByteVersions,
-	request p2ptypes.DataColumnsByRootIdentifiers,
-) ([]blocks.RODataColumn, error) {
-	// Return early if the request is nil.
-	if request == nil {
-		return nil, nil
-	}
-
+func SendDataColumnSidecarsByRootRequest(p DataColumnSidecarsParams, peer goPeer.ID, identifiers p2ptypes.DataColumnsByRootIdentifiers) ([]blocks.RODataColumn, error) {
 	// Compute how many sidecars are requested.
 	count := uint64(0)
-	for _, identifier := range request {
+	for _, identifier := range identifiers {
 		count += uint64(len(identifier.Columns))
 	}
 
@@ -570,14 +653,20 @@ func SendDataColumnSidecarsByRootRequest(
 	}
 
 	// Get the topic for the request.
-	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRootName, slots.ToEpoch(tor.CurrentSlot()))
+	currentSlot := p.Tor.CurrentSlot()
+	currentEpoch := slots.ToEpoch(currentSlot)
+	topic, err := p2p.TopicFromMessage(p2p.DataColumnSidecarsByRootName, currentEpoch)
 	if err != nil {
 		return nil, errors.Wrap(err, "topic from message")
 	}
 
 	// Send the request to the peer.
-	stream, err := p2pApi.Send(ctx, request, topic, pid)
+	stream, err := p.P2P.Send(p.Ctx, identifiers, topic, peer)
 	if err != nil {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, peer, "cannotSendDataColumnSidecarsByRootRequest")
+		}
+
 		return nil, errors.Wrap(err, "p2p api send")
 	}
 	defer closeStream(stream, log)
@@ -587,11 +676,19 @@ func SendDataColumnSidecarsByRootRequest(
 
 	// Read the data column sidecars from the stream.
 	for range count {
-		roDataColumn, err := readChunkedDataColumnSidecar(stream, p2pApi, ctxMap, isSidecarIndexRootRequested(request))
+		roDataColumn, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap, isSidecarIndexRootRequested(identifiers))
 		if errors.Is(err, io.EOF) {
+			if p.DownscorePeerOnRPCFault && len(roDataColumns) == 0 {
+				downscorePeer(p.P2P, peer, "noReturnedSidecar")
+			}
+
 			return roDataColumns, nil
 		}
 		if err != nil {
+			if p.DownscorePeerOnRPCFault {
+				downscorePeer(p.P2P, peer, "readChunkedDataColumnSidecarError")
+			}
+
 			return nil, errors.Wrap(err, "read chunked data column sidecar")
 		}
 
@@ -603,7 +700,11 @@ func SendDataColumnSidecarsByRootRequest(
 	}
 
 	// All requested sidecars were delivered by the peer. Expecting EOF.
-	if _, err := readChunkedDataColumnSidecar(stream, p2pApi, ctxMap); !errors.Is(err, io.EOF) {
+	if _, err := readChunkedDataColumnSidecar(stream, p.P2P, p.CtxMap); !errors.Is(err, io.EOF) {
+		if p.DownscorePeerOnRPCFault {
+			downscorePeer(p.P2P, peer, "tooManyResponseDataColumnSidecars")
+		}
+
 		return nil, errors.Wrapf(errMaxResponseDataColumnSidecarsExceeded, "requestedCount=%d", count)
 	}
 
@@ -629,11 +730,11 @@ func isSidecarIndexRootRequested(request p2ptypes.DataColumnsByRootIdentifiers) 
 		indices, ok := columnsIndexFromRoot[root]
 
 		if !ok {
-			return errors.Errorf("root #%x returned by peer but not requested", root)
+			return errors.Errorf("root %#x returned by peer but not requested", root)
 		}
 
 		if !indices[index] {
-			return errors.Errorf("index %d for root #%x returned by peer but not requested", index, root)
+			return errors.Errorf("index %d for root %#x returned by peer but not requested", index, root)
 		}
 
 		return nil
@@ -700,4 +801,25 @@ func readChunkedDataColumnSidecar(
 	}
 
 	return &roDataColumn, nil
+}
+
+func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.Fields) {
+	log := log
+	for _, field := range fields {
+		log = log.WithFields(field)
+	}
+
+	newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
+func DataColumnSidecarsByRangeRequest(columns []uint64, start, end primitives.Slot) (*ethpb.DataColumnSidecarsByRangeRequest, error) {
+	if end < start {
+		return nil, errors.Errorf("end slot %d is before start slot %d", end, start)
+	}
+	return &ethpb.DataColumnSidecarsByRangeRequest{
+		StartSlot: start,
+		Count:     uint64(end-start) + 1,
+		Columns:   columns,
+	}, nil
 }

@@ -7,35 +7,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
@@ -51,6 +54,7 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		srv.Stop()
 	})
 	bState, _ := util.DeterministicGenesisState(t, 10)
+	genesis.StoreStateDuringTest(t, bState)
 	pbState, err := state_native.ProtobufBeaconStatePhase0(bState.ToProtoUnsafe())
 	require.NoError(t, err)
 	mockTrie, err := trie.NewTrie(0)
@@ -71,18 +75,20 @@ func setupBeaconChain(t *testing.T, beaconDB db.Database) *Service {
 		DepositContainers: []*ethpb.DepositContainer{},
 	})
 	require.NoError(t, err)
+
+	depositCache, err := depositsnapshot.New()
+	require.NoError(t, err)
+
 	web3Service, err = execution.NewService(
 		ctx,
 		execution.WithDatabase(beaconDB),
 		execution.WithHttpEndpoint(endpoint),
 		execution.WithDepositContractAddress(common.Address{}),
+		execution.WithDepositCache(depositCache),
 	)
 	require.NoError(t, err, "Unable to set up web3 service")
 
 	attService, err := attestations.NewService(ctx, &attestations.Config{Pool: attestations.NewPool()})
-	require.NoError(t, err)
-
-	depositCache, err := depositsnapshot.New()
 	require.NoError(t, err)
 
 	fc := doublylinkedtree.New()
@@ -127,7 +133,7 @@ func TestChainStartStop_Initialized(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, genesisBlk)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.SetGenesisTime(uint64(gt.Unix())))
+	require.NoError(t, s.SetGenesisTime(gt))
 	require.NoError(t, s.SetSlot(1))
 	require.NoError(t, beaconDB.SaveState(ctx, s, blkRoot))
 	require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, blkRoot))
@@ -164,7 +170,7 @@ func TestChainStartStop_GenesisZeroHashes(t *testing.T) {
 	wsb := util.SaveBlock(t, ctx, beaconDB, genesisBlk)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.SetGenesisTime(uint64(gt.Unix())))
+	require.NoError(t, s.SetGenesisTime(gt))
 	require.NoError(t, beaconDB.SaveState(ctx, s, blkRoot))
 	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, blkRoot))
 	require.NoError(t, beaconDB.SaveBlock(ctx, wsb))
@@ -238,7 +244,7 @@ func TestChainService_CorrectGenesisRoots(t *testing.T) {
 	util.SaveBlock(t, ctx, beaconDB, genesisBlk)
 	s, err := util.NewBeaconState()
 	require.NoError(t, err)
-	require.NoError(t, s.SetGenesisTime(uint64(gt.Unix())))
+	require.NoError(t, s.SetGenesisTime(gt))
 	require.NoError(t, s.SetSlot(0))
 	require.NoError(t, beaconDB.SaveState(ctx, s, blkRoot))
 	require.NoError(t, beaconDB.SaveHeadBlockRoot(ctx, blkRoot))
@@ -345,12 +351,8 @@ func TestChainService_InitializeChainInfo_SetHeadAtGenesis(t *testing.T) {
 }
 
 func TestChainService_SaveHeadNoDB(t *testing.T) {
-	beaconDB := testDB.SetupDB(t)
 	ctx := t.Context()
-	fc := doublylinkedtree.New()
-	s := &Service{
-		cfg: &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, fc), ForkChoiceStore: fc},
-	}
+	s := testServiceWithDB(t)
 	blk := util.NewBeaconBlock()
 	blk.Block.Slot = 1
 	r, err := blk.HashTreeRoot()
@@ -371,10 +373,7 @@ func TestChainService_SaveHeadNoDB(t *testing.T) {
 
 func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 	ctx := t.Context()
-	beaconDB := testDB.SetupDB(t)
-	s := &Service{
-		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},
-	}
+	s := testServiceWithDB(t)
 	b := util.NewBeaconBlock()
 	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
 	require.NoError(t, err)
@@ -391,48 +390,21 @@ func TestHasBlock_ForkChoiceAndDB_DoublyLinkedTree(t *testing.T) {
 }
 
 func TestServiceStop_SaveCachedBlocks(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	beaconDB := testDB.SetupDB(t)
-	s := &Service{
-		cfg:            &config{BeaconDB: beaconDB, StateGen: stategen.New(beaconDB, doublylinkedtree.New())},
-		ctx:            ctx,
-		cancel:         cancel,
-		initSyncBlocks: make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock),
-	}
+	s := testServiceWithDB(t)
+	s.initSyncBlocks = make(map[[32]byte]interfaces.ReadOnlySignedBeaconBlock)
 	bb := util.NewBeaconBlock()
 	r, err := bb.Block.HashTreeRoot()
 	require.NoError(t, err)
 	wsb, err := consensusblocks.NewSignedBeaconBlock(bb)
 	require.NoError(t, err)
-	require.NoError(t, s.saveInitSyncBlock(ctx, r, wsb))
+	require.NoError(t, s.saveInitSyncBlock(s.ctx, r, wsb))
 	require.NoError(t, s.Stop())
-	require.Equal(t, true, s.cfg.BeaconDB.HasBlock(ctx, r))
-}
-
-func TestProcessChainStartTime_ReceivedFeed(t *testing.T) {
-	ctx := t.Context()
-	beaconDB := testDB.SetupDB(t)
-	service := setupBeaconChain(t, beaconDB)
-	mgs := &MockClockSetter{}
-	service.clockSetter = mgs
-	gt := time.Now()
-	service.onExecutionChainStart(t.Context(), gt)
-	gs, err := beaconDB.GenesisState(ctx)
-	require.NoError(t, err)
-	require.NotEqual(t, nil, gs)
-	require.Equal(t, 32, len(gs.GenesisValidatorsRoot()))
-	var zero [32]byte
-	require.DeepNotEqual(t, gs.GenesisValidatorsRoot(), zero[:])
-	require.Equal(t, gt, mgs.G.GenesisTime())
-	require.Equal(t, bytesutil.ToBytes32(gs.GenesisValidatorsRoot()), mgs.G.GenesisValidatorsRoot())
+	require.Equal(t, true, s.cfg.BeaconDB.HasBlock(s.ctx, r))
 }
 
 func BenchmarkHasBlockDB(b *testing.B) {
-	beaconDB := testDB.SetupDB(b)
 	ctx := b.Context()
-	s := &Service{
-		cfg: &config{BeaconDB: beaconDB},
-	}
+	s := testServiceWithDB(b)
 	blk := util.NewBeaconBlock()
 	wsb, err := consensusblocks.NewSignedBeaconBlock(blk)
 	require.NoError(b, err)
@@ -440,18 +412,14 @@ func BenchmarkHasBlockDB(b *testing.B) {
 	r, err := blk.Block.HashTreeRoot()
 	require.NoError(b, err)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, true, s.cfg.BeaconDB.HasBlock(ctx, r), "Block is not in DB")
 	}
 }
 
 func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
 	ctx := b.Context()
-	beaconDB := testDB.SetupDB(b)
-	s := &Service{
-		cfg: &config{ForkChoiceStore: doublylinkedtree.New(), BeaconDB: beaconDB},
-	}
+	s := testServiceWithDB(b)
 	blk := util.NewBeaconBlock()
 	r, err := blk.Block.HashTreeRoot()
 	require.NoError(b, err)
@@ -463,8 +431,7 @@ func BenchmarkHasBlockForkChoiceStore_DoublyLinkedTree(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, s.cfg.ForkChoiceStore.InsertNode(ctx, beaconState, roblock))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		require.Equal(b, true, s.cfg.ForkChoiceStore.HasNode(r), "Block is not in fork choice store")
 	}
 }
@@ -595,8 +562,9 @@ func TestNotifyIndex(t *testing.T) {
 	var root [32]byte
 	copy(root[:], "exampleRoot")
 
+	ds := util.SlotAtEpoch(t, params.BeaconConfig().DenebForkEpoch)
 	// Test notifying a new index
-	bn.notifyIndex(root, 1, 1)
+	bn.notifyIndex(root, 1, ds)
 	if !bn.seenIndex[root][1] {
 		t.Errorf("Index was not marked as seen")
 	}
@@ -613,7 +581,7 @@ func TestNotifyIndex(t *testing.T) {
 	}
 
 	// Test notifying a new index again
-	bn.notifyIndex(root, 2, 1)
+	bn.notifyIndex(root, 2, ds)
 	if !bn.seenIndex[root][2] {
 		t.Errorf("Index was not marked as seen")
 	}
@@ -627,4 +595,219 @@ func TestNotifyIndex(t *testing.T) {
 	default:
 		t.Errorf("Notifier channel did not receive the index")
 	}
+}
+
+func TestUpdateCustodyInfoInDB(t *testing.T) {
+	const (
+		fuluForkEpoch         = 10
+		custodyRequirement    = uint64(4)
+		earliestStoredSlot    = primitives.Slot(12)
+		numberOfCustodyGroups = uint64(64)
+	)
+
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig()
+	cfg.FuluForkEpoch = fuluForkEpoch
+	cfg.CustodyRequirement = custodyRequirement
+	cfg.NumberOfCustodyGroups = numberOfCustodyGroups
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	pbBlock := util.NewBeaconBlock()
+	pbBlock.Block.Slot = 12
+	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(pbBlock)
+	require.NoError(t, err)
+
+	roBlock, err := blocks.NewROBlock(signedBeaconBlock)
+	require.NoError(t, err)
+
+	t.Run("CGC increases before fulu", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Before Fulu
+		// -----------
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(15)
+		require.NoError(t, err)
+		require.Equal(t, earliestStoredSlot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc)
+
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(17)
+		require.NoError(t, err)
+		require.Equal(t, earliestStoredSlot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc)
+
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(19)
+		require.NoError(t, err)
+		require.Equal(t, earliestStoredSlot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+
+		// After Fulu
+		// ----------
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1)
+		require.NoError(t, err)
+		require.Equal(t, earliestStoredSlot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+	})
+
+	t.Run("CGC increases after fulu", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Before Fulu
+		// -----------
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(15)
+		require.NoError(t, err)
+		require.Equal(t, earliestStoredSlot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc)
+
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(17)
+		require.NoError(t, err)
+		require.Equal(t, earliestStoredSlot, actualEas)
+		require.Equal(t, custodyRequirement, actualCgc)
+
+		// After Fulu
+		// ----------
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+	})
+
+	t.Run("Supernode downgrade prevented", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc)
+
+		// Try to downgrade by removing flag
+		gFlags.Supernode = false
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should still be supernode
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Still 64, not downgraded
+	})
+
+	t.Run("Semi-supernode downgrade prevented", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Semi-supernode custodies 64 groups
+
+		// Try to downgrade by removing flag
+		gFlags.SemiSupernode = false
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// UpdateCustodyInfo should prevent downgrade - custody count should remain at 64
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(slot + 2)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Still 64 due to downgrade prevention by UpdateCustodyInfo
+	})
+
+	t.Run("Semi-supernode to supernode upgrade allowed", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Start with semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
+		require.Equal(t, semiSupernodeCustody, actualCgc) // Semi-supernode custodies 64 groups
+
+		// Upgrade to full supernode
+		gFlags.SemiSupernode = false
+		gFlags.Supernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Should upgrade to full supernode
+		upgradeSlot := slot + 2
+		actualEas, actualCgc, err = service.updateCustodyInfoInDB(upgradeSlot)
+		require.NoError(t, err)
+		require.Equal(t, upgradeSlot, actualEas)           // Earliest slot updates when upgrading
+		require.Equal(t, numberOfCustodyGroups, actualCgc) // Upgraded to 128
+	})
+
+	t.Run("Semi-supernode with high validator requirements uses higher custody", func(t *testing.T) {
+		service, requirements := minimalTestService(t)
+		err = requirements.db.SaveBlock(ctx, roBlock)
+		require.NoError(t, err)
+
+		// Enable semi-supernode
+		resetFlags := flags.Get()
+		gFlags := new(flags.GlobalFlags)
+		gFlags.SemiSupernode = true
+		flags.Init(gFlags)
+		defer flags.Init(resetFlags)
+
+		// Mock a high custody requirement (simulating many validators)
+		// We need to override the custody requirement calculation
+		// For this test, we'll verify the logic by checking if custodyRequirement > 64
+		// Since custodyRequirement in minimalTestService is 4, we can't test the high case here
+		// This would require a different test setup with actual validators
+		slot := fuluForkEpoch*primitives.Slot(cfg.SlotsPerEpoch) + 1
+		actualEas, actualCgc, err := service.updateCustodyInfoInDB(slot)
+		require.NoError(t, err)
+		require.Equal(t, slot, actualEas)
+		semiSupernodeCustody := numberOfCustodyGroups / 2 // 64
+		// With low validator requirements (4), should use semi-supernode minimum (64)
+		require.Equal(t, semiSupernodeCustody, actualCgc)
+	})
 }

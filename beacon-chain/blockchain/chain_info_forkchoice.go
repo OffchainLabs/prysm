@@ -2,13 +2,14 @@ package blockchain
 
 import (
 	"context"
+	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/forkchoice"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/forkchoice"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -27,7 +28,7 @@ func (s *Service) GetProposerHead() [32]byte {
 }
 
 // SetForkChoiceGenesisTime sets the genesis time in Forkchoice
-func (s *Service) SetForkChoiceGenesisTime(timestamp uint64) {
+func (s *Service) SetForkChoiceGenesisTime(timestamp time.Time) {
 	s.cfg.ForkChoiceStore.Lock()
 	defer s.cfg.ForkChoiceStore.Unlock()
 	s.cfg.ForkChoiceStore.SetGenesisTime(timestamp)

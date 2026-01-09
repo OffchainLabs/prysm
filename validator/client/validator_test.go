@@ -16,30 +16,30 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/config/proposer"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	validatorType "github.com/OffchainLabs/prysm/v6/consensus-types/validator"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	blsmock "github.com/OffchainLabs/prysm/v6/crypto/bls/common/mock"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	validatormock "github.com/OffchainLabs/prysm/v6/testing/validator-mock"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
-	dbTest "github.com/OffchainLabs/prysm/v6/validator/db/testing"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager/local"
-	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/proposer"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	validatorType "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	blsmock "github.com/OffchainLabs/prysm/v7/crypto/bls/common/mock"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
+	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -63,7 +63,7 @@ var unknownIndex = primitives.ValidatorIndex(^uint64(0))
 
 func genMockKeymanager(t *testing.T, numKeys int) *mockKeymanager {
 	pairs := make([]keypair, numKeys)
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		pairs[i] = randKeypair(t)
 	}
 
@@ -176,14 +176,14 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 			require.NoError(t, err)
 			assert.DeepEqual(t, []byte(nil), savedGenValRoot, "Unexpected saved genesis validators root")
 
-			genesis := uint64(time.Unix(1, 0).Unix())
+			genesis := time.Unix(1, 0)
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
 			client.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -192,7 +192,6 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 
 			assert.DeepEqual(t, genesisValidatorsRoot[:], savedGenValRoot, "Unexpected saved genesis validators root")
 			assert.Equal(t, genesis, v.genesisTime, "Unexpected chain start time")
-			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			// Make sure there are no errors running if it is the same data.
 			client.EXPECT().WaitForChainStart(
@@ -200,7 +199,7 @@ func TestWaitForChainStart_SetsGenesisInfo(t *testing.T) {
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -220,14 +219,14 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				validatorClient: client,
 				db:              db,
 			}
-			genesis := uint64(time.Unix(1, 0).Unix())
+			genesis := time.Unix(1, 0)
 			genesisValidatorsRoot := bytesutil.ToBytes32([]byte("validators"))
 			client.EXPECT().WaitForChainStart(
 				gomock.Any(),
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			require.NoError(t, v.WaitForChainStart(t.Context()))
@@ -236,7 +235,6 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 
 			assert.DeepEqual(t, genesisValidatorsRoot[:], savedGenValRoot, "Unexpected saved genesis validators root")
 			assert.Equal(t, genesis, v.genesisTime, "Unexpected chain start time")
-			assert.NotNil(t, v.ticker, "Expected ticker to be set, received nil")
 
 			genesisValidatorsRoot = bytesutil.ToBytes32([]byte("badvalidators"))
 
@@ -246,7 +244,7 @@ func TestWaitForChainStart_SetsGenesisInfo_IncorrectSecondTry(t *testing.T) {
 				&emptypb.Empty{},
 			).Return(&ethpb.ChainStartResponse{
 				Started:               true,
-				GenesisTime:           genesis,
+				GenesisTime:           uint64(genesis.Unix()),
 				GenesisValidatorsRoot: genesisValidatorsRoot[:],
 			}, nil)
 			err = v.WaitForChainStart(t.Context())
@@ -294,38 +292,6 @@ func TestWaitForChainStart_ReceiveErrorFromStream(t *testing.T) {
 	err := v.WaitForChainStart(t.Context())
 	want := "could not receive ChainStart from stream"
 	assert.ErrorContains(t, want, err)
-}
-
-func TestCanonicalHeadSlot_FailedRPC(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
-	v := validator{
-		chainClient: client,
-		genesisTime: 1,
-	}
-	client.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(nil, errors.New("failed"))
-	_, err := v.CanonicalHeadSlot(t.Context())
-	assert.ErrorContains(t, "failed", err)
-}
-
-func TestCanonicalHeadSlot_OK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	client := validatormock.NewMockChainClient(ctrl)
-	v := validator{
-		chainClient: client,
-	}
-	client.EXPECT().ChainHead(
-		gomock.Any(),
-		gomock.Any(),
-	).Return(&ethpb.ChainHead{HeadSlot: 0}, nil)
-	headSlot, err := v.CanonicalHeadSlot(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, primitives.Slot(0), headSlot, "Mismatch slots")
 }
 
 func TestWaitSync_ContextCanceled(t *testing.T) {
@@ -629,7 +595,7 @@ func TestUpdateDuties_Distributed(t *testing.T) {
 	).Return(
 		&ethpb.DomainResponse{SignatureDomain: sigDomain},
 		nil, /*err*/
-	).Times(2)
+	)
 
 	client.EXPECT().AggregatedSelections(
 		gomock.Any(),
@@ -809,7 +775,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 30,
 				},
 			},
-			log:    "Validator deposited, entering activation queue after finalization\" prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
+			log:    "Validator deposited, entering activation queue after finalization\" package=validator/client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
 			active: false,
 		},
 		{
@@ -823,7 +789,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 6,
 				},
 			},
-			log:    "Waiting for activation... Check validator queue status in a block explorer\" prefix=client pubkey=0x000000000000 status=PENDING validatorIndex=50",
+			log:    "Waiting for activation... Check validator queue status in a block explorer\" package=validator/client pubkey=0x000000000000 status=PENDING validatorIndex=50",
 			active: false,
 		},
 		{
@@ -893,7 +859,7 @@ type doppelGangerRequestMatcher struct {
 
 var _ gomock.Matcher = (*doppelGangerRequestMatcher)(nil)
 
-func (m *doppelGangerRequestMatcher) Matches(x interface{}) bool {
+func (m *doppelGangerRequestMatcher) Matches(x any) bool {
 	r, ok := x.(*ethpb.DoppelGangerRequest)
 	if !ok {
 		panic("Invalid match type")
@@ -1045,7 +1011,7 @@ func TestValidator_CheckDoppelGanger(t *testing.T) {
 					attLimit := 5
 					for i, k := range keys {
 						pkey := k
-						for j := 0; j < attLimit; j++ {
+						for j := range attLimit {
 							att := createAttestation(10+primitives.Epoch(j), 12+primitives.Epoch(j))
 							rt, err := att.Data.HashTreeRoot()
 							assert.NoError(t, err)
@@ -1396,7 +1362,7 @@ type PrepareBeaconProposerRequestMatcher struct {
 	expectedRecipients []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 }
 
-func (m *PrepareBeaconProposerRequestMatcher) Matches(x interface{}) bool {
+func (m *PrepareBeaconProposerRequestMatcher) Matches(x any) bool {
 	req, ok := x.(*ethpb.PrepareBeaconProposerRequest)
 	if !ok {
 		return false
@@ -1716,7 +1682,7 @@ func TestValidator_PushSettings(t *testing.T) {
 							NumValidatorKeys: 1,
 							Offset:           1,
 						},
-						genesisTime: 0,
+						genesisTime: time.Unix(0, 0),
 					}
 					// set bellatrix as current epoch
 					params.BeaconConfig().BellatrixForkEpoch = 0
@@ -2772,7 +2738,7 @@ func TestValidator_buildSignedRegReqs_TimestampBeforeGenesis(t *testing.T) {
 	v := validator{
 		signedValidatorRegistrations: map[[48]byte]*ethpb.SignedValidatorRegistrationV1{},
 		validatorClient:              client,
-		genesisTime:                  uint64(time.Now().UTC().Unix() + 1000),
+		genesisTime:                  time.Now().Add(1000 * time.Second),
 		proposerSettings: &proposer.Settings{
 			DefaultConfig: &proposer.Option{
 				FeeRecipientConfig: &proposer.FeeRecipientConfig{
@@ -2838,9 +2804,9 @@ func TestValidator_ChangeHost(t *testing.T) {
 
 	client.EXPECT().SetHost(v.beaconNodeHosts[1])
 	client.EXPECT().SetHost(v.beaconNodeHosts[0])
-	v.ChangeHost()
+	v.changeHost()
 	assert.Equal(t, uint64(1), v.currentHostIndex)
-	v.ChangeHost()
+	v.changeHost()
 	assert.Equal(t, uint64(0), v.currentHostIndex)
 }
 

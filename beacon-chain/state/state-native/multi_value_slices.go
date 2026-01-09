@@ -3,11 +3,11 @@ package state_native
 import (
 	"runtime"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	multi_value_slice "github.com/OffchainLabs/prysm/v6/container/multi-value-slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	multi_value_slice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )

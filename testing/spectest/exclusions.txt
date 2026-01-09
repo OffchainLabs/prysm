@@ -113,3 +113,6 @@ tests/minimal/whisk/ssz_static/Validator
 tests/minimal/whisk/ssz_static/VoluntaryExit
 tests/minimal/whisk/ssz_static/WhiskTracker
 tests/minimal/whisk/ssz_static/Withdrawal
+
+# Fulu
+tests/general/fulu/kzg/compute_verify_cell_kzg_proof_batch_challenge

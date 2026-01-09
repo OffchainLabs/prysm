@@ -1,22 +1,23 @@
 package kv
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filters"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
@@ -171,7 +172,7 @@ func TestStore_SaveBlock_NoDuplicates(t *testing.T) {
 
 			// Even with a full cache, saving new blocks should not cause
 			// duplicated blocks in the DB.
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				require.NoError(t, db.SaveBlock(ctx, blk))
 			}
 
@@ -254,7 +255,7 @@ func TestStore_BlocksHandleZeroCase(t *testing.T) {
 			ctx := t.Context()
 			numBlocks := 10
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, numBlocks)
-			for i := 0; i < len(totalBlocks); i++ {
+			for i := range totalBlocks {
 				b, err := tt.newBlock(primitives.Slot(i), bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				totalBlocks[i] = b
@@ -278,7 +279,7 @@ func TestStore_BlocksHandleInvalidEndSlot(t *testing.T) {
 			numBlocks := 10
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, numBlocks)
 			// Save blocks from slot 1 onwards.
-			for i := 0; i < len(totalBlocks); i++ {
+			for i := range totalBlocks {
 				b, err := tt.newBlock(primitives.Slot(i+1), bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				totalBlocks[i] = b
@@ -655,6 +656,44 @@ func TestStore_BlocksCRUD_NoCache(t *testing.T) {
 	}
 }
 
+func TestAvailableBlocks(t *testing.T) {
+	ctx := t.Context()
+	db := setupDB(t)
+
+	b0, b1, b2 := util.NewBeaconBlock(), util.NewBeaconBlock(), util.NewBeaconBlock()
+	b0.Block.Slot, b1.Block.Slot, b2.Block.Slot = 10, 20, 30
+
+	sb0, err := blocks.NewSignedBeaconBlock(b0)
+	require.NoError(t, err)
+	r0, err := b0.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Save b0 but remove it from cache.
+	err = db.SaveBlock(ctx, sb0)
+	require.NoError(t, err)
+	db.blockCache.Del(string(r0[:]))
+
+	// b1 is not saved at all.
+	r1, err := b1.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	// Save b2 in cache and DB.
+	sb2, err := blocks.NewSignedBeaconBlock(b2)
+	require.NoError(t, err)
+	r2, err := b2.Block.HashTreeRoot()
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, sb2))
+	require.NoError(t, err)
+
+	expected := map[[32]byte]bool{r0: true, r2: true}
+	actual := db.AvailableBlocks(ctx, [][32]byte{r0, r1, r2})
+
+	require.Equal(t, len(expected), len(actual))
+	for i := range expected {
+		require.Equal(t, true, actual[i])
+	}
+}
+
 func TestStore_Blocks_FiltersCorrectly(t *testing.T) {
 	for _, tt := range blockTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -888,7 +927,7 @@ func TestStore_Blocks_Retrieve_SlotRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, 500)
-			for i := 0; i < 500; i++ {
+			for i := range 500 {
 				b, err := tt.newBlock(primitives.Slot(i), bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				totalBlocks[i] = b
@@ -908,7 +947,7 @@ func TestStore_Blocks_Retrieve_Epoch(t *testing.T) {
 			db := setupDB(t)
 			slots := params.BeaconConfig().SlotsPerEpoch.Mul(7)
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, slots)
-			for i := primitives.Slot(0); i < slots; i++ {
+			for i := range slots {
 				b, err := tt.newBlock(i, bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				totalBlocks[i] = b
@@ -932,7 +971,7 @@ func TestStore_Blocks_Retrieve_SlotRangeWithStep(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupDB(t)
 			totalBlocks := make([]interfaces.ReadOnlySignedBeaconBlock, 500)
-			for i := 0; i < 500; i++ {
+			for i := range 500 {
 				b, err := tt.newBlock(primitives.Slot(i), bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				totalBlocks[i] = b
@@ -1101,7 +1140,7 @@ func TestStore_SaveBlocks_HasCachedBlocks(t *testing.T) {
 			ctx := t.Context()
 
 			b := make([]interfaces.ReadOnlySignedBeaconBlock, 500)
-			for i := 0; i < 500; i++ {
+			for i := range 500 {
 				blk, err := tt.newBlock(primitives.Slot(i), bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				b[i] = blk
@@ -1125,7 +1164,7 @@ func TestStore_SaveBlocks_HasRootsMatched(t *testing.T) {
 			ctx := t.Context()
 
 			b := make([]interfaces.ReadOnlySignedBeaconBlock, 500)
-			for i := 0; i < 500; i++ {
+			for i := range 500 {
 				blk, err := tt.newBlock(primitives.Slot(i), bytesutil.PadTo([]byte("parent"), 32))
 				require.NoError(t, err)
 				b[i] = blk
@@ -1326,4 +1365,87 @@ func TestStore_RegistrationsByValidatorID(t *testing.T) {
 	_, err = db.RegistrationByValidatorID(ctx, 3)
 	want := errors.Wrap(ErrNotFoundFeeRecipient, "validator id 3")
 	require.Equal(t, want.Error(), err.Error())
+}
+
+// Block creates a phase0 beacon block at the specified slot and saves it to the database.
+func createAndSaveBlock(t *testing.T, ctx context.Context, db *Store, slot primitives.Slot) {
+	block := util.NewBeaconBlock()
+	block.Block.Slot = slot
+
+	wrappedBlock, err := blocks.NewSignedBeaconBlock(block)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, wrappedBlock))
+}
+
+func TestStore_EarliestSlot(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("empty database returns ErrNotFound", func(t *testing.T) {
+		db := setupDB(t)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.ErrorIs(t, err, ErrNotFound)
+		assert.Equal(t, primitives.Slot(0), slot)
+	})
+
+	t.Run("database with only genesis block", func(t *testing.T) {
+		db := setupDB(t)
+
+		// Create and save genesis block (slot 0)
+		createAndSaveBlock(t, ctx, db, 0)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, primitives.Slot(0), slot)
+	})
+
+	t.Run("database with genesis and blocks in genesis epoch", func(t *testing.T) {
+		db := setupDB(t)
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+		// Create and save genesis block (slot 0)
+		createAndSaveBlock(t, ctx, db, 0)
+
+		// Create and save a block in the genesis epoch
+		createAndSaveBlock(t, ctx, db, primitives.Slot(slotsPerEpoch-1))
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, primitives.Slot(0), slot)
+	})
+
+	t.Run("database with genesis and blocks beyond genesis epoch", func(t *testing.T) {
+		db := setupDB(t)
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+		// Create and save genesis block (slot 0)
+		createAndSaveBlock(t, ctx, db, 0)
+
+		// Create and save a block beyond the genesis epoch
+		nextEpochSlot := primitives.Slot(slotsPerEpoch)
+		createAndSaveBlock(t, ctx, db, nextEpochSlot)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, nextEpochSlot, slot)
+	})
+
+	t.Run("database starting from checkpoint (non-zero earliest slot)", func(t *testing.T) {
+		db := setupDB(t)
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+
+		// Simulate starting from a checkpoint by creating blocks starting from a later slot
+		checkpointSlot := primitives.Slot(slotsPerEpoch * 10) // 10 epochs later
+		nextEpochSlot := checkpointSlot + slotsPerEpoch
+
+		// Create and save first block at checkpoint slot
+		createAndSaveBlock(t, ctx, db, checkpointSlot)
+
+		// Create and save another block in the next epoch
+		createAndSaveBlock(t, ctx, db, nextEpochSlot)
+
+		slot, err := db.EarliestSlot(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, nextEpochSlot, slot)
+	})
 }

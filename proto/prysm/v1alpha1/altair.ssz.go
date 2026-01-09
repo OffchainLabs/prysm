@@ -2,7 +2,7 @@
 package eth
 
 import (
-	github_com_OffchainLabs_prysm_v6_consensus_types_primitives "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	github_com_OffchainLabs_prysm_v7_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -172,10 +172,10 @@ func (b *BeaconBlockAltair) UnmarshalSSZ(buf []byte) error {
 	var o4 uint64
 
 	// Field (0) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'ProposerIndex'
-	b.ProposerIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
+	b.ProposerIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[8:16]))
 
 	// Field (2) 'ParentRoot'
 	if cap(b.ParentRoot) == 0 {
@@ -795,6 +795,107 @@ func (s *SyncAggregate) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
+// MarshalSSZ ssz marshals the SyncCommittee object
+func (s *SyncCommittee) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SyncCommittee object to a target array
+func (s *SyncCommittee) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Pubkeys'
+	if size := len(s.Pubkeys); size != 512 {
+		err = ssz.ErrVectorLengthFn("--.Pubkeys", size, 512)
+		return
+	}
+	for ii := 0; ii < 512; ii++ {
+		if size := len(s.Pubkeys[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.Pubkeys[ii]", size, 48)
+			return
+		}
+		dst = append(dst, s.Pubkeys[ii]...)
+	}
+
+	// Field (1) 'AggregatePubkey'
+	if size := len(s.AggregatePubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.AggregatePubkey", size, 48)
+		return
+	}
+	dst = append(dst, s.AggregatePubkey...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the SyncCommittee object
+func (s *SyncCommittee) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 24624 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Pubkeys'
+	s.Pubkeys = make([][]byte, 512)
+	for ii := 0; ii < 512; ii++ {
+		if cap(s.Pubkeys[ii]) == 0 {
+			s.Pubkeys[ii] = make([]byte, 0, len(buf[0:24576][ii*48:(ii+1)*48]))
+		}
+		s.Pubkeys[ii] = append(s.Pubkeys[ii], buf[0:24576][ii*48:(ii+1)*48]...)
+	}
+
+	// Field (1) 'AggregatePubkey'
+	if cap(s.AggregatePubkey) == 0 {
+		s.AggregatePubkey = make([]byte, 0, len(buf[24576:24624]))
+	}
+	s.AggregatePubkey = append(s.AggregatePubkey, buf[24576:24624]...)
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SyncCommittee object
+func (s *SyncCommittee) SizeSSZ() (size int) {
+	size = 24624
+	return
+}
+
+// HashTreeRoot ssz hashes the SyncCommittee object
+func (s *SyncCommittee) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SyncCommittee object with a hasher
+func (s *SyncCommittee) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Pubkeys'
+	{
+		if size := len(s.Pubkeys); size != 512 {
+			err = ssz.ErrVectorLengthFn("--.Pubkeys", size, 512)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range s.Pubkeys {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+		hh.Merkleize(subIndx)
+	}
+
+	// Field (1) 'AggregatePubkey'
+	if size := len(s.AggregatePubkey); size != 48 {
+		err = ssz.ErrBytesLengthFn("--.AggregatePubkey", size, 48)
+		return
+	}
+	hh.PutBytes(s.AggregatePubkey)
+
+	hh.Merkleize(indx)
+	return
+}
+
 // MarshalSSZ ssz marshals the BeaconStateAltair object
 func (b *BeaconStateAltair) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
@@ -1059,7 +1160,7 @@ func (b *BeaconStateAltair) UnmarshalSSZ(buf []byte) error {
 	b.GenesisValidatorsRoot = append(b.GenesisValidatorsRoot, buf[8:40]...)
 
 	// Field (2) 'Slot'
-	b.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
+	b.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[40:48]))
 
 	// Field (3) 'Fork'
 	if b.Fork == nil {
@@ -1585,107 +1686,6 @@ func (b *BeaconStateAltair) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	return
 }
 
-// MarshalSSZ ssz marshals the SyncCommittee object
-func (s *SyncCommittee) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(s)
-}
-
-// MarshalSSZTo ssz marshals the SyncCommittee object to a target array
-func (s *SyncCommittee) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	dst = buf
-
-	// Field (0) 'Pubkeys'
-	if size := len(s.Pubkeys); size != 512 {
-		err = ssz.ErrVectorLengthFn("--.Pubkeys", size, 512)
-		return
-	}
-	for ii := 0; ii < 512; ii++ {
-		if size := len(s.Pubkeys[ii]); size != 48 {
-			err = ssz.ErrBytesLengthFn("--.Pubkeys[ii]", size, 48)
-			return
-		}
-		dst = append(dst, s.Pubkeys[ii]...)
-	}
-
-	// Field (1) 'AggregatePubkey'
-	if size := len(s.AggregatePubkey); size != 48 {
-		err = ssz.ErrBytesLengthFn("--.AggregatePubkey", size, 48)
-		return
-	}
-	dst = append(dst, s.AggregatePubkey...)
-
-	return
-}
-
-// UnmarshalSSZ ssz unmarshals the SyncCommittee object
-func (s *SyncCommittee) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size != 24624 {
-		return ssz.ErrSize
-	}
-
-	// Field (0) 'Pubkeys'
-	s.Pubkeys = make([][]byte, 512)
-	for ii := 0; ii < 512; ii++ {
-		if cap(s.Pubkeys[ii]) == 0 {
-			s.Pubkeys[ii] = make([]byte, 0, len(buf[0:24576][ii*48:(ii+1)*48]))
-		}
-		s.Pubkeys[ii] = append(s.Pubkeys[ii], buf[0:24576][ii*48:(ii+1)*48]...)
-	}
-
-	// Field (1) 'AggregatePubkey'
-	if cap(s.AggregatePubkey) == 0 {
-		s.AggregatePubkey = make([]byte, 0, len(buf[24576:24624]))
-	}
-	s.AggregatePubkey = append(s.AggregatePubkey, buf[24576:24624]...)
-
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the SyncCommittee object
-func (s *SyncCommittee) SizeSSZ() (size int) {
-	size = 24624
-	return
-}
-
-// HashTreeRoot ssz hashes the SyncCommittee object
-func (s *SyncCommittee) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(s)
-}
-
-// HashTreeRootWith ssz hashes the SyncCommittee object with a hasher
-func (s *SyncCommittee) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'Pubkeys'
-	{
-		if size := len(s.Pubkeys); size != 512 {
-			err = ssz.ErrVectorLengthFn("--.Pubkeys", size, 512)
-			return
-		}
-		subIndx := hh.Index()
-		for _, i := range s.Pubkeys {
-			if len(i) != 48 {
-				err = ssz.ErrBytesLength
-				return
-			}
-			hh.PutBytes(i)
-		}
-		hh.Merkleize(subIndx)
-	}
-
-	// Field (1) 'AggregatePubkey'
-	if size := len(s.AggregatePubkey); size != 48 {
-		err = ssz.ErrBytesLengthFn("--.AggregatePubkey", size, 48)
-		return
-	}
-	hh.PutBytes(s.AggregatePubkey)
-
-	hh.Merkleize(indx)
-	return
-}
-
 // MarshalSSZ ssz marshals the SyncAggregatorSelectionData object
 func (s *SyncAggregatorSelectionData) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(s)
@@ -1713,7 +1713,7 @@ func (s *SyncAggregatorSelectionData) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'SubcommitteeIndex'
 	s.SubcommitteeIndex = ssz.UnmarshallUint64(buf[8:16])
@@ -2001,7 +2001,7 @@ func (l *LightClientUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (6) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25360:25368]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[25360:25368]))
 
 	return err
 }
@@ -2176,7 +2176,7 @@ func (l *LightClientFinalityUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (4) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[576:584]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[576:584]))
 
 	return err
 }
@@ -2291,7 +2291,7 @@ func (l *LightClientOptimisticUpdateAltair) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (2) 'SignatureSlot'
-	l.SignatureSlot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[272:280]))
+	l.SignatureSlot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[272:280]))
 
 	return err
 }
@@ -2432,7 +2432,7 @@ func (s *SyncCommitteeMessage) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'BlockRoot'
 	if cap(s.BlockRoot) == 0 {
@@ -2441,7 +2441,7 @@ func (s *SyncCommitteeMessage) UnmarshalSSZ(buf []byte) error {
 	s.BlockRoot = append(s.BlockRoot, buf[8:40]...)
 
 	// Field (2) 'ValidatorIndex'
-	s.ValidatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[40:48]))
+	s.ValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[40:48]))
 
 	// Field (3) 'Signature'
 	if cap(s.Signature) == 0 {
@@ -2613,7 +2613,7 @@ func (c *ContributionAndProof) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'AggregatorIndex'
-	c.AggregatorIndex = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
+	c.AggregatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'Contribution'
 	if c.Contribution == nil {
@@ -2714,7 +2714,7 @@ func (s *SyncCommitteeContribution) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'Slot'
-	s.Slot = github_com_OffchainLabs_prysm_v6_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
+	s.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[0:8]))
 
 	// Field (1) 'BlockRoot'
 	if cap(s.BlockRoot) == 0 {

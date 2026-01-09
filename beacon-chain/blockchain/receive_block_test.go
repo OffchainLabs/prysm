@@ -5,23 +5,28 @@ import (
 	"testing"
 	"time"
 
-	blockchainTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpbv1 "github.com/OffchainLabs/prysm/v6/proto/eth/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
@@ -126,12 +131,10 @@ func TestService_ReceiveBlock(t *testing.T) {
 				block: genFullBlock(t, util.DefaultBlockGenConfig(), 1 /*slot*/),
 			},
 			check: func(t *testing.T, s *Service) {
-				// Hacky sleep, should use a better way to be able to resolve the race
-				// between event being sent out and processed.
-				time.Sleep(100 * time.Millisecond)
-				if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {
-					t.Errorf("Received %d state notifications, expected at least 1", recvd)
-				}
+				notifier := s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier)
+				require.Eventually(t, func() bool {
+					return len(notifier.ReceivedEvents()) >= 1
+				}, 2*time.Second, 10*time.Millisecond, "Expected at least 1 state notification")
 			},
 		},
 		{
@@ -188,7 +191,9 @@ func TestHandleDA(t *testing.T) {
 	require.NoError(t, err)
 
 	s, _ := minimalTestService(t)
-	elapsed, err := s.handleDA(t.Context(), signedBeaconBlock, [fieldparams.RootLength]byte{}, nil)
+	block, err := blocks.NewROBlockWithRoot(signedBeaconBlock, [32]byte{})
+	require.NoError(t, err)
+	elapsed, err := s.handleDA(t.Context(), nil, block)
 	require.NoError(t, err)
 	require.Equal(t, true, elapsed > 0, "Elapsed time should be greater than 0")
 }
@@ -210,18 +215,16 @@ func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 	root, err := b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		wsb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		require.NoError(t, s.ReceiveBlock(ctx, wsb, root, nil))
-		wg.Done()
-	}()
+	})
 	wg.Wait()
-	time.Sleep(100 * time.Millisecond)
-	if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {
-		t.Errorf("Received %d state notifications, expected at least 1", recvd)
-	}
+	notifier := s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier)
+	require.Eventually(t, func() bool {
+		return len(notifier.ReceivedEvents()) >= 1
+	}, 2*time.Second, 10*time.Millisecond, "Expected at least 1 state notification")
 	// Verify fork choice has processed the block. (Genesis block and the new block)
 	assert.Equal(t, 2, s.cfg.ForkChoiceStore.NodeCount())
 }
@@ -261,10 +264,10 @@ func TestService_ReceiveBlockBatch(t *testing.T) {
 				block: genFullBlock(t, util.DefaultBlockGenConfig(), 1 /*slot*/),
 			},
 			check: func(t *testing.T, s *Service) {
-				time.Sleep(100 * time.Millisecond)
-				if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {
-					t.Errorf("Received %d state notifications, expected at least 1", recvd)
-				}
+				notifier := s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier)
+				require.Eventually(t, func() bool {
+					return len(notifier.ReceivedEvents()) >= 1
+				}, 2*time.Second, 10*time.Millisecond, "Expected at least 1 state notification")
 			},
 		},
 	}
@@ -307,7 +310,10 @@ func TestService_HasBlock(t *testing.T) {
 	r, err = b.Block.HashTreeRoot()
 	require.NoError(t, err)
 	require.Equal(t, true, s.HasBlock(t.Context(), r))
-	s.blockBeingSynced.set(r)
+	err = s.blockBeingSynced.set(r)
+	require.NoError(t, err)
+	err = s.blockBeingSynced.set(r)
+	require.ErrorIs(t, err, errBlockBeingSynced)
 	require.Equal(t, false, s.HasBlock(t.Context(), r))
 }
 
@@ -338,7 +344,7 @@ func TestCheckSaveHotStateDB_Disabling(t *testing.T) {
 func TestCheckSaveHotStateDB_Overflow(t *testing.T) {
 	hook := logTest.NewGlobal()
 	s, _ := minimalTestService(t)
-	s.genesisTime = time.Now()
+	s.SetGenesisTime(time.Now())
 
 	require.NoError(t, s.checkSaveHotStateDB(t.Context()))
 	assert.LogsDoNotContain(t, hook, "Entering mode to save hot states in DB")
@@ -348,8 +354,9 @@ func TestHandleCaches_EnablingLargeSize(t *testing.T) {
 	hook := logTest.NewGlobal()
 	s, _ := minimalTestService(t)
 	st := params.BeaconConfig().SlotsPerEpoch.Mul(uint64(epochsSinceFinalitySaveHotStateDB))
-	s.genesisTime = time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second)
+	s.SetGenesisTime(time.Now().Add(time.Duration(-1*int64(st)*int64(params.BeaconConfig().SecondsPerSlot)) * time.Second))
 
+	helpers.ClearCache()
 	require.NoError(t, s.handleCaches())
 	assert.LogsContain(t, hook, "Expanding committee cache size")
 }
@@ -504,8 +511,9 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		s.cfg.StateNotifier = notifier
 		s.executePostFinalizationTasks(s.ctx, headState)
 
-		time.Sleep(1 * time.Second) // sleep for a second because event is in a separate go routine
-		require.Equal(t, 1, len(notifier.ReceivedEvents()))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
 		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
@@ -544,8 +552,9 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		s.cfg.StateNotifier = notifier
 		s.executePostFinalizationTasks(s.ctx, headState)
 
-		time.Sleep(1 * time.Second) // sleep for a second because event is in a separate go routine
-		require.Equal(t, 1, len(notifier.ReceivedEvents()))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
 		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
@@ -561,4 +570,45 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		require.Equal(t, primitives.ValidatorIndex(0), index) // first index
 	})
 
+}
+
+func TestProcessLightClientBootstrap(t *testing.T) {
+	featCfg := &features.Flags{}
+	featCfg.EnableLightClient = true
+	reset := features.InitWithReset(featCfg)
+	defer reset()
+
+	s, tr := minimalTestService(t, WithLCStore())
+	ctx := tr.ctx
+
+	for testVersion := version.Altair; testVersion <= version.Electra; testVersion++ {
+		t.Run(version.String(testVersion), func(t *testing.T) {
+			l := util.NewTestLightClient(t, testVersion)
+
+			require.NoError(t, s.cfg.BeaconDB.SaveBlock(ctx, l.FinalizedBlock))
+			finalizedBlockRoot, err := l.FinalizedBlock.Block().HashTreeRoot()
+			require.NoError(t, err)
+			require.NoError(t, s.cfg.BeaconDB.SaveState(ctx, l.FinalizedState, finalizedBlockRoot))
+
+			cp := l.AttestedState.FinalizedCheckpoint()
+			require.DeepSSZEqual(t, finalizedBlockRoot, [32]byte(cp.Root))
+
+			require.NoError(t, s.cfg.ForkChoiceStore.UpdateFinalizedCheckpoint(&forkchoicetypes.Checkpoint{Epoch: cp.Epoch, Root: [32]byte(cp.Root)}))
+
+			s.executePostFinalizationTasks(s.ctx, l.AttestedState)
+
+			// Wait for the light client bootstrap to be saved (runs in goroutine)
+			var b interfaces.LightClientBootstrap
+			require.Eventually(t, func() bool {
+				var err error
+				b, err = s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
+				return err == nil && b != nil
+			}, 5*time.Second, 50*time.Millisecond, "Light client bootstrap was not saved within timeout")
+
+			btst, err := lightClient.NewLightClientBootstrapFromBeaconState(ctx, l.FinalizedState.Slot(), l.FinalizedState, l.FinalizedBlock)
+			require.NoError(t, err)
+			require.DeepEqual(t, btst, b)
+			require.Equal(t, b.Version(), testVersion)
+		})
+	}
 }

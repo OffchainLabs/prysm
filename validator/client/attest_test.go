@@ -10,20 +10,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -102,6 +101,99 @@ func TestAttestToBlockHead_SubmitAttestation_RequestFailure(t *testing.T) {
 			validator.SubmitAttestation(t.Context(), 30, pubKey)
 			require.LogsContain(t, hook, "Could not submit attestation to beacon node")
 		})
+	}
+}
+
+func TestSubmitAttestation_ElectraCommitteeIndex(t *testing.T) {
+	tests := []struct {
+		name                   string
+		electraForkEpoch       uint64
+		attestationSlot        primitives.Slot
+		assignedCommitteeIndex primitives.CommitteeIndex
+		expectedCommitteeIndex primitives.CommitteeIndex
+		isPostElectra          bool
+	}{
+		{
+			name:                   "Pre-Electra uses assigned committee index",
+			electraForkEpoch:       10,
+			attestationSlot:        300,
+			assignedCommitteeIndex: 5,
+			expectedCommitteeIndex: 5,
+			isPostElectra:          false,
+		},
+		{
+			name:                   "Post-Electra uses committee index 0",
+			electraForkEpoch:       1,
+			attestationSlot:        32,
+			assignedCommitteeIndex: 5,
+			expectedCommitteeIndex: 0,
+			isPostElectra:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		for _, isSlashingProtectionMinimal := range [...]bool{false, true} {
+			t.Run(fmt.Sprintf("%s (SlashingProtectionMinimal:%v)", tt.name, isSlashingProtectionMinimal), func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				cfg := params.BeaconConfig().Copy()
+				cfg.ElectraForkEpoch = primitives.Epoch(tt.electraForkEpoch)
+				params.OverrideBeaconConfig(cfg)
+
+				validator, m, validatorKey, finish := setup(t, isSlashingProtectionMinimal)
+				defer finish()
+				validatorIndex := primitives.ValidatorIndex(7)
+				committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
+				var pubKey [fieldparams.BLSPubkeyLength]byte
+				copy(pubKey[:], validatorKey.PublicKey().Marshal())
+				validator.duties = &ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+					{
+						PublicKey:       validatorKey.PublicKey().Marshal(),
+						CommitteeIndex:  tt.assignedCommitteeIndex,
+						CommitteeLength: uint64(len(committee)),
+						ValidatorIndex:  validatorIndex,
+					},
+				}}
+
+				var capturedRequest *ethpb.AttestationDataRequest
+				// Capture the actual request to verify committee index
+				m.validatorClient.EXPECT().AttestationData(
+					gomock.Any(), // ctx
+					gomock.AssignableToTypeOf(&ethpb.AttestationDataRequest{}),
+				).Do(func(_ context.Context, req *ethpb.AttestationDataRequest) {
+					capturedRequest = req
+				}).Return(&ethpb.AttestationData{
+					BeaconBlockRoot: make([]byte, fieldparams.RootLength),
+					Target:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				}, nil)
+
+				m.validatorClient.EXPECT().DomainData(
+					gomock.Any(), // ctx
+					gomock.Any(), // epoch
+				).Times(2).Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+
+				if tt.isPostElectra {
+					m.validatorClient.EXPECT().ProposeAttestationElectra(
+						gomock.Any(), // ctx
+						gomock.AssignableToTypeOf(&ethpb.SingleAttestation{}),
+					).Return(&ethpb.AttestResponse{}, nil)
+				} else {
+					m.validatorClient.EXPECT().ProposeAttestation(
+						gomock.Any(), // ctx
+						gomock.AssignableToTypeOf(&ethpb.Attestation{}),
+					).Return(&ethpb.AttestResponse{}, nil)
+				}
+
+				validator.SubmitAttestation(t.Context(), tt.attestationSlot, pubKey)
+
+				// Verify the committee index in the request
+				require.NotNil(t, capturedRequest, "AttestationDataRequest should have been called")
+				assert.Equal(t, tt.expectedCommitteeIndex, capturedRequest.CommitteeIndex,
+					"Committee index mismatch: expected %d, got %d", tt.expectedCommitteeIndex, capturedRequest.CommitteeIndex)
+				assert.Equal(t, tt.attestationSlot, capturedRequest.Slot,
+					"Slot should match the provided slot")
+			})
+		}
 	}
 }
 
@@ -445,7 +537,7 @@ func TestAttestToBlockHead_DoesNotAttestBeforeDelay(t *testing.T) {
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
-			validator.genesisTime = uint64(prysmTime.Now().Unix())
+			validator.genesisTime = time.Now()
 			m.validatorClient.EXPECT().Duties(
 				gomock.Any(), // ctx
 				gomock.AssignableToTypeOf(&ethpb.DutiesRequest{}),
@@ -478,7 +570,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 			wg.Add(1)
 			defer wg.Wait()
 
-			validator.genesisTime = uint64(prysmTime.Now().Unix())
+			validator.genesisTime = time.Now()
 			validatorIndex := primitives.ValidatorIndex(5)
 			committee := []primitives.ValidatorIndex{0, 3, 4, 2, validatorIndex, 6, 8, 9, 10}
 			var pubKey [fieldparams.BLSPubkeyLength]byte
@@ -498,7 +590,7 @@ func TestAttestToBlockHead_DoesAttestAfterDelay(t *testing.T) {
 				BeaconBlockRoot: bytesutil.PadTo([]byte("A"), 32),
 				Target:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("B"), 32)},
 				Source:          &ethpb.Checkpoint{Root: bytesutil.PadTo([]byte("C"), 32), Epoch: 3},
-			}, nil).Do(func(arg0, arg1 interface{}) {
+			}, nil).Do(func(arg0, arg1 any) {
 				wg.Done()
 			})
 
@@ -603,9 +695,9 @@ func TestSignAttestation(t *testing.T) {
 }
 
 func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
-	currentTime := uint64(time.Now().Unix())
+	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 	v := &validator{
 		genesisTime: genesisTime,
@@ -613,18 +705,18 @@ func TestServer_WaitToSlotOneThird_CanWait(t *testing.T) {
 	}
 
 	timeToSleep := params.BeaconConfig().SecondsPerSlot / 3
-	oneThird := currentTime + timeToSleep
+	oneThird := currentTime.Add(time.Duration(timeToSleep) * time.Second)
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
-	if oneThird != uint64(time.Now().Unix()) {
-		t.Errorf("Wanted %d time for slot one third but got %d", oneThird, currentTime)
+	if oneThird.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
+		t.Errorf("Wanted %s time for slot one third but got %s", oneThird, currentTime)
 	}
 }
 
 func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
-	currentTime := uint64(time.Now().Unix())
+	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 	v := &validator{
 		genesisTime:      genesisTime,
@@ -634,8 +726,8 @@ func TestServer_WaitToSlotOneThird_SameReqSlot(t *testing.T) {
 
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
-	if currentTime != uint64(time.Now().Unix()) {
-		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
+	if currentTime.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
+		t.Errorf("Wanted %s time for slot one third but got %s", time.Now(), currentTime)
 	}
 }
 
@@ -643,9 +735,9 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 	resetCfg := features.InitWithReset(&features.Flags{AttestTimely: true})
 	defer resetCfg()
 
-	currentTime := uint64(time.Now().Unix())
+	currentTime := time.Now()
 	currentSlot := primitives.Slot(4)
-	genesisTime := currentTime - uint64(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot))
+	genesisTime := currentTime.Add(-1 * time.Duration(currentSlot.Mul(params.BeaconConfig().SecondsPerSlot)) * time.Second)
 
 	v := &validator{
 		genesisTime: genesisTime,
@@ -653,17 +745,15 @@ func TestServer_WaitToSlotOneThird_ReceiveBlockSlot(t *testing.T) {
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		time.Sleep(100 * time.Millisecond)
 		v.slotFeed.Send(currentSlot)
-		wg.Done()
-	}()
+	})
 
 	v.waitOneThirdOrValidBlock(t.Context(), currentSlot)
 
-	if currentTime != uint64(time.Now().Unix()) {
-		t.Errorf("Wanted %d time for slot one third but got %d", uint64(time.Now().Unix()), currentTime)
+	if currentTime.Sub(time.Now()) > 10*time.Millisecond { // Allow for small diff due to execution time.
+		t.Errorf("Wanted %s time for slot one third but got %s", time.Now(), currentTime)
 	}
 }
 

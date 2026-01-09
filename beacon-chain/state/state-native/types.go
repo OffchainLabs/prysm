@@ -3,9 +3,9 @@ package state_native
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native/types"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
 // Ensure type BeaconState below implements BeaconState interface.
@@ -33,4 +33,8 @@ var fieldMap map[types.FieldIndex]types.DataType
 
 func errNotSupported(funcName string, ver int) error {
 	return fmt.Errorf("%s is not supported for %s", funcName, version.String(ver))
+}
+
+func IsNil(s state.BeaconState) bool {
+	return s == nil || s.IsNil()
 }

@@ -18,7 +18,7 @@ import (
 
 func mergeProfiles(p, merge *cover.Profile) {
 	if p.Mode != merge.Mode {
-		log.Fatalf("cannot merge profiles with different modes")
+		log.Fatalf("Cannot merge profiles with different modes")
 	}
 	// Since the blocks are sorted, we can keep track of where the last block
 	// was inserted and only look at the blocks after that as targets for merge
@@ -107,7 +107,7 @@ func main() {
 	for _, file := range flag.Args() {
 		profiles, err := cover.ParseProfiles(file)
 		if err != nil {
-			log.WithError(err).Fatal("failed to parse profiles")
+			log.WithError(err).Fatal("Failed to parse profiles")
 		}
 		for _, p := range profiles {
 			merged = addProfile(merged, p)

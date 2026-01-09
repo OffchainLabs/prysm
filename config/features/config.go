@@ -25,14 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/sirupsen/logrus"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "flags")
 
 const enabledFeatureFlag = "Enabled feature flag"
 const disabledFeatureFlag = "Disabled feature flag"
@@ -40,7 +37,6 @@ const disabledFeatureFlag = "Disabled feature flag"
 // Flags is a struct to represent which features the client will perform on runtime.
 type Flags struct {
 	// Feature related flags.
-	EnableExperimentalState             bool // EnableExperimentalState turns on the latest and greatest (but potentially unstable) changes to the beacon state.
 	WriteSSZStateTransitions            bool // WriteSSZStateTransitions to tmp directory.
 	EnablePeerScorer                    bool // EnablePeerScorer enables experimental peer scoring in p2p.
 	EnableLightClient                   bool // EnableLightClient enables light client APIs.
@@ -50,9 +46,10 @@ type Flags struct {
 	EnableHistoricalSpaceRepresentation bool // EnableHistoricalSpaceRepresentation enables the saving of registry validators in separate buckets to save space
 	EnableBeaconRESTApi                 bool // EnableBeaconRESTApi enables experimental usage of the beacon REST API by the validator when querying a beacon node
 	EnableExperimentalAttestationPool   bool // EnableExperimentalAttestationPool enables an experimental attestation pool design.
-	EnableDutiesV2                      bool // EnableDutiesV2 sets validator client to use the get Duties V2 endpoint
+	DisableDutiesV2                     bool // DisableDutiesV2 sets validator client to use the get Duties endpoint
 	EnableWeb                           bool // EnableWeb enables the webui on the validator client
-	SSZOnly                             bool // SSZOnly forces the validator client to use SSZ for communication with the beacon node when REST mode is enabled (useful for debugging)
+	EnableStateDiff                     bool // EnableStateDiff enables the experimental state diff feature for the beacon node.
+
 	// Logging related toggles.
 	DisableGRPCConnectionLogs bool // Disables logging when a new grpc client has connected.
 	EnableFullSSZDataLogging  bool // Enables logging for full ssz data on rejected gossip messages
@@ -71,6 +68,7 @@ type Flags struct {
 
 	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
+	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
 
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
 
@@ -82,6 +80,7 @@ type Flags struct {
 	SaveInvalidBlob  bool // SaveInvalidBlob saves invalid blob to temp.
 
 	EnableDiscoveryReboot bool // EnableDiscoveryReboot allows the node to have its local listener to be rebooted in the event of discovery issues.
+	LowValcountSweep      bool // LowValcountSweep bounds withdrawal sweep by validator count.
 
 	// KeystoreImportDebounceInterval specifies the time duration the validator waits to reload new keys if they have
 	// changed on disk. This feature is for advanced use cases only.
@@ -189,12 +188,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		return err
 	}
 
-	cfg.EnableExperimentalState = true
-	if ctx.Bool(disableExperimentalState.Name) {
-		logEnabled(disableExperimentalState)
-		cfg.EnableExperimentalState = false
-	}
-
 	if ctx.Bool(writeSSZStateTransitionsFlag.Name) {
 		logEnabled(writeSSZStateTransitionsFlag)
 		cfg.WriteSSZStateTransitions = true
@@ -282,10 +275,29 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(forceHeadFlag)
 		cfg.ForceHead = ctx.String(forceHeadFlag.Name)
 	}
-
 	if ctx.IsSet(blacklistRoots.Name) {
 		logEnabled(blacklistRoots)
 		cfg.BlacklistedRoots = parseBlacklistedRoots(ctx.StringSlice(blacklistRoots.Name))
+	}
+
+	cfg.IgnoreUnviableAttestations = false
+	if ctx.IsSet(ignoreUnviableAttestations.Name) && ctx.Bool(ignoreUnviableAttestations.Name) {
+		logEnabled(ignoreUnviableAttestations)
+		cfg.IgnoreUnviableAttestations = true
+	}
+	if ctx.Bool(lowValcountSweep.Name) {
+		logEnabled(lowValcountSweep)
+		cfg.LowValcountSweep = true
+	}
+
+	if ctx.IsSet(EnableStateDiff.Name) {
+		logEnabled(EnableStateDiff)
+		cfg.EnableStateDiff = true
+
+		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {
+			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
+			cfg.EnableHistoricalSpaceRepresentation = false
+		}
 	}
 
 	cfg.AggregateIntervals = [3]time.Duration{aggregateFirstInterval.Value, aggregateSecondInterval.Value, aggregateThirdInterval.Value}
@@ -318,9 +330,10 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(writeWalletPasswordOnWebOnboarding)
 		cfg.WriteWalletPasswordOnWebOnboarding = true
 	}
-	if ctx.Bool(attestTimely.Name) {
-		logEnabled(attestTimely)
-		cfg.AttestTimely = true
+	cfg.AttestTimely = true
+	if ctx.Bool(disableAttestTimely.Name) {
+		logEnabled(disableAttestTimely)
+		cfg.AttestTimely = false
 	}
 	if ctx.Bool(enableSlashingProtectionPruning.Name) {
 		logEnabled(enableSlashingProtectionPruning)
@@ -338,17 +351,13 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
-	if ctx.Bool(EnableDutiesV2.Name) {
-		logEnabled(EnableDutiesV2)
-		cfg.EnableDutiesV2 = true
+	if ctx.Bool(DisableDutiesV2.Name) {
+		logEnabled(DisableDutiesV2)
+		cfg.DisableDutiesV2 = true
 	}
 	if ctx.Bool(EnableWebFlag.Name) {
 		logEnabled(EnableWebFlag)
 		cfg.EnableWeb = true
-	}
-	if ctx.Bool(SSZOnly.Name) {
-		logEnabled(SSZOnly)
-		cfg.SSZOnly = true
 	}
 
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)

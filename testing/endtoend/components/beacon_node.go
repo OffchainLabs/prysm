@@ -12,17 +12,17 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	cmdshared "github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	cmdshared "github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
 )
@@ -72,7 +72,7 @@ func (s *BeaconNodeSet) Start(ctx context.Context) error {
 	// Once nodes are ready passed in handler function will be called.
 	return helpers.WaitOnNodes(ctx, nodes, func() {
 		if s.config.UseFixedPeerIDs {
-			for i := 0; i < len(nodes); i++ {
+			for i := range nodes {
 				s.ids = append(s.ids, nodes[i].(*BeaconNode).peerID)
 			}
 			s.config.PeerIDs = s.ids
@@ -172,7 +172,7 @@ func NewBeaconNode(config *e2etypes.E2EConfig, index int, enr string) *BeaconNod
 
 func (node *BeaconNode) saveGenesis(ctx context.Context) (string, error) {
 	// The deposit contract starts with an empty trie, we use the BeaconState to "pre-mine" the validator registry,
-	g, err := generateGenesis(ctx)
+	g, err := GenerateGenesis(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -308,7 +308,7 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start beacon node: %w", err)
 	}
 
-	if err = helpers.WaitForTextInFile(stdOutFile, "gRPC server listening on port"); err != nil {
+	if err = helpers.WaitForTextInFile(stdOutFile, "Beacon chain gRPC server listening"); err != nil {
 		return fmt.Errorf("could not find multiaddr for node %d, this means the node had issues starting: %w", index, err)
 	}
 
@@ -351,7 +351,7 @@ func (node *BeaconNode) UnderlyingProcess() *os.Process {
 	return node.cmd.Process
 }
 
-func generateGenesis(ctx context.Context) (state.BeaconState, error) {
+func GenerateGenesis(ctx context.Context) (state.BeaconState, error) {
 	if e2e.TestParams.Eth1GenesisBlock == nil {
 		return nil, errors.New("Cannot construct bellatrix block, e2e.TestParams.Eth1GenesisBlock == nil")
 	}

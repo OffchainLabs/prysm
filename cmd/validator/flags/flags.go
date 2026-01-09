@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/file"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/urfave/cli/v2"
 )
 
@@ -19,6 +19,8 @@ const (
 	WalletDefaultDirName = "prysm-wallet-v2"
 	// DefaultHTTPServerHost for the validator client.
 	DefaultHTTPServerHost = "127.0.0.1"
+
+	DefaultMaxHealthChecks = 0
 )
 
 var (
@@ -42,6 +44,13 @@ var (
 		Name:  "beacon-rest-api-provider",
 		Usage: "Beacon node REST API provider endpoint.",
 		Value: "http://127.0.0.1:3500",
+	}
+	// BeaconRESTApiHeaders defines a list of headers to send with all HTTP requests to the beacon node.
+	BeaconRESTApiHeaders = &cli.StringFlag{
+		Name: "beacon-rest-api-headers",
+		Usage: `Comma-separated list of key value pairs to pass as headers for all HTTP calls to the beacon node. 
+		To provide multiple values for the same key, specify the same key for each value. 
+		Example: --grpc-headers=key1=value1,key1=value2,key2=value3`,
 	}
 	// CertFlag defines a flag for the node's TLS certificate.
 	CertFlag = &cli.StringFlag{
@@ -392,6 +401,19 @@ var (
 	DisableDutiesPolling = &cli.BoolFlag{
 		Name:  "disable-duties-polling",
 		Usage: "Disables polling of duties on dependent root changes.",
+		Value: false,
+	}
+
+	// MaxHealthChecksFlag sets a maximum amount of times to check for beacon node health before validator client times out and shuts down
+	MaxHealthChecksFlag = &cli.IntFlag{
+		Name:  "max-health-checks",
+		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
+		Value: DefaultMaxHealthChecks,
+	}
+	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	DisableEphemeralLogFile = &cli.BoolFlag{
+		Name:  "disable-ephemeral-log-file",
+		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
 		Value: false,
 	}
 )

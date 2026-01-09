@@ -9,13 +9,13 @@ import (
 	"path"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -91,6 +91,7 @@ type Store struct {
 	blockCache          *ristretto.Cache[string, interfaces.ReadOnlySignedBeaconBlock]
 	validatorEntryCache *ristretto.Cache[[]byte, *ethpb.Validator]
 	stateSummaryCache   *stateSummaryCache
+	stateDiffCache      *stateDiffCache
 	ctx                 context.Context
 }
 
@@ -112,6 +113,7 @@ var Buckets = [][]byte{
 	lightClientUpdatesBucket,
 	lightClientBootstrapBucket,
 	lightClientSyncCommitteeBucket,
+	stateDiffBucket,
 	// Indices buckets.
 	blockSlotIndicesBucket,
 	stateSlotIndicesBucket,
@@ -123,6 +125,7 @@ var Buckets = [][]byte{
 
 	feeRecipientBucket,
 	registrationBucket,
+	custodyBucket,
 }
 
 // KVStoreOption is a functional option that modifies a kv.Store.
@@ -198,6 +201,14 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 	// Setup the type of block storage used depending on whether or not this is a fresh database.
 	if err := kv.setupBlockStorageType(ctx); err != nil {
 		return nil, err
+	}
+
+	if features.Get().EnableStateDiff {
+		sdCache, err := newStateDiffCache(kv)
+		if err != nil {
+			return nil, err
+		}
+		kv.stateDiffCache = sdCache
 	}
 
 	return kv, nil

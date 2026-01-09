@@ -9,16 +9,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	blockchainTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	rewardtesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards/testing"
-	rpctesting "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/shared/testing"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	mock2 "github.com/OffchainLabs/prysm/v6/testing/mock"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	blockchainTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	rewardtesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards/testing"
+	rpctesting "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared/testing"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -408,6 +409,82 @@ func TestProduceBlockV3(t *testing.T) {
 		require.Equal(t, "electra", writer.Header().Get(api.VersionHeader))
 		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
 	})
+	t.Run("Fulu", func(t *testing.T) {
+		var block *structs.SignedBeaconBlockContentsFulu
+		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &block)
+		require.NoError(t, err)
+		jsonBytes, err := json.Marshal(block.ToUnsigned())
+		require.NoError(t, err)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), &eth.BlockRequest{
+			Slot:         1,
+			RandaoReveal: bRandao,
+			Graffiti:     bGraffiti,
+			SkipMevBoost: false,
+		}).Return(
+			func() (*eth.GenericBeaconBlock, error) {
+				b, err := block.ToUnsigned().ToGeneric()
+				require.NoError(t, err)
+				b.PayloadValue = "2000"
+				return b, nil
+			}())
+		server := &Server{
+			V1Alpha1Server:        v1alpha1Server,
+			SyncChecker:           syncChecker,
+			OptimisticModeFetcher: chainService,
+			BlockRewardFetcher:    rewardFetcher,
+		}
+		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV3(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		want := fmt.Sprintf(`{"version":"fulu","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
+		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
+		require.Equal(t, want, body)
+		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
+		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+	})
+	t.Run("Blinded Fulu", func(t *testing.T) {
+		var block *structs.SignedBlindedBeaconBlockFulu
+		err := json.Unmarshal([]byte(rpctesting.BlindedFuluBlock), &block)
+		require.NoError(t, err)
+		jsonBytes, err := json.Marshal(block.Message)
+		require.NoError(t, err)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), &eth.BlockRequest{
+			Slot:         1,
+			RandaoReveal: bRandao,
+			Graffiti:     bGraffiti,
+			SkipMevBoost: false,
+		}).Return(
+			func() (*eth.GenericBeaconBlock, error) {
+				b, err := block.Message.ToGeneric()
+				require.NoError(t, err)
+				b.PayloadValue = "2000"
+				return b, nil
+			}())
+		server := &Server{
+			V1Alpha1Server:        v1alpha1Server,
+			SyncChecker:           syncChecker,
+			OptimisticModeFetcher: chainService,
+			BlockRewardFetcher:    rewardFetcher,
+		}
+		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV3(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		want := fmt.Sprintf(`{"version":"fulu","execution_payload_blinded":true,"execution_payload_value":"2000","consensus_block_value":"10000000000","data":%s}`, string(jsonBytes))
+		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
+		require.Equal(t, want, body)
+		require.Equal(t, "true", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
+		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+	})
 	t.Run("invalid query parameter slot empty", func(t *testing.T) {
 		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
 		server := &Server{
@@ -460,6 +537,46 @@ func TestProduceBlockV3(t *testing.T) {
 		server.ProduceBlockV3(writer, request)
 		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 		assert.Equal(t, true, strings.Contains(writer.Body.String(), "Beacon node is currently syncing and not serving request on that endpoint"))
+	})
+	t.Run("0 block value is returned on error", func(t *testing.T) {
+		rewardFetcher := &rewardtesting.MockBlockRewardFetcher{Error: &httputil.DefaultJsonError{}}
+
+		var block *structs.SignedBeaconBlockContentsFulu
+		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &block)
+		require.NoError(t, err)
+		jsonBytes, err := json.Marshal(block.ToUnsigned())
+		require.NoError(t, err)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), &eth.BlockRequest{
+			Slot:         1,
+			RandaoReveal: bRandao,
+			Graffiti:     bGraffiti,
+			SkipMevBoost: false,
+		}).Return(
+			func() (*eth.GenericBeaconBlock, error) {
+				b, err := block.ToUnsigned().ToGeneric()
+				require.NoError(t, err)
+				b.PayloadValue = "2000"
+				return b, nil
+			}())
+		server := &Server{
+			V1Alpha1Server:        v1alpha1Server,
+			SyncChecker:           syncChecker,
+			OptimisticModeFetcher: chainService,
+			BlockRewardFetcher:    rewardFetcher,
+		}
+		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV3(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		want := fmt.Sprintf(`{"version":"fulu","execution_payload_blinded":false,"execution_payload_value":"2000","consensus_block_value":"0","data":%s}`, string(jsonBytes))
+		body := strings.ReplaceAll(writer.Body.String(), "\n", "")
+		require.Equal(t, want, body)
+		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
+		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "0", writer.Header().Get(api.ConsensusBlockValueHeader))
 	})
 }
 
@@ -959,5 +1076,48 @@ func TestProduceBlockV3SSZ(t *testing.T) {
 		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
 		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
 		require.Equal(t, "10000000000", writer.Header().Get(api.ConsensusBlockValueHeader))
+	})
+	t.Run("0 block value is returned on error", func(t *testing.T) {
+		rewardFetcher := &rewardtesting.MockBlockRewardFetcher{Error: &httputil.DefaultJsonError{}}
+
+		var block *structs.SignedBeaconBlockContentsFulu
+		err := json.Unmarshal([]byte(rpctesting.FuluBlockContents), &block)
+		require.NoError(t, err)
+		v1alpha1Server := mock2.NewMockBeaconNodeValidatorServer(ctrl)
+		v1alpha1Server.EXPECT().GetBeaconBlock(gomock.Any(), &eth.BlockRequest{
+			Slot:         1,
+			RandaoReveal: bRandao,
+			Graffiti:     bGraffiti,
+			SkipMevBoost: false,
+		}).Return(
+			func() (*eth.GenericBeaconBlock, error) {
+				b, err := block.ToUnsigned().ToGeneric()
+				require.NoError(t, err)
+				b.PayloadValue = "2000"
+				return b, nil
+			}())
+		server := &Server{
+			V1Alpha1Server:        v1alpha1Server,
+			SyncChecker:           syncChecker,
+			OptimisticModeFetcher: chainService,
+			BlockRewardFetcher:    rewardFetcher,
+		}
+		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://foo.example/eth/v3/validator/blocks/1?randao_reveal=%s&graffiti=%s", randao, graffiti), nil)
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+		server.ProduceBlockV3(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		g, err := block.ToUnsigned().ToGeneric()
+		require.NoError(t, err)
+		bl, ok := g.Block.(*eth.GenericBeaconBlock_Fulu)
+		require.Equal(t, true, ok)
+		ssz, err := bl.Fulu.MarshalSSZ()
+		require.NoError(t, err)
+		require.Equal(t, string(ssz), writer.Body.String())
+		require.Equal(t, "false", writer.Header().Get(api.ExecutionPayloadBlindedHeader))
+		require.Equal(t, "2000", writer.Header().Get(api.ExecutionPayloadValueHeader))
+		require.Equal(t, "fulu", writer.Header().Get(api.VersionHeader))
+		require.Equal(t, "0", writer.Header().Get(api.ConsensusBlockValueHeader))
 	})
 }

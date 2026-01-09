@@ -11,17 +11,17 @@ import (
 	"strings"
 	"syscall"
 
-	cmdshared "github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	validatorpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/validator-client"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	cmdshared "github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -62,7 +62,7 @@ func (s *ValidatorNodeSet) Start(ctx context.Context) error {
 	validatorsPerNode := validatorNum / beaconNodeNum
 	// Create validator nodes.
 	nodes := make([]e2etypes.ComponentRunner, prysmBeaconNodeNum)
-	for i := 0; i < prysmBeaconNodeNum; i++ {
+	for i := range prysmBeaconNodeNum {
 		nodes[i] = NewValidatorNode(s.config, validatorsPerNode, i, validatorsPerNode*i)
 	}
 	s.nodes = nodes
@@ -221,13 +221,13 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	portFlagName := "grpc-gateway-port" // TODO: replace port flag name with flags.HTTPServerPort.Name in a future release
 	args := []string{
+
 		fmt.Sprintf("--%s=%s/eth2-val-%d", cmdshared.DataDirFlag.Name, e2e.TestParams.TestPath, index),
 		fmt.Sprintf("--%s=%s", cmdshared.LogFileName.Name, logFile.Name()),
 		fmt.Sprintf("--%s=%s", flags.GraffitiFileFlag.Name, gFile),
 		fmt.Sprintf("--%s=%d", flags.MonitoringPortFlag.Name, e2e.TestParams.Ports.ValidatorMetricsPort+index),
-		fmt.Sprintf("--%s=%d", portFlagName, e2e.TestParams.Ports.ValidatorHTTPPort+index),
+		fmt.Sprintf("--%s=%d", flags.HTTPServerPort.Name, e2e.TestParams.Ports.ValidatorHTTPPort+index),
 		fmt.Sprintf("--%s=localhost:%d", flags.BeaconRPCProviderFlag.Name, beaconRPCPort),
 
 		fmt.Sprintf("--%s=%s", flags.GRPCHeadersFlag.Name, "dummy=value,foo=bar"), // Sending random headers shouldn't break anything.
@@ -248,9 +248,6 @@ func (v *ValidatorNode) Start(ctx context.Context) error {
 		args = append(args,
 			fmt.Sprintf("--%s=http://localhost:%d", flags.BeaconRESTApiProviderFlag.Name, beaconRestApiPort),
 			fmt.Sprintf("--%s", features.EnableBeaconRESTApi.Name))
-		if v.config.UseSSZOnly {
-			args = append(args, fmt.Sprintf("--%s", features.SSZOnly.Name))
-		}
 	}
 
 	// Only apply e2e flags to the current branch. New flags may not exist in previous release.

@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"runtime"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // RunEvery runs the provided command periodically.
@@ -19,10 +17,10 @@ func RunEvery(ctx context.Context, period time.Duration, f func()) {
 		for {
 			select {
 			case <-ticker.C:
-				log.WithField("function", funcName).Trace("running")
+				log.WithField("function", funcName).Trace("Running")
 				f()
 			case <-ctx.Done():
-				log.WithField("function", funcName).Debug("context is closed, exiting")
+				log.WithField("function", funcName).Debug("Context is closed, exiting")
 				ticker.Stop()
 				return
 			}

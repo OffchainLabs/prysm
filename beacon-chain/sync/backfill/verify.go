@@ -1,38 +1,42 @@
 package backfill
 
 import (
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
-var errInvalidBatchChain = errors.New("parent_root of block does not match the previous block's root")
-var errProposerIndexTooHigh = errors.New("proposer index not present in origin state")
-var errUnknownDomain = errors.New("runtime error looking up signing domain for fork")
+var (
+	errInvalidBlocks        = errors.New("block validation failure")
+	errInvalidBatchChain    = errors.Wrap(errInvalidBlocks, "parent_root of block does not match the previous block's root")
+	errProposerIndexTooHigh = errors.Wrap(errInvalidBlocks, "proposer index not present in origin state")
+	errUnknownDomain        = errors.Wrap(errInvalidBlocks, "runtime error looking up signing domain for fork")
+	errBatchSignatureFailed = errors.Wrap(errInvalidBlocks, "failed to verify block signature in batch")
+	errInvalidSignatureData = errors.Wrap(errInvalidBlocks, "could not verify signatures in block batch due to invalid signature data")
+
+	errEmptyVerificationSet = errors.New("no blocks to verify in batch")
+)
 
 // verifiedROBlocks represents a slice of blocks that have passed signature verification.
 type verifiedROBlocks []blocks.ROBlock
 
-func (v verifiedROBlocks) blobIdents(retentionStart primitives.Slot) ([]blobSummary, error) {
-	// early return if the newest block is outside the retention window
-	if len(v) > 0 && v[len(v)-1].Block().Slot() < retentionStart {
+func (v verifiedROBlocks) blobIdents(needed func() das.CurrentNeeds) ([]blobSummary, error) {
+	if len(v) == 0 {
 		return nil, nil
 	}
+
+	needs := needed()
 	bs := make([]blobSummary, 0)
 	for i := range v {
-		if v[i].Block().Slot() < retentionStart {
-			continue
-		}
-		if v[i].Block().Version() < version.Deneb {
+		slot := v[i].Block().Slot()
+		if !needs.Blob.At(slot) {
 			continue
 		}
 		c, err := v[i].Block().Body().BlobKzgCommitments()
@@ -57,37 +61,37 @@ type verifier struct {
 	domain *domainCache
 }
 
-// TODO: rewrite this to use ROBlock.
-func (vr verifier) verify(blks []interfaces.ReadOnlySignedBeaconBlock) (verifiedROBlocks, error) {
-	var err error
-	result := make([]blocks.ROBlock, len(blks))
+func (vr verifier) verify(blks []blocks.ROBlock) (verifiedROBlocks, error) {
+	if len(blks) == 0 {
+		// Returning an error here simplifies handling in the caller.
+		// errEmptyVerificationSet should not cause the peer to be downscored.
+		return nil, errEmptyVerificationSet
+	}
 	sigSet := bls.NewSet()
 	for i := range blks {
-		result[i], err = blocks.NewROBlock(blks[i])
-		if err != nil {
-			return nil, err
-		}
-		if i > 0 && result[i-1].Root() != result[i].Block().ParentRoot() {
-			p, b := result[i-1], result[i]
+		if i > 0 && blks[i-1].Root() != blks[i].Block().ParentRoot() {
+			p, b := blks[i-1], blks[i]
 			return nil, errors.Wrapf(errInvalidBatchChain,
 				"slot %d parent_root=%#x, slot %d root=%#x",
 				b.Block().Slot(), b.Block().ParentRoot(),
 				p.Block().Slot(), p.Root())
 		}
-		set, err := vr.blockSignatureBatch(result[i])
+		set, err := vr.blockSignatureBatch(blks[i])
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "block signature batch")
 		}
 		sigSet.Join(set)
 	}
 	v, err := sigSet.Verify()
 	if err != nil {
-		return nil, errors.Wrap(err, "block signature verification error")
+		// The blst wrapper does not give us checkable errors, so we "reverse wrap"
+		// the error string to make it checkable for shouldDownscore.
+		return nil, errors.Wrap(errInvalidSignatureData, err.Error())
 	}
 	if !v {
-		return nil, errors.New("batch block signature verification failed")
+		return nil, errBatchSignatureFailed
 	}
-	return result, nil
+	return blks, nil
 }
 
 func (vr verifier) blockSignatureBatch(b blocks.ROBlock) (*bls.SignatureBatch, error) {
@@ -107,8 +111,7 @@ func (vr verifier) blockSignatureBatch(b blocks.ROBlock) (*bls.SignatureBatch, e
 }
 
 func newBackfillVerifier(vr []byte, keys [][fieldparams.BLSPubkeyLength]byte) (*verifier, error) {
-	dc, err := newDomainCache(vr, params.BeaconConfig().DomainBeaconProposer,
-		forks.NewOrderedSchedule(params.BeaconConfig()))
+	dc, err := newDomainCache(vr, params.BeaconConfig().DomainBeaconProposer)
 	if err != nil {
 		return nil, err
 	}
@@ -122,33 +125,31 @@ func newBackfillVerifier(vr []byte, keys [][fieldparams.BLSPubkeyLength]byte) (*
 
 // domainCache provides a fast signing domain lookup by epoch.
 type domainCache struct {
-	fsched      forks.OrderedSchedule
 	forkDomains map[[4]byte][]byte
 	dType       [bls.DomainByteLength]byte
 }
 
-func newDomainCache(vRoot []byte, dType [bls.DomainByteLength]byte, fsched forks.OrderedSchedule) (*domainCache, error) {
+func newDomainCache(vRoot []byte, dType [bls.DomainByteLength]byte) (*domainCache, error) {
 	dc := &domainCache{
-		fsched:      fsched,
 		forkDomains: make(map[[4]byte][]byte),
 		dType:       dType,
 	}
-	for _, entry := range fsched {
-		d, err := signing.ComputeDomain(dc.dType, entry.Version[:], vRoot)
+	for _, entry := range params.SortedForkSchedule() {
+		d, err := signing.ComputeDomain(dc.dType, entry.ForkVersion[:], vRoot)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to pre-compute signing domain for fork version=%#x", entry.Version)
+			return nil, errors.Wrapf(err, "failed to pre-compute signing domain for fork version=%#x", entry.ForkVersion)
 		}
-		dc.forkDomains[entry.Version] = d
+		dc.forkDomains[entry.ForkVersion] = d
 	}
 	return dc, nil
 }
 
 func (dc *domainCache) forEpoch(e primitives.Epoch) ([]byte, error) {
-	fork, err := dc.fsched.VersionForEpoch(e)
+	fork, err := params.Fork(e)
 	if err != nil {
 		return nil, err
 	}
-	d, ok := dc.forkDomains[fork]
+	d, ok := dc.forkDomains[[4]byte(fork.CurrentVersion)]
 	if !ok {
 		return nil, errors.Wrapf(errUnknownDomain, "fork version=%#x, epoch=%d", fork, e)
 	}

@@ -1,6 +1,6 @@
 package db
 
-import "github.com/OffchainLabs/prysm/v6/beacon-chain/db/iface"
+import "github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 
 // ReadOnlyDatabase exposes Prysm's Ethereum data backend for read access only, no information about
 // head info. For head info, use github.com/prysmaticlabs/prysm/blockchain.HeadFetcher.
@@ -9,6 +9,11 @@ type ReadOnlyDatabase = iface.ReadOnlyDatabase
 // NoHeadAccessDatabase exposes Prysm's Ethereum data backend for read/write access, no information
 // about head info. For head info, use github.com/prysmaticlabs/prysm/blockchain.HeadFetcher.
 type NoHeadAccessDatabase = iface.NoHeadAccessDatabase
+
+// ReadOnlyDatabaseWithSeqNum exposes Prysm's Ethereum data backend for read access only, no information about
+// head info, but with read/write access to the p2p metadata sequence number.
+// This is used for the p2p service.
+type ReadOnlyDatabaseWithSeqNum = iface.ReadOnlyDatabaseWithSeqNum
 
 // HeadAccessDatabase exposes Prysm's Ethereum backend for read/write access with information about
 // chain head information. This interface should be used sparingly as the HeadFetcher is the source

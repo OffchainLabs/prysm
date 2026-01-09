@@ -6,13 +6,13 @@ import (
 	runtimeDebug "runtime/debug"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/client-stats/flags"
-	"github.com/OffchainLabs/prysm/v6/io/logs"
-	"github.com/OffchainLabs/prysm/v6/monitoring/clientstats"
-	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
-	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/client-stats/flags"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/monitoring/clientstats"
+	"github.com/OffchainLabs/prysm/v7/monitoring/journald"
+	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	joonix "github.com/joonix/log"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -60,7 +60,7 @@ func main() {
 		switch format {
 		case "text":
 			formatter := new(prefixed.TextFormatter)
-			formatter.TimestampFormat = time.DateTime
+			formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 			formatter.FullTimestamp = true
 			// If persistent log files are written - we disable the log messages coloring because
 			// the colors are ANSI codes and seen as gibberish in the log files.
@@ -73,7 +73,9 @@ func main() {
 			}
 			logrus.SetFormatter(f)
 		case "json":
-			logrus.SetFormatter(&logrus.JSONFormatter{})
+			logrus.SetFormatter(&logrus.JSONFormatter{
+				TimestampFormat: "2006-01-02 15:04:05.00",
+			})
 		case "journald":
 			if err := journald.Enable(); err != nil {
 				return err
@@ -84,7 +86,7 @@ func main() {
 
 		logFileName := ctx.String(cmd.LogFileName.Name)
 		if logFileName != "" {
-			if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+			if err := logs.ConfigurePersistentLogging(logFileName, format, level); err != nil {
 				log.WithError(err).Error("Failed to configuring logging to disk.")
 			}
 		}
@@ -135,7 +137,7 @@ func run(ctx *cli.Context) error {
 				}
 				err = upd.Update(r)
 				if err != nil {
-					log.WithError(err).Error("client-stats collector error")
+					log.WithError(err).Error("Client stats collector error")
 					continue
 				}
 			}

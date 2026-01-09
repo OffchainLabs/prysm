@@ -9,38 +9,38 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	opfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/eth/rewards"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/lookup"
-	beaconv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/beacon"
-	debugv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/debug"
-	nodev1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/node"
-	validatorv1alpha1 "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/prysm/v1alpha1/validator"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	chainSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/io/logs"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	ethpbv1alpha1 "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
+	beaconv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/beacon"
+	debugv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/debug"
+	nodev1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/node"
+	validatorv1alpha1 "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/prysm/v1alpha1/validator"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	chainSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	ethpbv1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -89,6 +89,7 @@ type Config struct {
 	AttestationReceiver       blockchain.AttestationReceiver
 	BlockReceiver             blockchain.BlockReceiver
 	BlobReceiver              blockchain.BlobReceiver
+	DataColumnReceiver        blockchain.DataColumnReceiver
 	ExecutionChainService     execution.Chain
 	ChainStartFetcher         execution.ChainStartFetcher
 	ExecutionChainInfoFetcher execution.ChainInfoFetcher
@@ -120,6 +121,7 @@ type Config struct {
 	Router                    *http.ServeMux
 	ClockWaiter               startup.ClockWaiter
 	BlobStorage               *filesystem.BlobStorage
+	DataColumnStorage         *filesystem.DataColumnStorage
 	TrackedValidatorsCache    *cache.TrackedValidatorsCache
 	PayloadIDCache            *cache.PayloadIDCache
 	LCStore                   *lightClient.Store
@@ -143,7 +145,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		log.WithError(err).Errorf("Could not listen to port in Start() %s", address)
 	}
 	s.listener = lis
-	log.WithField("address", address).Info("gRPC server listening on port")
+	log.WithField("address", address).Info("Beacon chain gRPC server listening")
 
 	opts := []grpc.ServerOption{
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
@@ -196,6 +198,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ChainInfoFetcher:   s.cfg.ChainInfoFetcher,
 		GenesisTimeFetcher: s.cfg.GenesisTimeFetcher,
 		BlobStorage:        s.cfg.BlobStorage,
+		DataColumnStorage:  s.cfg.DataColumnStorage,
 	}
 	rewardFetcher := &rewards.BlockRewardService{Replayer: ch, DB: s.cfg.BeaconDB}
 	coreService := &core.Service{
@@ -236,6 +239,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		P2P:                     s.cfg.Broadcaster,
 		BlockReceiver:           s.cfg.BlockReceiver,
 		BlobReceiver:            s.cfg.BlobReceiver,
+		DataColumnReceiver:      s.cfg.DataColumnReceiver,
 		MockEth1Votes:           s.cfg.MockEth1Votes,
 		Eth1BlockFetcher:        s.cfg.ExecutionChainService,
 		PendingDepositsFetcher:  s.cfg.PendingDepositFetcher,
@@ -347,7 +351,7 @@ func (s *Service) Stop() error {
 	s.cancel()
 	if s.listener != nil {
 		s.grpcServer.GracefulStop()
-		log.Debug("Initiated graceful stop of gRPC server")
+		log.Debug("Completed graceful stop of beacon-chain gRPC server")
 	}
 	return nil
 }
@@ -373,7 +377,7 @@ func (s *Service) Status() error {
 
 // Stream interceptor for new validator client connections to the beacon node.
 func (s *Service) validatorStreamConnectionInterceptor(
-	srv interface{},
+	srv any,
 	ss grpc.ServerStream,
 	_ *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,
@@ -385,10 +389,10 @@ func (s *Service) validatorStreamConnectionInterceptor(
 // Unary interceptor for new validator client connections to the beacon node.
 func (s *Service) validatorUnaryConnectionInterceptor(
 	ctx context.Context,
-	req interface{},
+	req any,
 	_ *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
-) (interface{}, error) {
+) (any, error) {
 	s.logNewClientConnection(ctx)
 	return handler(ctx, req)
 }

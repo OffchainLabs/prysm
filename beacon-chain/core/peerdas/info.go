@@ -2,47 +2,20 @@ package peerdas
 
 import (
 	"encoding/binary"
+	"maps"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 )
 
 // info contains all useful peerDAS related information regarding a peer.
-type (
-	info struct {
-		CustodyGroups      map[uint64]bool
-		CustodyColumns     map[uint64]bool
-		DataColumnsSubnets map[uint64]bool
-	}
-
-	targetCustodyGroupCount struct {
-		mut                          sync.RWMutex
-		validatorsCustodyRequirement uint64
-	}
-
-	toAdverstiseCustodyGroupCount struct {
-		mut   sync.RWMutex
-		value uint64
-	}
-
-	CustodyInfo struct {
-		// Mut is a mutex to be used by caller to ensure neither
-		// TargetCustodyGroupCount nor ToAdvertiseCustodyGroupCount are being modified.
-		// (This is not necessary to use this mutex for any data protection.)
-		Mut sync.RWMutex
-
-		// TargetGroupCount represents the target number of custody groups we should custody
-		// regarding the validators we are tracking.
-		TargetGroupCount targetCustodyGroupCount
-
-		// ToAdvertiseGroupCount represents the number of custody groups to advertise to the network.
-		ToAdvertiseGroupCount toAdverstiseCustodyGroupCount
-	}
-)
+type info struct {
+	CustodyGroups      map[uint64]bool
+	CustodyColumns     map[uint64]bool
+	DataColumnsSubnets map[uint64]bool
+}
 
 const (
 	nodeInfoCacheSize   = 200
@@ -109,61 +82,6 @@ func Info(nodeID enode.ID, custodyGroupCount uint64) (*info, bool, error) {
 	return result, false, nil
 }
 
-// ActualGroupCount returns the actual custody group count.
-func (custodyInfo *CustodyInfo) ActualGroupCount() uint64 {
-	return min(custodyInfo.TargetGroupCount.Get(), custodyInfo.ToAdvertiseGroupCount.Get())
-}
-
-// CustodyGroupCount returns the number of groups we should participate in for custody.
-func (tcgc *targetCustodyGroupCount) Get() uint64 {
-	// If subscribed to all subnets, return the number of custody groups.
-	if flags.Get().SubscribeAllDataSubnets {
-		return params.BeaconConfig().NumberOfCustodyGroups
-	}
-
-	tcgc.mut.RLock()
-	defer tcgc.mut.RUnlock()
-
-	// If no validators are tracked, return the default custody requirement.
-	if tcgc.validatorsCustodyRequirement == 0 {
-		return params.BeaconConfig().CustodyRequirement
-	}
-
-	// Return the validators custody requirement.
-	return tcgc.validatorsCustodyRequirement
-}
-
-// setValidatorsCustodyRequirement sets the validators custody requirement.
-func (tcgc *targetCustodyGroupCount) SetValidatorsCustodyRequirement(value uint64) {
-	tcgc.mut.Lock()
-	defer tcgc.mut.Unlock()
-
-	tcgc.validatorsCustodyRequirement = value
-}
-
-// Get returns the to advertise custody group count.
-func (tacgc *toAdverstiseCustodyGroupCount) Get() uint64 {
-	// If subscribed to all subnets, return the number of custody groups.
-	if flags.Get().SubscribeAllDataSubnets {
-		return params.BeaconConfig().NumberOfCustodyGroups
-	}
-
-	custodyRequirement := params.BeaconConfig().CustodyRequirement
-
-	tacgc.mut.RLock()
-	defer tacgc.mut.RUnlock()
-
-	return max(tacgc.value, custodyRequirement)
-}
-
-// Set sets the to advertise custody group count.
-func (tacgc *toAdverstiseCustodyGroupCount) Set(value uint64) {
-	tacgc.mut.Lock()
-	defer tacgc.mut.Unlock()
-
-	tacgc.value = value
-}
-
 // createInfoCacheIfNeeded creates a new cache if it doesn't exist.
 func createInfoCacheIfNeeded() error {
 	nodeInfoCacheMut.Lock()
@@ -189,4 +107,103 @@ func computeInfoCacheKey(nodeID enode.ID, custodyGroupCount uint64) [nodeInfoCac
 	binary.BigEndian.PutUint64(key[32:], custodyGroupCount)
 
 	return key
+}
+
+// ColumnIndices represents as a set of ColumnIndices. This could be the set of indices that a node is required to custody,
+// the set that a peer custodies, missing indices for a given block, indices that are present on disk, etc.
+type ColumnIndices map[uint64]struct{}
+
+// Has returns true if the index is present in the ColumnIndices.
+func (ci ColumnIndices) Has(index uint64) bool {
+	_, ok := ci[index]
+	return ok
+}
+
+// Count returns the number of indices present in the ColumnIndices.
+func (ci ColumnIndices) Count() int {
+	return len(ci)
+}
+
+// Set sets the index in the ColumnIndices.
+func (ci ColumnIndices) Set(index uint64) {
+	ci[index] = struct{}{}
+}
+
+// Unset removes the index from the ColumnIndices.
+func (ci ColumnIndices) Unset(index uint64) {
+	delete(ci, index)
+}
+
+// Copy creates a copy of the ColumnIndices.
+func (ci ColumnIndices) Copy() ColumnIndices {
+	newCi := make(ColumnIndices, len(ci))
+	maps.Copy(newCi, ci)
+	return newCi
+}
+
+// Intersection returns a new ColumnIndices that contains only the indices that are present in both ColumnIndices.
+func (ci ColumnIndices) Intersection(other ColumnIndices) ColumnIndices {
+	result := make(ColumnIndices)
+	for index := range ci {
+		if other.Has(index) {
+			result.Set(index)
+		}
+	}
+	return result
+}
+
+// Merge mutates the receiver so that any index that is set in either of
+// the two ColumnIndices is set in the receiver after the function finishes.
+// It does not mutate the other ColumnIndices given as a function argument.
+func (ci ColumnIndices) Merge(other ColumnIndices) {
+	for index := range other {
+		ci.Set(index)
+	}
+}
+
+// ToMap converts a ColumnIndices into a map[uint64]struct{}.
+// In the future ColumnIndices may be changed to a bit map, so using
+// ToMap will ensure forwards-compatibility.
+func (ci ColumnIndices) ToMap() map[uint64]struct{} {
+	return ci.Copy()
+}
+
+// ToSlice converts a ColumnIndices into a slice of uint64 indices.
+func (ci ColumnIndices) ToSlice() []uint64 {
+	indices := make([]uint64, 0, len(ci))
+	for index := range ci {
+		indices = append(indices, index)
+	}
+	return indices
+}
+
+// NewColumnIndicesFromSlice creates a ColumnIndices from a slice of uint64.
+func NewColumnIndicesFromSlice(indices []uint64) ColumnIndices {
+	ci := make(ColumnIndices, len(indices))
+	for _, index := range indices {
+		ci[index] = struct{}{}
+	}
+	return ci
+}
+
+// NewColumnIndicesFromMap creates a ColumnIndices from a map[uint64]bool. This kind of map
+// is used in several places in peerdas code. Converting from this map type to ColumnIndices
+// will allow us to move ColumnIndices underlying type to a bitmap in the future and avoid
+// lots of loops for things like intersections/unions or copies.
+func NewColumnIndicesFromMap(indices map[uint64]bool) ColumnIndices {
+	ci := make(ColumnIndices, len(indices))
+	for index, set := range indices {
+		if !set {
+			continue
+		}
+		ci[index] = struct{}{}
+	}
+	return ci
+}
+
+// NewColumnIndices creates an empty ColumnIndices.
+// In the future ColumnIndices may change from a reference type to a value type,
+// so using this constructor will ensure forwards-compatibility.
+func NewColumnIndices() ColumnIndices {
+	return make(ColumnIndices)
 }

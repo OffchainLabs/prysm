@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 )
 
 // ROBlock is a value that embeds a ReadOnlySignedBeaconBlock along with its block root ([32]byte).
@@ -96,16 +96,17 @@ func (s ROBlockSlice) Len() int {
 	return len(s)
 }
 
-// BlockWithROBlobs is a wrapper that collects the block and blob values together.
+// BlockWithROSidecars is a wrapper that collects the block and blob values together.
 // This is helpful because these values are collated from separate RPC requests.
-type BlockWithROBlobs struct {
-	Block ROBlock
-	Blobs []ROBlob
+type BlockWithROSidecars struct {
+	Block   ROBlock
+	Blobs   []ROBlob
+	Columns []VerifiedRODataColumn
 }
 
 // BlockWithROBlobsSlice gives convenient access to getting a slice of just the ROBlocks,
 // and defines sorting helpers.
-type BlockWithROBlobsSlice []BlockWithROBlobs
+type BlockWithROBlobsSlice []BlockWithROSidecars
 
 func (s BlockWithROBlobsSlice) ROBlocks() []ROBlock {
 	r := make([]ROBlock, len(s))

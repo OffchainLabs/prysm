@@ -8,15 +8,17 @@ go_library(
         "mock_execution_chain.go",
         "mock_faulty_powchain.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing",
     visibility = [
         "//visibility:public",
     ],
     deps = [
         "//async/event:go_default_library",
+        "//beacon-chain/core/peerdas:go_default_library",
         "//beacon-chain/execution/types:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
+        "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",

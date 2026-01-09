@@ -9,19 +9,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers/scorers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	prysmnetwork "github.com/OffchainLabs/prysm/v6/network"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/metadata"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/scorers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	prysmnetwork "github.com/OffchainLabs/prysm/v7/network"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/metadata"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p"
@@ -31,57 +33,73 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 var _ runtime.Service = (*Service)(nil)
 
-// In the event that we are at our peer limit, we
-// stop looking for new peers and instead poll
-// for the current peer limit status for the time period
-// defined below.
-var pollingPeriod = 6 * time.Second
+const (
+	// When looking for new nodes, if not enough nodes are found,
+	// we stop after this spent time.
+	batchPeriod = 2 * time.Second
 
-// When looking for new nodes, if not enough nodes are found,
-// we stop after this spent time.
-var batchPeriod = 2 * time.Second
+	// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
+	maxBadResponses = 5
+)
 
-// Refresh rate of ENR set at twice per slot.
-var refreshRate = slots.DivideSlotBy(2)
+var (
+	// Refresh rate of ENR set at twice per slot.
+	refreshRate = slots.DivideSlotBy(2)
 
-// maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
-const maxBadResponses = 5
+	// maxDialTimeout is the timeout for a single peer dial.
+	maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
 
-// maxDialTimeout is the timeout for a single peer dial.
-var maxDialTimeout = params.BeaconConfig().RespTimeoutDuration()
+	// In the event that we are at our peer limit, we
+	// stop looking for new peers and instead poll
+	// for the current peer limit status for the time period
+	// defined below.
+	pollingPeriod = 6 * time.Second
+)
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
-	started               bool
-	isPreGenesis          bool
-	pingMethod            func(ctx context.Context, id peer.ID) error
-	pingMethodLock        sync.RWMutex
-	cancel                context.CancelFunc
-	cfg                   *Config
-	peers                 *peers.Status
-	addrFilter            *multiaddr.Filters
-	ipLimiter             *leakybucket.Collector
-	privKey               *ecdsa.PrivateKey
-	metaData              metadata.Metadata
-	pubsub                *pubsub.PubSub
-	joinedTopics          map[string]*pubsub.Topic
-	joinedTopicsLock      sync.RWMutex
-	subnetsLock           map[uint64]*sync.RWMutex
-	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
-	initializationLock    sync.Mutex
-	dv5Listener           ListenerRebooter
-	startupErr            error
-	ctx                   context.Context
-	host                  host.Host
-	genesisTime           time.Time
-	genesisValidatorsRoot []byte
-	activeValidatorCount  uint64
+	started                  bool
+	isPreGenesis             bool
+	pingMethod               func(ctx context.Context, id peer.ID) error
+	pingMethodLock           sync.RWMutex
+	cancel                   context.CancelFunc
+	cfg                      *Config
+	peers                    *peers.Status
+	addrFilter               *multiaddr.Filters
+	ipLimiter                *leakybucket.Collector
+	privKey                  *ecdsa.PrivateKey
+	metaData                 metadata.Metadata
+	pubsub                   *pubsub.PubSub
+	joinedTopics             map[string]*pubsub.Topic
+	joinedTopicsLock         sync.RWMutex
+	subnetsLock              map[uint64]*sync.RWMutex
+	subnetsLockLock          sync.Mutex // Lock access to subnetsLock
+	initializationLock       sync.Mutex
+	dv5Listener              ListenerRebooter
+	startupErr               error
+	ctx                      context.Context
+	host                     host.Host
+	genesisTime              time.Time
+	genesisValidatorsRoot    []byte
+	activeValidatorCount     uint64
+	activeValidatorCountLock sync.Mutex
+	peerDisconnectionTime    *cache.Cache
+	custodyInfo              *custodyInfo
+	custodyInfoLock          sync.RWMutex // Lock access to custodyInfo
+	custodyInfoSet           chan struct{}
+	allForkDigests           map[[4]byte]struct{}
+}
+
+type custodyInfo struct {
+	earliestAvailableSlot primitives.Slot
+	groupCount            uint64
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -90,13 +108,17 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
 
-	cfg = validateConfig(cfg)
+	validateConfig(cfg)
+
 	privKey, err := privKey(cfg)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to generate p2p private key")
 	}
 
-	metaData, err := metaDataFromConfig(cfg)
+	p2pMaxPeers.Set(float64(cfg.MaxPeers))
+	minimumPeersPerSubnet.Set(float64(flags.Get().MinimumPeersPerSubnet))
+
+	metaData, err := metaDataFromDB(ctx, cfg.DB)
 	if err != nil {
 		log.WithError(err).Error("Failed to create peer metadata")
 		return nil, err
@@ -111,16 +133,18 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	ipLimiter := leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	s := &Service{
-		ctx:          ctx,
-		cancel:       cancel,
-		cfg:          cfg,
-		addrFilter:   addrFilter,
-		ipLimiter:    ipLimiter,
-		privKey:      privKey,
-		metaData:     metaData,
-		isPreGenesis: true,
-		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
-		subnetsLock:  make(map[uint64]*sync.RWMutex),
+		ctx:                   ctx,
+		cancel:                cancel,
+		cfg:                   cfg,
+		addrFilter:            addrFilter,
+		ipLimiter:             ipLimiter,
+		privKey:               privKey,
+		metaData:              metaData,
+		isPreGenesis:          true,
+		joinedTopics:          make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
+		subnetsLock:           make(map[uint64]*sync.RWMutex),
+		peerDisconnectionTime: cache.New(1*time.Second, 1*time.Minute),
+		custodyInfoSet:        make(chan struct{}),
 	}
 
 	ipAddr := prysmnetwork.IPAddr()
@@ -160,7 +184,8 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	s.pubsub = gs
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
-		PeerLimit: int(s.cfg.MaxPeers),
+		PeerLimit:             int(s.cfg.MaxPeers),
+		IPColocationWhitelist: s.cfg.IPColocationWhitelist,
 		ScorerParams: &scorers.Config{
 			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
 				Threshold:     maxBadResponses,
@@ -185,6 +210,7 @@ func (s *Service) Start() {
 	// Waits until the state is initialized via an event feed.
 	// Used for fork-related data when connecting peers.
 	s.awaitStateInitialized()
+	s.setAllForkDigests()
 	s.isPreGenesis = false
 
 	var relayNodes []string
@@ -222,7 +248,7 @@ func (s *Service) Start() {
 	if len(s.cfg.StaticPeers) > 0 {
 		addrs, err := PeersFromStringAddrs(s.cfg.StaticPeers)
 		if err != nil {
-			log.WithError(err).Error("could not convert ENR to multiaddr")
+			log.WithError(err).Error("Could not convert ENR to multiaddr")
 		}
 		// Set trusted peers for those that are provided as static addresses.
 		pids := peerIdsFromMultiAddrs(addrs)
@@ -251,6 +277,7 @@ func (s *Service) Start() {
 			"inboundTCP":  inboundTCPCount,
 			"outboundTCP": outboundTCPCount,
 			"total":       total,
+			"target":      s.cfg.MaxPeers,
 		}
 
 		if features.Get().EnableQUIC {
@@ -403,7 +430,10 @@ func (s *Service) pingPeersAndLogEnr() {
 	defer s.pingMethodLock.RUnlock()
 
 	localENR := s.dv5Listener.Self()
-	log.WithField("ENR", localENR).Info("New node record")
+	log.WithFields(logrus.Fields{
+		"ENR": localENR,
+		"seq": localENR.Seq(),
+	}).Info("New node record")
 
 	if s.pingMethod == nil {
 		return
@@ -429,12 +459,12 @@ func (s *Service) awaitStateInitialized() {
 	}
 	clock, err := s.cfg.ClockWaiter.WaitForClock(s.ctx)
 	if err != nil {
-		log.WithError(err).Fatal("failed to receive initial genesis data")
+		log.WithError(err).Fatal("Failed to receive initial genesis data")
 	}
 	s.genesisTime = clock.GenesisTime()
 	gvr := clock.GenesisValidatorsRoot()
 	s.genesisValidatorsRoot = gvr[:]
-	_, err = s.currentForkDigest() // initialize fork digest cache
+	_, err = s.currentForkDigest()
 	if err != nil {
 		log.WithError(err).Error("Could not initialize fork digest")
 	}
@@ -481,14 +511,17 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	if info.ID == s.host.ID() {
 		return nil
 	}
+
 	if err := s.Peers().IsBad(info.ID); err != nil {
-		return errors.Wrap(err, "refused to connect to bad peer")
+		return errors.Wrap(err, "bad peer")
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
+
 	if err := s.host.Connect(ctx, info); err != nil {
-		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
-		return err
+		s.downscorePeer(info.ID, "connectionError")
+		return errors.Wrap(err, "peer connect")
 	}
 	return nil
 }
@@ -518,4 +551,9 @@ func (s *Service) connectToBootnodes() error {
 // required for discovery and pubsub validation.
 func (s *Service) isInitialized() bool {
 	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
+}
+
+func (s *Service) downscorePeer(peerID peer.ID, reason string) {
+	newScore := s.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

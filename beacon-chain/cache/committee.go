@@ -5,20 +5,18 @@ package cache
 import (
 	"context"
 	"errors"
-	"math"
 	"sync"
 	"time"
 
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	mathutil "github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -52,7 +50,7 @@ type CommitteeCache struct {
 }
 
 // committeeKeyFn takes the seed as the key to retrieve shuffled indices of a committee in a given epoch.
-func committeeKeyFn(obj interface{}) (string, error) {
+func committeeKeyFn(obj any) (string, error) {
 	info, ok := obj.(*Committees)
 	if !ok {
 		return "", ErrNotCommittee
@@ -272,7 +270,7 @@ func (c *CommitteeCache) checkInProgress(ctx context.Context, seed [32]byte) err
 		// for the in progress boolean to flip to false.
 		time.Sleep(time.Duration(delay) * time.Nanosecond)
 		delay *= delayFactor
-		delay = math.Min(delay, maxDelay)
+		delay = min(delay, maxDelay)
 	}
 	return nil
 }

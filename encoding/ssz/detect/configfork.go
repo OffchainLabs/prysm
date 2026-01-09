@@ -3,18 +3,17 @@ package detect
 import (
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
@@ -27,7 +26,7 @@ type VersionedUnmarshaler struct {
 	// Fork aligns with the fork names in config/params/values.go
 	Fork int
 	// Version corresponds to the Version type defined in the beacon-chain spec, aka a "fork version number":
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#custom-types
+	// https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/beacon-chain.md#custom-types
 	Version [fieldparams.VersionLength]byte
 }
 
@@ -55,14 +54,12 @@ func FromBlock(marshaled []byte) (*VersionedUnmarshaler, error) {
 	if err != nil {
 		return nil, err
 	}
-	copiedCfg := params.BeaconConfig().Copy()
 	epoch := slots.ToEpoch(slot)
-	fs := forks.NewOrderedSchedule(copiedCfg)
-	ver, err := fs.VersionForEpoch(epoch)
+	fs, err := params.Fork(epoch)
 	if err != nil {
 		return nil, err
 	}
-	return FromForkVersion(ver)
+	return FromForkVersion([4]byte(fs.CurrentVersion))
 }
 
 var ErrForkNotFound = errors.New("version found in fork schedule but can't be matched to a named fork")
@@ -175,6 +172,18 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
+	case version.Gloas:
+		st := &ethpb.BeaconStateGloas{}
+
+		err = st.UnmarshalSSZ(marshaled)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
+		}
+
+		s, err = state_native.InitializeFromProtoUnsafeGloas(st)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
+		}
 	default:
 		return nil, fmt.Errorf("unable to initialize BeaconState for fork version=%s", forkName)
 	}
@@ -282,13 +291,21 @@ func (cf *VersionedUnmarshaler) UnmarshalBlindedBeaconBlock(marshaled []byte) (i
 // VersionedUnmarshaler.
 func (cf *VersionedUnmarshaler) validateVersion(slot primitives.Slot) error {
 	epoch := slots.ToEpoch(slot)
-	fs := forks.NewOrderedSchedule(cf.Config)
-	ver, err := fs.VersionForEpoch(epoch)
+	fork, err := params.Fork(epoch)
 	if err != nil {
 		return err
 	}
+	ver := [4]byte(fork.CurrentVersion)
 	if ver != cf.Version {
-		return errors.Wrapf(errBlockForkMismatch, "slot=%d, epoch=%d, version=%#x", slot, epoch, ver)
+		return errors.Wrapf(errBlockForkMismatch, "slot=%d, epoch=%d, version=%#x", slot, epoch, fork.CurrentVersion)
 	}
 	return nil
+}
+
+func UnmarshalState(marshaled []byte) (state.BeaconState, error) {
+	vu, err := FromState(marshaled)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to detect version from state")
+	}
+	return vu.UnmarshalBeaconState(marshaled)
 }

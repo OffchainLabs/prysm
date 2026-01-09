@@ -9,10 +9,11 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/pkg/errors"
 )
 
@@ -326,7 +327,7 @@ func HashDir(dir string) (string, error) {
 	}
 
 	h := sha256.New()
-	files = append([]string(nil), files...)
+	files = slices.Clone(files)
 	sort.Strings(files)
 	for _, file := range files {
 		hf, err := HashFile(filepath.Join(dir, file))

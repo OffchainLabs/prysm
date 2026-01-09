@@ -2,16 +2,16 @@ package sync
 
 import (
 	"bytes"
-	"errors"
 	"io"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/encoder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	multiplex "github.com/libp2p/go-mplex"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,7 +38,7 @@ func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (ui
 	b := make([]byte, 1)
 	_, err := stream.Read(b)
 	if err != nil {
-		return 0, "", err
+		return 0, "", errors.Wrap(err, "stream read")
 	}
 
 	if b[0] == responseCodeSuccess {
@@ -52,7 +52,7 @@ func ReadStatusCode(stream network.Stream, encoding encoder.NetworkEncoding) (ui
 	SetStreamReadDeadline(stream, params.BeaconConfig().RespTimeoutDuration())
 	msg := &types.ErrorMessage{}
 	if err := encoding.DecodeWithMaxLength(stream, msg); err != nil {
-		return 0, "", err
+		return 0, "", errors.Wrap(err, "decode error message")
 	}
 
 	return b[0], string(*msg), nil
@@ -109,7 +109,12 @@ func isValidStreamError(err error) bool {
 
 func closeStream(stream network.Stream, log *logrus.Entry) {
 	if err := stream.Close(); isValidStreamError(err) {
-		log.WithError(err).Debugf("Could not reset stream with protocol %s", stream.Protocol())
+		log.WithError(err).
+			WithFields(logrus.Fields{
+				"protocol": stream.Protocol(),
+				"peer":     stream.Conn().RemotePeer(),
+			}).
+			Debug("Could not close stream")
 	}
 }
 
@@ -118,7 +123,12 @@ func closeStreamAndWait(stream network.Stream, log *logrus.Entry) {
 		_err := stream.Reset()
 		_ = _err
 		if isValidStreamError(err) {
-			log.WithError(err).Debugf("Could not reset stream with protocol %s", stream.Protocol())
+			log.WithError(err).
+				WithFields(logrus.Fields{
+					"protocol": stream.Protocol(),
+					"peer":     stream.Conn().RemotePeer(),
+				}).
+				Debug("Could not reset stream")
 		}
 		return
 	}

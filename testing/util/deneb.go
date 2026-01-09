@@ -5,19 +5,18 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/crypto/random"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/crypto/random"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	GoKZG "github.com/crate-crypto/go-kzg-4844"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -45,17 +44,31 @@ func WithProposerSigning(idx primitives.ValidatorIndex, sk bls.SecretKey, valRoo
 	}
 }
 
+// WithProposer sets the proposer index for the generated block without signing.
+func WithProposer(idx primitives.ValidatorIndex) DenebBlockGeneratorOption {
+	return func(g *denebBlockGenerator) {
+		g.proposer = idx
+	}
+}
+
 func WithPayloadSetter(p *enginev1.ExecutionPayloadDeneb) DenebBlockGeneratorOption {
 	return func(g *denebBlockGenerator) {
 		g.payload = p
 	}
 }
 
+func WithDenebSlot(slot primitives.Slot) DenebBlockGeneratorOption {
+	return func(g *denebBlockGenerator) {
+		g.slot = slot
+	}
+}
+
 func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primitives.Slot, nblobs int, opts ...DenebBlockGeneratorOption) (blocks.ROBlock, []blocks.ROBlob) {
 	g := &denebBlockGenerator{
-		parent: parent,
-		slot:   slot,
-		nblobs: nblobs,
+		parent:   parent,
+		slot:     slot,
+		nblobs:   nblobs,
+		proposer: 3, // Anything else than zero not to fallback to the default uin64 value.
 	}
 	for _, o := range opts {
 		o(g)
@@ -126,11 +139,7 @@ func GenerateTestDenebBlockWithSidecar(t *testing.T, parent [32]byte, slot primi
 	}
 	if g.sign {
 		epoch := slots.ToEpoch(block.Block.Slot)
-		schedule := forks.NewOrderedSchedule(params.BeaconConfig())
-		version, err := schedule.VersionForEpoch(epoch)
-		require.NoError(t, err)
-		fork, err := schedule.ForkFromVersion(version)
-		require.NoError(t, err)
+		fork := params.ForkFromConfig(params.BeaconConfig(), epoch)
 		domain := params.BeaconConfig().DomainBeaconProposer
 		sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, domain, g.valRoot, block.Block, g.sk)
 		require.NoError(t, err)
@@ -183,14 +192,16 @@ func fakeEmptyProof(_ *testing.T, _ *ethpb.BlobSidecar) [][]byte {
 }
 
 func ExtendBlocksPlusBlobs(t *testing.T, blks []blocks.ROBlock, size int) ([]blocks.ROBlock, []blocks.ROBlob) {
+	deneb := params.BeaconConfig().DenebForkEpoch
+	denebSlot := SlotAtEpoch(t, deneb)
 	blobs := make([]blocks.ROBlob, 0)
 	if len(blks) == 0 {
-		blk, blb := GenerateTestDenebBlockWithSidecar(t, [32]byte{}, 0, 6)
+		blk, blb := GenerateTestDenebBlockWithSidecar(t, [32]byte{}, denebSlot, 6)
 		blobs = append(blobs, blb...)
 		blks = append(blks, blk)
 	}
 
-	for i := 0; i < size; i++ {
+	for range size {
 		prev := blks[len(blks)-1]
 		blk, blb := GenerateTestDenebBlockWithSidecar(t, prev.Root(), prev.Block().Slot()+1, 6)
 		blobs = append(blobs, blb...)

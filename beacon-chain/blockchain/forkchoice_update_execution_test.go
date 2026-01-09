@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -97,7 +97,7 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		headBlock:     wsb,
 		proposingSlot: service.CurrentSlot() + 1,
 	}
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, args))
+	service.forkchoiceUpdateWithExecution(ctx, args)
 
 	payloadID, has := service.cfg.PayloadIDCache.PayloadID(2, [32]byte{2})
 	require.Equal(t, true, has)
@@ -151,7 +151,7 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 		headRoot:      r,
 		proposingSlot: service.CurrentSlot() + 1,
 	}
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, args))
+	service.forkchoiceUpdateWithExecution(ctx, args)
 }
 
 func TestShouldOverrideFCU(t *testing.T) {
@@ -160,6 +160,7 @@ func TestShouldOverrideFCU(t *testing.T) {
 	ctx, fcs := tr.ctx, tr.fcs
 
 	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
+	fcs.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
 	headRoot := [32]byte{'b'}
 	parentRoot := [32]byte{'a'}
 	ojc := &ethpb.Checkpoint{}
@@ -180,11 +181,12 @@ func TestShouldOverrideFCU(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, headRoot, head)
 
-	fcs.SetGenesisTime(uint64(time.Now().Unix()) - 29)
+	wantLog := "aborted due to attestations after threshold"
+	fcs.SetGenesisTime(time.Now().Add(-29 * time.Second))
 	require.Equal(t, true, service.shouldOverrideFCU(parentRoot, 3))
-	require.LogsDoNotContain(t, hook, "10 seconds")
-	fcs.SetGenesisTime(uint64(time.Now().Unix()) - 24)
+	require.LogsDoNotContain(t, hook, wantLog)
+	fcs.SetGenesisTime(time.Now().Add(-24 * time.Second))
 	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot+10) * time.Second))
 	require.Equal(t, false, service.shouldOverrideFCU(parentRoot, 3))
-	require.LogsContain(t, hook, "10 seconds")
+	require.LogsContain(t, hook, wantLog)
 }

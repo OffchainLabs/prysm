@@ -1,25 +1,26 @@
 package sync
 
 import (
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 )
 
 type Option func(s *Service) error
@@ -198,6 +199,14 @@ func WithAvailableBlocker(avb coverage.AvailableBlocker) Option {
 	}
 }
 
+// WithTrackedValidatorsCache for tracked validators cache.
+func WithTrackedValidatorsCache(c *cache.TrackedValidatorsCache) Option {
+	return func(s *Service) error {
+		s.trackedValidatorsCache = c
+		return nil
+	}
+}
+
 // WithSlasherEnabled configures the sync package to support slashing detection.
 func WithSlasherEnabled(enabled bool) Option {
 	return func(s *Service) error {
@@ -210,6 +219,22 @@ func WithSlasherEnabled(enabled bool) Option {
 func WithLightClientStore(lcs *lightClient.Store) Option {
 	return func(s *Service) error {
 		s.lcStore = lcs
+		return nil
+	}
+}
+
+// WithBatchVerifierLimit sets the maximum number of signatures to batch verify at once.
+func WithBatchVerifierLimit(limit int) Option {
+	return func(s *Service) error {
+		s.cfg.batchVerifierLimit = limit
+		return nil
+	}
+}
+
+// WithReconstructionRandGen sets the random generator for reconstruction delays.
+func WithReconstructionRandGen(rg *rand.Rand) Option {
+	return func(s *Service) error {
+		s.reconstructionRandGen = rg
 		return nil
 	}
 }

@@ -1,39 +1,40 @@
 package blockchain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"strings"
+	"slices"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	lightclient "github.com/OffchainLabs/prysm/v6/beacon-chain/core/light-client"
-
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	field_params "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	mathutil "github.com/OffchainLabs/prysm/v6/math"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	mathutil "github.com/OffchainLabs/prysm/v7/math"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
+// ErrInvalidCheckpointArgs may be returned when the finalized checkpoint has an epoch greater than the justified checkpoint epoch.
+// If you are seeing this error, make sure you haven't mixed up the order of the arguments in the method you are calling.
+var ErrInvalidCheckpointArgs = errors.New("finalized checkpoint cannot be greater than justified checkpoint")
+
 // CurrentSlot returns the current slot based on time.
 func (s *Service) CurrentSlot() primitives.Slot {
-	return slots.CurrentSlot(uint64(s.genesisTime.Unix()))
+	return slots.CurrentSlot(s.genesisTime)
 }
 
 // getFCUArgs returns the arguments to call forkchoice update
@@ -41,14 +42,8 @@ func (s *Service) getFCUArgs(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) er
 	if err := s.getFCUArgsEarlyBlock(cfg, fcuArgs); err != nil {
 		return err
 	}
-	if !s.inRegularSync() {
-		return nil
-	}
-	slot := cfg.roblock.Block().Slot()
-	if slots.WithinVotingWindow(uint64(s.genesisTime.Unix()), slot) {
-		return nil
-	}
-	return s.computePayloadAttributes(cfg, fcuArgs)
+	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
+	return nil
 }
 
 func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
@@ -68,11 +63,11 @@ func (s *Service) getFCUArgsEarlyBlock(cfg *postBlockProcessConfig, fcuArgs *fcu
 func (s *Service) logNonCanonicalBlockReceived(blockRoot [32]byte, headRoot [32]byte) {
 	receivedWeight, err := s.cfg.ForkChoiceStore.Weight(blockRoot)
 	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("could not determine node weight")
+		log.WithField("root", fmt.Sprintf("%#x", blockRoot)).Warn("Could not determine node weight")
 	}
 	headWeight, err := s.cfg.ForkChoiceStore.Weight(headRoot)
 	if err != nil {
-		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("could not determine node weight")
+		log.WithField("root", fmt.Sprintf("%#x", headRoot)).Warn("Could not determine node weight")
 	}
 	log.WithFields(logrus.Fields{
 		"receivedRoot":   fmt.Sprintf("%#x", blockRoot),
@@ -130,38 +125,26 @@ func (s *Service) sendStateFeedOnBlock(cfg *postBlockProcessConfig) {
 	})
 }
 
+// processLightClientUpdates saves the light client data in lcStore, when feature flag is enabled.
 func (s *Service) processLightClientUpdates(cfg *postBlockProcessConfig) {
-	if err := s.processLightClientUpdate(cfg); err != nil {
-		log.WithError(err).Error("Failed to process light client update")
-	}
-	if err := s.processLightClientBootstrap(cfg); err != nil {
-		log.WithError(err).Error("Failed to process light client bootstrap")
-	}
-	if err := s.processLightClientOptimisticUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
-		log.WithError(err).Error("Failed to process light client optimistic update")
-	}
-	if err := s.processLightClientFinalityUpdate(cfg.ctx, cfg.roblock, cfg.postState); err != nil {
-		log.WithError(err).Error("Failed to process light client finality update")
-	}
-}
-
-// processLightClientUpdate saves the light client update for this block
-// if it's better than the already saved one, when feature flag is enabled.
-func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 	attestedRoot := cfg.roblock.Block().ParentRoot()
 	attestedBlock, err := s.getBlock(cfg.ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
+		log.WithError(err).Error("processLightClientUpdates: Could not get attested block")
+		return
 	}
 	if attestedBlock == nil || attestedBlock.IsNil() {
-		return errors.New("attested block is nil")
+		log.Error("processLightClientUpdates: Could not get attested block")
+		return
 	}
 	attestedState, err := s.cfg.StateGen.StateByRoot(cfg.ctx, attestedRoot)
 	if err != nil {
-		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
+		log.WithError(err).Error("processLightClientUpdates: Could not get attested state")
+		return
 	}
 	if attestedState == nil || attestedState.IsNil() {
-		return errors.New("attested state is nil")
+		log.Error("processLightClientUpdates: Could not get attested state")
+		return
 	}
 
 	finalizedRoot := attestedState.FinalizedCheckpoint().Root
@@ -169,225 +152,34 @@ func (s *Service) processLightClientUpdate(cfg *postBlockProcessConfig) error {
 	if err != nil {
 		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
 			log.Debugf("Skipping saving light client update because finalized block is nil for root %#x", finalizedRoot)
-			return nil
+			return
 		}
-		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
+		log.WithError(err).Error("processLightClientUpdates: Could not get finalized block")
+		return
 	}
 
-	update, err := lightclient.NewLightClientUpdateFromBeaconState(
-		cfg.ctx,
-		s.CurrentSlot(),
-		cfg.postState,
-		cfg.roblock,
-		attestedState,
-		attestedBlock,
-		finalizedBlock,
-	)
+	err = s.lcStore.SaveLCData(cfg.ctx, cfg.postState, cfg.roblock, attestedState, attestedBlock, finalizedBlock, s.headRoot())
 	if err != nil {
-		return errors.Wrapf(err, "could not create light client update")
+		log.WithError(err).Error("processLightClientUpdates: Could not save light client data")
 	}
-
-	period := slots.SyncCommitteePeriod(slots.ToEpoch(attestedState.Slot()))
-
-	oldUpdate, err := s.cfg.BeaconDB.LightClientUpdate(cfg.ctx, period)
-	if err != nil {
-		return errors.Wrapf(err, "could not get current light client update")
-	}
-
-	if oldUpdate == nil {
-		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
-			return errors.Wrapf(err, "could not save light client update")
-		}
-		log.WithField("period", period).Debug("Saved new light client update")
-		return nil
-	}
-
-	isNewUpdateBetter, err := lightclient.IsBetterUpdate(update, oldUpdate)
-	if err != nil {
-		return errors.Wrapf(err, "could not compare light client updates")
-	}
-
-	if isNewUpdateBetter {
-		if err := s.cfg.BeaconDB.SaveLightClientUpdate(cfg.ctx, period, update); err != nil {
-			return errors.Wrapf(err, "could not save light client update")
-		}
-		log.WithField("period", period).Debug("Saved new light client update")
-		return nil
-	}
-	log.WithField("period", period).Debug("New light client update is not better than the current one, skipping save")
-	return nil
-}
-
-// processLightClientBootstrap saves a light client bootstrap for this block
-// when feature flag is enabled.
-func (s *Service) processLightClientBootstrap(cfg *postBlockProcessConfig) error {
-	blockRoot := cfg.roblock.Root()
-	bootstrap, err := lightclient.NewLightClientBootstrapFromBeaconState(cfg.ctx, s.CurrentSlot(), cfg.postState, cfg.roblock)
-	if err != nil {
-		return errors.Wrapf(err, "could not create light client bootstrap")
-	}
-	if err := s.cfg.BeaconDB.SaveLightClientBootstrap(cfg.ctx, blockRoot[:], bootstrap); err != nil {
-		return errors.Wrapf(err, "could not save light client bootstrap")
-	}
-	return nil
-}
-
-func (s *Service) processLightClientFinalityUpdate(
-	ctx context.Context,
-	signed interfaces.ReadOnlySignedBeaconBlock,
-	postState state.BeaconState,
-) error {
-	attestedRoot := signed.Block().ParentRoot()
-	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
-	}
-	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
-	}
-
-	finalizedCheckpoint := attestedState.FinalizedCheckpoint()
-
-	// Check if the finalized checkpoint has changed
-	if finalizedCheckpoint == nil || bytes.Equal(finalizedCheckpoint.GetRoot(), postState.FinalizedCheckpoint().Root) {
-		return nil
-	}
-
-	finalizedRoot := bytesutil.ToBytes32(finalizedCheckpoint.Root)
-	finalizedBlock, err := s.cfg.BeaconDB.Block(ctx, finalizedRoot)
-	if err != nil {
-		if errors.Is(err, errBlockNotFoundInCacheOrDB) {
-			log.Debugf("Skipping processing light client finality update: Finalized block is nil for root %#x", finalizedRoot)
-			return nil
-		}
-		return errors.Wrapf(err, "could not get finalized block for root %#x", finalizedRoot)
-	}
-
-	newUpdate, err := lightclient.NewLightClientFinalityUpdateFromBeaconState(
-		ctx,
-		postState.Slot(),
-		postState,
-		signed,
-		attestedState,
-		attestedBlock,
-		finalizedBlock,
-	)
-
-	if err != nil {
-		return errors.Wrap(err, "could not create light client finality update")
-	}
-
-	lastUpdate := s.lcStore.LastFinalityUpdate()
-	if lastUpdate != nil {
-		// The finalized_header.beacon.lastUpdateSlot is greater than that of all previously forwarded finality_updates,
-		// or it matches the highest previously forwarded lastUpdateSlot and also has a sync_aggregate indicating supermajority (> 2/3)
-		// sync committee participation while the previously forwarded finality_update for that lastUpdateSlot did not indicate supermajority
-		newUpdateSlot := newUpdate.FinalizedHeader().Beacon().Slot
-		newHasSupermajority := lightclient.UpdateHasSupermajority(newUpdate.SyncAggregate())
-
-		lastUpdateSlot := lastUpdate.FinalizedHeader().Beacon().Slot
-		lastHasSupermajority := lightclient.UpdateHasSupermajority(lastUpdate.SyncAggregate())
-
-		if newUpdateSlot < lastUpdateSlot {
-			log.Debug("Skip saving light client finality newUpdate: Older than local newUpdate")
-			return nil
-		}
-		if newUpdateSlot == lastUpdateSlot && (lastHasSupermajority || !newHasSupermajority) {
-			log.Debug("Skip saving light client finality update: No supermajority advantage")
-			return nil
-		}
-	}
-	log.Debug("Saving new light client finality update")
-	s.lcStore.SetLastFinalityUpdate(newUpdate)
-
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.LightClientFinalityUpdate,
-		Data: newUpdate,
-	})
-
-	if err = s.cfg.P2P.BroadcastLightClientFinalityUpdate(ctx, newUpdate); err != nil {
-		return errors.Wrap(err, "could not broadcast light client finality update")
-	}
-
-	return nil
-}
-
-func (s *Service) processLightClientOptimisticUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
-	postState state.BeaconState) error {
-	attestedRoot := signed.Block().ParentRoot()
-	attestedBlock, err := s.cfg.BeaconDB.Block(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested block for root %#x", attestedRoot)
-	}
-	attestedState, err := s.cfg.StateGen.StateByRoot(ctx, attestedRoot)
-	if err != nil {
-		return errors.Wrapf(err, "could not get attested state for root %#x", attestedRoot)
-	}
-
-	newUpdate, err := lightclient.NewLightClientOptimisticUpdateFromBeaconState(
-		ctx,
-		postState.Slot(),
-		postState,
-		signed,
-		attestedState,
-		attestedBlock,
-	)
-
-	if err != nil {
-		if strings.Contains(err.Error(), lightclient.ErrNotEnoughSyncCommitteeBits) {
-			log.WithError(err).Debug("Skipping processing light client optimistic update")
-			return nil
-		}
-		return errors.Wrap(err, "could not create light client optimistic update")
-	}
-
-	lastUpdate := s.lcStore.LastOptimisticUpdate()
-	if lastUpdate != nil {
-		// The attested_header.beacon.slot is greater than that of all previously forwarded optimistic updates
-		if newUpdate.AttestedHeader().Beacon().Slot <= lastUpdate.AttestedHeader().Beacon().Slot {
-			log.Debug("Skip saving light client optimistic update: Older than local update")
-			return nil
-		}
-	}
-
-	log.Debug("Saving new light client optimistic update")
-	s.lcStore.SetLastOptimisticUpdate(newUpdate)
-
-	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
-		Type: statefeed.LightClientOptimisticUpdate,
-		Data: newUpdate,
-	})
-
-	if err = s.cfg.P2P.BroadcastLightClientOptimisticUpdate(ctx, newUpdate); err != nil {
-		return errors.Wrap(err, "could not broadcast light client optimistic update")
-	}
-
-	return nil
+	log.Debug("Processed light client updates")
 }
 
 // updateCachesPostBlockProcessing updates the next slot cache and handles the epoch
 // boundary in order to compute the right proposer indices after processing
-// state transition. This function is called on late blocks while still locked,
-// before sending FCU to the engine.
-func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) error {
+// state transition. The caller of this function must not hold a lock in forkchoice store.
+func (s *Service) updateCachesPostBlockProcessing(cfg *postBlockProcessConfig) {
 	slot := cfg.postState.Slot()
 	root := cfg.roblock.Root()
 	if err := transition.UpdateNextSlotCache(cfg.ctx, root[:], cfg.postState); err != nil {
-		return errors.Wrap(err, "could not update next slot state cache")
+		log.WithError(err).Error("Could not update next slot state cache")
+		return
 	}
 	if !slots.IsEpochEnd(slot) {
-		return nil
+		return
 	}
-	return s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:])
-}
-
-// handleSecondFCUCall handles a second call to FCU when syncing a new block.
-// This is useful when proposing in the next block and we want to defer the
-// computation of the next slot shuffling.
-func (s *Service) handleSecondFCUCall(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) {
-	if (fcuArgs.attributes == nil || fcuArgs.attributes.IsEmpty()) && cfg.headRoot == cfg.roblock.Root() {
-		go s.sendFCUWithAttributes(cfg, fcuArgs)
+	if err := s.handleEpochBoundary(cfg.ctx, slot, cfg.postState, root[:]); err != nil {
+		log.WithError(err).Error("Could not handle epoch boundary")
 	}
 }
 
@@ -395,20 +187,6 @@ func (s *Service) handleSecondFCUCall(cfg *postBlockProcessConfig, fcuArgs *fcuC
 // current block
 func reportProcessingTime(startTime time.Time) {
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
-}
-
-// computePayloadAttributes modifies the passed FCU arguments to
-// contain the right payload attributes with the tracked proposer. It gets
-// called on blocks that arrive after the attestation voting window, or in a
-// background routine after syncing early blocks.
-func (s *Service) computePayloadAttributes(cfg *postBlockProcessConfig, fcuArgs *fcuConfig) error {
-	if cfg.roblock.Root() == cfg.headRoot {
-		if err := s.updateCachesPostBlockProcessing(cfg); err != nil {
-			return err
-		}
-	}
-	fcuArgs.attributes = s.getPayloadAttribute(cfg.ctx, fcuArgs.headState, fcuArgs.proposingSlot, cfg.headRoot[:])
-	return nil
 }
 
 // getBlockPreState returns the pre state of an incoming block. It uses the parent root of the block
@@ -432,7 +210,7 @@ func (s *Service) getBlockPreState(ctx context.Context, b interfaces.ReadOnlyBea
 	}
 
 	// Verify block slot time is not from the future.
-	if err := slots.VerifyTime(uint64(s.genesisTime.Unix()), b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
+	if err := slots.VerifyTime(s.genesisTime, b.Slot(), params.BeaconConfig().MaximumGossipClockDisparityDuration()); err != nil {
 		return nil, err
 	}
 
@@ -527,7 +305,7 @@ func (s *Service) updateFinalized(ctx context.Context, cp *ethpb.Checkpoint) err
 		// is meant to be asynchronous and run in the background rather than being
 		// tied to the execution of a block.
 		if err := s.cfg.StateGen.MigrateToCold(s.ctx, fRoot); err != nil {
-			log.WithError(err).Error("could not migrate to cold")
+			log.WithError(err).Error("Could not migrate to cold")
 		}
 	}()
 	return nil
@@ -561,6 +339,9 @@ func (s *Service) ancestorByDB(ctx context.Context, r [32]byte, slot primitives.
 // This is useful for block tree visualizer and additional vote accounting.
 func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
 	fCheckpoint, jCheckpoint *ethpb.Checkpoint) error {
+	if fCheckpoint.Epoch > jCheckpoint.Epoch {
+		return ErrInvalidCheckpointArgs
+	}
 	pendingNodes := make([]*forkchoicetypes.BlockAndCheckpoints, 0)
 
 	// Fork choice only matters from last finalized slot.
@@ -569,15 +350,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 	if err != nil {
 		return err
 	}
-	// The first block can have a bogus root since the block is not inserted in forkchoice
-	roblock, err := consensus_blocks.NewROBlockWithRoot(signed, [32]byte{})
-	if err != nil {
-		return err
-	}
-	pendingNodes = append(pendingNodes, &forkchoicetypes.BlockAndCheckpoints{Block: roblock,
-		JustifiedCheckpoint: jCheckpoint, FinalizedCheckpoint: fCheckpoint})
+	root := signed.Block().ParentRoot()
 	// As long as parent node is not in fork choice store, and parent node is in DB.
-	root := roblock.Block().ParentRoot()
 	for !s.cfg.ForkChoiceStore.HasNode(root) && s.cfg.BeaconDB.HasBlock(ctx, root) {
 		b, err := s.getBlock(ctx, root)
 		if err != nil {
@@ -596,12 +370,13 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 			FinalizedCheckpoint: fCheckpoint}
 		pendingNodes = append(pendingNodes, args)
 	}
-	if len(pendingNodes) == 1 {
+	if len(pendingNodes) == 0 {
 		return nil
 	}
 	if root != s.ensureRootNotZeros(finalized.Root) && !s.cfg.ForkChoiceStore.HasNode(root) {
 		return ErrNotDescendantOfFinalized
 	}
+	slices.Reverse(pendingNodes)
 	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
 }
 
@@ -616,7 +391,7 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	// Update deposit cache.
 	finalizedState, err := s.cfg.StateGen.StateByRoot(ctx, fRoot)
 	if err != nil {
-		log.WithError(err).Error("could not fetch finalized state")
+		log.WithError(err).Error("Could not fetch finalized state")
 		return
 	}
 
@@ -634,7 +409,7 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	// because the Eth1 follow distance makes such long-range reorgs extremely unlikely.
 	eth1DepositIndex, err := mathutil.Int(finalizedState.Eth1DepositIndex())
 	if err != nil {
-		log.WithError(err).Error("could not cast eth1 deposit index")
+		log.WithError(err).Error("Could not cast eth1 deposit index")
 		return
 	}
 	// The deposit index in the state is always the index of the next deposit
@@ -643,12 +418,12 @@ func (s *Service) insertFinalizedDepositsAndPrune(ctx context.Context, fRoot [32
 	finalizedEth1DepIdx := eth1DepositIndex - 1
 	if err = s.cfg.DepositCache.InsertFinalizedDeposits(ctx, int64(finalizedEth1DepIdx), common.Hash(finalizedState.Eth1Data().BlockHash),
 		0 /* Setting a zero value as we have no access to block height */); err != nil {
-		log.WithError(err).Error("could not insert finalized deposits")
+		log.WithError(err).Error("Could not insert finalized deposits")
 		return
 	}
 	// Deposit proofs are only used during state transition and can be safely removed to save space.
 	if err = s.cfg.DepositCache.PruneProofs(ctx, int64(finalizedEth1DepIdx)); err != nil {
-		log.WithError(err).Error("could not prune deposit proofs")
+		log.WithError(err).Error("Could not prune deposit proofs")
 	}
 	// Prune deposits which have already been finalized, the below method prunes all pending deposits (non-inclusive) up
 	// to the provided eth1 deposit index.

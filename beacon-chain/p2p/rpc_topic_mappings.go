@@ -3,11 +3,11 @@ package p2p
 import (
 	"reflect"
 
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	pb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	pb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 )
 
@@ -108,6 +108,8 @@ const (
 	RPCDataColumnSidecarsByRangeTopicV1 = protocolPrefix + DataColumnSidecarsByRangeName + SchemaVersionV1
 
 	// V2 RPC Topics
+	// RPCStatusTopicV2 defines the v1 topic for the status rpc method.
+	RPCStatusTopicV2 = protocolPrefix + StatusMessageName + SchemaVersionV2
 	// RPCBlocksByRangeTopicV2 defines v2 the topic for the blocks by range rpc method.
 	RPCBlocksByRangeTopicV2 = protocolPrefix + BeaconBlocksByRangeMessageName + SchemaVersionV2
 	// RPCBlocksByRootTopicV2 defines the v2 topic for the blocks by root rpc method.
@@ -127,9 +129,10 @@ const (
 
 // RPCTopicMappings map the base message type to the rpc request.
 var (
-	RPCTopicMappings = map[string]interface{}{
+	RPCTopicMappings = map[string]any{
 		// RPC Status Message
 		RPCStatusTopicV1: new(pb.Status),
+		RPCStatusTopicV2: new(pb.StatusV2),
 
 		// RPC Goodbye Message
 		RPCGoodByeTopicV1: new(primitives.SSZUint64),
@@ -146,9 +149,9 @@ var (
 		RPCPingTopicV1: new(primitives.SSZUint64),
 
 		// RPC Metadata Message
-		RPCMetaDataTopicV1: new(interface{}),
-		RPCMetaDataTopicV2: new(interface{}),
-		RPCMetaDataTopicV3: new(interface{}),
+		RPCMetaDataTopicV1: new(any),
+		RPCMetaDataTopicV2: new(any),
+		RPCMetaDataTopicV3: new(any),
 
 		// BlobSidecarsByRange v1 Message
 		RPCBlobSidecarsByRangeTopicV1: new(pb.BlobSidecarsByRangeRequest),
@@ -159,14 +162,14 @@ var (
 		// Light client
 		RPCLightClientBootstrapTopicV1:        new([fieldparams.RootLength]byte),
 		RPCLightClientUpdatesByRangeTopicV1:   new(pb.LightClientUpdatesByRangeRequest),
-		RPCLightClientFinalityUpdateTopicV1:   new(interface{}),
-		RPCLightClientOptimisticUpdateTopicV1: new(interface{}),
+		RPCLightClientFinalityUpdateTopicV1:   new(any),
+		RPCLightClientOptimisticUpdateTopicV1: new(any),
 
 		// DataColumnSidecarsByRange v1 Message
 		RPCDataColumnSidecarsByRangeTopicV1: new(pb.DataColumnSidecarsByRangeRequest),
 
 		// DataColumnSidecarsByRoot v1 Message
-		RPCDataColumnSidecarsByRootTopicV1: new(p2ptypes.DataColumnsByRootIdentifiers),
+		RPCDataColumnSidecarsByRootTopicV1: p2ptypes.DataColumnsByRootIdentifiers{},
 	}
 
 	// Maps all registered protocol prefixes.
@@ -201,6 +204,7 @@ var (
 
 	// Maps all the RPC messages which are to updated in fulu.
 	fuluMapping = map[string]string{
+		StatusMessageName:   SchemaVersionV2,
 		MetadataMessageName: SchemaVersionV3,
 	}
 
@@ -226,7 +230,7 @@ var (
 
 // VerifyTopicMapping verifies that the topic and its accompanying
 // message type is correct.
-func VerifyTopicMapping(topic string, msg interface{}) error {
+func VerifyTopicMapping(topic string, msg any) error {
 	msgType, ok := RPCTopicMappings[topic]
 	if !ok {
 		return errors.New("rpc topic is not registered currently")
@@ -341,17 +345,17 @@ func TopicFromMessage(msg string, epoch primitives.Epoch) (string, error) {
 		return "", errors.Errorf("%s: %s", invalidRPCMessageType, msg)
 	}
 
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
 	// Check if the message is to be updated in fulu.
-	if epoch >= beaconConfig.FuluForkEpoch {
+	if epoch >= cfg.FuluForkEpoch {
 		if version, ok := fuluMapping[msg]; ok {
 			return protocolPrefix + msg + version, nil
 		}
 	}
 
 	// Check if the message is to be updated in altair.
-	if epoch >= beaconConfig.AltairForkEpoch {
+	if epoch >= cfg.AltairForkEpoch {
 		if version, ok := altairMapping[msg]; ok {
 			return protocolPrefix + msg + version, nil
 		}

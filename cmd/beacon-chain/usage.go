@@ -5,14 +5,15 @@ import (
 	"io"
 	"sort"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
-	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/genesis"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/runtime/debug"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage"
+	backfill "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill/flags"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/runtime/debug"
 	"github.com/urfave/cli/v2"
 )
 
@@ -72,6 +73,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.NetworkID,
 			flags.RPCHost,
 			flags.RPCPort,
+			flags.BatchVerifierLimit,
 		},
 	},
 	{
@@ -83,11 +85,11 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.NoDiscovery,
 			cmd.P2PAllowList,
 			cmd.P2PDenyList,
+			cmd.P2PColocationWhitelist,
 			cmd.P2PHost,
 			cmd.P2PHostDNS,
 			cmd.P2PIP,
 			cmd.P2PMaxPeers,
-			cmd.P2PMetadata,
 			cmd.P2PPrivKey,
 			cmd.P2PQUICPort,
 			cmd.P2PStaticID,
@@ -98,19 +100,22 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.StaticPeers,
 			flags.BlobBatchLimit,
 			flags.BlobBatchLimitBurstFactor,
+			flags.DataColumnBatchLimit,
+			flags.DataColumnBatchLimitBurstFactor,
 			flags.BlockBatchLimit,
 			flags.BlockBatchLimitBurstFactor,
 			flags.MaxConcurrentDials,
 			flags.MinPeersPerSubnet,
 			flags.MinSyncPeers,
 			flags.SubscribeToAllSubnets,
+			flags.Supernode,
+			flags.SemiSupernode,
 		},
 	},
 	{ // Flags relevant to storing data on disk and configuring the beacon chain database.
 		Name: "db",
 		Flags: []cli.Flag{
 			backfill.BackfillBatchSize,
-			backfill.BackfillOldestSlot,
 			backfill.BackfillWorkerCount,
 			backfill.EnableExperimentalBackfill,
 			cmd.ClearDB,
@@ -118,12 +123,14 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.ForceClearDB,
 			cmd.RestoreSourceFileFlag,
 			cmd.RestoreTargetDirFlag,
+			das.BackfillOldestSlot,
+			das.BlobRetentionEpochFlag,
 			flags.BeaconDBPruning,
 			flags.PrunerRetentionEpochs,
 			flags.SlotsPerArchivedPoint,
-			storage.BlobRetentionEpochFlag,
 			storage.BlobStorageLayout,
 			storage.BlobStoragePathFlag,
+			storage.DataColumnStoragePathFlag,
 		},
 	},
 	{ // Flags relevant to configuring local block production or external builders such as mev-boost.
@@ -162,6 +169,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
 			flags.InteropMockEth1DataVotesFlag,
+			flags.DisableGetBlobsV2,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.
@@ -192,6 +200,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.LogFormat,
 			cmd.LogFileName,
 			cmd.VerbosityFlag,
+			flags.DisableEphemeralLogFile,
 		},
 	},
 	{ // Feature flags.
@@ -230,12 +239,12 @@ func init() {
 	cli.AppHelpTemplate = appHelpTemplate
 
 	type helpData struct {
-		App        interface{}
+		App        any
 		FlagGroups []flagGroup
 	}
 
 	originalHelpPrinter := cli.HelpPrinter
-	cli.HelpPrinter = func(w io.Writer, tmpl string, data interface{}) {
+	cli.HelpPrinter = func(w io.Writer, tmpl string, data any) {
 		if tmpl == appHelpTemplate {
 			for _, group := range appHelpFlagGroups {
 				sort.Sort(cli.FlagsByName(group.Flags))

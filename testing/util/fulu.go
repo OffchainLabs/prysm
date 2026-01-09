@@ -4,19 +4,18 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/forks"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -52,6 +51,12 @@ func WithFuluPayload(p *enginev1.ExecutionPayloadDeneb) FuluBlockGeneratorOption
 func WithParentRoot(root [fieldparams.RootLength]byte) FuluBlockGeneratorOption {
 	return func(g *fuluBlockGenerator) {
 		g.parent = root
+	}
+}
+
+func WithSlot(slot primitives.Slot) FuluBlockGeneratorOption {
+	return func(g *fuluBlockGenerator) {
+		g.slot = slot
 	}
 }
 
@@ -124,26 +129,9 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 
 	block.Block.Body.BlobKzgCommitments = commitments
 
-	body, err := blocks.NewBeaconBlockBody(block.Block.Body)
-	require.NoError(t, err)
-
-	inclusion := make([][][]byte, blobCount)
-	for i := range blobCount {
-		proof, err := blocks.MerkleProofKZGCommitment(body, i)
-		require.NoError(t, err)
-
-		inclusion[i] = proof
-	}
-
 	if generator.sign {
 		epoch := slots.ToEpoch(block.Block.Slot)
-		schedule := forks.NewOrderedSchedule(params.BeaconConfig())
-
-		version, err := schedule.VersionForEpoch(epoch)
-		require.NoError(t, err)
-
-		fork, err := schedule.ForkFromVersion(version)
-		require.NoError(t, err)
+		fork := params.ForkFromConfig(params.BeaconConfig(), epoch)
 
 		domain := params.BeaconConfig().DomainBeaconProposer
 		sig, err := signing.ComputeDomainAndSignWithoutState(fork, epoch, domain, generator.valRoot, block.Block, generator.sk)
@@ -158,17 +146,15 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	signedBeaconBlock, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
 
-	cellsAndProofs := GenerateCellsAndProofs(t, blobs)
+	cellsPerBlob, proofsPerBlob := GenerateCellsAndProofs(t, blobs)
 
-	sidecars, err := peerdas.DataColumnSidecars(signedBeaconBlock, cellsAndProofs)
+	rob, err := blocks.NewROBlockWithRoot(signedBeaconBlock, root)
+	require.NoError(t, err)
+	roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(rob))
 	require.NoError(t, err)
 
-	roSidecars := make([]blocks.RODataColumn, 0, len(sidecars))
-	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
-	for _, sidecar := range sidecars {
-		roSidecar, err := blocks.NewRODataColumnWithRoot(sidecar, root)
-		require.NoError(t, err)
-
+	verifiedRoSidecars := make([]blocks.VerifiedRODataColumn, 0, len(roSidecars))
+	for _, roSidecar := range roSidecars {
 		roVerifiedSidecar := blocks.NewVerifiedRODataColumn(roSidecar)
 
 		roSidecars = append(roSidecars, roSidecar)
@@ -181,12 +167,14 @@ func GenerateTestFuluBlockWithSidecars(t *testing.T, blobCount int, options ...F
 	return roBlock, roSidecars, verifiedRoSidecars
 }
 
-func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) []kzg.CellsAndProofs {
-	cellsAndProofs := make([]kzg.CellsAndProofs, len(blobs))
+func GenerateCellsAndProofs(t testing.TB, blobs []kzg.Blob) ([][]kzg.Cell, [][]kzg.Proof) {
+	cellsPerBlob := make([][]kzg.Cell, len(blobs))
+	proofsPerBlob := make([][]kzg.Proof, len(blobs))
 	for i := range blobs {
-		cp, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])
+		cells, proofs, err := kzg.ComputeCellsAndKZGProofs(&blobs[i])
 		require.NoError(t, err)
-		cellsAndProofs[i] = cp
+		cellsPerBlob[i] = cells
+		proofsPerBlob[i] = proofs
 	}
-	return cellsAndProofs
+	return cellsPerBlob, proofsPerBlob
 }

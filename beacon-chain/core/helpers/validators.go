@@ -5,23 +5,22 @@ import (
 	"context"
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -152,7 +151,7 @@ func ActiveValidatorIndices(ctx context.Context, s state.ReadOnlyBeaconState, ep
 	}
 
 	if err := UpdateCommitteeCache(ctx, s, epoch); err != nil {
-		return nil, errors.Wrap(err, "could not update committee cache")
+		log.WithError(err).Error("Could not update committee cache")
 	}
 
 	return indices, nil
@@ -309,23 +308,29 @@ func beaconProposerIndexAtSlotFulu(state state.ReadOnlyBeaconState, slot primiti
 	if err != nil {
 		return 0, errors.Wrap(err, "could not get proposer lookahead")
 	}
+	spe := params.BeaconConfig().SlotsPerEpoch
 	if e == stateEpoch {
-		return lookAhead[slot%params.BeaconConfig().SlotsPerEpoch], nil
+		return lookAhead[slot%spe], nil
 	}
 	// The caller is requesting the proposer for the next epoch
-	return lookAhead[slot%params.BeaconConfig().SlotsPerEpoch+params.BeaconConfig().SlotsPerEpoch], nil
+	return lookAhead[spe+slot%spe], nil
 }
 
 // BeaconProposerIndexAtSlot returns proposer index at the given slot from the
 // point of view of the given state as head state
 func BeaconProposerIndexAtSlot(ctx context.Context, state state.ReadOnlyBeaconState, slot primitives.Slot) (primitives.ValidatorIndex, error) {
-	if state.Version() >= version.Fulu {
-		return beaconProposerIndexAtSlotFulu(state, slot)
-	}
 	e := slots.ToEpoch(slot)
+	stateEpoch := slots.ToEpoch(state.Slot())
+	// Even if the state is post Fulu, we may request a past proposer index.
+	if state.Version() >= version.Fulu && e >= params.BeaconConfig().FuluForkEpoch {
+		// We can use the cached lookahead only for the current and the next epoch.
+		if e == stateEpoch || e == stateEpoch+1 {
+			return beaconProposerIndexAtSlotFulu(state, slot)
+		}
+	}
 	// The cache uses the state root of the previous epoch - minimum_seed_lookahead last slot as key. (e.g. Starting epoch 1, slot 32, the key would be block root at slot 31)
-	// For simplicity, the node will skip caching of genesis epoch.
-	if e > params.BeaconConfig().GenesisEpoch+params.BeaconConfig().MinSeedLookahead {
+	// For simplicity, the node will skip caching of genesis epoch. If the passed state has not yet reached this slot then we do not check the cache.
+	if e <= stateEpoch && e > params.BeaconConfig().GenesisEpoch+params.BeaconConfig().MinSeedLookahead {
 		s, err := slots.EpochEnd(e - 1)
 		if err != nil {
 			return 0, err
@@ -395,7 +400,7 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 		return 0, errors.New("empty active indices list")
 	}
 	hashFunc := hash.CustomSHA256Hasher()
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 	seedBuffer := make([]byte, len(seed)+8)
 	copy(seedBuffer, seed[:])
 
@@ -420,14 +425,14 @@ func ComputeProposerIndex(bState state.ReadOnlyBeaconState, activeIndices []prim
 			offset := (i % 16) * 2
 			randomValue := uint64(randomBytes[offset]) | uint64(randomBytes[offset+1])<<8
 
-			if effectiveBal*fieldparams.MaxRandomValueElectra >= beaconConfig.MaxEffectiveBalanceElectra*randomValue {
+			if effectiveBal*fieldparams.MaxRandomValueElectra >= cfg.MaxEffectiveBalanceElectra*randomValue {
 				return candidateIndex, nil
 			}
 		} else {
 			binary.LittleEndian.PutUint64(seedBuffer[len(seed):], i/32)
 			randomByte := hashFunc(seedBuffer)[i%32]
 
-			if effectiveBal*fieldparams.MaxRandomByte >= beaconConfig.MaxEffectiveBalance*uint64(randomByte) {
+			if effectiveBal*fieldparams.MaxRandomByte >= cfg.MaxEffectiveBalance*uint64(randomByte) {
 				return candidateIndex, nil
 			}
 		}

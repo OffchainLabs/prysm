@@ -6,9 +6,11 @@ import (
 	"context"
 	"os"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -51,15 +53,17 @@ func WithValidatorRESTApi() E2EConfigOpt {
 	}
 }
 
-func WithSSZOnly() E2EConfigOpt {
-	return func(cfg *E2EConfig) {
-		cfg.UseSSZOnly = true
-	}
-}
-
 func WithBuilder() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		cfg.UseBuilder = true
+	}
+}
+
+func WithSSZOnly() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		if err := os.Setenv(params.EnvNameOverrideAccept, api.OctetStreamMediaType); err != nil {
+			logrus.Fatal(err)
+		}
 	}
 }
 
@@ -76,7 +80,6 @@ type E2EConfig struct {
 	UseFixedPeerIDs         bool
 	UseValidatorCrossClient bool
 	UseBeaconRestApi        bool
-	UseSSZOnly              bool
 	UseBuilder              bool
 	EpochsToRun             uint64
 	Seed                    int64
@@ -91,6 +94,13 @@ type E2EConfig struct {
 
 func GenesisFork() int {
 	cfg := params.BeaconConfig()
+	// Check from highest fork to lowest to find the genesis fork.
+	if cfg.ElectraForkEpoch == 0 {
+		return version.Electra
+	}
+	if cfg.DenebForkEpoch == 0 {
+		return version.Deneb
+	}
 	if cfg.CapellaForkEpoch == 0 {
 		return version.Capella
 	}
@@ -181,7 +191,7 @@ type MultipleComponentRunners interface {
 type EngineProxy interface {
 	ComponentRunner
 	// AddRequestInterceptor adds in a json-rpc request interceptor.
-	AddRequestInterceptor(rpcMethodName string, responseGen func() interface{}, trigger func() bool)
+	AddRequestInterceptor(rpcMethodName string, responseGen func() any, trigger func() bool)
 	// RemoveRequestInterceptor removes the request interceptor for the provided method.
 	RemoveRequestInterceptor(rpcMethodName string)
 	// ReleaseBackedUpRequests releases backed up http requests.

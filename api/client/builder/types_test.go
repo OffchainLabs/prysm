@@ -11,18 +11,18 @@ import (
 	"os"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	consensusblocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/math"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	consensusblocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/math"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func ezDecode(t *testing.T, s string) []byte {
@@ -1699,7 +1699,7 @@ func TestExecutionPayloadHeaderCapellaRoundtrip(t *testing.T) {
 	require.DeepEqual(t, string(expected[0:len(expected)-1]), string(m))
 }
 
-func TestErrorMessage_non200Err(t *testing.T) {
+func TestErrorMessage_unexpectedStatusErr(t *testing.T) {
 	mockRequest := &http.Request{
 		URL: &url.URL{Path: "example.com"},
 	}
@@ -1779,7 +1779,7 @@ func TestErrorMessage_non200Err(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := non200Err(tt.args)
+			err := unexpectedStatusErr(tt.args, http.StatusOK)
 			if err != nil && tt.wantMessage != "" {
 				require.ErrorContains(t, tt.wantMessage, err)
 			}

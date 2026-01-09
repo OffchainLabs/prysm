@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	p2pTypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	p2ppb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	p2pTypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	p2ppb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -24,7 +24,7 @@ import (
 type forkData struct {
 	blocksFrom peer.ID
 	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROBlobs
+	bwb        []blocks.BlockWithROSidecars
 }
 
 // nonSkippedSlotAfter checks slots after the given one in an attempt to find a non-empty future slot.
@@ -275,16 +275,18 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 			"slot": block.Block().Slot(),
 			"root": fmt.Sprintf("%#x", parentRoot),
 		}).Debug("Block with unknown parent root has been found")
-		altBlocks, err := sortedBlockWithVerifiedBlobSlice(blocks[i-1:])
+		bwb, err := sortedBlockWithVerifiedBlobSlice(blocks[i-1:])
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid blocks received in findForkWithPeer")
 		}
+
 		// We need to fetch the blobs for the given alt-chain if any exist, so that we can try to verify and import
 		// the blocks.
-		bpid, bwb, err := f.fetchBlobsFromPeer(ctx, altBlocks, pid, []peer.ID{pid})
+		bpid, err := f.fetchSidecars(ctx, pid, []peer.ID{pid}, bwb)
 		if err != nil {
-			return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findForkWithPeer")
+			return nil, errors.Wrap(err, "fetch sidecars")
 		}
+
 		// The caller will use the BlocksWith VerifiedBlobs in bwb as the starting point for
 		// round-robin syncing the alternate chain.
 		return &forkData{blocksFrom: pid, blobsFrom: bpid, bwb: bwb}, nil
@@ -295,7 +297,7 @@ func (f *blocksFetcher) findForkWithPeer(ctx context.Context, pid peer.ID, slot 
 // findAncestor tries to figure out common ancestor slot that connects a given root to known block.
 func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfaces.ReadOnlySignedBeaconBlock) (*forkData, error) {
 	outBlocks := []interfaces.ReadOnlySignedBeaconBlock{b}
-	for i := uint64(0); i < backtrackingMaxHops; i++ {
+	for range uint64(backtrackingMaxHops) {
 		parentRoot := outBlocks[len(outBlocks)-1].Block().ParentRoot()
 		if f.chain.HasBlock(ctx, parentRoot) {
 			// Common ancestor found, forward blocks back to processor.
@@ -303,10 +305,9 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 			if err != nil {
 				return nil, errors.Wrap(err, "received invalid blocks in findAncestor")
 			}
-			var bpid peer.ID
-			bpid, bwb, err = f.fetchBlobsFromPeer(ctx, bwb, pid, []peer.ID{pid})
+			bpid, err := f.fetchSidecars(ctx, pid, []peer.ID{pid}, bwb)
 			if err != nil {
-				return nil, errors.Wrap(err, "unable to retrieve blobs for blocks found in findAncestor")
+				return nil, errors.Wrap(err, "fetch sidecars")
 			}
 			return &forkData{
 				blocksFrom: pid,
@@ -330,9 +331,7 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b interfa
 
 // bestFinalizedSlot returns the highest finalized slot of the majority of connected peers.
 func (f *blocksFetcher) bestFinalizedSlot() primitives.Slot {
-	cp := f.chain.FinalizedCheckpt()
-	finalizedEpoch, _ := f.p2p.Peers().BestFinalized(
-		params.BeaconConfig().MaxPeersToSync, cp.Epoch)
+	finalizedEpoch, _ := f.p2p.Peers().BestFinalized(f.chain.FinalizedCheckpt().Epoch)
 	return params.BeaconConfig().SlotsPerEpoch.Mul(uint64(finalizedEpoch))
 }
 
@@ -349,10 +348,16 @@ func (f *blocksFetcher) calculateHeadAndTargetEpochs() (headEpoch, targetEpoch p
 	if f.mode == modeStopOnFinalizedEpoch {
 		cp := f.chain.FinalizedCheckpt()
 		headEpoch = cp.Epoch
-		targetEpoch, peers = f.p2p.Peers().BestFinalized(params.BeaconConfig().MaxPeersToSync, headEpoch)
-	} else {
-		headEpoch = slots.ToEpoch(f.chain.HeadSlot())
-		targetEpoch, peers = f.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)
+		targetEpoch, peers = f.p2p.Peers().BestFinalized(headEpoch)
+		if len(peers) > params.BeaconConfig().MaxPeersToSync {
+			peers = peers[:params.BeaconConfig().MaxPeersToSync]
+		}
+
+		return headEpoch, targetEpoch, peers
 	}
+
+	headEpoch = slots.ToEpoch(f.chain.HeadSlot())
+	targetEpoch, peers = f.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)
+
 	return headEpoch, targetEpoch, peers
 }

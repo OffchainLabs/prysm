@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_types "github.com/OffchainLabs/prysm/v6/consensus-types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -86,9 +86,12 @@ func IsExecutionBlock(body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
 // def is_execution_enabled(state: BeaconState, body: ReadOnlyBeaconBlockBody) -> bool:
 //
 //	return is_merge_block(state, body) or is_merge_complete(state)
-func IsExecutionEnabled(st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
+func IsExecutionEnabled(st state.ReadOnlyBeaconState, body interfaces.ReadOnlyBeaconBlockBody) (bool, error) {
 	if st == nil || body == nil {
 		return false, errors.New("nil state or block body")
+	}
+	if st.Version() >= version.Capella {
+		return true, nil
 	}
 	if IsPreBellatrixVersion(st.Version()) {
 		return false, nil
@@ -162,7 +165,7 @@ func ValidatePayload(st state.BeaconState, payload interfaces.ExecutionData) err
 	if !bytes.Equal(payload.PrevRandao(), random) {
 		return ErrInvalidPayloadPrevRandao
 	}
-	t, err := slots.ToTime(st.GenesisTime(), st.Slot())
+	t, err := slots.StartTime(st.GenesisTime(), st.Slot())
 	if err != nil {
 		return err
 	}

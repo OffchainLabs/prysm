@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/cmd/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/interop"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/cmd/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/interop"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -188,7 +188,7 @@ func cliActionGenerateGenesisState(cliCtx *cli.Context) error {
 		type MinimumSSZMarshal interface {
 			MarshalSSZ() ([]byte, error)
 		}
-		marshalFn := func(o interface{}) ([]byte, error) {
+		marshalFn := func(o any) ([]byte, error) {
 			marshaler, ok := o.(MinimumSSZMarshal)
 			if !ok {
 				return nil, errors.New("not a marshaler")
@@ -233,7 +233,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("reading deposits from JSON at %s", expanded)
+		log.Printf("Reading deposits from JSON at %s", expanded)
 		b, err := os.ReadFile(expanded) // #nosec G304
 		if err != nil {
 			return nil, err
@@ -260,9 +260,11 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		}
 		// set timestamps for genesis and shanghai fork
 		gen.Timestamp = f.GenesisTime
-		gen.Config.ShanghaiTime = interop.GethShanghaiTime(f.GenesisTime, params.BeaconConfig())
-		gen.Config.CancunTime = interop.GethCancunTime(f.GenesisTime, params.BeaconConfig())
-		gen.Config.PragueTime = interop.GethPragueTime(f.GenesisTime, params.BeaconConfig())
+		genesis := time.Unix(int64(f.GenesisTime), 0)
+		gen.Config.ShanghaiTime = interop.GethShanghaiTime(genesis, params.BeaconConfig())
+		gen.Config.CancunTime = interop.GethCancunTime(genesis, params.BeaconConfig())
+		gen.Config.PragueTime = interop.GethPragueTime(genesis, params.BeaconConfig())
+		gen.Config.OsakaTime = interop.GethOsakaTime(genesis, params.BeaconConfig())
 
 		fields := logrus.Fields{}
 		if gen.Config.ShanghaiTime != nil {
@@ -274,13 +276,24 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if gen.Config.PragueTime != nil {
 			fields["prague"] = fmt.Sprintf("%d", *gen.Config.PragueTime)
 		}
+		if gen.Config.OsakaTime != nil {
+			fields["osaka"] = fmt.Sprintf("%d", *gen.Config.OsakaTime)
+		}
 		log.WithFields(fields).Info("Setting fork geth times")
 		if v > version.Altair {
 			// set ttd to zero so EL goes post-merge immediately
 			gen.Config.TerminalTotalDifficulty = big.NewInt(0)
+			if gen.BaseFee == nil {
+				return nil, errors.New("baseFeePerGas must be set in genesis.json for Post-Merge networks (after Altair)")
+			}
+		} else {
+			if gen.BaseFee == nil {
+				gen.BaseFee = big.NewInt(1000000000) // 1 Gwei default
+				log.WithField("baseFeePerGas", "1000000000").Warn("BaseFeePerGas not specified in genesis.json, using default value of 1 Gwei")
+			}
 		}
 	} else {
-		gen = interop.GethTestnetGenesis(f.GenesisTime, params.BeaconConfig())
+		gen = interop.GethTestnetGenesis(time.Unix(int64(f.GenesisTime), 0), params.BeaconConfig())
 	}
 
 	if f.GethGenesisJsonOut != "" {
@@ -296,7 +309,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 	gb := gen.ToBlock()
 
 	// TODO: expose the PregenesisCreds option with a cli flag - for now defaulting to no withdrawal credentials at genesis
-	genesisState, err := interop.NewPreminedGenesis(ctx, f.GenesisTime, nv, 0, v, gb, opts...)
+	genesisState, err := interop.NewPreminedGenesis(ctx, time.Unix(int64(f.GenesisTime), 0), nv, 0, v, gb, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -384,8 +397,8 @@ func depositJSONToDepositData(input *depositDataJSON) ([]byte, *ethpb.Deposit_Da
 
 func writeToOutputFile(
 	fPath string,
-	data interface{},
-	marshalFn func(o interface{}) ([]byte, error),
+	data any,
+	marshalFn func(o any) ([]byte, error),
 ) error {
 	encoded, err := marshalFn(data)
 	if err != nil {

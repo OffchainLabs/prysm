@@ -3,11 +3,11 @@ package blockchain
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -34,7 +34,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" prefix=blockchain slot=0",
+			want: "\"Finished applying state transition\" package=beacon-chain/blockchain slot=0",
 		},
 		{name: "has attestation",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -42,7 +42,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" attestations=1 prefix=blockchain slot=0",
+			want: "\"Finished applying state transition\" attestations=1 package=beacon-chain/blockchain slot=0",
 		},
 		{name: "has deposit",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -53,7 +53,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" attestations=1 prefix=blockchain slot=0",
+			want: "\"Finished applying state transition\" attestations=1 package=beacon-chain/blockchain slot=0",
 		},
 		{name: "has attester slashing",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -62,7 +62,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" attesterSlashings=1 prefix=blockchain slot=0",
+			want: "\"Finished applying state transition\" attesterSlashings=1 package=beacon-chain/blockchain slot=0",
 		},
 		{name: "has proposer slashing",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -71,7 +71,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" prefix=blockchain proposerSlashings=1 slot=0",
+			want: "\"Finished applying state transition\" package=beacon-chain/blockchain proposerSlashings=1 slot=0",
 		},
 		{name: "has exit",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -80,7 +80,7 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" prefix=blockchain slot=0 voluntaryExits=1",
+			want: "\"Finished applying state transition\" package=beacon-chain/blockchain slot=0 voluntaryExits=1",
 		},
 		{name: "has everything",
 			b: func() interfaces.ReadOnlyBeaconBlock {
@@ -93,11 +93,11 @@ func Test_logStateTransitionData(t *testing.T) {
 				require.NoError(t, err)
 				return wb
 			},
-			want: "\"Finished applying state transition\" attestations=1 attesterSlashings=1 prefix=blockchain proposerSlashings=1 slot=0 voluntaryExits=1",
+			want: "\"Finished applying state transition\" attestations=1 attesterSlashings=1 package=beacon-chain/blockchain proposerSlashings=1 slot=0 voluntaryExits=1",
 		},
 		{name: "has payload",
 			b:    func() interfaces.ReadOnlyBeaconBlock { return wrappedPayloadBlk },
-			want: "\"Finished applying state transition\" payloadHash=0x010203 prefix=blockchain slot=0 syncBitsCount=0 txCount=2",
+			want: "\"Finished applying state transition\" package=beacon-chain/blockchain payloadHash=0x010203 slot=0 syncBitsCount=0 txCount=2",
 		},
 	}
 	for _, tt := range tests {

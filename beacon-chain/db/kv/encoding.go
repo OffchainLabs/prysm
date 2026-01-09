@@ -5,8 +5,8 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/golang/snappy"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"google.golang.org/protobuf/proto"
@@ -58,7 +58,7 @@ func encode(ctx context.Context, msg proto.Message) ([]byte, error) {
 }
 
 // isSSZStorageFormat returns true if the object type should be saved in SSZ encoded format.
-func isSSZStorageFormat(obj interface{}) bool {
+func isSSZStorageFormat(obj any) bool {
 	switch obj.(type) {
 	case *ethpb.BeaconState:
 		return true

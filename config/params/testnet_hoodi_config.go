@@ -1,9 +1,5 @@
 package params
 
-import (
-	"math"
-)
-
 // UseHoodiNetworkConfig uses the Hoodi beacon chain specific network config.
 func UseHoodiNetworkConfig() {
 	cfg := BeaconNetworkConfig().Copy()
@@ -49,11 +45,20 @@ func HoodiConfig() *BeaconChainConfig {
 	cfg.DenebForkVersion = []byte{0x50, 0x00, 0x09, 0x10}
 	cfg.ElectraForkEpoch = 2048
 	cfg.ElectraForkVersion = []byte{0x60, 0x00, 0x09, 0x10}
-	cfg.FuluForkEpoch = math.MaxUint64
+	cfg.FuluForkEpoch = 50688 // 2025-10-28 18:53:12 UTC
 	cfg.FuluForkVersion = []byte{0x70, 0x00, 0x09, 0x10}
 	cfg.TerminalTotalDifficulty = "0"
 	cfg.DepositContractAddress = "0x00000000219ab540356cBB839Cbe05303d7705Fa"
-	cfg.BlobSchedule = []BlobScheduleEntry{}
+	cfg.BlobSchedule = []BlobScheduleEntry{
+		{
+			MaxBlobsPerBlock: 15,
+			Epoch:            52480, // 2025-11-05 18:02:00 UTC
+		},
+		{
+			MaxBlobsPerBlock: 21,
+			Epoch:            54016, // 2025-11-12 13:52:24 UTC
+		},
+	}
 	cfg.DefaultBuilderGasLimit = uint64(60000000)
 	cfg.InitializeForkSchedule()
 	return cfg

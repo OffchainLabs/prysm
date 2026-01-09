@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	consensus_blocks "github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_blocks "github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
 
@@ -44,7 +44,7 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 	if bestDescendant == nil {
 		bestDescendant = justifiedNode
 	}
-	currentEpoch := slots.EpochsSinceGenesis(time.Unix(int64(s.genesisTime), 0))
+	currentEpoch := slots.EpochsSinceGenesis(s.genesisTime)
 	if !bestDescendant.viableForHead(s.justifiedCheckpoint.Epoch, currentEpoch) {
 		s.allTipsAreInvalid = true
 		return [32]byte{}, fmt.Errorf("head at slot %d with weight %d is not eligible, finalizedEpoch, justified Epoch %d, %d != %d, %d",
@@ -99,7 +99,7 @@ func (s *Store) insert(ctx context.Context,
 		unrealizedFinalizedEpoch: finalizedEpoch,
 		optimistic:               true,
 		payloadHash:              payloadHash,
-		timestamp:                uint64(time.Now().Unix()),
+		timestamp:                time.Now(),
 	}
 
 	// Set the node's target checkpoint
@@ -128,15 +128,18 @@ func (s *Store) insert(ctx context.Context,
 	} else {
 		parent.children = append(parent.children, n)
 		// Apply proposer boost
-		timeNow := uint64(time.Now().Unix())
-		if timeNow < s.genesisTime {
+		now := time.Now()
+		if now.Before(s.genesisTime) {
 			return n, nil
 		}
-		secondsIntoSlot := (timeNow - s.genesisTime) % params.BeaconConfig().SecondsPerSlot
 		currentSlot := slots.CurrentSlot(s.genesisTime)
-		boostThreshold := params.BeaconConfig().SecondsPerSlot / params.BeaconConfig().IntervalsPerSlot
+		sss, err := slots.SinceSlotStart(currentSlot, s.genesisTime, now)
+		if err != nil {
+			return nil, fmt.Errorf("could not determine time since current slot started: %w", err)
+		}
+		boostThreshold := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPS)
 		isFirstBlock := s.proposerBoostRoot == [32]byte{}
-		if currentSlot == slot && secondsIntoSlot < boostThreshold && isFirstBlock {
+		if currentSlot == slot && sss < boostThreshold && isFirstBlock {
 			s.proposerBoostRoot = root
 		}
 
@@ -209,6 +212,9 @@ func (s *Store) prune(ctx context.Context) error {
 		return nil
 	}
 
+	// Save the new finalized dependent root because it will be pruned
+	s.finalizedDependentRoot = finalizedNode.parent.root
+
 	// Prune nodeByRoot starting from root
 	if err := s.pruneFinalizedNodeByRootMap(ctx, s.treeRootNode, finalizedNode); err != nil {
 		return err
@@ -268,17 +274,18 @@ func (f *ForkChoice) HighestReceivedBlockSlot() primitives.Slot {
 }
 
 // HighestReceivedBlockDelay returns the number of slots that the highest
-// received block was late when receiving it
+// received block was late when receiving it. For example, a block was late by 12 slots,
+// then this method is expected to return 12.
 func (f *ForkChoice) HighestReceivedBlockDelay() primitives.Slot {
 	n := f.store.highestReceivedNode
 	if n == nil {
 		return 0
 	}
-	secs, err := slots.SecondsSinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
+	sss, err := slots.SinceSlotStart(n.slot, f.store.genesisTime, n.timestamp)
 	if err != nil {
 		return 0
 	}
-	return primitives.Slot(secs / params.BeaconConfig().SecondsPerSlot)
+	return primitives.Slot(uint64(sss/time.Second) / params.BeaconConfig().SecondsPerSlot)
 }
 
 // ReceivedBlocksLastEpoch returns the number of blocks received in the last epoch

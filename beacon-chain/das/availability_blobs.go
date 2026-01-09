@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/runtime/logging"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
-	errors "github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -24,12 +23,13 @@ var (
 // This implementation will hold any blobs passed to Persist until the IsDataAvailable is called for their
 // block, at which time they will undergo full verification and be saved to the disk.
 type LazilyPersistentStoreBlob struct {
-	store    *filesystem.BlobStorage
-	cache    *blobCache
-	verifier BlobBatchVerifier
+	store        *filesystem.BlobStorage
+	cache        *blobCache
+	verifier     BlobBatchVerifier
+	shouldRetain RetentionChecker
 }
 
-var _ AvailabilityStore = &LazilyPersistentStoreBlob{}
+var _ AvailabilityChecker = &LazilyPersistentStoreBlob{}
 
 // BlobBatchVerifier enables LazyAvailabilityStore to manage the verification process
 // going from ROBlob->VerifiedROBlob, while avoiding the decision of which individual verifications
@@ -42,41 +42,34 @@ type BlobBatchVerifier interface {
 
 // NewLazilyPersistentStore creates a new LazilyPersistentStore. This constructor should always be used
 // when creating a LazilyPersistentStore because it needs to initialize the cache under the hood.
-func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchVerifier) *LazilyPersistentStoreBlob {
+func NewLazilyPersistentStore(store *filesystem.BlobStorage, verifier BlobBatchVerifier, shouldRetain RetentionChecker) *LazilyPersistentStoreBlob {
 	return &LazilyPersistentStoreBlob{
-		store:    store,
-		cache:    newBlobCache(),
-		verifier: verifier,
+		store:        store,
+		cache:        newBlobCache(),
+		verifier:     verifier,
+		shouldRetain: shouldRetain,
 	}
 }
 
 // Persist adds blobs to the working blob cache. Blobs stored in this cache will be persisted
 // for at least as long as the node is running. Once IsDataAvailable succeeds, all blobs referenced
 // by the given block are guaranteed to be persisted for the remainder of the retention period.
-func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ...blocks.ROSidecar) error {
+func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ...blocks.ROBlob) error {
 	if len(sidecars) == 0 {
 		return nil
 	}
 
-	blobSidecars, err := blocks.BlobSidecarsFromSidecars(sidecars)
-	if err != nil {
-		return errors.Wrap(err, "blob sidecars from sidecars")
-	}
-
-	if len(blobSidecars) > 1 {
-		firstRoot := blobSidecars[0].BlockRoot()
-		for _, sidecar := range blobSidecars[1:] {
+	if len(sidecars) > 1 {
+		firstRoot := sidecars[0].BlockRoot()
+		for _, sidecar := range sidecars[1:] {
 			if sidecar.BlockRoot() != firstRoot {
 				return errMixedRoots
 			}
 		}
 	}
-	if !params.WithinDAPeriod(slots.ToEpoch(blobSidecars[0].Slot()), slots.ToEpoch(current)) {
-		return nil
-	}
-	key := keyFromSidecar(blobSidecars[0])
+	key := keyFromSidecar(sidecars[0])
 	entry := s.cache.ensure(key)
-	for _, blobSidecar := range blobSidecars {
+	for _, blobSidecar := range sidecars {
 		if err := entry.stash(&blobSidecar); err != nil {
 			return err
 		}
@@ -86,8 +79,17 @@ func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ..
 
 // IsDataAvailable returns nil if all the commitments in the given block are persisted to the db and have been verified.
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
-func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
-	blockCommitments, err := commitmentsToCheck(b, current)
+func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
+	for _, b := range blks {
+		if err := s.checkOne(ctx, current, b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+	blockCommitments, err := commitmentsToCheck(b, s.shouldRetain)
 	if err != nil {
 		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())
 	}
@@ -105,7 +107,7 @@ func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current
 	// Verify we have all the expected sidecars, and fail fast if any are missing or inconsistent.
 	// We don't try to salvage problematic batches because this indicates a misbehaving peer and we'd rather
 	// ignore their response and decrease their peer score.
-	sidecars, err := entry.filter(root, blockCommitments, b.Block().Slot())
+	sidecars, err := entry.filter(root, blockCommitments)
 	if err != nil {
 		return errors.Wrap(err, "incomplete BlobSidecar batch")
 	}
@@ -117,12 +119,12 @@ func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current
 		ok := errors.As(err, &me)
 		if ok {
 			fails := me.Failures()
-			lf := make(log.Fields, len(fails))
+			lf := make(logrus.Fields, len(fails))
 			for i := range fails {
 				lf[fmt.Sprintf("fail_%d", i)] = fails[i].Error()
 			}
 			log.WithFields(lf).WithFields(logging.BlockFieldsFromBlob(sidecars[0])).
-				Debug("invalid BlobSidecars received")
+				Debug("Invalid BlobSidecars received")
 		}
 		return errors.Wrapf(err, "invalid BlobSidecars received for block %#x", root)
 	}
@@ -136,13 +138,12 @@ func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current
 	return nil
 }
 
-func commitmentsToCheck(b blocks.ROBlock, current primitives.Slot) ([][]byte, error) {
+func commitmentsToCheck(b blocks.ROBlock, shouldRetain RetentionChecker) ([][]byte, error) {
 	if b.Version() < version.Deneb {
 		return nil, nil
 	}
 
-	// We are only required to check within MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUEST
-	if !params.WithinDAPeriod(slots.ToEpoch(b.Block().Slot()), slots.ToEpoch(current)) {
+	if !shouldRetain(b.Block().Slot()) {
 		return nil, nil
 	}
 

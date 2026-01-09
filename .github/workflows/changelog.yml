@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-changelog-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-4
     steps:
       - name: Checkout source code
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0

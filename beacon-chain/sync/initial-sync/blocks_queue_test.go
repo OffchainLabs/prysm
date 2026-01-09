@@ -6,25 +6,25 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	p2pt "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/container/slice"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/container/slice"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
@@ -263,7 +263,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				highestExpectedSlot: tt.highestExpectedSlot,
 			})
 			assert.NoError(t, queue.start())
-			processBlock := func(b blocks.BlockWithROBlobs) error {
+			processBlock := func(b blocks.BlockWithROSidecars) error {
 				block := b.Block
 				if !beaconDB.HasBlock(ctx, block.Block().ParentRoot()) {
 					return fmt.Errorf("%w: %#x", errParentDoesNotExist, block.Block().ParentRoot())
@@ -275,7 +275,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				return mc.ReceiveBlock(ctx, block, root, nil)
 			}
 
-			var blocks []blocks.BlockWithROBlobs
+			var blocks []blocks.BlockWithROSidecars
 			for data := range queue.fetchedData {
 				for _, b := range data.bwb {
 					if err := processBlock(b); err != nil {
@@ -522,7 +522,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		})
 		assert.ErrorContains(t, beaconsync.ErrInvalidFetchedData.Error(), err)
 		assert.Equal(t, stateScheduled, updatedState)
-		assert.LogsContain(t, hook, "msg=\"Peer is penalized for invalid blocks\" pid=ZiCa")
+		assert.LogsContain(t, hook, "Downscore peer")
 	})
 
 	t.Run("transition ok", func(t *testing.T) {
@@ -538,7 +538,7 @@ func TestBlocksQueue_onDataReceivedEvent(t *testing.T) {
 		require.NoError(t, err)
 		response := &fetchRequestResponse{
 			blocksFrom: "abc",
-			bwb: []blocks.BlockWithROBlobs{
+			bwb: []blocks.BlockWithROSidecars{
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsb}},
 				{Block: blocks.ROBlock{ReadOnlySignedBeaconBlock: wsbCopy}},
 			},
@@ -640,7 +640,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[256].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[256].fetched.bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[256].fetched.bwb = []blocks.BlockWithROSidecars{
 			{Block: rwsb},
 		}
 
@@ -674,7 +674,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[320].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROSidecars{
 			{Block: rwsb},
 		}
 
@@ -705,7 +705,7 @@ func TestBlocksQueue_onReadyToSendEvent(t *testing.T) {
 		queue.smm.machines[320].fetched.blocksFrom = pidDataParsed
 		rwsb, err := blocks.NewROBlock(wsb)
 		require.NoError(t, err)
-		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROBlobs{
+		queue.smm.machines[320].fetched.bwb = []blocks.BlockWithROSidecars{
 			{Block: rwsb},
 		}
 
@@ -1049,7 +1049,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 		DB:    beaconDB,
 		FinalizedCheckPoint: &eth.Checkpoint{
 			Epoch: finalizedEpoch,
-			Root:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{},
@@ -1252,7 +1252,7 @@ func TestBlocksQueue_stuckWhenHeadIsSetToOrphanedBlock(t *testing.T) {
 		DB:    beaconDB,
 		FinalizedCheckPoint: &eth.Checkpoint{
 			Epoch: finalizedEpoch,
-			Root:  []byte(fmt.Sprintf("finalized_root %d", finalizedEpoch)),
+			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
 		Genesis:        time.Now(),
 		ValidatorsRoot: [32]byte{},

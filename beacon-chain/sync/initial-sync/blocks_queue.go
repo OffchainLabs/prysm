@@ -5,15 +5,15 @@ import (
 	"errors"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	beaconsync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	beaconsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sirupsen/logrus"
 )
@@ -72,6 +72,8 @@ type blocksQueueConfig struct {
 	db                  db.ReadOnlyDatabase
 	mode                syncMode
 	bs                  filesystem.BlobStorageSummarizer
+	dcs                 filesystem.DataColumnStorageReader
+	cv                  verification.NewDataColumnsVerifier
 }
 
 // blocksQueue is a priority queue that serves as a intermediary between block fetchers (producers)
@@ -96,7 +98,7 @@ type blocksQueue struct {
 type blocksQueueFetchedData struct {
 	blocksFrom peer.ID
 	blobsFrom  peer.ID
-	bwb        []blocks.BlockWithROBlobs
+	bwb        []blocks.BlockWithROSidecars
 }
 
 // newBlocksQueue creates initialized priority queue.
@@ -106,7 +108,7 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 	blocksFetcher := cfg.blocksFetcher
 	if blocksFetcher == nil {
 		if cfg.bs == nil {
-			log.Warn("rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
+			log.Warn("Rpc fetcher starting without blob availability cache, duplicate blobs may be requested.")
 		}
 		blocksFetcher = newBlocksFetcher(ctx, &blocksFetcherConfig{
 			ctxMap: cfg.ctxMap,
@@ -115,6 +117,8 @@ func newBlocksQueue(ctx context.Context, cfg *blocksQueueConfig) *blocksQueue {
 			db:     cfg.db,
 			clock:  cfg.clock,
 			bs:     cfg.bs,
+			dcs:    cfg.dcs,
+			cv:     cfg.cv,
 		})
 	}
 	highestExpectedSlot := cfg.highestExpectedSlot
@@ -299,7 +303,7 @@ func waitHighestExpectedSlot(q *blocksQueue) bool {
 
 // onScheduleEvent is an event called on newly arrived epochs. Transforms state to scheduled.
 func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if m.state != stateNew {
 			return m.state, errInvalidInitialState
 		}
@@ -317,7 +321,7 @@ func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
 
 // onDataReceivedEvent is an event called when data is received from fetcher.
 func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}
@@ -337,14 +341,15 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 					}
 				}
 			}
+
 			if errors.Is(response.err, beaconsync.ErrInvalidFetchedData) {
-				// Peer returned invalid data, penalize.
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blocksFrom)
-				log.WithField("pid", response.blocksFrom).Debug("Peer is penalized for invalid blocks")
-			} else if errors.Is(response.err, verification.ErrBlobInvalid) {
-				q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(response.blobsFrom)
-				log.WithField("pid", response.blobsFrom).Debug("Peer is penalized for invalid blob response")
+				q.downscorePeer(response.blocksFrom, "invalidBlocks")
 			}
+
+			if errors.Is(response.err, verification.ErrBlobInvalid) {
+				q.downscorePeer(response.blobsFrom, "invalidBlobs")
+			}
+
 			return m.state, response.err
 		}
 		m.fetched = *response
@@ -354,7 +359,7 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 
 // onReadyToSendEvent is an event called to allow epochs with available blocks to send them downstream.
 func (q *blocksQueue) onReadyToSendEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}
@@ -399,7 +404,7 @@ func (q *blocksQueue) onReadyToSendEvent(ctx context.Context) eventHandlerFn {
 // onProcessSkippedEvent is an event triggered on skipped machines, allowing handlers to
 // extend lookahead window, in case where progress is not possible otherwise.
 func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}
@@ -455,10 +460,15 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 	}
 }
 
+func (q *blocksQueue) downscorePeer(peerID peer.ID, reason string) {
+	newScore := q.blocksFetcher.p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
+	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
+}
+
 // onCheckStaleEvent is an event that allows to mark stale epochs,
 // so that they can be re-processed.
 func onCheckStaleEvent(ctx context.Context) eventHandlerFn {
-	return func(m *stateMachine, in interface{}) (stateID, error) {
+	return func(m *stateMachine, in any) (stateID, error) {
 		if ctx.Err() != nil {
 			return m.state, ctx.Err()
 		}

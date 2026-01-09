@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -212,7 +212,8 @@ func filterNoop(_ string) bool {
 	return true
 }
 
-func isRootDir(p string) bool {
+// IsBlockRootDir returns true if the path segment looks like a block root directory.
+func IsBlockRootDir(p string) bool {
 	dir := filepath.Base(p)
 	return len(dir) == rootStringLen && strings.HasPrefix(dir, "0x")
 }

@@ -1,0 +1,248 @@
+- name: BlobParameters
+  sources: []
+  spec: |
+    <spec dataclass="BlobParameters" fork="fulu" hash="a4575aa8">
+    class BlobParameters:
+        epoch: Epoch
+        max_blobs_per_block: uint64
+    </spec>
+
+- name: BlobsBundle#deneb
+  sources:
+    - file: proto/engine/v1/execution_engine.proto
+      search: ^message BlobsBundle\s*\{
+      regex: true
+  spec: |
+    <spec dataclass="BlobsBundle" fork="deneb" hash="8d6e7be6">
+    class BlobsBundle(object):
+        commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        blobs: List[Blob, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+    </spec>
+
+- name: BlobsBundle#fulu
+  sources:
+    - file: proto/engine/v1/execution_engine.proto
+      search: ^message BlobsBundleV2
+      regex: true
+  spec: |
+    <spec dataclass="BlobsBundle" fork="fulu" hash="e265362d">
+    class BlobsBundle(object):
+        commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        # [Modified in Fulu:EIP7594]
+        proofs: List[KZGProof, FIELD_ELEMENTS_PER_EXT_BLOB * MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        blobs: List[Blob, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+    </spec>
+
+- name: GetPayloadResponse#bellatrix
+  sources:
+    - file: consensus-types/blocks/get_payload.go
+      search: type GetPayloadResponse struct {
+    - file: consensus-types/blocks/get_payload.go
+      search: GetPayloadResponseV(1
+  spec: |
+    <spec dataclass="GetPayloadResponse" fork="bellatrix" hash="bc71e6e6">
+    class GetPayloadResponse(object):
+        execution_payload: ExecutionPayload
+    </spec>
+
+- name: GetPayloadResponse#capella
+  sources:
+    - file: consensus-types/blocks/get_payload.go
+      search: type GetPayloadResponse struct {
+    - file: consensus-types/blocks/get_payload.go
+      search: GetPayloadResponseV(1|2
+  spec: |
+    <spec dataclass="GetPayloadResponse" fork="capella" hash="5f10deae">
+    class GetPayloadResponse(object):
+        execution_payload: ExecutionPayload
+        block_value: uint256
+    </spec>
+
+- name: GetPayloadResponse#deneb
+  sources:
+    - file: consensus-types/blocks/get_payload.go
+      search: type GetPayloadResponse struct {
+    - file: consensus-types/blocks/get_payload.go
+      search: GetPayloadResponseV(1|2|3
+  spec: |
+    <spec dataclass="GetPayloadResponse" fork="deneb" hash="95f3156d">
+    class GetPayloadResponse(object):
+        execution_payload: ExecutionPayload
+        block_value: uint256
+        # [New in Deneb:EIP4844]
+        blobs_bundle: BlobsBundle
+    </spec>
+
+- name: GetPayloadResponse#electra
+  sources:
+    - file: consensus-types/blocks/get_payload.go
+      search: type GetPayloadResponse struct {
+    - file: consensus-types/blocks/get_payload.go
+      search: GetPayloadResponseV(1|2|3|4
+  spec: |
+    <spec dataclass="GetPayloadResponse" fork="electra" hash="7a57aa32">
+    class GetPayloadResponse(object):
+        execution_payload: ExecutionPayload
+        block_value: uint256
+        blobs_bundle: BlobsBundle
+        # [New in Electra]
+        execution_requests: Sequence[bytes]
+    </spec>
+
+- name: GetPayloadResponse#fulu
+  sources:
+    - file: consensus-types/blocks/get_payload.go
+      search: type GetPayloadResponse struct {
+    - file: consensus-types/blocks/get_payload.go
+      search: GetPayloadResponseV(1|2|3|4|5
+  spec: |
+    <spec dataclass="GetPayloadResponse" fork="fulu" hash="0fbc9ac9">
+    class GetPayloadResponse(object):
+        execution_payload: ExecutionPayload
+        block_value: uint256
+        # [Modified in Fulu:EIP7594]
+        blobs_bundle: BlobsBundle
+        execution_requests: Sequence[bytes]
+    </spec>
+
+- name: LatestMessage
+  sources: []
+  spec: |
+    <spec dataclass="LatestMessage" fork="phase0" hash="44e832d0">
+    @dataclass(eq=True, frozen=True)
+    class LatestMessage(object):
+        epoch: Epoch
+        root: Root
+    </spec>
+
+- name: LightClientStore
+  sources: []
+  spec: |
+    <spec dataclass="LightClientStore" fork="altair" hash="24725cec">
+    class LightClientStore(object):
+        # Header that is finalized
+        finalized_header: LightClientHeader
+        # Sync committees corresponding to the finalized header
+        current_sync_committee: SyncCommittee
+        next_sync_committee: SyncCommittee
+        # Best available header to switch finalized head to if we see nothing else
+        best_valid_update: Optional[LightClientUpdate]
+        # Most recent available reasonably-safe header
+        optimistic_header: LightClientHeader
+        # Max number of active participants in a sync committee (used to calculate safety threshold)
+        previous_max_active_participants: uint64
+        current_max_active_participants: uint64
+    </spec>
+
+- name: NewPayloadRequest#bellatrix
+  sources:
+    - file: beacon-chain/execution/engine_client.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData
+  spec: |
+    <spec dataclass="NewPayloadRequest" fork="bellatrix" hash="4d32e8c7">
+    class NewPayloadRequest(object):
+        execution_payload: ExecutionPayload
+    </spec>
+
+- name: NewPayloadRequest#deneb
+  sources:
+    - file: beacon-chain/execution/engine_client.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash
+  spec: |
+    <spec dataclass="NewPayloadRequest" fork="deneb" hash="26cf2e26">
+    class NewPayloadRequest(object):
+        execution_payload: ExecutionPayload
+        versioned_hashes: Sequence[VersionedHash]
+        parent_beacon_block_root: Root
+    </spec>
+
+- name: NewPayloadRequest#electra
+  sources:
+    - file: beacon-chain/execution/engine_client.go
+      search: func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionData, versionedHashes []common.Hash, parentBlockRoot *common.Hash, executionRequests *pb.ExecutionRequests
+  spec: |
+    <spec dataclass="NewPayloadRequest" fork="electra" hash="b1f69cc9">
+    class NewPayloadRequest(object):
+        execution_payload: ExecutionPayload
+        versioned_hashes: Sequence[VersionedHash]
+        parent_beacon_block_root: Root
+        # [New in Electra]
+        execution_requests: ExecutionRequests
+    </spec>
+
+- name: OptimisticStore
+  sources: []
+  spec: |
+    <spec dataclass="OptimisticStore" fork="bellatrix" hash="a2b2182c">
+    class OptimisticStore(object):
+        optimistic_roots: Set[Root]
+        head_block_root: Root
+        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
+        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
+    </spec>
+
+- name: PayloadAttributes#bellatrix
+  sources:
+    - file: proto/engine/v1/execution_engine.proto
+      search: ^message PayloadAttributes\s*\{
+      regex: true
+  spec: |
+    <spec dataclass="PayloadAttributes" fork="bellatrix" hash="8f6fc523">
+    class PayloadAttributes(object):
+        timestamp: uint64
+        prev_randao: Bytes32
+        suggested_fee_recipient: ExecutionAddress
+    </spec>
+
+- name: PayloadAttributes#capella
+  sources:
+    - file: proto/engine/v1/execution_engine.proto
+      search: ^message PayloadAttributesV2
+      regex: true
+  spec: |
+    <spec dataclass="PayloadAttributes" fork="capella" hash="f63ac439">
+    class PayloadAttributes(object):
+        timestamp: uint64
+        prev_randao: Bytes32
+        suggested_fee_recipient: ExecutionAddress
+        # [New in Capella]
+        withdrawals: Sequence[Withdrawal]
+    </spec>
+
+- name: PayloadAttributes#deneb
+  sources:
+    - file: proto/engine/v1/execution_engine.proto
+      search: ^message PayloadAttributesV3
+      regex: true
+  spec: |
+    <spec dataclass="PayloadAttributes" fork="deneb" hash="2beea525">
+    class PayloadAttributes(object):
+        timestamp: uint64
+        prev_randao: Bytes32
+        suggested_fee_recipient: ExecutionAddress
+        withdrawals: Sequence[Withdrawal]
+        # [New in Deneb:EIP4788]
+        parent_beacon_block_root: Root
+    </spec>
+
+- name: Store
+  sources: []
+  spec: |
+    <spec dataclass="Store" fork="phase0" hash="abe525d6">
+    class Store(object):
+        time: uint64
+        genesis_time: uint64
+        justified_checkpoint: Checkpoint
+        finalized_checkpoint: Checkpoint
+        unrealized_justified_checkpoint: Checkpoint
+        unrealized_finalized_checkpoint: Checkpoint
+        proposer_boost_root: Root
+        equivocating_indices: Set[ValidatorIndex]
+        blocks: Dict[Root, BeaconBlock] = field(default_factory=dict)
+        block_states: Dict[Root, BeaconState] = field(default_factory=dict)
+        block_timeliness: Dict[Root, boolean] = field(default_factory=dict)
+        checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
+        latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
+        unrealized_justifications: Dict[Root, Checkpoint] = field(default_factory=dict)
+    </spec>
