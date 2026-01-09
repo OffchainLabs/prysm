@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -49,6 +51,10 @@ func (b *BeaconState) SetBuilderPendingPayment(index primitives.Slot, payment *e
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
+
+	if uint64(index) >= uint64(len(b.builderPendingPayments)) {
+		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", index, len(b.builderPendingPayments))
+	}
 
 	b.builderPendingPayments[index] = ethpb.CopyBuilderPendingPayment(payment)
 

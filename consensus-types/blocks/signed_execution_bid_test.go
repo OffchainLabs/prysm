@@ -31,10 +31,45 @@ func validExecutionPayloadBid() *ethpb.ExecutionPayloadBid {
 
 func TestWrappedROExecutionPayloadBid(t *testing.T) {
 	t.Run("returns error on invalid lengths", func(t *testing.T) {
-		invalid := validExecutionPayloadBid()
-		invalid.ParentBlockHash = []byte{0x01}
-		_, err := blocks.WrappedROExecutionPayloadBid(invalid)
-		require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+		testCases := []struct {
+			name   string
+			mutate func(*ethpb.ExecutionPayloadBid)
+		}{
+			{
+				name:   "parent block hash",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.ParentBlockHash = []byte{0x01} },
+			},
+			{
+				name:   "parent block root",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.ParentBlockRoot = []byte{0x02} },
+			},
+			{
+				name:   "block hash",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.BlockHash = []byte{0x03} },
+			},
+			{
+				name:   "prev randao",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.PrevRandao = []byte{0x04} },
+			},
+			{
+				name:   "blob kzg commitments root",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.BlobKzgCommitmentsRoot = []byte{0x05} },
+			},
+			{
+				name:   "fee recipient",
+				mutate: func(b *ethpb.ExecutionPayloadBid) { b.FeeRecipient = []byte{0x06} },
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				invalid := validExecutionPayloadBid()
+				tc.mutate(invalid)
+
+				_, err := blocks.WrappedROExecutionPayloadBid(invalid)
+				require.Equal(t, consensus_types.ErrNilObjectWrapped, err)
+			})
+		}
 	})
 
 	t.Run("wraps and exposes fields", func(t *testing.T) {

@@ -124,4 +124,17 @@ func TestSetBuilderPendingPayment(t *testing.T) {
 		payment.Withdrawal.Amount = 12345
 		require.Equal(t, primitives.Gwei(99), st.builderPendingPayments[1].Withdrawal.Amount)
 	})
+
+	t.Run("returns error on out of range index", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: make([]*ethpb.BuilderPendingPayment, 1),
+		}
+
+		err := st.SetBuilderPendingPayment(2, &ethpb.BuilderPendingPayment{})
+
+		require.ErrorContains(t, "out of range", err)
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
+	})
 }

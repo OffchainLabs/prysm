@@ -42,7 +42,9 @@ func (h executionPayloadBidGloas) IsNil() bool {
 	if len(h.payload.ParentBlockHash) != 32 ||
 		len(h.payload.ParentBlockRoot) != 32 ||
 		len(h.payload.BlockHash) != 32 ||
-		len(h.payload.BlobKzgCommitmentsRoot) != 32 {
+		len(h.payload.PrevRandao) != 32 ||
+		len(h.payload.BlobKzgCommitmentsRoot) != 32 ||
+		len(h.payload.FeeRecipient) != 20 {
 		return true
 	}
 
