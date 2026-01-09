@@ -13,6 +13,7 @@ go_library(
         "deposit_request.go",
         "execution_payload.go",
         "execution_payload_bid.go",
+        "payload_attestation.go",
         "proposer_slashing.go",
         "slashing.go",
         "sync_aggregate.go",
