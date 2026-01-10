@@ -1,9 +1,10 @@
-package electra
+package transition
 
 import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -47,7 +48,7 @@ var (
 //      # [New in Electra:EIP7251]
 //      for_ops(body.execution_payload.consolidation_requests, process_consolidation_request)
 
-func ProcessOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
+func electraOperations(ctx context.Context, st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) (state.BeaconState, error) {
 	var err error
 
 	// 6110 validations are in VerifyOperationLengths
@@ -63,59 +64,60 @@ func ProcessOperations(ctx context.Context, st state.BeaconState, block interfac
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}
 	}
-	st, err = ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
+	st, err = blocks.ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process altair proposer slashing")
+		return nil, errors.Wrap(ErrProcessProposerSlashingsFailed, err.Error())
 	}
-	st, err = ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo)
+	st, err = blocks.ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process altair attester slashing")
+		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
-	st, err = ProcessAttestationsNoVerifySignature(ctx, st, block)
+	st, err = electra.ProcessAttestationsNoVerifySignature(ctx, st, block)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process altair attestation")
+		return nil, errors.Wrap(ErrProcessAttestationsFailed, err.Error())
 	}
-	if _, err := ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
-		return nil, errors.Wrap(err, "could not process altair deposit")
+	if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil {
+		return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
 	}
-	st, err = ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
+	st, err = blocks.ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process voluntary exits")
+		return nil, errors.Wrap(ErrProcessVoluntaryExitsFailed, err.Error())
 	}
-	st, err = ProcessBLSToExecutionChanges(st, block)
+	st, err = blocks.ProcessBLSToExecutionChanges(st, block)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process bls-to-execution changes")
+		return nil, errors.Wrap(ErrProcessBLSChangesFailed, err.Error())
 	}
 	// new in electra
 	requests, err := bb.ExecutionRequests()
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get execution requests")
+		return nil, electra.NewExecReqError(errors.Wrap(err, "could not get execution requests").Error())
 	}
 	for _, d := range requests.Deposits {
 		if d == nil {
-			return nil, errors.New("nil deposit request")
+			return nil, electra.NewExecReqError("nil deposit request")
 		}
 	}
-	st, err = ProcessDepositRequests(ctx, st, requests.Deposits)
+	st, err = electra.ProcessDepositRequests(ctx, st, requests.Deposits)
 	if err != nil {
-		return nil, execReqErr{errors.Wrap(err, "could not process deposit requests")}
+		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process deposit requests").Error())
 	}
+
 	for _, w := range requests.Withdrawals {
 		if w == nil {
-			return nil, errors.New("nil withdrawal request")
+			return nil, electra.NewExecReqError("nil withdrawal request")
 		}
 	}
-	st, err = ProcessWithdrawalRequests(ctx, st, requests.Withdrawals)
+	st, err = electra.ProcessWithdrawalRequests(ctx, st, requests.Withdrawals)
 	if err != nil {
-		return nil, execReqErr{errors.Wrap(err, "could not process withdrawal requests")}
+		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process withdrawal requests").Error())
 	}
 	for _, c := range requests.Consolidations {
 		if c == nil {
-			return nil, errors.New("nil consolidation request")
+			return nil, electra.NewExecReqError("nil consolidation request")
 		}
 	}
-	if err := ProcessConsolidationRequests(ctx, st, requests.Consolidations); err != nil {
-		return nil, execReqErr{errors.Wrap(err, "could not process consolidation requests")}
+	if err := electra.ProcessConsolidationRequests(ctx, st, requests.Consolidations); err != nil {
+		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process consolidation requests").Error())
 	}
 	return st, nil
 }

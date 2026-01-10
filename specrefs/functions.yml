@@ -6272,8 +6272,8 @@
 
 - name: process_operations#electra
   sources:
-    - file: beacon-chain/core/electra/transition_no_verify_sig.go
-      search: func ProcessOperations(
+    - file: beacon-chain/core/transition/electra.go
+      search: func electraOperations(
   spec: |
     <spec fn="process_operations" fork="electra" hash="643f18b4">
     def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:

@@ -137,6 +137,11 @@ var (
 		Name:  "disable-verbose-sig-verification",
 		Usage: "Disables identifying invalid signatures if batch verification fails when processing block.",
 	}
+	enableProposerPreprocessing = &cli.BoolFlag{
+		Name:  "enable-proposer-preprocessing",
+		Usage: "Enables proposer pre-processing of blocks before proposing.",
+		Value: false,
+	}
 	prepareAllPayloads = &cli.BoolFlag{
 		Name:  "prepare-all-payloads",
 		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders.",
@@ -266,6 +271,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	ignoreUnviableAttestations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
+	enableProposerPreprocessing,
 	prepareAllPayloads,
 	aggregateFirstInterval,
 	aggregateSecondInterval,
