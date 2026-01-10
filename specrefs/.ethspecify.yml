@@ -117,6 +117,8 @@ exceptions:
   dataclasses:
     # Not implemented
     - BlobParameters#fulu
+    - ExpectedWithdrawals#capella
+    - ExpectedWithdrawals#electra
     - LatestMessage#phase0
     - LightClientStore#altair
     - OptimisticStore#bellatrix
@@ -126,6 +128,7 @@ exceptions:
     - LightClientStore#capella
 
     # Not implemented: gloas (future fork)
+    - ExpectedWithdrawals#gloas
     - LatestMessage#gloas
     - Store#gloas
 
