@@ -1,11 +1,16 @@
 package state_native
 
 import (
+	"bytes"
 	"fmt"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
@@ -146,4 +151,79 @@ func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, 
 	defer b.lock.RUnlock()
 
 	return b.builderPendingPaymentsVal(), nil
+}
+
+// LatestExecutionPayloadBid returns the cached latest execution payload bid for Gloas.
+func (b *BeaconState) LatestExecutionPayloadBid() (interfaces.ROExecutionPayloadBid, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.latestExecutionPayloadBid == nil {
+		return nil, nil
+	}
+
+	return blocks.WrappedROExecutionPayloadBid(b.latestExecutionPayloadBid.Copy())
+}
+
+// WithdrawalsMatchPayloadExpected returns true if the given withdrawals root matches the state's
+// payload_expected_withdrawals root.
+func (b *BeaconState) WithdrawalsMatchPayloadExpected(withdrawals []*enginev1.Withdrawal) (bool, error) {
+	if b.version < version.Gloas {
+		return false, errNotSupported("WithdrawalsMatchPayloadExpected", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	cfg := params.BeaconConfig()
+
+	withdrawalsRoot, err := ssz.WithdrawalSliceRoot(withdrawals, cfg.MaxWithdrawalsPerPayload)
+	if err != nil {
+		return false, fmt.Errorf("could not compute withdrawals root: %w", err)
+	}
+
+	expected := b.payloadExpectedWithdrawals
+	if expected == nil {
+		expected = []*enginev1.Withdrawal{}
+	}
+	expectedRoot, err := ssz.WithdrawalSliceRoot(expected, cfg.MaxWithdrawalsPerPayload)
+	if err != nil {
+		return false, fmt.Errorf("could not compute expected withdrawals root: %w", err)
+	}
+
+	return withdrawalsRoot == expectedRoot, nil
+}
+
+// Builder returns the builder at the given index.
+func (b *BeaconState) Builder(index primitives.BuilderIndex) (*ethpb.Builder, error) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if b.builders == nil {
+		return nil, nil
+	}
+	if uint64(index) >= uint64(len(b.builders)) {
+		return nil, fmt.Errorf("builder index %d out of bounds", index)
+	}
+	if b.builders[index] == nil {
+		return nil, nil
+	}
+
+	return ethpb.CopyBuilder(b.builders[index]), nil
+}
+
+// BuilderIndexByPubkey returns the builder index for the given pubkey, if present.
+func (b *BeaconState) BuilderIndexByPubkey(pubkey [fieldparams.BLSPubkeyLength]byte) (primitives.BuilderIndex, bool) {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	for i, builder := range b.builders {
+		if builder == nil {
+			continue
+		}
+		if bytes.Equal(builder.Pubkey, pubkey[:]) {
+			return primitives.BuilderIndex(i), true
+		}
+	}
+	return 0, false
 }

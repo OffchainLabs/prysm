@@ -86,6 +86,7 @@ func TestGetSpec(t *testing.T) {
 	config.GloasForkEpoch = 110
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
+	config.BuilderWithdrawalPrefixByte = byte('e')
 	config.GenesisDelay = 24
 	config.SecondsPerSlot = 25
 	config.SlotDurationMilliseconds = 120

@@ -111,7 +111,7 @@ func (h executionPayloadBidGloas) GasLimit() uint64 {
 	return h.payload.GasLimit
 }
 
-// BuilderIndex returns the validator index of the builder who created this bid.
+// BuilderIndex returns the builder index of the builder who created this bid.
 func (h executionPayloadBidGloas) BuilderIndex() primitives.BuilderIndex {
 	return h.payload.BuilderIndex
 }

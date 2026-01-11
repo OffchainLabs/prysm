@@ -31,6 +31,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	// Initial values
 	minimalConfig.BLSWithdrawalPrefixByte = byte(0)
 	minimalConfig.ETH1AddressWithdrawalPrefixByte = byte(1)
+	minimalConfig.BuilderWithdrawalPrefixByte = byte(3)
 
 	// Time parameters
 	minimalConfig.SecondsPerSlot = 6
