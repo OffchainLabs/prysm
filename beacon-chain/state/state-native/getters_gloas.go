@@ -3,6 +3,7 @@ package state_native
 import (
 	"fmt"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -25,16 +26,23 @@ func (b *BeaconState) LatestBlockHash() ([32]byte, error) {
 	return [32]byte(b.latestBlockHash), nil
 }
 
-// BuilderAtIndex returns a copy of the builder at the provided index.
-func (b *BeaconState) BuilderAtIndex(builderIndex primitives.BuilderIndex) (*ethpb.Builder, error) {
+// BuilderPubkey returns the builder pubkey at the provided index.
+func (b *BeaconState) BuilderPubkey(builderIndex primitives.BuilderIndex) ([fieldparams.BLSPubkeyLength]byte, error) {
 	if b.version < version.Gloas {
-		return nil, errNotSupported("BuilderAtIndex", b.version)
+		return [fieldparams.BLSPubkeyLength]byte{}, errNotSupported("BuilderPubkey", b.version)
 	}
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	return b.builderAtIndex(builderIndex)
+	builder, err := b.builderAtIndex(builderIndex)
+	if err != nil {
+		return [fieldparams.BLSPubkeyLength]byte{}, err
+	}
+
+	var pk [fieldparams.BLSPubkeyLength]byte
+	copy(pk[:], builder.Pubkey)
+	return pk, nil
 }
 
 // IsActiveBuilder returns true if the builder placement is finalized and it has not initiated exit.

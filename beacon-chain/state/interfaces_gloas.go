@@ -12,7 +12,7 @@ type writeOnlyGloasFields interface {
 }
 
 type readOnlyGloasFields interface {
-	BuilderAtIndex(primitives.BuilderIndex) (*ethpb.Builder, error)
+	BuilderPubkey(primitives.BuilderIndex) ([48]byte, error)
 	IsActiveBuilder(primitives.BuilderIndex) (bool, error)
 	CanBuilderCoverBid(primitives.BuilderIndex, primitives.Gwei) (bool, error)
 	LatestBlockHash() ([32]byte, error)

@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -154,15 +153,12 @@ func validatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfa
 		return fmt.Errorf("failed to get bid: %w", err)
 	}
 
-	builder, err := st.BuilderAtIndex(bid.BuilderIndex())
+	pubkey, err := st.BuilderPubkey(bid.BuilderIndex())
 	if err != nil {
-		return fmt.Errorf("failed to get builder: %w", err)
-	}
-	if len(builder.Pubkey) != fieldparams.BLSPubkeyLength {
-		return fmt.Errorf("invalid builder public key length: %d", len(builder.Pubkey))
+		return fmt.Errorf("failed to get builder pubkey: %w", err)
 	}
 
-	publicKey, err := bls.PublicKeyFromBytes(builder.Pubkey)
+	publicKey, err := bls.PublicKeyFromBytes(pubkey[:])
 	if err != nil {
 		return fmt.Errorf("invalid builder public key: %w", err)
 	}

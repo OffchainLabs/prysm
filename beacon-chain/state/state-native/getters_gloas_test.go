@@ -44,29 +44,39 @@ func TestLatestBlockHash(t *testing.T) {
 	})
 }
 
-func TestBuilderAtIndex(t *testing.T) {
+func TestBuilderPubkey(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		stIface, _ := util.DeterministicGenesisState(t, 1)
 		native, ok := stIface.(*state_native.BeaconState)
 		require.Equal(t, true, ok)
 
-		_, err := native.BuilderAtIndex(0)
+		_, err := native.BuilderPubkey(0)
 		require.ErrorContains(t, "is not supported", err)
 	})
 
-	t.Run("returns copy", func(t *testing.T) {
-		orig := &ethpb.Builder{Balance: 42}
+	t.Run("returns pubkey copy", func(t *testing.T) {
+		pubkey := bytes.Repeat([]byte{0xAA}, 48)
 		stIface, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
-			Builders: []*ethpb.Builder{orig},
+			Builders: []*ethpb.Builder{
+				{
+					Pubkey:            pubkey,
+					Balance:           42,
+					DepositEpoch:      3,
+					WithdrawableEpoch: 4,
+				},
+			},
 		})
 		require.NoError(t, err)
 
-		st := stIface.(*state_native.BeaconState)
-		got, err := st.BuilderAtIndex(0)
+		gotPk, err := stIface.BuilderPubkey(0)
 		require.NoError(t, err)
-		require.Equal(t, primitives.Gwei(42), got.Balance)
-		got.Balance = 99
-		require.Equal(t, primitives.Gwei(42), orig.Balance)
+		var wantPk [48]byte
+		copy(wantPk[:], pubkey)
+		require.Equal(t, wantPk, gotPk)
+
+		// Mutate original to ensure copy.
+		pubkey[0] = 0
+		require.Equal(t, byte(0xAA), gotPk[0])
 	})
 
 	t.Run("out of range returns error", func(t *testing.T) {
@@ -76,7 +86,7 @@ func TestBuilderAtIndex(t *testing.T) {
 		require.NoError(t, err)
 
 		st := stIface.(*state_native.BeaconState)
-		_, err = st.BuilderAtIndex(1)
+		_, err = st.BuilderPubkey(1)
 		require.ErrorContains(t, "out of range", err)
 	})
 }
