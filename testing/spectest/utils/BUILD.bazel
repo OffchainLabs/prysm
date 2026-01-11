@@ -10,7 +10,6 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/testing/spectest/utils",
     visibility = ["//testing/spectest:__subpackages__"],
     deps = [
-        "//config/features:go_default_library",
         "//config/params:go_default_library",
         "//io/file:go_default_library",
         "//testing/require:go_default_library",
