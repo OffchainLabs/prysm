@@ -18,7 +18,7 @@ func (info *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error) {
 		return nil, fmt.Errorf("nil SszInfo")
 	}
 
-	collector := NewProofCollector()
+	collector := newProofCollector()
 	collector.registerRequiredSiblings(gindex)
 
 	// info.source is guaranteed to be valid and dereferenced by AnalyzeObject

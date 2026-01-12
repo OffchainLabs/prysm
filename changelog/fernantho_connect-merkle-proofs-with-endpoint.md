@@ -1,6 +1,6 @@
 ### Added
 
-- Added new ProofCollector type to ssz-query
+- Added new proofCollector type to ssz-query
 - Integrated Merkle proofs into ssz-query API endpoints
 
 ### Ignored
