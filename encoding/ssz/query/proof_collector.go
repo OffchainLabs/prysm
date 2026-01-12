@@ -318,10 +318,8 @@ func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		for i := 0; i < length; i++ {
 			buf := allData[i*elemSize : (i+1)*elemSize]
 			elem := v.Index(i)
-			if elemInfo.sszType == Boolean {
-				if elem.Bool() {
-					buf[0] = 1
-				}
+			if elemInfo.sszType == Boolean && elem.Bool() {
+				buf[0] = 1
 			} else {
 				bytesutil.PutLittleEndian(buf, elem.Uint(), elemSize)
 			}
@@ -426,14 +424,9 @@ func (pc *ProofCollector) merkleizeVector(info *SszInfo, v reflect.Value, curren
 	elemInfo := vi.element
 
 	// Determine the virtual leaf capacity for the vector.
-	// For composite vectors: leaves == fixed element count.
-	// For packed-basic vectors: leaves == fixed chunk count.
-	var leaves uint64
-	if elemInfo.sszType.isBasic() {
-		elemLen := itemLength(elemInfo)
-		leaves = (uint64(length)*elemLen + 31) / 32
-	} else {
-		leaves = uint64(length)
+	leaves, err := getChunkCount(info)
+	if err != nil {
+		return [32]byte{}, err
 	}
 
 	root, err := pc.merkleizeVectorBody(elemInfo, v, length, leaves, currentGindex)
@@ -467,7 +460,6 @@ func (pc *ProofCollector) merkleizeList(info *SszInfo, v reflect.Value, currentG
 	}
 
 	length := v.Len()
-	limit := li.Limit()
 	elemInfo := li.element
 
 	chunks := make([][32]byte, 2)
@@ -478,14 +470,9 @@ func (pc *ProofCollector) merkleizeList(info *SszInfo, v reflect.Value, currentG
 	dataRootGindex := currentGindex * 2
 
 	// Compute virtual leaf capacity for the data subtree.
-	// Note: List[T, 0] is illegal per SSZ spec, so limit > 0 is guaranteed.
-	var leaves uint64
-	if elemInfo.sszType.isBasic() {
-		// Packed-basic list: leaves is the limit in 32-byte chunks.
-		leaves = fastssz.CalculateLimit(limit, uint64(length), itemLength(elemInfo))
-	} else {
-		// Composite list: leaves is the element limit.
-		leaves = uint64(limit)
+	leaves, err := getChunkCount(info)
+	if err != nil {
+		return [32]byte{}, err
 	}
 
 	chunks[0], err = pc.merkleizeVectorBody(elemInfo, v, length, leaves, dataRootGindex)
@@ -531,21 +518,18 @@ func (pc *ProofCollector) merkleizeBitvectorBody(data []byte, chunkLimit uint64,
 }
 
 func (pc *ProofCollector) merkleizeBitvector(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
-	bv, err := info.BitvectorInfo()
-	if err != nil {
-		return [32]byte{}, err
-	}
-
 	bitvectorBytes := v.Bytes()
 	if len(bitvectorBytes) == 0 {
 		return [32]byte{}, fmt.Errorf("bitvector field is uninitialized (nil or empty slice)")
 	}
 
-	// Fixed bitvector length -> fixed number of 32-byte chunks.
-	// Note: Bitvector[0] is illegal per SSZ spec, so Length() >= 1 is guaranteed.
-	numChunks := (bv.Length() + 255) / 256
+	// Compute virtual leaf capacity for the bitvector.
+	numChunks, err := getChunkCount(info)
+	if err != nil {
+		return [32]byte{}, err
+	}
 
-	root, err := pc.merkleizeBitvectorBody(bitvectorBytes, uint64(numChunks), currentGindex)
+	root, err := pc.merkleizeBitvectorBody(bitvectorBytes, numChunks, currentGindex)
 	if err != nil {
 		return [32]byte{}, err
 	}
