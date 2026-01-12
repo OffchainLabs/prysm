@@ -62,6 +62,8 @@ SLOT_DURATION_MS: 10000
 SECONDS_PER_ETH1_BLOCK: 2 # Override for e2e tests
 # [customized] faster time for withdrawals
 MIN_VALIDATOR_WITHDRAWABILITY_DELAY: 1
+# [customized] increased for e2e testing (minimal default is 16)
+MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP: 128
 # [customized] higher frequency of committee turnover and faster time to acceptable voluntary exit
 SHARD_COMMITTEE_PERIOD: 4 # Override for e2e tests
 # [customized] process deposits more quickly, but insecure

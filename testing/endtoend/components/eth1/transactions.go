@@ -10,11 +10,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/rand"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -147,10 +147,8 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	}
 
 	// Check if we're post-Fulu fork
-	currentSlot := slots.CurrentSlot(e2e.TestParams.CLGenesisTime)
-	currentEpoch := slots.ToEpoch(currentSlot)
-	fuluForkEpoch := params.BeaconConfig().FuluForkEpoch
-	isPostFulu := currentEpoch >= fuluForkEpoch
+	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
+	isPostFulu := clock.CurrentEpoch() >= params.BeaconConfig().FuluForkEpoch
 
 	g, _ := errgroup.WithContext(context.Background())
 	txs := make([]*types.Transaction, 10)
@@ -691,16 +689,21 @@ func randomBlobData() ([]byte, error) {
 // This is used post-Fulu to ensure we can test increased blob limits.
 // With 5 blob txs per slot × 6 blobs = 30 max blobs submitted,
 // which exceeds the highest BPO limit (21) and ensures we can hit it.
+// The data is mostly zeros with only the first 1KB randomized for uniqueness,
+// which is sufficient for testing without the overhead of generating ~786KB of random data.
 func randomBlobDataLarge() ([]byte, error) {
 	const numBlobs = 6
 	size := (numBlobs-1)*fieldparams.BlobSize + 1
-	data := make([]byte, size)
-	n, err := mathRand.Read(data) // #nosec G404
+	data := make([]byte, size) // Zero-initialized by Go
+
+	// Only randomize first 1KB for uniqueness - no need for full randomness in tests
+	const randomSize = 1024
+	n, err := mathRand.Read(data[:randomSize]) // #nosec G404
 	if err != nil {
 		return nil, err
 	}
-	if n != size {
-		return nil, fmt.Errorf("could not create random blob data with size %d: %w", size, err)
+	if n != randomSize {
+		return nil, fmt.Errorf("could not create random blob data: %w", err)
 	}
 	return data, nil
 }
