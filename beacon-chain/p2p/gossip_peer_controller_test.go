@@ -472,10 +472,10 @@ func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 			expected:       []peer.ID{},
 		},
 		{
-			name:           "multiple peers for all topics protects first peer from each",
+			name:           "multiple peers for all topics protects up to 2 peers from each",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 2, "topic/b": 2} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA, peerB}, "topic/b": {peerB, peerC}},
-			expected:       []peer.ID{peerA, peerB},
+			expected:       []peer.ID{peerA, peerB, peerC}, // peerA, peerB from topic/a; peerB, peerC from topic/b
 		},
 		{
 			name:           "single peer for one topic",
@@ -496,10 +496,10 @@ func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 			expected:       []peer.ID{peerA, peerB},
 		},
 		{
-			name:           "protects first peer from each topic",
+			name:           "protects up to 2 peers from each topic",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 2, "topic/c": 1} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB, peerC}, "topic/c": {peerC}},
-			expected:       []peer.ID{peerA, peerB, peerC},
+			expected:       []peer.ID{peerA, peerB, peerC}, // peerA from topic/a; peerB, peerC from topic/b; peerC from topic/c
 		},
 	}
 

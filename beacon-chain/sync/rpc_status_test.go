@@ -35,6 +35,7 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"google.golang.org/protobuf/proto"
 )
@@ -1142,4 +1143,128 @@ func makeBlocks(t *testing.T, i, n uint64, previousRoot [32]byte) []interfaces.R
 		require.NoError(t, err)
 	}
 	return ifaceBlocks
+}
+
+// TestPrunePeers verifies the prunePeers function correctly triggers pruning
+// when peers exceed the high watermark and does not prune when below.
+func TestPrunePeers(t *testing.T) {
+	tests := []struct {
+		name          string
+		inboundPeers  int
+		outboundPeers int
+		lowWatermark  int
+		highWatermark int
+		expectPruning bool
+	}{
+		{
+			name:          "no pruning - at high watermark",
+			inboundPeers:  2,
+			outboundPeers: 2,
+			lowWatermark:  3,
+			highWatermark: 4,
+			expectPruning: false,
+		},
+		{
+			name:          "no pruning - below high watermark",
+			inboundPeers:  1,
+			outboundPeers: 1,
+			lowWatermark:  3,
+			highWatermark: 4,
+			expectPruning: false,
+		},
+		{
+			name:          "pruning - above high watermark",
+			inboundPeers:  3,
+			outboundPeers: 2,
+			lowWatermark:  3,
+			highWatermark: 4, // 5 peers > 4, should prune
+			expectPruning: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			p := p2ptest.NewTestP2P(t)
+			gt := time.Now()
+			vr := [32]byte{'A'}
+
+			// Add disconnection handler to update peer state when disconnected
+			p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
+				return nil
+			})
+
+			r := &Service{
+				cfg: &config{
+					p2p:   p,
+					clock: startup.NewClock(gt, vr),
+					chain: &mock.ChainService{
+						Genesis:        gt,
+						ValidatorsRoot: vr,
+					},
+				},
+				ctx:         ctx,
+				rateLimiter: newRateLimiter(p),
+			}
+
+			// Create candidates list and add peers
+			candidates := make([]peer.ID, 0, tt.inboundPeers+tt.outboundPeers)
+
+			// Add inbound peers
+			for i := 0; i < tt.inboundPeers; i++ {
+				pid := addPeer(t, p, network.DirInbound)
+				candidates = append(candidates, pid)
+			}
+
+			// Add outbound peers
+			for i := 0; i < tt.outboundPeers; i++ {
+				pid := addPeer(t, p, network.DirOutbound)
+				candidates = append(candidates, pid)
+			}
+
+			// Call prunePeers
+			r.prunePeers(candidates, tt.lowWatermark, tt.highWatermark)
+
+			// Wait for disconnection handlers to complete (they run in goroutines)
+			time.Sleep(100 * time.Millisecond)
+
+			// Count remaining connected peers
+			var remaining int
+			for _, pid := range candidates {
+				connState, err := p.Peers().ConnectionState(pid)
+				if err != nil {
+					continue
+				}
+				if connState == peers.Connected {
+					remaining++
+				}
+			}
+
+			totalOriginal := tt.inboundPeers + tt.outboundPeers
+			actualPruned := totalOriginal - remaining
+
+			if tt.expectPruning {
+				assert.Equal(t, true, actualPruned > 0,
+					"Expected pruning to occur, but no peers were pruned")
+			} else {
+				assert.Equal(t, 0, actualPruned,
+					"Expected no peers to be pruned, but %d were pruned", actualPruned)
+			}
+		})
+	}
+}
+
+// addPeer creates a peer with the given direction and connects it.
+func addPeer(t *testing.T, p *p2ptest.TestP2P, direction network.Direction) peer.ID {
+	otherP := p2ptest.NewTestP2P(t)
+	p.Connect(otherP)
+
+	pid := otherP.PeerID()
+
+	// Update direction in peers.Status since Connect() sets it based on who initiated
+	p.Peers().Add(new(enr.Record), pid, nil, direction)
+	p.Peers().SetConnectionState(pid, peers.Connected)
+
+	return pid
 }

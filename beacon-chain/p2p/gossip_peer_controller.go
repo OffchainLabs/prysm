@@ -16,6 +16,7 @@ import (
 const dialInterval = 500 * time.Millisecond
 const peerCountLogInterval = 5 * time.Minute
 const topicMonitorInterval = 200 * time.Millisecond
+const minProtectedPeers = 2
 
 // GossipPeerDialer maintains minimum peer counts for gossip topics by periodically
 // dialing new peers discovered by a crawler. It runs a background loop that checks each
@@ -304,8 +305,6 @@ func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode
 }
 
 // ProtectedPeers returns peer IDs that should be protected from pruning.
-// For each topic, one connected peer is marked as protected to ensure
-// we maintain connectivity to all subscribed topics.
 func (g *GossipPeerDialer) ProtectedPeers() []peer.ID {
 	if g.topicsProvider == nil {
 		return nil
@@ -322,8 +321,10 @@ func (g *GossipPeerDialer) ProtectedPeers() []peer.ID {
 			continue
 		}
 
-		// Protect the first peer for this topic
-		protectedPeers[connectedPeers[0]] = struct{}{}
+		peersToProtect := min(minProtectedPeers, len(connectedPeers))
+		for i := range peersToProtect {
+			protectedPeers[connectedPeers[i]] = struct{}{}
+		}
 	}
 
 	result := make([]peer.ID, 0, len(protectedPeers))

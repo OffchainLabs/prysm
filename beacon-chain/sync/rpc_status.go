@@ -78,19 +78,96 @@ func (s *Service) maintainPeerStatuses() {
 		// Wait for all status checks to finish and then proceed onwards to
 		// pruning excess peers.
 		wg.Wait()
-		peerIds := s.cfg.p2p.Peers().PeersToPrune()
-		peerIds = s.filterNeededPeers(peerIds)
-		for _, id := range peerIds {
-			if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeTooManyPeers, id); err != nil {
-				log.WithField("peer", id).WithError(err).Debug("Could not disconnect with peer")
-			}
 
-			log.WithFields(logrus.Fields{
-				"peer":   id,
-				"reason": "to be pruned",
-			}).Debug("Initiate peer disconnection")
+		// Get high/low watermarks for pruning (same algorithm as libp2p connection manager)
+		lowWatermark, highWatermark := s.cfg.p2p.Peers().HighLowWatermarks()
+
+		// Check if there's a fork in the next epoch (same logic as fork_watcher.go)
+		currentEpoch := s.cfg.clock.CurrentEpoch()
+		currentEntry := params.GetNetworkScheduleEntry(currentEpoch)
+		nextEntry := params.GetNetworkScheduleEntry(currentEpoch + 1)
+
+		if currentEntry.Epoch == nextEntry.Epoch {
+			// No fork in the next epoch - use simple single-bucket pruning
+			s.prunePeers(s.cfg.p2p.Peers().Active(), lowWatermark, highWatermark)
+		} else {
+			// Fork coming in next epoch - use fork-aware two-bucket pruning
+			// Categorize peers based on which pubsub topics they subscribe to
+			currentDigest := currentEntry.ForkDigest
+			nextDigest := nextEntry.ForkDigest
+
+			currentForkPeers, nextForkPeers := s.peersByTopicSubscription(currentDigest, nextDigest)
+
+			// Apply watermarks separately to each bucket
+			s.prunePeers(currentForkPeers, lowWatermark, highWatermark)
+			s.prunePeers(nextForkPeers, lowWatermark, highWatermark)
 		}
 	})
+}
+
+// pruneAllPeers prunes peers when total connected peers exceed the high watermark.
+// Prunes inbound peers first, then outbound peers until the low watermark is reached.
+func (s *Service) prunePeers(candidates []peer.ID, lowWatermark, highWatermark int) {
+
+	// Only prune if above high watermark
+	if len(candidates) <= highWatermark {
+		return
+	}
+
+	totalToPrune := len(candidates) - lowWatermark
+
+	// Phase 1: Prune inbound peers first
+	inboundPeerIds := s.cfg.p2p.Peers().InboundPeersToPrune(candidates, totalToPrune)
+	var peersToPrune = inboundPeerIds
+
+	// Phase 2: If still above low watermark, prune outbound peers
+	remainingToPrune := totalToPrune - len(peersToPrune)
+	if remainingToPrune > 0 {
+		outboundPeerIds := s.cfg.p2p.Peers().OutboundPeersToPrune(candidates, remainingToPrune)
+		peersToPrune = append(peersToPrune, outboundPeerIds...)
+	}
+
+	peersToPrune = s.filterNeededPeers(peersToPrune)
+
+	for _, id := range peersToPrune {
+		if err := s.sendGoodByeAndDisconnect(s.ctx, p2ptypes.GoodbyeCodeTooManyPeers, id); err != nil {
+			log.WithField("peer", id).WithError(err).Debug("Could not disconnect with peer")
+			continue
+		}
+		log.WithFields(logrus.Fields{
+			"peer":   id,
+			"reason": "peer pruning (above high watermark)",
+		}).Debug("Initiate peer disconnection")
+	}
+}
+
+// peersByTopicSubscription categorizes active peers based on which pubsub topics they subscribe to.
+// Peers subscribed to the next-fork's beacon_block topic are placed in the next-fork bucket.
+// All other active peers are placed in the current-fork bucket.
+// This is used during fork transitions to ensure we maintain adequate peers for both forks.
+func (s *Service) peersByTopicSubscription(currentDigest, nextDigest [4]byte) (currentForkPeers, nextForkPeers []peer.ID) {
+	// Get the next-fork's beacon_block topic
+	nextForkBlockTopic := p2p.BlockSubnetTopic(nextDigest)
+
+	// Query pubsub for peers subscribed to the next-fork topic
+	nextForkSubscribers := s.cfg.p2p.PubSub().ListPeers(nextForkBlockTopic)
+
+	// Build a set for quick lookup
+	nextForkSet := make(map[peer.ID]struct{}, len(nextForkSubscribers))
+	for _, pid := range nextForkSubscribers {
+		nextForkSet[pid] = struct{}{}
+	}
+
+	// Categorize all active peers (connected + connecting)
+	for _, pid := range s.cfg.p2p.Peers().Active() {
+		if _, isNextFork := nextForkSet[pid]; isNextFork {
+			nextForkPeers = append(nextForkPeers, pid)
+		} else {
+			currentForkPeers = append(currentForkPeers, pid)
+		}
+	}
+
+	return currentForkPeers, nextForkPeers
 }
 
 // resyncIfBehind checks periodically to see if we are in normal sync but have fallen behind our peers
