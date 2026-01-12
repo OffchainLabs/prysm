@@ -359,3 +359,66 @@ func Test_decodeResp(t *testing.T) {
 		assert.ErrorContains(t, "HTTP request unsuccessful (500: foo)", err)
 	})
 }
+
+func TestGetStatusCode(t *testing.T) {
+	ctx := t.Context()
+	const endpoint = "/eth/v1/node/health"
+
+	testCases := []struct {
+		name               string
+		serverStatusCode   int
+		expectedStatusCode int
+	}{
+		{
+			name:               "returns 200 OK",
+			serverStatusCode:   http.StatusOK,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "returns 206 Partial Content",
+			serverStatusCode:   http.StatusPartialContent,
+			expectedStatusCode: http.StatusPartialContent,
+		},
+		{
+			name:               "returns 503 Service Unavailable",
+			serverStatusCode:   http.StatusServiceUnavailable,
+			expectedStatusCode: http.StatusServiceUnavailable,
+		},
+		{
+			name:               "returns 500 Internal Server Error",
+			serverStatusCode:   http.StatusInternalServerError,
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, version.BuildData(), r.Header.Get("User-Agent"))
+				w.WriteHeader(tc.serverStatusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			jsonRestHandler := BeaconApiRestHandler{
+				client: http.Client{Timeout: time.Second * 5},
+				host:   server.URL,
+			}
+
+			statusCode, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedStatusCode, statusCode)
+		})
+	}
+
+	t.Run("returns error on connection failure", func(t *testing.T) {
+		jsonRestHandler := BeaconApiRestHandler{
+			client: http.Client{Timeout: time.Millisecond * 100},
+			host:   "http://localhost:99999", // Invalid port
+		}
+
+		_, err := jsonRestHandler.GetStatusCode(ctx, endpoint)
+		require.ErrorContains(t, "failed to perform request", err)
+	})
+}

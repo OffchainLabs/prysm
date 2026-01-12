@@ -75,13 +75,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 		return nil, err
 	}
 
-	verbosity := cliCtx.String(cmd.VerbosityFlag.Name)
-	level, err := logrus.ParseLevel(verbosity)
-	if err != nil {
-		return nil, err
-	}
-	logrus.SetLevel(level)
-
 	// Warn if user's platform is not supported
 	prereqs.WarnIfPlatformNotSupported(cliCtx.Context)
 
