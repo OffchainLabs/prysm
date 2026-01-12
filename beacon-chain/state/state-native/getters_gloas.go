@@ -105,6 +105,7 @@ func (b *BeaconState) CanBuilderCoverBid(builderIndex primitives.BuilderIndex, b
 	return balance-minBalance >= uint64(bidAmount), nil
 }
 
+// builderAtIndex intentionally returns the underlying pointer without copying.
 func (b *BeaconState) builderAtIndex(builderIndex primitives.BuilderIndex) (*ethpb.Builder, error) {
 	idx := uint64(builderIndex)
 	if idx >= uint64(len(b.builders)) {
@@ -115,7 +116,7 @@ func (b *BeaconState) builderAtIndex(builderIndex primitives.BuilderIndex) (*eth
 	if builder == nil {
 		return nil, fmt.Errorf("builder at index %d is nil", builderIndex)
 	}
-	return ethpb.CopyBuilder(builder), nil
+	return builder, nil
 }
 
 // builderPendingBalanceToWithdraw mirrors get_pending_balance_to_withdraw_for_builder in the spec,
