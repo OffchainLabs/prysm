@@ -281,7 +281,7 @@ func TestColumnSlotAboveFinalized(t *testing.T) {
 
 func TestValidProposerSignature(t *testing.T) {
 	const (
-		columnSlot = 0
+		columnSlot = 97
 		blobCount  = 1
 	)
 
@@ -923,4 +923,3 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 	_, err = verifier.VerifiedRODataColumns()
 	require.NoError(t, err)
 }
-
