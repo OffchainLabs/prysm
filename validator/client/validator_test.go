@@ -3166,7 +3166,7 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 	results := make([]*ethpb.AttestationData, numGoroutines)
 	errs := make([]error, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -3176,7 +3176,7 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		require.NoError(t, errs[i])
 		require.DeepEqual(t, expectedData, results[i])
 	}
