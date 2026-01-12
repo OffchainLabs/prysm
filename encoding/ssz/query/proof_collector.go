@@ -12,6 +12,8 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
+
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/gohashtree"
@@ -139,14 +141,6 @@ func (pc *ProofCollector) collectLeaf(gindex uint64, leaf [32]byte) {
 	pc.Lock()
 	pc.leaves[gindex] = leaf
 	pc.Unlock()
-}
-
-// putLittleEndian writes an unsigned integer value in little-endian format.
-// Supports sizes 1, 2, 4, or 8 bytes for uint8/16/32/64 respectively.
-func putLittleEndian(dst []byte, val uint64, size int) {
-	for i := 0; i < size; i++ {
-		dst[i] = byte(val >> (8 * i))
-	}
 }
 
 // Merkleizers and proof collection methods
@@ -319,15 +313,17 @@ func (pc *ProofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		// Serialize basic elements and pack into 32-byte chunks using ssz.PackByChunk.
 		elemSize := int(itemLength(elemInfo))
 		serialized := make([][]byte, length)
+		// Single contiguous allocation for all element data
+		allData := make([]byte, length*elemSize)
 		for i := 0; i < length; i++ {
-			buf := make([]byte, elemSize)
+			buf := allData[i*elemSize : (i+1)*elemSize]
 			elem := v.Index(i)
 			if elemInfo.sszType == Boolean {
 				if elem.Bool() {
 					buf[0] = 1
 				}
 			} else {
-				putLittleEndian(buf, elem.Uint(), elemSize)
+				bytesutil.PutLittleEndian(buf, elem.Uint(), elemSize)
 			}
 			serialized[i] = buf
 		}
