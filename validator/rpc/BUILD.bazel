@@ -106,6 +106,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api:go_default_library",
+        "//api/grpc:go_default_library",
         "//async/event:go_default_library",
         "//cmd/validator/flags:go_default_library",
         "//config/features:go_default_library",
