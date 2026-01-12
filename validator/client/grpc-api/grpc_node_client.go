@@ -34,7 +34,7 @@ func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Pee
 }
 
 func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
-	_, err := c.nodeClient.GetHealth(ctx, &ethpb.HealthRequest{})
+	_, err := c.getClient().GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
 		log.WithError(err).Debug("Failed to get health of node")
 		return false
