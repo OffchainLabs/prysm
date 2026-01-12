@@ -226,8 +226,8 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 			// stateDiffCache stays nil until SaveOrigin or SaveGenesisData initializes it.
 			log.Info("State-diff enabled: will be initialized during checkpoint or genesis sync")
 		} else {
-			// Existing database without state-diff - warn and disable feature.
-			log.Warn("State-diff feature ignored: database was created without state-diff support")
+			// Existing database without state-diff - return store with error for caller to handle.
+			return kv, ErrStateDiffIncompatible
 		}
 	}
 
