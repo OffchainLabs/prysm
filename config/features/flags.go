@@ -133,9 +133,18 @@ var (
 		Name:  "enable-beacon-rest-api",
 		Usage: "(Experimental): Enables of the beacon REST API when querying a beacon node.",
 	}
+	enableHashtree = &cli.BoolFlag{
+		Name:  "enable-hashtree",
+		Usage: "(Experimental): Enables the hashtree hashing library.",
+	}
 	disableVerboseSigVerification = &cli.BoolFlag{
 		Name:  "disable-verbose-sig-verification",
 		Usage: "Disables identifying invalid signatures if batch verification fails when processing block.",
+	}
+	enableProposerPreprocessing = &cli.BoolFlag{
+		Name:  "enable-proposer-preprocessing",
+		Usage: "Enables proposer pre-processing of blocks before proposing.",
+		Value: false,
 	}
 	prepareAllPayloads = &cli.BoolFlag{
 		Name:  "prepare-all-payloads",
@@ -211,13 +220,6 @@ var (
 		Name:  "ignore-unviable-attestations",
 		Usage: "Ignores attestations whose target state is not viable with respect to the current head (avoid expensive state replay from lagging attesters).",
 	}
-	// lowValcountSweep bounds withdrawal sweep by validator count.
-	lowValcountSweep = &cli.BoolFlag{
-		Name:   "low-valcount-sweep",
-		Usage:  "Uses validator count bound for withdrawal sweep when validator count is less than MaxValidatorsPerWithdrawalsSweep.",
-		Value:  false,
-		Hidden: true,
-	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -266,6 +268,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	ignoreUnviableAttestations,
 	enableFullSSZDataLogging,
 	disableVerboseSigVerification,
+	enableProposerPreprocessing,
 	prepareAllPayloads,
 	aggregateFirstInterval,
 	aggregateSecondInterval,
@@ -279,7 +282,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	enableExperimentalAttestationPool,
 	forceHeadFlag,
 	blacklistRoots,
-	lowValcountSweep,
+	enableHashtree,
 }, deprecatedBeaconFlags, deprecatedFlags, upcomingDeprecation)
 
 func combinedFlags(flags ...[]cli.Flag) []cli.Flag {

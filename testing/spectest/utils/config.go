@@ -6,20 +6,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 )
 
 // SetConfig sets the global params for spec tests depending on the option chosen.
 // Provides reset function allowing to get back to the previous configuration at the end of a test.
 func SetConfig(t testing.TB, config string) error {
-	params.SetupTestConfigCleanup(t)
-
-	resetFeatures := features.InitWithReset(&features.Flags{
-		LowValcountSweep: true,
-	})
-	t.Cleanup(resetFeatures)
-
 	switch config {
 	case "minimal":
 		params.OverrideBeaconConfig(params.MinimalSpecConfig().Copy())
