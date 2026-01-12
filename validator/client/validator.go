@@ -1294,7 +1294,7 @@ func (v *validator) numHosts() int {
 
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
 	numHosts := v.numHosts()
-	
+
 	// Check all hosts for a fully synced node
 	for i := range numHosts {
 		if v.nodeClient.IsReady(ctx) {
@@ -1302,7 +1302,7 @@ func (v *validator) FindHealthyHost(ctx context.Context) bool {
 			return true
 		}
 		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
-		
+
 		// Try next host if not the last iteration
 		if i < numHosts-1 {
 			v.changeHost()
