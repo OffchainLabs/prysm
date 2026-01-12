@@ -288,9 +288,6 @@ func (pc *proofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 	// collecting sibling hashes if target is within this subtree
 	root := pc.merkleizeVectorAndCollect(fieldRoots, currentGindex, uint64(depth))
 
-	// If the container root itself is the target
-	pc.collectLeaf(currentGindex, root)
-
 	return root, nil
 }
 
