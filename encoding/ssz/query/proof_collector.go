@@ -242,7 +242,13 @@ func (pc *proofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 	// If the container root itself is the target, compute directly and return early.
 	// This avoids full subtree merkleization when we only need the root.
 	if _, ok := pc.requiredLeaves[currentGindex]; ok {
-		root, err := info.HashTreeRoot()
+		// Use the actual value v, not info.source, because info.source may be nil
+		// (for list elements) or a zero-value template (from type analysis).
+		sszObj := castToSSZObject(dereferencePointer(v))
+		if sszObj == nil {
+			return [32]byte{}, fmt.Errorf("value does not implement SSZObject interface")
+		}
+		root, err := sszObj.HashTreeRoot()
 		if err != nil {
 			return [32]byte{}, err
 		}
