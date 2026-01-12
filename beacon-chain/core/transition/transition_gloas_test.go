@@ -32,6 +32,19 @@ func TestProcessSlot_GloasClearsNextPayloadAvailability(t *testing.T) {
 	require.Equal(t, byte(0xFF)&^bitMask, post.ExecutionPayloadAvailability[byteIdx])
 }
 
+func TestProcessSlot_GloasClearsNextPayloadAvailability_Wrap(t *testing.T) {
+	cfg := params.BeaconConfig()
+	slot := primitives.Slot(cfg.SlotsPerHistoricalRoot - 1)
+	availability := bytes.Repeat([]byte{0xFF}, int(cfg.SlotsPerHistoricalRoot/8))
+	st := newGloasState(t, slot, availability)
+
+	_, err := ProcessSlot(context.Background(), st)
+	require.NoError(t, err)
+
+	post := st.ToProto().(*ethpb.BeaconStateGloas)
+	require.Equal(t, byte(0xFE), post.ExecutionPayloadAvailability[0])
+}
+
 func TestProcessSlot_GloasAvailabilityUpdateError(t *testing.T) {
 	slot := primitives.Slot(7)
 	availability := make([]byte, 1)
