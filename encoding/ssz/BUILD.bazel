@@ -12,6 +12,7 @@ go_library(
     importpath = "github.com/OffchainLabs/prysm/v7/encoding/ssz",
     visibility = ["//visibility:public"],
     deps = [
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//container/trie:go_default_library",
         "//crypto/hash/htr:go_default_library",
@@ -19,6 +20,7 @@ go_library(
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_minio_sha256_simd//:go_default_library",
+        "@com_github_offchainlabs_hashtree//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
         "@com_github_prysmaticlabs_gohashtree//:go_default_library",

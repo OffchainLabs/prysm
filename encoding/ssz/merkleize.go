@@ -3,6 +3,8 @@ package ssz
 import (
 	"encoding/binary"
 
+	"github.com/OffchainLabs/hashtree"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/pkg/errors"
@@ -182,7 +184,12 @@ func MerkleizeListSSZ[T Hashable](elements []T, limit uint64) ([32]byte, error) 
 	chunks := make([][32]byte, 2)
 	chunks[0] = body
 	binary.LittleEndian.PutUint64(chunks[1][:], uint64(len(elements)))
-	if err := gohashtree.Hash(chunks, chunks); err != nil {
+	if features.Get().EnableHashtree {
+		err = hashtree.Hash(chunks, chunks)
+	} else {
+		err = gohashtree.Hash(chunks, chunks)
+	}
+	if err != nil {
 		return [32]byte{}, err
 	}
 	return chunks[0], err

@@ -4,6 +4,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/OffchainLabs/hashtree"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/prysmaticlabs/gohashtree"
 )
 
@@ -11,7 +13,12 @@ const minSliceSizeToParallelize = 5000
 
 func hashParallel(inputList [][32]byte, outputList [][32]byte, wg *sync.WaitGroup) {
 	defer wg.Done()
-	err := gohashtree.Hash(outputList, inputList)
+	var err error
+	if features.Get().EnableHashtree {
+		err = hashtree.Hash(outputList, inputList)
+	} else {
+		err = gohashtree.Hash(outputList, inputList)
+	}
 	if err != nil {
 		panic(err) // lint:nopanic -- This should never panic.
 	}
@@ -25,9 +32,16 @@ func hashParallel(inputList [][32]byte, outputList [][32]byte, wg *sync.WaitGrou
 func VectorizedSha256(inputList [][32]byte) [][32]byte {
 	outputList := make([][32]byte, len(inputList)/2)
 	if len(inputList) < minSliceSizeToParallelize {
-		err := gohashtree.Hash(outputList, inputList)
-		if err != nil {
-			panic(err) // lint:nopanic -- This should never panic.
+		if features.Get().EnableHashtree {
+			err := hashtree.Hash(outputList, inputList)
+			if err != nil {
+				panic(err) // lint:nopanic -- This should never panic.
+			}
+		} else {
+			err := gohashtree.Hash(outputList, inputList)
+			if err != nil {
+				panic(err) // lint:nopanic -- This should never panic.
+			}
 		}
 		return outputList
 	}
@@ -38,7 +52,12 @@ func VectorizedSha256(inputList [][32]byte) [][32]byte {
 	for j := range n {
 		go hashParallel(inputList[j*2*groupSize:(j+1)*2*groupSize], outputList[j*groupSize:], &wg)
 	}
-	err := gohashtree.Hash(outputList[n*groupSize:], inputList[n*2*groupSize:])
+	var err error
+	if features.Get().EnableHashtree {
+		err = hashtree.Hash(outputList[n*groupSize:], inputList[n*2*groupSize:])
+	} else {
+		err = gohashtree.Hash(outputList[n*groupSize:], inputList[n*2*groupSize:])
+	}
 	if err != nil {
 		panic(err) // lint:nopanic -- This should never panic.
 	}
