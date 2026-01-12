@@ -830,56 +830,19 @@ func (p *Status) BestNonFinalized(minPeers int, ourHeadEpoch primitives.Epoch) (
 
 // OutboundPeersToPrune returns outbound peers to prune to reach the target count.
 // Peers are sorted by score (lowest first) to prune lower quality peers first.
-// This is used after inbound pruning to reach the low watermark when total peers
-// exceed the high watermark.
 func (p *Status) OutboundPeersToPrune(peersToPrune []peer.ID, targetToPrune int) []peer.ID {
-	if targetToPrune <= 0 {
-		return []peer.ID{}
-	}
-
-	peersToPruneMap := make(map[peer.ID]bool)
-	for _, pid := range peersToPrune {
-		peersToPruneMap[pid] = true
-	}
-
-	p.store.Lock()
-	defer p.store.Unlock()
-
-	type peerResp struct {
-		pid   peer.ID
-		score float64
-	}
-	candidates := make([]*peerResp, 0)
-
-	// Select connected outbound peers (not trusted)
-	for pid, peerData := range p.store.Peers() {
-		if peerData.ConnState == Connected &&
-			peerData.Direction == network.DirOutbound && !p.store.IsTrustedPeer(pid) && peersToPruneMap[pid] {
-			candidates = append(candidates, &peerResp{
-				pid:   pid,
-				score: p.scorers.ScoreNoLock(pid),
-			})
-		}
-	}
-
-	// Sort ascending by score (prune lowest-scored first)
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].score < candidates[j].score
-	})
-
-	amountToPrune := min(targetToPrune, len(candidates))
-	ids := make([]peer.ID, 0, amountToPrune)
-	for i := range amountToPrune {
-		ids = append(ids, candidates[i].pid)
-	}
-	return ids
+	return p.peersToPruneByDirection(peersToPrune, targetToPrune, network.DirOutbound)
 }
 
 // InboundPeersToPrune returns inbound peers to prune to reach the target count.
 // Peers are sorted by score (lowest first) to prune lower quality peers first.
-// This is used for watermark-based pruning where the caller determines how many
-// peers need to be pruned based on high/low watermarks.
 func (p *Status) InboundPeersToPrune(peersToPrune []peer.ID, targetToPrune int) []peer.ID {
+	return p.peersToPruneByDirection(peersToPrune, targetToPrune, network.DirInbound)
+}
+
+// peersToPruneByDirection returns peers of the specified direction to prune to reach the target count.
+// Peers are sorted by score (lowest first) to prune lower quality peers first.
+func (p *Status) peersToPruneByDirection(peersToPrune []peer.ID, targetToPrune int, direction network.Direction) []peer.ID {
 	if targetToPrune <= 0 {
 		return []peer.ID{}
 	}
@@ -898,10 +861,10 @@ func (p *Status) InboundPeersToPrune(peersToPrune []peer.ID, targetToPrune int) 
 	}
 	candidates := make([]*peerResp, 0)
 
-	// Select connected inbound peers (not trusted)
+	// Select connected peers of the specified direction (not trusted)
 	for pid, peerData := range p.store.Peers() {
 		if peerData.ConnState == Connected &&
-			peerData.Direction == network.DirInbound && !p.store.IsTrustedPeer(pid) && peersToPruneMap[pid] {
+			peerData.Direction == direction && !p.store.IsTrustedPeer(pid) && peersToPruneMap[pid] {
 			candidates = append(candidates, &peerResp{
 				pid:   pid,
 				score: p.scorers.ScoreNoLock(pid),
