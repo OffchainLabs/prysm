@@ -72,11 +72,13 @@ type BeaconState struct {
 
 	// Gloas fields
 	latestExecutionPayloadBid    *ethpb.ExecutionPayloadBid
+	builders                     []*ethpb.Builder
+	nextWithdrawalBuilderIndex   primitives.BuilderIndex
 	executionPayloadAvailability []byte
 	builderPendingPayments       []*ethpb.BuilderPendingPayment
 	builderPendingWithdrawals    []*ethpb.BuilderPendingWithdrawal
 	latestBlockHash              []byte
-	latestWithdrawalsRoot        []byte
+	payloadExpectedWithdrawals   []*enginev1.Withdrawal
 
 	id                    uint64
 	lock                  sync.RWMutex
@@ -134,11 +136,13 @@ type beaconStateMarshalable struct {
 	PendingConsolidations               []*ethpb.PendingConsolidation           `json:"pending_consolidations" yaml:"pending_consolidations"`
 	ProposerLookahead                   []primitives.ValidatorIndex             `json:"proposer_look_ahead" yaml:"proposer_look_ahead"`
 	LatestExecutionPayloadBid           *ethpb.ExecutionPayloadBid              `json:"latest_execution_payload_bid" yaml:"latest_execution_payload_bid"`
+	Builders                            []*ethpb.Builder                        `json:"builders" yaml:"builders"`
+	NextWithdrawalBuilderIndex          primitives.BuilderIndex                 `json:"next_withdrawal_builder_index" yaml:"next_withdrawal_builder_index"`
 	ExecutionPayloadAvailability        []byte                                  `json:"execution_payload_availability" yaml:"execution_payload_availability"`
 	BuilderPendingPayments              []*ethpb.BuilderPendingPayment          `json:"builder_pending_payments" yaml:"builder_pending_payments"`
 	BuilderPendingWithdrawals           []*ethpb.BuilderPendingWithdrawal       `json:"builder_pending_withdrawals" yaml:"builder_pending_withdrawals"`
 	LatestBlockHash                     []byte                                  `json:"latest_block_hash" yaml:"latest_block_hash"`
-	LatestWithdrawalsRoot               []byte                                  `json:"latest_withdrawals_root" yaml:"latest_withdrawals_root"`
+	PayloadExpectedWithdrawals          []*enginev1.Withdrawal                  `json:"payload_expected_withdrawals" yaml:"payload_expected_withdrawals"`
 }
 
 func (b *BeaconState) MarshalJSON() ([]byte, error) {
@@ -194,11 +198,13 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
 		LatestExecutionPayloadBid:           b.latestExecutionPayloadBid,
+		Builders:                            b.builders,
+		NextWithdrawalBuilderIndex:          b.nextWithdrawalBuilderIndex,
 		ExecutionPayloadAvailability:        b.executionPayloadAvailability,
 		BuilderPendingPayments:              b.builderPendingPayments,
 		BuilderPendingWithdrawals:           b.builderPendingWithdrawals,
 		LatestBlockHash:                     b.latestBlockHash,
-		LatestWithdrawalsRoot:               b.latestWithdrawalsRoot,
+		PayloadExpectedWithdrawals:          b.payloadExpectedWithdrawals,
 	}
 	return json.Marshal(marshalable)
 }

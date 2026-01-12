@@ -212,8 +212,7 @@ func ProcessWithdrawals(st state.BeaconState, executionData interfaces.Execution
 		if err != nil {
 			return nil, errors.Wrap(err, "could not get next withdrawal validator index")
 		}
-		bound := min(uint64(st.NumValidators()), params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep)
-		nextValidatorIndex += primitives.ValidatorIndex(bound)
+		nextValidatorIndex += primitives.ValidatorIndex(params.BeaconConfig().MaxValidatorsPerWithdrawalsSweep)
 		nextValidatorIndex = nextValidatorIndex % primitives.ValidatorIndex(st.NumValidators())
 	} else {
 		nextValidatorIndex = expectedWithdrawals[len(expectedWithdrawals)-1].ValidatorIndex + 1
