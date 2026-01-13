@@ -74,13 +74,13 @@ type validator struct {
 	attLogsLock                        sync.Mutex
 	attSelectionLock                   sync.Mutex
 	highestValidSlotLock               sync.Mutex
-	domainDataLock                  sync.RWMutex
-	blacklistedPubkeysLock          sync.RWMutex
-	prevEpochBalancesLock           sync.RWMutex
-	cachedAttestationDataLock       sync.RWMutex
-	dutiesLock                      sync.RWMutex
-	cachedAttestationData           *ethpb.AttestationData
-	accountsChangedChannel          chan [][fieldparams.BLSPubkeyLength]byte
+	domainDataLock                     sync.RWMutex
+	blacklistedPubkeysLock             sync.RWMutex
+	prevEpochBalancesLock              sync.RWMutex
+	cachedAttestationDataLock          sync.RWMutex
+	dutiesLock                         sync.RWMutex
+	cachedAttestationData              *ethpb.AttestationData
+	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                      chan *eventClient.Event
 	highestValidSlot                   primitives.Slot
 	submittedAggregates                map[submittedAttKey]*submittedAtt
