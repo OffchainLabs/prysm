@@ -698,176 +698,6 @@ func TestAtInboundPeerLimit(t *testing.T) {
 	assert.Equal(t, true, p.IsAboveInboundLimit(), "Inbound limit not exceeded")
 }
 
-func TestPrunePeers(t *testing.T) {
-	resetCfg := features.InitWithReset(&features.Flags{
-		EnablePeerScorer: false,
-	})
-	defer resetCfg()
-	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
-		PeerLimit: 30,
-		ScorerParams: &scorers.Config{
-			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
-				Threshold: 1,
-			},
-		},
-	})
-	for range 15 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-	// Assert there are no prunable peers.
-	peersToPrune := p.PeersToPrune()
-	assert.Equal(t, 0, len(peersToPrune))
-
-	for range 18 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-
-	// Assert there are the correct prunable peers.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 3, len(peersToPrune))
-
-	// Add in more peers.
-	for range 13 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-
-	// Set up bad scores for inbound peers.
-	inboundPeers := p.InboundConnected()
-	for i, pid := range inboundPeers {
-		modulo := i % 5
-		// Increment bad scores for peers.
-		for range modulo {
-			p.Scorers().BadResponsesScorer().Increment(pid)
-		}
-	}
-	// Assert all peers more than max are prunable.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 16, len(peersToPrune))
-	for _, pid := range peersToPrune {
-		dir, err := p.Direction(pid)
-		require.NoError(t, err)
-		assert.Equal(t, network.DirInbound, dir)
-	}
-
-	// Ensure it is in the descending order.
-	currCount, err := p.Scorers().BadResponsesScorer().Count(peersToPrune[0])
-	require.NoError(t, err)
-	for _, pid := range peersToPrune {
-		count, err := p.Scorers().BadResponsesScorer().Count(pid)
-		require.NoError(t, err)
-		assert.Equal(t, true, currCount >= count)
-		currCount = count
-	}
-}
-
-func TestPrunePeers_TrustedPeers(t *testing.T) {
-	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
-		PeerLimit: 30,
-		ScorerParams: &scorers.Config{
-			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
-				Threshold: 1,
-			},
-		},
-	})
-
-	for range 15 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirOutbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-	// Assert there are no prunable peers.
-	peersToPrune := p.PeersToPrune()
-	assert.Equal(t, 0, len(peersToPrune))
-
-	for range 18 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-
-	// Assert there are the correct prunable peers.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 3, len(peersToPrune))
-
-	// Add in more peers.
-	for range 13 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-
-	var trustedPeers []peer.ID
-	// Set up bad scores for inbound peers.
-	inboundPeers := p.InboundConnected()
-	for i, pid := range inboundPeers {
-		modulo := i % 5
-		// Increment bad scores for peers.
-		for range modulo {
-			p.Scorers().BadResponsesScorer().Increment(pid)
-		}
-		if modulo == 4 {
-			trustedPeers = append(trustedPeers, pid)
-		}
-	}
-	p.SetTrustedPeers(trustedPeers)
-
-	// Assert we have correct trusted peers
-	trustedPeers = p.GetTrustedPeers()
-	assert.Equal(t, 6, len(trustedPeers))
-
-	// Assert all peers more than max are prunable.
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 16, len(peersToPrune))
-
-	// Check that trusted peers are not pruned.
-	for _, pid := range peersToPrune {
-		for _, tPid := range trustedPeers {
-			assert.NotEqual(t, pid.String(), tPid.String())
-		}
-	}
-
-	// Add more peers to check if trusted peers can be pruned after they are deleted from trusted peer set.
-	for range 9 {
-		// Peer added to peer handler.
-		createPeer(t, p, nil, network.DirInbound, peerdata.ConnectionState(ethpb.ConnectionState_CONNECTED))
-	}
-
-	// Delete trusted peers.
-	p.DeleteTrustedPeers(trustedPeers)
-
-	peersToPrune = p.PeersToPrune()
-	assert.Equal(t, 25, len(peersToPrune))
-
-	// Check that trusted peers are pruned.
-	for _, tPid := range trustedPeers {
-		pruned := false
-		for _, pid := range peersToPrune {
-			if pid.String() == tPid.String() {
-				pruned = true
-			}
-		}
-		assert.Equal(t, true, pruned)
-	}
-
-	// Assert have zero trusted peers
-	trustedPeers = p.GetTrustedPeers()
-	assert.Equal(t, 0, len(trustedPeers))
-
-	for _, pid := range peersToPrune {
-		dir, err := p.Direction(pid)
-		require.NoError(t, err)
-		assert.Equal(t, network.DirInbound, dir)
-	}
-
-	// Ensure it is in the descending order.
-	currScore := p.Scorers().Score(peersToPrune[0])
-	for _, pid := range peersToPrune {
-		score := p.Scorers().Score(pid)
-		assert.Equal(t, true, currScore <= score)
-		currScore = score
-	}
-}
-
 func TestStatus_BestPeer(t *testing.T) {
 	type peerConfig struct {
 		headSlot       primitives.Slot
@@ -1307,6 +1137,309 @@ func TestOutboundConnectedWithProtocol(t *testing.T) {
 		_, ok := expectedQUIC[actualPeer.String()]
 		require.Equal(t, true, ok)
 	}
+}
+
+func TestHighLowWatermarks(t *testing.T) {
+	tests := []struct {
+		name         string
+		maxPeers     int
+		expectedHigh int
+		expectedLow  int
+	}{
+		{
+			name:         "MaxPeers below default high watermark",
+			maxPeers:     100,
+			expectedHigh: 192, // default high watermark
+			expectedLow:  160, // 192 - 32
+		},
+		{
+			name:         "MaxPeers at default high watermark minus margin",
+			maxPeers:     160, // 160 + 32 = 192
+			expectedHigh: 192,
+			expectedLow:  160,
+		},
+		{
+			name:         "MaxPeers above default high watermark",
+			maxPeers:     200,
+			expectedHigh: 232, // 200 + 32
+			expectedLow:  200, // 232 - 32
+		},
+		{
+			name:         "MaxPeers at 140 (current default)",
+			maxPeers:     140,
+			expectedHigh: 192, // max(140+32, 192) = 192
+			expectedLow:  160,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+				PeerLimit: tt.maxPeers,
+				ScorerParams: &scorers.Config{
+					BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+						Threshold: 5,
+					},
+				},
+			})
+
+			low, high := p.HighLowWatermarks()
+			assert.Equal(t, tt.expectedHigh, high, "High watermark mismatch")
+			assert.Equal(t, tt.expectedLow, low, "Low watermark mismatch")
+		})
+	}
+}
+
+func TestOutboundPeersToPrune(t *testing.T) {
+	// Enable peer scorer for score-based pruning
+	resetCfg := features.InitWithReset(&features.Flags{
+		EnablePeerScorer: true,
+	})
+	defer resetCfg()
+
+	addr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/33333")
+	require.NoError(t, err)
+
+	t.Run("returns empty when targetToPrune is zero", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add some outbound peers
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+
+		result := p.OutboundPeersToPrune(p.Connected(), 0)
+		assert.Equal(t, 0, len(result))
+	})
+
+	t.Run("returns empty when targetToPrune is negative", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+
+		result := p.OutboundPeersToPrune(p.Connected(), -1)
+		assert.Equal(t, 0, len(result))
+	})
+
+	t.Run("returns correct number of peers to prune", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add 5 outbound connected peers
+		for range 5 {
+			createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		}
+
+		// Request to prune 3
+		result := p.OutboundPeersToPrune(p.Connected(), 3)
+		assert.Equal(t, 3, len(result))
+	})
+
+	t.Run("returns all available when target exceeds available", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add only 2 outbound connected peers
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+
+		// Request to prune 10 (more than available)
+		result := p.OutboundPeersToPrune(p.Connected(), 10)
+		assert.Equal(t, 2, len(result))
+	})
+
+	t.Run("does not prune inbound peers", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add inbound peers only
+		inbound1 := createPeer(t, p, addr, network.DirInbound, peers.Connected)
+		inbound2 := createPeer(t, p, addr, network.DirInbound, peers.Connected)
+
+		result := p.OutboundPeersToPrune(p.Connected(), 5)
+		assert.Equal(t, 0, len(result))
+
+		// Verify inbound peers still exist
+		assert.Equal(t, true, len(p.InboundConnected()) == 2)
+		_ = inbound1
+		_ = inbound2
+	})
+
+	t.Run("does not prune trusted peers", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add outbound peers
+		outbound1 := createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		outbound2 := createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		outbound3 := createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+
+		// Mark one as trusted
+		p.SetTrustedPeers([]peer.ID{outbound2})
+
+		// Request to prune all 3
+		result := p.OutboundPeersToPrune(p.Connected(), 3)
+
+		// Should only return 2 (outbound1 and outbound3, not the trusted outbound2)
+		assert.Equal(t, 2, len(result))
+
+		// Verify trusted peer is not in the result
+		for _, id := range result {
+			assert.NotEqual(t, outbound2, id, "Trusted peer should not be pruned")
+		}
+		_ = outbound1
+		_ = outbound3
+	})
+
+	t.Run("does not prune non-connected peers", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add outbound peers with different states
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		createPeer(t, p, addr, network.DirOutbound, peers.Connecting)
+		createPeer(t, p, addr, network.DirOutbound, peers.Disconnecting)
+		createPeer(t, p, addr, network.DirOutbound, peers.Disconnected)
+
+		// Only the connected peer should be prunable
+		result := p.OutboundPeersToPrune(p.Connected(), 10)
+		assert.Equal(t, 1, len(result))
+	})
+}
+
+func TestInboundPeersToPrune(t *testing.T) {
+	addr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/33333")
+	require.NoError(t, err)
+
+	t.Run("returns empty when targetToPrune is zero", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		createPeer(t, p, addr, network.DirInbound, peers.Connected)
+		createPeer(t, p, addr, network.DirInbound, peers.Connected)
+
+		result := p.InboundPeersToPrune(p.Connected(), 0)
+		assert.Equal(t, 0, len(result))
+	})
+
+	t.Run("returns correct number of peers to prune", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add 5 inbound connected peers
+		for range 5 {
+			createPeer(t, p, addr, network.DirInbound, peers.Connected)
+		}
+
+		// Request to prune 3
+		result := p.InboundPeersToPrune(p.Connected(), 3)
+		assert.Equal(t, 3, len(result))
+	})
+
+	t.Run("does not prune outbound peers", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add outbound peers only
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+		createPeer(t, p, addr, network.DirOutbound, peers.Connected)
+
+		result := p.InboundPeersToPrune(p.Connected(), 5)
+		assert.Equal(t, 0, len(result))
+	})
+
+	t.Run("does not prune trusted peers", func(t *testing.T) {
+		p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+			PeerLimit: 30,
+			ScorerParams: &scorers.Config{
+				BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
+					Threshold: 5,
+				},
+			},
+		})
+
+		// Add inbound peers
+		inbound1 := createPeer(t, p, addr, network.DirInbound, peers.Connected)
+		inbound2 := createPeer(t, p, addr, network.DirInbound, peers.Connected)
+		inbound3 := createPeer(t, p, addr, network.DirInbound, peers.Connected)
+
+		// Mark one as trusted
+		p.SetTrustedPeers([]peer.ID{inbound2})
+
+		// Request to prune all 3
+		result := p.InboundPeersToPrune(p.Connected(), 3)
+
+		// Should only return 2 (not the trusted one)
+		assert.Equal(t, 2, len(result))
+
+		// Verify trusted peer is not in the result
+		for _, id := range result {
+			assert.NotEqual(t, inbound2, id, "Trusted peer should not be pruned")
+		}
+		_ = inbound1
+		_ = inbound3
+	})
 }
 
 // addPeer is a helper to add a peer with a given connection state)

@@ -35,6 +35,7 @@ import (
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"google.golang.org/protobuf/proto"
 )
@@ -1142,4 +1143,399 @@ func makeBlocks(t *testing.T, i, n uint64, previousRoot [32]byte) []interfaces.R
 		require.NoError(t, err)
 	}
 	return ifaceBlocks
+}
+
+// TestPrunePeers verifies the prunePeers function correctly triggers pruning
+// when peers exceed the high watermark and does not prune when below.
+func TestPrunePeers(t *testing.T) {
+	tests := []struct {
+		name          string
+		inboundPeers  int
+		outboundPeers int
+		lowWatermark  int
+		highWatermark int
+		expectPruning bool
+	}{
+		{
+			name:          "no pruning - at high watermark",
+			inboundPeers:  2,
+			outboundPeers: 2,
+			lowWatermark:  3,
+			highWatermark: 4,
+			expectPruning: false,
+		},
+		{
+			name:          "no pruning - below high watermark",
+			inboundPeers:  1,
+			outboundPeers: 1,
+			lowWatermark:  3,
+			highWatermark: 4,
+			expectPruning: false,
+		},
+		{
+			name:          "pruning - above high watermark",
+			inboundPeers:  3,
+			outboundPeers: 2,
+			lowWatermark:  3,
+			highWatermark: 4, // 5 peers > 4, should prune
+			expectPruning: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			p := p2ptest.NewTestP2P(t)
+			gt := time.Now()
+			vr := [32]byte{'A'}
+
+			// Add disconnection handler to update peer state when disconnected
+			p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
+				return nil
+			})
+
+			r := &Service{
+				cfg: &config{
+					p2p:   p,
+					clock: startup.NewClock(gt, vr),
+					chain: &mock.ChainService{
+						Genesis:        gt,
+						ValidatorsRoot: vr,
+					},
+				},
+				ctx:         ctx,
+				rateLimiter: newRateLimiter(p),
+			}
+
+			// Create candidates list and add peers
+			candidates := make([]peer.ID, 0, tt.inboundPeers+tt.outboundPeers)
+
+			// Add inbound peers
+			for i := 0; i < tt.inboundPeers; i++ {
+				pid := addPeer(t, p, network.DirInbound)
+				candidates = append(candidates, pid)
+			}
+
+			// Add outbound peers
+			for i := 0; i < tt.outboundPeers; i++ {
+				pid := addPeer(t, p, network.DirOutbound)
+				candidates = append(candidates, pid)
+			}
+
+			// Call prunePeers
+			r.prunePeers(candidates, tt.lowWatermark, tt.highWatermark)
+
+			// Wait for disconnection handlers to complete (they run in goroutines)
+			time.Sleep(100 * time.Millisecond)
+
+			// Count remaining connected peers
+			var remaining int
+			for _, pid := range candidates {
+				connState, err := p.Peers().ConnectionState(pid)
+				if err != nil {
+					continue
+				}
+				if connState == peers.Connected {
+					remaining++
+				}
+			}
+
+			totalOriginal := tt.inboundPeers + tt.outboundPeers
+			actualPruned := totalOriginal - remaining
+
+			if tt.expectPruning {
+				assert.Equal(t, true, actualPruned > 0,
+					"Expected pruning to occur, but no peers were pruned")
+			} else {
+				assert.Equal(t, 0, actualPruned,
+					"Expected no peers to be pruned, but %d were pruned", actualPruned)
+			}
+		})
+	}
+}
+
+// addPeer creates a peer with the given direction and connects it.
+func addPeer(t *testing.T, p *p2ptest.TestP2P, direction network.Direction) peer.ID {
+	otherP := p2ptest.NewTestP2P(t)
+	p.Connect(otherP)
+
+	pid := otherP.PeerID()
+
+	// Update direction in peers.Status since Connect() sets it based on who initiated
+	p.Peers().Add(new(enr.Record), pid, nil, direction)
+	p.Peers().SetConnectionState(pid, peers.Connected)
+
+	return pid
+}
+
+func TestPrunePeers_InboundPrunedFirst(t *testing.T) {
+	ctx := context.Background()
+
+	p := p2ptest.NewTestP2P(t)
+	gt := time.Now()
+	vr := [32]byte{'A'}
+
+	r := &Service{
+		cfg: &config{
+			p2p:   p,
+			clock: startup.NewClock(gt, vr),
+			chain: &mock.ChainService{
+				Genesis:        gt,
+				ValidatorsRoot: vr,
+			},
+		},
+		ctx:         ctx,
+		rateLimiter: newRateLimiter(p),
+	}
+
+	// Create 3 inbound and 3 outbound peers (6 total)
+	inboundPeers := make([]peer.ID, 3)
+	outboundPeers := make([]peer.ID, 3)
+	candidates := make([]peer.ID, 0, 6)
+
+	for i := range 3 {
+		inboundPeers[i] = addPeer(t, p, network.DirInbound)
+		candidates = append(candidates, inboundPeers[i])
+	}
+	for i := range 3 {
+		outboundPeers[i] = addPeer(t, p, network.DirOutbound)
+		candidates = append(candidates, outboundPeers[i])
+	}
+
+	// Set watermarks: highWatermark=4, lowWatermark=2
+	// With 6 peers, should prune 4 peers (6 - 2 = 4)
+	// Should prune all 3 inbound first, then 1 outbound
+	lowWatermark := 2
+	highWatermark := 4
+
+	// Call prunePeers
+	r.prunePeers(candidates, lowWatermark, highWatermark)
+
+	// Wait for disconnections to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Count remaining connected peers using network-level state
+	var inboundConnected, outboundConnected int
+	for _, pid := range inboundPeers {
+		if p.BHost.Network().Connectedness(pid) == network.Connected {
+			inboundConnected++
+		}
+	}
+	for _, pid := range outboundPeers {
+		if p.BHost.Network().Connectedness(pid) == network.Connected {
+			outboundConnected++
+		}
+	}
+
+	// All 3 inbound should be pruned first (0 remaining inbound)
+	assert.Equal(t, 0, inboundConnected, "Expected all inbound peers to be pruned first")
+
+	// 1 outbound should be pruned (2 remaining outbound)
+	assert.Equal(t, 2, outboundConnected, "Expected 2 outbound peers to remain (1 pruned)")
+
+	// Total remaining should equal low watermark
+	totalRemaining := inboundConnected + outboundConnected
+	assert.Equal(t, lowWatermark, totalRemaining, "Expected total remaining to equal low watermark")
+}
+
+// TestPrunePeers_TrustedPeersNotPruned verifies that trusted peers are not included in prune list.
+func TestPrunePeers_TrustedPeersNotPruned(t *testing.T) {
+	ctx := context.Background()
+
+	p := p2ptest.NewTestP2P(t)
+	gt := time.Now()
+	vr := [32]byte{'A'}
+
+	r := &Service{
+		cfg: &config{
+			p2p:   p,
+			clock: startup.NewClock(gt, vr),
+			chain: &mock.ChainService{
+				Genesis:        gt,
+				ValidatorsRoot: vr,
+			},
+		},
+		ctx:         ctx,
+		rateLimiter: newRateLimiter(p),
+	}
+
+	// Create 5 inbound peers
+	allPeers := make([]peer.ID, 5)
+	for i := range 5 {
+		allPeers[i] = addPeer(t, p, network.DirInbound)
+	}
+
+	// Set first 2 peers as trusted
+	trustedPeers := allPeers[:2]
+	nonTrustedPeers := allPeers[2:]
+	p.Peers().SetTrustedPeers(trustedPeers)
+
+	// Verify trusted peers are set
+	retrievedTrusted := p.Peers().GetTrustedPeers()
+	assert.Equal(t, 2, len(retrievedTrusted), "Expected 2 trusted peers")
+
+	// With 5 peers, lowWatermark=1, highWatermark=3
+	// Should try to prune 4 peers (5 - 1 = 4)
+	// But only 3 non-trusted peers available
+	lowWatermark := 1
+	highWatermark := 3
+
+	// Call prunePeers
+	r.prunePeers(allPeers, lowWatermark, highWatermark)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify trusted peers are still connected at network level
+	for _, pid := range trustedPeers {
+		assert.Equal(t, network.Connected, p.BHost.Network().Connectedness(pid),
+			"Trusted peer %s should still be connected", pid)
+	}
+
+	// Count non-trusted peers that remain connected
+	var nonTrustedConnected int
+	for _, pid := range nonTrustedPeers {
+		if p.BHost.Network().Connectedness(pid) == network.Connected {
+			nonTrustedConnected++
+		}
+	}
+
+	// All 3 non-trusted peers should be pruned
+	assert.Equal(t, 0, nonTrustedConnected, "Expected all non-trusted peers to be pruned")
+}
+
+// TestPrunePeers_LowestScorePrunedFirst verifies that peers with lowest scores are pruned first.
+func TestPrunePeers_LowestScorePrunedFirst(t *testing.T) {
+	ctx := context.Background()
+
+	p := p2ptest.NewTestP2P(t)
+	gt := time.Now()
+	vr := [32]byte{'A'}
+
+	r := &Service{
+		cfg: &config{
+			p2p:   p,
+			clock: startup.NewClock(gt, vr),
+			chain: &mock.ChainService{
+				Genesis:        gt,
+				ValidatorsRoot: vr,
+			},
+		},
+		ctx:         ctx,
+		rateLimiter: newRateLimiter(p),
+	}
+
+	// Create 5 inbound peers
+	allPeers := make([]peer.ID, 5)
+	for i := range 5 {
+		allPeers[i] = addPeer(t, p, network.DirInbound)
+	}
+
+	// Set different bad response counts for peers (higher = worse score)
+	// Peer 0: 4 bad responses (worst)
+	// Peer 1: 3 bad responses
+	// Peer 2: 2 bad responses
+	// Peer 3: 1 bad response
+	// Peer 4: 0 bad responses (best)
+	for i := range 5 {
+		badResponses := 4 - i
+		for range badResponses {
+			p.Peers().Scorers().BadResponsesScorer().Increment(allPeers[i])
+		}
+	}
+
+	// With 5 peers, lowWatermark=3, highWatermark=4
+	// Should prune 2 peers (5 - 3 = 2)
+	// Worst-scored peers (peer 0 and 1) should be pruned
+	lowWatermark := 3
+	highWatermark := 4
+
+	// Call prunePeers
+	r.prunePeers(allPeers, lowWatermark, highWatermark)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify worst peers (peer 0 and 1) are disconnected
+	assert.Equal(t, network.NotConnected, p.BHost.Network().Connectedness(allPeers[0]),
+		"Worst peer (peer 0 with 4 bad responses) should be disconnected")
+	assert.Equal(t, network.NotConnected, p.BHost.Network().Connectedness(allPeers[1]),
+		"Second worst peer (peer 1 with 3 bad responses) should be disconnected")
+
+	// Verify better peers (peer 2, 3, 4) remain connected
+	assert.Equal(t, network.Connected, p.BHost.Network().Connectedness(allPeers[2]),
+		"Peer 2 with 2 bad responses should remain connected")
+	assert.Equal(t, network.Connected, p.BHost.Network().Connectedness(allPeers[3]),
+		"Peer 3 with 1 bad response should remain connected")
+	assert.Equal(t, network.Connected, p.BHost.Network().Connectedness(allPeers[4]),
+		"Best peer (peer 4 with 0 bad responses) should remain connected")
+}
+
+// TestPrunePeers_OutboundPrunedAfterInbound verifies outbound peers are only pruned
+// when there aren't enough inbound peers to reach the target.
+func TestPrunePeers_OutboundPrunedAfterInbound(t *testing.T) {
+	ctx := context.Background()
+
+	p := p2ptest.NewTestP2P(t)
+	gt := time.Now()
+	vr := [32]byte{'A'}
+
+	r := &Service{
+		cfg: &config{
+			p2p:   p,
+			clock: startup.NewClock(gt, vr),
+			chain: &mock.ChainService{
+				Genesis:        gt,
+				ValidatorsRoot: vr,
+			},
+		},
+		ctx:         ctx,
+		rateLimiter: newRateLimiter(p),
+	}
+
+	// Create 1 inbound and 5 outbound peers (6 total)
+	inboundPeers := make([]peer.ID, 1)
+	outboundPeers := make([]peer.ID, 5)
+	candidates := make([]peer.ID, 0, 6)
+
+	inboundPeers[0] = addPeer(t, p, network.DirInbound)
+	candidates = append(candidates, inboundPeers[0])
+
+	for i := range 5 {
+		outboundPeers[i] = addPeer(t, p, network.DirOutbound)
+		candidates = append(candidates, outboundPeers[i])
+	}
+
+	// With 6 peers, lowWatermark=2, highWatermark=4
+	// Need to prune 4 peers (6 - 2 = 4)
+	// Only 1 inbound available, so must prune 3 outbound
+	lowWatermark := 2
+	highWatermark := 4
+
+	// Call prunePeers
+	r.prunePeers(candidates, lowWatermark, highWatermark)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Count remaining connected peers using network-level state
+	var inboundConnected, outboundConnected int
+	for _, pid := range inboundPeers {
+		if p.BHost.Network().Connectedness(pid) == network.Connected {
+			inboundConnected++
+		}
+	}
+	for _, pid := range outboundPeers {
+		if p.BHost.Network().Connectedness(pid) == network.Connected {
+			outboundConnected++
+		}
+	}
+
+	// The 1 inbound should be pruned first
+	assert.Equal(t, 0, inboundConnected, "Expected inbound peer to be pruned first")
+
+	// 3 outbound should be pruned (leaving 2 outbound)
+	assert.Equal(t, 2, outboundConnected, "Expected 2 outbound peers to remain (3 pruned)")
+
+	// Total remaining should equal low watermark
+	totalRemaining := inboundConnected + outboundConnected
+	assert.Equal(t, lowWatermark, totalRemaining, "Expected total remaining to equal low watermark")
 }

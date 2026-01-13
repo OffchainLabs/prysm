@@ -21,7 +21,6 @@ go_library(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//crypto/rand:go_default_library",
-        "//math:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//proto/prysm/v1alpha1/metadata:go_default_library",
         "//time:go_default_library",

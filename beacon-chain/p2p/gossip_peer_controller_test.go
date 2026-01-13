@@ -448,10 +448,11 @@ func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 	peerC := peer.ID("peerC")
 
 	tests := []struct {
-		name           string
-		topicsProvider func() map[string]int
-		connectedPeers map[string][]peer.ID // topic -> connected peers
-		expected       []peer.ID
+		name             string
+		topicsProvider   func() map[string]int
+		connectedPeers   map[string][]peer.ID // topic -> connected peers
+		alreadyProtected map[string]struct{}
+		expected         []peer.ID
 	}{
 		{
 			name:           "nil topics provider",
@@ -472,10 +473,10 @@ func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 			expected:       []peer.ID{},
 		},
 		{
-			name:           "multiple peers for all topics protects first peer from each",
+			name:           "multiple peers for all topics protects up to 2 peers from each",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 2, "topic/b": 2} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA, peerB}, "topic/b": {peerB, peerC}},
-			expected:       []peer.ID{peerA, peerB},
+			expected:       []peer.ID{peerA, peerB, peerC}, // peerA, peerB from topic/a; peerB, peerC from topic/b
 		},
 		{
 			name:           "single peer for one topic",
@@ -496,10 +497,20 @@ func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 			expected:       []peer.ID{peerA, peerB},
 		},
 		{
-			name:           "protects first peer from each topic",
+			name:           "protects up to 2 peers from each topic",
 			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 2, "topic/c": 1} },
 			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB, peerC}, "topic/c": {peerC}},
-			expected:       []peer.ID{peerA, peerB, peerC},
+			expected:       []peer.ID{peerA, peerB, peerC}, // peerA from topic/a; peerB, peerC from topic/b; peerC from topic/c
+		},
+		{
+			name:           "skips already protected topics",
+			topicsProvider: func() map[string]int { return map[string]int{"topic/a": 1, "topic/b": 1, "topic/c": 1} },
+			connectedPeers: map[string][]peer.ID{"topic/a": {peerA}, "topic/b": {peerB}, "topic/c": {peerC}},
+			alreadyProtected: map[string]struct{}{
+				"topic/a": {},
+				"topic/c": {},
+			},
+			expected: []peer.ID{peerB}, // only peerB since topic/a and topic/c are already protected
 		},
 	}
 
@@ -514,7 +525,7 @@ func TestGossipPeerDialer_ProtectedPeers(t *testing.T) {
 				listPeers:      listPeers,
 			}
 
-			got := dialer.ProtectedPeers()
+			got := dialer.ProtectedPeers(tt.alreadyProtected)
 
 			if tt.expected == nil {
 				require.Nil(t, got)
