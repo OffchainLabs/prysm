@@ -11,29 +11,30 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/genesis"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/components/eth1"
-	ev "github.com/OffchainLabs/prysm/v6/testing/endtoend/evaluators"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/genesis"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/components"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/components/eth1"
+	ev "github.com/OffchainLabs/prysm/v7/testing/endtoend/evaluators"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -224,9 +225,9 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 		if err := helpers.ComponentsStarted(ctx, []e2etypes.ComponentRunner{r.depositor}); err != nil {
 			return errors.Wrap(err, "testDepositsAndTx unable to run, depositor did not Start")
 		}
-		go func() {
-			if r.config.TestDeposits {
-				log.Info("Running deposit tests")
+        go func() {
+            if r.config.TestDeposits {
+                log.Info("Running deposit tests")
 				// The validators with an index < minGenesisActiveCount all have deposits already from the chain start.
 				// Skip all of those chain start validators by seeking to minGenesisActiveCount in the validator list
 				// for further deposit testing.
@@ -237,9 +238,12 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 						r.t.Error(errors.Wrap(err, "depositor.SendAndMine failed"))
 					}
 				}
-			}
-			r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
-		}()
+            }
+            // Only generate background transactions when relevant for the test.
+            if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+                r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
+            }
+        }()
 		if r.config.TestDeposits {
 			return depositCheckValidator.Start(ctx)
 		}
@@ -248,7 +252,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 }
 
 func (r *testRunner) testTxGeneration(ctx context.Context, g *errgroup.Group, keystorePath string, requiredNodes []e2etypes.ComponentRunner) {
-	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed)
+	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed, r.config.UseLargeBlobs)
 	r.comHandler.txGen = txGenerator
 	g.Go(func() error {
 		if err := helpers.ComponentsStarted(ctx, requiredNodes); err != nil {
@@ -322,7 +326,7 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 		return err
 	}
 
-	flags := append([]string{}, r.config.BeaconFlags...)
+	flags := slices.Clone(r.config.BeaconFlags)
 	flags = append(flags, fmt.Sprintf("--checkpoint-sync-url=%s", bnAPI))
 	flags = append(flags, fmt.Sprintf("--genesis-beacon-api-url=%s", bnAPI))
 
@@ -689,7 +693,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		// Set it for prysm beacon node.
 		component, err := r.comHandler.eth1Proxy.ComponentAtIndex(0)
 		require.NoError(r.t, err)
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() any {
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),
@@ -700,7 +704,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		// Set it for lighthouse beacon node.
 		component, err = r.comHandler.eth1Proxy.ComponentAtIndex(2)
 		require.NoError(r.t, err)
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() any {
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),
@@ -709,7 +713,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 			return true
 		})
 
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(forkChoiceUpdatedMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(forkChoiceUpdatedMethod, func() any {
 			return &ForkchoiceUpdatedResponse{
 				Status: &enginev1.PayloadStatus{
 					Status:          enginev1.PayloadStatus_SYNCING,
@@ -814,7 +818,7 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	case optimisticStartEpoch:
 		component, err := r.comHandler.eth1Proxy.ComponentAtIndex(0)
 		require.NoError(r.t, err)
-		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() interface{} {
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(newPayloadMethod, func() any {
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),

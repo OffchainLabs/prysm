@@ -19,6 +19,8 @@ import (
 
 const defaultTimestampFormat = time.RFC3339
 
+var regex = regexp.MustCompile(`^\\[(.*?)\\]`)
+
 var (
 	baseTimestamp      time.Time    = time.Now()
 	defaultColorScheme *ColorScheme = &ColorScheme{
@@ -263,17 +265,11 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys 
 	}
 
 	level := levelColor(fmt.Sprintf("%5s", levelText))
-	prefix := ""
-	message := entry.Message
 
-	if prefixValue, ok := entry.Data["prefix"]; ok {
-		prefix = colorScheme.PrefixColor(" " + prefixValue.(string) + ":")
-	} else {
-		prefixValue, trimmedMsg := extractPrefix(entry.Message)
-		if len(prefixValue) > 0 {
-			prefix = colorScheme.PrefixColor(" " + prefixValue + ":")
-			message = trimmedMsg
-		}
+	prefix := ""
+	prefixValue, message := getPrefixAndMessage(entry)
+	if len(prefixValue) > 0 {
+		prefix = colorScheme.PrefixColor(" " + prefixValue + ":")
 	}
 
 	messageFormat := "%s"
@@ -293,7 +289,7 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys 
 		_, err = fmt.Fprintf(b, "%s %s%s "+messageFormat, colorScheme.TimestampColor(timestamp), level, prefix, message)
 	}
 	for _, k := range keys {
-		if k != "prefix" {
+		if k != "package" {
 			v := entry.Data[k]
 
 			format := "%+v"
@@ -333,9 +329,39 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 	return false
 }
 
+// getPrefixAndMessage extracts the prefix and the message from the entry by the following order:
+//  1. If the "prefix" field is set in entry.Data, use that as prefix.
+//  2. If the "package" field is set in entry.Data, use that to determine the prefix.
+//     If a replacement is found in prefixReplacements, use that. Otherwise, use the package name.
+//  3. Try to extract the prefix from the message itself by looking for a pattern like "[prefix] message".
+//  4. If none of the above methods yield a prefix, return an empty prefix and the original message.
+func getPrefixAndMessage(entry *logrus.Entry) (string, string) {
+	prefix := ""
+	msg := entry.Message
+
+	if prefixOldMethod, ok := entry.Data["prefix"]; ok {
+		return prefixOldMethod.(string), msg
+	}
+
+	if packagePath, ok := entry.Data["package"]; ok {
+		if prefixReplacement, ok := prefixReplacements[packagePath.(string)]; ok {
+			return prefixReplacement, msg
+		}
+		pathSplit := strings.Split(packagePath.(string), "/")
+		prefix = pathSplit[len(pathSplit)-1]
+		return prefix, msg
+	}
+
+	if prefixExtracted, trimmedMsg := extractPrefix(msg); len(prefixExtracted) > 0 {
+		return prefixExtracted, trimmedMsg
+	}
+
+	return "", msg
+}
+
 func extractPrefix(msg string) (string, string) {
 	prefix := ""
-	regex := regexp.MustCompile(`^\\[(.*?)\\]`)
+
 	if regex.MatchString(msg) {
 		match := regex.FindString(msg)
 		prefix, msg = match[1:len(match)-1], strings.TrimSpace(msg[len(match):])
@@ -343,7 +369,7 @@ func extractPrefix(msg string) (string, string) {
 	return prefix, msg
 }
 
-func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interface{}, appendSpace bool) error {
+func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value any, appendSpace bool) error {
 	b.WriteString(key)
 	b.WriteByte('=')
 	if err := f.appendValue(b, value); err != nil {
@@ -356,7 +382,7 @@ func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interf
 	return nil
 }
 
-func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) (err error) {
+func (f *TextFormatter) appendValue(b *bytes.Buffer, value any) (err error) {
 	switch value := value.(type) {
 	case string:
 		if !f.needsQuoting(value) {

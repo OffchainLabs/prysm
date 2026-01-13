@@ -4,33 +4,36 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/node"
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	blockchaincmd "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/blockchain"
-	dbcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/execution"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/genesis"
-	jwtcommands "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/jwt"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/storage"
-	backfill "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill"
-	bflags "github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/backfill/flags"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/sync/checkpoint"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/io/logs"
-	"github.com/OffchainLabs/prysm/v6/monitoring/journald"
-	"github.com/OffchainLabs/prysm/v6/runtime/debug"
-	"github.com/OffchainLabs/prysm/v6/runtime/fdlimits"
-	prefixed "github.com/OffchainLabs/prysm/v6/runtime/logging/logrus-prefixed-formatter"
-	_ "github.com/OffchainLabs/prysm/v6/runtime/maxprocs"
-	"github.com/OffchainLabs/prysm/v6/runtime/tos"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	blockchaincmd "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/blockchain"
+	das "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das"
+	dasFlags "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
+	dbcommands "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/execution"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/genesis"
+	jwtcommands "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/jwt"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/storage"
+	backfill "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill"
+	bflags "github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/backfill/flags"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/sync/checkpoint"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/io/logs"
+	"github.com/OffchainLabs/prysm/v7/monitoring/journald"
+	"github.com/OffchainLabs/prysm/v7/runtime/debug"
+	"github.com/OffchainLabs/prysm/v7/runtime/fdlimits"
+	prefixed "github.com/OffchainLabs/prysm/v7/runtime/logging/logrus-prefixed-formatter"
+	_ "github.com/OffchainLabs/prysm/v7/runtime/maxprocs"
+	"github.com/OffchainLabs/prysm/v7/runtime/tos"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	gethlog "github.com/ethereum/go-ethereum/log"
 	golog "github.com/ipfs/go-log/v2"
 	joonix "github.com/joonix/log"
@@ -65,7 +68,8 @@ var appFlags = []cli.Flag{
 	flags.SlotsPerArchivedPoint,
 	flags.DisableDebugRPCEndpoints,
 	flags.SubscribeToAllSubnets,
-	flags.SubscribeAllDataSubnets,
+	flags.Supernode,
+	flags.SemiSupernode,
 	flags.HistoricalSlasherNode,
 	flags.ChainID,
 	flags.NetworkID,
@@ -144,15 +148,17 @@ var appFlags = []cli.Flag{
 	flags.SlasherDirFlag,
 	flags.SlasherFlag,
 	flags.JwtId,
+	flags.DisableGetBlobsV2,
 	storage.BlobStoragePathFlag,
 	storage.DataColumnStoragePathFlag,
-	storage.BlobRetentionEpochFlag,
 	storage.BlobStorageLayout,
 	bflags.EnableExperimentalBackfill,
 	bflags.BackfillBatchSize,
 	bflags.BackfillWorkerCount,
-	bflags.BackfillOldestSlot,
+	dasFlags.BackfillOldestSlot,
+	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
+	flags.DisableEphemeralLogFile,
 }
 
 func init() {
@@ -165,18 +171,32 @@ func before(ctx *cli.Context) error {
 		return errors.Wrap(err, "failed to load flags from config file")
 	}
 
-	format := ctx.String(cmd.LogFormat.Name)
+	// determine log verbosity
+	verbosity := ctx.String(cmd.VerbosityFlag.Name)
+	verbosityLevel, err := logrus.ParseLevel(verbosity)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse log verbosity")
+	}
+	logs.SetLoggingLevel(verbosityLevel)
 
+	format := ctx.String(cmd.LogFormat.Name)
 	switch format {
 	case "text":
+		// disabling logrus default output so we can control it via different hooks
+		logrus.SetOutput(io.Discard)
+
+		// create a custom formatter and hook for terminal output
 		formatter := new(prefixed.TextFormatter)
 		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
+		formatter.ForceFormatting = true
+		formatter.ForceColors = true
 
-		// If persistent log files are written - we disable the log messages coloring because
-		// the colors are ANSI codes and seen as gibberish in the log files.
-		formatter.DisableColors = ctx.String(cmd.LogFileName.Name) != ""
-		logrus.SetFormatter(formatter)
+		logrus.AddHook(&logs.WriterHook{
+			Formatter:     formatter,
+			Writer:        os.Stderr,
+			AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+		})
 	case "fluentd":
 		f := joonix.NewFormatter()
 
@@ -199,8 +219,14 @@ func before(ctx *cli.Context) error {
 
 	logFileName := ctx.String(cmd.LogFileName.Name)
 	if logFileName != "" {
-		if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+		if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
+		}
+	}
+
+	if !ctx.Bool(flags.DisableEphemeralLogFile.Name) {
+		if err := logs.ConfigureEphemeralLogFile(ctx.String(cmd.DataDirFlag.Name), ctx.App.Name); err != nil {
+			log.WithError(err).Error("Failed to configure debug log file")
 		}
 	}
 
@@ -280,7 +306,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 	if err != nil {
 		return err
 	}
-	logrus.SetLevel(level)
+
 	// Set libp2p logger to only panic logs for the info level.
 	golog.SetAllLoggers(golog.LevelPanic)
 
@@ -318,6 +344,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 		checkpoint.BeaconNodeOptions,
 		storage.BeaconNodeOptions,
 		backfill.BeaconNodeOptions,
+		das.BeaconNodeOptions,
 	}
 	for _, of := range optFuncs {
 		ofo, err := of(ctx)

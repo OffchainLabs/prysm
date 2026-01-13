@@ -9,22 +9,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/peers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/features"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/messagehandler"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/messagehandler"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -638,7 +638,7 @@ func (s *Service) logMinimumPeersPerSubnet(ctx context.Context, p subscribeParam
 					log.WithFields(logrus.Fields{
 						"topic":  topic,
 						"actual": count,
-					}).Warning("Not enough connected peers")
+					}).Debug("Not enough connected peers")
 				}
 			}
 			if !isSubnetWithMissingPeers {
@@ -692,14 +692,11 @@ func (s *Service) dataColumnSubnetIndices(primitives.Slot) map[uint64]bool {
 }
 
 // samplingSize computes the sampling size based on the samples per slot value,
-// the validators custody requirement, and whether the node is subscribed to all data subnets.
+// the validators custody requirement, and the custody group count.
+// The custody group count is the source of truth and already includes supernode/semi-supernode logic.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/das-core.md#custody-sampling
 func (s *Service) samplingSize() (uint64, error) {
-	beaconConfig := params.BeaconConfig()
-
-	if flags.Get().SubscribeAllDataSubnets {
-		return beaconConfig.DataColumnSidecarSubnetCount, nil
-	}
+	cfg := params.BeaconConfig()
 
 	// Compute the validators custody requirement.
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
@@ -707,19 +704,20 @@ func (s *Service) samplingSize() (uint64, error) {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
+	// Get custody group count - this is the source of truth and already reflects:
+	// - Supernode mode: NUMBER_OF_CUSTODY_GROUPS
+	// - Semi-supernode mode: half of NUMBER_OF_CUSTODY_GROUPS (or more if validators require)
+	// - Regular mode: validator custody requirement
 	custodyGroupCount, err := s.cfg.p2p.CustodyGroupCount(s.ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "custody group count")
 	}
 
-	return max(beaconConfig.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount), nil
+	// Sampling size should match custody to ensure we can serve what we advertise
+	return max(cfg.SamplesPerSlot, validatorsCustodyRequirement, custodyGroupCount), nil
 }
 
 func (s *Service) persistentAndAggregatorSubnetIndices(currentSlot primitives.Slot) map[uint64]bool {
-	if flags.Get().SubscribeToAllSubnets {
-		return mapFromCount(params.BeaconConfig().AttestationSubnetCount)
-	}
-
 	persistentSubnetIndices := persistentSubnetIndices()
 	aggregatorSubnetIndices := aggregatorSubnetIndices(currentSlot)
 
@@ -753,7 +751,7 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 		wantedSubnets[subnet] = true
 	}
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(&ethpb.Attestation{})]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
 
 	// Map of peers in subnets
 	peerMap := make(map[peer.ID]bool)

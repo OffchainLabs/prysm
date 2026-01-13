@@ -6,10 +6,10 @@ import (
 	"runtime"
 	"sync"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -56,7 +56,7 @@ func validatorRegistryRoot(validators []*ethpb.Validator) ([32]byte, error) {
 
 func hashValidatorHelper(validators []*ethpb.Validator, roots [][32]byte, j int, groupSize int, wg *sync.WaitGroup) {
 	defer wg.Done()
-	for i := 0; i < groupSize; i++ {
+	for i := range groupSize {
 		fRoots, err := ValidatorFieldRoots(validators[j*groupSize+i])
 		if err != nil {
 			logrus.WithError(err).Error("Could not get validator field roots")
@@ -98,7 +98,7 @@ func OptimizedValidatorRoots(validators []*ethpb.Validator) ([][32]byte, error) 
 	// A validator's tree can represented with a depth of 3. As log2(8) = 3
 	// Using this property we can lay out all the individual fields of a
 	// validator and hash them in single level using our vectorized routine.
-	for i := 0; i < validatorTreeDepth; i++ {
+	for range validatorTreeDepth {
 		// Overwrite input lists as we are hashing by level
 		// and only need the highest level to proceed.
 		roots = htr.VectorizedSha256(roots)

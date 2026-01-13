@@ -6,9 +6,10 @@ go_library(
         "keccak256.go",
         "key.go",
         "keystore.go",
+        "log.go",
         "utils.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/crypto/keystore",
+    importpath = "github.com/OffchainLabs/prysm/v7/crypto/keystore",
     visibility = ["//visibility:public"],
     deps = [
         "//crypto/bls:go_default_library",

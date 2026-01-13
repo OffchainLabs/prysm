@@ -4,10 +4,11 @@ go_library(
     name = "go_default_library",
     srcs = [
         "countdown.go",
+        "log.go",
         "slotticker.go",
         "slottime.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/time/slots",
+    importpath = "github.com/OffchainLabs/prysm/v7/time/slots",
     visibility = ["//visibility:public"],
     deps = [
         "//config/params:go_default_library",

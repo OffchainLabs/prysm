@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 	fuzz "github.com/google/gofuzz"
 )
 
@@ -13,7 +13,7 @@ func fuzzCopies[T any, C eth.Copier[T]](t *testing.T, obj C) {
 	fuzzer := fuzz.NewWithSeed(0)
 	amount := 1000
 	t.Run(fmt.Sprintf("%T", obj), func(t *testing.T) {
-		for i := 0; i < amount; i++ {
+		for range amount {
 			fuzzer.Fuzz(obj) // Populate thing with random values
 
 			got := obj.Copy()

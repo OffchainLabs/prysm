@@ -14,21 +14,21 @@ import (
 	"sync"
 	"time"
 
-	builderAPI "github.com/OffchainLabs/prysm/v6/api/client/builder"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	types "github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network"
-	"github.com/OffchainLabs/prysm/v6/network/authorization"
-	v1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	builderAPI "github.com/OffchainLabs/prysm/v7/api/client/builder"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	types "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network"
+	"github.com/OffchainLabs/prysm/v7/network/authorization"
+	v1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -67,18 +67,18 @@ var (
 )
 
 type jsonRPCObject struct {
-	Jsonrpc string        `json:"jsonrpc"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-	ID      uint64        `json:"id"`
-	Result  interface{}   `json:"result"`
+	Jsonrpc string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  []any  `json:"params"`
+	ID      uint64 `json:"id"`
+	Result  any    `json:"result"`
 }
 
 type ForkchoiceUpdatedResponse struct {
-	Jsonrpc string        `json:"jsonrpc"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-	ID      uint64        `json:"id"`
+	Jsonrpc string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  []any  `json:"params"`
+	ID      uint64 `json:"id"`
 	Result  struct {
 		Status    *v1.PayloadStatus  `json:"payloadStatus"`
 		PayloadId *v1.PayloadIDBytes `json:"payloadId"`
@@ -692,14 +692,25 @@ func (p *Builder) handleHeaderRequestElectra(w http.ResponseWriter) {
 }
 
 func (p *Builder) handleBlindedBlock(w http.ResponseWriter, req *http.Request) {
-	// TODO update for fork specific
-	sb := &builderAPI.SignedBlindedBeaconBlockBellatrix{
-		SignedBlindedBeaconBlockBellatrix: &eth.SignedBlindedBeaconBlockBellatrix{},
+	// Decode blinded block based on the current fork version.
+	// The beacon node sends JSON using api/server/structs types.
+	var err error
+	switch p.currVersion {
+	case version.Electra:
+		var sb structs.SignedBlindedBeaconBlockElectra
+		err = json.NewDecoder(req.Body).Decode(&sb)
+	case version.Deneb:
+		var sb structs.SignedBlindedBeaconBlockDeneb
+		err = json.NewDecoder(req.Body).Decode(&sb)
+	case version.Capella:
+		var sb structs.SignedBlindedBeaconBlockCapella
+		err = json.NewDecoder(req.Body).Decode(&sb)
+	default:
+		var sb structs.SignedBlindedBeaconBlockBellatrix
+		err = json.NewDecoder(req.Body).Decode(&sb)
 	}
-	err := json.NewDecoder(req.Body).Decode(sb)
 	if err != nil {
-		p.cfg.logger.WithError(err).Error("Could not decode blinded block")
-		// TODO: Allow the method to unmarshal blinded blocks correctly
+		p.cfg.logger.WithError(err).WithField("version", version.String(p.currVersion)).Error("Could not decode blinded block")
 	}
 	if p.currPayload == nil {
 		p.cfg.logger.Error("No payload is cached")
@@ -728,7 +739,7 @@ var errInvalidTypeConversion = errors.New("unable to translate between api and f
 // This involves serializing the execution payload value so that the abstract payload envelope can be used.
 func ExecutionPayloadResponseFromData(v int, ed interfaces.ExecutionData, bundle *v1.BlobsBundle) (*builderAPI.ExecutionPayloadResponse, error) {
 	pb := ed.Proto()
-	var data interface{}
+	var data any
 	var err error
 	ver := version.String(v)
 	switch pbStruct := pb.(type) {

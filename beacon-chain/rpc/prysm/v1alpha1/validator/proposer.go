@@ -7,28 +7,28 @@ import (
 	"sync"
 	"time"
 
-	builderapi "github.com/OffchainLabs/prysm/v6/api/client/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/kv"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
@@ -191,9 +191,7 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei) (*ethpb.GenericBeaconBlock, error) {
 	// Build consensus fields in background
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		// Set eth1 data.
 		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
@@ -229,11 +227,11 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
 
 		// Set sync aggregate. New in Altair.
-		vs.setSyncAggregate(ctx, sBlk)
+		vs.setSyncAggregate(ctx, sBlk, head)
 
 		// Set bls to execution change. New in Capella.
 		vs.setBlsToExecData(sBlk, head)
-	}()
+	})
 
 	winningBid := primitives.ZeroWei()
 	var bundle enginev1.BlobsBundler
@@ -312,6 +310,10 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	rob, err := blocks.NewROBlockWithRoot(block, root)
 	if block.IsBlinded() {
 		block, blobSidecars, err = vs.handleBlindedBlock(ctx, block)
+		if errors.Is(err, builderapi.ErrBadGateway) {
+			log.WithError(err).Info("Optimistically proposed block - builder relay temporarily unavailable, block may arrive over P2P")
+			return &ethpb.ProposeResponse{BlockRoot: root[:]}, nil
+		}
 	} else if block.Version() >= version.Deneb {
 		blobSidecars, dataColumnSidecars, err = vs.handleUnblindedBlock(rob, req)
 	}
@@ -409,13 +411,13 @@ func (vs *Server) handleUnblindedBlock(
 
 	if block.Version() >= version.Fulu {
 		// Compute cells and proofs from the blobs and cell proofs.
-		cellsAndProofs, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
+		cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromFlat(rawBlobs, proofs)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "compute cells and proofs")
 		}
 
 		// Construct data column sidecars from the signed block and cells and proofs.
-		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsAndProofs, peerdas.PopulateFromBlock(block))
+		roDataColumnSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, peerdas.PopulateFromBlock(block))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "data column sidcars")
 		}
@@ -545,11 +547,19 @@ func (vs *Server) PrepareBeaconProposer(
 		vs.TrackedValidatorsCache.Set(val)
 		validatorIndices = append(validatorIndices, r.ValidatorIndex)
 	}
-	if len(validatorIndices) != 0 {
-		log.WithFields(logrus.Fields{
-			"validatorCount": len(validatorIndices),
-		}).Debug("Updated fee recipient addresses for validator indices")
+
+	if len(validatorIndices) == 0 {
+		return &emptypb.Empty{}, nil
+
 	}
+
+	log := log.WithField("validatorCount", len(validatorIndices))
+	if logrus.GetLevel() >= logrus.TraceLevel {
+		log = log.WithField("validatorIndices", validatorIndices)
+	}
+
+	log.Debug("Updated fee recipient addresses")
+
 	return &emptypb.Empty{}, nil
 }
 
@@ -592,7 +602,7 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 
 // computeStateRoot computes the state root after a block has been processed through a state transition and
 // returns it to the validator client.
-func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
+func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
 	beaconState, err := vs.StateGen.StateByRoot(ctx, block.Block().ParentRoot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
@@ -603,11 +613,70 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 		block,
 	)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not calculate state root at slot %d", beaconState.Slot())
+		return vs.handleStateRootError(ctx, block, err)
 	}
 
 	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
 	return root[:], nil
+}
+
+type computeStateRootAttemptsKeyType string
+
+const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
+const maxComputeStateRootAttempts = 3
+
+// handleStateRootError retries block construction in some error cases.
+func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) ([]byte, error) {
+	if ctx.Err() != nil {
+		return nil, status.Errorf(codes.Canceled, "context error: %v", ctx.Err())
+	}
+	switch {
+	case errors.Is(err, transition.ErrAttestationsSignatureInvalid),
+		errors.Is(err, transition.ErrProcessAttestationsFailed):
+		log.WithError(err).Warn("Retrying block construction without attestations")
+		if err := block.SetAttestations([]ethpb.Att{}); err != nil {
+			return nil, errors.Wrap(err, "could not set attestations")
+		}
+	case errors.Is(err, transition.ErrProcessBLSChangesFailed), errors.Is(err, transition.ErrBLSToExecutionChangesSignatureInvalid):
+		log.WithError(err).Warn("Retrying block construction without BLS to execution changes")
+		if err := block.SetBLSToExecutionChanges([]*ethpb.SignedBLSToExecutionChange{}); err != nil {
+			return nil, errors.Wrap(err, "could not set BLS to execution changes")
+		}
+	case errors.Is(err, transition.ErrProcessProposerSlashingsFailed):
+		log.WithError(err).Warn("Retrying block construction without proposer slashings")
+		block.SetProposerSlashings([]*ethpb.ProposerSlashing{})
+	case errors.Is(err, transition.ErrProcessAttesterSlashingsFailed):
+		log.WithError(err).Warn("Retrying block construction without attester slashings")
+		if err := block.SetAttesterSlashings([]ethpb.AttSlashing{}); err != nil {
+			return nil, errors.Wrap(err, "could not set attester slashings")
+		}
+	case errors.Is(err, transition.ErrProcessVoluntaryExitsFailed):
+		log.WithError(err).Warn("Retrying block construction without voluntary exits")
+		block.SetVoluntaryExits([]*ethpb.SignedVoluntaryExit{})
+	case errors.Is(err, transition.ErrProcessSyncAggregateFailed):
+		log.WithError(err).Warn("Retrying block construction without sync aggregate")
+		emptySig := [96]byte{0xC0}
+		emptyAggregate := &ethpb.SyncAggregate{
+			SyncCommitteeBits:      make([]byte, params.BeaconConfig().SyncCommitteeSize/8),
+			SyncCommitteeSignature: emptySig[:],
+		}
+		if err := block.SetSyncAggregate(emptyAggregate); err != nil {
+			log.WithError(err).Error("Could not set sync aggregate")
+		}
+
+	default:
+		return nil, errors.Wrap(err, "could not compute state root")
+	}
+	// prevent deep recursion by limiting max attempts.
+	if v, ok := ctx.Value(computeStateRootAttemptsKey).(int); !ok {
+		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, int(1))
+	} else if v >= maxComputeStateRootAttempts {
+		return nil, fmt.Errorf("attempted max compute state root attempts %d", maxComputeStateRootAttempts)
+	} else {
+		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, v+1)
+	}
+	// recursive call to compute state root again
+	return vs.computeStateRoot(ctx, block)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.

@@ -3,7 +3,7 @@ package iface
 import (
 	"context"
 
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
@@ -12,5 +12,5 @@ type NodeClient interface {
 	Genesis(ctx context.Context, in *empty.Empty) (*ethpb.Genesis, error)
 	Version(ctx context.Context, in *empty.Empty) (*ethpb.Version, error)
 	Peers(ctx context.Context, in *empty.Empty) (*ethpb.Peers, error)
-	IsHealthy(ctx context.Context) bool
+	IsReady(ctx context.Context) bool
 }

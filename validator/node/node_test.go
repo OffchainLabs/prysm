@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/cmd/validator/flags"
-	"github.com/OffchainLabs/prysm/v6/io/file"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts"
-	"github.com/OffchainLabs/prysm/v6/validator/accounts/wallet"
-	"github.com/OffchainLabs/prysm/v6/validator/db/kv"
-	"github.com/OffchainLabs/prysm/v6/validator/keymanager"
-	remoteweb3signer "github.com/OffchainLabs/prysm/v6/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
+	"github.com/OffchainLabs/prysm/v7/io/file"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts"
+	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
+	"github.com/OffchainLabs/prysm/v7/validator/db/kv"
+	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/urfave/cli/v2"
 )
@@ -307,4 +307,18 @@ func TestWeb3SignerConfig(t *testing.T) {
 			require.DeepEqual(t, tt.want, got)
 		})
 	}
+}
+
+func Test_parseBeaconApiHeaders(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		h := parseBeaconApiHeaders("key1=value1,key1=value2,key2=value3")
+		assert.Equal(t, 2, len(h))
+		assert.DeepEqual(t, []string{"value1", "value2"}, h["key1"])
+		assert.DeepEqual(t, []string{"value3"}, h["key2"])
+	})
+	t.Run("ignores malformed", func(t *testing.T) {
+		h := parseBeaconApiHeaders("key1=value1,key2value2,key3=,=key4")
+		assert.Equal(t, 1, len(h))
+		assert.DeepEqual(t, []string{"value1"}, h["key1"])
+	})
 }

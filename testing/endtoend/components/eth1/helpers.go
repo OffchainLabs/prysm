@@ -3,10 +3,11 @@ package eth1
 import (
 	"context"
 	"math/big"
+	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -31,10 +32,6 @@ var _ e2etypes.EngineProxy = (*Proxy)(nil)
 
 // WaitForBlocks waits for a certain amount of blocks to be mined by the ETH1 chain before returning.
 func WaitForBlocks(ctx context.Context, web3 *ethclient.Client, key *keystore.Key, blocksToWait uint64) error {
-	nonce, err := web3.PendingNonceAt(ctx, key.Address)
-	if err != nil {
-		return err
-	}
 	chainID, err := web3.NetworkID(ctx)
 	if err != nil {
 		return err
@@ -49,19 +46,36 @@ func WaitForBlocks(ctx context.Context, web3 *ethclient.Client, key *keystore.Ke
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		// Get fresh nonce each iteration to handle any pending transactions
+		nonce, err := web3.PendingNonceAt(ctx, key.Address)
+		if err != nil {
+			return err
+		}
 		gasPrice, err := web3.SuggestGasPrice(ctx)
 		if err != nil {
 			return err
 		}
+		// Bump gas price by 20% to ensure we can replace any pending transactions
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(120))
+		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(100))
+
 		spamTX := types.NewTransaction(nonce, key.Address, big.NewInt(0), params.SpamTxGasLimit, gasPrice, []byte{})
 		signed, err := types.SignTx(spamTX, types.NewEIP155Signer(chainID), key.PrivateKey)
 		if err != nil {
 			return err
 		}
 		if err = web3.SendTransaction(ctx, signed); err != nil {
+			// If replacement error, try again with next iteration which will get fresh nonce
+			if strings.Contains(err.Error(), "replacement transaction underpriced") {
+				time.Sleep(timeGapPerMiningTX)
+				block, err = web3.BlockByNumber(ctx, nil)
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			return err
 		}
-		nonce++
 		time.Sleep(timeGapPerMiningTX)
 		block, err = web3.BlockByNumber(ctx, nil)
 		if err != nil {

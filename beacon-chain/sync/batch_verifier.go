@@ -4,17 +4,18 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 )
 
-const signatureVerificationInterval = 50 * time.Millisecond
+const signatureVerificationInterval = 5 * time.Millisecond
 
 type signatureVerifier struct {
 	set     *bls.SignatureBatch
@@ -130,7 +131,7 @@ func verifyBatch(verifierBatch []*signatureVerifier) {
 			verificationErr = errors.New("batch signature verification failed")
 		}
 	}
-	for i := 0; i < len(verifierBatch); i++ {
+	for i := range verifierBatch {
 		verifierBatch[i].resChan <- verificationErr
 	}
 }
@@ -160,12 +161,16 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 
 	timeout := time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second
 
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 	verificationSet := &kzgVerifier{dataColumns: dataColumns, resChan: resChan}
-	s.kzgChan <- verificationSet
-
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	select {
+	case s.kzgChan <- verificationSet:
+	case <-ctx.Done():
+		return pubsub.ValidationIgnore, ctx.Err()
+	}
 
 	select {
 	case <-ctx.Done():
@@ -183,11 +188,13 @@ func (s *Service) validateWithKzgBatchVerifier(ctx context.Context, dataColumns 
 func (s *Service) validateUnbatchedColumnsKzg(ctx context.Context, columns []blocks.RODataColumn) (pubsub.ValidationResult, error) {
 	_, span := trace.StartSpan(ctx, "sync.validateUnbatchedColumnsKzg")
 	defer span.End()
+	start := time.Now()
 	if err := peerdas.VerifyDataColumnsSidecarKZGProofs(columns); err != nil {
 		err = errors.Wrap(err, "could not verify")
 		tracing.AnnotateError(span, err)
 		return pubsub.ValidationReject, err
 	}
+	verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("fallback").Observe(float64(time.Since(start).Milliseconds()))
 	return pubsub.ValidationAccept, nil
 }
 
@@ -202,9 +209,12 @@ func verifyKzgBatch(kzgBatch []*kzgVerifier) {
 	}
 
 	var verificationErr error
+	start := time.Now()
 	err := peerdas.VerifyDataColumnsSidecarKZGProofs(allDataColumns)
 	if err != nil {
 		verificationErr = errors.Wrap(err, "batch KZG verification failed")
+	} else {
+		verification.DataColumnBatchKZGVerificationHistogram.WithLabelValues("batch").Observe(float64(time.Since(start).Milliseconds()))
 	}
 
 	// Send the same result to all verifiers in the batch

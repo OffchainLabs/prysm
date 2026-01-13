@@ -6,24 +6,24 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -38,6 +38,7 @@ func TestProposeAttestation(t *testing.T) {
 		OperationNotifier:       (&mock.ChainService{}).OperationNotifier(),
 		TimeFetcher:             chainService,
 		AttestationStateFetcher: chainService,
+		SyncChecker:             &mockSync.Sync{IsSyncing: false},
 	}
 	head := util.NewBeaconBlock()
 	head.Block.Slot = 999
@@ -46,7 +47,7 @@ func TestProposeAttestation(t *testing.T) {
 	require.NoError(t, err)
 
 	validators := make([]*ethpb.Validator, 64)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			PublicKey:             make([]byte, 48),
 			WithdrawalCredentials: make([]byte, 32),
@@ -141,12 +142,44 @@ func TestProposeAttestation_IncorrectSignature(t *testing.T) {
 		P2P:               &mockp2p.MockBroadcaster{},
 		AttPool:           attestations.NewPool(),
 		OperationNotifier: (&mock.ChainService{}).OperationNotifier(),
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
 	}
 
 	req := util.HydrateAttestation(&ethpb.Attestation{})
 	wanted := "Incorrect attestation signature"
 	_, err := attesterServer.ProposeAttestation(t.Context(), req)
 	assert.ErrorContains(t, wanted, err)
+}
+
+func TestProposeAttestation_Syncing(t *testing.T) {
+	attesterServer := &Server{
+		SyncChecker: &mockSync.Sync{IsSyncing: true},
+	}
+
+	req := util.HydrateAttestation(&ethpb.Attestation{})
+	_, err := attesterServer.ProposeAttestation(t.Context(), req)
+	assert.ErrorContains(t, "Syncing to latest head", err)
+	s, ok := status.FromError(err)
+	require.Equal(t, true, ok)
+	assert.Equal(t, codes.Unavailable, s.Code())
+}
+
+func TestProposeAttestationElectra_Syncing(t *testing.T) {
+	attesterServer := &Server{
+		SyncChecker: &mockSync.Sync{IsSyncing: true},
+	}
+
+	req := &ethpb.SingleAttestation{
+		Data: &ethpb.AttestationData{
+			Source: &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target: &ethpb.Checkpoint{Root: make([]byte, 32)},
+		},
+	}
+	_, err := attesterServer.ProposeAttestationElectra(t.Context(), req)
+	assert.ErrorContains(t, "Syncing to latest head", err)
+	s, ok := status.FromError(err)
+	require.Equal(t, true, ok)
+	assert.Equal(t, codes.Unavailable, s.Code())
 }
 
 func TestGetAttestationData_OK(t *testing.T) {
@@ -253,12 +286,11 @@ func BenchmarkGetAttestationDataConcurrent(b *testing.B) {
 		Slot:           3*params.BeaconConfig().SlotsPerEpoch + 1,
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var wg sync.WaitGroup
 		wg.Add(5000) // for 5000 concurrent accesses
 
-		for j := 0; j < 5000; j++ {
+		for range 5000 {
 			go func() {
 				defer wg.Done()
 				_, err := attesterServer.GetAttestationData(b.Context(), req)
@@ -577,7 +609,7 @@ func TestServer_SubscribeCommitteeSubnets_MultipleSlots(t *testing.T) {
 	randGen := rand.New(s)
 
 	validators := make([]*ethpb.Validator, 64)
-	for i := 0; i < len(validators); i++ {
+	for i := range validators {
 		validators[i] = &ethpb.Validator{
 			ExitEpoch:        params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance: params.BeaconConfig().MaxEffectiveBalance,

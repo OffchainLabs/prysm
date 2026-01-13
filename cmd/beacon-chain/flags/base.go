@@ -5,8 +5,8 @@ package flags
 import (
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/cmd"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/cmd"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -204,7 +204,7 @@ var (
 	BlobBatchLimit = &cli.IntFlag{
 		Name:  "blob-batch-limit",
 		Usage: "The amount of blobs the local peer is bounded to request and respond to in a batch.",
-		Value: 192,
+		Value: 384,
 	}
 	// BlobBatchLimitBurstFactor specifies the factor by which blob batch size may increase.
 	BlobBatchLimitBurstFactor = &cli.IntFlag{
@@ -222,7 +222,7 @@ var (
 	DataColumnBatchLimitBurstFactor = &cli.IntFlag{
 		Name:  "data-column-batch-limit-burst-factor",
 		Usage: "The factor by which data column batch limit may increase on burst.",
-		Value: 2,
+		Value: 4,
 	}
 	// DisableDebugRPCEndpoints disables the debug Beacon API namespace.
 	DisableDebugRPCEndpoints = &cli.BoolFlag{
@@ -333,15 +333,38 @@ var (
 		Usage: "Specifies the retention period for the pruner service in terms of epochs. " +
 			"If this value is less than MIN_EPOCHS_FOR_BLOCK_REQUESTS, it will be ignored.",
 	}
-	// SubscribeAllDataSubnets enables subscription to all data subnets.
-	SubscribeAllDataSubnets = &cli.BoolFlag{
-		Name:  "subscribe-all-data-subnets",
-		Usage: "Enable subscription to all data subnets. Once set, unsetting this flag won't have any effect.",
+	// Supernode custodies all data.
+	Supernode = &cli.BoolFlag{
+		Name:    "supernode",
+		Aliases: []string{"subscribe-all-data-subnets"},
+		Usage:   "Custodies all data. Cannot be used with --semi-supernode.",
+	}
+	// SemiSupernode custodies just enough data to serve the blobs and blob sidecars beacon API.
+	SemiSupernode = &cli.BoolFlag{
+		Name:  "semi-supernode",
+		Usage: "Custodies just enough data to serve the blobs and blob sidecars beacon API. Cannot be used with --supernode.",
 	}
 	// BatchVerifierLimit sets the maximum number of signatures to batch verify at once.
 	BatchVerifierLimit = &cli.IntFlag{
 		Name:  "batch-verifier-limit",
 		Usage: "Maximum number of signatures to batch verify at once for beacon attestation p2p gossip.",
 		Value: 1000,
+	}
+	// StateDiffExponents defines the state diff tree hierarchy levels.
+	StateDiffExponents = &cli.IntSliceFlag{
+		Name:  "state-diff-exponents",
+		Usage: "A comma-separated list of exponents (of 2) in decreasing order, defining the state diff hierarchy levels. The last exponent must be greater than or equal to 5.",
+		Value: cli.NewIntSlice(21, 18, 16, 13, 11, 9, 5),
+	}
+	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	DisableEphemeralLogFile = &cli.BoolFlag{
+		Name:  "disable-ephemeral-log-file",
+		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Value: false,
+	}
+	// DisableGetBlobsV2 disables the engine_getBlobsV2 usage.
+	DisableGetBlobsV2 = &cli.BoolFlag{
+		Name:  "disable-get-blobs-v2",
+		Usage: "Disables the engine_getBlobsV2 usage.",
 	}
 )

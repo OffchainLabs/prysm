@@ -7,29 +7,29 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	dbtest "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptest "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/go-bitfield"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	dbtest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 func TestVerifyIndexInCommittee_CanVerify(t *testing.T) {
@@ -94,9 +94,11 @@ func TestVerifyIndexInCommittee_ExistsInBeaconCommittee(t *testing.T) {
 	assert.ErrorContains(t, wanted, err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 
-	att.Data.CommitteeIndex = 10000
+	// Test the edge case where committee index equals count (should be rejected)
+	// With 64 validators and minimal config, count = 2, so valid indices are 0 and 1
+	att.Data.CommitteeIndex = 2
 	_, _, result, err = service.validateCommitteeIndexAndCount(ctx, att, s)
-	require.ErrorContains(t, "committee index 10000 > 2", err)
+	require.ErrorContains(t, "committee index 2 >= 2", err)
 	assert.Equal(t, pubsub.ValidationReject, result)
 }
 
@@ -228,7 +230,7 @@ func TestValidateAggregateAndProof_NoBlock(t *testing.T) {
 	_, err := p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -298,7 +300,7 @@ func TestValidateAggregateAndProof_NotWithinSlotRange(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -380,7 +382,7 @@ func TestValidateAggregateAndProof_ExistedInPool(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -483,7 +485,7 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -586,7 +588,7 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	d, err := r.currentForkDigest()
 	assert.NoError(t, err)
 	topic = r.addDigestToTopic(topic, d)
@@ -612,11 +614,10 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 		},
 	}
 
-	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers.
-	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
-		_ = err
-		t.Fatal("Validated status is true")
-	}
+	require.Eventually(t, func() bool {
+		res, _ := r.validateAggregateAndProof(t.Context(), "", msg)
+		return res != pubsub.ValidationAccept
+	}, time.Second, 10*time.Millisecond, "Expected validation to reject duplicate aggregate")
 }
 
 func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
@@ -698,7 +699,7 @@ func TestValidateAggregateAndProof_BadBlock(t *testing.T) {
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -788,7 +789,7 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
 	require.NoError(t, err)
 
-	topic := p2p.GossipTypeMapping[reflect.TypeOf(signedAggregateAndProof)]
+	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProof]()]
 	msg := &pubsub.Message{
 		Message: &pubsubpb.Message{
 			Data:  buf.Bytes(),
@@ -798,4 +799,28 @@ func TestValidateAggregateAndProof_RejectWhenAttEpochDoesntEqualTargetEpoch(t *t
 	res, err := r.validateAggregateAndProof(t.Context(), "", msg)
 	assert.NotNil(t, err)
 	assert.Equal(t, pubsub.ValidationReject, res)
+}
+
+func Test_SetAggregatorIndexEpochSeen(t *testing.T) {
+	db := dbtest.SetupDB(t)
+	p := p2ptest.NewTestP2P(t)
+
+	r := &Service{
+		cfg: &config{
+			p2p:      p,
+			beaconDB: db,
+		},
+		seenAggregatedAttestationCache: lruwrpr.New(10),
+	}
+
+	aggIndex := primitives.ValidatorIndex(42)
+	epoch := primitives.Epoch(7)
+
+	require.Equal(t, false, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
+	first := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
+	require.Equal(t, true, first)
+	require.Equal(t, true, r.hasSeenAggregatorIndexEpoch(epoch, aggIndex))
+
+	second := r.setAggregatorIndexEpochSeen(epoch, aggIndex)
+	require.Equal(t, false, second)
 }

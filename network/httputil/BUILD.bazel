@@ -4,10 +4,11 @@ go_library(
     name = "go_default_library",
     srcs = [
         "errors.go",
+        "log.go",
         "reader.go",
         "writer.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/network/httputil",
+    importpath = "github.com/OffchainLabs/prysm/v7/network/httputil",
     visibility = ["//visibility:public"],
     deps = [
         "//api:go_default_library",

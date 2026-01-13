@@ -16,6 +16,7 @@ go_library(
         "doc.go",
         "error.go",
         "interfaces.go",
+        "log.go",
         "payload_id.go",
         "proposer_indices.go",
         "proposer_indices_disabled.go",  # keep
@@ -29,7 +30,7 @@ go_library(
         "sync_subnet_ids.go",
         "tracked_validators.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/cache",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/cache",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//testing/spectest:__subpackages__",

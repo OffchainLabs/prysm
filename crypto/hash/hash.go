@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/minio/highwayhash"
 	"github.com/minio/sha256-simd"
 	fastssz "github.com/prysmaticlabs/fastssz"
@@ -19,7 +19,7 @@ import (
 // or has nil objects within lists.
 var ErrNilProto = errors.New("cannot hash a nil protobuf message")
 
-var sha256Pool = sync.Pool{New: func() interface{} {
+var sha256Pool = sync.Pool{New: func() any {
 	return sha256.New()
 }}
 
@@ -75,7 +75,7 @@ func CustomSHA256Hasher() func([]byte) [32]byte {
 	}
 }
 
-var keccak256Pool = sync.Pool{New: func() interface{} {
+var keccak256Pool = sync.Pool{New: func() any {
 	return sha3.NewLegacyKeccak256()
 }}
 

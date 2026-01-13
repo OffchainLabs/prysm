@@ -4,14 +4,14 @@ import (
 	"context"
 	"sync"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/das"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/proto/dbval"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/pkg/errors"
 )
 
@@ -45,9 +45,10 @@ type Store struct {
 	bs          *dbval.BackfillStatus
 }
 
-// AvailableBlock determines if the given slot is covered by the current chain history.
-// If the slot is <= backfill low slot, or >= backfill high slot, the result is true.
-// If the slot is between the backfill low and high slots, the result is false.
+// AvailableBlock determines if the given slot has been covered by backfill.
+// If the node was synced from genesis, all slots are considered available.
+// The genesis block at slot 0 is always available.
+// Otherwise any slot between 0 and LowSlot are considered unavailable.
 func (s *Store) AvailableBlock(sl primitives.Slot) bool {
 	s.RLock()
 	defer s.RUnlock()
@@ -71,10 +72,10 @@ func (s *Store) status() *dbval.BackfillStatus {
 	}
 }
 
-// fillBack saves the slice of blocks and updates the BackfillStatus LowSlot/Root/ParentRoot tracker to the values
-// from the first block in the slice. This method assumes that the block slice has been fully validated and
-// sorted in slot order by the calling function.
-func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityStore) (*dbval.BackfillStatus, error) {
+// fillBack saves the slice of blocks and updates the BackfillStatus tracker to match the first block in the slice.
+// This method assumes that the block slice has been fully validated and sorted in slot order by the calling function.
+// It also performs the blob and/or data column availability check, which will persist blobs/DCs to disk once verified.
+func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []blocks.ROBlock, store das.AvailabilityChecker) (*dbval.BackfillStatus, error) {
 	status := s.status()
 	if len(blocks) == 0 {
 		return status, nil
@@ -88,10 +89,8 @@ func (s *Store) fillBack(ctx context.Context, current primitives.Slot, blocks []
 			status.LowParentRoot, highest.Root(), status.LowSlot, highest.Block().Slot())
 	}
 
-	for i := range blocks {
-		if err := store.IsDataAvailable(ctx, current, blocks[i]); err != nil {
-			return nil, err
-		}
+	if err := store.IsDataAvailable(ctx, current, blocks...); err != nil {
+		return nil, errors.Wrap(err, "IsDataAvailable")
 	}
 
 	if err := s.store.SaveROBlocks(ctx, blocks, false); err != nil {

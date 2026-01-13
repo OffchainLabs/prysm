@@ -2,11 +2,12 @@ package beacon_api
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/validator/client/iface"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
@@ -101,12 +102,17 @@ func (c *beaconApiNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethp
 	return nil, errors.New("beaconApiNodeClient.Peers is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiNodeClientWithFallback.")
 }
 
-func (c *beaconApiNodeClient) IsHealthy(ctx context.Context) bool {
-	if err := c.jsonRestHandler.Get(ctx, "/eth/v1/node/health", nil); err != nil {
+// IsReady returns true only if the node is fully synced (200 OK).
+// A 206 Partial Content response indicates the node is syncing and not ready.
+func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
+	statusCode, err := c.jsonRestHandler.GetStatusCode(ctx, "/eth/v1/node/health")
+	if err != nil {
 		log.WithError(err).Error("failed to get health of node")
 		return false
 	}
-	return true
+	// Only 200 OK means the node is fully synced and ready.
+	// 206 Partial Content means syncing, 503 means unavailable.
+	return statusCode == http.StatusOK
 }
 
 func NewNodeClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface.NodeClient) iface.NodeClient {

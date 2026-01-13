@@ -17,7 +17,7 @@ go_library(
         "rpc_connection.go",
         "service.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/execution",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/execution",
     visibility = [
         "//beacon-chain:__subpackages__",
         "//cmd/beacon-chain:__subpackages__",
@@ -40,6 +40,7 @@ go_library(
         "//beacon-chain/state/state-native:go_default_library",
         "//beacon-chain/state/stategen:go_default_library",
         "//beacon-chain/verification:go_default_library",
+        "//cmd/beacon-chain/flags:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
@@ -100,6 +101,7 @@ go_test(
     deps = [
         "//async/event:go_default_library",
         "//beacon-chain/blockchain/kzg:go_default_library",
+        "//beacon-chain/blockchain/testing:go_default_library",
         "//beacon-chain/cache/depositsnapshot:go_default_library",
         "//beacon-chain/core/feed:go_default_library",
         "//beacon-chain/core/feed/state:go_default_library",

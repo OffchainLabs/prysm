@@ -10,11 +10,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api"
-	"github.com/OffchainLabs/prysm/v6/api/apiutil"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -22,9 +22,10 @@ import (
 type reqOption func(*http.Request)
 
 type RestHandler interface {
-	Get(ctx context.Context, endpoint string, resp interface{}) error
+	Get(ctx context.Context, endpoint string, resp any) error
+	GetStatusCode(ctx context.Context, endpoint string) (int, error)
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
-	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp interface{}) error
+	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
 	HttpClient() *http.Client
 	Host() string
@@ -70,7 +71,7 @@ func (c *BeaconApiRestHandler) Host() string {
 
 // Get sends a GET request and decodes the response body as a JSON object into the passed in object.
 // If an HTTP error is returned, the body is decoded as a DefaultJsonError JSON object and returned as the first return value.
-func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp interface{}) error {
+func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp any) error {
 	url := c.host + endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -88,6 +89,28 @@ func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp in
 	}()
 
 	return decodeResp(httpResp, resp)
+}
+
+// GetStatusCode sends a GET request and returns only the HTTP status code.
+// This is useful for endpoints like /eth/v1/node/health that communicate status via HTTP codes
+// (200 = ready, 206 = syncing, 503 = unavailable) rather than response bodies.
+func (c *BeaconApiRestHandler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
+	url := c.host + endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+	}
+	req.Header.Set("User-Agent", version.BuildData())
+	httpResp, err := c.client.Do(req)
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+	}
+	defer func() {
+		if err := httpResp.Body.Close(); err != nil {
+			return
+		}
+	}()
+	return httpResp.StatusCode, nil
 }
 
 func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {
@@ -135,7 +158,7 @@ func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]b
 		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
 		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
 		}
 		return nil, nil, errorJson
 	}
@@ -150,7 +173,7 @@ func (c *BeaconApiRestHandler) Post(
 	apiEndpoint string,
 	headers map[string]string,
 	data *bytes.Buffer,
-	resp interface{},
+	resp any,
 ) error {
 	if data == nil {
 		return errors.New("data is nil")
@@ -241,7 +264,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 		decoder := json.NewDecoder(bytes.NewBuffer(body))
 		errorJson := &httputil.DefaultJsonError{}
 		if err = decoder.Decode(errorJson); err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to decode response body into error json for %s", httpResp.Request.URL)
+			return nil, nil, fmt.Errorf("HTTP request for %s unsuccessful (%d: %s)", httpResp.Request.URL, httpResp.StatusCode, string(body))
 		}
 		return nil, nil, errorJson
 	}
@@ -249,7 +272,7 @@ func (c *BeaconApiRestHandler) PostSSZ(
 	return body, httpResp.Header, nil
 }
 
-func decodeResp(httpResp *http.Response, resp interface{}) error {
+func decodeResp(httpResp *http.Response, resp any) error {
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read response body for %s", httpResp.Request.URL)

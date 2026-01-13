@@ -3,10 +3,10 @@ package state_native_test
 import (
 	"testing"
 
-	statenative "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -19,10 +19,6 @@ func TestBeaconStateMerkleProofs_phase0_notsupported(t *testing.T) {
 	})
 	t.Run("next sync committee", func(t *testing.T) {
 		_, err := st.NextSyncCommitteeProof(ctx)
-		require.ErrorContains(t, "not supported", err)
-	})
-	t.Run("finalized root", func(t *testing.T) {
-		_, err := st.FinalizedRootProof(ctx)
 		require.ErrorContains(t, "not supported", err)
 	})
 }

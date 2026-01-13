@@ -4,39 +4,42 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
 var streamDeadline = 1 * time.Minute
-var startingFork = version.Phase0
 
 // AltairForkTransition ensures that the Altair hard fork has occurred successfully.
-var AltairForkTransition = types.Evaluator{
+var AltairForkTransition = e2etypes.Evaluator{
 	Name: "altair_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
-		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
-		// TODO (11750): modify policies to take an end to end config
-		if startingFork == version.Phase0 {
-			return altair(e)
+		// Only run if we started before Altair
+		if e2etypes.GenesisFork() >= version.Altair {
+			return false
 		}
-		return false
+		altair := policies.OnEpoch(params.BeaconConfig().AltairForkEpoch)
+		return altair(e)
 	},
 	Evaluation: altairForkOccurs,
 }
 
 // BellatrixForkTransition ensures that the Bellatrix hard fork has occurred successfully.
-var BellatrixForkTransition = types.Evaluator{
+var BellatrixForkTransition = e2etypes.Evaluator{
 	Name: "bellatrix_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Bellatrix
+		if e2etypes.GenesisFork() >= version.Bellatrix {
+			return false
+		}
 		fEpoch := params.BeaconConfig().BellatrixForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -44,9 +47,13 @@ var BellatrixForkTransition = types.Evaluator{
 }
 
 // CapellaForkTransition ensures that the Capella hard fork has occurred successfully.
-var CapellaForkTransition = types.Evaluator{
+var CapellaForkTransition = e2etypes.Evaluator{
 	Name: "capella_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Capella
+		if e2etypes.GenesisFork() >= version.Capella {
+			return false
+		}
 		fEpoch := params.BeaconConfig().CapellaForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -54,9 +61,13 @@ var CapellaForkTransition = types.Evaluator{
 }
 
 // DenebForkTransition ensures that the Deneb hard fork has occurred successfully
-var DenebForkTransition = types.Evaluator{
+var DenebForkTransition = e2etypes.Evaluator{
 	Name: "deneb_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Deneb
+		if e2etypes.GenesisFork() >= version.Deneb {
+			return false
+		}
 		fEpoch := params.BeaconConfig().DenebForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
@@ -64,20 +75,41 @@ var DenebForkTransition = types.Evaluator{
 }
 
 // ElectraForkTransition ensures that the electra hard fork has occurred successfully
-var ElectraForkTransition = types.Evaluator{
+var ElectraForkTransition = e2etypes.Evaluator{
 	Name: "electra_fork_transition_%d",
 	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Electra
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
 		fEpoch := params.BeaconConfig().ElectraForkEpoch
 		return policies.OnEpoch(fEpoch)(e)
 	},
 	Evaluation: electraForkOccurs,
 }
 
-func altairForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+// FuluForkTransition ensures that the fulu hard fork has occurred successfully
+var FuluForkTransition = e2etypes.Evaluator{
+	Name: "fulu_fork_transition_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Only run if we started before Fulu
+		if e2etypes.GenesisFork() >= version.Fulu {
+			return false
+		}
+		fEpoch := params.BeaconConfig().FuluForkEpoch
+		return policies.OnEpoch(fEpoch)(e)
+	},
+	Evaluation: fuluForkOccurs,
+}
+
+func altairForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
+
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
 	defer cancel()
+
 	stream, err := client.StreamBlocksAltair(ctx, &ethpb.StreamBlocksRequest{VerifiedOnly: true})
 	if err != nil {
 		return errors.Wrap(err, "failed to get stream")
@@ -86,6 +118,7 @@ func altairForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) err
 	if err != nil {
 		return err
 	}
+
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return errors.New("context canceled prematurely")
 	}
@@ -106,20 +139,24 @@ func altairForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) err
 	if err != nil {
 		return err
 	}
+
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
 		return err
 	}
 	if blk.Block().Slot() < fSlot {
 		return errors.Errorf("wanted a block >= %d but received %d", fSlot, blk.Block().Slot())
 	}
+
 	return nil
 }
 
-func bellatrixForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func bellatrixForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
+
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
 	defer cancel()
+
 	stream, err := client.StreamBlocksAltair(ctx, &ethpb.StreamBlocksRequest{VerifiedOnly: true})
 	if err != nil {
 		return errors.Wrap(err, "failed to get stream")
@@ -128,6 +165,7 @@ func bellatrixForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) 
 	if err != nil {
 		return err
 	}
+
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return errors.New("context canceled prematurely")
 	}
@@ -151,6 +189,7 @@ func bellatrixForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) 
 	if err != nil {
 		return err
 	}
+
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
 		return err
 	}
@@ -160,7 +199,7 @@ func bellatrixForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) 
 	return nil
 }
 
-func capellaForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func capellaForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -173,6 +212,7 @@ func capellaForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 	if err != nil {
 		return err
 	}
+
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return errors.New("context canceled prematurely")
 	}
@@ -194,6 +234,7 @@ func capellaForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 	if err != nil {
 		return err
 	}
+
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
 		return err
 	}
@@ -203,7 +244,7 @@ func capellaForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 	return nil
 }
 
-func denebForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func denebForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -216,6 +257,7 @@ func denebForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) erro
 	if err != nil {
 		return err
 	}
+
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return errors.New("context canceled prematurely")
 	}
@@ -237,6 +279,7 @@ func denebForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) erro
 	if err != nil {
 		return err
 	}
+
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
 		return err
 	}
@@ -246,7 +289,7 @@ func denebForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) erro
 	return nil
 }
 
-func electraForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+func electraForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconNodeValidatorClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
@@ -259,6 +302,7 @@ func electraForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 	if err != nil {
 		return err
 	}
+
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return errors.New("context canceled prematurely")
 	}
@@ -280,11 +324,66 @@ func electraForkOccurs(_ *types.EvaluationContext, conns ...*grpc.ClientConn) er
 	if err != nil {
 		return err
 	}
+
 	if err := blocks.BeaconBlockIsNil(blk); err != nil {
 		return err
 	}
 	if blk.Block().Slot() < fSlot {
 		return errors.Errorf("wanted a block at slot >= %d but received %d", fSlot, blk.Block().Slot())
 	}
+	return nil
+}
+
+func fuluForkOccurs(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	conn := conns[0]
+	client := ethpb.NewBeaconNodeValidatorClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), streamDeadline)
+	defer cancel()
+
+	stream, err := client.StreamBlocksAltair(ctx, &ethpb.StreamBlocksRequest{VerifiedOnly: true})
+	if err != nil {
+		return errors.Wrap(err, "failed to get stream")
+	}
+
+	fSlot, err := slots.EpochStart(params.BeaconConfig().FuluForkEpoch)
+	if err != nil {
+		return err
+	}
+
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return errors.New("context canceled prematurely")
+	}
+
+	res, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+
+	if res == nil || res.Block == nil {
+		return errors.New("nil block returned by beacon node")
+	}
+
+	if res.GetBlock() == nil {
+		return errors.New("nil block returned by beacon node")
+	}
+
+	if res.GetFuluBlock() == nil {
+		return errors.Errorf("non-fulu block returned after the fork with type %T", res.Block)
+	}
+
+	blk, err := blocks.NewSignedBeaconBlock(res.GetFuluBlock())
+	if err != nil {
+		return err
+	}
+
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return err
+	}
+
+	if blk.Block().Slot() < fSlot {
+		return errors.Errorf("wanted a block at slot >= %d but received %d", fSlot, blk.Block().Slot())
+	}
+
 	return nil
 }

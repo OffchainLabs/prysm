@@ -3,10 +3,9 @@ package ssz
 import (
 	"encoding/binary"
 
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/hash/htr"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/gohashtree"
 )
 
 var errInvalidNilSlice = errors.New("invalid empty slice")
@@ -113,7 +112,7 @@ func Merkleize(hasher Hasher, count, limit uint64, leaf func(i uint64) []byte) (
 	}
 
 	// merge in leaf by leaf.
-	for i := uint64(0); i < count; i++ {
+	for i := range count {
 		copy(h, leaf(i))
 		merge(i)
 	}
@@ -141,7 +140,7 @@ func MerkleizeVector(elements [][32]byte, length uint64) [32]byte {
 	if len(elements) == 0 {
 		return trie.ZeroHashes[depth]
 	}
-	for i := uint8(0); i < depth; i++ {
+	for i := range depth {
 		layerLen := len(elements)
 		oddNodeLength := layerLen%2 == 1
 		if oddNodeLength {
@@ -182,10 +181,10 @@ func MerkleizeListSSZ[T Hashable](elements []T, limit uint64) ([32]byte, error) 
 	chunks := make([][32]byte, 2)
 	chunks[0] = body
 	binary.LittleEndian.PutUint64(chunks[1][:], uint64(len(elements)))
-	if err := gohashtree.Hash(chunks, chunks); err != nil {
+	if err = htr.Hash(chunks, chunks); err != nil {
 		return [32]byte{}, err
 	}
-	return chunks[0], err
+	return chunks[0], nil
 }
 
 // MerkleizeByteSliceSSZ hashes a byteslice by chunkifying it and returning the

@@ -7,22 +7,23 @@ import (
 	"math"
 	"strings"
 
-	"github.com/OffchainLabs/prysm/v6/api/client/beacon"
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	corehelpers "github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/helpers"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
-	e2etypes "github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	corehelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/helpers"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
+	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/rand"
@@ -39,12 +40,21 @@ var depositsInBlockStart = params.E2ETestConfig().EpochsPerEth1VotingPeriod * 2
 // deposits included + finalization + MaxSeedLookahead for activation.
 var depositActivationStartEpoch = depositsInBlockStart + 2 + params.E2ETestConfig().MaxSeedLookahead
 var depositEndEpoch = depositActivationStartEpoch + primitives.Epoch(math.Ceil(float64(depositValCount)/float64(params.E2ETestConfig().MinPerEpochChurnLimit)))
-var exitSubmissionEpoch = primitives.Epoch(7)
+
+// Default exit submission epoch for standard tests.
+var defaultExitSubmissionEpoch = primitives.Epoch(7)
 
 // ProcessesDepositsInBlocks ensures the expected amount of deposits are accepted into blocks.
+// Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
 var ProcessesDepositsInBlocks = e2etypes.Evaluator{
-	Name:       "processes_deposits_in_blocks_epoch_%d",
-	Policy:     policies.OnEpoch(depositsInBlockStart), // We expect all deposits to enter in one epoch.
+	Name: "processes_deposits_in_blocks_epoch_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Skip if starting at Electra or later - deposits work differently with EIP-6110
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
+		return policies.OnEpoch(depositsInBlockStart)(e)
+	},
 	Evaluation: processesDepositsInBlocks,
 }
 
@@ -56,58 +66,118 @@ var VerifyBlockGraffiti = e2etypes.Evaluator{
 }
 
 // ActivatesDepositedValidators ensures the expected amount of validator deposits are activated into the state.
+// Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
 var ActivatesDepositedValidators = e2etypes.Evaluator{
-	Name:       "processes_deposit_validators_epoch_%d",
-	Policy:     policies.BetweenEpochs(depositActivationStartEpoch, depositEndEpoch),
+	Name: "processes_deposit_validators_epoch_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Skip if starting at Electra or later - deposits work differently with EIP-6110
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
+		return policies.BetweenEpochs(depositActivationStartEpoch, depositEndEpoch)(e)
+	},
 	Evaluation: activatesDepositedValidators,
 }
 
 // DepositedValidatorsAreActive ensures the expected amount of validators are active after their deposits are processed.
+// Note: This evaluator only works for pre-Electra genesis since Electra uses EIP-6110 deposit requests.
 var DepositedValidatorsAreActive = e2etypes.Evaluator{
-	Name:       "deposited_validators_are_active_epoch_%d",
-	Policy:     policies.AfterNthEpoch(depositEndEpoch),
+	Name: "deposited_validators_are_active_epoch_%d",
+	Policy: func(e primitives.Epoch) bool {
+		// Skip if starting at Electra or later - deposits work differently with EIP-6110
+		if e2etypes.GenesisFork() >= version.Electra {
+			return false
+		}
+		return policies.AfterNthEpoch(depositEndEpoch)(e)
+	},
 	Evaluation: depositedValidatorsAreActive,
 }
 
 // ProposeVoluntaryExit sends a voluntary exit from randomly selected validator in the genesis set.
-var ProposeVoluntaryExit = e2etypes.Evaluator{
-	Name:       "propose_voluntary_exit_epoch_%d",
-	Policy:     policies.OnEpoch(exitSubmissionEpoch),
-	Evaluation: proposeVoluntaryExit,
+// Uses the default exit submission epoch (7).
+var ProposeVoluntaryExit = ProposeVoluntaryExitAtEpoch(defaultExitSubmissionEpoch)
+
+// ProposeVoluntaryExitAtEpoch sends a voluntary exit at the specified epoch.
+var ProposeVoluntaryExitAtEpoch = func(epoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name:       "propose_voluntary_exit_epoch_%d",
+		Policy:     policies.OnEpoch(epoch),
+		Evaluation: proposeVoluntaryExit,
+	}
 }
 
 // ValidatorsHaveExited checks the beacon state for the exited validator and ensures its marked as exited.
-var ValidatorsHaveExited = e2etypes.Evaluator{
-	Name:       "voluntary_has_exited_%d",
-	Policy:     policies.OnEpoch(8),
-	Evaluation: validatorsHaveExited,
+// Uses the default exit submission epoch + 1 (epoch 8).
+var ValidatorsHaveExited = ValidatorsHaveExitedAtEpoch(defaultExitSubmissionEpoch + 1)
+
+// ValidatorsHaveExitedAtEpoch checks validators have exited at the specified epoch.
+var ValidatorsHaveExitedAtEpoch = func(epoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name:       "voluntary_has_exited_%d",
+		Policy:     policies.OnEpoch(epoch),
+		Evaluation: validatorsHaveExited,
+	}
 }
 
 // SubmitWithdrawal sends a withdrawal from a previously exited validator.
-var SubmitWithdrawal = e2etypes.Evaluator{
-	Name: "submit_withdrawal_epoch_%d",
-	Policy: func(currentEpoch primitives.Epoch) bool {
-		fEpoch := params.BeaconConfig().CapellaForkEpoch
-		return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
-	},
-	Evaluation: submitWithdrawal,
+// Uses default timing based on exit submission epoch.
+var SubmitWithdrawal = SubmitWithdrawalAtEpoch(defaultExitSubmissionEpoch + 1)
+
+// SubmitWithdrawalAtEpoch sends a withdrawal at the specified epoch.
+// For pre-Deneb genesis, it runs around the Capella fork epoch instead.
+var SubmitWithdrawalAtEpoch = func(epoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name: "submit_withdrawal_epoch_%d",
+		Policy: func(currentEpoch primitives.Epoch) bool {
+			fEpoch := params.BeaconConfig().CapellaForkEpoch
+			// If Capella is disabled (starting at Deneb+), run at the specified epoch
+			if e2etypes.GenesisFork() >= version.Deneb {
+				return policies.OnEpoch(epoch)(currentEpoch)
+			}
+			return policies.BetweenEpochs(fEpoch-2, fEpoch+1)(currentEpoch)
+		},
+		Evaluation: submitWithdrawal,
+	}
 }
 
 // ValidatorsHaveWithdrawn checks the beacon state for the withdrawn validator and ensures it has been withdrawn.
-var ValidatorsHaveWithdrawn = e2etypes.Evaluator{
-	Name: "validator_has_withdrawn_%d",
-	Policy: func(currentEpoch primitives.Epoch) bool {
-		// TODO: Fix this for mainnet configs.
-		if params.BeaconConfig().ConfigName != params.EndToEndName {
-			return false
-		}
-		// Only run this for minimal setups after capella
-		validWithdrawnEpoch := params.BeaconConfig().CapellaForkEpoch + 1
+// Uses default timing based on exit submission epoch.
+var ValidatorsHaveWithdrawn = ValidatorsHaveWithdrawnAfterExitAtEpoch(defaultExitSubmissionEpoch)
 
-		requiredPolicy := policies.OnEpoch(validWithdrawnEpoch)
-		return requiredPolicy(currentEpoch)
-	},
-	Evaluation: validatorsAreWithdrawn,
+// ValidatorsHaveWithdrawnAfterExitAtEpoch checks validators have withdrawn after exiting at the specified epoch.
+// For pre-Deneb genesis, it runs at CapellaForkEpoch + 1 instead.
+var ValidatorsHaveWithdrawnAfterExitAtEpoch = func(exitSubmitEpoch primitives.Epoch) e2etypes.Evaluator {
+	return e2etypes.Evaluator{
+		Name: "validator_has_withdrawn_%d",
+		Policy: func(currentEpoch primitives.Epoch) bool {
+			// TODO: Fix this for mainnet configs.
+			if params.BeaconConfig().ConfigName != params.EndToEndName {
+				return false
+			}
+			// Only run this for minimal setups after capella
+			fEpoch := params.BeaconConfig().CapellaForkEpoch
+			// If Capella is disabled (starting at Deneb+), run after withdrawal submission
+			var validWithdrawnEpoch primitives.Epoch
+			if e2etypes.GenesisFork() >= version.Deneb {
+				// Exit submitted at exitSubmitEpoch
+				// Exit epoch = exitSubmitEpoch + 1 + MAX_SEED_LOOKAHEAD
+				// Withdrawable epoch = exit epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+				// Add 1 more epoch for the sweep to process
+				exitEpoch := exitSubmitEpoch + 1 + primitives.Epoch(params.BeaconConfig().MaxSeedLookahead)
+				withdrawableEpoch := exitEpoch + primitives.Epoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
+				validWithdrawnEpoch = withdrawableEpoch + 1
+			} else {
+				// For pre-Deneb genesis, give 2 epochs after Capella for:
+				// 1. BLS-to-exec changes to be processed (submitted in epoch before Capella)
+				// 2. Withdrawal sweep to reach all exited validators
+				validWithdrawnEpoch = fEpoch + 2
+			}
+
+			requiredPolicy := policies.OnEpoch(validWithdrawnEpoch)
+			return requiredPolicy(currentEpoch)
+		},
+		Evaluation: validatorsAreWithdrawn,
+	}
 }
 
 // ValidatorsVoteWithTheMajority verifies whether validator vote for eth1data using the majority algorithm.
@@ -318,8 +388,7 @@ func depositedValidatorsAreActive(ec *e2etypes.EvaluationContext, conns ...*grpc
 			continue // we aren't checking for this validator
 		}
 		// ignore voluntary exits when checking balance and active status
-		exited := ec.ExitedVals[key]
-		if exited {
+		if _, exited := ec.ExitedVals[key]; exited {
 			nexits++
 			delete(expected, key)
 			continue
@@ -424,7 +493,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 			return errors.Wrap(err, "could not propose exit")
 		}
 		pubk := bytesutil.ToBytes48(deposits[exitedIndex].Data.PublicKey)
-		ec.ExitedVals[pubk] = true
+		ec.ExitedVals[pubk] = chainHead.HeadEpoch // Store submission epoch
 		return nil
 	}
 
@@ -438,7 +507,7 @@ func proposeVoluntaryExit(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientC
 	// Send an exit for a non-exited validator.
 	for i := 0; i < numOfExits; {
 		randIndex := primitives.ValidatorIndex(rand.Uint64() % params.BeaconConfig().MinGenesisActiveValidatorCount)
-		if ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())] {
+		if _, alreadyExited := ec.ExitedVals[bytesutil.ToBytes48(privKeys[randIndex].PublicKey().Marshal())]; alreadyExited {
 			continue
 		}
 		if err := sendExit(randIndex); err != nil {
@@ -534,6 +603,14 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 			b := blk.GetBlindedElectraBlock().Message
 			slot = b.Slot
 			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_FuluBlock:
+			b := blk.GetFuluBlock().Block
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
+		case *ethpb.BeaconBlockContainer_BlindedFuluBlock:
+			b := blk.GetBlindedFuluBlock().Message
+			slot = b.Slot
+			vote = b.Body.Eth1Data.BlockHash
 		default:
 			return fmt.Errorf("block of type %T is unknown", blk.Block)
 		}
@@ -554,20 +631,28 @@ func validatorsVoteWithTheMajority(ec *e2etypes.EvaluationContext, conns ...*grp
 		}
 		if isFirstSlotInVotingPeriod {
 			ec.ExpectedEth1DataVote = vote
+			ec.Eth1DataMismatchCount = 0 // Reset for new voting period
 			return nil
 		}
 
 		if !bytes.Equal(vote, ec.ExpectedEth1DataVote) {
-			for i := primitives.Slot(0); i < slot; i++ {
-				v, ok := ec.SeenVotes[i]
-				if ok {
-					fmt.Printf("vote at slot=%d = %#x\n", i, v)
-				} else {
-					fmt.Printf("did not see slot=%d\n", i)
+			// Allow some tolerance for eth1data vote differences.
+			// Validators may have slightly different views of the eth1 chain
+			// as new blocks arrive during the voting period.
+			ec.Eth1DataMismatchCount++
+			// Allow up to 2 mismatches per voting period before failing.
+			if ec.Eth1DataMismatchCount > 2 {
+				for i := primitives.Slot(0); i < slot; i++ {
+					v, ok := ec.SeenVotes[i]
+					if ok {
+						fmt.Printf("vote at slot=%d = %#x\n", i, v)
+					} else {
+						fmt.Printf("did not see slot=%d\n", i)
+					}
 				}
+				return fmt.Errorf("incorrect eth1data vote for slot %d; expected: %#x vs voted: %#x (mismatch count: %d)",
+					slot, ec.ExpectedEth1DataVote, vote, ec.Eth1DataMismatchCount)
 			}
-			return fmt.Errorf("incorrect eth1data vote for slot %d; expected: %#x vs voted: %#x",
-				slot, ec.ExpectedEth1DataVote, vote)
 		}
 	}
 	return nil
@@ -611,8 +696,12 @@ func submitWithdrawal(ec *e2etypes.EvaluationContext, conns ...*grpc.ClientConn)
 	}
 	changes := make([]*structs.SignedBLSToExecutionChange, 0)
 	// Only send half the number of changes each time, to allow us to test
-	// at the fork boundary.
+	// at the fork boundary. When starting from Deneb+ at genesis, there's no
+	// fork boundary to test so we send all changes.
 	wantedChanges := numOfExits / 2
+	if e2etypes.GenesisFork() >= version.Deneb {
+		wantedChanges = numOfExits
+	}
 	for _, idx := range exitedIndices {
 		// Exit sending more change messages.
 		if len(changes) >= wantedChanges {

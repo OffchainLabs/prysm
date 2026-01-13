@@ -9,7 +9,7 @@ go_library(
         "merkleize.go",
         "slice_root.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/encoding/ssz",
+    importpath = "github.com/OffchainLabs/prysm/v7/encoding/ssz",
     visibility = ["//visibility:public"],
     deps = [
         "//config/fieldparams:go_default_library",
@@ -21,7 +21,6 @@ go_library(
         "@com_github_minio_sha256_simd//:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
-        "@com_github_prysmaticlabs_gohashtree//:go_default_library",
     ],
 )
 

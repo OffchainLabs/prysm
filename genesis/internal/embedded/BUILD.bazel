@@ -7,7 +7,7 @@ go_library(
         "mainnet.go",
     ],
     embedsrcs = ["mainnet.ssz.snappy"],
-    importpath = "github.com/OffchainLabs/prysm/v6/genesis/internal/embedded",
+    importpath = "github.com/OffchainLabs/prysm/v7/genesis/internal/embedded",
     visibility = [
         "//genesis:__pkg__",
     ],

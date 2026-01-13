@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	contracts "github.com/OffchainLabs/prysm/v6/contracts/deposit"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	eth "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	e2e "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	contracts "github.com/OffchainLabs/prysm/v7/contracts/deposit"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -198,7 +198,7 @@ func (d *Depositor) SendAndMineByBatch(ctx context.Context, offset, nvals, batch
 	}
 	numBatch := len(deposits) / batchSize
 	log.WithField("numDeposits", len(deposits)).WithField("batchSize", batchSize).WithField("numBatches", numBatch).WithField("balance", balance.String()).WithField("account", d.Key.Address.Hex()).Info("SendAndMineByBatch check")
-	for i := 0; i < numBatch; i++ {
+	for i := range numBatch {
 		txo, err := d.txops(ctx)
 		if err != nil {
 			return err
@@ -267,6 +267,10 @@ func (d *Depositor) txops(ctx context.Context) (*bind.TransactOpts, error) {
 		return nil, err
 	}
 	txo.Nonce = big.NewInt(0).SetUint64(nonce)
+	// Set a high gas price to ensure deposit transactions can replace any pending
+	// transactions from the transaction generator that may be using the same nonce.
+	// The transaction generator uses 1e11 (100 Gwei), so we use 2e11 (200 Gwei).
+	txo.GasPrice = big.NewInt(2e11)
 	return txo, nil
 }
 

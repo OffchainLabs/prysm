@@ -3,11 +3,11 @@ package monitor
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -22,7 +22,7 @@ func TestProcessSyncCommitteeContribution(t *testing.T) {
 	}
 
 	s.processSyncCommitteeContribution(contrib)
-	require.LogsContain(t, hook, "\"Sync committee aggregation processed\" prefix=monitor validatorIndex=1")
+	require.LogsContain(t, hook, "\"Sync committee aggregation processed\" package=beacon-chain/monitor validatorIndex=1")
 	require.LogsDoNotContain(t, hook, "validatorIndex=2")
 }
 
@@ -53,7 +53,7 @@ func TestProcessSyncAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	s.processSyncAggregate(beaconState, wrappedBlock)
-	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=0 contribCount=1 expectedContribCount=4 newBalance=32000000000 prefix=monitor validatorIndex=1")
-	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=100000000 contribCount=2 expectedContribCount=2 newBalance=32000000000 prefix=monitor validatorIndex=12")
+	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=0 contribCount=1 expectedContribCount=4 newBalance=32000000000 package=beacon-chain/monitor validatorIndex=1")
+	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=100000000 contribCount=2 expectedContribCount=2 newBalance=32000000000 package=beacon-chain/monitor validatorIndex=12")
 	require.LogsDoNotContain(t, hook, "validatorIndex=2")
 }

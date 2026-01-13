@@ -5,19 +5,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	testDB "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	p2pTesting "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	p2pTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
 func TestLightClientStore(t *testing.T) {
@@ -75,7 +75,6 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 	p2p := p2pTesting.NewTestP2P(t)
 	lcStore := NewLightClientStore(p2p, new(event.Feed), testDB.SetupDB(t))
 
-	timeForGoroutinesToFinish := 20 * time.Microsecond
 	// update 0 with basic data and no supermajority following an empty lastFinalityUpdate - should save and broadcast
 	l0 := util.NewTestLightClient(t, version.Altair)
 	update0, err := NewLightClientFinalityUpdateFromBeaconState(l0.Ctx, l0.State, l0.Block, l0.AttestedState, l0.AttestedBlock, l0.FinalizedBlock)
@@ -87,8 +86,9 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update0, true)
 	require.Equal(t, update0, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
-	require.Equal(t, true, p2p.BroadcastCalled.Load(), "Broadcast should have been called after setting a new last finality update when previous is nil")
+	require.Eventually(t, func() bool {
+		return p2p.BroadcastCalled.Load()
+	}, time.Second, 10*time.Millisecond, "Broadcast should have been called after setting a new last finality update when previous is nil")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
 	// update 1 with same finality slot, increased attested slot, and no supermajority - should save but not broadcast
@@ -102,7 +102,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update1, true)
 	require.Equal(t, update1, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called after setting a new last finality update without supermajority")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
@@ -117,8 +117,9 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update2, true)
 	require.Equal(t, update2, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
-	require.Equal(t, true, p2p.BroadcastCalled.Load(), "Broadcast should have been called after setting a new last finality update with supermajority")
+	require.Eventually(t, func() bool {
+		return p2p.BroadcastCalled.Load()
+	}, time.Second, 10*time.Millisecond, "Broadcast should have been called after setting a new last finality update with supermajority")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
 	// update 3 with same finality slot, increased attested slot, and supermajority - should save but not broadcast
@@ -132,7 +133,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update3, true)
 	require.Equal(t, update3, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been when previous was already broadcast")
 
 	// update 4 with increased finality slot, increased attested slot, and supermajority - should save and broadcast
@@ -146,8 +147,9 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update4, true)
 	require.Equal(t, update4, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
-	require.Equal(t, true, p2p.BroadcastCalled.Load(), "Broadcast should have been called after a new finality update with increased finality slot")
+	require.Eventually(t, func() bool {
+		return p2p.BroadcastCalled.Load()
+	}, time.Second, 10*time.Millisecond, "Broadcast should have been called after a new finality update with increased finality slot")
 	p2p.BroadcastCalled.Store(false) // Reset for next test
 
 	// update 5 with the same new finality slot, increased attested slot, and supermajority - should save but not broadcast
@@ -161,7 +163,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update5, true)
 	require.Equal(t, update5, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called when previous was already broadcast with supermajority")
 
 	// update 6 with the same new finality slot, increased attested slot, and no supermajority - should save but not broadcast
@@ -175,7 +177,7 @@ func TestLightClientStore_SetLastFinalityUpdate(t *testing.T) {
 
 	lcStore.SetLastFinalityUpdate(update6, true)
 	require.Equal(t, update6, lcStore.LastFinalityUpdate(), "lastFinalityUpdate should match the set value")
-	time.Sleep(timeForGoroutinesToFinish) // give some time for the broadcast goroutine to finish
+	time.Sleep(50 * time.Millisecond) // Wait briefly to verify broadcast is not called
 	require.Equal(t, false, p2p.BroadcastCalled.Load(), "Broadcast should not have been called when previous was already broadcast with supermajority")
 }
 
@@ -366,7 +368,7 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		s := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			newBlock := util.NewBeaconBlock()
 			newBlock.Block.Slot = primitives.Slot(32 + uint64(i))
 			newBlock.Block.ParentRoot = finalizedBlockRoot[:]
@@ -394,7 +396,7 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		s := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), beaconDB)
 		require.NotNil(t, s)
 
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			newBlock := util.NewBeaconBlock()
 			newBlock.Block.Slot = primitives.Slot(32 + uint64(i))
 			newBlock.Block.ParentRoot = finalizedBlockRoot[:]
@@ -844,7 +846,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 		updates, err := s.LightClientUpdates(ctx, 1, 5, headBlock)
 		require.NoError(t, err)
 		require.Equal(t, 5, len(updates))
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			require.DeepEqual(t, update, updates[i], "Expected to find the update in the store")
 		}
 	})
@@ -899,7 +901,7 @@ func TestLightClientStore_LightClientUpdatesByRange(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 5, len(updates))
 		// first two updates should be update1
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			require.DeepEqual(t, update1, updates[i], "Expected to find the update in the store")
 		}
 		// next three updates should be update2 - as cache overrides db

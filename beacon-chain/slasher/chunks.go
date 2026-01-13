@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	slashertypes "github.com/OffchainLabs/prysm/v6/beacon-chain/slasher/types"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -101,7 +101,7 @@ func EmptyMinSpanChunksSlice(params *Parameters) *MinSpanChunksSlice {
 		params: params,
 	}
 	data := make([]uint16, params.chunkSize*params.validatorChunkSize)
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		data[i] = m.NeutralElement()
 	}
 	m.data = data
@@ -116,7 +116,7 @@ func EmptyMaxSpanChunksSlice(params *Parameters) *MaxSpanChunksSlice {
 		params: params,
 	}
 	data := make([]uint16, params.chunkSize*params.validatorChunkSize)
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		data[i] = m.NeutralElement()
 	}
 	m.data = data

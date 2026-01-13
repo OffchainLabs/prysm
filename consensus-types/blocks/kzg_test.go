@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/prysmaticlabs/gohashtree"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func Test_MerkleProofKZGCommitment_Altair(t *testing.T) {
@@ -108,7 +108,7 @@ func Test_MerkleProofKZGCommitment(t *testing.T) {
 	require.Equal(t, true, trie.VerifyMerkleProof(root[:], commitmentsRoot[:], kzgPosition, topProof[:len(topProof)-1]))
 
 	chunk := makeChunk(kzgs[index])
-	gohashtree.HashChunks(chunk, chunk)
+	htr.HashChunks(chunk, chunk)
 	require.Equal(t, true, trie.VerifyMerkleProof(root[:], chunk[0][:], uint64(index+KZGOffset), proof))
 }
 
@@ -230,8 +230,8 @@ func Benchmark_MerkleProofKZGCommitment(b *testing.B) {
 	body, err := NewBeaconBlockBody(pbBody)
 	require.NoError(b, err)
 	index := 1
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := MerkleProofKZGCommitment(body, index)
 		require.NoError(b, err)
 	}

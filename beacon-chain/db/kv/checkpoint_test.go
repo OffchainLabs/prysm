@@ -3,13 +3,13 @@ package kv
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -136,4 +136,33 @@ func TestStore_FinalizedCheckpoint_StateMustExist(t *testing.T) {
 	}
 
 	require.ErrorContains(t, errMissingStateForCheckpoint.Error(), db.SaveFinalizedCheckpoint(ctx, cp))
+}
+
+// Regression test: verify that saving a checkpoint triggers recovery which writes
+// the state summary into the correct stateSummaryBucket so that HasStateSummary/StateSummary see it.
+func TestRecoverStateSummary_WritesToStateSummaryBucket(t *testing.T) {
+	db := setupDB(t)
+	ctx := t.Context()
+
+	// Create a block without saving a state or summary, so recovery is needed.
+	blk := util.HydrateSignedBeaconBlock(&ethpb.SignedBeaconBlock{})
+	root, err := blk.Block.HashTreeRoot()
+	require.NoError(t, err)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	require.NoError(t, db.SaveBlock(ctx, wsb))
+
+	// Precondition: summary not present yet.
+	require.Equal(t, false, db.HasStateSummary(ctx, root))
+
+	// Saving justified checkpoint should trigger recovery path calling recoverStateSummary.
+	cp := &ethpb.Checkpoint{Epoch: 2, Root: root[:]}
+	require.NoError(t, db.SaveJustifiedCheckpoint(ctx, cp))
+
+	// Postcondition: summary is visible via the public summary APIs (which read stateSummaryBucket).
+	require.Equal(t, true, db.HasStateSummary(ctx, root))
+	summary, err := db.StateSummary(ctx, root)
+	require.NoError(t, err)
+	require.NotNil(t, summary)
+	assert.DeepEqual(t, &ethpb.StateSummary{Slot: blk.Block.Slot, Root: root[:]}, summary)
 }

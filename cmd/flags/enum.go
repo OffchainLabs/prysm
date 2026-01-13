@@ -4,6 +4,7 @@ package flags
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/urfave/cli/v2"
@@ -19,11 +20,9 @@ type EnumValue struct {
 }
 
 func (e *EnumValue) Set(value string) error {
-	for _, enum := range e.Enum {
-		if enum == value {
-			*e.Destination = value
-			return nil
-		}
+	if slices.Contains(e.Enum, value) {
+		*e.Destination = value
+		return nil
 	}
 
 	return fmt.Errorf("allowed values are %s", strings.Join(e.Enum, ", "))

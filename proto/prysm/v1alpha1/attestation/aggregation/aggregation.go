@@ -4,11 +4,8 @@ package aggregation
 import (
 	"errors"
 
-	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/sirupsen/logrus"
+	"github.com/OffchainLabs/go-bitfield"
 )
-
-var _ = logrus.WithField("prefix", "aggregation")
 
 var (
 	// ErrBitsOverlap is returned when two bitlists overlap with each other.

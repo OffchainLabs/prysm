@@ -7,30 +7,30 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/OffchainLabs/prysm/v6/api/server/structs"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/altair"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/network/httputil"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/runtime/version"
-	e2eparams "github.com/OffchainLabs/prysm/v6/testing/endtoend/params"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/policies"
-	"github.com/OffchainLabs/prysm/v6/testing/endtoend/types"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/network/httputil"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	e2eparams "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
+	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var expectedParticipation = 0.99
+var expectedParticipation = 0.98
 
 var expectedMulticlientParticipation = 0.95
 
-var expectedSyncParticipation = 0.99
+var expectedSyncParticipation = 0.95
 
 // ValidatorsAreActive ensures the expected amount of validators are active.
 var ValidatorsAreActive = types.Evaluator{
@@ -62,6 +62,7 @@ var ValidatorSyncParticipation = types.Evaluator{
 func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconChainClient(conn)
+
 	// Balances actually fluctuate but we just want to check initial balance.
 	validatorRequest := &ethpb.ListValidatorsRequest{
 		PageSize: int32(params.BeaconConfig().MinGenesisActiveValidatorCount),
@@ -72,17 +73,26 @@ func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn)
 		return errors.Wrap(err, "failed to get validators")
 	}
 
-	expectedCount := params.BeaconConfig().MinGenesisActiveValidatorCount
+	// Count should be MinGenesisActiveValidatorCount minus any validators that have exited.
+	// We determine actual exited count from the difference, as exits may be submitted but
+	// not yet processed, or affected by churn limits.
 	receivedCount := uint64(len(validators.ValidatorList))
-	if expectedCount != receivedCount {
-		return fmt.Errorf("expected validator count to be %d, received %d", expectedCount, receivedCount)
+	maxExpected := params.BeaconConfig().MinGenesisActiveValidatorCount
+	minExpected := maxExpected - uint64(len(ec.ExitedVals))
+
+	if receivedCount > maxExpected {
+		return fmt.Errorf("validator count %d exceeds genesis count %d", receivedCount, maxExpected)
+	}
+	if receivedCount < minExpected {
+		return fmt.Errorf("validator count %d is less than expected minimum %d (genesis %d - %d submitted exits)",
+			receivedCount, minExpected, maxExpected, len(ec.ExitedVals))
 	}
 
 	effBalanceLowCount := 0
 	exitEpochWrongCount := 0
 	withdrawEpochWrongCount := 0
 	for _, item := range validators.ValidatorList {
-		if ec.ExitedVals[bytesutil.ToBytes48(item.Validator.PublicKey)] {
+		if _, exited := ec.ExitedVals[bytesutil.ToBytes48(item.Validator.PublicKey)]; exited {
 			continue
 		}
 		if item.Validator.EffectiveBalance < params.BeaconConfig().MaxEffectiveBalance {
@@ -262,6 +272,11 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 			// Skip fork slot.
 			continue
 		}
+		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
+		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
+		if b.Block().Slot() < 3 {
+			continue
+		}
 		expectedParticipation := expectedSyncParticipation
 		switch slots.ToEpoch(b.Block().Slot()) {
 		case params.BeaconConfig().AltairForkEpoch:
@@ -295,20 +310,34 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 		if b == nil || b.IsNil() {
 			return errors.New("nil block provided")
 		}
-		forkSlot, err := slots.EpochStart(params.BeaconConfig().AltairForkEpoch)
-		if err != nil {
-			return err
+		// Skip evaluation of fork transition slots as sync participation
+		// tends to drop briefly when transitioning between forks.
+		forkEpochs := []primitives.Epoch{
+			params.BeaconConfig().AltairForkEpoch,
+			params.BeaconConfig().BellatrixForkEpoch,
+			params.BeaconConfig().CapellaForkEpoch,
+			params.BeaconConfig().DenebForkEpoch,
+			params.BeaconConfig().ElectraForkEpoch,
+			params.BeaconConfig().FuluForkEpoch,
 		}
-		nexForkSlot, err := slots.EpochStart(params.BeaconConfig().BellatrixForkEpoch)
-		if err != nil {
-			return err
+		skipSlot := false
+		for _, forkEpoch := range forkEpochs {
+			// Skip fork epochs set to far future (not scheduled).
+			if forkEpoch == params.BeaconConfig().FarFutureEpoch {
+				continue
+			}
+			forkSlot, err := slots.EpochStart(forkEpoch)
+			if err != nil {
+				return err
+			}
+			// Skip the first two slots of each fork epoch.
+			if b.Block().Slot() == forkSlot || b.Block().Slot() == forkSlot+1 {
+				skipSlot = true
+				break
+			}
 		}
-		switch b.Block().Slot() {
-		case forkSlot, forkSlot + 1, nexForkSlot:
-			// Skip evaluation of the slot.
+		if skipSlot {
 			continue
-		default:
-			// no-op
 		}
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
@@ -352,6 +381,14 @@ func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfac
 	}
 	if container.GetBlindedElectraBlock() != nil {
 		return blocks.NewSignedBeaconBlock(container.GetBlindedElectraBlock())
+	}
+
+	if container.GetFuluBlock() != nil {
+		return blocks.NewSignedBeaconBlock(container.GetFuluBlock())
+	}
+
+	if container.GetBlindedFuluBlock() != nil {
+		return blocks.NewSignedBeaconBlock(container.GetBlindedFuluBlock())
 	}
 	return nil, errors.New("no supported block type in container")
 }

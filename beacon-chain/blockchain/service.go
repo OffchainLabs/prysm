@@ -9,36 +9,35 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	coreTime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	f "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	f "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -290,19 +289,6 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 		return errors.Wrap(err, "failed to initialize blockchain service")
 	}
 
-	if !params.FuluEnabled() {
-		return nil
-	}
-
-	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(saved.Slot())
-	if err != nil {
-		return errors.Wrap(err, "could not get and save custody group count")
-	}
-
-	if _, _, err := s.cfg.P2P.UpdateCustodyInfo(earliestAvailableSlot, custodySubnetCount); err != nil {
-		return errors.Wrap(err, "update custody info")
-	}
-
 	return nil
 }
 
@@ -467,57 +453,6 @@ func (s *Service) removeStartupState() {
 	s.cfg.FinalizedStateAtStartUp = nil
 }
 
-// UpdateCustodyInfoInDB updates the custody information in the database.
-// It returns the (potentially updated) custody group count and the earliest available slot.
-func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
-	isSubscribedToAllDataSubnets := flags.Get().SubscribeAllDataSubnets
-
-	beaconConfig := params.BeaconConfig()
-	custodyRequirement := beaconConfig.CustodyRequirement
-
-	// Check if the node was previously subscribed to all data subnets, and if so,
-	// store the new status accordingly.
-	wasSubscribedToAllDataSubnets, err := s.cfg.BeaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSubscribedToAllDataSubnets)
-	if err != nil {
-		log.WithError(err).Error("Could not update subscription status to all data subnets")
-	}
-
-	// Warn the user if the node was previously subscribed to all data subnets and is not any more.
-	if wasSubscribedToAllDataSubnets && !isSubscribedToAllDataSubnets {
-		log.Warnf(
-			"Because the flag `--%s` was previously used, the node will still subscribe to all data subnets.",
-			flags.SubscribeAllDataSubnets.Name,
-		)
-	}
-
-	// Compute the custody group count.
-	custodyGroupCount := custodyRequirement
-	if isSubscribedToAllDataSubnets {
-		custodyGroupCount = beaconConfig.NumberOfColumns
-	}
-
-	// Safely compute the fulu fork slot.
-	fuluForkSlot, err := fuluForkSlot()
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "fulu fork slot")
-	}
-
-	// If slot is before the fulu fork slot, then use the earliest stored slot as the reference slot.
-	if slot < fuluForkSlot {
-		slot, err = s.cfg.BeaconDB.EarliestSlot(s.ctx)
-		if err != nil {
-			return 0, 0, errors.Wrap(err, "earliest slot")
-		}
-	}
-
-	earliestAvailableSlot, custodyGroupCount, err := s.cfg.BeaconDB.UpdateCustodyInfo(s.ctx, slot, custodyGroupCount)
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "update custody info")
-	}
-
-	return earliestAvailableSlot, custodyGroupCount, nil
-}
-
 func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db db.HeadAccessDatabase) {
 	currentTime := prysmTime.Now()
 	if currentTime.After(genesisTime) {
@@ -533,20 +468,4 @@ func spawnCountdownIfPreGenesis(ctx context.Context, genesisTime time.Time, db d
 		log.WithError(err).Fatal("Could not hash tree root genesis state")
 	}
 	go slots.CountdownToGenesis(ctx, genesisTime, uint64(gState.NumValidators()), gRoot)
-}
-
-func fuluForkSlot() (primitives.Slot, error) {
-	beaconConfig := params.BeaconConfig()
-
-	fuluForkEpoch := beaconConfig.FuluForkEpoch
-	if fuluForkEpoch == beaconConfig.FarFutureEpoch {
-		return beaconConfig.FarFutureSlot, nil
-	}
-
-	forkFuluSlot, err := slots.EpochStart(fuluForkEpoch)
-	if err != nil {
-		return 0, errors.Wrap(err, "epoch start")
-	}
-
-	return forkFuluSlot, nil
 }

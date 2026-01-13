@@ -206,18 +206,6 @@ type WeakSubjectivityData struct {
 	StateRoot    string      `json:"state_root"`
 }
 
-type GetDepositSnapshotResponse struct {
-	Data *DepositSnapshot `json:"data"`
-}
-
-type DepositSnapshot struct {
-	Finalized            []string `json:"finalized"`
-	DepositRoot          string   `json:"deposit_root"`
-	DepositCount         string   `json:"deposit_count"`
-	ExecutionBlockHash   string   `json:"execution_block_hash"`
-	ExecutionBlockHeight string   `json:"execution_block_height"`
-}
-
 type GetIndividualVotesRequest struct {
 	Epoch      string   `json:"epoch"`
 	PublicKeys []string `json:"public_keys,omitempty"`
@@ -295,4 +283,9 @@ type GetBlobsResponse struct {
 	ExecutionOptimistic bool     `json:"execution_optimistic"`
 	Finalized           bool     `json:"finalized"`
 	Data                []string `json:"data"` //blobs
+}
+
+type SSZQueryRequest struct {
+	Query        string `json:"query"`
+	IncludeProof bool   `json:"include_proof,omitempty"`
 }

@@ -6,52 +6,54 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/kzg"
-	mock "github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/builder"
-	builderTest "github.com/OffchainLabs/prysm/v6/beacon-chain/builder/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache/depositsnapshot"
-	b "github.com/OffchainLabs/prysm/v6/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/signing"
-	coretime "github.com/OffchainLabs/prysm/v6/beacon-chain/core/time"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	dbutil "github.com/OffchainLabs/prysm/v6/beacon-chain/db/testing"
-	mockExecution "github.com/OffchainLabs/prysm/v6/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/OffchainLabs/prysm/v6/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	mockp2p "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/testing"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/testutil"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
-	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	mockSync "github.com/OffchainLabs/prysm/v6/beacon-chain/sync/initial-sync/testing"
-	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
-	"github.com/OffchainLabs/prysm/v6/container/trie"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
-	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
-	"github.com/OffchainLabs/prysm/v6/encoding/ssz"
-	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
-	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation"
-	attaggregation "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1/attestation/aggregation/attestations"
-	"github.com/OffchainLabs/prysm/v6/testing/assert"
-	"github.com/OffchainLabs/prysm/v6/testing/require"
-	"github.com/OffchainLabs/prysm/v6/testing/util"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/go-bitfield"
+	builderapi "github.com/OffchainLabs/prysm/v7/api/client/builder"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/kzg"
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
+	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache/depositsnapshot"
+	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	coretime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	mockExecution "github.com/OffchainLabs/prysm/v7/beacon-chain/execution/testing"
+	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/testutil"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	attaggregation "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -1120,7 +1122,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				numberOfColumns := uint64(128)
 				// For Fulu, we have cell proofs (blobs * numberOfColumns)
 				cellProofs := make([][]byte, numberOfColumns)
-				for i := uint64(0); i < numberOfColumns; i++ {
+				for i := range numberOfColumns {
 					cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 				}
 				// Blob must be exactly 131072 bytes
@@ -1154,7 +1156,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 				}
 				// Create properly sized blobs (131072 bytes each)
 				blobs := make([][]byte, blobCount)
-				for i := 0; i < blobCount; i++ {
+				for i := range blobCount {
 					blob := make([]byte, 131072)
 					blob[0] = byte(i + 1)
 					blobs[i] = blob
@@ -1243,7 +1245,7 @@ func TestProposer_ProposeBlock_OK(t *testing.T) {
 			// Create cell proofs for Fulu blocks (128 proofs per blob)
 			numberOfColumns := uint64(128)
 			cellProofs := make([][]byte, numberOfColumns)
-			for i := uint64(0); i < numberOfColumns; i++ {
+			for i := range numberOfColumns {
 				cellProofs[i] = bytesutil.PadTo([]byte{byte(i)}, 48)
 			}
 			// Create properly sized blob for mock builder
@@ -1309,6 +1311,59 @@ func TestProposer_ComputeStateRoot_OK(t *testing.T) {
 	require.NoError(t, err)
 	_, err = proposerServer.computeStateRoot(t.Context(), wsb)
 	require.NoError(t, err)
+}
+
+func TestHandleStateRootError_MaxAttemptsReached(t *testing.T) {
+	// Test that handleStateRootError returns an error when max attempts is reached
+	// instead of recursing infinitely.
+	ctx := t.Context()
+	vs := &Server{}
+
+	// Create a minimal block for testing
+	blk := util.NewBeaconBlock()
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	// Pre-seed the context with max attempts already reached
+	ctx = context.WithValue(ctx, computeStateRootAttemptsKey, maxComputeStateRootAttempts)
+
+	// Call handleStateRootError with a retryable error
+	_, err = vs.handleStateRootError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
+
+	// Should return an error about max attempts instead of recursing
+	require.ErrorContains(t, "attempted max compute state root attempts", err)
+}
+
+func TestHandleStateRootError_IncrementsAttempts(t *testing.T) {
+	// Test that handleStateRootError properly increments the attempts counter
+	// and eventually fails after max attempts.
+	db := dbutil.SetupDB(t)
+	ctx := t.Context()
+
+	beaconState, parentRoot, _ := util.DeterministicGenesisStateWithGenesisBlock(t, ctx, db, 100)
+
+	stateGen := stategen.New(db, doublylinkedtree.New())
+	vs := &Server{
+		StateGen: stateGen,
+	}
+
+	// Create a block that will trigger retries
+	blk := util.NewBeaconBlock()
+	blk.Block.ParentRoot = parentRoot[:]
+	blk.Block.Slot = 1
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	// Add a state for the parent root so StateByRoot succeeds
+	require.NoError(t, stateGen.SaveState(ctx, parentRoot, beaconState))
+
+	// Call handleStateRootError with a retryable error - it will recurse
+	// but eventually hit the max attempts limit since CalculateStateRoot
+	// will keep failing (no valid attestations, randao, etc.)
+	_, err = vs.handleStateRootError(ctx, wsb, transition.ErrAttestationsSignatureInvalid)
+
+	// Should eventually fail - either with max attempts or another error
+	require.NotNil(t, err)
 }
 
 func TestProposer_PendingDeposits_Eth1DataVoteOK(t *testing.T) {
@@ -2907,7 +2962,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 			name: "invalid attestations",
 			inputAtts: func() []ethpb.Att {
 				atts := make([]ethpb.Att, 10)
-				for i := 0; i < len(atts); i++ {
+				for i := range atts {
 					atts[i] = util.HydrateAttestation(&ethpb.Attestation{
 						Data: &ethpb.AttestationData{
 							CommitteeIndex: primitives.CommitteeIndex(i),
@@ -2924,7 +2979,7 @@ func TestProposer_FilterAttestation(t *testing.T) {
 			name: "filter aggregates ok",
 			inputAtts: func() []ethpb.Att {
 				atts := make([]ethpb.Att, 10)
-				for i := 0; i < len(atts); i++ {
+				for i := range atts {
 					atts[i] = util.HydrateAttestation(&ethpb.Attestation{
 						Data: &ethpb.AttestationData{
 							CommitteeIndex: primitives.CommitteeIndex(i),
@@ -3161,6 +3216,8 @@ func TestProposer_PrepareBeaconProposer(t *testing.T) {
 
 func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	hook := logTest.NewGlobal()
+	logrus.SetLevel(logrus.DebugLevel)
+
 	db := dbutil.SetupDB(t)
 	ctx := t.Context()
 	proposerServer := &Server{
@@ -3177,13 +3234,13 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err := proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validator
 	hook.Reset()
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validator with different fee recipient
 	hook.Reset()
@@ -3195,7 +3252,7 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// More than one validator
 	hook.Reset()
@@ -3208,13 +3265,13 @@ func TestProposer_PrepareBeaconProposerOverlapping(t *testing.T) {
 	}
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 
 	// Same validators
 	hook.Reset()
 	_, err = proposerServer.PrepareBeaconProposer(ctx, req)
 	require.NoError(t, err)
-	require.LogsContain(t, hook, "Updated fee recipient addresses for validator indices")
+	require.LogsContain(t, hook, "Updated fee recipient addresses")
 }
 
 func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
@@ -3226,15 +3283,15 @@ func BenchmarkServer_PrepareBeaconProposer(b *testing.B) {
 	}
 	f := bytesutil.PadTo([]byte{0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF, 0x01, 0xFF}, fieldparams.FeeRecipientLength)
 	recipients := make([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, 0)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		recipients = append(recipients, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{FeeRecipient: f, ValidatorIndex: primitives.ValidatorIndex(i)})
 	}
 
 	req := &ethpb.PrepareBeaconProposerRequest{
 		Recipients: recipients,
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := proposerServer.PrepareBeaconProposer(ctx, req)
 		if err != nil {
 			b.Fatal(err)
@@ -3629,6 +3686,54 @@ func TestServer_ProposeBeaconBlock_PostFuluBlindedBlock(t *testing.T) {
 		}
 
 		// Unblinded blocks should not trigger post-Fulu condition, even at epoch >= FuluForkEpoch
+		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.BlockRoot)
+	})
+
+	t.Run("blinded block - 502 error handling", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		cfg := params.BeaconConfig().Copy()
+		cfg.FuluForkEpoch = 10
+		params.OverrideBeaconConfig(cfg)
+
+		mockBuilder := &builderTest.MockBuilderService{
+			HasConfigured:         true,
+			Cfg:                   &builderTest.Config{BeaconDB: db},
+			PayloadDeneb:          &enginev1.ExecutionPayloadDeneb{},
+			ErrSubmitBlindedBlock: builderapi.ErrBadGateway,
+		}
+
+		c := &mock.ChainService{State: beaconState, Root: parentRoot[:]}
+		proposerServer := &Server{
+			ChainStartFetcher: &mockExecution.Chain{},
+			Eth1InfoFetcher:   &mockExecution.Chain{},
+			Eth1BlockFetcher:  &mockExecution.Chain{},
+			BlockReceiver:     c,
+			BlobReceiver:      c,
+			HeadFetcher:       c,
+			BlockNotifier:     c.BlockNotifier(),
+			OperationNotifier: c.OperationNotifier(),
+			StateGen:          stategen.New(db, doublylinkedtree.New()),
+			TimeFetcher:       c,
+			SyncChecker:       &mockSync.Sync{IsSyncing: false},
+			BeaconDB:          db,
+			BlockBuilder:      mockBuilder,
+			P2P:               &mockp2p.MockBroadcaster{},
+		}
+
+		blindedBlock := util.NewBlindedBeaconBlockDeneb()
+		blindedBlock.Message.Slot = 160 // This puts us at epoch 5 (160/32 = 5)
+		blindedBlock.Message.ProposerIndex = 0
+		blindedBlock.Message.ParentRoot = parentRoot[:]
+		blindedBlock.Message.StateRoot = make([]byte, 32)
+
+		req := &ethpb.GenericSignedBeaconBlock{
+			Block: &ethpb.GenericSignedBeaconBlock_BlindedDeneb{BlindedDeneb: blindedBlock},
+		}
+
+		// Should handle 502 error gracefully and continue with original blinded block
 		res, err := proposerServer.ProposeBeaconBlock(ctx, req)
 		require.NoError(t, err)
 		require.NotNil(t, res)

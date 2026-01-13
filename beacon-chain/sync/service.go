@@ -9,38 +9,41 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/async/abool"
-	"github.com/OffchainLabs/prysm/v6/async/event"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/blockchain"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/cache"
-	blockfeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/block"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/operation"
-	statefeed "github.com/OffchainLabs/prysm/v6/beacon-chain/core/feed/state"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/db/filesystem"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/execution"
-	lightClient "github.com/OffchainLabs/prysm/v6/beacon-chain/light-client"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/attestations"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/slashings"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/synccommittee"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/operations/voluntaryexits"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	p2ptypes "github.com/OffchainLabs/prysm/v6/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/startup"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/state/stategen"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/sync/backfill/coverage"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/verification"
-	lruwrpr "github.com/OffchainLabs/prysm/v6/cache/lru"
-	"github.com/OffchainLabs/prysm/v6/config/params"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
-	leakybucket "github.com/OffchainLabs/prysm/v6/container/leaky-bucket"
-	"github.com/OffchainLabs/prysm/v6/crypto/rand"
-	"github.com/OffchainLabs/prysm/v6/runtime"
-	prysmTime "github.com/OffchainLabs/prysm/v6/time"
-	"github.com/OffchainLabs/prysm/v6/time/slots"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/async/abool"
+	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	blockfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/block"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	statefeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/state"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filesystem"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
+	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	p2ptypes "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	leakybucket "github.com/OffchainLabs/prysm/v7/container/leaky-bucket"
+	"github.com/OffchainLabs/prysm/v7/crypto/rand"
+	"github.com/OffchainLabs/prysm/v7/runtime"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -212,7 +215,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.kzgChan = make(chan *kzgVerifier, 100)
 	// Correctly remove it from our seen pending block map.
 	// The eviction method always assumes that the mutex is held.
-	r.slotToPendingBlocks.OnEvicted(func(s string, i interface{}) {
+	r.slotToPendingBlocks.OnEvicted(func(s string, i any) {
 		if !mutexasserts.RWMutexLocked(&r.pendingQueueLock) {
 			log.Errorf("Mutex is not locked during cache eviction of values")
 			// Continue on to allow elements to be properly removed.
@@ -275,11 +278,6 @@ func (s *Service) Start() {
 
 	s.processPendingBlocksQueue()
 	s.maintainPeerStatuses()
-
-	if params.FuluEnabled() {
-		s.maintainCustodyInfo()
-	}
-
 	s.resyncIfBehind()
 
 	// Update sync metrics.
@@ -287,6 +285,15 @@ func (s *Service) Start() {
 
 	// Prune data column cache periodically on finalization.
 	async.RunEvery(s.ctx, 30*time.Second, s.pruneDataColumnCache)
+
+	if !params.FuluEnabled() {
+		return
+	}
+
+	if err := s.maintainCustodyInfo(); err != nil {
+		log.WithError(err).Error("Failed to maintain custody info")
+	}
+
 }
 
 // Stop the regular sync service.
@@ -450,6 +457,89 @@ func (s *Service) waitForInitialSync(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// UpdateCustodyInfoInDB updates the custody information in the database.
+// It returns the (potentially updated) custody group count and the earliest available slot.
+func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, uint64, error) {
+	isSupernode := flags.Get().Supernode
+	isSemiSupernode := flags.Get().SemiSupernode
+
+	cfg := params.BeaconConfig()
+	custodyRequirement := cfg.CustodyRequirement
+
+	// Check if the node was previously subscribed to all data subnets, and if so,
+	// store the new status accordingly.
+	wasSupernode, err := s.cfg.beaconDB.UpdateSubscribedToAllDataSubnets(s.ctx, isSupernode)
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "update subscribed to all data subnets")
+	}
+
+	// Compute the target custody group count based on current flag configuration.
+	targetCustodyGroupCount := custodyRequirement
+
+	// Supernode: custody all groups (either currently set or previously enabled)
+	if isSupernode {
+		targetCustodyGroupCount = cfg.NumberOfCustodyGroups
+	}
+
+	// Semi-supernode: custody minimum needed for reconstruction, or custody requirement if higher
+	if isSemiSupernode {
+		semiSupernodeCustody, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "minimum custody group count")
+		}
+
+		targetCustodyGroupCount = max(custodyRequirement, semiSupernodeCustody)
+	}
+
+	// Safely compute the fulu fork slot.
+	fuluForkSlot, err := fuluForkSlot()
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "fulu fork slot")
+	}
+
+	// If slot is before the fulu fork slot, then use the earliest stored slot as the reference slot.
+	if slot < fuluForkSlot {
+		slot, err = s.cfg.beaconDB.EarliestSlot(s.ctx)
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "earliest slot")
+		}
+	}
+
+	earliestAvailableSlot, actualCustodyGroupCount, err := s.cfg.beaconDB.UpdateCustodyInfo(s.ctx, slot, targetCustodyGroupCount)
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "update custody info")
+	}
+
+	if isSupernode {
+		log.WithFields(logrus.Fields{
+			"current": actualCustodyGroupCount,
+			"target":  cfg.NumberOfCustodyGroups,
+		}).Info("Supernode mode enabled. Will custody all data columns going forward.")
+	}
+
+	if wasSupernode && !isSupernode {
+		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.Supernode.Name)
+	}
+
+	return earliestAvailableSlot, actualCustodyGroupCount, nil
+}
+
+func fuluForkSlot() (primitives.Slot, error) {
+	cfg := params.BeaconConfig()
+
+	fuluForkEpoch := cfg.FuluForkEpoch
+	if fuluForkEpoch == cfg.FarFutureEpoch {
+		return cfg.FarFutureSlot, nil
+	}
+
+	forkFuluSlot, err := slots.EpochStart(fuluForkEpoch)
+	if err != nil {
+		return 0, errors.Wrap(err, "epoch start")
+	}
+
+	return forkFuluSlot, nil
 }
 
 // Checker defines a struct which can verify whether a node is currently

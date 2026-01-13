@@ -5,25 +5,77 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v6/async"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/peerdas"
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v6/cmd/beacon-chain/flags"
-	"github.com/OffchainLabs/prysm/v6/config/params"
+	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 var nilFinalizedStateError = errors.New("finalized state is nil")
 
-func (s *Service) maintainCustodyInfo() {
+func (s *Service) maintainCustodyInfo() error {
+	// Rationale of slot choice:
+	// - If syncing with an empty DB from genesis, then justifiedSlot = finalizedSlot = 0,
+	//   and the node starts to sync from slot 0 ==> Using justifiedSlot is correct.
+	// - If syncing with an empty DB from a checkpoint, then justifiedSlot = finalizedSlot = checkpointSlot,
+	//   and the node starts to sync from checkpointSlot ==> Using justifiedSlot is correct.
+	// - If syncing with a non-empty DB, then justifiedSlot > finalizedSlot,
+	//   and the node starts to sync from justifiedSlot + 1 ==> Using justifiedSlot + 1 is correct.
 	const interval = 1 * time.Minute
+
+	finalizedCheckpoint, err := s.cfg.beaconDB.FinalizedCheckpoint(s.ctx)
+	if err != nil {
+		return errors.Wrap(err, "finalized checkpoint")
+	}
+
+	if finalizedCheckpoint == nil {
+		return errors.New("finalized checkpoint is nil")
+	}
+
+	finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
+	if err != nil {
+		return errors.Wrap(err, "epoch start for finalized slot")
+	}
+
+	justifiedCheckpoint, err := s.cfg.beaconDB.JustifiedCheckpoint(s.ctx)
+	if err != nil {
+		return errors.Wrap(err, "justified checkpoint")
+	}
+
+	if justifiedCheckpoint == nil {
+		return errors.New("justified checkpoint is nil")
+	}
+
+	justifiedSlot, err := slots.EpochStart(justifiedCheckpoint.Epoch)
+	if err != nil {
+		return errors.Wrap(err, "epoch start for justified slot")
+	}
+
+	slot := justifiedSlot
+	if justifiedSlot > finalizedSlot {
+		slot++
+	}
+
+	earliestAvailableSlot, custodySubnetCount, err := s.updateCustodyInfoInDB(slot)
+	if err != nil {
+		return errors.Wrap(err, "could not get and save custody group count")
+	}
+
+	if _, _, err := s.cfg.p2p.UpdateCustodyInfo(earliestAvailableSlot, custodySubnetCount); err != nil {
+		return errors.Wrap(err, "update custody info")
+	}
 
 	async.RunEvery(s.ctx, interval, func() {
 		if err := s.updateCustodyInfoIfNeeded(); err != nil {
 			log.WithError(err).Error("Failed to update custody info")
 		}
 	})
+
+	return nil
 }
 
 func (s *Service) updateCustodyInfoIfNeeded() error {
@@ -90,18 +142,32 @@ func (s *Service) updateCustodyInfoIfNeeded() error {
 // custodyGroupCount computes the custody group count based on the custody requirement,
 // the validators custody requirement, and whether the node is subscribed to all data subnets.
 func (s *Service) custodyGroupCount(context.Context) (uint64, error) {
-	beaconConfig := params.BeaconConfig()
+	cfg := params.BeaconConfig()
 
-	if flags.Get().SubscribeAllDataSubnets {
-		return beaconConfig.NumberOfCustodyGroups, nil
+	if flags.Get().Supernode {
+		return cfg.NumberOfCustodyGroups, nil
 	}
 
+	// Calculate validator custody requirements
 	validatorsCustodyRequirement, err := s.validatorsCustodyRequirement()
 	if err != nil {
 		return 0, errors.Wrap(err, "validators custody requirement")
 	}
 
-	return max(beaconConfig.CustodyRequirement, validatorsCustodyRequirement), nil
+	effectiveCustodyRequirement := max(cfg.CustodyRequirement, validatorsCustodyRequirement)
+
+	// If we're not in semi-supernode mode, just use the effective requirement.
+	if !flags.Get().SemiSupernode {
+		return effectiveCustodyRequirement, nil
+	}
+
+	// Semi-supernode mode custodies the minimum custody groups required for reconstruction.
+	// This is future-proof and works correctly even if custody groups != columns.
+	semiSupernodeTarget, err := peerdas.MinimumCustodyGroupCountToReconstruct()
+	if err != nil {
+		return 0, errors.Wrap(err, "minimum custody group count")
+	}
+	return max(effectiveCustodyRequirement, semiSupernodeTarget), nil
 }
 
 // validatorsCustodyRequirements computes the custody requirements based on the

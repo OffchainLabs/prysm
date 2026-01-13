@@ -9,9 +9,10 @@ go_library(
         "service.go",
         "validator.go",
     ],
-    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/rpc/core",
+    importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/server:go_default_library",
         "//beacon-chain/blockchain:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/core/altair:go_default_library",
