@@ -74,14 +74,13 @@ type validator struct {
 	attLogsLock                        sync.Mutex
 	attSelectionLock                   sync.Mutex
 	highestValidSlotLock               sync.Mutex
-	domainDataLock                     sync.RWMutex
-	blacklistedPubkeysLock             sync.RWMutex
-	prevEpochBalancesLock              sync.RWMutex
-	attestationDataCacheLock           sync.RWMutex
-	dutiesLock                         sync.RWMutex
-	attestationDataCache               *ethpb.AttestationData
-	attestationDataCacheSlot           primitives.Slot
-	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
+	domainDataLock                  sync.RWMutex
+	blacklistedPubkeysLock          sync.RWMutex
+	prevEpochBalancesLock           sync.RWMutex
+	cachedAttestationDataLock       sync.RWMutex
+	dutiesLock                      sync.RWMutex
+	cachedAttestationData           *ethpb.AttestationData
+	accountsChangedChannel          chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                      chan *eventClient.Event
 	highestValidSlot                   primitives.Slot
 	submittedAggregates                map[submittedAttKey]*submittedAtt
@@ -998,21 +997,21 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 	}
 
 	// Post-Electra: check cache first (committee index is always 0)
-	v.attestationDataCacheLock.RLock()
-	if v.attestationDataCacheSlot == slot && v.attestationDataCache != nil {
-		data := v.attestationDataCache
-		v.attestationDataCacheLock.RUnlock()
+	v.cachedAttestationDataLock.RLock()
+	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
+		data := v.cachedAttestationData
+		v.cachedAttestationDataLock.RUnlock()
 		return data, nil
 	}
-	v.attestationDataCacheLock.RUnlock()
+	v.cachedAttestationDataLock.RUnlock()
 
 	// Cache miss - acquire write lock and fetch
-	v.attestationDataCacheLock.Lock()
-	defer v.attestationDataCacheLock.Unlock()
+	v.cachedAttestationDataLock.Lock()
+	defer v.cachedAttestationDataLock.Unlock()
 
 	// Double-check after acquiring write lock (another goroutine may have filled the cache)
-	if v.attestationDataCacheSlot == slot && v.attestationDataCache != nil {
-		return v.attestationDataCache, nil
+	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
+		return v.cachedAttestationData, nil
 	}
 
 	data, err := v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
@@ -1023,8 +1022,7 @@ func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot
 		return nil, err
 	}
 
-	v.attestationDataCache = data
-	v.attestationDataCacheSlot = slot
+	v.cachedAttestationData = data
 
 	return data, nil
 }
