@@ -23,9 +23,6 @@ func runExecutionPayloadBidTest(t *testing.T, config string, fork string, objNam
 	}
 	for _, folder := range testFolders {
 		t.Run(folder.Name(), func(t *testing.T) {
-			if folder.Name() != "process_execution_payload_bid_self_build_non_zero_value" {
-				t.Skip("skipping other tests for now")
-			}
 			helpers.ClearCache()
 			folderPath := path.Join(testsFolderPath, folder.Name())
 			blockFile, err := util.BazelFileBytes(folderPath, "block.ssz_snappy")

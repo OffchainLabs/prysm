@@ -66,6 +66,11 @@ type stubBlock struct {
 	v          int
 }
 
+var (
+	_ interfaces.ReadOnlyBeaconBlockBody = (*stubBlockBody)(nil)
+	_ interfaces.ReadOnlyBeaconBlock     = (*stubBlock)(nil)
+)
+
 func (s stubBlock) Slot() primitives.Slot                    { return s.slot }
 func (s stubBlock) ProposerIndex() primitives.ValidatorIndex { return s.proposer }
 func (s stubBlock) ParentRoot() [32]byte                     { return s.parentRoot }
