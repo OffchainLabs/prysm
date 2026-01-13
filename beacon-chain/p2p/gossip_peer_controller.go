@@ -305,7 +305,7 @@ func (g *GossipPeerDialer) peersForTopic(topic string, targetCount int) []*enode
 }
 
 // ProtectedPeers returns peer IDs that should be protected from pruning.
-func (g *GossipPeerDialer) ProtectedPeers() []peer.ID {
+func (g *GossipPeerDialer) ProtectedPeers(alreadyProtected map[string]struct{}) []peer.ID {
 	if g.topicsProvider == nil {
 		return nil
 	}
@@ -314,6 +314,9 @@ func (g *GossipPeerDialer) ProtectedPeers() []peer.ID {
 	protectedPeers := make(map[peer.ID]struct{})
 
 	for topic := range topics {
+		if _, ok := alreadyProtected[topic]; ok {
+			continue
+		}
 		connectedPeers := g.listPeers(topic)
 
 		// Skip if no peers connected

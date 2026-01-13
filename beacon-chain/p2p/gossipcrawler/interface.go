@@ -33,5 +33,5 @@ type SubnetTopicsProvider func() map[string]int
 type GossipDialer interface {
 	Start(provider SubnetTopicsProvider) error
 	DialPeersForTopicBlocking(ctx context.Context, topic string, nPeers int) error
-	ProtectedPeers() []peer.ID
+	ProtectedPeers(alreadyProtected map[string]struct{}) []peer.ID
 }

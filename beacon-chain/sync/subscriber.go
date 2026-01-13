@@ -226,6 +226,8 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 
 	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.Attestation]()]
 
+	alreadyProtected := make(map[string]struct{})
+
 	// Map of peers in subnets
 	peerMap := make(map[peer.ID]bool)
 	for subnet := range wantedSubnets {
@@ -243,13 +245,14 @@ func (s *Service) filterNeededPeers(pids []peer.ID) []peer.ID {
 			// as the outcome is the same.
 			peerMap[peer] = true
 		}
+		alreadyProtected[subnetTopic] = struct{}{}
 	}
 
 	dialer := s.cfg.p2p.GossipDialer()
 
 	if dialer != nil {
 		// ask the dialer for peers that should be protected from pruning.
-		for _, pid := range dialer.ProtectedPeers() {
+		for _, pid := range dialer.ProtectedPeers(alreadyProtected) {
 			peerMap[pid] = true
 		}
 	}
