@@ -1,7 +1,6 @@
 package gloas
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -14,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 )
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
@@ -41,17 +41,17 @@ import (
 func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) error {
 	signedBid, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
-		return fmt.Errorf("failed to get signed execution payload bid: %w", err)
+		return errors.Wrap(err, "failed to get signed execution payload bid")
 	}
 
 	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	if err != nil {
-		return fmt.Errorf("failed to wrap signed bid: %w", err)
+		return errors.Wrap(err, "failed to wrap signed bid")
 	}
 
 	bid, err := wrappedBid.Bid()
 	if err != nil {
-		return fmt.Errorf("failed to get bid from wrapped bid: %w", err)
+		return errors.Wrap(err, "failed to get bid from wrapped bid")
 	}
 
 	builderIndex := bid.BuilderIndex()
@@ -67,7 +67,7 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 	} else {
 		ok, err := st.IsActiveBuilder(builderIndex)
 		if err != nil {
-			return fmt.Errorf("builder active check failed: %w", err)
+			return errors.Wrap(err, "builder active check failed")
 		}
 		if !ok {
 			return fmt.Errorf("builder %d is not active", builderIndex)
@@ -75,19 +75,19 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 
 		ok, err = st.CanBuilderCoverBid(builderIndex, amount)
 		if err != nil {
-			return fmt.Errorf("builder balance check failed: %w", err)
+			return errors.Wrap(err, "builder balance check failed")
 		}
 		if !ok {
 			return fmt.Errorf("builder %d cannot cover bid amount %d", builderIndex, amount)
 		}
 
 		if err := validatePayloadBidSignature(st, wrappedBid); err != nil {
-			return fmt.Errorf("bid signature validation failed: %w", err)
+			return errors.Wrap(err, "bid signature validation failed")
 		}
 	}
 
 	if err := validateBidConsistency(st, bid, block); err != nil {
-		return fmt.Errorf("bid consistency validation failed: %w", err)
+		return errors.Wrap(err, "bid consistency validation failed")
 	}
 
 	if amount > 0 {
@@ -102,12 +102,12 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		}
 		slotIndex := params.BeaconConfig().SlotsPerEpoch + (bid.Slot() % params.BeaconConfig().SlotsPerEpoch)
 		if err := st.SetBuilderPendingPayment(slotIndex, pendingPayment); err != nil {
-			return fmt.Errorf("failed to set pending payment: %w", err)
+			return errors.Wrap(err, "failed to set pending payment")
 		}
 	}
 
 	if err := st.SetExecutionPayloadBid(bid); err != nil {
-		return fmt.Errorf("failed to cache execution payload bid: %w", err)
+		return errors.Wrap(err, "failed to cache execution payload bid")
 	}
 
 	return nil
@@ -121,7 +121,7 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 
 	latestBlockHash, err := st.LatestBlockHash()
 	if err != nil {
-		return fmt.Errorf("failed to get latest block hash: %w", err)
+		return errors.Wrap(err, "failed to get latest block hash")
 	}
 	if bid.ParentBlockHash() != latestBlockHash {
 		return fmt.Errorf("bid parent block hash mismatch: got %x, expected %x",
@@ -135,7 +135,7 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 
 	randaoMix, err := helpers.RandaoMix(st, slots.ToEpoch(st.Slot()))
 	if err != nil {
-		return fmt.Errorf("failed to get randao mix: %w", err)
+		return errors.Wrap(err, "failed to get randao mix")
 	}
 	if bid.PrevRandao() != [32]byte(randaoMix) {
 		return fmt.Errorf("bid prev randao mismatch: got %x, expected %x", bid.PrevRandao(), randaoMix)
@@ -150,23 +150,23 @@ func validateBidConsistency(st state.BeaconState, bid interfaces.ROExecutionPayl
 func validatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfaces.ROSignedExecutionPayloadBid) error {
 	bid, err := signedBid.Bid()
 	if err != nil {
-		return fmt.Errorf("failed to get bid: %w", err)
+		return errors.Wrap(err, "failed to get bid")
 	}
 
 	pubkey, err := st.BuilderPubkey(bid.BuilderIndex())
 	if err != nil {
-		return fmt.Errorf("failed to get builder pubkey: %w", err)
+		return errors.Wrap(err, "failed to get builder pubkey")
 	}
 
 	publicKey, err := bls.PublicKeyFromBytes(pubkey[:])
 	if err != nil {
-		return fmt.Errorf("invalid builder public key: %w", err)
+		return errors.Wrap(err, "invalid builder public key")
 	}
 
 	signatureBytes := signedBid.Signature()
 	signature, err := bls.SignatureFromBytes(signatureBytes[:])
 	if err != nil {
-		return fmt.Errorf("invalid signature format: %w", err)
+		return errors.Wrap(err, "invalid signature format")
 	}
 
 	currentEpoch := slots.ToEpoch(bid.Slot())
@@ -177,16 +177,16 @@ func validatePayloadBidSignature(st state.ReadOnlyBeaconState, signedBid interfa
 		st.GenesisValidatorsRoot(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to compute signing domain: %w", err)
+		return errors.Wrap(err, "failed to compute signing domain")
 	}
 
 	signingRoot, err := signedBid.SigningRoot(domain)
 	if err != nil {
-		return fmt.Errorf("failed to compute signing root: %w", err)
+		return errors.Wrap(err, "failed to compute signing root")
 	}
 
 	if !signature.Verify(publicKey, signingRoot[:]) {
-		return fmt.Errorf("signature verification failed: %w", signing.ErrSigFailedToVerify)
+		return signing.ErrSigFailedToVerify
 	}
 
 	return nil
