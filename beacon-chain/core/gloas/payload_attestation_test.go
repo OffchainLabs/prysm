@@ -123,6 +123,44 @@ func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestProcessPayloadAttestations_MultipleAttestations(t *testing.T) {
+	helpers.ClearCache()
+	setupTestConfig(t)
+
+	sk1, pk1 := newKey(t)
+	sk2, pk2 := newKey(t)
+	vals := []*eth.Validator{activeValidator(pk1), activeValidator(pk2)}
+
+	st := newTestState(t, vals, 2)
+	parentRoot := bytes.Repeat([]byte{0xaa}, 32)
+	require.NoError(t, st.SetLatestBlockHeader(&eth.BeaconBlockHeader{ParentRoot: parentRoot}))
+
+	attData1 := &eth.PayloadAttestationData{
+		BeaconBlockRoot: parentRoot,
+		Slot:            1,
+	}
+	attData2 := &eth.PayloadAttestationData{
+		BeaconBlockRoot: parentRoot,
+		Slot:            1,
+	}
+
+	att1 := &eth.PayloadAttestation{
+		Data:            attData1,
+		AggregationBits: setBits(bitfield.NewBitvector512(), 0),
+		Signature:       signAttestation(t, st, attData1, []common.SecretKey{sk1}),
+	}
+	att2 := &eth.PayloadAttestation{
+		Data:            attData2,
+		AggregationBits: setBits(bitfield.NewBitvector512(), 1),
+		Signature:       signAttestation(t, st, attData2, []common.SecretKey{sk2}),
+	}
+
+	body := buildBody(t, att1, att2)
+
+	err := ProcessPayloadAttestations(t.Context(), st, body)
+	require.NoError(t, err)
+}
+
 func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 	setupTestConfig(t)
 
@@ -171,9 +209,9 @@ func setupTestConfig(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 }
 
-func buildBody(t *testing.T, att *eth.PayloadAttestation) interfaces.ReadOnlyBeaconBlockBody {
+func buildBody(t *testing.T, atts ...*eth.PayloadAttestation) interfaces.ReadOnlyBeaconBlockBody {
 	body := &eth.BeaconBlockBodyGloas{
-		PayloadAttestations:   []*eth.PayloadAttestation{att},
+		PayloadAttestations:   atts,
 		RandaoReveal:          make([]byte, 96),
 		Eth1Data:              &eth.Eth1Data{},
 		Graffiti:              make([]byte, 32),

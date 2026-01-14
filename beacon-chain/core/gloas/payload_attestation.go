@@ -109,7 +109,7 @@ func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 	}
 
 	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
-	out := make([]primitives.ValidatorIndex, 0, committeesPerSlot*(activeCount/committeesPerSlot))
+	out := make([]primitives.ValidatorIndex, 0, committeesPerSlot)
 
 	for i := primitives.CommitteeIndex(0); i < primitives.CommitteeIndex(committeesPerSlot); i++ {
 		committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, i)
@@ -134,6 +134,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 // selectByBalance selects a balance-weighted subset of input candidates.
 // Spec v1.7.0-alpha.0 (pseudocode):
 // compute_balance_weighted_selection(state, indices, seed, size, shuffle_indices):
+// Note: shuffle_indices is false for PTC.
 //
 //	total = len(indices); selected = []; i = 0
 //	while len(selected) < size:
@@ -148,6 +149,7 @@ func selectByBalance(st state.ReadOnlyBeaconState, candidates []primitives.Valid
 	}
 
 	hashFunc := hash.CustomSHA256Hasher()
+	// Pre-allocate buffer for hash input: seed (32 bytes) + round counter (8 bytes).
 	var buf [40]byte
 	copy(buf[:], seed[:])
 	maxBalance := params.BeaconConfig().MaxEffectiveBalanceElectra
@@ -182,7 +184,7 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 	binary.LittleEndian.PutUint64(seedBuf[len(seedBuf)-8:], round/16)
 	random := hashFunc(seedBuf)
 	offset := (round % 16) * 2
-	randomValue := uint64(binary.LittleEndian.Uint16(random[offset:])) // 16-bit draw per spec
+	randomValue := uint64(binary.LittleEndian.Uint16(random[offset : offset+2])) // 16-bit draw per spec
 
 	val, err := st.ValidatorAtIndex(idx)
 	if err != nil {
@@ -200,7 +202,7 @@ func acceptByBalance(st state.ReadOnlyBeaconState, idx primitives.ValidatorIndex
 //	return len(indices) > 0 and indices == sorted(indices) and
 //	  bls.FastAggregateVerify(
 //	    [state.validators[i].pubkey for i in indices],
-//	    compute_signing_root(indexed_payload_attestation.data, get_domain(state, DOMAIN_PTC_ATTESTER, None)),
+//	    compute_signing_root(indexed_payload_attestation.data, get_domain(state, DOMAIN_PTC_ATTESTER, compute_epoch_at_slot(attestation.data.slot)),
 //	    indexed_payload_attestation.signature,
 //	  )
 func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus_types.IndexedPayloadAttestation) error {
@@ -223,7 +225,7 @@ func validIndexedPayloadAttestation(st state.ReadOnlyBeaconState, att *consensus
 		pubkeys[i] = key
 	}
 
-	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(st.Slot()), params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
+	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(att.Data.Slot), params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
 	if err != nil {
 		return err
 	}
