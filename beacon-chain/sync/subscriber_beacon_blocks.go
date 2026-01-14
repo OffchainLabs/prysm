@@ -81,18 +81,6 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "process pending atts for block")
 	}
 
-	if block.Body() == nil {
-		log.Errorf("nil block body for root %#x", root)
-	}
-
-	commitments, err := block.Body().BlobKzgCommitments()
-	if err != nil {
-		return errors.Wrap(err, "blob Kzg commitments")
-	}
-
-	commitmentCount.Set(float64(len(commitments)))
-	maxBlobsPerBlock.Set(float64(params.BeaconConfig().MaxBlobsPerBlock(block.Slot())))
-
 	return nil
 }
 

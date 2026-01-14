@@ -256,20 +256,6 @@ var (
 			Help: "Count the number of data column sidecars obtained via the execution layer.",
 		},
 	)
-
-	commitmentCount = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "commitment_count_in_gossip_processed_blocks",
-			Help: "The number of blob KZG commitments in the most recently processed block.",
-		},
-	)
-
-	maxBlobsPerBlock = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "max_blobs_per_block",
-			Help: "The maximum number of blobs allowed in a block.",
-		},
-	)
 )
 
 func (s *Service) updateMetrics() {
