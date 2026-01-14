@@ -134,7 +134,7 @@ func processProposerSlashing(
 	if beaconState.Version() >= version.Gloas {
 		beaconState, err = gloas.RemoveBuilderPendingPayment(beaconState, slashing.Header_1.Header)
 		if err != nil {
-			return nil, errors.Wrap(err, "could not remove builder pending payment")
+			return nil, err
 		}
 	}
 
