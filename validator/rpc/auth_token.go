@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/fsnotify/fsnotify"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/pkg/errors"
 )
 
@@ -195,15 +194,4 @@ func readAuthTokenFile(r io.Reader) ([]byte, string, error) {
 			"Tokens can be generated through the `validator web generate-auth-token` command")
 	}
 	return secret, token, nil
-}
-
-// Creates a JWT token string using the JWT key.
-func createTokenString(jwtKey []byte) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{})
-	// Sign and get the complete encoded token as a string using the secret
-	tokenString, err := token.SignedString(jwtKey)
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
 }
