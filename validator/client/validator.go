@@ -66,58 +66,62 @@ var (
 )
 
 type validator struct {
-	duties                             *ethpb.ValidatorDutiesContainer
-	ticker                             slots.Ticker
-	genesisTime                        time.Time
+	logValidatorPerformance            bool
+	distributed                        bool
+	enableAPI                          bool
+	disableDutiesPolling               bool
+	emitAccountMetrics                 bool
+	aggregatedSlotCommitteeIDCacheLock sync.Mutex
+	attLogsLock                        sync.Mutex
+	attSelectionLock                   sync.Mutex
+	highestValidSlotLock               sync.Mutex
+	domainDataLock                     sync.RWMutex
+	blacklistedPubkeysLock             sync.RWMutex
+	prevEpochBalancesLock              sync.RWMutex
+	cachedAttestationDataLock          sync.RWMutex
+	dutiesLock                         sync.RWMutex
+	cachedAttestationData              *ethpb.AttestationData
+	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
+	eventsChannel                      chan *eventClient.Event
 	highestValidSlot                   primitives.Slot
+	submittedAggregates                map[submittedAttKey]*submittedAtt
+	graffitiStruct                     *graffiti.Graffiti
+	syncCommitteeStats                 syncCommitteeStats
 	slotFeed                           *event.Feed
+	domainDataCache                    *ristretto.Cache[string, proto.Message]
+	aggregatedSlotCommitteeIDCache     *lru.Cache
+	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
+	interopKeysConfig                  *local.InteropKeymanagerConfig
+	duties                             *ethpb.ValidatorDutiesContainer
+	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
+	proposerSettings                   *proposer.Settings
+	web3SignerConfig                   *remoteweb3signer.SetupConfig
 	startBalances                      map[[fieldparams.BLSPubkeyLength]byte]uint64
 	prevEpochBalances                  map[[fieldparams.BLSPubkeyLength]byte]uint64
 	blacklistedPubkeys                 map[[fieldparams.BLSPubkeyLength]byte]bool
 	pubkeyToStatus                     map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	wallet                             *wallet.Wallet
 	walletInitializedChan              chan *wallet.Wallet
+	currentHostIndex                   uint64
 	walletInitializedFeed              *event.Feed
-	graffiti                           []byte
-	graffitiStruct                     *graffiti.Graffiti
 	graffitiOrderedIndex               uint64
 	beaconNodeHosts                    []string
 	currentHostIndex                   uint64
 	grpcConnectionProvider             validatorHelpers.GrpcConnectionProvider
+	submittedAtts                      map[submittedAttKey]*submittedAtt
+	validatorsRegBatchSize             int
 	validatorClient                    iface.ValidatorClient
 	chainClient                        iface.ChainClient
 	nodeClient                         iface.NodeClient
 	prysmChainClient                   iface.PrysmChainClient
 	db                                 db.Database
 	km                                 keymanager.IKeymanager
-	web3SignerConfig                   *remoteweb3signer.SetupConfig
-	proposerSettings                   *proposer.Settings
-	signedValidatorRegistrations       map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1
-	validatorsRegBatchSize             int
-	interopKeysConfig                  *local.InteropKeymanagerConfig
-	attSelections                      map[attSelectionKey]iface.BeaconCommitteeSelection
-	aggregatedSlotCommitteeIDCache     *lru.Cache
-	domainDataCache                    *ristretto.Cache[string, proto.Message]
-	voteStats                          voteStats
-	syncCommitteeStats                 syncCommitteeStats
-	submittedAtts                      map[submittedAttKey]*submittedAtt
-	submittedAggregates                map[submittedAttKey]*submittedAtt
-	logValidatorPerformance            bool
-	emitAccountMetrics                 bool
-	enableAPI                          bool
-	distributed                        bool
-	domainDataLock                     sync.RWMutex
-	attLogsLock                        sync.Mutex
-	aggregatedSlotCommitteeIDCacheLock sync.Mutex
-	highestValidSlotLock               sync.Mutex
-	prevEpochBalancesLock              sync.RWMutex
-	blacklistedPubkeysLock             sync.RWMutex
-	attSelectionLock                   sync.Mutex
-	dutiesLock                         sync.RWMutex
-	disableDutiesPolling               bool
-	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
-	eventsChannel                      chan *eventClient.Event
 	accountChangedSub                  event.Subscription
+	ticker                             slots.Ticker
+	beaconNodeHosts                    []string
+	genesisTime                        time.Time
+	graffiti                           []byte
+	voteStats                          voteStats
 }
 
 type validatorStatus struct {
@@ -977,6 +981,54 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	v.domainDataCache.Set(key, proto.Clone(res), 1)
 
 	return res, nil
+}
+
+// getAttestationData fetches attestation data from the beacon node with caching for post-Electra.
+// Post-Electra, attestation data is identical for all validators in the same slot (committee index is always 0),
+// so we cache it to avoid redundant beacon node requests.
+func (v *validator) getAttestationData(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) (*ethpb.AttestationData, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.getAttestationData")
+	defer span.End()
+
+	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
+
+	// Pre-Electra: no caching since committee index varies per validator
+	if !postElectra {
+		return v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
+			Slot:           slot,
+			CommitteeIndex: committeeIndex,
+		})
+	}
+
+	// Post-Electra: check cache first (committee index is always 0)
+	v.cachedAttestationDataLock.RLock()
+	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
+		data := v.cachedAttestationData
+		v.cachedAttestationDataLock.RUnlock()
+		return data, nil
+	}
+	v.cachedAttestationDataLock.RUnlock()
+
+	// Cache miss - acquire write lock and fetch
+	v.cachedAttestationDataLock.Lock()
+	defer v.cachedAttestationDataLock.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine may have filled the cache)
+	if v.cachedAttestationData != nil && v.cachedAttestationData.Slot == slot {
+		return v.cachedAttestationData, nil
+	}
+
+	data, err := v.validatorClient.AttestationData(ctx, &ethpb.AttestationDataRequest{
+		Slot:           slot,
+		CommitteeIndex: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	v.cachedAttestationData = data
+
+	return data, nil
 }
 
 func (v *validator) logDuties(slot primitives.Slot, currentEpochDuties []*ethpb.ValidatorDuty, nextEpochDuties []*ethpb.ValidatorDuty) {
