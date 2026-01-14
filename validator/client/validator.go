@@ -102,11 +102,8 @@ type validator struct {
 	pubkeyToStatus                     map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	wallet                             *wallet.Wallet
 	walletInitializedChan              chan *wallet.Wallet
-	currentHostIndex                   uint64
 	walletInitializedFeed              *event.Feed
 	graffitiOrderedIndex               uint64
-	beaconNodeHosts                    []string
-	currentHostIndex                   uint64
 	grpcConnectionProvider             validatorHelpers.GrpcConnectionProvider
 	submittedAtts                      map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize             int
@@ -119,6 +116,7 @@ type validator struct {
 	accountChangedSub                  event.Subscription
 	ticker                             slots.Ticker
 	beaconNodeHosts                    []string
+	currentHostIndex                   uint64
 	genesisTime                        time.Time
 	graffiti                           []byte
 	voteStats                          voteStats
