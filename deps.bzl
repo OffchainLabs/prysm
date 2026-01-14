@@ -783,7 +783,7 @@ def prysm_deps():
         version = "v1.2.1",
     )
     go_repository(
-        name = "com_github_ethereum_c_kzg_4844_v2",
+        name = "com_github_ethereum_c_kzg_4844",
         build_directives = [
             "gazelle:resolve go github.com/supranational/blst/bindings/go @com_github_supranational_blst//:go_default_library",
         ],
