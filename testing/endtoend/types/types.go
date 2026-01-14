@@ -59,11 +59,28 @@ func WithBuilder() E2EConfigOpt {
 	}
 }
 
+// WithLargeBlobs configures the transaction generator to use large blob
+// transactions (6 blobs per tx) for testing BPO limits. Without this option,
+// small blob transactions (1 blob per tx) are used by default.
+func WithLargeBlobs() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.UseLargeBlobs = true
+	}
+}
+
 func WithSSZOnly() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		if err := os.Setenv(params.EnvNameOverrideAccept, api.OctetStreamMediaType); err != nil {
 			logrus.Fatal(err)
 		}
+	}
+}
+
+// WithExitEpoch sets a custom epoch for voluntary exit submission.
+// This affects ProposeVoluntaryExit, ValidatorsHaveExited, SubmitWithdrawal, and ValidatorsHaveWithdrawn evaluators.
+func WithExitEpoch(e primitives.Epoch) E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.ExitEpoch = e
 	}
 }
 
@@ -81,7 +98,9 @@ type E2EConfig struct {
 	UseValidatorCrossClient bool
 	UseBeaconRestApi        bool
 	UseBuilder              bool
+	UseLargeBlobs           bool // Use large blob transactions (6 blobs per tx) for BPO testing
 	EpochsToRun             uint64
+	ExitEpoch               primitives.Epoch // Custom epoch for voluntary exit submission (0 means use default)
 	Seed                    int64
 	TracingSinkEndpoint     string
 	Evaluators              []Evaluator
@@ -95,6 +114,9 @@ type E2EConfig struct {
 func GenesisFork() int {
 	cfg := params.BeaconConfig()
 	// Check from highest fork to lowest to find the genesis fork.
+	if cfg.FuluForkEpoch == 0 {
+		return version.Fulu
+	}
 	if cfg.ElectraForkEpoch == 0 {
 		return version.Electra
 	}
@@ -146,16 +168,21 @@ type DepositBalancer interface {
 // EvaluationContext allows for additional data to be provided to evaluators that need extra state.
 type EvaluationContext struct {
 	DepositBalancer
-	ExitedVals           map[[48]byte]bool
+	// ExitedVals maps validator pubkey to the epoch when their exit was submitted.
+	// The actual exit takes effect at: submission_epoch + 1 + MaxSeedLookahead
+	ExitedVals           map[[48]byte]primitives.Epoch
 	SeenVotes            map[primitives.Slot][]byte
 	ExpectedEth1DataVote []byte
+	// Eth1DataMismatchCount tracks how many eth1data vote mismatches have been seen
+	// in the current voting period. Some tolerance is allowed for timing differences.
+	Eth1DataMismatchCount int
 }
 
 // NewEvaluationContext handles initializing internal datastructures (like maps) provided by the EvaluationContext.
 func NewEvaluationContext(d DepositBalancer) *EvaluationContext {
 	return &EvaluationContext{
 		DepositBalancer: d,
-		ExitedVals:      make(map[[48]byte]bool),
+		ExitedVals:      make(map[[48]byte]primitives.Epoch),
 		SeenVotes:       make(map[primitives.Slot][]byte),
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	"github.com/d4l3k/messagediff"
@@ -138,12 +139,21 @@ func StringContains(loggerFn assertionLoggerFn, expected, actual string, flag bo
 
 // NoError asserts that error is nil.
 func NoError(loggerFn assertionLoggerFn, err error, msg ...any) {
-	// reflect.ValueOf is needed for nil instances of custom types implementing Error
-	if err != nil && !reflect.ValueOf(err).IsNil() {
-		errMsg := parseMsg("Unexpected error", msg...)
-		_, file, line, _ := runtime.Caller(2)
-		loggerFn("%s:%d %s: %v", filepath.Base(file), line, errMsg, err)
+	if err == nil {
+		return
 	}
+	// reflect.ValueOf is needed for nil instances of custom types implementing Error.
+	// Only check IsNil for types that support it to avoid panics on struct types.
+	v := reflect.ValueOf(err)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
+		if v.IsNil() {
+			return
+		}
+	}
+	errMsg := parseMsg("Unexpected error", msg...)
+	_, file, line, _ := runtime.Caller(2)
+	loggerFn("%s:%d %s: %v", filepath.Base(file), line, errMsg, err)
 }
 
 // ErrorIs uses Errors.Is to recursively unwrap err looking for target in the chain.
@@ -340,4 +350,19 @@ func (tb *TBMock) Errorf(format string, args ...any) {
 // Fatalf writes testing logs to FatalfMsg.
 func (tb *TBMock) Fatalf(format string, args ...any) {
 	tb.FatalfMsg = fmt.Sprintf(format, args...)
+}
+
+// Eventually asserts that given condition will be met within waitFor time,
+// periodically checking target function each tick.
+func Eventually(loggerFn assertionLoggerFn, condition func() bool, waitFor, tick time.Duration, msg ...any) {
+	deadline := time.Now().Add(waitFor)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(tick)
+	}
+	errMsg := parseMsg("Condition never satisfied", msg...)
+	_, file, line, _ := runtime.Caller(2)
+	loggerFn("%s:%d %s (waited %v)", filepath.Base(file), line, errMsg, waitFor)
 }

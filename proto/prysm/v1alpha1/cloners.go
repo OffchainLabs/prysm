@@ -35,6 +35,21 @@ func CopyValidator(val *Validator) *Validator {
 	}
 }
 
+// CopyBuilder copies the provided builder.
+func CopyBuilder(builder *Builder) *Builder {
+	if builder == nil {
+		return nil
+	}
+	return &Builder{
+		Pubkey:            bytesutil.SafeCopyBytes(builder.Pubkey),
+		Version:           bytesutil.SafeCopyBytes(builder.Version),
+		ExecutionAddress:  bytesutil.SafeCopyBytes(builder.ExecutionAddress),
+		Balance:           builder.Balance,
+		DepositEpoch:      builder.DepositEpoch,
+		WithdrawableEpoch: builder.WithdrawableEpoch,
+	}
+}
+
 // CopySyncCommitteeMessage copies the provided sync committee message object.
 func CopySyncCommitteeMessage(s *SyncCommitteeMessage) *SyncCommitteeMessage {
 	if s == nil {

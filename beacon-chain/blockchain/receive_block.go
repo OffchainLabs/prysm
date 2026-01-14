@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -258,32 +259,55 @@ func (s *Service) handleDA(ctx context.Context, avs das.AvailabilityChecker, blo
 }
 
 func (s *Service) reportPostBlockProcessing(
-	block interfaces.SignedBeaconBlock,
+	signedBlock interfaces.SignedBeaconBlock,
 	blockRoot [32]byte,
 	receivedTime time.Time,
 	daWaitedTime time.Duration,
 ) {
+	block := signedBlock.Block()
+	if block == nil {
+		log.WithField("blockRoot", blockRoot).Error("Nil block")
+		return
+	}
+
 	// Reports on block and fork choice metrics.
 	cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	finalized := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	reportSlotMetrics(block.Block().Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
+	reportSlotMetrics(block.Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
 
 	// Log block sync status.
 	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
 	justified := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
-	if err := logBlockSyncStatus(block.Block(), blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
+	if err := logBlockSyncStatus(block, blockRoot, justified, finalized, receivedTime, s.genesisTime, daWaitedTime); err != nil {
 		log.WithError(err).Error("Unable to log block sync status")
 	}
+
 	// Log payload data
-	if err := logPayload(block.Block()); err != nil {
+	if err := logPayload(block); err != nil {
 		log.WithError(err).Error("Unable to log debug block payload data")
 	}
+
 	// Log state transition data.
-	if err := logStateTransitionData(block.Block()); err != nil {
+	if err := logStateTransitionData(block); err != nil {
 		log.WithError(err).Error("Unable to log state transition data")
 	}
+
 	timeWithoutDaWait := time.Since(receivedTime) - daWaitedTime
 	chainServiceProcessingTime.Observe(float64(timeWithoutDaWait.Milliseconds()))
+
+	body := block.Body()
+	if body == nil {
+		log.WithField("blockRoot", blockRoot).Error("Nil block body")
+		return
+	}
+
+	commitments, err := body.BlobKzgCommitments()
+	if err != nil {
+		log.WithError(err).Error("Unable to get blob KZG commitments")
+	}
+
+	commitmentCount.Observe(float64(len(commitments)))
+	maxBlobsPerBlock.Set(float64(params.BeaconConfig().MaxBlobsPerBlock(block.Slot())))
 }
 
 func (s *Service) executePostFinalizationTasks(ctx context.Context, finalizedState state.BeaconState) {
