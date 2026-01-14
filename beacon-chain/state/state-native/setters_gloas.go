@@ -50,6 +50,10 @@ func (b *BeaconState) AppendBuilderPendingWithdrawal(withdrawal *ethpb.BuilderPe
 		return errors.New("cannot append nil builder pending withdrawal")
 	}
 
+	if b.version < version.Gloas {
+		return errNotSupported("AppendBuilderPendingWithdrawal", b.version)
+	}
+
 	b.lock.Lock()
 	defer b.lock.Unlock()
 

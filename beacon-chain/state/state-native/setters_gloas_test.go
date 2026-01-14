@@ -184,7 +184,8 @@ func TestRotateBuilderPendingPayments(t *testing.T) {
 
 func TestRotateBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
 	st := &BeaconState{version: version.Electra}
-	require.ErrorContains(t, "RotateBuilderPendingPayments", st.RotateBuilderPendingPayments())
+	err := st.RotateBuilderPendingPayments()
+	require.ErrorContains(t, "RotateBuilderPendingPayments", err)
 }
 
 func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
@@ -222,5 +223,6 @@ func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
 
 func TestAppendBuilderPendingWithdrawal_UnsupportedVersion(t *testing.T) {
 	st := &BeaconState{version: version.Electra}
-	require.ErrorContains(t, "AppendBuilderPendingWithdrawal", st.AppendBuilderPendingWithdrawal(&ethpb.BuilderPendingWithdrawal{}))
+	err := st.AppendBuilderPendingWithdrawal(&ethpb.BuilderPendingWithdrawal{})
+	require.ErrorContains(t, "AppendBuilderPendingWithdrawal", err)
 }
