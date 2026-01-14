@@ -13,11 +13,13 @@ func (header *ExecutionPayloadBid) Copy() *ExecutionPayloadBid {
 		ParentBlockHash:        bytesutil.SafeCopyBytes(header.ParentBlockHash),
 		ParentBlockRoot:        bytesutil.SafeCopyBytes(header.ParentBlockRoot),
 		BlockHash:              bytesutil.SafeCopyBytes(header.BlockHash),
+		PrevRandao:             bytesutil.SafeCopyBytes(header.PrevRandao),
 		FeeRecipient:           bytesutil.SafeCopyBytes(header.FeeRecipient),
 		GasLimit:               header.GasLimit,
 		BuilderIndex:           header.BuilderIndex,
 		Slot:                   header.Slot,
 		Value:                  header.Value,
+		ExecutionPayment:       header.ExecutionPayment,
 		BlobKzgCommitmentsRoot: bytesutil.SafeCopyBytes(header.BlobKzgCommitmentsRoot),
 	}
 }
@@ -28,10 +30,9 @@ func (withdrawal *BuilderPendingWithdrawal) Copy() *BuilderPendingWithdrawal {
 		return nil
 	}
 	return &BuilderPendingWithdrawal{
-		FeeRecipient:      bytesutil.SafeCopyBytes(withdrawal.FeeRecipient),
-		Amount:            withdrawal.Amount,
-		BuilderIndex:      withdrawal.BuilderIndex,
-		WithdrawableEpoch: withdrawal.WithdrawableEpoch,
+		FeeRecipient: bytesutil.SafeCopyBytes(withdrawal.FeeRecipient),
+		Amount:       withdrawal.Amount,
+		BuilderIndex: withdrawal.BuilderIndex,
 	}
 }
 

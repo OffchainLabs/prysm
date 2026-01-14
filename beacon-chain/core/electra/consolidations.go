@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // ProcessPendingConsolidations implements the spec definition below. This method makes mutating

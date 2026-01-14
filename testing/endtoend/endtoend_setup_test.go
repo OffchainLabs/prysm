@@ -21,7 +21,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	require.NoError(t, e2eParams.Init(t, e2eParams.StandardBeaconCount))
 
 	var err error
-	epochsToRun := 16
+	epochsToRun := 18
 	epochStr, longRunning := os.LookupEnv("E2E_EPOCHS")
 	if longRunning {
 		epochsToRun, err = strconv.Atoi(epochStr)
@@ -35,6 +35,10 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	}
 	tracingPort := e2eParams.TestParams.Ports.JaegerTracingPort
 	tracingEndpoint := fmt.Sprintf("127.0.0.1:%d", tracingPort)
+	// Default exit epoch used for voluntary exit tests.
+	// Can be overridden via WithExitEpoch option for shorter test runs.
+	exitEpoch := primitives.Epoch(7)
+
 	evals := []types.Evaluator{
 		ev.PeersConnect,
 		ev.HealthzCheck,
@@ -44,10 +48,7 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 		ev.FinalizationOccurs(3),
 		ev.VerifyBlockGraffiti,
 		ev.PeersCheck,
-		ev.ProposeVoluntaryExit,
-		ev.ValidatorsHaveExited,
-		ev.SubmitWithdrawal,
-		ev.ValidatorsHaveWithdrawn,
+		// Exit-related evaluators are added after processing options to allow custom exit epoch.
 		ev.ProcessesDepositsInBlocks,
 		ev.ActivatesDepositedValidators,
 		ev.DepositedValidatorsAreActive,
@@ -64,6 +65,11 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
 	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.FuluForkTransition)
+	// Blob evaluators - run from Deneb onwards
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.BlobsIncludedInBlocks)
+	// BPO (Blob Parameter Optimization) evaluator - runs from Fulu onwards
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.BlobLimitsRespected)
 
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
@@ -87,6 +93,18 @@ func e2eMinimal(t *testing.T, cfg *params.BeaconChainConfig, cfgo ...types.E2ECo
 	for _, o := range cfgo {
 		o(testConfig)
 	}
+
+	// Add exit-related evaluators using custom exit epoch if configured, otherwise use default.
+	if testConfig.ExitEpoch > 0 {
+		exitEpoch = testConfig.ExitEpoch
+	}
+	testConfig.Evaluators = append(testConfig.Evaluators,
+		ev.ProposeVoluntaryExitAtEpoch(exitEpoch),
+		ev.ValidatorsHaveExitedAtEpoch(exitEpoch+1),
+		ev.SubmitWithdrawalAtEpoch(exitEpoch+1),
+		ev.ValidatorsHaveWithdrawnAfterExitAtEpoch(exitEpoch),
+	)
+
 	if testConfig.UseBuilder {
 		testConfig.Evaluators = append(testConfig.Evaluators, ev.BuilderIsActive)
 	}
@@ -140,6 +158,11 @@ func e2eMainnet(t *testing.T, usePrysmSh, useMultiClient bool, cfg *params.Beaco
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
 	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.FuluForkTransition)
+	// Blob evaluators - run from Deneb onwards
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.BlobsIncludedInBlocks)
+	// BPO (Blob Parameter Optimization) evaluator - runs from Fulu onwards
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.BlobLimitsRespected)
 
 	testConfig := &types.E2EConfig{
 		BeaconFlags: []string{
@@ -208,6 +231,11 @@ func scenarioEvals(cfg *params.BeaconChainConfig) []types.Evaluator {
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
 	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.FuluForkTransition)
+	// Blob evaluators - run from Deneb onwards
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.BlobsIncludedInBlocks)
+	// BPO (Blob Parameter Optimization) evaluator - runs from Fulu onwards
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.BlobLimitsRespected)
 	return evals
 }
 
@@ -229,5 +257,10 @@ func scenarioEvalsMulti(cfg *params.BeaconChainConfig) []types.Evaluator {
 	evals = addIfForkSet(evals, cfg.CapellaForkEpoch, ev.CapellaForkTransition)
 	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.DenebForkTransition)
 	evals = addIfForkSet(evals, cfg.ElectraForkEpoch, ev.ElectraForkTransition)
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.FuluForkTransition)
+	// Blob evaluators - run from Deneb onwards
+	evals = addIfForkSet(evals, cfg.DenebForkEpoch, ev.BlobsIncludedInBlocks)
+	// BPO (Blob Parameter Optimization) evaluator - runs from Fulu onwards
+	evals = addIfForkSet(evals, cfg.FuluForkEpoch, ev.BlobLimitsRespected)
 	return evals
 }

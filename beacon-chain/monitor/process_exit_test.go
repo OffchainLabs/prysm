@@ -43,7 +43,7 @@ func TestProcessExitsFromBlockTrackedIndices(t *testing.T) {
 	wb, err := blocks.NewBeaconBlock(block)
 	require.NoError(t, err)
 	s.processExitsFromBlock(wb)
-	require.LogsContain(t, hook, "\"Voluntary exit was included\" prefix=monitor slot=0 validatorIndex=2")
+	require.LogsContain(t, hook, "\"Voluntary exit was included\" package=beacon-chain/monitor slot=0 validatorIndex=2")
 }
 
 func TestProcessExitsFromBlockUntrackedIndices(t *testing.T) {
@@ -99,7 +99,7 @@ func TestProcessExitP2PTrackedIndices(t *testing.T) {
 		Signature: make([]byte, 96),
 	}
 	s.processExit(exit)
-	require.LogsContain(t, hook, "\"Voluntary exit was processed\" prefix=monitor validatorIndex=1")
+	require.LogsContain(t, hook, "\"Voluntary exit was processed\" package=beacon-chain/monitor validatorIndex=1")
 }
 
 func TestProcessExitP2PUntrackedIndices(t *testing.T) {

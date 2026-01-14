@@ -8,10 +8,10 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/prysmaticlabs/gohashtree"
 )
 
 func Test_MerkleProofKZGCommitment_Altair(t *testing.T) {
@@ -108,7 +108,7 @@ func Test_MerkleProofKZGCommitment(t *testing.T) {
 	require.Equal(t, true, trie.VerifyMerkleProof(root[:], commitmentsRoot[:], kzgPosition, topProof[:len(topProof)-1]))
 
 	chunk := makeChunk(kzgs[index])
-	gohashtree.HashChunks(chunk, chunk)
+	htr.HashChunks(chunk, chunk)
 	require.Equal(t, true, trie.VerifyMerkleProof(root[:], chunk[0][:], uint64(index+KZGOffset), proof))
 }
 

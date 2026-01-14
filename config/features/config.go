@@ -28,11 +28,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "flags")
 
 const enabledFeatureFlag = "Enabled feature flag"
 const disabledFeatureFlag = "Disabled feature flag"
@@ -73,7 +70,9 @@ type Flags struct {
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
 
+	EnableHashtree               bool // Enables usage of the hashtree library for hashing
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
+	EnableProposerPreprocessing  bool // EnableProposerPreprocessing enables proposer pre-processing of blocks before proposing.
 
 	PrepareAllPayloads bool // PrepareAllPayloads informs the engine to prepare a block on every slot.
 	// BlobSaveFsync requires blob saving to block on fsync to ensure blobs are durably persisted before passing DA.
@@ -239,10 +238,18 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableFullSSZDataLogging)
 		cfg.EnableFullSSZDataLogging = true
 	}
+	if ctx.IsSet(enableHashtree.Name) {
+		logEnabled(enableHashtree)
+		cfg.EnableHashtree = true
+	}
 	cfg.EnableVerboseSigVerification = true
 	if ctx.IsSet(disableVerboseSigVerification.Name) {
 		logEnabled(disableVerboseSigVerification)
 		cfg.EnableVerboseSigVerification = false
+	}
+	cfg.EnableProposerPreprocessing = ctx.Bool(enableProposerPreprocessing.Name)
+	if cfg.EnableProposerPreprocessing {
+		logEnabled(enableProposerPreprocessing)
 	}
 	if ctx.IsSet(prepareAllPayloads.Name) {
 		logEnabled(prepareAllPayloads)
@@ -287,7 +294,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(ignoreUnviableAttestations)
 		cfg.IgnoreUnviableAttestations = true
 	}
-
 	if ctx.IsSet(EnableStateDiff.Name) {
 		logEnabled(EnableStateDiff)
 		cfg.EnableStateDiff = true

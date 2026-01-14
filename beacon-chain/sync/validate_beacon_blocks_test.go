@@ -992,7 +992,6 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 
 	// Mark the proposer/slot as seen
 	r.setSeenBlockIndexSlot(msg.Block.Slot, msg.Block.ProposerIndex)
-	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers
 
 	// Prepare and validate the second message (clone)
 	buf := new(bytes.Buffer)
@@ -1010,9 +1009,11 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 	}
 
 	// Since this is not an equivocation (same signature), it should be ignored
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
-	assert.NoError(t, err)
-	assert.Equal(t, pubsub.ValidationIgnore, res, "block with same signature should be ignored")
+	// Wait for the cached value to propagate through buffers
+	require.Eventually(t, func() bool {
+		res, err := r.validateBeaconBlockPubSub(ctx, "", m)
+		return err == nil && res == pubsub.ValidationIgnore
+	}, time.Second, 10*time.Millisecond, "block with same signature should be ignored")
 
 	// Verify no slashings were created
 	assert.Equal(t, 0, len(slashingPool.PendingPropSlashings), "Expected no slashings for same signature")

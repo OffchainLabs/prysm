@@ -3,11 +3,12 @@ package sync
 import (
 	"context"
 	"fmt"
-	"math"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -192,19 +193,13 @@ func (s *Service) validateDataColumn(ctx context.Context, pid peer.ID, msg *pubs
 	dataColumnSidecarArrivalGossipSummary.Observe(float64(sinceSlotStartTime.Milliseconds()))
 	dataColumnSidecarVerificationGossipHistogram.Observe(float64(validationTime.Milliseconds()))
 
-	peerGossipScore := s.cfg.p2p.Peers().Scorers().GossipScorer().Score(pid)
-
 	select {
 	case s.dataColumnLogCh <- dataColumnLogEntry{
-		Slot:            roDataColumn.Slot(),
-		ColIdx:          roDataColumn.Index,
-		PropIdx:         roDataColumn.ProposerIndex(),
-		BlockRoot:       roDataColumn.BlockRoot(),
-		ParentRoot:      roDataColumn.ParentRoot(),
-		PeerSuffix:      pid.String()[len(pid.String())-6:],
-		PeerGossipScore: peerGossipScore,
-		validationTime:  validationTime,
-		sinceStartTime:  sinceSlotStartTime,
+		slot:           roDataColumn.Slot(),
+		index:          roDataColumn.Index,
+		root:           roDataColumn.BlockRoot(),
+		validationTime: validationTime,
+		sinceStartTime: sinceSlotStartTime,
 	}:
 	default:
 		log.WithField("slot", roDataColumn.Slot()).Warn("Failed to send data column log entry")
@@ -249,68 +244,69 @@ func computeCacheKey(slot primitives.Slot, proposerIndex primitives.ValidatorInd
 }
 
 type dataColumnLogEntry struct {
-	Slot            primitives.Slot
-	ColIdx          uint64
-	PropIdx         primitives.ValidatorIndex
-	BlockRoot       [32]byte
-	ParentRoot      [32]byte
-	PeerSuffix      string
-	PeerGossipScore float64
-	validationTime  time.Duration
-	sinceStartTime  time.Duration
+	slot           primitives.Slot
+	index          uint64
+	root           [32]byte
+	validationTime time.Duration
+	sinceStartTime time.Duration
 }
 
 func (s *Service) processDataColumnLogs() {
 	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	slotStats := make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+	slotStats := make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 
 	for {
 		select {
-		case entry := <-s.dataColumnLogCh:
-			cols := slotStats[entry.Slot]
-			cols[entry.ColIdx] = entry
-			slotStats[entry.Slot] = cols
+		case col := <-s.dataColumnLogCh:
+			cols := slotStats[col.root]
+			cols = append(cols, col)
+			slotStats[col.root] = cols
 		case <-ticker.C:
-			for slot, columns := range slotStats {
-				var (
-					colIndices      = make([]uint64, 0, fieldparams.NumberOfColumns)
-					peers           = make([]string, 0, fieldparams.NumberOfColumns)
-					gossipScores    = make([]float64, 0, fieldparams.NumberOfColumns)
-					validationTimes = make([]string, 0, fieldparams.NumberOfColumns)
-					sinceStartTimes = make([]string, 0, fieldparams.NumberOfColumns)
-				)
+			for root, columns := range slotStats {
+				indices := make([]uint64, 0, fieldparams.NumberOfColumns)
+				minValidationTime, maxValidationTime, sumValidationTime := time.Duration(0), time.Duration(0), time.Duration(0)
+				minSinceStartTime, maxSinceStartTime, sumSinceStartTime := time.Duration(0), time.Duration(0), time.Duration(0)
 
 				totalReceived := 0
-				for _, entry := range columns {
-					if entry.PeerSuffix == "" {
+				for _, column := range columns {
+					indices = append(indices, column.index)
+
+					sumValidationTime += column.validationTime
+					sumSinceStartTime += column.sinceStartTime
+
+					if totalReceived == 0 {
+						minValidationTime, maxValidationTime = column.validationTime, column.validationTime
+						minSinceStartTime, maxSinceStartTime = column.sinceStartTime, column.sinceStartTime
+						totalReceived++
 						continue
 					}
-					colIndices = append(colIndices, entry.ColIdx)
-					peers = append(peers, entry.PeerSuffix)
-					gossipScores = append(gossipScores, roundFloat(entry.PeerGossipScore, 2))
-					validationTimes = append(validationTimes, fmt.Sprintf("%.2fms", float64(entry.validationTime.Milliseconds())))
-					sinceStartTimes = append(sinceStartTimes, fmt.Sprintf("%.2fms", float64(entry.sinceStartTime.Milliseconds())))
+
+					minValidationTime, maxValidationTime = min(minValidationTime, column.validationTime), max(maxValidationTime, column.validationTime)
+					minSinceStartTime, maxSinceStartTime = min(minSinceStartTime, column.sinceStartTime), max(maxSinceStartTime, column.sinceStartTime)
 					totalReceived++
 				}
 
-				log.WithFields(logrus.Fields{
-					"slot":            slot,
-					"receivedCount":   totalReceived,
-					"columnIndices":   colIndices,
-					"peers":           peers,
-					"gossipScores":    gossipScores,
-					"validationTimes": validationTimes,
-					"sinceStartTimes": sinceStartTimes,
-				}).Debug("Accepted data column sidecars summary")
+				if totalReceived > 0 {
+					slices.Sort(indices)
+					avgValidationTime := sumValidationTime / time.Duration(totalReceived)
+					avgSinceStartTime := sumSinceStartTime / time.Duration(totalReceived)
+
+					log.WithFields(logrus.Fields{
+						"slot":           columns[0].slot,
+						"root":           fmt.Sprintf("%#x", root),
+						"count":          totalReceived,
+						"indices":        helpers.PrettySlice(indices),
+						"validationTime": prettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
+						"sinceStartTime": prettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
+					}).Debug("Accepted data column sidecars summary")
+				}
 			}
-			slotStats = make(map[primitives.Slot][fieldparams.NumberOfColumns]dataColumnLogEntry)
+
+			slotStats = make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 		}
 	}
 }
 
-func roundFloat(f float64, decimals int) float64 {
-	mult := math.Pow(10, float64(decimals))
-	return math.Round(f*mult) / mult
+func prettyMinMaxAverage(min, max, average time.Duration) string {
+	return fmt.Sprintf("[min: %v, avg: %v, max: %v]", min, average, max)
 }

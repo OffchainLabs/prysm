@@ -304,16 +304,6 @@
     GENESIS_SLOT: Slot = 0
     </spec>
 
-- name: INTERVALS_PER_SLOT
-  sources:
-    - file: config/params/config.go
-      search: IntervalsPerSlot\s+.*yaml:"INTERVALS_PER_SLOT"
-      regex: true
-  spec: |
-    <spec constant_var="INTERVALS_PER_SLOT" fork="phase0" hash="3352e419">
-    INTERVALS_PER_SLOT: uint64 = 3
-    </spec>
-
 - name: JUSTIFICATION_BITS_LENGTH
   sources:
     - file: config/params/config.go

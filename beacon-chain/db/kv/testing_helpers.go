@@ -2,6 +2,7 @@ package kv
 
 import (
 	"encoding/binary"
+	"testing"
 
 	"go.etcd.io/bbolt"
 )
@@ -9,7 +10,7 @@ import (
 // InitStateDiffCacheForTesting initializes the state diff cache with the given offset.
 // This is intended for testing purposes when setting up state diff after database creation.
 // This file is only compiled when the "testing" build tag is set.
-func (s *Store) InitStateDiffCacheForTesting(offset uint64) error {
+func (s *Store) InitStateDiffCacheForTesting(t testing.TB, offset uint64) error {
 	// First, set the offset in the database.
 	err := s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -21,6 +22,7 @@ func (s *Store) InitStateDiffCacheForTesting(offset uint64) error {
 		binary.LittleEndian.PutUint64(offsetBytes, offset)
 		return bucket.Put([]byte("offset"), offsetBytes)
 	})
+
 	if err != nil {
 		return err
 	}

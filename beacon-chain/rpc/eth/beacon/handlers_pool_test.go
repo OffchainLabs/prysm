@@ -657,8 +657,9 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
-			time.Sleep(100 * time.Millisecond) // Wait for async pool save
-			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
+			require.Eventually(t, func() bool {
+				return s.AttestationsPool.UnaggregatedAttestationCount() == 1
+			}, time.Second, 10*time.Millisecond, "Expected 1 attestation in pool")
 		})
 		t.Run("multiple", func(t *testing.T) {
 			broadcaster := &p2pMock.MockBroadcaster{}
@@ -677,8 +678,9 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
-			time.Sleep(100 * time.Millisecond) // Wait for async pool save
-			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+			require.Eventually(t, func() bool {
+				return s.AttestationsPool.UnaggregatedAttestationCount() == 2
+			}, time.Second, 10*time.Millisecond, "Expected 2 attestations in pool")
 		})
 		t.Run("phase0 att post electra", func(t *testing.T) {
 			params.SetupTestConfigCleanup(t)
@@ -798,8 +800,9 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Source.Epoch)
 			assert.Equal(t, "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2", hexutil.Encode(broadcaster.BroadcastAttestations[0].GetData().Target.Root))
 			assert.Equal(t, primitives.Epoch(0), broadcaster.BroadcastAttestations[0].GetData().Target.Epoch)
-			time.Sleep(100 * time.Millisecond) // Wait for async pool save
-			assert.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
+			require.Eventually(t, func() bool {
+				return s.AttestationsPool.UnaggregatedAttestationCount() == 1
+			}, time.Second, 10*time.Millisecond, "Expected 1 attestation in pool")
 		})
 		t.Run("multiple", func(t *testing.T) {
 			broadcaster := &p2pMock.MockBroadcaster{}
@@ -818,8 +821,9 @@ func TestSubmitAttestationsV2(t *testing.T) {
 			assert.Equal(t, http.StatusOK, writer.Code)
 			assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
 			assert.Equal(t, 2, broadcaster.NumAttestations())
-			time.Sleep(100 * time.Millisecond) // Wait for async pool save
-			assert.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
+			require.Eventually(t, func() bool {
+				return s.AttestationsPool.UnaggregatedAttestationCount() == 2
+			}, time.Second, 10*time.Millisecond, "Expected 2 attestations in pool")
 		})
 		t.Run("no body", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
@@ -1375,9 +1379,9 @@ func TestSubmitSignedBLSToExecutionChanges_Ok(t *testing.T) {
 	writer.Body = &bytes.Buffer{}
 	s.SubmitBLSToExecutionChanges(writer, request)
 	assert.Equal(t, http.StatusOK, writer.Code)
-	time.Sleep(100 * time.Millisecond) // Delay to let the routine start
-	assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-	assert.Equal(t, numValidators, len(broadcaster.BroadcastMessages))
+	require.Eventually(t, func() bool {
+		return broadcaster.BroadcastCalled.Load() && len(broadcaster.BroadcastMessages) == numValidators
+	}, time.Second, 10*time.Millisecond, "Broadcast should be called with all messages")
 
 	poolChanges, err := s.BLSChangesPool.PendingBLSToExecChanges()
 	require.Equal(t, len(poolChanges), len(signedChanges))
@@ -1591,10 +1595,10 @@ func TestSubmitSignedBLSToExecutionChanges_Failures(t *testing.T) {
 
 	s.SubmitBLSToExecutionChanges(writer, request)
 	assert.Equal(t, http.StatusBadRequest, writer.Code)
-	time.Sleep(10 * time.Millisecond) // Delay to allow the routine to start
 	require.StringContains(t, "One or more messages failed validation", writer.Body.String())
-	assert.Equal(t, true, broadcaster.BroadcastCalled.Load())
-	assert.Equal(t, numValidators, len(broadcaster.BroadcastMessages)+1)
+	require.Eventually(t, func() bool {
+		return broadcaster.BroadcastCalled.Load() && len(broadcaster.BroadcastMessages)+1 == numValidators
+	}, time.Second, 10*time.Millisecond, "Broadcast should be called with expected messages")
 
 	poolChanges, err := s.BLSChangesPool.PendingBLSToExecChanges()
 	require.Equal(t, len(poolChanges)+1, len(signedChanges))
