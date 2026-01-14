@@ -27,6 +27,18 @@ func setupWalletDir(t testing.TB) string {
 	return walletDir
 }
 
+// Creates a JWT token string using the JWT key.
+// Test-only helper: production code does not need to ship this thin wrapper.
+func createTokenString(jwtKey []byte) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{})
+	// Sign and get the complete encoded token as a string using the secret
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
 func TestServer_AuthenticateUsingExistingToken(t *testing.T) {
 	// Initializing for the first time, there is no auth token file in
 	// the wallet directory, so we generate a jwt token and secret from scratch.
