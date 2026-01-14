@@ -267,6 +267,10 @@ func (d *Depositor) txops(ctx context.Context) (*bind.TransactOpts, error) {
 		return nil, err
 	}
 	txo.Nonce = big.NewInt(0).SetUint64(nonce)
+	// Set a high gas price to ensure deposit transactions can replace any pending
+	// transactions from the transaction generator that may be using the same nonce.
+	// The transaction generator uses 1e11 (100 Gwei), so we use 2e11 (200 Gwei).
+	txo.GasPrice = big.NewInt(2e11)
 	return txo, nil
 }
 

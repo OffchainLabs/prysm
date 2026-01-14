@@ -36,7 +36,6 @@ go_library(
         "//runtime/version:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
-        "@com_github_prysmaticlabs_gohashtree//:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )
@@ -63,6 +62,7 @@ go_test(
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/trie:go_default_library",
+        "//crypto/hash/htr:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
@@ -72,6 +72,5 @@ go_test(
         "//testing/require:go_default_library",
         "@com_github_prysmaticlabs_fastssz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
-        "@com_github_prysmaticlabs_gohashtree//:go_default_library",
     ],
 )

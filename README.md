@@ -15,7 +15,7 @@
 
 ## 📖 Overview
 
-This is the core repository for Prysm, a [Golang](https://golang.org/) implementation of the [Ethereum Consensus](https://ethereum.org/en/developers/docs/consensus-mechanisms/#proof-of-stake) [specification](https://github.com/ethereum/consensus-specs), developed by [Offchain Labs](https://www.offchainlabs.com).
+This is the core repository for Prysm, a [Golang](https://go.dev/) implementation of the [Ethereum Consensus](https://ethereum.org/en/developers/docs/consensus-mechanisms/#proof-of-stake) [specification](https://github.com/ethereum/consensus-specs), developed by [Offchain Labs](https://www.offchainlabs.com).
 
 See the [Changelog](https://github.com/OffchainLabs/prysm/releases) for details of the latest releases and upcoming breaking changes.
 
@@ -23,7 +23,7 @@ See the [Changelog](https://github.com/OffchainLabs/prysm/releases) for details 
 
 ## 🚀 Getting Started
 
-A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://docs.prylabs.network)**.
+A detailed set of installation and usage instructions as well as breakdowns of each individual component are available in the **[official documentation portal](https://prysm.offchainlabs.com/docs/)**.
 
 💬 **Need help?** Join our **[Discord Community](https://discord.gg/prysm)** for support.
 
@@ -51,7 +51,7 @@ Prysm maintains two permanent branches:
 
 ### 🛠 Contribution Guide
 
-Want to get involved? Check out our **[Contribution Guide](https://docs.prylabs.network/docs/contribute/contribution-guidelines/)** to learn more!
+Want to get involved? Check out our **[Contribution Guide](https://prysm.offchainlabs.com/docs/contribute/contribution-guidelines/)** to learn more!
 
 ---
 

@@ -6,7 +6,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/gohashtree"
 )
 
 var errInvalidNilSlice = errors.New("invalid empty slice")
@@ -182,10 +181,10 @@ func MerkleizeListSSZ[T Hashable](elements []T, limit uint64) ([32]byte, error) 
 	chunks := make([][32]byte, 2)
 	chunks[0] = body
 	binary.LittleEndian.PutUint64(chunks[1][:], uint64(len(elements)))
-	if err := gohashtree.Hash(chunks, chunks); err != nil {
+	if err = htr.Hash(chunks, chunks); err != nil {
 		return [32]byte{}, err
 	}
-	return chunks[0], err
+	return chunks[0], nil
 }
 
 // MerkleizeByteSliceSSZ hashes a byteslice by chunkifying it and returning the

@@ -71,17 +71,9 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 		return
 	}
 
-	committeeIndex := duty.CommitteeIndex
 	postElectra := slots.ToEpoch(slot) >= params.BeaconConfig().ElectraForkEpoch
-	if postElectra {
-		committeeIndex = 0
-	}
 
-	req := &ethpb.AttestationDataRequest{
-		Slot:           slot,
-		CommitteeIndex: committeeIndex,
-	}
-	data, err := v.validatorClient.AttestationData(ctx, req)
+	data, err := v.getAttestationData(ctx, slot, duty.CommitteeIndex)
 	if err != nil {
 		log.WithError(err).Error("Could not request attestation to sign at slot")
 		if v.emitAccountMetrics {

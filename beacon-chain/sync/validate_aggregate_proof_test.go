@@ -614,11 +614,10 @@ func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
 		},
 	}
 
-	time.Sleep(10 * time.Millisecond) // Wait for cached value to pass through buffers.
-	if res, err := r.validateAggregateAndProof(t.Context(), "", msg); res == pubsub.ValidationAccept {
-		_ = err
-		t.Fatal("Validated status is true")
-	}
+	require.Eventually(t, func() bool {
+		res, _ := r.validateAggregateAndProof(t.Context(), "", msg)
+		return res != pubsub.ValidationAccept
+	}, time.Second, 10*time.Millisecond, "Expected validation to reject duplicate aggregate")
 }
 
 func TestValidateAggregateAndProof_BadBlock(t *testing.T) {

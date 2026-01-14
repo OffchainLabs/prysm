@@ -17,6 +17,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpbv1 "github.com/OffchainLabs/prysm/v7/proto/eth/v1"
@@ -130,12 +131,10 @@ func TestService_ReceiveBlock(t *testing.T) {
 				block: genFullBlock(t, util.DefaultBlockGenConfig(), 1 /*slot*/),
 			},
 			check: func(t *testing.T, s *Service) {
-				// Hacky sleep, should use a better way to be able to resolve the race
-				// between event being sent out and processed.
-				time.Sleep(100 * time.Millisecond)
-				if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {
-					t.Errorf("Received %d state notifications, expected at least 1", recvd)
-				}
+				notifier := s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier)
+				require.Eventually(t, func() bool {
+					return len(notifier.ReceivedEvents()) >= 1
+				}, 2*time.Second, 10*time.Millisecond, "Expected at least 1 state notification")
 			},
 		},
 		{
@@ -222,10 +221,10 @@ func TestService_ReceiveBlockUpdateHead(t *testing.T) {
 		require.NoError(t, s.ReceiveBlock(ctx, wsb, root, nil))
 	})
 	wg.Wait()
-	time.Sleep(100 * time.Millisecond)
-	if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {
-		t.Errorf("Received %d state notifications, expected at least 1", recvd)
-	}
+	notifier := s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier)
+	require.Eventually(t, func() bool {
+		return len(notifier.ReceivedEvents()) >= 1
+	}, 2*time.Second, 10*time.Millisecond, "Expected at least 1 state notification")
 	// Verify fork choice has processed the block. (Genesis block and the new block)
 	assert.Equal(t, 2, s.cfg.ForkChoiceStore.NodeCount())
 }
@@ -265,10 +264,10 @@ func TestService_ReceiveBlockBatch(t *testing.T) {
 				block: genFullBlock(t, util.DefaultBlockGenConfig(), 1 /*slot*/),
 			},
 			check: func(t *testing.T, s *Service) {
-				time.Sleep(100 * time.Millisecond)
-				if recvd := len(s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier).ReceivedEvents()); recvd < 1 {
-					t.Errorf("Received %d state notifications, expected at least 1", recvd)
-				}
+				notifier := s.cfg.StateNotifier.(*blockchainTesting.MockStateNotifier)
+				require.Eventually(t, func() bool {
+					return len(notifier.ReceivedEvents()) >= 1
+				}, 2*time.Second, 10*time.Millisecond, "Expected at least 1 state notification")
 			},
 		},
 	}
@@ -512,8 +511,9 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		s.cfg.StateNotifier = notifier
 		s.executePostFinalizationTasks(s.ctx, headState)
 
-		time.Sleep(1 * time.Second) // sleep for a second because event is in a separate go routine
-		require.Equal(t, 1, len(notifier.ReceivedEvents()))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
 		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
@@ -552,8 +552,9 @@ func Test_executePostFinalizationTasks(t *testing.T) {
 		s.cfg.StateNotifier = notifier
 		s.executePostFinalizationTasks(s.ctx, headState)
 
-		time.Sleep(1 * time.Second) // sleep for a second because event is in a separate go routine
-		require.Equal(t, 1, len(notifier.ReceivedEvents()))
+		require.Eventually(t, func() bool {
+			return len(notifier.ReceivedEvents()) == 1
+		}, 5*time.Second, 50*time.Millisecond, "Expected exactly 1 state notification")
 		e := notifier.ReceivedEvents()[0]
 		assert.Equal(t, statefeed.FinalizedCheckpoint, int(e.Type))
 		fc, ok := e.Data.(*ethpbv1.EventFinalizedCheckpoint)
@@ -596,13 +597,13 @@ func TestProcessLightClientBootstrap(t *testing.T) {
 
 			s.executePostFinalizationTasks(s.ctx, l.AttestedState)
 
-			// wait for the goroutine to finish processing
-			time.Sleep(1 * time.Second)
-
-			// Check that the light client bootstrap is saved
-			b, err := s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
-			require.NoError(t, err)
-			require.NotNil(t, b)
+			// Wait for the light client bootstrap to be saved (runs in goroutine)
+			var b interfaces.LightClientBootstrap
+			require.Eventually(t, func() bool {
+				var err error
+				b, err = s.lcStore.LightClientBootstrap(ctx, [32]byte(cp.Root))
+				return err == nil && b != nil
+			}, 5*time.Second, 50*time.Millisecond, "Light client bootstrap was not saved within timeout")
 
 			btst, err := lightClient.NewLightClientBootstrapFromBeaconState(ctx, l.FinalizedState.Slot(), l.FinalizedState, l.FinalizedBlock)
 			require.NoError(t, err)

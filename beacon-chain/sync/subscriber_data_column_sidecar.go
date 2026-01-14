@@ -25,12 +25,12 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
-		return errors.Wrap(err, "receive data column sidecar")
+		return wrapDataColumnError(sidecar, "receive data column sidecar", err)
 	}
 
 	wg.Go(func() error {
 		if err := s.processDataColumnSidecarsFromReconstruction(ctx, sidecar); err != nil {
-			return errors.Wrap(err, "process data column sidecars from reconstruction")
+			return wrapDataColumnError(sidecar, "process data column sidecars from reconstruction", err)
 		}
 
 		return nil
@@ -38,7 +38,13 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 
 	wg.Go(func() error {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromSidecar(sidecar)); err != nil {
-			return errors.Wrap(err, "process data column sidecars from execution")
+			if errors.Is(err, context.Canceled) {
+				// Do not log if the context was cancelled on purpose.
+				// (Still log other context errors such as deadlines exceeded).
+				return nil
+			}
+
+			return wrapDataColumnError(sidecar, "process data column sidecars from execution", err)
 		}
 
 		return nil
@@ -109,4 +115,8 @@ func (s *Service) allDataColumnSubnets(_ primitives.Slot) map[uint64]bool {
 	}
 
 	return allSubnets
+}
+
+func wrapDataColumnError(sidecar blocks.VerifiedRODataColumn, message string, err error) error {
+	return fmt.Errorf("%s - slot %d, root %s: %w", message, sidecar.SignedBlockHeader.Header.Slot, fmt.Sprintf("%#x", sidecar.BlockRoot()), err)
 }

@@ -23,6 +23,7 @@ type reqOption func(*http.Request)
 
 type RestHandler interface {
 	Get(ctx context.Context, endpoint string, resp any) error
+	GetStatusCode(ctx context.Context, endpoint string) (int, error)
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
@@ -88,6 +89,28 @@ func (c *BeaconApiRestHandler) Get(ctx context.Context, endpoint string, resp an
 	}()
 
 	return decodeResp(httpResp, resp)
+}
+
+// GetStatusCode sends a GET request and returns only the HTTP status code.
+// This is useful for endpoints like /eth/v1/node/health that communicate status via HTTP codes
+// (200 = ready, 206 = syncing, 503 = unavailable) rather than response bodies.
+func (c *BeaconApiRestHandler) GetStatusCode(ctx context.Context, endpoint string) (int, error) {
+	url := c.host + endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to create request for endpoint %s", url)
+	}
+	req.Header.Set("User-Agent", version.BuildData())
+	httpResp, err := c.client.Do(req)
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to perform request for endpoint %s", url)
+	}
+	defer func() {
+		if err := httpResp.Body.Close(); err != nil {
+			return
+		}
+	}()
+	return httpResp.StatusCode, nil
 }
 
 func (c *BeaconApiRestHandler) GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error) {

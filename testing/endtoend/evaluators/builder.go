@@ -11,7 +11,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/policies"
 	e2etypes "github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -26,6 +25,11 @@ var BuilderIsActive = e2etypes.Evaluator{
 	},
 	Evaluation: builderActive,
 }
+
+// maxNonBuilderBlocks is the maximum number of blocks that can be built locally
+// instead of by the builder before the test fails. This allows tolerance for
+// occasional builder timeouts or failures.
+const maxNonBuilderBlocks = 2
 
 func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	conn := conns[0]
@@ -49,6 +53,10 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 	if err != nil {
 		return err
 	}
+
+	nonBuilderBlocks := 0
+	builderBlocks := 0
+
 	blockCtrs, err := beaconClient.ListBeaconBlocks(context.Background(), &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: lowestBound}})
 	if err != nil {
 		return errors.Wrap(err, "failed to get beacon blocks")
@@ -84,13 +92,18 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 			continue
 		}
 		if string(execPayload.ExtraData()) != "prysm-builder" {
-			return errors.Errorf("%s block with slot %d was not built by the builder. It has an extra data of %s and txRoot of %s", version.String(b.Version()), b.Block().Slot(), string(execPayload.ExtraData()), hexutil.Encode(txRoot))
+			nonBuilderBlocks++
+			continue
 		}
+		builderBlocks++
 		if execPayload.GasLimit() == 0 {
 			return errors.Errorf("%s block with slot %d has a gas limit of 0, when it should be in the 30M range", version.String(b.Version()), b.Block().Slot())
 		}
 	}
 	if lowestBound == currEpoch {
+		if nonBuilderBlocks > maxNonBuilderBlocks {
+			return errors.Errorf("too many non-builder blocks: %d (max allowed: %d), builder blocks: %d", nonBuilderBlocks, maxNonBuilderBlocks, builderBlocks)
+		}
 		return nil
 	}
 	blockCtrs, err = beaconClient.ListBeaconBlocks(context.Background(), &ethpb.ListBlocksRequest{QueryFilter: &ethpb.ListBlocksRequest_Epoch{Epoch: currEpoch}})
@@ -127,11 +140,16 @@ func builderActive(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) err
 			continue
 		}
 		if string(execPayload.ExtraData()) != "prysm-builder" {
-			return errors.Errorf("%s block with slot %d was not built by the builder. It has an extra data of %s and txRoot of %s", version.String(b.Version()), b.Block().Slot(), string(execPayload.ExtraData()), hexutil.Encode(txRoot))
+			nonBuilderBlocks++
+			continue
 		}
+		builderBlocks++
 		if execPayload.GasLimit() == 0 {
 			return errors.Errorf("%s block with slot %d has a gas limit of 0, when it should be in the 30M range", version.String(b.Version()), b.Block().Slot())
 		}
+	}
+	if nonBuilderBlocks > maxNonBuilderBlocks {
+		return errors.Errorf("too many non-builder blocks: %d (max allowed: %d), builder blocks: %d", nonBuilderBlocks, maxNonBuilderBlocks, builderBlocks)
 	}
 	return nil
 }

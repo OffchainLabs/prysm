@@ -342,6 +342,15 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 	}
 
 	if state.version >= version.Gloas {
+		buildersRoot, err := stateutil.BuildersRoot(state.builders)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute builders merkleization")
+		}
+		fieldRoots[types.Builders.RealPosition()] = buildersRoot[:]
+
+		nextWithdrawalBuilderIndexRoot := ssz.Uint64Root(uint64(state.nextWithdrawalBuilderIndex))
+		fieldRoots[types.NextWithdrawalBuilderIndex.RealPosition()] = nextWithdrawalBuilderIndexRoot[:]
+
 		epaRoot, err := stateutil.ExecutionPayloadAvailabilityRoot(state.executionPayloadAvailability)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not compute execution payload availability merkleization")
@@ -366,8 +375,12 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		lbhRoot := bytesutil.ToBytes32(state.latestBlockHash)
 		fieldRoots[types.LatestBlockHash.RealPosition()] = lbhRoot[:]
 
-		lwrRoot := bytesutil.ToBytes32(state.latestWithdrawalsRoot)
-		fieldRoots[types.LatestWithdrawalsRoot.RealPosition()] = lwrRoot[:]
+		expectedWithdrawalsRoot, err := ssz.WithdrawalSliceRoot(state.payloadExpectedWithdrawals, fieldparams.MaxWithdrawalsPerPayload)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute payload expected withdrawals root")
+		}
+
+		fieldRoots[types.PayloadExpectedWithdrawals.RealPosition()] = expectedWithdrawalsRoot[:]
 	}
 	return fieldRoots, nil
 }
