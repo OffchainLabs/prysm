@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 )
@@ -46,17 +45,37 @@ func TestLatestBlockHash(t *testing.T) {
 }
 
 func TestBuilderPubkey(t *testing.T) {
-	t.Run("returns pubkey", func(t *testing.T) {
+	t.Run("returns error before gloas", func(t *testing.T) {
+		stIface, _ := util.DeterministicGenesisState(t, 1)
+		native, ok := stIface.(*state_native.BeaconState)
+		require.Equal(t, true, ok)
+
+		_, err := native.BuilderPubkey(0)
+		require.ErrorContains(t, "is not supported", err)
+	})
+
+	t.Run("returns pubkey copy", func(t *testing.T) {
+		pubkey := bytes.Repeat([]byte{0xAA}, 48)
 		stIface, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
 			Builders: []*ethpb.Builder{
-				{Pubkey: bytes.Repeat([]byte{0xAA}, 48)},
+				{
+					Pubkey:            pubkey,
+					Balance:           42,
+					DepositEpoch:      3,
+					WithdrawableEpoch: 4,
+				},
 			},
 		})
 		require.NoError(t, err)
 
-		st := stIface.(*state_native.BeaconState)
-		gotPk, err := st.BuilderPubkey(0)
+		gotPk, err := stIface.BuilderPubkey(0)
 		require.NoError(t, err)
+		var wantPk [48]byte
+		copy(wantPk[:], pubkey)
+		require.Equal(t, wantPk, gotPk)
+
+		// Mutate original to ensure copy.
+		pubkey[0] = 0
 		require.Equal(t, byte(0xAA), gotPk[0])
 	})
 
