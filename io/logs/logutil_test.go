@@ -28,20 +28,20 @@ func TestMaskCredentialsLogging(t *testing.T) {
 	}
 }
 
-func TestConfigurePersistantLogging(t *testing.T) {
+func TestConfigurePersistentLogging(t *testing.T) {
 	testParentDir := t.TempDir()
 
 	// 1. Test creation of file in an existing parent directory
 	logFileName := "test.log"
 	existingDirectory := "test-1-existing-testing-dir"
 
-	err := ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, logFileName), "text", logrus.InfoLevel)
+	err := ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, existingDirectory, logFileName), "text", logrus.InfoLevel, map[string]logrus.Level{})
 	require.NoError(t, err)
 
 	// 2. Test creation of file along with parent directory
 	nonExistingDirectory := "test-2-non-existing-testing-dir"
 
-	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, nonExistingDirectory, logFileName), "text", logrus.InfoLevel)
+	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s", testParentDir, nonExistingDirectory, logFileName), "text", logrus.InfoLevel, map[string]logrus.Level{})
 	require.NoError(t, err)
 
 	// 3. Test creation of file in an existing parent directory with a non-existing sub-directory
@@ -52,7 +52,7 @@ func TestConfigurePersistantLogging(t *testing.T) {
 		return
 	}
 
-	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory, logFileName), "text", logrus.InfoLevel)
+	err = ConfigurePersistentLogging(fmt.Sprintf("%s/%s/%s/%s", testParentDir, existingDirectory, nonExistingSubDirectory, logFileName), "text", logrus.InfoLevel, map[string]logrus.Level{})
 	require.NoError(t, err)
 
 	//4. Create log file in a directory without 700 permissions

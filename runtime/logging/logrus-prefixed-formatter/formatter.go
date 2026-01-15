@@ -120,6 +120,13 @@ type TextFormatter struct {
 
 	// Timestamp format to use for display when a full timestamp is printed.
 	TimestampFormat string
+
+	// VModule overrides the allowed log level for exact package paths.
+	// When using VModule, you should also set BaseVerbosity to the default verbosity level provided by the user.
+	VModule map[string]logrus.Level
+
+	// BaseVerbosity is the default verbosity level for all packages.
+	BaseVerbosity logrus.Level
 }
 
 func getCompiledColor(main string, fallback string) func(string) string {
@@ -168,6 +175,11 @@ func (f *TextFormatter) SetColorScheme(colorScheme *ColorScheme) {
 }
 
 func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	// check for vmodule compatibility
+	if !f.shouldLog(entry) {
+		return []byte{}, nil
+	}
+
 	var b *bytes.Buffer
 	keys := make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
@@ -234,6 +246,39 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		return nil, err
 	}
 	return b.Bytes(), nil
+}
+
+func (f *TextFormatter) shouldLog(entry *logrus.Entry) bool {
+	if len(f.VModule) == 0 {
+		return true
+	}
+	packagePath, ok := entry.Data["package"]
+	if !ok {
+		return entry.Level <= f.BaseVerbosity
+	}
+	packageName, ok := packagePath.(string)
+	if !ok {
+		return entry.Level <= f.BaseVerbosity
+	}
+
+	packageLevel := f.bestMatchLevel(packageName)
+
+	return entry.Level <= packageLevel
+}
+
+// bestMatchLevel returns the level of the most specific path that matches package name.
+func (f *TextFormatter) bestMatchLevel(pkg string) logrus.Level {
+	bestLen := 0
+	bestLevel := f.BaseVerbosity
+	for k, v := range f.VModule {
+		if k == pkg || strings.HasPrefix(pkg, k+"/") {
+			if len(k) > bestLen {
+				bestLen = len(k)
+				bestLevel = v
+			}
+		}
+	}
+	return bestLevel
 }
 
 func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys []string, timestampFormat string, colorScheme *compiledColorScheme) (err error) {

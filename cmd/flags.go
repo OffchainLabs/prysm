@@ -36,6 +36,12 @@ var (
 		Usage: "Logging verbosity. (trace, debug, info, warn, error, fatal, panic)",
 		Value: "info",
 	}
+	// LogVModuleFlag defines per-package log levels.
+	LogVModuleFlag = &cli.StringFlag{
+		Name:  "log.vmodule",
+		Usage: "Per-package log verbosity. packagePath=level entries separated by commas.",
+		Value: "",
+	}
 	// DataDirFlag defines a path on disk where Prysm databases are stored.
 	DataDirFlag = &cli.StringFlag{
 		Name:  "datadir",

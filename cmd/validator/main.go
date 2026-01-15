@@ -95,6 +95,7 @@ var appFlags = []cli.Flag{
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.VerbosityFlag,
+	cmd.LogVModuleFlag,
 	cmd.DataDirFlag,
 	cmd.ClearDB,
 	cmd.ForceClearDB,
@@ -150,13 +151,21 @@ func main() {
 				return err
 			}
 
-			// determine log verbosity
+			// determine default log verbosity
 			verbosity := ctx.String(cmd.VerbosityFlag.Name)
 			verbosityLevel, err := logrus.ParseLevel(verbosity)
 			if err != nil {
 				return errors.Wrap(err, "failed to parse log verbosity")
 			}
-			logs.SetLoggingLevel(verbosityLevel)
+
+			// determine per package verbosity. if not set, maxLevel will be 0.
+			vmodule, maxLevel, err := cmd.ParseVModule(ctx.String(cmd.LogVModuleFlag.Name))
+			if err != nil {
+				return errors.Wrap(err, "failed to parse log vmodule")
+			}
+
+			// set the global logging level to allow for the highest verbosity requested
+			logs.SetLoggingLevel(max(maxLevel, verbosityLevel))
 
 			logFileName := ctx.String(cmd.LogFileName.Name)
 
@@ -172,11 +181,13 @@ func main() {
 				formatter.FullTimestamp = true
 				formatter.ForceFormatting = true
 				formatter.ForceColors = true
+				formatter.VModule = vmodule
+				formatter.BaseVerbosity = verbosityLevel
 
 				logrus.AddHook(&logs.WriterHook{
 					Formatter:     formatter,
 					Writer:        os.Stderr,
-					AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+					AllowedLevels: logrus.AllLevels[:max(verbosityLevel, maxLevel)+1],
 				})
 			case "fluentd":
 				f := joonix.NewFormatter()
@@ -197,7 +208,7 @@ func main() {
 			}
 
 			if logFileName != "" {
-				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
+				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel, vmodule); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
 				}
 			}
