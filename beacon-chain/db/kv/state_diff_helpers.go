@@ -19,7 +19,7 @@ import (
 
 var (
 	offsetKey           = []byte("offset")
-	ErrSlotBeforeOffset = errors.New("slot is before root offset")
+	ErrSlotBeforeOffset = errors.New("slot is before state-diff root offset")
 )
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
@@ -73,6 +73,9 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 
 // computeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
 func computeLevel(offset uint64, slot primitives.Slot) int {
+	if uint64(slot) < offset {
+		return -1
+	}
 	rel := uint64(slot) - offset
 	for i, exp := range flags.Get().StateDiffExponents {
 		if exp < 2 || exp >= 64 {
