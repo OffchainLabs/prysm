@@ -140,8 +140,10 @@ func main() {
 			slashingprotectioncommands.Commands,
 			dbcommands.Commands,
 			web.Commands,
+			cmd.CompletionCommand("validator"),
 		},
-		Flags: appFlags,
+		Flags:                appFlags,
+		EnableBashCompletion: true,
 		Before: func(ctx *cli.Context) error {
 			// Load flags from config file, if specified.
 			if err := cmd.LoadFlagsFromConfig(ctx, appFlags); err != nil {

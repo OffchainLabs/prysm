@@ -1,5 +1,4 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
-load("@com_github_atlassian_bazel_tools//gometalinter:def.bzl", "gometalinter")
 load("@com_github_atlassian_bazel_tools//goimports:def.bzl", "goimports")
 load("@io_kubernetes_build//defs:run_in_workspace.bzl", "workspace_binary")
 load("@io_bazel_rules_go//go:def.bzl", "nogo")
@@ -53,15 +52,6 @@ alias(
     name = "cast_grpc_proto_compiler",
     actual = "@com_github_prysmaticlabs_protoc_gen_go_cast//:go_cast_grpc",
     visibility = ["//visibility:public"],
-)
-
-gometalinter(
-    name = "gometalinter",
-    config = "//:.gometalinter.json",
-    paths = [
-        "./...",
-    ],
-    prefix = prefix,
 )
 
 goimports(
