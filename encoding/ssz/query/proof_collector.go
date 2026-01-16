@@ -423,7 +423,7 @@ func (pc *proofCollector) merkleizeVector(info *SszInfo, v reflect.Value, curren
 		return [32]byte{}, err
 	}
 
-	length := v.Len()
+	length := int(vi.Length())
 	elemInfo := vi.element
 
 	// Determine the virtual leaf capacity for the vector.
@@ -562,19 +562,19 @@ func (pc *proofCollector) merkleizeBitlist(info *SszInfo, v reflect.Value, curre
 	}
 
 	bitlistBytes := v.Bytes()
-	// Handle zero-initialized bitlist: create a single byte with just the termination bit
-	if len(bitlistBytes) == 0 {
-		bitlistBytes = []byte{0x01}
-	}
 
-	// Use go-bitfield to get length and bytes with termination bit cleared
+	// Use go-bitfield to get bytes with termination bit cleared
 	bl := bitfield.Bitlist(bitlistBytes)
 	data := bl.BytesNoTrim()
-	bitLength := bl.Len() // number of bits (excluding termination bit)
 
-	// limit is in bits; convert to fixed number of 256-bit chunks.
-	// Note: Bitlist[0] is illegal per SSZ spec, so limit >= 1 is guaranteed.
-	limitChunks := (bi.limit + 255) / 256
+	// Get the bit length from bitlistInfo
+	bitLength := bi.Length()
+
+	// Get the chunk limit from getChunkCount
+	limitChunks, err := getChunkCount(info)
+	if err != nil {
+		return [32]byte{}, err
+	}
 
 	chunks := make([][32]byte, 2)
 	// Compute the length hash (little-endian uint256)
