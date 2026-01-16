@@ -105,18 +105,6 @@ func (b *BeaconState) CanBuilderCoverBid(builderIndex primitives.BuilderIndex, b
 	return balance-minBalance >= uint64(bidAmount), nil
 }
 
-// BuilderPendingPaymentsNoCopy returns the builder pending payments without copying.
-func (b *BeaconState) BuilderPendingPaymentsNoCopy() ([]*ethpb.BuilderPendingPayment, error) {
-	if b.version < version.Gloas {
-		return nil, errNotSupported("BuilderPendingPaymentsNoCopy", b.version)
-	}
-
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
-	return b.builderPendingPayments, nil
-}
-
 // builderAtIndex intentionally returns the underlying pointer without copying.
 func (b *BeaconState) builderAtIndex(builderIndex primitives.BuilderIndex) (*ethpb.Builder, error) {
 	idx := uint64(builderIndex)
@@ -146,4 +134,16 @@ func (b *BeaconState) builderPendingBalanceToWithdraw(builderIndex primitives.Bu
 		}
 	}
 	return total
+}
+
+// BuilderPendingPayments returns a copy of the builder pending payments.
+func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingPayments", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingPaymentsVal(), nil
 }

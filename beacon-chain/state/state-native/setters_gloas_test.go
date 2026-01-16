@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -162,11 +163,11 @@ func TestRotateBuilderPendingPayments(t *testing.T) {
 	st, ok := statePb.(*BeaconState)
 	require.Equal(t, true, ok)
 
-	oldPayments, err := st.BuilderPendingPaymentsNoCopy()
+	oldPayments, err := st.BuilderPendingPayments()
 	require.NoError(t, err)
 	require.NoError(t, st.RotateBuilderPendingPayments())
 
-	newPayments, err := st.BuilderPendingPaymentsNoCopy()
+	newPayments, err := st.BuilderPendingPayments()
 	require.NoError(t, err)
 	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
 	for i := range slotsPerEpoch {
@@ -210,7 +211,7 @@ func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
 		Amount:       4,
 		BuilderIndex: 5,
 	}
-	require.NoError(t, copied.AppendBuilderPendingWithdrawal(appended))
+	require.NoError(t, copied.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{appended}))
 
 	require.Equal(t, 1, len(st.builderPendingWithdrawals))
 	require.Equal(t, 2, len(copied.builderPendingWithdrawals))
@@ -221,8 +222,28 @@ func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
 	require.Equal(t, uint(1), copied.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs())
 }
 
-func TestAppendBuilderPendingWithdrawal_UnsupportedVersion(t *testing.T) {
+func TestAppendBuilderPendingWithdrawals(t *testing.T) {
+	st := &BeaconState{
+		version:     version.Gloas,
+		dirtyFields: make(map[types.FieldIndex]bool),
+		sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+			types.BuilderPendingWithdrawals: stateutil.NewRef(1),
+		},
+		builderPendingWithdrawals: make([]*ethpb.BuilderPendingWithdrawal, 0),
+	}
+
+	first := &ethpb.BuilderPendingWithdrawal{Amount: 1}
+	second := &ethpb.BuilderPendingWithdrawal{Amount: 2}
+	require.NoError(t, st.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{first, second}))
+
+	require.Equal(t, 2, len(st.builderPendingWithdrawals))
+	require.DeepEqual(t, first, st.builderPendingWithdrawals[0])
+	require.DeepEqual(t, second, st.builderPendingWithdrawals[1])
+	require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
+}
+
+func TestAppendBuilderPendingWithdrawals_UnsupportedVersion(t *testing.T) {
 	st := &BeaconState{version: version.Electra}
-	err := st.AppendBuilderPendingWithdrawal(&ethpb.BuilderPendingWithdrawal{})
-	require.ErrorContains(t, "AppendBuilderPendingWithdrawal", err)
+	err := st.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{{}})
+	require.ErrorContains(t, "AppendBuilderPendingWithdrawals", err)
 }

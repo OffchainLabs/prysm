@@ -10,7 +10,7 @@ type writeOnlyGloasFields interface {
 	SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid) error
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	RotateBuilderPendingPayments() error
-	AppendBuilderPendingWithdrawal(*ethpb.BuilderPendingWithdrawal) error
+	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
 }
 
 type readOnlyGloasFields interface {
@@ -18,5 +18,5 @@ type readOnlyGloasFields interface {
 	IsActiveBuilder(primitives.BuilderIndex) (bool, error)
 	CanBuilderCoverBid(primitives.BuilderIndex, primitives.Gwei) (bool, error)
 	LatestBlockHash() ([32]byte, error)
-	BuilderPendingPaymentsNoCopy() ([]*ethpb.BuilderPendingPayment, error)
+	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
 }

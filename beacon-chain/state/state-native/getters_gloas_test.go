@@ -158,11 +158,11 @@ func TestBuilderHelpers(t *testing.T) {
 	})
 }
 
-func TestBuilderPendingPaymentsNoCopy_UnsupportedVersion(t *testing.T) {
+func TestBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
 	stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
 	require.NoError(t, err)
 	st := stIface.(*state_native.BeaconState)
 
-	_, err = st.BuilderPendingPaymentsNoCopy()
-	require.ErrorContains(t, "BuilderPendingPaymentsNoCopy", err)
+	_, err = st.BuilderPendingPayments()
+	require.ErrorContains(t, "BuilderPendingPayments", err)
 }

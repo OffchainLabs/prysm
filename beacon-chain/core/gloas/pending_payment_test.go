@@ -95,12 +95,12 @@ type testProcessState struct {
 	withdrawals []*ethpb.BuilderPendingWithdrawal
 }
 
-func (t *testProcessState) BuilderPendingPaymentsNoCopy() ([]*ethpb.BuilderPendingPayment, error) {
+func (t *testProcessState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
 	return t.payments, nil
 }
 
-func (t *testProcessState) AppendBuilderPendingWithdrawal(withdrawal *ethpb.BuilderPendingWithdrawal) error {
-	t.withdrawals = append(t.withdrawals, withdrawal)
+func (t *testProcessState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.BuilderPendingWithdrawal) error {
+	t.withdrawals = append(t.withdrawals, withdrawals...)
 	return nil
 }
 

@@ -1,7 +1,6 @@
 package state_native
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
@@ -24,48 +23,41 @@ func (b *BeaconState) RotateBuilderPendingPayments() error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	oldPayments := b.builderPendingPayments
-	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
-	newPayments := make([]*ethpb.BuilderPendingPayment, 2*slotsPerEpoch)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	copy(b.builderPendingPayments[:slotsPerEpoch], b.builderPendingPayments[slotsPerEpoch:2*slotsPerEpoch])
 
-	copy(newPayments, oldPayments[slotsPerEpoch:])
-
-	for i := uint64(len(oldPayments)) - slotsPerEpoch; i < uint64(len(newPayments)); i++ {
-		newPayments[i] = emptyPayment()
+	for i := slotsPerEpoch; i < primitives.Slot(len(b.builderPendingPayments)); i++ {
+		b.builderPendingPayments[i] = emptyPayment()
 	}
 
-	b.builderPendingPayments = newPayments
 	b.markFieldAsDirty(types.BuilderPendingPayments)
 	b.rebuildTrie[types.BuilderPendingPayments] = true
 	return nil
 }
 
-// AppendBuilderPendingWithdrawal appends a builder pending withdrawal to the beacon state.
+// AppendBuilderPendingWithdrawals appends builder pending withdrawals to the beacon state.
 // If the withdrawals slice is shared, it copies the slice first to preserve references.
-func (b *BeaconState) AppendBuilderPendingWithdrawal(withdrawal *ethpb.BuilderPendingWithdrawal) error {
+func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.BuilderPendingWithdrawal) error {
 	if b.version < version.Gloas {
-		return errNotSupported("AppendBuilderPendingWithdrawal", b.version)
-	}
-	if withdrawal == nil {
-		return errors.New("cannot append nil builder pending withdrawal")
+		return errNotSupported("AppendBuilderPendingWithdrawals", b.version)
 	}
 
-	if b.version < version.Gloas {
-		return errNotSupported("AppendBuilderPendingWithdrawal", b.version)
+	if len(withdrawals) == 0 {
+		return nil
 	}
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	withdrawals := b.builderPendingWithdrawals
+	pendingWithdrawals := b.builderPendingWithdrawals
 	if b.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs() > 1 {
-		withdrawals = make([]*ethpb.BuilderPendingWithdrawal, len(b.builderPendingWithdrawals), len(b.builderPendingWithdrawals)+1)
-		copy(withdrawals, b.builderPendingWithdrawals)
+		pendingWithdrawals = make([]*ethpb.BuilderPendingWithdrawal, 0, len(b.builderPendingWithdrawals)+len(withdrawals))
+		pendingWithdrawals = append(pendingWithdrawals, b.builderPendingWithdrawals...)
 		b.sharedFieldReferences[types.BuilderPendingWithdrawals].MinusRef()
 		b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1)
 	}
 
-	b.builderPendingWithdrawals = append(withdrawals, withdrawal)
+	b.builderPendingWithdrawals = append(pendingWithdrawals, withdrawals...)
 	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
 	return nil
 }
