@@ -6,6 +6,7 @@ go_library(
         "beacon_block.go",
         "error.go",
         "light_client.go",
+        "signed_execution_payload_bid.go",
         "utils.go",
         "validator.go",
     ],

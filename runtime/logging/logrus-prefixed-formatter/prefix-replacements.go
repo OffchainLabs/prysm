@@ -1,0 +1,24 @@
+package prefixed
+
+var prefixReplacements = map[string]string{
+	"beacon-chain/cache/depositsnapshot":              "cache",
+	"beacon-chain/core/transition":                    "state",
+	"beacon-chain/db/kv":                              "db",
+	"beacon-chain/db/slasherkv":                       "slasherdb",
+	"beacon-chain/db/pruner":                          "db-pruner",
+	"beacon-chain/rpc/core":                           "rpc/core",
+	"beacon-chain/rpc/eth/beacon":                     "rpc/beacon",
+	"beacon-chain/rpc/eth/validator":                  "beacon-api",
+	"beacon-chain/rpc/prysm/v1alpha1/beacon":          "rpc",
+	"beacon-chain/rpc/prysm/v1alpha1/validator":       "rpc/validator",
+	"beacon-chain/sync/checkpoint":                    "checkpoint-sync",
+	"config/features":                                 "flags",
+	"proto/prysm/v1alpha1":                            "protobuf",
+	"validator/db/kv":                                 "db",
+	"validator/db/filesystem":                         "db",
+	"validator/keymanager/derived":                    "derived-keymanager",
+	"validator/keymanager/local":                      "local-keymanager",
+	"validator/keymanager/remote-web3signer":          "remote-keymanager",
+	"validator/keymanager/remote-web3signer/internal": "remote-keymanager-internal",
+	"beacon-chain/forkchoice/doubly-linked-tree":      "forkchoice-doublylinkedtree",
+}

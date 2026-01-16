@@ -75,6 +75,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.GrpcMaxCallRecvMsgSizeFlag,
 			cmd.AcceptTosFlag,
 			cmd.ApiTimeoutFlag,
+			flags.DisableEphemeralLogFile,
 		},
 	},
 	{

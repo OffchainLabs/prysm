@@ -5,6 +5,7 @@ load("@prysm//tools/go:def.bzl", "go_test")
 # gazelle:exclude mainnet_scenario_e2e_test.go
 # gazelle:exclude minimal_scenario_e2e_test.go
 # gazelle:exclude minimal_builder_e2e_test.go
+# gazelle:exclude minimal_postmerge_e2e_test.go
 
 # Presubmit tests represent the group of endtoend tests that are run on pull
 # requests and must be passing before a pull request can merge.
@@ -27,6 +28,7 @@ test_suite(
     ],
     tests = [
         ":go_builder_test",
+        ":go_minimal_postmerge_test",
         ":go_mainnet_test",
     ],
 )
@@ -88,7 +90,7 @@ common_deps = [
 # gazelle:ignore
 go_test(
     name = "go_default_test",
-    size = "large",
+    size = "enormous",
     testonly = True,
     srcs = [
         "component_handler_test.go",
@@ -130,6 +132,39 @@ go_test(
         "endtoend_setup_test.go",
         "endtoend_test.go",
         "minimal_builder_e2e_test.go",
+    ],
+    args = ["-test.v"],
+    data = [
+        "//:prysm_sh",
+        "//cmd/beacon-chain",
+        "//cmd/validator",
+        "//config/params:custom_configs",
+        "//tools/bootnode",
+        "@com_github_ethereum_go_ethereum//cmd/geth",
+        "@web3signer",
+    ],
+    eth_network = "minimal",
+    flaky = True,
+    shard_count = 2,
+    tags = [
+        "e2e",
+        "manual",
+        "minimal",
+        "requires-network",
+    ],
+    deps = common_deps,
+)
+
+# Full e2e test from post-merge (Bellatrix) through all forks (post-submit only, takes longer)
+go_test(
+    name = "go_minimal_postmerge_test",
+    size = "enormous",
+    testonly = True,
+    srcs = [
+        "component_handler_test.go",
+        "endtoend_setup_test.go",
+        "endtoend_test.go",
+        "minimal_postmerge_e2e_test.go",
     ],
     args = ["-test.v"],
     data = [

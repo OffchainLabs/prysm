@@ -32,6 +32,7 @@ go_library(
         "state_diff_helpers.go",
         "state_summary.go",
         "state_summary_cache.go",
+        "testing_helpers.go",
         "utils.go",
         "validated_checkpoint.go",
         "wss.go",

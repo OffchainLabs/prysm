@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
@@ -114,6 +115,7 @@ var appFlags = []cli.Flag{
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.AcceptTosFlag,
+	flags.DisableEphemeralLogFile,
 }
 
 func init() {
@@ -138,26 +140,44 @@ func main() {
 			slashingprotectioncommands.Commands,
 			dbcommands.Commands,
 			web.Commands,
+			cmd.CompletionCommand("validator"),
 		},
-		Flags: appFlags,
+		Flags:                appFlags,
+		EnableBashCompletion: true,
 		Before: func(ctx *cli.Context) error {
 			// Load flags from config file, if specified.
 			if err := cmd.LoadFlagsFromConfig(ctx, appFlags); err != nil {
 				return err
 			}
 
+			// determine log verbosity
+			verbosity := ctx.String(cmd.VerbosityFlag.Name)
+			verbosityLevel, err := logrus.ParseLevel(verbosity)
+			if err != nil {
+				return errors.Wrap(err, "failed to parse log verbosity")
+			}
+			logs.SetLoggingLevel(verbosityLevel)
+
 			logFileName := ctx.String(cmd.LogFileName.Name)
 
 			format := ctx.String(cmd.LogFormat.Name)
 			switch format {
 			case "text":
+				// disabling logrus default output so we can control it via different hooks
+				logrus.SetOutput(io.Discard)
+
+				// create a custom formatter and hook for terminal output
 				formatter := new(prefixed.TextFormatter)
 				formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 				formatter.FullTimestamp = true
-				// If persistent log files are written - we disable the log messages coloring because
-				// the colors are ANSI codes and seen as gibberish in the log files.
-				formatter.DisableColors = logFileName != ""
-				logrus.SetFormatter(formatter)
+				formatter.ForceFormatting = true
+				formatter.ForceColors = true
+
+				logrus.AddHook(&logs.WriterHook{
+					Formatter:     formatter,
+					Writer:        os.Stderr,
+					AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+				})
 			case "fluentd":
 				f := joonix.NewFormatter()
 				if err := joonix.DisableTimestampFormat(f); err != nil {
@@ -177,8 +197,14 @@ func main() {
 			}
 
 			if logFileName != "" {
-				if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
+				}
+			}
+
+			if !ctx.Bool(flags.DisableEphemeralLogFile.Name) {
+				if err := logs.ConfigureEphemeralLogFile(ctx.String(cmd.DataDirFlag.Name), ctx.App.Name); err != nil {
+					log.WithError(err).Error("Failed to configure debug log file")
 				}
 			}
 

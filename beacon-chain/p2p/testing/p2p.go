@@ -70,6 +70,11 @@ type TestP2P struct {
 
 // NewTestP2P initializes a new p2p test service.
 func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
+	return NewTestP2PWithPubsubOptions(t, nil, userOptions...)
+}
+
+// NewTestP2PWithPubsubOptions initializes a new p2p test service with custom pubsub options.
+func NewTestP2PWithPubsubOptions(t *testing.T, pubsubOpts []pubsub.Option, userOptions ...config.Option) *TestP2P {
 	ctx := context.Background()
 	options := []config.Option{
 		libp2p.ResourceManager(&network.NullResourceManager{}),
@@ -84,10 +89,14 @@ func NewTestP2P(t *testing.T, userOptions ...config.Option) *TestP2P {
 
 	h, err := libp2p.New(options...)
 	require.NoError(t, err)
-	ps, err := pubsub.NewFloodSub(ctx, h,
+
+	defaultPubsubOpts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
 		pubsub.WithStrictSignatureVerification(false),
-	)
+	}
+	allPubsubOpts := append(defaultPubsubOpts, pubsubOpts...)
+
+	ps, err := pubsub.NewGossipSub(ctx, h, allPubsubOpts...)
 	if err != nil {
 		t.Fatal(err)
 	}

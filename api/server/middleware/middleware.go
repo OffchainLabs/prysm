@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
 	"github.com/rs/cors"
-	log "github.com/sirupsen/logrus"
 )
 
 type Middleware func(http.Handler) http.Handler

@@ -424,7 +424,8 @@ func debugStateTransition(
 		return st, errors.Wrap(err, "could not process block")
 	}
 	var valid bool
-	valid, err = set.VerifyVerbosely()
+	sigSet := set.Batch()
+	valid, err = sigSet.VerifyVerbosely()
 	if err != nil {
 		return st, errors.Wrap(err, "could not batch verify signature")
 	}

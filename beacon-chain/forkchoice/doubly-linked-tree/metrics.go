@@ -3,12 +3,9 @@ package doublylinkedtree
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/sirupsen/logrus"
 )
 
 var (
-	log = logrus.WithField("prefix", "forkchoice-doublylinkedtree")
-
 	headSlotNumber = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "doublylinkedtree_head_slot",
