@@ -510,6 +510,13 @@ func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay ti
 		}
 
 		logFunc("Failed to fetch some origin data column sidecars, retrying later")
+
+		// Wait before retrying, respecting context cancellation.
+		select {
+		case <-s.ctx.Done():
+			return s.ctx.Err()
+		case <-time.After(delay):
+		}
 	}
 }
 
