@@ -588,6 +588,12 @@ func fcReturnsTargetRoot(root [32]byte) func([32]byte, primitives.Epoch) ([32]by
 	}
 }
 
+func fcReturnsDependentRoot() func([32]byte, primitives.Epoch) ([32]byte, error) {
+	return func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+		return root, nil
+	}
+}
+
 type mockSignatureCache struct {
 	svCalledForSig map[signatureData]bool
 	svcb           func(sig signatureData) (bool, error)

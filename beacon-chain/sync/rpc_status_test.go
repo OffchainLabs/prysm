@@ -12,6 +12,7 @@ import (
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
+	dbTest "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	testingDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -934,6 +935,7 @@ func TestStatusRPCRequest_BadPeerHandshake(t *testing.T) {
 	r := &Service{
 		cfg: &config{
 			p2p:           p1,
+			beaconDB:      dbTest.SetupDB(t),
 			chain:         chain,
 			stateNotifier: chain.StateNotifier(),
 			initialSync:   &mockSync.Sync{IsSyncing: false},

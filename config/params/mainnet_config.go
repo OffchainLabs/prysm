@@ -94,6 +94,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BLSWithdrawalPrefixByte:         byte(0),
 	ETH1AddressWithdrawalPrefixByte: byte(1),
 	CompoundingWithdrawalPrefixByte: byte(2),
+	BuilderWithdrawalPrefixByte:     byte(3),
+	BuilderIndexSelfBuild:           primitives.BuilderIndex(math.MaxUint64),
 	ZeroHash:                        [32]byte{},
 
 	// Time parameter constants.
@@ -182,6 +184,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainApplicationMask:             bytesutil.Uint32ToBytes4(0x00000001),
 	DomainApplicationBuilder:          bytesutil.Uint32ToBytes4(0x00000001),
 	DomainBLSToExecutionChange:        bytesutil.Uint32ToBytes4(0x0A000000),
+	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -206,7 +209,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateDenebFieldCount:     28,
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
-	BeaconStateGloasFieldCount:     43,
+	BeaconStateGloasFieldCount:     45,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,

@@ -602,7 +602,7 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 
 // computeStateRoot computes the state root after a block has been processed through a state transition and
 // returns it to the validator client.
-func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
+func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
 	beaconState, err := vs.StateGen.StateByRoot(ctx, block.Block().ParentRoot())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")
@@ -613,11 +613,70 @@ func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.ReadOnl
 		block,
 	)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not calculate state root at slot %d", beaconState.Slot())
+		return vs.handleStateRootError(ctx, block, err)
 	}
 
 	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
 	return root[:], nil
+}
+
+type computeStateRootAttemptsKeyType string
+
+const computeStateRootAttemptsKey = computeStateRootAttemptsKeyType("compute-state-root-attempts")
+const maxComputeStateRootAttempts = 3
+
+// handleStateRootError retries block construction in some error cases.
+func (vs *Server) handleStateRootError(ctx context.Context, block interfaces.SignedBeaconBlock, err error) ([]byte, error) {
+	if ctx.Err() != nil {
+		return nil, status.Errorf(codes.Canceled, "context error: %v", ctx.Err())
+	}
+	switch {
+	case errors.Is(err, transition.ErrAttestationsSignatureInvalid),
+		errors.Is(err, transition.ErrProcessAttestationsFailed):
+		log.WithError(err).Warn("Retrying block construction without attestations")
+		if err := block.SetAttestations([]ethpb.Att{}); err != nil {
+			return nil, errors.Wrap(err, "could not set attestations")
+		}
+	case errors.Is(err, transition.ErrProcessBLSChangesFailed), errors.Is(err, transition.ErrBLSToExecutionChangesSignatureInvalid):
+		log.WithError(err).Warn("Retrying block construction without BLS to execution changes")
+		if err := block.SetBLSToExecutionChanges([]*ethpb.SignedBLSToExecutionChange{}); err != nil {
+			return nil, errors.Wrap(err, "could not set BLS to execution changes")
+		}
+	case errors.Is(err, transition.ErrProcessProposerSlashingsFailed):
+		log.WithError(err).Warn("Retrying block construction without proposer slashings")
+		block.SetProposerSlashings([]*ethpb.ProposerSlashing{})
+	case errors.Is(err, transition.ErrProcessAttesterSlashingsFailed):
+		log.WithError(err).Warn("Retrying block construction without attester slashings")
+		if err := block.SetAttesterSlashings([]ethpb.AttSlashing{}); err != nil {
+			return nil, errors.Wrap(err, "could not set attester slashings")
+		}
+	case errors.Is(err, transition.ErrProcessVoluntaryExitsFailed):
+		log.WithError(err).Warn("Retrying block construction without voluntary exits")
+		block.SetVoluntaryExits([]*ethpb.SignedVoluntaryExit{})
+	case errors.Is(err, transition.ErrProcessSyncAggregateFailed):
+		log.WithError(err).Warn("Retrying block construction without sync aggregate")
+		emptySig := [96]byte{0xC0}
+		emptyAggregate := &ethpb.SyncAggregate{
+			SyncCommitteeBits:      make([]byte, params.BeaconConfig().SyncCommitteeSize/8),
+			SyncCommitteeSignature: emptySig[:],
+		}
+		if err := block.SetSyncAggregate(emptyAggregate); err != nil {
+			log.WithError(err).Error("Could not set sync aggregate")
+		}
+
+	default:
+		return nil, errors.Wrap(err, "could not compute state root")
+	}
+	// prevent deep recursion by limiting max attempts.
+	if v, ok := ctx.Value(computeStateRootAttemptsKey).(int); !ok {
+		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, int(1))
+	} else if v >= maxComputeStateRootAttempts {
+		return nil, fmt.Errorf("attempted max compute state root attempts %d", maxComputeStateRootAttempts)
+	} else {
+		ctx = context.WithValue(ctx, computeStateRootAttemptsKey, v+1)
+	}
+	// recursive call to compute state root again
+	return vs.computeStateRoot(ctx, block)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
