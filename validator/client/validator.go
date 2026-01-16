@@ -1344,22 +1344,27 @@ func (v *validator) numHosts() int {
 
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
 	numHosts := v.numHosts()
-	switchedHost := false
+	startingHost := v.Host()
+	attemptedHosts := []string{}
 
 	// Check all hosts for a fully synced node
 	for i := range numHosts {
 		if v.nodeClient.IsReady(ctx) {
-			if switchedHost {
-				log.WithField("host", v.Host()).Info("Found fully synced beacon node")
+			if len(attemptedHosts) > 0 {
+				log.WithFields(logrus.Fields{
+					"previousHost":   startingHost,
+					"newHost":        v.Host(),
+					"failedAttempts": attemptedHosts,
+				}).Info("Failover succeeded: connected to healthy beacon node")
 			}
 			return true
 		}
 		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
+		attemptedHosts = append(attemptedHosts, v.Host())
 
 		// Try next host if not the last iteration
 		if i < numHosts-1 {
 			v.changeHost()
-			switchedHost = true
 		}
 	}
 

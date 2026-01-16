@@ -144,7 +144,7 @@ func (p *grpcConnectionProvider) SetHost(index int) error {
 	log.WithFields(logrus.Fields{
 		"previousHost": p.endpoints[oldIdx%uint64(len(p.endpoints))],
 		"newHost":      p.endpoints[index],
-	}).Info("Switched gRPC endpoint")
+	}).Debug("Trying gRPC endpoint")
 	return nil
 }
 
