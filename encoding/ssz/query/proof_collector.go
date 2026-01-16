@@ -12,11 +12,12 @@ import (
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
-
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/pkg/errors"
 	fastssz "github.com/prysmaticlabs/fastssz"
 	"github.com/prysmaticlabs/gohashtree"
+	"github.com/sirupsen/logrus"
 )
 
 // proofCollector collects sibling hashes and leaves needed for Merkle proofs.
@@ -514,6 +515,16 @@ func (pc *proofCollector) merkleizeBitvectorBody(data []byte, chunkLimit uint64,
 	return root, nil
 }
 
+// merkleizeBitvector computes the Merkle root of a fixed-length SSZ bitvector and collects proof nodes for targets.
+//
+// Parameters:
+// - info: SSZ type metadata for the bitvector.
+// - v: reflect.Value of the bitvector value.
+// - currentGindex: generalized index (gindex) of the bitvector root.
+//
+// Returns:
+// - [32]byte: Merkle root of the bitvector.
+// - error: any error encountered during packing or merkleization.
 func (pc *proofCollector) merkleizeBitvector(info *SszInfo, v reflect.Value, currentGindex uint64) ([32]byte, error) {
 	bitvectorBytes := v.Bytes()
 	if len(bitvectorBytes) == 0 {
@@ -679,4 +690,86 @@ func (pc *proofCollector) collectSibling(gindex uint64, hash [32]byte) {
 	pc.Lock()
 	pc.siblings[gindex] = hash
 	pc.Unlock()
+}
+
+func OptimizedContainerRoots(info *SszInfo, v reflect.Value, pc *proofCollector) ([][32]byte, error) {
+	ci, err := info.ContainerInfo()
+	if err != nil {
+		return [][32]byte{}, err
+	}
+
+	containerFieldRoots := len(ci.order)
+	depth := ssz.Depth(uint64(containerFieldRoots))
+	v = dereferencePointer(v)
+
+	// Exit early if no containers are provided.
+	if v.Len() == 0 {
+		return [][32]byte{}, nil
+	}
+
+	wg := sync.WaitGroup{}
+	n := runtime.GOMAXPROCS(0)
+	rootsSize := v.Len() * containerFieldRoots
+	groupSize := v.Len() / n
+	roots := make([][32]byte, rootsSize)
+	wg.Add(n - 1)
+	for j := 0; j < n-1; j++ {
+		go pc.hashContainerHelper(ci, v, roots, j, groupSize, containerFieldRoots, &wg)
+	}
+	for i := (n - 1) * groupSize; i < v.Len(); i++ {
+		fRoots, err := pc.ContainerFieldRoots(ci, v.Index(i))
+		if err != nil {
+			return [][32]byte{}, errors.Wrap(err, "could not compute validators merkleization")
+		}
+		for k, root := range fRoots {
+			roots[i*containerFieldRoots+k] = root
+		}
+	}
+	wg.Wait()
+
+	// A container's tree can represented with a depth of floor(log2(containerFieldRoots))
+	// Using this property we can lay out all the individual fields of a
+	// container and hash them in single level using our vectorized routine.
+	for range depth {
+		// Overwrite input lists as we are hashing by level
+		// and only need the highest level to proceed.
+		roots = htr.VectorizedSha256(roots)
+	}
+	return roots, nil
+
+}
+
+func (pc *proofCollector) hashContainerHelper(ci *containerInfo, v reflect.Value, roots [][32]byte, j int, groupSize, containerFieldRoots int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for i := 0; i < groupSize; i++ {
+		fRoots, err := pc.ContainerFieldRoots(ci, v.Index(j*groupSize+i))
+		if err != nil {
+			logrus.WithError(err).Error("Could not get container field roots")
+			return
+		}
+		for k, root := range fRoots {
+			roots[(j*groupSize+i)*containerFieldRoots+k] = root
+		}
+	}
+}
+
+func (pc *proofCollector) ContainerFieldRoots(ci *containerInfo, v reflect.Value) ([][32]byte, error) {
+	v = dereferencePointer(v)
+
+	fieldCount := len(ci.order)
+	fieldRoots := make([][32]byte, fieldCount)
+
+	for i, name := range ci.order {
+		fieldInfo := ci.fields[name]
+		fieldVal := v.FieldByName(fieldInfo.goFieldName)
+
+		// Non-proof path: use a constant gindex to avoid proof bookkeeping.
+		root, err := pc.merkleize(fieldInfo.sszInfo, fieldVal, 0)
+		if err != nil {
+			return nil, fmt.Errorf("field %s: %w", name, err)
+		}
+		fieldRoots[i] = root
+	}
+
+	return fieldRoots, nil
 }
