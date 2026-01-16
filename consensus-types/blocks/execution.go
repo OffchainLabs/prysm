@@ -797,34 +797,42 @@ var (
 	PayloadToHeaderFulu    = PayloadToHeaderDeneb
 )
 
+// Pre-allocated zero-value slices to avoid repeated allocations in IsEmptyExecutionData.
+// These are safe for concurrent read access since they are never modified.
+var (
+	zeroRoot         = make([]byte, fieldparams.RootLength)
+	zeroFeeRecipient = make([]byte, fieldparams.FeeRecipientLength)
+	zeroLogsBloom    = make([]byte, fieldparams.LogsBloomLength)
+)
+
 // IsEmptyExecutionData checks if an execution data is empty underneath. If a single field has
 // a non-zero value, this function will return false.
 func IsEmptyExecutionData(data interfaces.ExecutionData) (bool, error) {
 	if data == nil {
 		return true, nil
 	}
-	if !bytes.Equal(data.ParentHash(), make([]byte, fieldparams.RootLength)) {
+	if !bytes.Equal(data.ParentHash(), zeroRoot) {
 		return false, nil
 	}
-	if !bytes.Equal(data.FeeRecipient(), make([]byte, fieldparams.FeeRecipientLength)) {
+	if !bytes.Equal(data.FeeRecipient(), zeroFeeRecipient) {
 		return false, nil
 	}
-	if !bytes.Equal(data.StateRoot(), make([]byte, fieldparams.RootLength)) {
+	if !bytes.Equal(data.StateRoot(), zeroRoot) {
 		return false, nil
 	}
-	if !bytes.Equal(data.ReceiptsRoot(), make([]byte, fieldparams.RootLength)) {
+	if !bytes.Equal(data.ReceiptsRoot(), zeroRoot) {
 		return false, nil
 	}
-	if !bytes.Equal(data.LogsBloom(), make([]byte, fieldparams.LogsBloomLength)) {
+	if !bytes.Equal(data.LogsBloom(), zeroLogsBloom) {
 		return false, nil
 	}
-	if !bytes.Equal(data.PrevRandao(), make([]byte, fieldparams.RootLength)) {
+	if !bytes.Equal(data.PrevRandao(), zeroRoot) {
 		return false, nil
 	}
-	if !bytes.Equal(data.BaseFeePerGas(), make([]byte, fieldparams.RootLength)) {
+	if !bytes.Equal(data.BaseFeePerGas(), zeroRoot) {
 		return false, nil
 	}
-	if !bytes.Equal(data.BlockHash(), make([]byte, fieldparams.RootLength)) {
+	if !bytes.Equal(data.BlockHash(), zeroRoot) {
 		return false, nil
 	}
 
