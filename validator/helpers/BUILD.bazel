@@ -25,6 +25,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "converts_test.go",
+        "grpc_connection_provider_test.go",
         "metadata_test.go",
     ],
     embed = [":go_default_library"],
@@ -34,10 +35,13 @@ go_test(
         "//consensus-types/interfaces:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
+        "//testing/assert:go_default_library",
         "//testing/require:go_default_library",
         "//validator/db/common:go_default_library",
         "//validator/db/iface:go_default_library",
         "//validator/slashing-protection-history/format:go_default_library",
         "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@org_golang_google_grpc//:go_default_library",
+        "@org_golang_google_grpc//credentials/insecure:go_default_library",
     ],
 )
