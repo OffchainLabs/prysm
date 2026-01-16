@@ -246,10 +246,18 @@ func init() {
 	originalHelpPrinter := cli.HelpPrinter
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data any) {
 		if tmpl == appHelpTemplate {
+			filteredGroups := make([]flagGroup, 0, len(appHelpFlagGroups))
 			for _, group := range appHelpFlagGroups {
-				sort.Sort(cli.FlagsByName(group.Flags))
+				visibleFlags := make([]cli.Flag, 0, len(group.Flags))
+				for _, flag := range group.Flags {
+					if vf, ok := flag.(cli.VisibleFlag); !ok || vf.IsVisible() {
+						visibleFlags = append(visibleFlags, flag)
+					}
+				}
+				sort.Sort(cli.FlagsByName(visibleFlags))
+				filteredGroups = append(filteredGroups, flagGroup{Name: group.Name, Flags: visibleFlags})
 			}
-			originalHelpPrinter(w, tmpl, helpData{data, appHelpFlagGroups})
+			originalHelpPrinter(w, tmpl, helpData{data, filteredGroups})
 		} else {
 			originalHelpPrinter(w, tmpl, data)
 		}
