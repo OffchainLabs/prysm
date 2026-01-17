@@ -76,31 +76,32 @@ func ParseAccept(header string) []mediaRange {
 // Matches reports whether content type is acceptable per the header.
 func Matches(header, ct string) bool {
 	for _, r := range ParseAccept(header) {
-		switch {
-		case r.q == 0:
-			continue
-		case r.mt == "*/*":
-			return true
-		case strings.HasSuffix(r.mt, "/*"):
-			if strings.HasPrefix(ct, r.mt[:len(r.mt)-1]) {
-				return true
-			}
-		case r.mt == ct:
+		if matchesMediaRange(r, ct) {
 			return true
 		}
 	}
 	return false
 }
 
+func matchesMediaRange(r mediaRange, ct string) bool {
+	switch {
+	case r.q == 0:
+		return false
+	case r.mt == "*/*":
+		return true
+	case strings.HasSuffix(r.mt, "/*"):
+		return strings.HasPrefix(ct, r.mt[:len(r.mt)-1])
+	default:
+		return r.mt == ct
+	}
+}
+
 // Negotiate selects the best server type according to the header.
 // Returns the chosen type and true, or "", false when nothing matches.
 func Negotiate(header string, serverTypes []string) (string, bool) {
 	for _, r := range ParseAccept(header) {
-		if r.q == 0 {
-			continue
-		}
 		for _, s := range serverTypes {
-			if Matches(r.mt, s) {
+			if matchesMediaRange(r, s) {
 				return s, true
 			}
 		}
@@ -114,7 +115,7 @@ func PrimaryAcceptMatches(header, produced string) bool {
 		if r.q == 0 {
 			continue // explicitly unacceptable – skip
 		}
-		return Matches(r.mt, produced)
+		return matchesMediaRange(r, produced)
 	}
 	return false
 }
