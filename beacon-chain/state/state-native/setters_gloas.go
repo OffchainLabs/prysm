@@ -23,10 +23,10 @@ func (b *BeaconState) RotateBuilderPendingPayments() error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	copy(b.builderPendingPayments[:slotsPerEpoch], b.builderPendingPayments[slotsPerEpoch:2*slotsPerEpoch])
 
-	for i := slotsPerEpoch; i < len(b.builderPendingPayments); i++ {
+	for i := slotsPerEpoch; i < primitives.Slot(len(b.builderPendingPayments)); i++ {
 		b.builderPendingPayments[i] = emptyPayment()
 	}
 
@@ -48,14 +48,6 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 
 	b.lock.Lock()
 	defer b.lock.Unlock()
-
-	if b.sharedFieldReferences == nil {
-		b.sharedFieldReferences = map[types.FieldIndex]*stateutil.Reference{}
-	}
-
-	if b.sharedFieldReferences[types.BuilderPendingWithdrawals] == nil {
-		b.sharedFieldReferences[types.BuilderPendingWithdrawals] = stateutil.NewRef(1)
-	}
 
 	pendingWithdrawals := b.builderPendingWithdrawals
 	if b.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs() > 1 {
@@ -123,11 +115,12 @@ func (b *BeaconState) SetBuilderPendingPayment(index primitives.Slot, payment *e
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if int(index) >= len(b.builderPendingPayments) {
+	if uint64(index) >= uint64(len(b.builderPendingPayments)) {
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", index, len(b.builderPendingPayments))
 	}
 
 	b.builderPendingPayments[index] = ethpb.CopyBuilderPendingPayment(payment)
+
 	b.markFieldAsDirty(types.BuilderPendingPayments)
 	return nil
 }

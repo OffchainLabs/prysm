@@ -9,7 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/stretchr/testify/require"
+	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
 func TestRemoveBuilderPendingPayment_CurrentEpoch(t *testing.T) {
@@ -27,8 +27,8 @@ func TestRemoveBuilderPendingPayment_CurrentEpoch(t *testing.T) {
 
 	got := getPendingPayment(t, st, paymentIndex)
 	require.NotNil(t, got.Withdrawal)
-	require.Equal(t, make([]byte, 20), got.Withdrawal.FeeRecipient)
-	require.Zero(t, got.Withdrawal.Amount)
+	require.DeepEqual(t, make([]byte, 20), got.Withdrawal.FeeRecipient)
+	require.Equal(t, uint64(0), uint64(got.Withdrawal.Amount))
 }
 
 func TestRemoveBuilderPendingPayment_PreviousEpoch(t *testing.T) {
@@ -46,8 +46,8 @@ func TestRemoveBuilderPendingPayment_PreviousEpoch(t *testing.T) {
 
 	got := getPendingPayment(t, st, paymentIndex)
 	require.NotNil(t, got.Withdrawal)
-	require.Equal(t, make([]byte, 20), got.Withdrawal.FeeRecipient)
-	require.Zero(t, got.Withdrawal.Amount)
+	require.DeepEqual(t, make([]byte, 20), got.Withdrawal.FeeRecipient)
+	require.Equal(t, uint64(0), uint64(got.Withdrawal.Amount))
 }
 
 func TestRemoveBuilderPendingPayment_OlderThanTwoEpoch(t *testing.T) {
@@ -64,7 +64,7 @@ func TestRemoveBuilderPendingPayment_OlderThanTwoEpoch(t *testing.T) {
 	require.NoError(t, err)
 
 	after := getPendingPayment(t, st, paymentIndex)
-	require.Equal(t, original.Withdrawal.FeeRecipient, after.Withdrawal.FeeRecipient)
+	require.DeepEqual(t, original.Withdrawal.FeeRecipient, after.Withdrawal.FeeRecipient)
 	require.Equal(t, original.Withdrawal.Amount, after.Withdrawal.Amount)
 }
 
@@ -100,13 +100,13 @@ func setPendingPayment(t *testing.T, st state.BeaconState, index int, amount uin
 			Amount:       primitives.Gwei(amount),
 		},
 	}
-	require.NoError(t, st.SetBuilderPendingPayment(index, payment))
+	require.NoError(t, st.SetBuilderPendingPayment(primitives.Slot(index), payment))
 }
 
 func getPendingPayment(t *testing.T, st state.BeaconState, index int) *eth.BuilderPendingPayment {
 	t.Helper()
 
 	stateProto := st.ToProtoUnsafe().(*eth.BeaconStateGloas)
-	require.Greater(t, len(stateProto.BuilderPendingPayments), index)
+
 	return stateProto.BuilderPendingPayments[index]
 }

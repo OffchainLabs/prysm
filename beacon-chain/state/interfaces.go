@@ -102,7 +102,7 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyWithdrawals
 	WriteOnlyDeposits
 	WriteOnlyProposerLookahead
-	WriteOnlyGloasFields
+	writeOnlyGloasFields
 	SetGenesisTime(val time.Time) error
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error
