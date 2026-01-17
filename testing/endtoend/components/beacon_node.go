@@ -35,11 +35,12 @@ var _ e2etypes.BeaconNodeSet = (*BeaconNodeSet)(nil)
 // BeaconNodeSet represents set of beacon nodes.
 type BeaconNodeSet struct {
 	e2etypes.ComponentRunner
-	config  *e2etypes.E2EConfig
-	nodes   []e2etypes.ComponentRunner
-	enr     string
-	ids     []string
-	started chan struct{}
+	config     *e2etypes.E2EConfig
+	nodes      []e2etypes.ComponentRunner
+	enr        string
+	ids        []string
+	multiAddrs []string
+	started    chan struct{}
 }
 
 // SetENR assigns ENR to the set of beacon nodes.
@@ -74,8 +75,10 @@ func (s *BeaconNodeSet) Start(ctx context.Context) error {
 		if s.config.UseFixedPeerIDs {
 			for i := range nodes {
 				s.ids = append(s.ids, nodes[i].(*BeaconNode).peerID)
+				s.multiAddrs = append(s.multiAddrs, nodes[i].(*BeaconNode).multiAddr)
 			}
 			s.config.PeerIDs = s.ids
+			s.config.PeerMultiAddrs = s.multiAddrs
 		}
 		// All nodes started, close channel, so that all services waiting on a set, can proceed.
 		close(s.started)
@@ -152,12 +155,13 @@ func (s *BeaconNodeSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error
 // BeaconNode represents beacon node.
 type BeaconNode struct {
 	e2etypes.ComponentRunner
-	config  *e2etypes.E2EConfig
-	started chan struct{}
-	index   int
-	enr     string
-	peerID  string
-	cmd     *exec.Cmd
+	config    *e2etypes.E2EConfig
+	started   chan struct{}
+	index     int
+	enr       string
+	peerID    string
+	multiAddr string
+	cmd       *exec.Cmd
 }
 
 // NewBeaconNode creates and returns a beacon node.
@@ -318,6 +322,18 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 			return fmt.Errorf("could not find peer id: %w", err)
 		}
 		node.peerID = peerId
+
+		// Extract QUIC multiaddr for Lighthouse to connect to this node.
+		// Prysm logs: msg="Node started p2p server" multiAddr="/ip4/192.168.0.14/udp/4250/quic-v1/p2p/16Uiu2..."
+		// We prefer QUIC over TCP as it's more reliable in E2E tests.
+		multiAddr, err := helpers.FindFollowingTextInFile(stdOutFile, "multiAddr=\"/ip4/192.168.0.14/udp/")
+		if err != nil {
+			return fmt.Errorf("could not find QUIC multiaddr: %w", err)
+		}
+		// The extracted text will be like: 4250/quic-v1/p2p/16Uiu2..."
+		// We need to prepend "/ip4/192.168.0.14/udp/" and strip the trailing quote
+		multiAddr = strings.TrimSuffix(multiAddr, "\"")
+		node.multiAddr = "/ip4/192.168.0.14/udp/" + multiAddr
 	}
 
 	// Mark node as ready.

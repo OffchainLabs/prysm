@@ -194,9 +194,10 @@ func (node *LighthouseBeaconNode) Start(ctx context.Context) error {
 		"--suggested-fee-recipient=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
 	}
 	if node.config.UseFixedPeerIDs {
-		flagVal := strings.Join(node.config.PeerIDs, ",")
-		args = append(args,
-			fmt.Sprintf("--trusted-peers=%s", flagVal))
+		// Use libp2p-addresses with full multiaddrs instead of trusted-peers with just peer IDs.
+		// This allows Lighthouse to connect directly to Prysm nodes without relying on DHT discovery.
+		flagVal := strings.Join(node.config.PeerMultiAddrs, ",")
+		args = append(args, fmt.Sprintf("--libp2p-addresses=%s", flagVal))
 	}
 	if node.config.UseBuilder {
 		args = append(args, fmt.Sprintf("--builder=%s:%d", "http://127.0.0.1", e2e.TestParams.Ports.Eth1ProxyPort+prysmNodeCount+index))

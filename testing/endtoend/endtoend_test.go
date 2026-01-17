@@ -49,6 +49,10 @@ const (
 	// stalled (safety measure for nodes stuck at startup, shouldn't normally happen).
 	allNodesStartTimeout = 5 * time.Minute
 
+	// peerReconnectionTimeout defines the timeout for waiting for peer reconnection
+	// after a beacon node has been frozen and resumed.
+	peerReconnectionTimeout = 60 * time.Second
+
 	// errGeneralCode is used to represent the string value for all general process errors.
 	errGeneralCode = "exit status 1"
 )
@@ -225,9 +229,9 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 		if err := helpers.ComponentsStarted(ctx, []e2etypes.ComponentRunner{r.depositor}); err != nil {
 			return errors.Wrap(err, "testDepositsAndTx unable to run, depositor did not Start")
 		}
-        go func() {
-            if r.config.TestDeposits {
-                log.Info("Running deposit tests")
+		go func() {
+			if r.config.TestDeposits {
+				log.Info("Running deposit tests")
 				// The validators with an index < minGenesisActiveCount all have deposits already from the chain start.
 				// Skip all of those chain start validators by seeking to minGenesisActiveCount in the validator list
 				// for further deposit testing.
@@ -238,12 +242,12 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 						r.t.Error(errors.Wrap(err, "depositor.SendAndMine failed"))
 					}
 				}
-            }
-            // Only generate background transactions when relevant for the test.
-            if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
-                r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
-            }
-        }()
+			}
+			// Only generate background transactions when relevant for the test.
+			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
+			}
+		}()
 		if r.config.TestDeposits {
 			return depositCheckValidator.Start(ctx)
 		}
@@ -290,6 +294,36 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 			}
 			if bytesutil.ToBytes32(cResp.HeadBlockRoot) == bytesutil.ToBytes32(rResp.HeadBlockRoot) {
 				return nil
+			}
+		}
+	}
+}
+
+func (r *testRunner) waitForPeerReconnection(ctx context.Context, conn *grpc.ClientConn, minPeers int, timeout time.Duration) {
+	dctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	nodeClient := eth.NewNodeClient(conn)
+	var currentPeerCount int
+
+	for {
+		select {
+		case <-dctx.Done():
+			r.t.Fatalf("Timed out waiting for peer reconnection after %v. Current peers: %d", timeout, currentPeerCount)
+		case <-ticker.C:
+			resp, err := nodeClient.ListPeers(ctx, &emptypb.Empty{})
+			if err != nil {
+				log.WithError(err).Debug("Error listing peers, retrying")
+				continue
+			}
+
+			currentPeerCount = len(resp.Peers)
+			if currentPeerCount >= minPeers {
+				log.WithField("peer_count", currentPeerCount).Info("Beacon node reconnected to peers after freeze")
+				return
 			}
 		}
 	}
@@ -688,6 +722,9 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	case freezeEndEpoch:
 		require.NoError(r.t, r.comHandler.beaconNodes.ResumeAtIndex(0))
 		require.NoError(r.t, r.comHandler.validatorNodes.ResumeAtIndex(0))
+		// Wait for beacon node to reconnect to peers after SIGCONT.
+		// QUIC connections are reset during freeze (peers send stateless reset).
+		r.waitForPeerReconnection(r.comHandler.ctx, conns[0], 1, peerReconnectionTimeout)
 		return true
 	case optimisticStartEpoch:
 		// Set it for prysm beacon node.
@@ -806,6 +843,9 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	case freezeEndEpoch:
 		require.NoError(r.t, r.comHandler.beaconNodes.ResumeAtIndex(0))
 		require.NoError(r.t, r.comHandler.validatorNodes.ResumeAtIndex(0))
+		// Wait for beacon node to reconnect to peers after SIGCONT.
+		// QUIC connections are reset during freeze (peers send stateless reset).
+		r.waitForPeerReconnection(r.comHandler.ctx, conns[0], 1, peerReconnectionTimeout)
 		return true
 	case valOfflineStartEpoch:
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))

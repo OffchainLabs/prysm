@@ -117,6 +117,7 @@ type E2EConfig struct {
 	BeaconFlags             []string
 	ValidatorFlags          []string
 	PeerIDs                 []string
+	PeerMultiAddrs          []string
 	ExtraEpochs             uint64
 }
 

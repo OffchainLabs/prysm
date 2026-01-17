@@ -101,16 +101,44 @@ func peersConnect(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) erro
 		return nil
 	}
 	ctx := context.Background()
+	expectedPeers := len(conns) - 1 + e2e.TestParams.LighthouseBeaconNodeCount
+
+	// Wait up to 60 seconds for all nodes to discover peers.
+	// Peer discovery via DHT can take time, especially for nodes that start later.
+	timeout := 60 * time.Second
+	pollInterval := 1 * time.Second
+
 	for _, conn := range conns {
 		nodeClient := eth.NewNodeClient(conn)
-		peersResp, err := nodeClient.ListPeers(ctx, &emptypb.Empty{})
+		deadline := time.Now().Add(timeout)
+
+		var peersResp *eth.Peers
+		var err error
+		for time.Now().Before(deadline) {
+			peersResp, err = nodeClient.ListPeers(ctx, &emptypb.Empty{})
+			if err != nil {
+				time.Sleep(pollInterval)
+				continue
+			}
+
+			if len(peersResp.Peers) >= expectedPeers {
+				break
+			}
+
+			time.Sleep(pollInterval)
+		}
+
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to list peers after %v: %w", timeout, err)
 		}
-		expectedPeers := len(conns) - 1 + e2e.TestParams.LighthouseBeaconNodeCount
 		if expectedPeers != len(peersResp.Peers) {
-			return fmt.Errorf("unexpected amount of peers, expected %d, received %d", expectedPeers, len(peersResp.Peers))
+			peerIDs := make([]string, 0, len(peersResp.Peers))
+			for _, p := range peersResp.Peers {
+				peerIDs = append(peerIDs, p.Address[len(p.Address)-10:])
+			}
+			return fmt.Errorf("unexpected amount of peers after %v timeout, expected %d, received %d (connected to: %v)", timeout, expectedPeers, len(peersResp.Peers), peerIDs)
 		}
+
 		time.Sleep(connTimeDelay)
 	}
 	return nil
