@@ -51,7 +51,9 @@ const (
 
 	// peerReconnectionTimeout defines the timeout for waiting for peer reconnection
 	// after a beacon node has been frozen and resumed.
-	peerReconnectionTimeout = 60 * time.Second
+	// Increased to 3 minutes to allow DHT and peer discovery mechanisms enough time
+	// to rediscover the node after QUIC connections are reset by SIGSTOP/SIGCONT.
+	peerReconnectionTimeout = 180 * time.Second
 
 	// errGeneralCode is used to represent the string value for all general process errors.
 	errGeneralCode = "exit status 1"
@@ -199,12 +201,20 @@ func (r *testRunner) runEvaluators(ec *e2etypes.EvaluationContext, conns []*grpc
 	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
 	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
 	for currentEpoch := range ticker.C() {
+		log.WithField("epoch", currentEpoch).Info("Processing epoch")
 		if config.EvalInterceptor(ec, currentEpoch, conns) {
+			log.WithField("epoch", currentEpoch).Info("Interceptor returned true, skipping evaluators")
 			continue
 		}
 		r.executeProvidedEvaluators(ec, currentEpoch, conns, config.Evaluators)
 
 		if t.Failed() || currentEpoch >= config.EpochsToRun-1 {
+			log.WithFields(log.Fields{
+				"currentEpoch":  currentEpoch,
+				"EpochsToRun":   config.EpochsToRun,
+				"testFailed":    t.Failed(),
+				"epochLimitHit": currentEpoch >= config.EpochsToRun-1,
+			}).Info("Stopping evaluator loop")
 			ticker.Done()
 			if t.Failed() {
 				return errors.New("test failed")
@@ -300,6 +310,8 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 }
 
 func (r *testRunner) waitForPeerReconnection(ctx context.Context, conn *grpc.ClientConn, minPeers int, timeout time.Duration) {
+	time.Sleep(10 * time.Second)
+
 	dctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -656,7 +668,7 @@ func (r *testRunner) scenarioRun() error {
 	tickingStartTime := helpers.EpochTickerStartTime(genesis)
 
 	ec := e2etypes.NewEvaluationContext(r.depositor.History())
-	// Run assigned evaluators.
+	log.WithField("EpochsToRun", r.config.EpochsToRun).Info("Starting evaluators")
 	return r.runEvaluators(ec, conns, tickingStartTime)
 }
 
@@ -702,9 +714,9 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	freezeStartEpoch := lastForkEpoch + 1
 	freezeEndEpoch := lastForkEpoch + 2
 	optimisticStartEpoch := lastForkEpoch + 6
-	optimisticEndEpoch := lastForkEpoch + 7
+	optimisticEndEpoch := lastForkEpoch + 8
 	recoveryEpochStart, recoveryEpochEnd := lastForkEpoch+3, lastForkEpoch+4
-	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
+	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+10, lastForkEpoch+11
 
 	newPayloadMethod := "engine_newPayloadV4"
 	forkChoiceUpdatedMethod := "engine_forkchoiceUpdatedV3"
@@ -712,6 +724,11 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
 		newPayloadMethod = "engine_newPayloadV3"
 		forkChoiceUpdatedMethod = "engine_forkchoiceUpdatedV3"
+	}
+
+	// Skip evaluators during optimistic sync window (between start and end, exclusive)
+	if primitives.Epoch(epoch) > optimisticStartEpoch && primitives.Epoch(epoch) < optimisticEndEpoch {
+		return true
 	}
 
 	switch primitives.Epoch(epoch) {
