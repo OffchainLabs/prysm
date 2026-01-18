@@ -108,6 +108,17 @@ func (s *BuilderSet) StopAtIndex(i int) error {
 	return s.builders[i].Stop()
 }
 
+// RestartAtIndex for builders just does pause/resume.
+func (s *BuilderSet) RestartAtIndex(_ context.Context, i int) error {
+	if i >= len(s.builders) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.builders))
+	}
+	if err := s.builders[i].Pause(); err != nil {
+		return err
+	}
+	return s.builders[i].Resume()
+}
+
 // ComponentAtIndex returns the component at the provided index.
 func (s *BuilderSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error) {
 	if i >= len(s.builders) {

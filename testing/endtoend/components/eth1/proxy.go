@@ -108,6 +108,17 @@ func (s *ProxySet) StopAtIndex(i int) error {
 	return s.proxies[i].Stop()
 }
 
+// RestartAtIndex for proxies just does pause/resume.
+func (s *ProxySet) RestartAtIndex(_ context.Context, i int) error {
+	if i >= len(s.proxies) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.proxies))
+	}
+	if err := s.proxies[i].Pause(); err != nil {
+		return err
+	}
+	return s.proxies[i].Resume()
+}
+
 // ComponentAtIndex returns the component at the provided index.
 func (s *ProxySet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error) {
 	if i >= len(s.proxies) {

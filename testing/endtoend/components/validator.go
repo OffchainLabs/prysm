@@ -134,6 +134,17 @@ func (s *ValidatorNodeSet) StopAtIndex(i int) error {
 	return s.nodes[i].Stop()
 }
 
+// RestartAtIndex for validators just does pause/resume since they don't have P2P issues.
+func (s *ValidatorNodeSet) RestartAtIndex(_ context.Context, i int) error {
+	if i >= len(s.nodes) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.nodes))
+	}
+	if err := s.nodes[i].Pause(); err != nil {
+		return err
+	}
+	return s.nodes[i].Resume()
+}
+
 // ComponentAtIndex returns the component at the provided index.
 func (s *ValidatorNodeSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error) {
 	if i >= len(s.nodes) {

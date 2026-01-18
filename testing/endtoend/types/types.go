@@ -223,6 +223,8 @@ type MultipleComponentRunners interface {
 	ResumeAtIndex(i int) error
 	// StopAtIndex stops the grouped component element at the desired index.
 	StopAtIndex(i int) error
+	// RestartAtIndex restarts the grouped component element at the desired index.
+	RestartAtIndex(ctx context.Context, i int) error
 }
 
 type EngineProxy interface {

@@ -677,7 +677,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 	optimisticStartEpoch := lastForkEpoch + 6
 	optimisticEndEpoch := lastForkEpoch + 8
 	recoveryEpochStart, recoveryEpochEnd := lastForkEpoch+3, lastForkEpoch+4
-	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+10, lastForkEpoch+11
+	secondRecoveryEpochStart, secondRecoveryEpochMid, secondRecoveryEpochEnd := lastForkEpoch+9, lastForkEpoch+10, lastForkEpoch+11
 
 	newPayloadMethod := "engine_newPayloadV4"
 	forkChoiceUpdatedMethod := "engine_forkchoiceUpdatedV3"
@@ -698,11 +698,8 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))
 		return true
 	case freezeEndEpoch:
-		require.NoError(r.t, r.comHandler.beaconNodes.ResumeAtIndex(0))
+		require.NoError(r.t, r.comHandler.beaconNodes.RestartAtIndex(r.comHandler.ctx, 0))
 		require.NoError(r.t, r.comHandler.validatorNodes.ResumeAtIndex(0))
-		// Note: QUIC connections are reset during freeze (peers send stateless reset).
-		// Peer reconnection happens naturally during recovery epochs (17-19).
-		// No need to block here - the network has 3 epochs (~108s) to stabilize.
 		return true
 	case optimisticStartEpoch:
 		// Set it for prysm beacon node.
@@ -712,6 +709,19 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 			return &enginev1.PayloadStatus{
 				Status:          enginev1.PayloadStatus_SYNCING,
 				LatestValidHash: make([]byte, 32),
+			}
+		}, func() bool {
+			return true
+		})
+		// Also intercept forkchoiceUpdated for prysm beacon node to prevent
+		// SetOptimisticToValid from clearing the optimistic status.
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(forkChoiceUpdatedMethod, func() any {
+			return &ForkchoiceUpdatedResponse{
+				Status: &enginev1.PayloadStatus{
+					Status:          enginev1.PayloadStatus_SYNCING,
+					LatestValidHash: nil,
+				},
+				PayloadId: nil,
 			}
 		}, func() bool {
 			return true
@@ -749,6 +759,7 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 		engineProxy, ok := component.(e2etypes.EngineProxy)
 		require.Equal(r.t, true, ok)
 		engineProxy.RemoveRequestInterceptor(newPayloadMethod)
+		engineProxy.RemoveRequestInterceptor(forkChoiceUpdatedMethod)
 		engineProxy.ReleaseBackedUpRequests(newPayloadMethod)
 
 		// Remove for lighthouse too
@@ -762,8 +773,8 @@ func (r *testRunner) multiScenarioMulticlient(ec *e2etypes.EvaluationContext, ep
 
 		return true
 	case recoveryEpochStart, recoveryEpochEnd,
-		secondRecoveryEpochStart, secondRecoveryEpochEnd:
-		// Allow 2 epochs for the network to finalize again.
+		secondRecoveryEpochStart, secondRecoveryEpochMid, secondRecoveryEpochEnd:
+		// Allow epochs for the network to finalize again after optimistic sync test.
 		return true
 	}
 	return false
@@ -819,11 +830,8 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))
 		return true
 	case freezeEndEpoch:
-		require.NoError(r.t, r.comHandler.beaconNodes.ResumeAtIndex(0))
+		require.NoError(r.t, r.comHandler.beaconNodes.RestartAtIndex(r.comHandler.ctx, 0))
 		require.NoError(r.t, r.comHandler.validatorNodes.ResumeAtIndex(0))
-		// Note: QUIC connections are reset during freeze (peers send stateless reset).
-		// Peer reconnection happens naturally during recovery epochs (3-4).
-		// No need to block here - the network has 2 epochs (~72s) to stabilize.
 		return true
 	case valOfflineStartEpoch:
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	cmdshared "github.com/OffchainLabs/prysm/v7/cmd"
@@ -144,6 +145,14 @@ func (s *BeaconNodeSet) StopAtIndex(i int) error {
 	return s.nodes[i].Stop()
 }
 
+// RestartAtIndex restarts the component at the desired index.
+func (s *BeaconNodeSet) RestartAtIndex(ctx context.Context, i int) error {
+	if i >= len(s.nodes) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.nodes))
+	}
+	return s.nodes[i].(*BeaconNode).Restart(ctx)
+}
+
 // ComponentAtIndex returns the component at the provided index.
 func (s *BeaconNodeSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error) {
 	if i >= len(s.nodes) {
@@ -162,6 +171,7 @@ type BeaconNode struct {
 	peerID    string
 	multiAddr string
 	cmd       *exec.Cmd
+	args      []string
 }
 
 // NewBeaconNode creates and returns a beacon node.
@@ -294,6 +304,7 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		args = append(args, fmt.Sprintf("--%s=%s:%d", flags.MevRelayEndpoint.Name, "http://127.0.0.1", e2e.TestParams.Ports.Eth1ProxyPort+index))
 	}
 	args = append(args, config.BeaconFlags...)
+	node.args = args
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- Safe
 	// Write stderr to log files.
@@ -361,6 +372,78 @@ func (node *BeaconNode) Resume() error {
 // Stop stops the component and its underlying process.
 func (node *BeaconNode) Stop() error {
 	return node.cmd.Process.Kill()
+}
+
+// Restart gracefully stops the beacon node and starts a new process.
+// This is useful for testing resilience as it allows the P2P layer to reinitialize
+// and discover peers again (unlike SIGSTOP/SIGCONT which breaks QUIC connections permanently).
+func (node *BeaconNode) Restart(ctx context.Context) error {
+	binaryPath, found := bazel.FindBinary("cmd/beacon-chain", "beacon-chain")
+	if !found {
+		return errors.New("beacon chain binary not found")
+	}
+
+	// First, continue the process if it's stopped (from PauseAtIndex).
+	// A stopped process (SIGSTOP) cannot receive SIGTERM until continued.
+	_ = node.cmd.Process.Signal(syscall.SIGCONT)
+
+	if err := node.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("failed to send SIGTERM: %w", err)
+	}
+
+	// Wait for process to exit by polling. We can't call cmd.Wait() here because
+	// the Start() method's goroutine is already waiting on the command, and calling
+	// Wait() twice on the same process causes "waitid: no child processes" error.
+	// Instead, poll using Signal(0) which returns an error when the process no longer exists.
+	for range 100 {
+		if err := node.cmd.Process.Signal(syscall.Signal(0)); err != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	restartArgs := make([]string, 0, len(node.args))
+	for _, arg := range node.args {
+		if !strings.Contains(arg, cmdshared.ForceClearDB.Name) {
+			restartArgs = append(restartArgs, arg)
+		}
+	}
+
+	stdOutFile, err := os.OpenFile(
+		path.Join(e2e.TestParams.LogPath, fmt.Sprintf(e2e.BeaconNodeLogFileName, node.index)),
+		os.O_APPEND|os.O_WRONLY,
+		0644,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, binaryPath, restartArgs...)
+	stderr, err := os.OpenFile(
+		path.Join(e2e.TestParams.LogPath, fmt.Sprintf("beacon_node_%d_stderr.log", node.index)),
+		os.O_APPEND|os.O_WRONLY|os.O_CREATE,
+		0644,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to open stderr file: %w", err)
+	}
+	cmd.Stderr = stderr
+
+	log.Infof("Restarting beacon chain %d with flags: %s", node.index, strings.Join(restartArgs, " "))
+	if err = cmd.Start(); err != nil {
+		return fmt.Errorf("failed to restart beacon node: %w", err)
+	}
+
+	if err = helpers.WaitForTextInFile(stdOutFile, "Beacon chain gRPC server listening"); err != nil {
+		return fmt.Errorf("beacon node %d failed to restart properly: %w", node.index, err)
+	}
+
+	node.cmd = cmd
+	go func() {
+		_ = cmd.Wait()
+	}()
+
+	return nil
 }
 
 func (node *BeaconNode) UnderlyingProcess() *os.Process {

@@ -127,6 +127,17 @@ func (s *LighthouseBeaconNodeSet) StopAtIndex(i int) error {
 	return s.nodes[i].Stop()
 }
 
+// RestartAtIndex for Lighthouse just does pause/resume.
+func (s *LighthouseBeaconNodeSet) RestartAtIndex(_ context.Context, i int) error {
+	if i >= len(s.nodes) {
+		return errors.Errorf("provided index exceeds slice size: %d >= %d", i, len(s.nodes))
+	}
+	if err := s.nodes[i].Pause(); err != nil {
+		return err
+	}
+	return s.nodes[i].Resume()
+}
+
 // ComponentAtIndex returns the component at the provided index.
 func (s *LighthouseBeaconNodeSet) ComponentAtIndex(i int) (e2etypes.ComponentRunner, error) {
 	if i >= len(s.nodes) {
