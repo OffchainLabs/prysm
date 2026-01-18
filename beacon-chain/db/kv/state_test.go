@@ -1395,6 +1395,23 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		require.IsNil(t, readSt)
 	})
 
+	t.Run("slot before offset", func(t *testing.T) {
+		db := setupDB(t)
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 10)
+		require.NoError(t, err)
+
+		r := bytesutil.ToBytes32([]byte{'A'})
+		ss := &ethpb.StateSummary{Slot: 9, Root: r[:]}
+		err = db.SaveStateSummary(t.Context(), ss)
+		require.NoError(t, err)
+
+		st, err := db.getStateUsingStateDiff(t.Context(), r)
+		require.ErrorIs(t, err, ErrSlotBeforeOffset)
+		require.IsNil(t, st)
+	})
+
 	t.Run("Full state snapshot", func(t *testing.T) {
 		t.Run("using state summary", func(t *testing.T) {
 			for v := range version.All() {
@@ -1626,5 +1643,22 @@ func TestStore_HasStateUsingStateDiff(t *testing.T) {
 			require.Equal(t, tc.expected, hasSt)
 		}
 
+	})
+
+	t.Run("slot before offset", func(t *testing.T) {
+		db := setupDB(t)
+		setDefaultStateDiffExponents()
+
+		err := setOffsetInDB(db, 10)
+		require.NoError(t, err)
+
+		r := bytesutil.ToBytes32([]byte{'B'})
+		ss := &ethpb.StateSummary{Slot: 0, Root: r[:]}
+		err = db.SaveStateSummary(t.Context(), ss)
+		require.NoError(t, err)
+
+		hasState, err := db.hasStateUsingStateDiff(t.Context(), r)
+		require.ErrorIs(t, err, ErrSlotBeforeOffset)
+		require.Equal(t, false, hasState)
 	})
 }

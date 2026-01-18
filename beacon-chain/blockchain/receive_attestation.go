@@ -94,6 +94,7 @@ func (s *Service) spawnProcessAttestationsRoutine() {
 		for {
 			select {
 			case <-s.ctx.Done():
+				ticker.Done()
 				return
 			case slotInterval := <-ticker.C():
 				if slotInterval.Interval > 0 {

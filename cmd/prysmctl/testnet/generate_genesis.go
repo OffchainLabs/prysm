@@ -214,13 +214,6 @@ func setGlobalParams() error {
 
 func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 	f := &generateGenesisStateFlags
-	if f.GenesisTime == 0 {
-		f.GenesisTime = uint64(time.Now().Unix())
-		log.Info("No genesis time specified, defaulting to now()")
-	}
-	log.Infof("Delaying genesis %v by %v seconds", f.GenesisTime, f.GenesisTimeDelay)
-	f.GenesisTime += f.GenesisTimeDelay
-	log.Infof("Genesis is now %v", f.GenesisTime)
 
 	v, err := version.FromString(f.ForkName)
 	if err != nil {
@@ -258,7 +251,28 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if err := json.Unmarshal(gbytes, gen); err != nil {
 			return nil, err
 		}
-		// set timestamps for genesis and shanghai fork
+		// Use input file's timestamp (if `--genesis-time` is NOT explicitly provided)
+		if f.GenesisTime == 0 {
+			f.GenesisTime = gen.Timestamp
+			log.Infof("Using genesis time from input file: %d", f.GenesisTime)
+		}
+	}
+
+	// If still unset (no `--genesis-time` and no input file), default to `now()`
+	if f.GenesisTime == 0 {
+		f.GenesisTime = uint64(time.Now().Unix())
+		log.Info("No genesis time specified, defaulting to now()")
+	}
+
+	// Apply delay (if any) and expose used genesis time
+	if f.GenesisTimeDelay > 0 {
+		log.Infof("Delaying genesis %d by %d seconds", f.GenesisTime, f.GenesisTimeDelay)
+		f.GenesisTime += f.GenesisTimeDelay
+	}
+	log.Infof("Genesis time is %d", f.GenesisTime)
+
+	// Set the timestamps for genesis and forks
+	if f.GethGenesisJsonIn != "" {
 		gen.Timestamp = f.GenesisTime
 		genesis := time.Unix(int64(f.GenesisTime), 0)
 		gen.Config.ShanghaiTime = interop.GethShanghaiTime(genesis, params.BeaconConfig())
@@ -301,7 +315,7 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(f.GethGenesisJsonOut, gbytes, 0600); err != nil {
+		if err := os.WriteFile(f.GethGenesisJsonOut, gbytes, 0o600); err != nil {
 			return nil, errors.Wrapf(err, "failed to write %s", f.GethGenesisJsonOut)
 		}
 	}

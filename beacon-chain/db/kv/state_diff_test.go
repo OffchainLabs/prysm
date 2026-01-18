@@ -43,8 +43,12 @@ func TestStateDiff_ComputeLevel(t *testing.T) {
 
 	offset := db.getOffset()
 
+	// should be -1. slot < offset
+	lvl := computeLevel(10, primitives.Slot(9))
+	require.Equal(t, -1, lvl)
+
 	// 2 ** 21
-	lvl := computeLevel(offset, primitives.Slot(math.PowerOf2(21)))
+	lvl = computeLevel(offset, primitives.Slot(math.PowerOf2(21)))
 	require.Equal(t, 0, lvl)
 
 	// 2 ** 21 * 3

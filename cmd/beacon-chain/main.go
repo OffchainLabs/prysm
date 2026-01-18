@@ -271,9 +271,11 @@ func main() {
 		Commands: []*cli.Command{
 			dbcommands.Commands,
 			jwtcommands.Commands,
+			cmd.CompletionCommand("beacon-chain"),
 		},
-		Flags:  appFlags,
-		Before: before,
+		Flags:                appFlags,
+		Before:               before,
+		EnableBashCompletion: true,
 	}
 
 	defer func() {
