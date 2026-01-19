@@ -24,7 +24,6 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"AGGREGATE_DUE_BPS",
 	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
 	"ATTESTATION_DUE_BPS_GLOAS",
