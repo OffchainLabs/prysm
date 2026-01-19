@@ -112,8 +112,7 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		return errors.Wrap(err, "save finalized checkpoint")
 	}
 
-	// Initialize state-diff if enabled and not yet initialized.
-	if features.Get().EnableStateDiff && s.stateDiffCache == nil {
+	if features.Get().EnableStateDiff {
 		if err := s.initializeStateDiff(state.Slot(), state); err != nil {
 			return errors.Wrap(err, "failed to initialize state diff")
 		}
