@@ -22,7 +22,7 @@ func TestRemoveBuilderPendingPayment_CurrentEpoch(t *testing.T) {
 
 	setPendingPayment(t, st, paymentIndex, 123)
 
-	_, err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	got := getPendingPayment(t, st, paymentIndex)
@@ -41,7 +41,7 @@ func TestRemoveBuilderPendingPayment_PreviousEpoch(t *testing.T) {
 
 	setPendingPayment(t, st, paymentIndex, 456)
 
-	_, err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	got := getPendingPayment(t, st, paymentIndex)
@@ -60,7 +60,7 @@ func TestRemoveBuilderPendingPayment_OlderThanTwoEpoch(t *testing.T) {
 
 	original := getPendingPayment(t, st, paymentIndex)
 
-	_, err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
+	err := RemoveBuilderPendingPayment(st, &eth.BeaconBlockHeader{Slot: headerSlot})
 	require.NoError(t, err)
 
 	after := getPendingPayment(t, st, paymentIndex)

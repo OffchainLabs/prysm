@@ -21,7 +21,7 @@ import (
 //	elif proposal_epoch == get_previous_epoch(state):
 //	  payment_index = slot % SLOTS_PER_EPOCH
 //	  state.builder_pending_payments[payment_index] = BuilderPendingPayment()
-func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHeader) (state.BeaconState, error) {
+func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHeader) error {
 	proposalEpoch := slots.ToEpoch(header.Slot)
 	currentEpoch := time.CurrentEpoch(st)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
@@ -29,20 +29,15 @@ func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHe
 	var paymentIndex primitives.Slot
 	if proposalEpoch == currentEpoch {
 		paymentIndex = slotsPerEpoch + header.Slot%slotsPerEpoch
-	} else if proposalEpoch == time.PrevEpoch(st) {
+	} else if proposalEpoch+1 == currentEpoch {
 		paymentIndex = header.Slot % slotsPerEpoch
 	} else {
-		return st, nil
+		return nil
 	}
 
-	emptyPayment := &eth.BuilderPendingPayment{
-		Withdrawal: &eth.BuilderPendingWithdrawal{
-			FeeRecipient: make([]byte, 20),
-		},
-	}
-	if err := st.SetBuilderPendingPayment(paymentIndex, emptyPayment); err != nil {
-		return nil, errors.Wrap(err, "could not set builder pending payment")
+	if err := st.SetBuilderPendingPayment(paymentIndex, eth.EmptyBuilderPendingPayment); err != nil {
+		return errors.Wrap(err, "could not set builder pending payment")
 	}
 
-	return st, nil
+	return nil
 }

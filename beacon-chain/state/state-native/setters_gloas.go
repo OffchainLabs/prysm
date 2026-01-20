@@ -27,7 +27,7 @@ func (b *BeaconState) RotateBuilderPendingPayments() error {
 	copy(b.builderPendingPayments[:slotsPerEpoch], b.builderPendingPayments[slotsPerEpoch:2*slotsPerEpoch])
 
 	for i := slotsPerEpoch; i < primitives.Slot(len(b.builderPendingPayments)); i++ {
-		b.builderPendingPayments[i] = emptyPayment()
+		b.builderPendingPayments[i] = ethpb.EmptyBuilderPendingPayment
 	}
 
 	b.markFieldAsDirty(types.BuilderPendingPayments)
@@ -60,17 +60,6 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 	b.builderPendingWithdrawals = append(pendingWithdrawals, withdrawals...)
 	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
 	return nil
-}
-
-func emptyPayment() *ethpb.BuilderPendingPayment {
-	return &ethpb.BuilderPendingPayment{
-		Weight: 0,
-		Withdrawal: &ethpb.BuilderPendingWithdrawal{
-			FeeRecipient: make([]byte, 20),
-			Amount:       0,
-			BuilderIndex: 0,
-		},
-	}
 }
 
 // SetExecutionPayloadBid sets the latest execution payload bid in the state.
@@ -119,7 +108,11 @@ func (b *BeaconState) SetBuilderPendingPayment(index primitives.Slot, payment *e
 		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", index, len(b.builderPendingPayments))
 	}
 
-	b.builderPendingPayments[index] = ethpb.CopyBuilderPendingPayment(payment)
+	if payment == ethpb.EmptyBuilderPendingPayment {
+		b.builderPendingPayments[index] = payment
+	} else {
+		b.builderPendingPayments[index] = ethpb.CopyBuilderPendingPayment(payment)
+	}
 
 	b.markFieldAsDirty(types.BuilderPendingPayments)
 	return nil
