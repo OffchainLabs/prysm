@@ -34,39 +34,95 @@ func TestParseEndpoints(t *testing.T) {
 }
 
 func TestNewGrpcConnectionProvider_Errors(t *testing.T) {
-	tests := []struct {
-		name      string
-		endpoint  string
-		setupCtx  func() context.Context
-		wantError string
-	}{
-		{
-			name:      "no endpoints",
-			endpoint:  "",
-			setupCtx:  context.Background,
-			wantError: "no gRPC endpoints provided",
-		},
-		{
-			name:     "connection failure",
-			endpoint: "invalid:99999",
-			setupCtx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				return ctx
-			},
-			wantError: "failed to connect to gRPC endpoint",
-		},
+	t.Run("no endpoints", func(t *testing.T) {
+		dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		_, err := NewGrpcConnectionProvider(context.Background(), "", dialOpts)
+		require.ErrorContains(t, "no gRPC endpoints provided", err)
+	})
+}
+
+func TestGrpcConnectionProvider_LazyConnection(t *testing.T) {
+	// Start only one server but configure provider with two endpoints
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	server := grpc.NewServer()
+	go func() { _ = server.Serve(lis) }()
+	defer server.Stop()
+
+	validAddr := lis.Addr().String()
+	invalidAddr := "127.0.0.1:1" // Port 1 is unlikely to be listening
+
+	// Provider should succeed even though second endpoint is invalid (lazy connections)
+	endpoint := validAddr + "," + invalidAddr
+	ctx := context.Background()
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	provider, err := NewGrpcConnectionProvider(ctx, endpoint, dialOpts)
+	require.NoError(t, err, "Provider creation should succeed with lazy connections")
+	defer func() { _ = provider.Close() }()
+
+	// First endpoint should work
+	conn := provider.CurrentConn()
+	assert.NotNil(t, conn, "First connection should be created lazily")
+}
+
+func TestGrpcConnectionProvider_SingleConnectionModel(t *testing.T) {
+	// Create provider with 3 endpoints
+	var addrs []string
+	var servers []*grpc.Server
+
+	for range 3 {
+		lis, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		server := grpc.NewServer()
+		go func() { _ = server.Serve(lis) }()
+		addrs = append(addrs, lis.Addr().String())
+		servers = append(servers, server)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dialOpts := []grpc.DialOption{
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithBlock(),
-			}
-			_, err := NewGrpcConnectionProvider(tt.setupCtx(), tt.endpoint, dialOpts)
-			require.ErrorContains(t, tt.wantError, err)
-		})
-	}
+	defer func() {
+		for _, s := range servers {
+			s.Stop()
+		}
+	}()
+
+	endpoint := strings.Join(addrs, ",")
+	ctx := context.Background()
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	provider, err := NewGrpcConnectionProvider(ctx, endpoint, dialOpts)
+	require.NoError(t, err)
+	defer func() { _ = provider.Close() }()
+
+	// Access the internal state to verify single connection behavior
+	p := provider.(*grpcConnectionProvider)
+
+	// Initially no connection
+	p.mu.Lock()
+	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil before access")
+	p.mu.Unlock()
+
+	// Access connection - should create one
+	conn0 := provider.CurrentConn()
+	assert.NotNil(t, conn0)
+
+	p.mu.Lock()
+	assert.NotNil(t, p.conn, "Connection should be created after CurrentConn()")
+	firstConn := p.conn
+	p.mu.Unlock()
+
+	// Call CurrentConn again - should return same connection
+	conn0Again := provider.CurrentConn()
+	assert.Equal(t, conn0, conn0Again, "Should return same connection")
+
+	// Switch to next host - old connection should be closed, new one created lazily
+	provider.NextHost()
+
+	p.mu.Lock()
+	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil after NextHost (lazy)")
+	p.mu.Unlock()
+
+	// Get new connection
+	conn1 := provider.CurrentConn()
+	assert.NotNil(t, conn1)
+	assert.NotEqual(t, firstConn, conn1, "Should be a different connection after switching hosts")
 }
 
 // testProvider creates a provider with n test servers and returns cleanup function.
@@ -109,16 +165,10 @@ func TestGrpcConnectionProvider(t *testing.T) {
 		assert.NotNil(t, provider.CurrentConn())
 	})
 
-	t.Run("Conn bounds checking", func(t *testing.T) {
-		assert.NotNil(t, provider.Conn(0))
-		assert.NotNil(t, provider.Conn(2))
-		assert.Equal(t, (*grpc.ClientConn)(nil), provider.Conn(-1))
-		assert.Equal(t, (*grpc.ClientConn)(nil), provider.Conn(3))
-	})
-
 	t.Run("SetHost", func(t *testing.T) {
 		require.NoError(t, provider.SetHost(1))
 		assert.Equal(t, addrs[1], provider.CurrentHost())
+		assert.NotNil(t, provider.CurrentConn()) // New connection created lazily
 		require.NoError(t, provider.SetHost(0))
 		assert.Equal(t, addrs[0], provider.CurrentHost())
 		require.ErrorContains(t, "invalid host index", provider.SetHost(-1))
@@ -148,6 +198,5 @@ func TestGrpcConnectionProvider_Close(t *testing.T) {
 	assert.NotNil(t, provider.CurrentConn())
 	require.NoError(t, provider.Close())
 	assert.Equal(t, (*grpc.ClientConn)(nil), provider.CurrentConn())
-	assert.Equal(t, (*grpc.ClientConn)(nil), provider.Conn(0))
 	require.NoError(t, provider.Close()) // Double close is safe
 }

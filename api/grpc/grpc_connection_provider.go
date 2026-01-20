@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,42 +11,45 @@ import (
 	"google.golang.org/grpc"
 )
 
-// GrpcConnectionProvider manages multiple gRPC connections for failover support.
+// GrpcConnectionProvider manages gRPC connections for failover support.
 // It allows switching between different beacon node endpoints when the current one becomes unavailable.
+// Only one connection is maintained at a time - when switching hosts, the old connection is closed.
 type GrpcConnectionProvider interface {
 	// CurrentConn returns the currently active gRPC connection.
+	// The connection is created lazily on first call.
 	// Returns nil if the provider has been closed.
 	CurrentConn() *grpc.ClientConn
 	// CurrentHost returns the address of the currently active endpoint.
 	CurrentHost() string
 	// Hosts returns all configured endpoint addresses.
 	Hosts() []string
-	// Conn returns the connection at the given index.
-	Conn(index int) *grpc.ClientConn
 	// SetHost switches to the endpoint at the given index.
+	// The new connection is created lazily on next CurrentConn() call.
 	SetHost(index int) error
 	// NextHost switches to the next available endpoint in round-robin fashion.
+	// The new connection is created lazily on next CurrentConn() call.
 	NextHost()
-	// Close closes all managed connections.
+	// Close closes the current connection.
 	Close() error
 }
 
 type grpcConnectionProvider struct {
 	// Immutable after construction - no lock needed for reads
-	endpoints   []string
-	connections []*grpc.ClientConn
+	endpoints []string
+	ctx       context.Context
+	dialOpts  []grpc.DialOption
 
-	// Atomic index for lock-free current endpoint access
-	currentIndex atomic.Uint64
+	// Current connection state (protected by mu)
+	currentIndex uint64
+	conn         *grpc.ClientConn
 
-	// Mutex only for Close() and write operations that need log consistency
 	mu     sync.Mutex
 	closed atomic.Bool
 }
 
-// NewGrpcConnectionProvider creates a new connection provider that manages multiple gRPC connections.
+// NewGrpcConnectionProvider creates a new connection provider that manages gRPC connections.
 // The endpoint parameter can be a comma-separated list of addresses (e.g., "host1:4000,host2:4000").
-// It creates a separate connection for each endpoint using the provided dial options.
+// Only one connection is maintained at a time, created lazily on first use.
 func NewGrpcConnectionProvider(
 	ctx context.Context,
 	endpoint string,
@@ -58,29 +60,15 @@ func NewGrpcConnectionProvider(
 		return nil, pkgErrors.New("no gRPC endpoints provided")
 	}
 
-	connections := make([]*grpc.ClientConn, 0, len(endpoints))
-	for _, ep := range endpoints {
-		conn, err := grpc.DialContext(ctx, ep, dialOpts...)
-		if err != nil {
-			// Clean up already created connections
-			for _, c := range connections {
-				if err := c.Close(); err != nil {
-					log.WithError(err).Warn("Failed to close connection during cleanup")
-				}
-			}
-			return nil, pkgErrors.Wrapf(err, "failed to connect to gRPC endpoint %s", ep)
-		}
-		connections = append(connections, conn)
-	}
-
 	log.WithFields(logrus.Fields{
 		"endpoints": endpoints,
 		"count":     len(endpoints),
 	}).Info("Initialized gRPC connection provider with multiple endpoints")
 
 	return &grpcConnectionProvider{
-		endpoints:   endpoints,
-		connections: connections,
+		endpoints: endpoints,
+		ctx:       ctx,
+		dialOpts:  dialOpts,
 	}, nil
 }
 
@@ -102,13 +90,32 @@ func (p *grpcConnectionProvider) CurrentConn() *grpc.ClientConn {
 	if p.closed.Load() {
 		return nil
 	}
-	idx := p.currentIndex.Load() % uint64(len(p.connections))
-	return p.connections[idx]
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Return existing connection if available
+	if p.conn != nil {
+		return p.conn
+	}
+
+	// Create connection lazily
+	ep := p.endpoints[p.currentIndex]
+	conn, err := grpc.DialContext(p.ctx, ep, p.dialOpts...)
+	if err != nil {
+		log.WithError(err).WithField("endpoint", ep).Error("Failed to create gRPC connection")
+		return nil
+	}
+
+	p.conn = conn
+	log.WithField("endpoint", ep).Debug("Created gRPC connection")
+	return conn
 }
 
 func (p *grpcConnectionProvider) CurrentHost() string {
-	idx := p.currentIndex.Load() % uint64(len(p.endpoints))
-	return p.endpoints[idx]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.endpoints[p.currentIndex]
 }
 
 func (p *grpcConnectionProvider) Hosts() []string {
@@ -116,16 +123,6 @@ func (p *grpcConnectionProvider) Hosts() []string {
 	hosts := make([]string, len(p.endpoints))
 	copy(hosts, p.endpoints)
 	return hosts
-}
-
-func (p *grpcConnectionProvider) Conn(index int) *grpc.ClientConn {
-	if p.closed.Load() {
-		return nil
-	}
-	if index < 0 || index >= len(p.connections) {
-		return nil
-	}
-	return p.connections[index]
 }
 
 func (p *grpcConnectionProvider) SetHost(index int) error {
@@ -136,13 +133,26 @@ func (p *grpcConnectionProvider) SetHost(index int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	oldIdx := p.currentIndex.Load()
-	p.currentIndex.Store(uint64(index))
+	if uint64(index) == p.currentIndex {
+		return nil // Already on this host
+	}
+
+	oldHost := p.endpoints[p.currentIndex]
+
+	// Close existing connection if any
+	if p.conn != nil {
+		if err := p.conn.Close(); err != nil {
+			log.WithError(err).WithField("endpoint", oldHost).Debug("Failed to close previous connection")
+		}
+		p.conn = nil
+	}
+
+	p.currentIndex = uint64(index)
 
 	log.WithFields(logrus.Fields{
-		"previousHost": p.endpoints[oldIdx%uint64(len(p.endpoints))],
+		"previousHost": oldHost,
 		"newHost":      p.endpoints[index],
-	}).Debug("Trying gRPC endpoint")
+	}).Debug("Switched gRPC endpoint")
 	return nil
 }
 
@@ -150,9 +160,18 @@ func (p *grpcConnectionProvider) NextHost() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	oldIdx := p.currentIndex.Load()
+	oldIdx := p.currentIndex
 	newIdx := (oldIdx + 1) % uint64(len(p.endpoints))
-	p.currentIndex.Store(newIdx)
+
+	// Close existing connection if any
+	if p.conn != nil {
+		if err := p.conn.Close(); err != nil {
+			log.WithError(err).WithField("endpoint", p.endpoints[oldIdx]).Debug("Failed to close previous connection")
+		}
+		p.conn = nil
+	}
+
+	p.currentIndex = newIdx
 
 	log.WithFields(logrus.Fields{
 		"previousHost": p.endpoints[oldIdx],
@@ -169,11 +188,11 @@ func (p *grpcConnectionProvider) Close() error {
 	}
 	p.closed.Store(true)
 
-	var errs []error
-	for i, conn := range p.connections {
-		if err := conn.Close(); err != nil {
-			errs = append(errs, pkgErrors.Wrapf(err, "failed to close connection to %s", p.endpoints[i]))
+	if p.conn != nil {
+		if err := p.conn.Close(); err != nil {
+			return pkgErrors.Wrapf(err, "failed to close connection to %s", p.endpoints[p.currentIndex])
 		}
+		p.conn = nil
 	}
-	return errors.Join(errs...)
+	return nil
 }
