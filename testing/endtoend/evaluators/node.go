@@ -129,7 +129,7 @@ func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 }
 
 func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	headEpochs := make([]primitives.Epoch, len(conns))
+	headSlots := make([]primitives.Slot, len(conns))
 	justifiedRoots := make([][]byte, len(conns))
 	prevJustifiedRoots := make([][]byte, len(conns))
 	finalizedRoots := make([][]byte, len(conns))
@@ -146,7 +146,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 			if err != nil {
 				return errors.Wrapf(err, "connection number=%d", conIdx)
 			}
-			headEpochs[conIdx] = chainHead.HeadEpoch
+			headSlots[conIdx] = chainHead.HeadSlot
 			justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
 			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
 			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
@@ -160,12 +160,18 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	}
 
 	for i := range conns {
-		if headEpochs[0] != headEpochs[i] {
+		// Allow head slots to differ by at most 2 slots to account for timing
+		// differences when querying nodes and chain advancement during evaluation.
+		slotDiff := headSlots[0] - headSlots[i]
+		if headSlots[i] > headSlots[0] {
+			slotDiff = headSlots[i] - headSlots[0]
+		}
+		if slotDiff > 2 {
 			return fmt.Errorf(
-				"received conflicting head epochs on node %d, expected %d, received %d",
+				"received conflicting head slots on node %d, expected %d (±2), received %d",
 				i,
-				headEpochs[0],
-				headEpochs[i],
+				headSlots[0],
+				headSlots[i],
 			)
 		}
 		// Skip finalized/justified checks for nodes in optimistic mode.
