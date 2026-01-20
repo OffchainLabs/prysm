@@ -1,6 +1,7 @@
 package beacon_api
 
 import (
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"context"
 	"net/http"
 	"strconv"
@@ -20,7 +21,7 @@ var (
 
 type beaconApiNodeClient struct {
 	fallbackClient  iface.NodeClient
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 	genesisProvider GenesisProvider
 }
 
@@ -115,7 +116,7 @@ func (c *beaconApiNodeClient) IsReady(ctx context.Context) bool {
 	return statusCode == http.StatusOK
 }
 
-func NewNodeClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface.NodeClient) iface.NodeClient {
+func NewNodeClientWithFallback(jsonRestHandler rest.RestHandler, fallbackClient iface.NodeClient) iface.NodeClient {
 	b := &beaconApiNodeClient{
 		jsonRestHandler: jsonRestHandler,
 		fallbackClient:  fallbackClient,

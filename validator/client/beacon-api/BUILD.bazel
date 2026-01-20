@@ -26,7 +26,6 @@ go_library(
         "propose_exit.go",
         "prysm_beacon_chain_client.go",
         "registration.go",
-        "rest_handler_client.go",
         "state_validators.go",
         "status.go",
         "stream_blocks.go",

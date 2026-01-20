@@ -1,6 +1,7 @@
 package beacon_api
 
 import (
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"context"
 	"net/http"
 	"strconv"
@@ -20,7 +21,7 @@ type GenesisProvider interface {
 }
 
 type beaconApiGenesisProvider struct {
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 	genesis         *structs.Genesis
 	once            sync.Once
 }

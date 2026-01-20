@@ -1,6 +1,7 @@
 package beacon_api
 
 import (
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -27,7 +28,7 @@ type dutiesProvider interface {
 }
 
 type beaconApiDutiesProvider struct {
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 }
 
 type attesterDuty struct {

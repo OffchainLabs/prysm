@@ -130,12 +130,6 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 
 	s.ctx = grpcutil.AppendHeaders(ctx, cfg.GRPCHeaders)
 
-	// Only create connection providers if endpoints are provided.
-	// Tests may not provide endpoints when testing other functionality.
-	if cfg.BeaconNodeGRPCEndpoint == "" && cfg.BeaconApiEndpoint == "" {
-		return s, nil
-	}
-
 	var grpcProvider grpcutil.GrpcConnectionProvider
 	if cfg.BeaconNodeGRPCEndpoint != "" {
 		var err error

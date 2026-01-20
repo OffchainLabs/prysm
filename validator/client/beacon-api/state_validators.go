@@ -1,6 +1,7 @@
 package beacon_api
 
 import (
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -21,7 +22,7 @@ type StateValidatorsProvider interface {
 }
 
 type beaconApiStateValidatorsProvider struct {
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 }
 
 func (c beaconApiStateValidatorsProvider) StateValidators(
