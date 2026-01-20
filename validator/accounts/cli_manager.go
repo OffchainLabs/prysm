@@ -76,20 +76,14 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 	}
 
 	ctx = grpcutil.AppendHeaders(ctx, acm.grpcHeaders)
-	grpcProvider, err := grpcutil.NewGrpcConnectionProvider(ctx, acm.beaconRPCProvider, acm.dialOpts)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "could not dial endpoint %s", acm.beaconRPCProvider)
-	}
 
-	restProvider, err := rest.NewRestConnectionProvider(
-		acm.beaconApiEndpoint,
-		rest.WithHttpTimeout(acm.beaconApiTimeout),
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGrpc(ctx, acm.beaconRPCProvider, acm.dialOpts),
+		validatorHelpers.WithREST(acm.beaconApiEndpoint, rest.WithHttpTimeout(acm.beaconApiTimeout)),
 	)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to create REST connection provider")
+		return nil, nil, err
 	}
-
-	conn := validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
 
 	validatorClient := validatorClientFactory.NewValidatorClient(conn)
 	nodeClient := nodeClientFactory.NewNodeClient(conn)

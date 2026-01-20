@@ -2804,7 +2804,8 @@ func TestValidator_ChangeHost(t *testing.T) {
 
 	hosts := []string{"http://localhost:8080", "http://localhost:8081"}
 	restProvider := &rest.MockRestProvider{MockHosts: hosts}
-	conn := validatorHelpers.NewNodeConnection(nil, restProvider)
+	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithRestProvider(restProvider))
+	require.NoError(t, err)
 
 	client := validatormock.NewMockValidatorClient(ctrl)
 	v := validator{
@@ -2850,7 +2851,8 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		gomock.Any()).Return(mockResponse, nil)
 
 	mockProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000", "localhost:4001"}}
-	conn := validatorHelpers.NewNodeConnection(mockProvider, nil)
+	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGrpcProvider(mockProvider))
+	require.NoError(t, err)
 
 	v := &validator{
 		validatorClient:  client,
@@ -2867,7 +2869,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		},
 	}
 
-	err := v.updateValidatorStatusCache(ctx, pubkeys)
+	err = v.updateValidatorStatusCache(ctx, pubkeys)
 	assert.NoError(t, err)
 
 	// make sure the nonexistent key is fully removed

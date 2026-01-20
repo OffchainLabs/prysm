@@ -37,26 +37,23 @@ func (s *Server) registerBeaconClient() error {
 
 	s.ctx = grpcutil.AppendHeaders(s.ctx, s.grpcHeaders)
 
-	grpcProvider, err := grpcutil.NewGrpcConnectionProvider(s.ctx, s.beaconNodeEndpoint, dialOpts)
-	if err != nil {
-		return errors.Wrapf(err, "could not dial endpoint: %s", s.beaconNodeEndpoint)
-	}
-	if s.beaconNodeCert != "" {
-		log.Info("Established secure gRPC connection")
-	}
-	s.healthClient = ethpb.NewHealthClient(grpcProvider.CurrentConn())
-
-	restProvider, err := rest.NewRestConnectionProvider(
-		s.beaconApiEndpoint,
-		rest.WithHttpHeaders(s.beaconApiHeaders),
-		rest.WithHttpTimeout(s.beaconApiTimeout),
-		rest.WithTracing(),
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGrpc(s.ctx, s.beaconNodeEndpoint, dialOpts),
+		validatorHelpers.WithREST(s.beaconApiEndpoint,
+			rest.WithHttpHeaders(s.beaconApiHeaders),
+			rest.WithHttpTimeout(s.beaconApiTimeout),
+			rest.WithTracing(),
+		),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to create REST connection provider")
+		return err
 	}
-
-	conn := validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
+	if s.beaconNodeCert != "" && s.beaconNodeEndpoint != "" {
+		log.Info("Established secure gRPC connection")
+	}
+	if grpcConn := conn.GetGrpcClientConn(); grpcConn != nil {
+		s.healthClient = ethpb.NewHealthClient(grpcConn)
+	}
 
 	s.chainClient = beaconChainClientFactory.NewChainClient(conn)
 	s.nodeClient = nodeClientFactory.NewNodeClient(conn)
