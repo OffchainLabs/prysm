@@ -24,7 +24,7 @@ const (
 */
 
 // SlotInDiffTree returns whether the given slot is a saving point in the diff tree.
-// It it is, it also returns the offset and level in the tree.
+// If it is, it also returns the offset and level in the tree.
 func (s *Store) SlotInDiffTree(slot primitives.Slot) (uint64, int, error) {
 	offset := s.getOffset()
 	if uint64(slot) < offset {
