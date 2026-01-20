@@ -35,6 +35,7 @@ func TestNew_Insecure(t *testing.T) {
 	hook := logTest.NewGlobal()
 	_, err := NewValidatorService(t.Context(), &Config{
 		BeaconNodeGRPCEndpoint: "localhost:4000",
+		BeaconApiEndpoint:      "http://localhost:3500",
 	})
 	require.NoError(t, err)
 	require.LogsContain(t, hook, "You are using an insecure gRPC connection")
@@ -62,6 +63,7 @@ func TestStart_GrpcHeaders(t *testing.T) {
 	} {
 		cfg := &Config{
 			BeaconNodeGRPCEndpoint: "localhost:4000",
+			BeaconApiEndpoint:      "http://localhost:3500",
 			GRPCHeaders:            strings.Split(input, ","),
 		}
 		validatorService, err := NewValidatorService(ctx, cfg)

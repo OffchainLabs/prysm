@@ -2,12 +2,11 @@ package client
 
 import (
 	"context"
-	"net/http"
 	"time"
 
-	api "github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -34,7 +33,6 @@ import (
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
@@ -133,21 +131,39 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 
 	s.ctx = grpcutil.AppendHeaders(ctx, cfg.GRPCHeaders)
 
-	grpcProvider, err := grpcutil.NewGrpcConnectionProvider(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts)
-	if err != nil {
-		return s, errors.Wrap(err, "failed to create gRPC connection provider")
+	// Only create connection providers if endpoints are provided.
+	// Tests may not provide endpoints when testing other functionality.
+	if cfg.BeaconNodeGRPCEndpoint == "" && cfg.BeaconApiEndpoint == "" {
+		return s, nil
 	}
 
-	if cfg.BeaconNodeCert != "" {
-		log.Info("Established secure gRPC connection")
+	var grpcProvider grpcutil.GrpcConnectionProvider
+	if cfg.BeaconNodeGRPCEndpoint != "" {
+		var err error
+		grpcProvider, err = grpcutil.NewGrpcConnectionProvider(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts)
+		if err != nil {
+			return s, errors.Wrap(err, "failed to create gRPC connection provider")
+		}
+		if cfg.BeaconNodeCert != "" {
+			log.Info("Established secure gRPC connection")
+		}
 	}
 
-	s.conn = validatorHelpers.NewNodeConnection(
-		grpcProvider,
-		cfg.BeaconApiEndpoint,
-		validatorHelpers.WithBeaconApiHeaders(cfg.BeaconApiHeaders),
-		validatorHelpers.WithBeaconApiTimeout(cfg.BeaconApiTimeout),
-	)
+	var restProvider rest.RestConnectionProvider
+	if cfg.BeaconApiEndpoint != "" {
+		var err error
+		restProvider, err = rest.NewRestConnectionProvider(
+			cfg.BeaconApiEndpoint,
+			rest.WithHttpHeaders(cfg.BeaconApiHeaders),
+			rest.WithHttpTimeout(cfg.BeaconApiTimeout),
+			rest.WithTracing(),
+		)
+		if err != nil {
+			return s, errors.Wrap(err, "failed to create REST connection provider")
+		}
+	}
+
+	s.conn = validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
 
 	return s, nil
 }
@@ -182,16 +198,15 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	hosts := v.conn.GetBeaconApiHosts()
-	if len(hosts) == 0 {
-		log.Error("No API hosts provided")
+	restProvider := v.conn.GetRestConnectionProvider()
+	if restProvider == nil || len(restProvider.Hosts()) == 0 {
+		log.Error("No REST API hosts provided")
 		return
 	}
 
-	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, v.conn.GetBeaconApiHeaders())
 	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(headersTransport)},
-		hosts[0],
+		*restProvider.HttpClient(),
+		restProvider.CurrentHost(),
 	)
 
 	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)

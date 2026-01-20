@@ -1328,7 +1328,7 @@ func (v *validator) changeHost() {
 // hosts returns the list of configured beacon node hosts.
 func (v *validator) hosts() []string {
 	if features.Get().EnableBeaconRESTApi {
-		return v.conn.GetBeaconApiHosts()
+		return v.conn.GetRestConnectionProvider().Hosts()
 	}
 	return v.conn.GetGrpcConnectionProvider().Hosts()
 }

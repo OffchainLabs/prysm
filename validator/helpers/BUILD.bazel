@@ -11,6 +11,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//api/grpc:go_default_library",
+        "//api/rest:go_default_library",
         "//config/fieldparams:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//validator/db/iface:go_default_library",
@@ -30,6 +31,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api/grpc:go_default_library",
+        "//api/rest:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/proposer:go_default_library",
         "//consensus-types/interfaces:go_default_library",

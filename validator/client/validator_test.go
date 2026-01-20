@@ -17,6 +17,7 @@ import (
 	"time"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -2802,7 +2803,8 @@ func TestValidator_ChangeHost(t *testing.T) {
 	defer ctrl.Finish()
 
 	hosts := []string{"http://localhost:8080", "http://localhost:8081"}
-	conn := validatorHelpers.NewNodeConnection(nil, strings.Join(hosts, ","))
+	restProvider := &rest.MockRestProvider{MockHosts: hosts}
+	conn := validatorHelpers.NewNodeConnection(nil, restProvider)
 
 	client := validatormock.NewMockValidatorClient(ctrl)
 	v := validator{
@@ -2848,7 +2850,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		gomock.Any()).Return(mockResponse, nil)
 
 	mockProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000", "localhost:4001"}}
-	conn := validatorHelpers.NewNodeConnection(mockProvider, "")
+	conn := validatorHelpers.NewNodeConnection(mockProvider, nil)
 
 	v := &validator{
 		validatorClient:  client,

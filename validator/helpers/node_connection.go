@@ -1,50 +1,32 @@
 package helpers
 
 import (
-	"strings"
-	"time"
+	"net/http"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"google.golang.org/grpc"
 )
 
-// Use an interface with a private dummy function to force all other packages to call NewNodeConnection
+// NodeConnection provides access to both gRPC and REST API connections to a beacon node.
+// Use an interface with a private dummy function to force all other packages to call NewNodeConnection.
 type NodeConnection interface {
+	// GetGrpcClientConn returns the current gRPC client connection.
+	// Returns nil if no gRPC provider is configured.
 	GetGrpcClientConn() *grpc.ClientConn
-	GetBeaconApiUrl() string
-	// GetBeaconApiHosts returns the list of beacon API hosts parsed from the URL.
-	GetBeaconApiHosts() []string
-	GetBeaconApiHeaders() map[string][]string
-	setBeaconApiHeaders(map[string][]string)
-	GetBeaconApiTimeout() time.Duration
-	setBeaconApiTimeout(time.Duration)
 	// GetGrpcConnectionProvider returns the gRPC connection provider.
 	GetGrpcConnectionProvider() grpcutil.GrpcConnectionProvider
+	// GetRestConnectionProvider returns the REST connection provider.
+	GetRestConnectionProvider() rest.RestConnectionProvider
+	// GetHttpClient returns the configured HTTP client for REST API requests.
+	// Returns nil if no REST provider is configured.
+	GetHttpClient() *http.Client
 	dummy()
 }
 
 type nodeConnection struct {
 	grpcConnectionProvider grpcutil.GrpcConnectionProvider
-	beaconApiUrl           string
-	beaconApiHeaders       map[string][]string
-	beaconApiTimeout       time.Duration
-}
-
-// NodeConnectionOption is a functional option for configuring the node connection.
-type NodeConnectionOption func(nc NodeConnection)
-
-// WithBeaconApiHeaders sets the HTTP headers that should be sent to the server along with each request.
-func WithBeaconApiHeaders(headers map[string][]string) NodeConnectionOption {
-	return func(nc NodeConnection) {
-		nc.setBeaconApiHeaders(headers)
-	}
-}
-
-// WithBeaconApiTimeout sets the HTTP request timeout.
-func WithBeaconApiTimeout(timeout time.Duration) NodeConnectionOption {
-	return func(nc NodeConnection) {
-		nc.setBeaconApiTimeout(timeout)
-	}
+	restConnectionProvider rest.RestConnectionProvider
 }
 
 func (c *nodeConnection) GetGrpcClientConn() *grpc.ClientConn {
@@ -54,47 +36,28 @@ func (c *nodeConnection) GetGrpcClientConn() *grpc.ClientConn {
 	return c.grpcConnectionProvider.CurrentConn()
 }
 
-func (c *nodeConnection) GetBeaconApiUrl() string {
-	return c.beaconApiUrl
-}
-
-func (c *nodeConnection) GetBeaconApiHosts() []string {
-	url := strings.ReplaceAll(c.beaconApiUrl, " ", "")
-	if url == "" {
-		return nil
-	}
-	return strings.Split(url, ",")
-}
-
-func (c *nodeConnection) GetBeaconApiHeaders() map[string][]string {
-	return c.beaconApiHeaders
-}
-
-func (c *nodeConnection) setBeaconApiHeaders(headers map[string][]string) {
-	c.beaconApiHeaders = headers
-}
-
-func (c *nodeConnection) GetBeaconApiTimeout() time.Duration {
-	return c.beaconApiTimeout
-}
-
-func (c *nodeConnection) setBeaconApiTimeout(timeout time.Duration) {
-	c.beaconApiTimeout = timeout
-}
-
 func (c *nodeConnection) GetGrpcConnectionProvider() grpcutil.GrpcConnectionProvider {
 	return c.grpcConnectionProvider
 }
 
+func (c *nodeConnection) GetRestConnectionProvider() rest.RestConnectionProvider {
+	return c.restConnectionProvider
+}
+
+func (c *nodeConnection) GetHttpClient() *http.Client {
+	if c.restConnectionProvider == nil {
+		return nil
+	}
+	return c.restConnectionProvider.HttpClient()
+}
+
 func (*nodeConnection) dummy() {}
 
-func NewNodeConnection(provider grpcutil.GrpcConnectionProvider, beaconApiUrl string, opts ...NodeConnectionOption) NodeConnection {
-	conn := &nodeConnection{
-		grpcConnectionProvider: provider,
-		beaconApiUrl:           beaconApiUrl,
+// NewNodeConnection creates a new NodeConnection with the given gRPC and REST providers.
+// Either provider can be nil if that connection type is not needed.
+func NewNodeConnection(grpcProvider grpcutil.GrpcConnectionProvider, restProvider rest.RestConnectionProvider) NodeConnection {
+	return &nodeConnection{
+		grpcConnectionProvider: grpcProvider,
+		restConnectionProvider: restProvider,
 	}
-	for _, opt := range opts {
-		opt(conn)
-	}
-	return conn
 }

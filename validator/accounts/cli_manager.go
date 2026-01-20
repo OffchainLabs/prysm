@@ -3,11 +3,11 @@ package accounts
 import (
 	"context"
 	"io"
-	"net/http"
 	"os"
 	"time"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
@@ -81,15 +81,20 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "could not dial endpoint %s", acm.beaconRPCProvider)
 	}
-	conn := validatorHelpers.NewNodeConnection(
-		grpcProvider,
+
+	restProvider, err := rest.NewRestConnectionProvider(
 		acm.beaconApiEndpoint,
-		validatorHelpers.WithBeaconApiTimeout(acm.beaconApiTimeout),
+		rest.WithHttpTimeout(acm.beaconApiTimeout),
 	)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to create REST connection provider")
+	}
+
+	conn := validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
 
 	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: acm.beaconApiTimeout},
-		acm.beaconApiEndpoint,
+		*restProvider.HttpClient(),
+		restProvider.CurrentHost(),
 	)
 	validatorClient := validatorClientFactory.NewValidatorClient(conn, restHandler)
 	nodeClient := nodeClientFactory.NewNodeClient(conn, restHandler)

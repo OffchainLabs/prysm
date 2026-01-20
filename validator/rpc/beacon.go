@@ -1,10 +1,8 @@
 package rpc
 
 import (
-	"net/http"
-
-	api "github.com/OffchainLabs/prysm/v7/api/client"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
@@ -17,7 +15,6 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 )
 
@@ -50,17 +47,21 @@ func (s *Server) registerBeaconClient() error {
 	}
 	s.healthClient = ethpb.NewHealthClient(grpcProvider.CurrentConn())
 
-	conn := validatorHelpers.NewNodeConnection(
-		grpcProvider,
+	restProvider, err := rest.NewRestConnectionProvider(
 		s.beaconApiEndpoint,
-		validatorHelpers.WithBeaconApiHeaders(s.beaconApiHeaders),
-		validatorHelpers.WithBeaconApiTimeout(s.beaconApiTimeout),
+		rest.WithHttpHeaders(s.beaconApiHeaders),
+		rest.WithHttpTimeout(s.beaconApiTimeout),
+		rest.WithTracing(),
 	)
+	if err != nil {
+		return errors.Wrap(err, "failed to create REST connection provider")
+	}
 
-	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, conn.GetBeaconApiHeaders())
+	conn := validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
+
 	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: s.beaconApiTimeout, Transport: otelhttp.NewTransport(headersTransport)},
-		s.beaconApiEndpoint,
+		*restProvider.HttpClient(),
+		restProvider.CurrentHost(),
 	)
 
 	s.chainClient = beaconChainClientFactory.NewChainClient(conn, restHandler)
