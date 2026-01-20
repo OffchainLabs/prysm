@@ -1337,7 +1337,7 @@ func (v *validator) hosts() []string {
 	return nil
 }
 
-// numHosts returns the number of configured beacon node hosts for failover.
+// numHosts returns the number of configured beacon node hosts.
 func (v *validator) numHosts() int {
 	return len(v.hosts())
 }
