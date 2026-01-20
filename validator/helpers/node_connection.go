@@ -140,3 +140,13 @@ func NewNodeConnection(opts ...NodeConnectionOption) (NodeConnection, error) {
 		restConnectionProvider: b.restProvider,
 	}, nil
 }
+
+// MockNodeConnection creates a minimal NodeConnection for testing.
+// It uses a mock gRPC provider with no actual connection.
+func MockNodeConnection() NodeConnection {
+	return &nodeConnection{
+		grpcConnectionProvider: &grpcutil.MockGrpcProvider{
+			MockHosts: []string{"mock:4000"},
+		},
+	}
+}

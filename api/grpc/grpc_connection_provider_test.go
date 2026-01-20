@@ -112,11 +112,11 @@ func TestGrpcConnectionProvider_SingleConnectionModel(t *testing.T) {
 	conn0Again := provider.CurrentConn()
 	assert.Equal(t, conn0, conn0Again, "Should return same connection")
 
-	// Switch to next host - old connection should be closed, new one created lazily
-	provider.NextHost()
+	// Switch to different host - old connection should be closed, new one created lazily
+	require.NoError(t, provider.SetHost(1))
 
 	p.mu.Lock()
-	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil after NextHost (lazy)")
+	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil after SetHost (lazy)")
 	p.mu.Unlock()
 
 	// Get new connection
@@ -175,11 +175,12 @@ func TestGrpcConnectionProvider(t *testing.T) {
 		require.ErrorContains(t, "invalid host index", provider.SetHost(3))
 	})
 
-	t.Run("NextHost circular", func(t *testing.T) {
-		require.NoError(t, provider.SetHost(0)) // Reset to start
-		for i, expected := range []string{addrs[1], addrs[2], addrs[0], addrs[1]} {
-			provider.NextHost()
-			assert.Equal(t, expected, provider.CurrentHost(), "iteration %d", i)
+	t.Run("SetHost circular", func(t *testing.T) {
+		// Test round-robin style switching using SetHost with manual index
+		indices := []int{1, 2, 0, 1} // Simulate circular switching
+		for i, idx := range indices {
+			require.NoError(t, provider.SetHost(idx))
+			assert.Equal(t, addrs[idx], provider.CurrentHost(), "iteration %d", i)
 		}
 	})
 

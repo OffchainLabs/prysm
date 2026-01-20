@@ -1,12 +1,12 @@
 package beacon_api
 
 import (
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"context"
 	"net/http"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"

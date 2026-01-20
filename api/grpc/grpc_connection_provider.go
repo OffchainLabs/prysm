@@ -26,9 +26,6 @@ type GrpcConnectionProvider interface {
 	// SetHost switches to the endpoint at the given index.
 	// The new connection is created lazily on next CurrentConn() call.
 	SetHost(index int) error
-	// NextHost switches to the next available endpoint in round-robin fashion.
-	// The new connection is created lazily on next CurrentConn() call.
-	NextHost()
 	// Close closes the current connection.
 	Close() error
 }
@@ -154,29 +151,6 @@ func (p *grpcConnectionProvider) SetHost(index int) error {
 		"newHost":      p.endpoints[index],
 	}).Debug("Switched gRPC endpoint")
 	return nil
-}
-
-func (p *grpcConnectionProvider) NextHost() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	oldIdx := p.currentIndex
-	newIdx := (oldIdx + 1) % uint64(len(p.endpoints))
-
-	// Close existing connection if any
-	if p.conn != nil {
-		if err := p.conn.Close(); err != nil {
-			log.WithError(err).WithField("endpoint", p.endpoints[oldIdx]).Debug("Failed to close previous connection")
-		}
-		p.conn = nil
-	}
-
-	p.currentIndex = newIdx
-
-	log.WithFields(logrus.Fields{
-		"previousHost": p.endpoints[oldIdx],
-		"newHost":      p.endpoints[newIdx],
-	}).Debug("Switched to next gRPC endpoint")
 }
 
 func (p *grpcConnectionProvider) Close() error {

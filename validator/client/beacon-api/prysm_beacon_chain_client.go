@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -11,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"

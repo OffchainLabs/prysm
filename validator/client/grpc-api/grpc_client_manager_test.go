@@ -18,9 +18,8 @@ type mockProvider struct {
 }
 
 func (m *mockProvider) CurrentConn() *grpc.ClientConn { return nil }
-func (m *mockProvider) Conn(int) *grpc.ClientConn    { return nil }
-func (m *mockProvider) Hosts() []string              { return m.hosts }
-func (m *mockProvider) Close() error                 { return nil }
+func (m *mockProvider) Hosts() []string               { return m.hosts }
+func (m *mockProvider) Close() error                  { return nil }
 
 func (m *mockProvider) CurrentHost() string {
 	m.mu.Lock()
@@ -35,7 +34,8 @@ func (m *mockProvider) SetHost(index int) error {
 	return nil
 }
 
-func (m *mockProvider) NextHost() {
+// nextHost is a test helper for round-robin simulation (not part of the interface).
+func (m *mockProvider) nextHost() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.currentIndex = (m.currentIndex + 1) % len(m.hosts)
@@ -85,7 +85,7 @@ func TestGrpcClientManager(t *testing.T) {
 		c1 := manager.getClient()
 		assert.Equal(t, 1, c1.id)
 
-		provider.NextHost()
+		provider.nextHost()
 		c2 := manager.getClient()
 		assert.Equal(t, 2, *count)
 		assert.Equal(t, 2, c2.id)
@@ -102,7 +102,7 @@ func TestGrpcClientManager(t *testing.T) {
 		assert.Equal(t, 1, *count)
 
 		for expected := 2; expected <= 4; expected++ {
-			provider.NextHost()
+			provider.nextHost()
 			_ = manager.getClient()
 			assert.Equal(t, expected, *count)
 		}
@@ -157,7 +157,7 @@ func TestGrpcClientManager_Concurrent(t *testing.T) {
 		var wg sync.WaitGroup
 		for range 50 {
 			wg.Go(func() { _ = manager.getClient() })
-			wg.Go(func() { provider.NextHost() })
+			wg.Go(func() { provider.nextHost() })
 		}
 		wg.Wait()
 

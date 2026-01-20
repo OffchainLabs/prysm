@@ -68,6 +68,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
+	Conn                    validatorHelpers.NodeConnection // Optional: inject connection for testing
 	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint
@@ -116,6 +117,12 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
+	}
+
+	// Use injected connection if provided (for testing)
+	if cfg.Conn != nil {
+		s.conn = cfg.Conn
+		return s, nil
 	}
 
 	dialOpts := ConstructDialOptions(

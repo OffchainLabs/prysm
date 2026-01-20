@@ -1,11 +1,11 @@
 package beacon_api
 
 import (
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"context"
 	"reflect"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"

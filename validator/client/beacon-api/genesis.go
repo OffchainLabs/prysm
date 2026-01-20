@@ -1,13 +1,13 @@
 package beacon_api
 
 import (
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"context"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"

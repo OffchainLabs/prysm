@@ -1,7 +1,6 @@
 package beacon_api
 
 import (
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
