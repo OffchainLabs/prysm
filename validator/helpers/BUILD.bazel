@@ -4,19 +4,18 @@ go_library(
     name = "go_default_library",
     srcs = [
         "converts.go",
-        "grpc_connection_provider.go",
         "metadata.go",
         "node_connection.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/validator/helpers",
     visibility = ["//visibility:public"],
     deps = [
+        "//api/grpc:go_default_library",
         "//config/fieldparams:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//validator/db/iface:go_default_library",
         "//validator/slashing-protection-history/format:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
-        "@com_github_sirupsen_logrus//:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
     ],
 )
@@ -25,12 +24,12 @@ go_test(
     name = "go_default_test",
     srcs = [
         "converts_test.go",
-        "grpc_connection_provider_test.go",
         "metadata_test.go",
         "node_connection_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
+        "//api/grpc:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/proposer:go_default_library",
         "//consensus-types/interfaces:go_default_library",
@@ -43,6 +42,5 @@ go_test(
         "//validator/slashing-protection-history/format:go_default_library",
         "@com_github_prometheus_client_golang//prometheus:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
-        "@org_golang_google_grpc//credentials/insecure:go_default_library",
     ],
 )

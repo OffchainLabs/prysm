@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -37,6 +38,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
@@ -2799,15 +2801,18 @@ func TestValidator_ChangeHost(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	hosts := []string{"http://localhost:8080", "http://localhost:8081"}
+	conn := validatorHelpers.NewNodeConnection(nil, strings.Join(hosts, ","))
+
 	client := validatormock.NewMockValidatorClient(ctrl)
 	v := validator{
 		validatorClient:  client,
-		beaconNodeHosts:  []string{"http://localhost:8080", "http://localhost:8081"},
+		conn:             conn,
 		currentHostIndex: 0,
 	}
 
-	client.EXPECT().SetHost(v.beaconNodeHosts[1])
-	client.EXPECT().SetHost(v.beaconNodeHosts[0])
+	client.EXPECT().SetHost(hosts[1])
+	client.EXPECT().SetHost(hosts[0])
 	v.changeHost()
 	assert.Equal(t, uint64(1), v.currentHostIndex)
 	v.changeHost()
@@ -2842,12 +2847,15 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		gomock.Any(),
 		gomock.Any()).Return(mockResponse, nil)
 
+	mockProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000", "localhost:4001"}}
+	conn := validatorHelpers.NewNodeConnection(mockProvider, "")
+
 	v := &validator{
 		validatorClient:  client,
-		beaconNodeHosts:  []string{"http://localhost:8080", "http://localhost:8081"},
+		conn:             conn,
 		currentHostIndex: 0,
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
-			[fieldparams.BLSPubkeyLength]byte{0x03}: &validatorStatus{ // add non existent key and status to cache, should be fully removed on update
+			[fieldparams.BLSPubkeyLength]byte{0x03}: { // add non existent key and status to cache, should be fully removed on update
 				publicKey: []byte{0x03},
 				status: &ethpb.ValidatorStatusResponse{
 					Status: ethpb.ValidatorStatus_ACTIVE,

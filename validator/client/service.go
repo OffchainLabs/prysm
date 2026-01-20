@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	api "github.com/OffchainLabs/prysm/v7/api/client"
@@ -134,7 +133,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 
 	s.ctx = grpcutil.AppendHeaders(ctx, cfg.GRPCHeaders)
 
-	grpcProvider, err := validatorHelpers.NewGrpcConnectionProvider(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts)
+	grpcProvider, err := grpcutil.NewGrpcConnectionProvider(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts)
 	if err != nil {
 		return s, errors.Wrap(err, "failed to create gRPC connection provider")
 	}
@@ -183,10 +182,9 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	u := strings.ReplaceAll(v.conn.GetBeaconApiUrl(), " ", "")
-	hosts := strings.Split(u, ",")
+	hosts := v.conn.GetBeaconApiHosts()
 	if len(hosts) == 0 {
-		log.WithError(err).Error("No API hosts provided")
+		log.Error("No API hosts provided")
 		return
 	}
 
@@ -210,9 +208,8 @@ func (v *ValidatorService) Start() {
 		graffiti:                       v.graffiti,
 		graffitiStruct:                 v.graffitiStruct,
 		graffitiOrderedIndex:           graffitiOrderedIndex,
-		beaconNodeHosts:                hosts,
+		conn:                           v.conn,
 		currentHostIndex:               0,
-		grpcConnectionProvider:         v.conn.GetGrpcConnectionProvider(),
 		validatorClient:                validatorClient,
 		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn, restHandler),
 		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn, restHandler),

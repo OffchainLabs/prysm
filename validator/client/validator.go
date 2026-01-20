@@ -104,7 +104,7 @@ type validator struct {
 	walletInitializedChan              chan *wallet.Wallet
 	walletInitializedFeed              *event.Feed
 	graffitiOrderedIndex               uint64
-	grpcConnectionProvider             validatorHelpers.GrpcConnectionProvider
+	conn                               validatorHelpers.NodeConnection
 	submittedAtts                      map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize             int
 	validatorClient                    iface.ValidatorClient
@@ -115,7 +115,6 @@ type validator struct {
 	km                                 keymanager.IKeymanager
 	accountChangedSub                  event.Subscription
 	ticker                             slots.Ticker
-	beaconNodeHosts                    []string
 	currentHostIndex                   uint64
 	genesisTime                        time.Time
 	graffiti                           []byte
@@ -1329,9 +1328,9 @@ func (v *validator) changeHost() {
 // hosts returns the list of configured beacon node hosts.
 func (v *validator) hosts() []string {
 	if features.Get().EnableBeaconRESTApi {
-		return v.beaconNodeHosts
+		return v.conn.GetBeaconApiHosts()
 	}
-	return v.grpcConnectionProvider.Hosts()
+	return v.conn.GetGrpcConnectionProvider().Hosts()
 }
 
 // numHosts returns the number of configured beacon node hosts.

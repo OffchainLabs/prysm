@@ -4,27 +4,14 @@ import (
 	"testing"
 	"time"
 
+	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"google.golang.org/grpc"
 )
 
-// mockConnectionProvider implements GrpcConnectionProvider for testing.
-type mockConnectionProvider struct {
-	conn *grpc.ClientConn
-	host string
-}
-
-func (m *mockConnectionProvider) CurrentConn() *grpc.ClientConn { return m.conn }
-func (m *mockConnectionProvider) CurrentHost() string           { return m.host }
-func (m *mockConnectionProvider) Hosts() []string               { return []string{m.host} }
-func (m *mockConnectionProvider) Conn(int) *grpc.ClientConn     { return m.conn }
-func (m *mockConnectionProvider) SetHost(int) error             { return nil }
-func (m *mockConnectionProvider) NextHost()                     {}
-func (m *mockConnectionProvider) Close() error                  { return nil }
-
 func TestNewNodeConnection(t *testing.T) {
 	t.Run("with provider", func(t *testing.T) {
-		provider := &mockConnectionProvider{host: "localhost:4000"}
+		provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
 		conn := NewNodeConnection(provider, "http://localhost:3500")
 
 		assert.Equal(t, provider, conn.GetGrpcConnectionProvider())
@@ -34,12 +21,12 @@ func TestNewNodeConnection(t *testing.T) {
 	t.Run("with nil provider", func(t *testing.T) {
 		conn := NewNodeConnection(nil, "http://localhost:3500")
 
-		assert.Equal(t, (GrpcConnectionProvider)(nil), conn.GetGrpcConnectionProvider())
+		assert.Equal(t, (grpcutil.GrpcConnectionProvider)(nil), conn.GetGrpcConnectionProvider())
 		assert.Equal(t, (*grpc.ClientConn)(nil), conn.GetGrpcClientConn())
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		provider := &mockConnectionProvider{host: "localhost:4000"}
+		provider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
 		headers := map[string][]string{"Authorization": {"Bearer token"}}
 		timeout := 30 * time.Second
 
@@ -59,7 +46,7 @@ func TestNodeConnection_GetGrpcClientConn(t *testing.T) {
 	t.Run("delegates to provider", func(t *testing.T) {
 		// We can't easily create a real grpc.ClientConn in tests,
 		// but we can verify the delegation works with nil
-		provider := &mockConnectionProvider{conn: nil, host: "localhost:4000"}
+		provider := &grpcutil.MockGrpcProvider{MockConn: nil, MockHosts: []string{"localhost:4000"}}
 		conn := NewNodeConnection(provider, "")
 
 		// Should delegate to provider.CurrentConn()
@@ -69,5 +56,28 @@ func TestNodeConnection_GetGrpcClientConn(t *testing.T) {
 	t.Run("returns nil when provider is nil", func(t *testing.T) {
 		conn := NewNodeConnection(nil, "")
 		assert.Equal(t, (*grpc.ClientConn)(nil), conn.GetGrpcClientConn())
+	})
+}
+
+func TestNodeConnection_GetBeaconApiHosts(t *testing.T) {
+	t.Run("single host", func(t *testing.T) {
+		conn := NewNodeConnection(nil, "http://localhost:3500")
+		assert.DeepEqual(t, []string{"http://localhost:3500"}, conn.GetBeaconApiHosts())
+	})
+
+	t.Run("multiple hosts", func(t *testing.T) {
+		conn := NewNodeConnection(nil, "http://localhost:3500,http://localhost:3501,http://localhost:3502")
+		assert.DeepEqual(t, []string{"http://localhost:3500", "http://localhost:3501", "http://localhost:3502"}, conn.GetBeaconApiHosts())
+	})
+
+	t.Run("with spaces", func(t *testing.T) {
+		conn := NewNodeConnection(nil, "http://localhost:3500, http://localhost:3501")
+		// Spaces should be removed
+		assert.DeepEqual(t, []string{"http://localhost:3500", "http://localhost:3501"}, conn.GetBeaconApiHosts())
+	})
+
+	t.Run("empty url", func(t *testing.T) {
+		conn := NewNodeConnection(nil, "")
+		assert.DeepEqual(t, []string(nil), conn.GetBeaconApiHosts())
 	})
 }

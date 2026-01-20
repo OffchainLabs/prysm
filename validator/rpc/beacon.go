@@ -41,7 +41,7 @@ func (s *Server) registerBeaconClient() error {
 
 	s.ctx = grpcutil.AppendHeaders(s.ctx, s.grpcHeaders)
 
-	grpcProvider, err := validatorHelpers.NewGrpcConnectionProvider(s.ctx, s.beaconNodeEndpoint, dialOpts)
+	grpcProvider, err := grpcutil.NewGrpcConnectionProvider(s.ctx, s.beaconNodeEndpoint, dialOpts)
 	if err != nil {
 		return errors.Wrapf(err, "could not dial endpoint: %s", s.beaconNodeEndpoint)
 	}

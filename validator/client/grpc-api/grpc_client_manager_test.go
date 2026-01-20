@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// mockProvider implements validatorHelpers.GrpcConnectionProvider for testing.
+// mockProvider implements grpcutil.GrpcConnectionProvider for testing.
 type mockProvider struct {
 	hosts        []string
 	currentIndex int

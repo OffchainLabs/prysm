@@ -1,8 +1,10 @@
 package helpers
 
 import (
+	"strings"
 	"time"
 
+	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"google.golang.org/grpc"
 )
 
@@ -10,17 +12,19 @@ import (
 type NodeConnection interface {
 	GetGrpcClientConn() *grpc.ClientConn
 	GetBeaconApiUrl() string
+	// GetBeaconApiHosts returns the list of beacon API hosts parsed from the URL.
+	GetBeaconApiHosts() []string
 	GetBeaconApiHeaders() map[string][]string
 	setBeaconApiHeaders(map[string][]string)
 	GetBeaconApiTimeout() time.Duration
 	setBeaconApiTimeout(time.Duration)
 	// GetGrpcConnectionProvider returns the gRPC connection provider.
-	GetGrpcConnectionProvider() GrpcConnectionProvider
+	GetGrpcConnectionProvider() grpcutil.GrpcConnectionProvider
 	dummy()
 }
 
 type nodeConnection struct {
-	grpcConnectionProvider GrpcConnectionProvider
+	grpcConnectionProvider grpcutil.GrpcConnectionProvider
 	beaconApiUrl           string
 	beaconApiHeaders       map[string][]string
 	beaconApiTimeout       time.Duration
@@ -54,6 +58,14 @@ func (c *nodeConnection) GetBeaconApiUrl() string {
 	return c.beaconApiUrl
 }
 
+func (c *nodeConnection) GetBeaconApiHosts() []string {
+	url := strings.ReplaceAll(c.beaconApiUrl, " ", "")
+	if url == "" {
+		return nil
+	}
+	return strings.Split(url, ",")
+}
+
 func (c *nodeConnection) GetBeaconApiHeaders() map[string][]string {
 	return c.beaconApiHeaders
 }
@@ -70,13 +82,13 @@ func (c *nodeConnection) setBeaconApiTimeout(timeout time.Duration) {
 	c.beaconApiTimeout = timeout
 }
 
-func (c *nodeConnection) GetGrpcConnectionProvider() GrpcConnectionProvider {
+func (c *nodeConnection) GetGrpcConnectionProvider() grpcutil.GrpcConnectionProvider {
 	return c.grpcConnectionProvider
 }
 
 func (*nodeConnection) dummy() {}
 
-func NewNodeConnection(provider GrpcConnectionProvider, beaconApiUrl string, opts ...NodeConnectionOption) NodeConnection {
+func NewNodeConnection(provider grpcutil.GrpcConnectionProvider, beaconApiUrl string, opts ...NodeConnectionOption) NodeConnection {
 	conn := &nodeConnection{
 		grpcConnectionProvider: provider,
 		beaconApiUrl:           beaconApiUrl,

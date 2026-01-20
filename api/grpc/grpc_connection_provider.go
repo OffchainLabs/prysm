@@ -1,4 +1,4 @@
-package helpers
+package grpc
 
 import (
 	"context"
@@ -11,8 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
-
-var log = logrus.WithField("prefix", "helpers")
 
 // GrpcConnectionProvider manages multiple gRPC connections for failover support.
 // It allows switching between different beacon node endpoints when the current one becomes unavailable.
