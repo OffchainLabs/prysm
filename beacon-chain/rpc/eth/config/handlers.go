@@ -65,11 +65,7 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "config.GetSpec")
 	defer span.End()
 
-	data, err := prepareConfigSpec()
-	if err != nil {
-		httputil.HandleError(w, "Could not prepare config spec: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	data := prepareConfigSpec()
 	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
 }
 
@@ -159,7 +155,7 @@ func convertValueForJSON(v reflect.Value, tag string) any {
 	}
 }
 
-func prepareConfigSpec() (map[string]any, error) {
+func prepareConfigSpec() map[string]any {
 	data := make(map[string]any)
 	config := *params.BeaconConfig()
 
@@ -181,7 +177,7 @@ func prepareConfigSpec() (map[string]any, error) {
 		data[tag] = convertValueForJSON(val, tag)
 	}
 
-	return data, nil
+	return data
 }
 
 func shouldSkip(tField reflect.StructField) bool {
