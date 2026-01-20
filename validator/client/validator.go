@@ -1331,9 +1331,6 @@ func (v *validator) hosts() []string {
 	if features.Get().EnableBeaconRESTApi {
 		return v.beaconNodeHosts
 	}
-	if v.grpcConnectionProvider == nil {
-		return nil
-	}
 	return v.grpcConnectionProvider.Hosts()
 }
 
