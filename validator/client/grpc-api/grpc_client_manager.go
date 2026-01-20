@@ -22,23 +22,20 @@ func newGrpcClientManager[T any](
 	conn validatorHelpers.NodeConnection,
 	newClient func(grpc.ClientConnInterface) T,
 ) *grpcClientManager[T] {
-	m := &grpcClientManager[T]{
+	return &grpcClientManager[T]{
 		conn:      conn,
 		newClient: newClient,
 		client:    newClient(conn.GetGrpcClientConn()),
+		lastHost:  conn.GetGrpcConnectionProvider().CurrentHost(),
 	}
-	if provider := conn.GetGrpcConnectionProvider(); provider != nil {
-		m.lastHost = provider.CurrentHost()
-	}
-	return m
 }
 
 // getClient returns the current client, recreating it if the connection has changed.
 func (m *grpcClientManager[T]) getClient() T {
+	// Safety check for tests that create manager directly without connection
 	if m.conn == nil || m.conn.GetGrpcConnectionProvider() == nil {
 		return m.client
 	}
-
 	currentHost := m.conn.GetGrpcConnectionProvider().CurrentHost()
 	m.clientMu.RLock()
 	if m.lastHost == currentHost {

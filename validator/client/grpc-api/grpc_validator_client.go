@@ -379,20 +379,11 @@ func (c *grpcValidatorClient) EventStreamIsRunning() bool {
 }
 
 func (c *grpcValidatorClient) Host() string {
-	if c.grpcClientManager == nil || c.grpcClientManager.conn == nil || c.grpcClientManager.conn.GetGrpcConnectionProvider() == nil {
-		return ""
-	}
 	return c.grpcClientManager.conn.GetGrpcConnectionProvider().CurrentHost()
 }
 
 func (c *grpcValidatorClient) SetHost(host string) {
-	if c.grpcClientManager == nil || c.grpcClientManager.conn == nil {
-		return
-	}
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
-	if provider == nil {
-		return
-	}
 	// Find the index of the requested host and switch to it
 	for i, h := range provider.Hosts() {
 		if h == host {

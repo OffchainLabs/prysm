@@ -77,12 +77,12 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 	}
 
 	ctx = grpcutil.AppendHeaders(ctx, acm.grpcHeaders)
-	grpcConn, err := grpc.DialContext(ctx, acm.beaconRPCProvider, acm.dialOpts...)
+	grpcProvider, err := validatorHelpers.NewGrpcConnectionProvider(ctx, acm.beaconRPCProvider, acm.dialOpts)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "could not dial endpoint %s", acm.beaconRPCProvider)
 	}
 	conn := validatorHelpers.NewNodeConnection(
-		grpcConn,
+		grpcProvider,
 		acm.beaconApiEndpoint,
 		validatorHelpers.WithBeaconApiTimeout(acm.beaconApiTimeout),
 	)

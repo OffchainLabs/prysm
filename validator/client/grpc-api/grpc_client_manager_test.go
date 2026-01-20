@@ -46,12 +46,7 @@ type testClient struct{ id int }
 
 // testManager creates a manager with client creation counting.
 func testManager(t *testing.T, provider *mockProvider) (*grpcClientManager[*testClient], *int) {
-	var conn validatorHelpers.NodeConnection
-	if provider != nil {
-		conn = validatorHelpers.NewNodeConnection(nil, "", validatorHelpers.WithGrpcConnectionProvider(provider))
-	} else {
-		conn = validatorHelpers.NewNodeConnection(nil, "")
-	}
+	conn := validatorHelpers.NewNodeConnection(provider, "")
 
 	clientCount := new(int)
 	newClient := func(grpc.ClientConnInterface) *testClient {
@@ -65,18 +60,7 @@ func testManager(t *testing.T, provider *mockProvider) (*grpcClientManager[*test
 }
 
 func TestGrpcClientManager(t *testing.T) {
-	t.Run("without provider creates one client", func(t *testing.T) {
-		manager, count := testManager(t, nil)
-		assert.Equal(t, 1, *count)
-		assert.Equal(t, 1, manager.client.id)
-
-		// Multiple getClient calls return same client
-		c1, c2 := manager.getClient(), manager.getClient()
-		assert.Equal(t, 1, *count)
-		assert.Equal(t, c1, c2)
-	})
-
-	t.Run("with provider tracks host", func(t *testing.T) {
+	t.Run("tracks host", func(t *testing.T) {
 		provider := &mockProvider{hosts: []string{"host1:4000", "host2:4000"}}
 		manager, count := testManager(t, provider)
 		assert.Equal(t, 1, *count)

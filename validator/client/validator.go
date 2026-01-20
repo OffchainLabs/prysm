@@ -1331,10 +1331,10 @@ func (v *validator) hosts() []string {
 	if features.Get().EnableBeaconRESTApi {
 		return v.beaconNodeHosts
 	}
-	if v.grpcConnectionProvider != nil {
-		return v.grpcConnectionProvider.Hosts()
+	if v.grpcConnectionProvider == nil {
+		return nil
 	}
-	return nil
+	return v.grpcConnectionProvider.Hosts()
 }
 
 // numHosts returns the number of configured beacon node hosts.

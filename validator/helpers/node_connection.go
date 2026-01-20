@@ -14,15 +14,12 @@ type NodeConnection interface {
 	setBeaconApiHeaders(map[string][]string)
 	GetBeaconApiTimeout() time.Duration
 	setBeaconApiTimeout(time.Duration)
-	// GetGrpcConnectionProvider returns the gRPC connection provider for multi-endpoint support.
-	// Returns nil if no provider is configured (single endpoint mode).
+	// GetGrpcConnectionProvider returns the gRPC connection provider.
 	GetGrpcConnectionProvider() GrpcConnectionProvider
-	setGrpcConnectionProvider(GrpcConnectionProvider)
 	dummy()
 }
 
 type nodeConnection struct {
-	grpcClientConn         *grpc.ClientConn
 	grpcConnectionProvider GrpcConnectionProvider
 	beaconApiUrl           string
 	beaconApiHeaders       map[string][]string
@@ -46,19 +43,11 @@ func WithBeaconApiTimeout(timeout time.Duration) NodeConnectionOption {
 	}
 }
 
-// WithGrpcConnectionProvider sets the gRPC connection provider for multi-endpoint support.
-func WithGrpcConnectionProvider(provider GrpcConnectionProvider) NodeConnectionOption {
-	return func(nc NodeConnection) {
-		nc.setGrpcConnectionProvider(provider)
-	}
-}
-
 func (c *nodeConnection) GetGrpcClientConn() *grpc.ClientConn {
-	// If a connection provider is configured, use its current connection
-	if c.grpcConnectionProvider != nil {
-		return c.grpcConnectionProvider.CurrentConn()
+	if c.grpcConnectionProvider == nil {
+		return nil
 	}
-	return c.grpcClientConn
+	return c.grpcConnectionProvider.CurrentConn()
 }
 
 func (c *nodeConnection) GetBeaconApiUrl() string {
@@ -85,16 +74,13 @@ func (c *nodeConnection) GetGrpcConnectionProvider() GrpcConnectionProvider {
 	return c.grpcConnectionProvider
 }
 
-func (c *nodeConnection) setGrpcConnectionProvider(provider GrpcConnectionProvider) {
-	c.grpcConnectionProvider = provider
-}
-
 func (*nodeConnection) dummy() {}
 
-func NewNodeConnection(grpcConn *grpc.ClientConn, beaconApiUrl string, opts ...NodeConnectionOption) NodeConnection {
-	conn := &nodeConnection{}
-	conn.grpcClientConn = grpcConn
-	conn.beaconApiUrl = beaconApiUrl
+func NewNodeConnection(provider GrpcConnectionProvider, beaconApiUrl string, opts ...NodeConnectionOption) NodeConnection {
+	conn := &nodeConnection{
+		grpcConnectionProvider: provider,
+		beaconApiUrl:           beaconApiUrl,
+	}
 	for _, opt := range opts {
 		opt(conn)
 	}

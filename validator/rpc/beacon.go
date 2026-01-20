@@ -41,17 +41,17 @@ func (s *Server) registerBeaconClient() error {
 
 	s.ctx = grpcutil.AppendHeaders(s.ctx, s.grpcHeaders)
 
-	grpcConn, err := grpc.DialContext(s.ctx, s.beaconNodeEndpoint, dialOpts...)
+	grpcProvider, err := validatorHelpers.NewGrpcConnectionProvider(s.ctx, s.beaconNodeEndpoint, dialOpts)
 	if err != nil {
 		return errors.Wrapf(err, "could not dial endpoint: %s", s.beaconNodeEndpoint)
 	}
 	if s.beaconNodeCert != "" {
 		log.Info("Established secure gRPC connection")
 	}
-	s.healthClient = ethpb.NewHealthClient(grpcConn)
+	s.healthClient = ethpb.NewHealthClient(grpcProvider.CurrentConn())
 
 	conn := validatorHelpers.NewNodeConnection(
-		grpcConn,
+		grpcProvider,
 		s.beaconApiEndpoint,
 		validatorHelpers.WithBeaconApiHeaders(s.beaconApiHeaders),
 		validatorHelpers.WithBeaconApiTimeout(s.beaconApiTimeout),
