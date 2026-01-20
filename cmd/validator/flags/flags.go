@@ -410,6 +410,12 @@ var (
 		Usage: "Maximum number of health checks to perform before exiting if not healthy. Set to 0 or a negative number for indefinite checks.",
 		Value: DefaultMaxHealthChecks,
 	}
+	// DisableEphemeralLogFile disables the 24 hour debug log file.
+	DisableEphemeralLogFile = &cli.BoolFlag{
+		Name:  "disable-ephemeral-log-file",
+		Usage: "Disables the creation of a debug log file that keeps 24 hours of logs.",
+		Value: false,
+	}
 )
 
 // DefaultValidatorDir returns OS-specific default validator directory.

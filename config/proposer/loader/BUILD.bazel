@@ -26,7 +26,10 @@ go_test(
 
 go_library(
     name = "go_default_library",
-    srcs = ["loader.go"],
+    srcs = [
+        "loader.go",
+        "log.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/config/proposer/loader",
     visibility = ["//visibility:public"],
     deps = [

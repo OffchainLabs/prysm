@@ -25,7 +25,7 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 			return bbolt.ErrBucketNotFound
 		}
 
-		offsetBytes := bucket.Get([]byte("offset"))
+		offsetBytes := bucket.Get(offsetKey)
 		if offsetBytes == nil {
 			return errors.New("state diff cache: offset not found")
 		}

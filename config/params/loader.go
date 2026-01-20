@@ -243,7 +243,7 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("MAX_BLOBS_PER_BLOCK: %d", cfg.DeprecatedMaxBlobsPerBlock),
 		fmt.Sprintf("PROPOSER_REORG_CUTOFF_BPS: %d", cfg.ProposerReorgCutoffBPS),
 		fmt.Sprintf("ATTESTATION_DUE_BPS: %d", cfg.AttestationDueBPS),
-		fmt.Sprintf("AGGREGRATE_DUE_BPS: %d", cfg.AggregrateDueBPS),
+		fmt.Sprintf("AGGREGATE_DUE_BPS: %d", cfg.AggregateDueBPS),
 		fmt.Sprintf("SYNC_MESSAGE_DUE_BPS: %d", cfg.SyncMessageDueBPS),
 		fmt.Sprintf("CONTRIBUTION_DUE_BPS: %d", cfg.ContributionDueBPS),
 	}

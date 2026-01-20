@@ -1,4 +1,4 @@
-version: v1.6.0
+version: v1.7.0-alpha.1
 style: full
 
 specrefs:
@@ -57,6 +57,12 @@ exceptions:
     - PAYLOAD_STATUS_EMPTY#gloas
     - PAYLOAD_STATUS_FULL#gloas
     - PAYLOAD_STATUS_PENDING#gloas
+    - ATTESTATION_TIMELINESS_INDEX#gloas
+    - BUILDER_INDEX_FLAG#gloas
+    - BUILDER_INDEX_SELF_BUILD#gloas
+    - DOMAIN_PROPOSER_PREFERENCES#gloas
+    - NUM_BLOCK_TIMELINESS_DEADLINES#gloas
+    - PTC_TIMELINESS_INDEX#gloas
 
   configs:
     # Not implemented (placeholders)
@@ -76,6 +82,7 @@ exceptions:
     - MAX_REQUEST_PAYLOADS#gloas
     - PAYLOAD_ATTESTATION_DUE_BPS#gloas
     - SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
+    - MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
 
   ssz_objects:
     # Not implemented
@@ -103,10 +110,15 @@ exceptions:
     - PayloadAttestationMessage#gloas
     - SignedExecutionPayloadEnvelope#gloas
     - SignedExecutionPayloadBid#gloas
+    - Builder#gloas
+    - ProposerPreferences#gloas
+    - SignedProposerPreferences#gloas
 
   dataclasses:
     # Not implemented
     - BlobParameters#fulu
+    - ExpectedWithdrawals#capella
+    - ExpectedWithdrawals#electra
     - LatestMessage#phase0
     - LightClientStore#altair
     - OptimisticStore#bellatrix
@@ -116,6 +128,7 @@ exceptions:
     - LightClientStore#capella
 
     # Not implemented: gloas (future fork)
+    - ExpectedWithdrawals#gloas
     - LatestMessage#gloas
     - Store#gloas
 
@@ -331,10 +344,8 @@ exceptions:
     - get_ptc#gloas
     - get_ptc_assignment#gloas
     - get_weight#gloas
-    - has_builder_withdrawal_credential#gloas
     - has_compounding_withdrawal_credential#gloas
     - is_attestation_same_slot#gloas
-    - is_builder_payment_withdrawable#gloas
     - is_builder_withdrawal_credential#gloas
     - is_merge_transition_complete#gloas
     - is_parent_block_full#gloas
@@ -358,7 +369,6 @@ exceptions:
     - process_proposer_slashing#gloas
     - process_slot#gloas
     - process_withdrawals#gloas
-    - remove_flag#gloas
     - should_extend_payload#gloas
     - update_latest_messages#gloas
     - upgrade_to_gloas#gloas
@@ -368,3 +378,55 @@ exceptions:
     - verify_data_column_sidecar_inclusion_proof#gloas
     - verify_execution_payload_envelope_signature#gloas
     - verify_execution_payload_bid_signature#gloas
+    - add_builder_to_registry#gloas
+    - apply_deposit_for_builder#gloas
+    - apply_withdrawals#capella
+    - apply_withdrawals#gloas
+    - can_builder_cover_bid#gloas
+    - compute_proposer_score#phase0
+    - convert_builder_index_to_validator_index#gloas
+    - convert_validator_index_to_builder_index#gloas
+    - get_attestation_score#gloas
+    - get_attestation_score#phase0
+    - get_balance_after_withdrawals#capella
+    - get_builder_from_deposit#gloas
+    - get_builder_withdrawals#gloas
+    - get_builders_sweep_withdrawals#gloas
+    - get_index_for_new_builder#gloas
+    - get_pending_balance_to_withdraw_for_builder#gloas
+    - get_pending_partial_withdrawals#electra
+    - get_proposer_preferences_signature#gloas
+    - get_upcoming_proposal_slots#gloas
+    - get_validators_sweep_withdrawals#capella
+    - get_validators_sweep_withdrawals#electra
+    - initiate_builder_exit#gloas
+    - is_active_builder#gloas
+    - is_builder_index#gloas
+    - is_eligible_for_partial_withdrawals#electra
+    - is_head_late#gloas
+    - is_head_weak#gloas
+    - is_parent_strong#gloas
+    - is_proposer_equivocation#phase0
+    - is_valid_proposal_slot#gloas
+    - process_deposit_request#gloas
+    - process_voluntary_exit#gloas
+    - record_block_timeliness#gloas
+    - record_block_timeliness#phase0
+    - should_apply_proposer_boost#gloas
+    - update_builder_pending_withdrawals#gloas
+    - update_next_withdrawal_builder_index#gloas
+    - update_next_withdrawal_index#capella
+    - update_next_withdrawal_validator_index#capella
+    - update_payload_expected_withdrawals#gloas
+    - update_pending_partial_withdrawals#electra
+    - update_proposer_boost_root#gloas
+    - update_proposer_boost_root#phase0
+
+  presets:
+    - CELLS_PER_EXT_BLOB#fulu
+    - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
+    - BUILDER_REGISTRY_LIMIT#gloas
+    - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
+    - MAX_PAYLOAD_ATTESTATIONS#gloas
+    - PTC_SIZE#gloas
+    - UPDATE_TIMEOUT#altair

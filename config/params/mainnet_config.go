@@ -94,6 +94,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BLSWithdrawalPrefixByte:         byte(0),
 	ETH1AddressWithdrawalPrefixByte: byte(1),
 	CompoundingWithdrawalPrefixByte: byte(2),
+	BuilderWithdrawalPrefixByte:     byte(3),
+	BuilderIndexSelfBuild:           primitives.BuilderIndex(math.MaxUint64),
 	ZeroHash:                        [32]byte{},
 
 	// Time parameter constants.
@@ -121,7 +123,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Time-based protocol parameters.
 	ProposerReorgCutoffBPS: primitives.BP(1667),
 	AttestationDueBPS:      primitives.BP(3333),
-	AggregrateDueBPS:       primitives.BP(6667),
+	AggregateDueBPS:        primitives.BP(6667),
 	SyncMessageDueBPS:      primitives.BP(3333),
 	ContributionDueBPS:     primitives.BP(6667),
 
@@ -182,6 +184,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainApplicationMask:             bytesutil.Uint32ToBytes4(0x00000001),
 	DomainApplicationBuilder:          bytesutil.Uint32ToBytes4(0x00000001),
 	DomainBLSToExecutionChange:        bytesutil.Uint32ToBytes4(0x0A000000),
+	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -206,7 +209,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateDenebFieldCount:     28,
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
-	BeaconStateGloasFieldCount:     43,
+	BeaconStateGloasFieldCount:     45,
 
 	// Slasher related values.
 	WeakSubjectivityPeriod:          54000,
@@ -328,6 +331,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
+
+	// Values related to gloas
+	BuilderPaymentThresholdNumerator:   6,
+	BuilderPaymentThresholdDenominator: 10,
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

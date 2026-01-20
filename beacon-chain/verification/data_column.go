@@ -1,7 +1,6 @@
 package verification
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -11,16 +10,15 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
-	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -295,55 +293,57 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 // The returned state is guaranteed to be at the same epoch as the data column's epoch, and have the same randao mix and active
 // validator indices as the data column's parent state advanced to the data column's slot.
 func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColumn blocks.RODataColumn) (state.ReadOnlyBeaconState, error) {
+	dataColumnSlot := dataColumn.Slot()
+	dataColumnEpoch := slots.ToEpoch(dataColumnSlot)
+	if dataColumnEpoch == 0 {
+		return dv.hsp.HeadStateReadOnly(ctx)
+	}
+	parentRoot := dataColumn.ParentRoot()
+	dcDependentRoot, err := dv.fc.DependentRootForEpoch(parentRoot, dataColumnEpoch-1)
+	if err != nil {
+		return nil, err
+	}
 	headRoot, err := dv.hsp.HeadRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	parentRoot := dataColumn.ParentRoot()
-	dataColumnSlot := dataColumn.Slot()
-	dataColumnEpoch := slots.ToEpoch(dataColumnSlot)
-	headSlot := dv.hsp.HeadSlot()
-	headEpoch := slots.ToEpoch(headSlot)
-
-	// Use head if it's the parent
-	if bytes.Equal(parentRoot[:], headRoot) {
-		// If they are in the same epoch, then we can return the head state directly
-		if dataColumnEpoch == headEpoch {
-			return dv.hsp.HeadStateReadOnly(ctx)
-		}
-		// Otherwise, we need to process the head state to the data column's slot
-		headState, err := dv.hsp.HeadState(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, dataColumnSlot)
-	}
-
-	// If head and data column are in the same epoch and head is compatible with the parent's depdendent root, then use head
-	if dataColumnEpoch == headEpoch {
-		headDependent, err := dv.fc.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dataColumnEpoch)
-		if err != nil {
-			return nil, err
-		}
-		parentDependent, err := dv.fc.DependentRootForEpoch(parentRoot, dataColumnEpoch)
-		if err != nil {
-			return nil, err
-		}
-		if bytes.Equal(headDependent[:], parentDependent[:]) {
-			return dv.hsp.HeadStateReadOnly(ctx)
-		}
-	}
-
-	// Otherwise retrieve the parent state and advance it to the data column's slot
-	parentState, err := dv.sr.StateByRoot(ctx, parentRoot)
+	headDependentRoot, err := dv.fc.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dataColumnEpoch-1)
 	if err != nil {
 		return nil, err
 	}
-	parentEpoch := slots.ToEpoch(parentState.Slot())
-	if dataColumnEpoch == parentEpoch {
-		return parentState, nil
+	if dcDependentRoot == headDependentRoot {
+		headSlot := dv.hsp.HeadSlot()
+		headEpoch := slots.ToEpoch(headSlot)
+		if headEpoch == dataColumnEpoch || headEpoch == dataColumnEpoch-1 {
+			return dv.hsp.HeadStateReadOnly(ctx)
+		}
+		if headEpoch+1 < dataColumnEpoch {
+			headState, err := dv.hsp.HeadState(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, dataColumnSlot)
+		}
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], dataColumnSlot)
+
+	logrus.WithFields(logrus.Fields{
+		"slot":       dataColumnSlot,
+		"parentRoot": fmt.Sprintf("%#x", parentRoot),
+		"headRoot":   fmt.Sprintf("%#x", headRoot),
+	}).Debug("Replying state for data column verification")
+	targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+	if err != nil {
+		return nil, err
+	}
+	targetState, err := dv.sr.StateByRoot(ctx, targetRoot)
+	if err != nil {
+		return nil, err
+	}
+	targetEpoch := slots.ToEpoch(targetState.Slot())
+	if targetEpoch == dataColumnEpoch || targetEpoch == dataColumnEpoch-1 {
+		return targetState, nil
+	}
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, targetState, parentRoot[:], dataColumnSlot)
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {
@@ -484,88 +484,19 @@ func (dv *RODataColumnsVerifier) SidecarProposerExpected(ctx context.Context) (e
 
 	defer dv.recordResult(RequireSidecarProposerExpected, &err)
 
-	type slotParentRoot struct {
-		slot       primitives.Slot
-		parentRoot [fieldparams.RootLength]byte
-	}
-
-	targetRootBySlotParentRoot := make(map[slotParentRoot][fieldparams.RootLength]byte)
-
-	var targetRootFromCache = func(slot primitives.Slot, parentRoot [fieldparams.RootLength]byte) ([fieldparams.RootLength]byte, error) {
-		// Use cached values if available.
-		slotParentRoot := slotParentRoot{slot: slot, parentRoot: parentRoot}
-		if root, ok := targetRootBySlotParentRoot[slotParentRoot]; ok {
-			return root, nil
-		}
-
-		// Compute the epoch of the data column slot.
-		dataColumnEpoch := slots.ToEpoch(slot)
-		if dataColumnEpoch > 0 {
-			dataColumnEpoch = dataColumnEpoch - 1
-		}
-
-		// Compute the target root for the epoch.
-		targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
-		if err != nil {
-			return [fieldparams.RootLength]byte{}, columnErrBuilder(errors.Wrap(err, "target root from epoch"))
-		}
-
-		// Store the target root in the cache.
-		targetRootBySlotParentRoot[slotParentRoot] = targetRoot
-
-		return targetRoot, nil
-	}
-
 	for _, dataColumn := range dv.dataColumns {
-		// Extract the slot of the data column.
 		dataColumnSlot := dataColumn.Slot()
 
-		// Extract the root of the parent block corresponding to the data column.
-		parentRoot := dataColumn.ParentRoot()
-
-		// Compute the target root for the data column.
-		targetRoot, err := targetRootFromCache(dataColumnSlot, parentRoot)
+		// Get the verifying state, it is guaranteed to have the correct proposer in the lookahead.
+		verifyingState, err := dv.getVerifyingState(ctx, dataColumn)
 		if err != nil {
-			return columnErrBuilder(errors.Wrap(err, "target root"))
+			return columnErrBuilder(errors.Wrap(err, "verifying state"))
 		}
 
-		// Compute the epoch of the data column slot.
-		dataColumnEpoch := slots.ToEpoch(dataColumnSlot)
-		if dataColumnEpoch > 0 {
-			dataColumnEpoch = dataColumnEpoch - 1
-		}
-
-		// Create a checkpoint for the target root.
-		checkpoint := &forkchoicetypes.Checkpoint{Root: targetRoot, Epoch: dataColumnEpoch}
-
-		// Try to extract the proposer index from the data column in the cache.
-		idx, cached := dv.pc.Proposer(checkpoint, dataColumnSlot)
-
-		if !cached {
-			parentRoot := dataColumn.ParentRoot()
-			// Ensure the expensive index computation is only performed once for
-			// concurrent requests for the same signature data.
-			idxAny, err, _ := dv.sg.Do(concatRootSlot(parentRoot, dataColumnSlot), func() (any, error) {
-				verifyingState, err := dv.getVerifyingState(ctx, dataColumn)
-				if err != nil {
-					return nil, columnErrBuilder(errors.Wrap(err, "verifying state"))
-				}
-
-				idx, err = helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, dataColumnSlot)
-				if err != nil {
-					return nil, columnErrBuilder(errors.Wrap(err, "compute proposer"))
-				}
-
-				return idx, nil
-			})
-			if err != nil {
-				return err
-			}
-
-			var ok bool
-			if idx, ok = idxAny.(primitives.ValidatorIndex); !ok {
-				return columnErrBuilder(errors.New("type assertion to ValidatorIndex failed"))
-			}
+		// Use proposer lookahead directly
+		idx, err := helpers.BeaconProposerIndexAtSlot(ctx, verifyingState, dataColumnSlot)
+		if err != nil {
+			return columnErrBuilder(errors.Wrap(err, "proposer from lookahead"))
 		}
 
 		if idx != dataColumn.ProposerIndex() {
@@ -625,8 +556,4 @@ func inclusionProofKey(c blocks.RODataColumn) ([32]byte, error) {
 	}
 
 	return sha256.Sum256(unhashedKey), nil
-}
-
-func concatRootSlot(root [fieldparams.RootLength]byte, slot primitives.Slot) string {
-	return string(root[:]) + fmt.Sprintf("%d", slot)
 }

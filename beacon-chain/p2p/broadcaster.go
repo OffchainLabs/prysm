@@ -22,6 +22,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	ssz "github.com/prysmaticlabs/fastssz"
 	"github.com/sirupsen/logrus"
@@ -357,58 +358,67 @@ func (s *Service) BroadcastDataColumnSidecars(ctx context.Context, sidecars []bl
 	return nil
 }
 
-// broadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network, after ensuring
-// there is at least one peer in each needed subnet. If not, it will attempt to find one before broadcasting.
-// It returns when all broadcasts are complete, or the context is cancelled (whichever comes first).
+// broadcastDataColumnSidecars broadcasts multiple data column sidecars to the p2p network.
+// For sidecars with available peers, it uses batch publishing.
+// For sidecars without peers, it finds peers first and then publishes individually.
+// Both paths run in parallel. It returns when all broadcasts are complete, or the context is cancelled.
 func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [fieldparams.VersionLength]byte, sidecars []blocks.VerifiedRODataColumn) {
 	type rootAndIndex struct {
 		root  [fieldparams.RootLength]byte
 		index uint64
 	}
 
-	var (
-		wg      sync.WaitGroup
-		timings sync.Map
-	)
-
+	var timings sync.Map
 	logLevel := logrus.GetLevel()
-
 	slotPerRoot := make(map[[fieldparams.RootLength]byte]primitives.Slot, 1)
+
+	topicFunc := func(sidecar blocks.VerifiedRODataColumn) (topic string, wrappedSubIdx uint64, subnet uint64) {
+		subnet = peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+		topic = dataColumnSubnetToTopic(subnet, forkDigest)
+		wrappedSubIdx = subnet + dataColumnSubnetVal
+		return
+	}
+
+	sidecarsWithPeers := make([]blocks.VerifiedRODataColumn, 0, len(sidecars))
+	var sidecarsWithoutPeers []blocks.VerifiedRODataColumn
+
+	// Categorize sidecars by peer availability.
 	for _, sidecar := range sidecars {
 		slotPerRoot[sidecar.BlockRoot()] = sidecar.Slot()
 
-		wg.Go(func() {
-			// Add tracing to the function.
-			ctx, span := trace.StartSpan(s.ctx, "p2p.broadcastDataColumnSidecars")
+		topic, wrappedSubIdx, _ := topicFunc(sidecar)
+		// Check if we have a peer for this subnet (use RLock for read-only check).
+		mu := s.subnetLocker(wrappedSubIdx)
+		mu.RLock()
+		hasPeer := s.hasPeerWithSubnet(topic)
+		mu.RUnlock()
+
+		if hasPeer {
+			sidecarsWithPeers = append(sidecarsWithPeers, sidecar)
+			continue
+		}
+
+		sidecarsWithoutPeers = append(sidecarsWithoutPeers, sidecar)
+	}
+
+	var batchWg, individualWg sync.WaitGroup
+
+	// Batch publish sidecars that already have peers
+	var messageBatch pubsub.MessageBatch
+	for _, sidecar := range sidecarsWithPeers {
+		batchWg.Go(func() {
+			_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
+			ctx := trace.NewContext(s.ctx, span)
 			defer span.End()
 
-			// Compute the subnet for this data column sidecar.
-			subnet := peerdas.ComputeSubnetForDataColumnSidecar(sidecar.Index)
+			topic, _, _ := topicFunc(sidecar)
 
-			// Build the topic corresponding to subnet column subnet and this fork digest.
-			topic := dataColumnSubnetToTopic(subnet, forkDigest)
-
-			// Compute the wrapped subnet index.
-			wrappedSubIdx := subnet + dataColumnSubnetVal
-
-			// Find peers if needed.
-			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+			if err := s.batchObject(ctx, &messageBatch, sidecar, topic); err != nil {
 				tracing.AnnotateError(span, err)
-				log.WithError(err).Error("Cannot find peers if needed")
+				log.WithError(err).Error("Cannot batch data column sidecar")
 				return
 			}
 
-			// Broadcast the data column sidecar to the network.
-			if err := s.broadcastObject(ctx, sidecar, topic); err != nil {
-				tracing.AnnotateError(span, err)
-				log.WithError(err).Error("Cannot broadcast data column sidecar")
-				return
-			}
-
-			// Increase the number of successful broadcasts.
-			dataColumnSidecarBroadcasts.Inc()
-
-			// Record the timing for log purposes.
 			if logLevel >= logrus.DebugLevel {
 				root := sidecar.BlockRoot()
 				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
@@ -416,8 +426,50 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 		})
 	}
 
-	// Wait for all broadcasts to finish.
-	wg.Wait()
+	// For sidecars without peers, find peers and publish individually (no batching).
+	for _, sidecar := range sidecarsWithoutPeers {
+		individualWg.Go(func() {
+			_, span := trace.StartSpan(ctx, "p2p.broadcastDataColumnSidecars")
+			ctx := trace.NewContext(s.ctx, span)
+			defer span.End()
+
+			topic, wrappedSubIdx, subnet := topicFunc(sidecar)
+
+			// Find peers for this sidecar's subnet.
+			if err := s.findPeersIfNeeded(ctx, wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, subnet); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot find peers if needed")
+				return
+			}
+
+			// Publish individually (not batched) since we just found peers.
+			if err := s.broadcastObject(ctx, sidecar, topic); err != nil {
+				tracing.AnnotateError(span, err)
+				log.WithError(err).Error("Cannot broadcast data column sidecar")
+				return
+			}
+
+			dataColumnSidecarBroadcasts.Inc()
+
+			if logLevel >= logrus.DebugLevel {
+				root := sidecar.BlockRoot()
+				timings.Store(rootAndIndex{root: root, index: sidecar.Index}, time.Now())
+			}
+		})
+	}
+
+	// Wait for batch to be populated, then publish.
+	batchWg.Wait()
+	if len(sidecarsWithPeers) > 0 {
+		if err := s.pubsub.PublishBatch(&messageBatch); err != nil {
+			log.WithError(err).Error("Cannot publish batch for data column sidecars")
+		} else {
+			dataColumnSidecarBroadcasts.Add(float64(len(sidecarsWithPeers)))
+		}
+	}
+
+	// Wait for all individual publishes to complete.
+	individualWg.Wait()
 
 	// The rest of this function is only for debug logging purposes.
 	if logLevel < logrus.DebugLevel {
@@ -504,28 +556,68 @@ func (s *Service) findPeersIfNeeded(
 	return nil
 }
 
-// method to broadcast messages to other peers in our gossip mesh.
+// encodeGossipMessage encodes an object for gossip transmission.
+// It returns the encoded bytes and the full topic with protocol suffix.
+func (s *Service) encodeGossipMessage(obj ssz.Marshaler, topic string) ([]byte, string, error) {
+	buf := new(bytes.Buffer)
+	if _, err := s.Encoding().EncodeGossip(buf, obj); err != nil {
+		return nil, "", fmt.Errorf("could not encode message: %w", err)
+	}
+	return buf.Bytes(), topic + s.Encoding().ProtocolSuffix(), nil
+}
+
+// broadcastObject broadcasts a message to other peers in our gossip mesh.
 func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic string) error {
 	ctx, span := trace.StartSpan(ctx, "p2p.broadcastObject")
 	defer span.End()
 
 	span.SetAttributes(trace.StringAttribute("topic", topic))
 
-	buf := new(bytes.Buffer)
-	if _, err := s.Encoding().EncodeGossip(buf, obj); err != nil {
-		err := errors.Wrap(err, "could not encode message")
+	data, fullTopic, err := s.encodeGossipMessage(obj, topic)
+	if err != nil {
 		tracing.AnnotateError(span, err)
 		return err
 	}
 
 	if span.IsRecording() {
-		id := hash.FastSum64(buf.Bytes())
-		messageLen := int64(buf.Len())
+		id := hash.FastSum64(data)
+		messageLen := int64(len(data))
 		// lint:ignore uintcast -- It's safe to do this for tracing.
 		iid := int64(id)
 		span = trace.AddMessageSendEvent(span, iid, messageLen /*uncompressed*/, messageLen /*compressed*/)
 	}
-	if err := s.PublishToTopic(ctx, topic+s.Encoding().ProtocolSuffix(), buf.Bytes()); err != nil {
+
+	if err := s.PublishToTopic(ctx, fullTopic, data); err != nil {
+		err := errors.Wrap(err, "could not publish message")
+		tracing.AnnotateError(span, err)
+		return err
+	}
+	return nil
+}
+
+// batchObject adds an object to a message batch for a future broadcast.
+// The caller MUST publish the batch after all messages have been added.
+func (s *Service) batchObject(ctx context.Context, batch *pubsub.MessageBatch, obj ssz.Marshaler, topic string) error {
+	ctx, span := trace.StartSpan(ctx, "p2p.batchObject")
+	defer span.End()
+
+	span.SetAttributes(trace.StringAttribute("topic", topic))
+
+	data, fullTopic, err := s.encodeGossipMessage(obj, topic)
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return err
+	}
+
+	if span.IsRecording() {
+		id := hash.FastSum64(data)
+		messageLen := int64(len(data))
+		// lint:ignore uintcast -- It's safe to do this for tracing.
+		iid := int64(id)
+		span = trace.AddMessageSendEvent(span, iid, messageLen /*uncompressed*/, messageLen /*compressed*/)
+	}
+
+	if err := s.addToBatch(ctx, batch, fullTopic, data); err != nil {
 		err := errors.Wrap(err, "could not publish message")
 		tracing.AnnotateError(span, err)
 		return err

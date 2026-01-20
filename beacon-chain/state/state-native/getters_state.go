@@ -305,10 +305,12 @@ func (b *BeaconState) ToProtoUnsafe() any {
 			PendingConsolidations:         b.pendingConsolidations,
 			ProposerLookahead:             lookahead,
 			ExecutionPayloadAvailability:  b.executionPayloadAvailability,
+			Builders:                      b.builders,
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
 			BuilderPendingPayments:        b.builderPendingPayments,
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawals,
 			LatestBlockHash:               b.latestBlockHash,
-			LatestWithdrawalsRoot:         b.latestWithdrawalsRoot,
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawals,
 		}
 	default:
 		return nil
@@ -607,10 +609,12 @@ func (b *BeaconState) ToProto() any {
 			PendingConsolidations:         b.pendingConsolidationsVal(),
 			ProposerLookahead:             lookahead,
 			ExecutionPayloadAvailability:  b.executionPayloadAvailabilityVal(),
+			Builders:                      b.buildersVal(),
+			NextWithdrawalBuilderIndex:    b.nextWithdrawalBuilderIndex,
 			BuilderPendingPayments:        b.builderPendingPaymentsVal(),
 			BuilderPendingWithdrawals:     b.builderPendingWithdrawalsVal(),
 			LatestBlockHash:               b.latestBlockHashVal(),
-			LatestWithdrawalsRoot:         b.latestWithdrawalsRootVal(),
+			PayloadExpectedWithdrawals:    b.payloadExpectedWithdrawalsVal(),
 		}
 	default:
 		return nil
@@ -718,6 +722,16 @@ func ProtobufBeaconStateFulu(s any) (*ethpb.BeaconStateFulu, error) {
 	pbState, ok := s.(*ethpb.BeaconStateFulu)
 	if !ok {
 		return nil, errors.New("input is not type pb.BeaconStateFulu")
+	}
+	return pbState, nil
+}
+
+// ProtobufBeaconStateGloas transforms an input into beacon state Gloas in the form of protobuf.
+// Error is returned if the input is not type protobuf beacon state.
+func ProtobufBeaconStateGloas(s any) (*ethpb.BeaconStateGloas, error) {
+	pbState, ok := s.(*ethpb.BeaconStateGloas)
+	if !ok {
+		return nil, errors.New("input is not type pb.BeaconStateGloas")
 	}
 	return pbState, nil
 }

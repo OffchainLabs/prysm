@@ -169,6 +169,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
 			flags.InteropMockEth1DataVotesFlag,
+			flags.DisableGetBlobsV2,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.
@@ -199,6 +200,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.LogFormat,
 			cmd.LogFileName,
 			cmd.VerbosityFlag,
+			flags.DisableEphemeralLogFile,
 		},
 	},
 	{ // Feature flags.

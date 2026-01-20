@@ -36,6 +36,7 @@ import (
 )
 
 var testEventWriteTimeout = 100 * time.Millisecond
+var logger = logrus.StandardLogger()
 
 func requireAllEventsReceived(t *testing.T, stn, opn *mockChain.EventFeedWrapper, events []*feed.Event, req *topicRequest, s *Server, w *StreamingResponseWriterRecorder, logs chan *logrus.Entry) {
 	// maxBufferSize param copied from sse lib client code

@@ -3,6 +3,8 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "completion.go",
+        "completion_scripts.go",
         "config.go",
         "defaults.go",
         "flags.go",
@@ -28,6 +30,7 @@ go_test(
     name = "go_default_test",
     size = "small",
     srcs = [
+        "completion_test.go",
         "config_test.go",
         "flags_test.go",
         "helpers_test.go",

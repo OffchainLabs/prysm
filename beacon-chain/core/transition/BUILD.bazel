@@ -3,6 +3,8 @@ load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "electra.go",
+        "errors.go",
         "log.go",
         "skip_slot_cache.go",
         "state.go",
@@ -62,6 +64,8 @@ go_test(
         "altair_transition_no_verify_sig_test.go",
         "bellatrix_transition_no_verify_sig_test.go",
         "benchmarks_test.go",
+        "electra_test.go",
+        "exports_test.go",
         "skip_slot_cache_test.go",
         "state_fuzz_test.go",
         "state_test.go",

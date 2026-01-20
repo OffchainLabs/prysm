@@ -221,6 +221,19 @@ var (
 			Buckets: []float64{1, 2, 4, 8, 16, 32},
 		},
 	)
+	commitmentCount = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "commitment_count_max_21",
+			Help:    "The number of blob KZG commitments per block.",
+			Buckets: []float64{1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21},
+		},
+	)
+	maxBlobsPerBlock = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "max_blobs_per_block",
+			Help: "The maximum number of blobs allowed in a block.",
+		},
+	)
 )
 
 // reportSlotMetrics reports slot related metrics.

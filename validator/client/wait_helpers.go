@@ -51,7 +51,7 @@ func (v *validator) slotComponentSpanName(component primitives.BP) string {
 	switch component {
 	case cfg.AttestationDueBPS:
 		return "validator.waitAttestationWindow"
-	case cfg.AggregrateDueBPS:
+	case cfg.AggregateDueBPS:
 		return "validator.waitAggregateWindow"
 	case cfg.SyncMessageDueBPS:
 		return "validator.waitSyncMessageWindow"

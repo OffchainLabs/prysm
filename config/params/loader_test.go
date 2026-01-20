@@ -24,7 +24,6 @@ import (
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
 // IMPORTANT: Use one field per line and sort these alphabetically to reduce conflicts.
 var placeholderFields = []string{
-	"AGGREGATE_DUE_BPS",
 	"AGGREGATE_DUE_BPS_GLOAS",
 	"ATTESTATION_DEADLINE",
 	"ATTESTATION_DUE_BPS_GLOAS",
@@ -55,7 +54,8 @@ var placeholderFields = []string{
 	"MAX_REQUEST_BLOB_SIDECARS_FULU",
 	"MAX_REQUEST_INCLUSION_LIST",
 	"MAX_REQUEST_PAYLOADS", // Compile time constant on BeaconBlockBody.ExecutionRequests
-	"NUMBER_OF_COLUMNS",    // Configured as a constant in config/fieldparams/mainnet.go
+	"MIN_BUILDER_WITHDRAWABILITY_DELAY",
+	"NUMBER_OF_COLUMNS", // Configured as a constant in config/fieldparams/mainnet.go
 	"PAYLOAD_ATTESTATION_DUE_BPS",
 	"PROPOSER_INCLUSION_LIST_CUTOFF",
 	"PROPOSER_INCLUSION_LIST_CUTOFF_BPS",
@@ -98,7 +98,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.HysteresisDownwardMultiplier, actual.HysteresisDownwardMultiplier, "%s: HysteresisDownwardMultiplier", name)
 	assert.Equal(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier, "%s: HysteresisUpwardMultiplier", name)
 	assert.Equal(t, expected.AttestationDueBPS, actual.AttestationDueBPS, "%s: AttestationDueBPS", name)
-	assert.Equal(t, expected.AggregrateDueBPS, actual.AggregrateDueBPS, "%s: AggregrateDueBPS", name)
+	assert.Equal(t, expected.AggregateDueBPS, actual.AggregateDueBPS, "%s: AggregateDueBPS", name)
 	assert.Equal(t, expected.ContributionDueBPS, actual.ContributionDueBPS, "%s: ContributionDueBPS", name)
 	assert.Equal(t, expected.ProposerReorgCutoffBPS, actual.ProposerReorgCutoffBPS, "%s: ProposerReorgCutoffBPS", name)
 	assert.Equal(t, expected.SyncMessageDueBPS, actual.SyncMessageDueBPS, "%s: SyncMessageDueBPS", name)
