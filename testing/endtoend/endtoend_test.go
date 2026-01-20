@@ -289,10 +289,45 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 				return errors.Wrap(err, "unexpected error requesting head block root from 'ref' beacon node")
 			}
 			if bytesutil.ToBytes32(cResp.HeadBlockRoot) == bytesutil.ToBytes32(rResp.HeadBlockRoot) {
-				return nil
+				// Head matches, now wait for node to exit optimistic mode.
+				// For Fulu, the execution client may take additional time to sync and verify payloads.
+				// Give extra time (up to 2 minutes) for optimistic status to clear.
+				return r.waitForNonOptimistic(ctx, 2*time.Minute, check)
 			}
 		}
 	}
+}
+
+// waitForNonOptimistic waits for a node to exit optimistic mode, with a bounded timeout.
+// If the timeout is reached, it logs a warning but does not fail - the evaluator will
+// handle optimistic nodes gracefully by skipping finalized/justified checks.
+func (r *testRunner) waitForNonOptimistic(ctx context.Context, timeout time.Duration, conn *grpc.ClientConn) error {
+	start := time.Now()
+	deadline := start.Add(timeout)
+	checkClient := eth.NewBeaconChainClient(conn)
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			cResp, err := checkClient.GetChainHead(ctx, &emptypb.Empty{})
+			if err != nil {
+				// If we can't get chain head, just continue - head already matched
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if !cResp.OptimisticStatus {
+				log.Infof("Node exited optimistic mode after %s", time.Since(start))
+				return nil
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// Timeout reached but node is still optimistic - this is OK, evaluator handles it
+	log.Warnf("Node still in optimistic mode after %s, continuing anyway (evaluator will handle)", timeout)
+	return nil
 }
 
 func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string) error {

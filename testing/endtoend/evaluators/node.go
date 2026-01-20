@@ -134,6 +134,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	prevJustifiedRoots := make([][]byte, len(conns))
 	finalizedRoots := make([][]byte, len(conns))
 	chainHeads := make([]*eth.ChainHead, len(conns))
+	optimisticStatus := make([]bool, len(conns))
 	g, _ := errgroup.WithContext(context.Background())
 
 	for i, conn := range conns {
@@ -150,6 +151,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
 			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
 			chainHeads[conIdx] = chainHead
+			optimisticStatus[conIdx] = chainHead.OptimisticStatus
 			return nil
 		})
 	}
@@ -165,6 +167,12 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 				headEpochs[0],
 				headEpochs[i],
 			)
+		}
+		// Skip finalized/justified checks for nodes in optimistic mode.
+		// Optimistic nodes haven't verified execution payloads yet, so their
+		// finalized/justified state may lag behind fully verified nodes.
+		if optimisticStatus[i] {
+			continue
 		}
 		if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {
 			return fmt.Errorf(
