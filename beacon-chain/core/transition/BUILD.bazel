@@ -71,6 +71,7 @@ go_test(
         "state_test.go",
         "trailing_slot_state_cache_test.go",
         "transition_fuzz_test.go",
+        "transition_gloas_test.go",
         "transition_no_verify_sig_test.go",
         "transition_test.go",
     ],
@@ -106,6 +107,7 @@ go_test(
         "//time/slots:go_default_library",
         "@com_github_google_gofuzz//:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )
