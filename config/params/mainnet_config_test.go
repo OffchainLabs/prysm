@@ -36,6 +36,13 @@ func TestMaxRequestBlock(t *testing.T) {
 	}
 }
 
+func TestUpdateTimeoutMatchesFormula(t *testing.T) {
+	config := params.BeaconConfig()
+	expected := uint64(config.SlotsPerEpoch) * uint64(config.EpochsPerSyncCommitteePeriod)
+	require.Equal(t, expected, config.UpdateTimeout,
+		"UPDATE_TIMEOUT must equal SLOTS_PER_EPOCH * EPOCHS_PER_SYNC_COMMITTEE_PERIOD")
+}
+
 func TestMainnetConfigMatchesUpstreamYaml(t *testing.T) {
 	presetFPs := presetsFilePath(t, "mainnet")
 	mn, err := params.ByName(params.MainnetName)

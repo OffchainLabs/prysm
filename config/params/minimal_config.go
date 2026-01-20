@@ -102,6 +102,7 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.SyncCommitteeSize = 32
 	minimalConfig.InactivityScoreBias = 4
 	minimalConfig.EpochsPerSyncCommitteePeriod = 8
+	minimalConfig.UpdateTimeout = 64 // SlotsPerEpoch (8) * EpochsPerSyncCommitteePeriod (8)
 	minimalConfig.MinEpochsForBlockRequests = 272
 
 	// New Deneb params

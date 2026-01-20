@@ -326,13 +326,12 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	NumberOfCustodyGroups:                 128,
 	CustodyRequirement:                    4,
 	MinEpochsForDataColumnSidecarsRequest: 4096,
-	ValidatorCustodyRequirement:           8,
-	BalancePerAdditionalCustodyGroup:      32_000_000_000,
-	FieldElementsPerCell:                  64,
-	FieldElementsPerExtBlob:               8192,
-	KzgCommitmentsInclusionProofDepth:     4,
-	CellsPerExtBlob:                       128,
-	NumberOfColumns:                       128,
+	ValidatorCustodyRequirement:      8,
+	BalancePerAdditionalCustodyGroup: 32_000_000_000,
+
+	// Light client preset values
+	UpdateTimeout: 8192, // SLOTS_PER_EPOCH (32) * EPOCHS_PER_SYNC_COMMITTEE_PERIOD (256)
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

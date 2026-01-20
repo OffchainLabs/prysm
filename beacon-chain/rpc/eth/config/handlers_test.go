@@ -168,11 +168,7 @@ func TestGetSpec(t *testing.T) {
 	config.BlobsidecarSubnetCount = 101
 	config.BlobsidecarSubnetCountElectra = 102
 	config.SyncMessageDueBPS = 103
-	config.FieldElementsPerCell = 104
-	config.FieldElementsPerExtBlob = 105
-	config.KzgCommitmentsInclusionProofDepth = 106
-	config.CellsPerExtBlob = 107
-	config.NumberOfColumns = 108
+	config.UpdateTimeout = 8192
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -587,17 +583,17 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
 			case "FIELD_ELEMENTS_PER_CELL":
-				assert.Equal(t, "104", v)
+				assert.Equal(t, "64", v) // From fieldparams.CellsPerBlob
 			case "FIELD_ELEMENTS_PER_EXT_BLOB":
-				assert.Equal(t, "105", v)
+				assert.Equal(t, "198", v) // FieldElementsPerBlob (99) * 2
 			case "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH":
-				assert.Equal(t, "106", v)
+				assert.Equal(t, "4", v) // Preset value
 			case "CELLS_PER_EXT_BLOB":
-				assert.Equal(t, "107", v)
+				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
 			case "NUMBER_OF_COLUMNS":
-				assert.Equal(t, "108", v)
+				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
 			case "UPDATE_TIMEOUT":
-				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
+				assert.Equal(t, "8192", v) // SLOTS_PER_EPOCH (32) * EPOCHS_PER_SYNC_COMMITTEE_PERIOD (256)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}
