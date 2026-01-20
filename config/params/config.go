@@ -88,7 +88,7 @@ type BeaconChainConfig struct {
 	IntervalsPerSlot                uint64           `yaml:"INTERVALS_PER_SLOT"`                              // IntervalsPerSlot defines the number of fork choice intervals in a slot defined in the fork choice spec.
 	ProposerReorgCutoffBPS          primitives.BP    `yaml:"PROPOSER_REORG_CUTOFF_BPS" spec:"true"`           // ProposerReorgCutoffBPS defines the proposer reorg deadline in basis points of the slot.
 	AttestationDueBPS               primitives.BP    `yaml:"ATTESTATION_DUE_BPS" spec:"true"`                 // AttestationDueBPS defines the attestation due time in basis points of the slot.
-	AggregrateDueBPS                primitives.BP    `yaml:"AGGREGRATE_DUE_BPS" spec:"true"`                  // AggregrateDueBPS defines the aggregate due time in basis points of the slot.
+	AggregateDueBPS                 primitives.BP    `yaml:"AGGREGATE_DUE_BPS" spec:"true"`                   // AggregateDueBPS defines the aggregate due time in basis points of the slot.
 	SyncMessageDueBPS               primitives.BP    `yaml:"SYNC_MESSAGE_DUE_BPS" spec:"true"`                // SyncMessageDueBPS defines the sync message due time in basis points of the slot.
 	ContributionDueBPS              primitives.BP    `yaml:"CONTRIBUTION_DUE_BPS" spec:"true"`                // ContributionDueBPS defines the contribution due time in basis points of the slot.
 

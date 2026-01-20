@@ -123,7 +123,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Time-based protocol parameters.
 	ProposerReorgCutoffBPS: primitives.BP(1667),
 	AttestationDueBPS:      primitives.BP(3333),
-	AggregrateDueBPS:       primitives.BP(6667),
+	AggregateDueBPS:        primitives.BP(6667),
 	SyncMessageDueBPS:      primitives.BP(3333),
 	ContributionDueBPS:     primitives.BP(6667),
 
