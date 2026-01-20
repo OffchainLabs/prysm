@@ -43,6 +43,7 @@ go_library(
         "//api:go_default_library",
         "//api/apiutil:go_default_library",
         "//api/client/event:go_default_library",
+        "//api/rest:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
@@ -111,6 +112,7 @@ go_test(
     deps = [
         "//api:go_default_library",
         "//api/apiutil:go_default_library",
+        "//api/rest:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/rpc/eth/shared/testing:go_default_library",

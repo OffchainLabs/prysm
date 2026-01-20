@@ -19,6 +19,8 @@ var log = logrus.WithField("prefix", "rest")
 type RestConnectionProvider interface {
 	// HttpClient returns the configured HTTP client with headers, timeout, and optional tracing.
 	HttpClient() *http.Client
+	// RestHandler returns the REST handler for making API requests.
+	RestHandler() RestHandler
 	// CurrentHost returns the current REST API endpoint URL.
 	CurrentHost() string
 	// Hosts returns all configured REST API endpoint URLs.
@@ -56,6 +58,7 @@ func WithTracing() RestConnectionProviderOption {
 type restConnectionProvider struct {
 	endpoints     []string
 	httpClient    *http.Client
+	restHandler   RestHandler
 	currentIndex  atomic.Uint64
 	timeout       time.Duration
 	headers       map[string][]string
@@ -96,6 +99,9 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 		Transport: transport,
 	}
 
+	// Create the REST handler with the HTTP client and initial host
+	p.restHandler = newRestHandler(*p.httpClient, endpoints[0])
+
 	log.WithFields(logrus.Fields{
 		"endpoints": endpoints,
 		"count":     len(endpoints),
@@ -122,6 +128,10 @@ func (p *restConnectionProvider) HttpClient() *http.Client {
 	return p.httpClient
 }
 
+func (p *restConnectionProvider) RestHandler() RestHandler {
+	return p.restHandler
+}
+
 func (p *restConnectionProvider) CurrentHost() string {
 	idx := p.currentIndex.Load() % uint64(len(p.endpoints))
 	return p.endpoints[idx]
@@ -142,6 +152,9 @@ func (p *restConnectionProvider) SetHost(index int) error {
 	oldIdx := p.currentIndex.Load()
 	p.currentIndex.Store(uint64(index))
 
+	// Update the rest handler's host
+	p.restHandler.SetHost(p.endpoints[index])
+
 	log.WithFields(logrus.Fields{
 		"previousHost": p.endpoints[oldIdx%uint64(len(p.endpoints))],
 		"newHost":      p.endpoints[index],
@@ -153,6 +166,9 @@ func (p *restConnectionProvider) NextHost() {
 	oldIdx := p.currentIndex.Load()
 	newIdx := (oldIdx + 1) % uint64(len(p.endpoints))
 	p.currentIndex.Store(newIdx)
+
+	// Update the rest handler's host
+	p.restHandler.SetHost(p.endpoints[newIdx])
 
 	log.WithFields(logrus.Fields{
 		"previousHost": p.endpoints[oldIdx],

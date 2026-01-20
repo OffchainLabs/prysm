@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
 	iface "github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	nodeClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
 	validatorClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/validator-client-factory"
@@ -92,12 +91,8 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 
 	conn := validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
 
-	restHandler := beaconApi.NewBeaconApiRestHandler(
-		*restProvider.HttpClient(),
-		restProvider.CurrentHost(),
-	)
-	validatorClient := validatorClientFactory.NewValidatorClient(conn, restHandler)
-	nodeClient := nodeClientFactory.NewNodeClient(conn, restHandler)
+	validatorClient := validatorClientFactory.NewValidatorClient(conn)
+	nodeClient := nodeClientFactory.NewNodeClient(conn)
 
 	return &validatorClient, &nodeClient, nil
 }

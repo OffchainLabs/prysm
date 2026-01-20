@@ -5,7 +5,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
-	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
 	beaconChainClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/beacon-chain-client-factory"
 	nodeClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
 	validatorClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/validator-client-factory"
@@ -59,13 +58,8 @@ func (s *Server) registerBeaconClient() error {
 
 	conn := validatorHelpers.NewNodeConnection(grpcProvider, restProvider)
 
-	restHandler := beaconApi.NewBeaconApiRestHandler(
-		*restProvider.HttpClient(),
-		restProvider.CurrentHost(),
-	)
-
-	s.chainClient = beaconChainClientFactory.NewChainClient(conn, restHandler)
-	s.nodeClient = nodeClientFactory.NewNodeClient(conn, restHandler)
-	s.beaconNodeValidatorClient = validatorClientFactory.NewValidatorClient(conn, restHandler)
+	s.chainClient = beaconChainClientFactory.NewChainClient(conn)
+	s.nodeClient = nodeClientFactory.NewNodeClient(conn)
+	s.beaconNodeValidatorClient = validatorClientFactory.NewValidatorClient(conn)
 	return nil
 }

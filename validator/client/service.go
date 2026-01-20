@@ -15,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
 	beaconChainClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/beacon-chain-client-factory"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	nodeclientfactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
@@ -204,12 +203,7 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	restHandler := beaconApi.NewBeaconApiRestHandler(
-		*restProvider.HttpClient(),
-		restProvider.CurrentHost(),
-	)
-
-	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)
+	validatorClient := validatorclientfactory.NewValidatorClient(v.conn)
 
 	v.validator = &validator{
 		slotFeed:                       new(event.Feed),
@@ -226,9 +220,9 @@ func (v *ValidatorService) Start() {
 		conn:                           v.conn,
 		currentHostIndex:               0,
 		validatorClient:                validatorClient,
-		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn, restHandler),
-		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn, restHandler),
-		prysmChainClient:               beaconChainClientFactory.NewPrysmChainClient(v.conn, restHandler),
+		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn),
+		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn),
+		prysmChainClient:               beaconChainClientFactory.NewPrysmChainClient(v.conn),
 		db:                             v.db,
 		km:                             nil,
 		web3SignerConfig:               v.web3SignerConfig,
