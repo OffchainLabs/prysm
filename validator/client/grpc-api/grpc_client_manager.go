@@ -10,10 +10,10 @@ import (
 // grpcClientManager handles dynamic gRPC client recreation when the connection changes.
 // It uses generics to work with any gRPC client type.
 type grpcClientManager[T any] struct {
+	sync.RWMutex
 	conn      validatorHelpers.NodeConnection
 	client    T
 	lastHost  string
-	clientMu  sync.RWMutex
 	newClient func(grpc.ClientConnInterface) T
 }
 
@@ -37,17 +37,17 @@ func (m *grpcClientManager[T]) getClient() T {
 		return m.client
 	}
 	currentHost := m.conn.GetGrpcConnectionProvider().CurrentHost()
-	m.clientMu.RLock()
+	m.RLock()
 	if m.lastHost == currentHost {
 		client := m.client
-		m.clientMu.RUnlock()
+		m.RUnlock()
 		return client
 	}
-	m.clientMu.RUnlock()
+	m.RUnlock()
 
 	// Connection changed, need to recreate client
-	m.clientMu.Lock()
-	defer m.clientMu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	// Double-check after acquiring write lock
 	if m.lastHost == currentHost {
 		return m.client
