@@ -52,9 +52,9 @@ func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
 	return true
 }
 
-// NewNodeClientWithConnection creates a new gRPC node client that supports
+// NewNodeClient creates a new gRPC node client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewNodeClientWithConnection(conn validatorHelpers.NodeConnection) iface.NodeClient {
+func NewNodeClient(conn validatorHelpers.NodeConnection) iface.NodeClient {
 	return &grpcNodeClient{
 		grpcClientManager: newGrpcClientManager(conn, ethpb.NewNodeClient),
 	}

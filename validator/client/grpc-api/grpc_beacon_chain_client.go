@@ -37,9 +37,9 @@ func (c *grpcChainClient) ValidatorParticipation(ctx context.Context, in *ethpb.
 	return c.getClient().GetValidatorParticipation(ctx, in)
 }
 
-// NewGrpcChainClientWithConnection creates a new gRPC chain client that supports
+// NewGrpcChainClient creates a new gRPC chain client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewGrpcChainClientWithConnection(conn validatorHelpers.NodeConnection) iface.ChainClient {
+func NewGrpcChainClient(conn validatorHelpers.NodeConnection) iface.ChainClient {
 	return &grpcChainClient{
 		grpcClientManager: newGrpcClientManager(conn, ethpb.NewBeaconChainClient),
 	}

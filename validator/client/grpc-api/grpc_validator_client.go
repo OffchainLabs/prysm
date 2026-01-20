@@ -277,9 +277,9 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 	return nil, iface.ErrNotSupported
 }
 
-// NewGrpcValidatorClientWithConnection creates a new gRPC validator client that supports
+// NewGrpcValidatorClient creates a new gRPC validator client that supports
 // dynamic connection switching via the NodeConnection's GrpcConnectionProvider.
-func NewGrpcValidatorClientWithConnection(conn validatorHelpers.NodeConnection) iface.ValidatorClient {
+func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection) iface.ValidatorClient {
 	return &grpcValidatorClient{
 		grpcClientManager: newGrpcClientManager(conn, ethpb.NewBeaconNodeValidatorClient),
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func NewChainClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.RestHandler) iface.ChainClient {
-	grpcClient := grpcApi.NewGrpcChainClientWithConnection(validatorConn)
+	grpcClient := grpcApi.NewGrpcChainClient(validatorConn)
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewBeaconApiChainClientWithFallback(jsonRestHandler, grpcClient)
 	}
@@ -21,5 +21,5 @@ func NewPrysmChainClient(validatorConn validatorHelpers.NodeConnection, jsonRest
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewPrysmChainClient(jsonRestHandler, nodeClientFactory.NewNodeClient(validatorConn, jsonRestHandler))
 	}
-	return grpcApi.NewGrpcPrysmChainClientWithConnection(validatorConn)
+	return grpcApi.NewGrpcPrysmChainClient(validatorConn)
 }

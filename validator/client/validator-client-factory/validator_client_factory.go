@@ -16,5 +16,5 @@ func NewValidatorClient(
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewBeaconApiValidatorClient(jsonRestHandler, opt...)
 	}
-	return grpcApi.NewGrpcValidatorClientWithConnection(validatorConn)
+	return grpcApi.NewGrpcValidatorClient(validatorConn)
 }

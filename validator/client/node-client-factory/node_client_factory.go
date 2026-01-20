@@ -9,7 +9,7 @@ import (
 )
 
 func NewNodeClient(validatorConn validatorHelpers.NodeConnection, jsonRestHandler beaconApi.RestHandler) iface.NodeClient {
-	grpcClient := grpcApi.NewNodeClientWithConnection(validatorConn)
+	grpcClient := grpcApi.NewNodeClient(validatorConn)
 	if features.Get().EnableBeaconRESTApi {
 		return beaconApi.NewNodeClientWithFallback(jsonRestHandler, grpcClient)
 	}
