@@ -1326,7 +1326,7 @@ func (v *validator) changeHost() {
 	v.currentHostIndex = next
 }
 
-// hosts returns the list of configured beacon node hosts for failover.
+// hosts returns the list of configured beacon node hosts.
 func (v *validator) hosts() []string {
 	if features.Get().EnableBeaconRESTApi {
 		return v.beaconNodeHosts
