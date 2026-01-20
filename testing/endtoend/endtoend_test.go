@@ -808,16 +808,20 @@ func (r *testRunner) eeOffline(_ *e2etypes.EvaluationContext, epoch uint64, _ []
 // as expected.
 func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64, conns []*grpc.ClientConn) bool {
 	lastForkEpoch := params.LastForkEpoch()
-	freezeStartEpoch := lastForkEpoch + 1
-	freezeEndEpoch := lastForkEpoch + 2
+	// Freeze/restart scenario is skipped in minimal test: With only 2 beacon nodes,
+	// when one node restarts it enters initial sync mode. During initial sync, the
+	// restarting node doesn't subscribe to gossip topics, leaving the other node with
+	// 0 gossip peers. This causes a deadlock where the network can't produce blocks
+	// consistently (no gossip mesh) and the restarting node can't complete initial sync
+	// (no blocks being produced). This scenario works in multiclient test (4 nodes)
+	// where 3 healthy nodes maintain the gossip mesh while 1 node syncs.
 	valOfflineStartEpoch := lastForkEpoch + 6
 	valOfflineEndEpoch := lastForkEpoch + 7
 	optimisticStartEpoch := lastForkEpoch + 11
-	optimisticEndEpoch := lastForkEpoch + 12
+	optimisticEndEpoch := lastForkEpoch + 13
 
-	recoveryEpochStart, recoveryEpochEnd := lastForkEpoch+3, lastForkEpoch+4
 	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
-	thirdRecoveryEpochStart, thirdRecoveryEpochEnd := lastForkEpoch+13, lastForkEpoch+14
+	thirdRecoveryEpochStart, thirdRecoveryEpochEnd := lastForkEpoch+14, lastForkEpoch+15
 
 	newPayloadMethod := "engine_newPayloadV4"
 	//  Fallback if Electra is not set.
@@ -825,14 +829,6 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 		newPayloadMethod = "engine_newPayloadV3"
 	}
 	switch primitives.Epoch(epoch) {
-	case freezeStartEpoch:
-		require.NoError(r.t, r.comHandler.beaconNodes.PauseAtIndex(0))
-		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))
-		return true
-	case freezeEndEpoch:
-		require.NoError(r.t, r.comHandler.beaconNodes.RestartAtIndex(r.comHandler.ctx, 0))
-		require.NoError(r.t, r.comHandler.validatorNodes.ResumeAtIndex(0))
-		return true
 	case valOfflineStartEpoch:
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(1))
@@ -865,10 +861,8 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 		engineProxy.ReleaseBackedUpRequests(newPayloadMethod)
 
 		return true
-	case recoveryEpochStart, recoveryEpochEnd,
-		secondRecoveryEpochStart, secondRecoveryEpochEnd,
+	case secondRecoveryEpochStart, secondRecoveryEpochEnd,
 		thirdRecoveryEpochStart, thirdRecoveryEpochEnd:
-		// Allow 2 epochs for the network to finalize again.
 		return true
 	}
 	return false
