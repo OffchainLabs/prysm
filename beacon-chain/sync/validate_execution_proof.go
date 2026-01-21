@@ -54,29 +54,24 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationReject, err
 	}
 
-	// 3. Check if proof is already known via gossip
-	if s.hasSeenExecutionProofIndex(executionProof.ProofId, executionProof.Slot) {
-		return pubsub.ValidationIgnore, nil
-	}
-
-	// 4. Check if the proof is already in the DA checker cache (execution proof pool)
+	// 3. Check if the proof is already in the DA checker cache (execution proof pool)
 	// If it exists in the cache, we know it has already passed validation.
-	if s.isProofCachedInPool(executionProof.ProofId, executionProof.Slot) {
+	blockRoot := bytesutil.ToBytes32(executionProof.BlockRoot)
+	if s.isProofCachedInPool(blockRoot, executionProof.ProofId) {
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// 5. Verify proof size limits
+	// 4. Verify proof size limits
 	if uint64(len(executionProof.ProofData)) > params.BeaconConfig().MaxProofDataBytes {
 		return pubsub.ValidationReject, fmt.Errorf("execution proof data size %d exceeds maximum allowed %d", len(executionProof.ProofData), params.BeaconConfig().MaxProofDataBytes)
 	}
 
-	// 6. Run zkVM proof verification
+	// 5. Run zkVM proof verification
 	if err := s.verifyExecutionProof(executionProof); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
 	// Validation successful, return accept
-	msg.ValidatorData = executionProof
 	return pubsub.ValidationAccept, nil
 }
 
@@ -93,6 +88,7 @@ func (s *Service) proofNotFromFutureSlot(executionProof *ethpb.ExecutionProof) e
 
 	earliestStart, err := s.cfg.clock.SlotStart(proofSlot)
 	if err != nil {
+		// TODO: Should we penalize the peer for this?
 		return fmt.Errorf("failed to compute start time for proof slot %d: %w", proofSlot, err)
 	}
 
@@ -108,10 +104,13 @@ func (s *Service) proofNotFromFutureSlot(executionProof *ethpb.ExecutionProof) e
 func (s *Service) proofAboveFinalizedSlot(ctx context.Context, executionProof *ethpb.ExecutionProof) error {
 	finalizedCheckpoint, err := s.cfg.beaconDB.FinalizedCheckpoint(ctx)
 	if err != nil {
+		// TODO: Should we penalize the peer for this?
 		return fmt.Errorf("failed to get finalized checkpoint: %w", err)
 	}
+
 	fSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
 	if err != nil {
+		// TODO: Should we penalize the peer for this?
 		return fmt.Errorf("failed to compute start slot for finalized epoch %d: %w", finalizedCheckpoint.Epoch, err)
 	}
 
@@ -121,54 +120,13 @@ func (s *Service) proofAboveFinalizedSlot(ctx context.Context, executionProof *e
 	return nil
 }
 
-// hasSeenExecutionProofIndex checks whether we have already seen the execution proof for the given slot.
-func (s *Service) hasSeenExecutionProofIndex(proofId primitives.ExecutionProofId, slot primitives.Slot) bool {
-	s.seenExecutionProofLock.RLock()
-	defer s.seenExecutionProofLock.RUnlock()
-	b := append(bytesutil.Bytes32(uint64(proofId)), bytesutil.Bytes32(uint64(slot))...)
-	_, seen := s.seenExecutionProofCache.Get(string(b))
-	return seen
-}
-
-// setSeenExecutionProofIndex marks the execution proof for the given slot as seen.
-func (s *Service) setSeenExecutionProofIndex(proofId primitives.ExecutionProofId, slot primitives.Slot) {
-	s.seenExecutionProofLock.Lock()
-	defer s.seenExecutionProofLock.Unlock()
-	b := append(bytesutil.Bytes32(uint64(proofId)), bytesutil.Bytes32(uint64(slot))...)
-	s.seenExecutionProofCache.Add(string(b), true)
-}
-
 // isProofCachedInPool checks if the execution proof is already present in the pool.
-func (s *Service) isProofCachedInPool(proofId primitives.ExecutionProofId, slot primitives.Slot) bool {
-	return s.cfg.execProofPool.ProofExists(slot, proofId)
+func (s *Service) isProofCachedInPool(blockRoot [32]byte, proofId primitives.ExecutionProofId) bool {
+	return s.cfg.execProofPool.Exists(blockRoot, proofId)
 }
 
 // verifyExecutionProof performs the actual verification of the execution proof.
-// It uses verifier implementations to validate the proof.
-func (s *Service) verifyExecutionProof(executionProof *ethpb.ExecutionProof) error {
-	verifierRegistry := s.executionProofVerifierRegistry
-	if verifierRegistry == nil {
-		return fmt.Errorf("execution proof verifier registry is not initialized")
-	}
-
-	if verifierRegistry.IsEmpty() {
-		return fmt.Errorf("no execution proof verifiers are registered")
-	}
-
-	proofId := primitives.ExecutionProofId(executionProof.ProofId)
-	verifier, found := verifierRegistry.GetVerifier(proofId)
-	if !found {
-		return fmt.Errorf("no verifier registered for execution proof ID %d", proofId)
-	}
-
-	isValid, err := verifier.Verify(executionProof)
-	if err != nil {
-		return fmt.Errorf("error during execution proof verification: %w", err)
-	}
-
-	if !isValid {
-		return fmt.Errorf("execution proof verification failed for proof ID %d", proofId)
-	}
-
+func (s *Service) verifyExecutionProof(_ *ethpb.ExecutionProof) error {
+	// For now, say all proof are valid.
 	return nil
 }

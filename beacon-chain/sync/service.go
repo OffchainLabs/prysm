@@ -23,7 +23,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -34,7 +34,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync/backfill/coverage"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -43,7 +42,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
-	zkvmexecutionlayer "github.com/OffchainLabs/prysm/v7/zkvm-execution-layer"
 	lru "github.com/hashicorp/golang-lru"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -98,7 +96,7 @@ type config struct {
 	slashingPool            slashings.PoolManager
 	syncCommsPool           synccommittee.Pool
 	blsToExecPool           blstoexec.PoolManager
-	execProofPool           execproof.PoolManager
+	execProofPool           execproofs.PoolManager
 	chain                   blockchainService
 	initialSync             Checker
 	blockNotifier           blockfeed.Notifier
@@ -148,8 +146,6 @@ type Service struct {
 	rateLimiter                      *limiter
 	seenBlockLock                    sync.RWMutex
 	seenBlockCache                   *lru.Cache
-	seenExecutionProofLock           sync.RWMutex
-	seenExecutionProofCache          *lru.Cache
 	seenBlobLock                     sync.RWMutex
 	seenBlobCache                    *lru.Cache
 	seenDataColumnCache              *slotAwareCache
@@ -189,9 +185,6 @@ type Service struct {
 	dataColumnLogCh                  chan dataColumnLogEntry
 	digestActions                    perDigestSet
 	subscriptionSpawner              func(func()) // see Service.spawn for details
-
-	// EIP-8025: Optional Execution Proofs
-	executionProofVerifierRegistry *zkvmexecutionlayer.VerifierRegistry
 }
 
 // NewService initializes new regular sync service.
@@ -245,13 +238,6 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
 	r.initCaches()
-
-	// Register execution proof verifier registry if zkvm feature is enabled.
-	if features.Get().EnableZkvm {
-		// For now, use dummy verifiers.
-		r.executionProofVerifierRegistry = zkvmexecutionlayer.NewVerifierRegistryWithDummyVerifiers()
-	}
-
 	return r
 }
 
@@ -371,9 +357,6 @@ func (s *Service) initCaches() {
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)
 	s.badBlockCache = lruwrpr.New(badBlockSize)
-
-	// Execution Proof Cache (Optional Proofs)
-	s.seenExecutionProofCache = lruwrpr.New(seenExecutionProofSize)
 }
 
 func (s *Service) waitForChainStart() {

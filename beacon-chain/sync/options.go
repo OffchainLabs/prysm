@@ -12,7 +12,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -89,7 +89,7 @@ func WithBlsToExecPool(blsToExecPool blstoexec.PoolManager) Option {
 	}
 }
 
-func WithExecProofPool(execProofPool execproof.PoolManager) Option {
+func WithExecProofPool(execProofPool execproofs.PoolManager) Option {
 	return func(s *Service) error {
 		s.cfg.execProofPool = execProofPool
 		return nil

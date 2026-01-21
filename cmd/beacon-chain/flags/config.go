@@ -87,18 +87,15 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	}
 
 	// zkVM Proof Generation Types
-	proofTypes := make([]primitives.ExecutionProofId, len(ctx.IntSlice(ZkvmGenerationProofTypeFlag.Name)))
-	for i, t := range ctx.IntSlice(ZkvmGenerationProofTypeFlag.Name) {
-		proofTypes[i] = primitives.ExecutionProofId(t)
+	proofTypes := make([]primitives.ExecutionProofId, 0, len(ctx.IntSlice(ZkvmGenerationProofTypeFlag.Name)))
+	for _, t := range ctx.IntSlice(ZkvmGenerationProofTypeFlag.Name) {
+		proofTypes = append(proofTypes, primitives.ExecutionProofId(t))
 	}
 	cfg.ProofGenerationTypes = proofTypes
+
 	if features.Get().EnableZkvm {
 		if err := validateZkvmProofGenerationTypes(cfg.ProofGenerationTypes); err != nil {
-			return err
-		}
-	} else {
-		if ctx.IsSet(ZkvmGenerationProofTypeFlag.Name) {
-			log.Warn("--zkvm-generation-proof-types is set but --enable-zkvm is not; the value will be ignored.")
+			return fmt.Errorf("validate Zkvm proof generation types: %w", err)
 		}
 	}
 

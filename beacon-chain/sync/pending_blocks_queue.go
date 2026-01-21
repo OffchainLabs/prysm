@@ -259,8 +259,6 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 			return errors.Wrap(err, "request and save missing data column sidecars")
 		}
 
-		// EIP-8025: Optional Execution Proofs
-		// When processing beacon blocks, also request execution proofs for blocks that are missing them.
 		if err := s.requestAndSaveMissingExecutionProofs([]blocks.ROBlock{roBlock}); err != nil {
 			return errors.Wrap(err, "request and save missing execution proofs")
 		}

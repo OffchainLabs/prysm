@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -90,8 +89,6 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		return errors.Wrap(err, "request and save missing data columns")
 	}
 
-	// EIP-8025: Optional Execution Proofs
-	// When requesting beacon blocks, also request execution proofs for blocks that are missing them.
 	if err := s.requestAndSaveMissingExecutionProofs(postFuluBlocks); err != nil {
 		return errors.Wrap(err, "request and save missing execution proofs")
 	}
@@ -104,6 +101,7 @@ func (s *Service) requestAndSaveMissingExecutionProofs(blks []blocks.ROBlock) er
 		return nil
 	}
 
+	// TODO: Parallelize requests for multiple blocks.
 	for _, blk := range blks {
 		if err := s.sendAndSaveExecutionProofs(s.ctx, blk); err != nil {
 			return err
@@ -112,11 +110,7 @@ func (s *Service) requestAndSaveMissingExecutionProofs(blks []blocks.ROBlock) er
 	return nil
 }
 
-func (s *Service) sendAndSaveExecutionProofs(
-	ctx context.Context,
-	block blocks.ROBlock,
-) error {
-	// If EIP-8025 is not enabled, skip.
+func (s *Service) sendAndSaveExecutionProofs(ctx context.Context, block blocks.ROBlock) error {
 	if !features.Get().EnableZkvm {
 		return nil
 	}
@@ -129,22 +123,18 @@ func (s *Service) sendAndSaveExecutionProofs(
 	}
 
 	// Check how many proofs are needed with Execution Proof Pool.
-	proofTypesSet := s.cfg.execProofPool.GetProofTypesForBlock(block.Root())
-	if uint64(len(proofTypesSet)) >= params.BeaconConfig().MinProofsRequired {
+	storedIds := s.cfg.execProofPool.Ids(block.Root())
+	count := uint64(len(storedIds))
+	if count >= params.BeaconConfig().MinProofsRequired {
 		return nil
-	}
-
-	alreadyHave := make([]primitives.ExecutionProofId, 0, len(proofTypesSet))
-	for proofType := range proofTypesSet {
-		alreadyHave = append(alreadyHave, proofType)
 	}
 
 	// Construct request
 	blockRoot := block.Root()
 	req := &ethpb.ExecutionProofsByRootRequest{
 		BlockRoot:   blockRoot[:],
-		CountNeeded: params.BeaconConfig().MinProofsRequired - uint64(len(proofTypesSet)),
-		AlreadyHave: alreadyHave,
+		CountNeeded: params.BeaconConfig().MinProofsRequired - count,
+		AlreadyHave: storedIds,
 	}
 
 	// Call SendExecutionProofByRootRequest
@@ -153,7 +143,7 @@ func (s *Service) sendAndSaveExecutionProofs(
 		return fmt.Errorf("no zkVM enabled peers available to request execution proofs")
 	}
 
-	// For simplicity, just pick the first peer for now.
+	// TODO: For simplicity, just pick the first peer for now.
 	// In the future, we can implement better peer selection logic.
 	pid := zkvmEnabledPeers[0]
 	proofs, err := SendExecutionProofsByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, pid, req)
@@ -162,8 +152,9 @@ func (s *Service) sendAndSaveExecutionProofs(
 	}
 
 	// Insert ExecProofPool
+	// TODO: Implement multiple proof insertion in ExecProofPool to avoid multiple locks.
 	for _, proof := range proofs {
-		s.cfg.execProofPool.InsertExecutionProof(proof)
+		s.cfg.execProofPool.Insert(proof)
 	}
 
 	return nil

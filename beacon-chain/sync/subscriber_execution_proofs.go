@@ -16,8 +16,8 @@ func (s *Service) executionProofSubscriber(_ context.Context, msg proto.Message)
 		return errors.Errorf("incorrect type of message received, wanted %T but got %T", &ethpb.ExecutionProof{}, msg)
 	}
 
-	// Mark the proof as seen to avoid reprocessing
-	s.setSeenExecutionProofIndex(executionProof.ProofId, executionProof.Slot)
+	// Insert the execution proof into the pool
+	s.cfg.execProofPool.Insert(executionProof)
 
 	// Notify subscribers about the new execution proof
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{
@@ -27,7 +27,5 @@ func (s *Service) executionProofSubscriber(_ context.Context, msg proto.Message)
 		},
 	})
 
-	// Insert the execution proof into the pool
-	s.cfg.execProofPool.InsertExecutionProof(executionProof)
 	return nil
 }

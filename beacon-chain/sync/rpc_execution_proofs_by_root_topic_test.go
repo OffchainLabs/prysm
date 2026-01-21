@@ -8,7 +8,7 @@ import (
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
@@ -92,7 +92,7 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 		defer resetCfg()
 
 		localP2P := p2ptest.NewTestP2P(t)
-		execProofPool := execproof.NewPool()
+		execProofPool := execproofs.NewPool()
 		service := &Service{
 			cfg: &config{
 				p2p:           localP2P,
@@ -138,7 +138,7 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 		defer resetCfg()
 
 		localP2P := p2ptest.NewTestP2P(t)
-		execProofPool := execproof.NewPool()
+		execProofPool := execproofs.NewPool()
 		service := &Service{
 			cfg: &config{
 				p2p:           localP2P,
@@ -187,7 +187,7 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
 		// Create execution proof pool with some proofs
-		execProofPool := execproof.NewPool()
+		execProofPool := execproofs.NewPool()
 		blockRoot := [32]byte{0x01, 0x02, 0x03}
 
 		// Add 3 proofs for the same block
@@ -214,9 +214,9 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 			ProofData: []byte("proof3"),
 		}
 
-		execProofPool.InsertExecutionProof(proof1)
-		execProofPool.InsertExecutionProof(proof2)
-		execProofPool.InsertExecutionProof(proof3)
+		execProofPool.Insert(proof1)
+		execProofPool.Insert(proof2)
+		execProofPool.Insert(proof3)
 
 		beaconDB := testDB.SetupDB(t)
 		service := &Service{
@@ -288,7 +288,7 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
 		// Create execution proof pool with some proofs
-		execProofPool := execproof.NewPool()
+		execProofPool := execproofs.NewPool()
 		blockRoot := [32]byte{0x01, 0x02, 0x03}
 
 		// Add 4 proofs for the same block
@@ -322,10 +322,10 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 			ProofData: []byte("proof4"),
 		}
 
-		execProofPool.InsertExecutionProof(proof1)
-		execProofPool.InsertExecutionProof(proof2)
-		execProofPool.InsertExecutionProof(proof3)
-		execProofPool.InsertExecutionProof(proof4)
+		execProofPool.Insert(proof1)
+		execProofPool.Insert(proof2)
+		execProofPool.Insert(proof3)
+		execProofPool.Insert(proof4)
 
 		beaconDB := testDB.SetupDB(t)
 		service := &Service{
@@ -394,7 +394,7 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 		clock := startup.NewClock(time.Now(), [fieldparams.RootLength]byte{})
 
 		// Create execution proof pool with only 2 proofs
-		execProofPool := execproof.NewPool()
+		execProofPool := execproofs.NewPool()
 		blockRoot := [32]byte{0x01, 0x02, 0x03}
 
 		blockHash := bytesutil.PadTo([]byte("blockhash"), 32)
@@ -413,8 +413,8 @@ func TestExecutionProofsByRootRPCHandler(t *testing.T) {
 			ProofData: []byte("proof2"),
 		}
 
-		execProofPool.InsertExecutionProof(proof1)
-		execProofPool.InsertExecutionProof(proof2)
+		execProofPool.Insert(proof1)
+		execProofPool.Insert(proof2)
 
 		beaconDB := testDB.SetupDB(t)
 		service := &Service{

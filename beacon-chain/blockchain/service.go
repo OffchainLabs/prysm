@@ -25,7 +25,7 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproof"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -87,7 +87,7 @@ type config struct {
 	ExitPool                voluntaryexits.PoolManager
 	SlashingPool            slashings.PoolManager
 	BLSToExecPool           blstoexec.PoolManager
-	ExecProofPool           execproof.PoolManager
+	ExecProofsPool          execproofs.PoolManager
 	P2P                     p2p.Accessor
 	MaxRoutines             int
 	StateNotifier           statefeed.Notifier
@@ -215,7 +215,9 @@ func (s *Service) Start() {
 	if err := s.StartFromSavedState(s.cfg.FinalizedStateAtStartUp); err != nil {
 		log.Fatal(err)
 	}
-	s.spawnProcessAttestationsRoutine()
+
+	go s.spawnProcessAttestationsRoutine()
+	go s.spawnFinalizedProofsPruningRoutine()
 	go s.runLateBlockTasks()
 }
 
@@ -570,4 +572,47 @@ func fuluForkSlot() (primitives.Slot, error) {
 	}
 
 	return forkFuluSlot, nil
+}
+
+// spawnFinalizedProofsPruningRoutine prunes execution proofs pool on every epoch.
+// It removes proofs older than the finalized checkpoint to prevent unbounded
+// memory growth.
+// TODO: Manage cases where the network is not finalizing for a long time (avoid OOMs...)
+func (s *Service) spawnFinalizedProofsPruningRoutine() {
+	ticker := slots.NewSlotTicker(s.genesisTime, params.BeaconConfig().SecondsPerSlot)
+	defer ticker.Done()
+
+	for {
+		select {
+		case slot := <-ticker.C():
+			// Only prune at the start of each epoch
+			if !slots.IsEpochStart(slot) {
+				continue
+			}
+
+			finalizedCheckpoint := s.FinalizedCheckpt()
+			if finalizedCheckpoint == nil {
+				log.Error("Finalized checkpoint is nil, cannot prune execution proofs")
+				continue
+			}
+
+			finalizedSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
+			if err != nil {
+				log.WithError(err).Error("Could not get finalized slot")
+				continue
+			}
+
+			// Prune proofs older than finalized slot
+			if count := s.cfg.ExecProofsPool.PruneUpTo(finalizedSlot); count > 0 {
+				log.WithFields(logrus.Fields{
+					"prunedCount":   count,
+					"finalizedSlot": finalizedSlot,
+				}).Debug("Pruned finalized execution proofs")
+			}
+
+		case <-s.ctx.Done():
+			log.Debug("Context closed, exiting routine")
+			return
+		}
+	}
 }

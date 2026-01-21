@@ -66,52 +66,54 @@ func (s *Service) VerifyLmdFfgConsistency(ctx context.Context, a ethpb.Att) erro
 
 // This routine processes fork choice attestations from the pool to account for validator votes and fork choice.
 func (s *Service) spawnProcessAttestationsRoutine() {
-	go func() {
-		_, err := s.clockWaiter.WaitForClock(s.ctx)
-		if err != nil {
-			log.WithError(err).Error("Failed to receive genesis data")
-			return
-		}
-		if s.genesisTime.IsZero() {
-			log.Warn("ProcessAttestations routine waiting for genesis time")
-			for s.genesisTime.IsZero() {
-				if err := s.ctx.Err(); err != nil {
-					log.WithError(err).Error("Giving up waiting for genesis time")
-					return
-				}
-				time.Sleep(1 * time.Second)
-			}
-			log.Warn("Genesis time received, now available to process attestations")
-		}
-		// Wait for node to be synced before running the routine.
-		if err := s.waitForSync(); err != nil {
-			log.WithError(err).Error("Could not wait to sync")
-			return
-		}
+	_, err := s.clockWaiter.WaitForClock(s.ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to receive genesis data")
+		return
+	}
 
-		reorgInterval := time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot) - reorgLateBlockCountAttestations
-		ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, reorgInterval})
-		for {
-			select {
-			case <-s.ctx.Done():
+	if s.genesisTime.IsZero() {
+		log.Warn("ProcessAttestations routine waiting for genesis time")
+		for s.genesisTime.IsZero() {
+			if err := s.ctx.Err(); err != nil {
+				log.WithError(err).Error("Giving up waiting for genesis time")
 				return
-			case slotInterval := <-ticker.C():
-				if slotInterval.Interval > 0 {
-					if s.validating() {
-						s.UpdateHead(s.ctx, slotInterval.Slot+1)
-					}
-				} else {
-					s.cfg.ForkChoiceStore.Lock()
-					if err := s.cfg.ForkChoiceStore.NewSlot(s.ctx, slotInterval.Slot); err != nil {
-						log.WithError(err).Error("Could not process new slot")
-					}
-					s.cfg.ForkChoiceStore.Unlock()
-
-					s.UpdateHead(s.ctx, slotInterval.Slot)
-				}
 			}
+			time.Sleep(1 * time.Second)
 		}
-	}()
+		log.Warn("Genesis time received, now available to process attestations")
+	}
+
+	// Wait for node to be synced before running the routine.
+	if err := s.waitForSync(); err != nil {
+		log.WithError(err).Error("Could not wait to sync")
+		return
+	}
+
+	reorgInterval := time.Second*time.Duration(params.BeaconConfig().SecondsPerSlot) - reorgLateBlockCountAttestations
+	ticker := slots.NewSlotTickerWithIntervals(s.genesisTime, []time.Duration{0, reorgInterval})
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case slotInterval := <-ticker.C():
+			if slotInterval.Interval > 0 {
+				if s.validating() {
+					s.UpdateHead(s.ctx, slotInterval.Slot+1)
+				}
+
+				continue
+			}
+
+			s.cfg.ForkChoiceStore.Lock()
+			if err := s.cfg.ForkChoiceStore.NewSlot(s.ctx, slotInterval.Slot); err != nil {
+				log.WithError(err).Error("Could not process new slot")
+			}
+			s.cfg.ForkChoiceStore.Unlock()
+
+			s.UpdateHead(s.ctx, slotInterval.Slot)
+		}
+	}
 }
 
 // UpdateHead updates the canonical head of the chain based on information from fork-choice attestations and votes.

@@ -8,7 +8,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -139,10 +138,9 @@ func validateExecutionProof(
 func (s *Service) executionProofsByRootRPCHandler(ctx context.Context, msg any, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.executionProofsByRootRPCHandler")
 	defer span.End()
+
 	_, cancel := context.WithTimeout(ctx, ttfbTimeout)
 	defer cancel()
-
-	log := log.WithField("handler", "execution_proofs_by_root")
 
 	req, ok := msg.(*ethpb.ExecutionProofsByRootRequest)
 	if !ok {
@@ -166,42 +164,34 @@ func (s *Service) executionProofsByRootRPCHandler(ctx context.Context, msg any, 
 
 	blockRoot := bytesutil.ToBytes32(req.BlockRoot)
 
-	log.WithFields(logrus.Fields{
-		"block_root": blockRoot,
-		"count":      req.CountNeeded,
-		"already":    len(req.AlreadyHave),
-	}).Debug("Received execution proofs by root request")
+	log := log.WithFields(logrus.Fields{
+		"blockroot":   fmt.Sprintf("%#x", blockRoot),
+		"neededCount": req.CountNeeded,
+		"alreadyHave": req.AlreadyHave,
+		"peer":        remotePeer.String(),
+	})
 
 	s.rateLimiter.add(stream, 1)
 	defer closeStream(stream, log)
 
-	if !features.Get().EnableZkvm {
-		log.Debug("Disabled zkVM mode; refusing to serve execution proofs by root request")
-		return nil
-	}
-
 	// Get proofs from execution proof pool
-	availableProofs := s.cfg.execProofPool.GetProofsForBlock(blockRoot)
-	if len(availableProofs) == 0 {
-		log.Debug("No execution proofs available for block")
-		return nil
-	}
+	storedProofs := s.cfg.execProofPool.Get(blockRoot)
 
-	// Filter out already_have proofs
-	alreadyHaveSet := make(map[primitives.ExecutionProofId]struct{})
+	// Filter out not requested proofs
+	alreadyHave := make(map[primitives.ExecutionProofId]bool)
 	for _, id := range req.AlreadyHave {
-		alreadyHaveSet[id] = struct{}{}
+		alreadyHave[id] = true
 	}
 
 	// Send proofs
 	sentCount := uint64(0)
-	for _, proof := range availableProofs {
+	for _, proof := range storedProofs {
 		if sentCount >= req.CountNeeded {
 			break
 		}
 
 		// Skip proofs the requester already has
-		if _, ok := alreadyHaveSet[proof.ProofId]; ok {
+		if alreadyHave[proof.ProofId] {
 			continue
 		}
 
@@ -216,11 +206,7 @@ func (s *Service) executionProofsByRootRPCHandler(ctx context.Context, msg any, 
 		sentCount++
 	}
 
-	log.WithFields(logrus.Fields{
-		"block_root": blockRoot,
-		"sent":       sentCount,
-		"requested":  req.CountNeeded,
-	}).Debug("Sent execution proofs")
+	log.WithField("sentCount", sentCount).Debug("Responded to execution proofs by root request")
 
 	return nil
 }

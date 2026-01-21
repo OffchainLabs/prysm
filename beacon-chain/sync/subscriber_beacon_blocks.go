@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition/interop"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -22,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -69,10 +71,47 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		}
 		return err
 	}
+
+	// We use the service context to ensure this context is not cancelled
+	// when the current function returns.
+	// TODO: Do not broadcast proofs for blocks we have already seen.
+	go s.generateAndBroadcastExecutionProofs(s.ctx, roBlock)
+
 	if err := s.processPendingAttsForBlock(ctx, root); err != nil {
 		return errors.Wrap(err, "process pending atts for block")
 	}
+
 	return nil
+}
+
+func (s *Service) generateAndBroadcastExecutionProofs(ctx context.Context, roBlock blocks.ROBlock) {
+	const delay = 2 * time.Second
+	proofTypes := flags.Get().ProofGenerationTypes
+
+	if len(proofTypes) == 0 {
+		return
+	}
+
+	var wg errgroup.Group
+	for _, proofType := range proofTypes {
+		wg.Go(func() error {
+			execProof, err := generateExecProof(roBlock, primitives.ExecutionProofId(proofType), delay)
+
+			if err != nil {
+				return fmt.Errorf("generate exec proof: %w", err)
+			}
+
+			if err := s.cfg.p2p.Broadcast(ctx, execProof); err != nil {
+				return fmt.Errorf("broadcast exec proof: %w", err)
+			}
+
+			return nil
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		log.WithError(err).Error("Failed to generate and broadcast execution proofs")
+	}
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,

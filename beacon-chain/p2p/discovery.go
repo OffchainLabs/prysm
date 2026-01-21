@@ -228,6 +228,7 @@ func (s *Service) RefreshPersistentSubnets() {
 	for _, idx := range syncCommittees {
 		bitS.SetBitAt(idx, true)
 	}
+
 	// Get the sync subnet bitfield we store in our record.
 	inRecordBitS, err := syncBitvector(record)
 	if err != nil {

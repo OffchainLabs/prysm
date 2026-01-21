@@ -330,15 +330,16 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			})
 		})
 
-		// Optional proofs
-		s.spawn(func() {
-			s.subscribe(
-				p2p.ExecutionProofSubnetTopicFormat,
-				s.validateExecutionProof,
-				s.executionProofSubscriber,
-				nse,
-			)
-		})
+		if features.Get().EnableZkvm {
+			s.spawn(func() {
+				s.subscribe(
+					p2p.ExecutionProofSubnetTopicFormat,
+					s.validateExecutionProof,
+					s.executionProofSubscriber,
+					nse,
+				)
+			})
+		}
 	}
 	return true
 }
