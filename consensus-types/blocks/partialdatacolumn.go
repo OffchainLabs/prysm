@@ -124,6 +124,28 @@ func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMe
 	return marshalled, nil
 }
 
+func (p *PartialDataColumn) EagerPartialMessageBytes() ([]byte, partialmessages.PartsMetadata, error) {
+	// Eagerly push the PartialDataColumnHeader
+	outHeader := &ethpb.PartialDataColumnHeader{
+		KzgCommitments:               p.KzgCommitments,
+		SignedBlockHeader:            p.SignedBlockHeader,
+		KzgCommitmentsInclusionProof: p.KzgCommitmentsInclusionProof,
+	}
+	outMessage := &ethpb.PartialDataColumnSidecar{
+		CellsPresentBitmap: bitfield.NewBitlist(uint64(len(p.KzgCommitments))),
+		Header:             []*ethpb.PartialDataColumnHeader{outHeader},
+	}
+
+	marshalled, err := outMessage.MarshalSSZ()
+	if err != nil {
+		return nil, nil, err
+	}
+	// Empty bitlist since we aren't including any cells here
+	peersNextParts := partialmessages.PartsMetadata(bitfield.NewBitlist(uint64(len(p.KzgCommitments))))
+
+	return marshalled, peersNextParts, nil
+}
+
 func (p *PartialDataColumn) PartsMetadata() partialmessages.PartsMetadata {
 	return partialmessages.PartsMetadata(p.Included)
 }
@@ -131,6 +153,9 @@ func (p *PartialDataColumn) PartsMetadata() partialmessages.PartsMetadata {
 // CellsToVerifyFromPartialMessage returns cells from the partial message that need to be verified.
 func (p *PartialDataColumn) CellsToVerifyFromPartialMessage(message *ethpb.PartialDataColumnSidecar) ([]uint64, []CellProofBundle, error) {
 	included := message.CellsPresentBitmap
+	if included.Len() == 0 {
+		return nil, nil, nil
+	}
 
 	// Some basic sanity checks
 	includedCells := included.Count()
