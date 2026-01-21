@@ -129,13 +129,14 @@ func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 	return nil
 }
 
-// waitForMidEpoch waits until we're at least 2 slots into the current epoch.
+// waitForMidEpoch waits until we're at least halfway into the current epoch.
 // This prevents race conditions at epoch boundaries where different nodes
 // may report different head epochs.
 func waitForMidEpoch(conn *grpc.ClientConn) error {
 	beaconClient := eth.NewBeaconChainClient(conn)
 	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
 	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	midEpochSlot := slotsPerEpoch / 2
 
 	for {
 		chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
@@ -143,12 +144,12 @@ func waitForMidEpoch(conn *grpc.ClientConn) error {
 			return err
 		}
 		slotInEpoch := chainHead.HeadSlot % slotsPerEpoch
-		// If we're at least 2 slots into the epoch, we're safe
-		if slotInEpoch >= 2 {
+		// If we're at least halfway into the epoch, we're safe
+		if slotInEpoch >= midEpochSlot {
 			return nil
 		}
-		// Wait for the remaining slots until slot 2
-		slotsToWait := 2 - slotInEpoch
+		// Wait for the remaining slots until mid-epoch
+		slotsToWait := midEpochSlot - slotInEpoch
 		time.Sleep(time.Duration(slotsToWait) * time.Duration(secondsPerSlot) * time.Second)
 	}
 }
