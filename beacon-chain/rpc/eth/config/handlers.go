@@ -182,7 +182,7 @@ func prepareConfigSpec() (map[string]any, error) {
 		data[tag] = convertValueForJSON(val, tag)
 	}
 
-// Add Fulu preset values. These are compile-time constants from fieldparams,
+	// Add Fulu preset values. These are compile-time constants from fieldparams,
 	// not runtime configs, but are required by the /eth/v1/config/spec API.
 	data["NUMBER_OF_COLUMNS"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.NumberOfColumns)), "NUMBER_OF_COLUMNS")
 	data["CELLS_PER_EXT_BLOB"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.NumberOfColumns)), "CELLS_PER_EXT_BLOB")
