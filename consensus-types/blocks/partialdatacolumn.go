@@ -19,7 +19,8 @@ type CellProofBundle struct {
 
 type PartialDataColumn struct {
 	*ethpb.DataColumnSidecar
-	root [fieldparams.RootLength]byte
+	root    [fieldparams.RootLength]byte
+	groupID []byte
 
 	Included bitfield.Bitlist
 
@@ -54,9 +55,15 @@ func NewPartialDataColumn(
 		KzgCommitmentsInclusionProof: kzgInclusionProof,
 	}
 
+	groupID := make([]byte, len(root)+1)
+	copy(groupID[1:], root[:])
+	// Version 0
+	groupID[0] = 0
+
 	c := PartialDataColumn{
 		DataColumnSidecar: sidecar,
 		root:              root,
+		groupID:           groupID,
 		Included:          bitfield.NewBitlist(uint64(len(sidecar.KzgCommitments))),
 	}
 	if len(c.Column) != len(c.KzgCommitments) {
@@ -76,7 +83,7 @@ func NewPartialDataColumn(
 }
 
 func (p *PartialDataColumn) GroupID() []byte {
-	return p.root[:]
+	return p.groupID
 }
 func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMetadata) ([]byte, error) {
 	peerHas := bitfield.Bitlist(metadata)
