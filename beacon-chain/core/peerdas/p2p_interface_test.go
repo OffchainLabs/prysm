@@ -89,7 +89,7 @@ func TestVerifyDataColumnSidecarKZGProofs(t *testing.T) {
 		sidecars := generateRandomSidecars(t, seed, blobCount)
 		failedSegments, err := peerdas.BatchVerifyDataColumnsCellsKZGProofs(blobCount, []iter.Seq[blocks.CellProofBundle]{blocks.RODataColumnsToCellProofBundles(sidecars)})
 		require.NoError(t, err)
-		require.Equal(t, 0, failedSegments)
+		require.Equal(t, 0, len(failedSegments))
 	})
 }
 
