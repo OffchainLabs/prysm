@@ -155,13 +155,14 @@ func waitForMidEpoch(conn *grpc.ClientConn) error {
 }
 
 func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	// Wait until we're at least 2 slots into the epoch to avoid race conditions
+	// Wait until we're at least halfway into the epoch to avoid race conditions
 	// at epoch boundaries where nodes may report different epochs.
 	if err := waitForMidEpoch(conns[0]); err != nil {
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
 	headEpochs := make([]primitives.Epoch, len(conns))
+	headBlockRoots := make([][]byte, len(conns))
 	justifiedRoots := make([][]byte, len(conns))
 	prevJustifiedRoots := make([][]byte, len(conns))
 	finalizedRoots := make([][]byte, len(conns))
@@ -178,6 +179,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 				return errors.Wrapf(err, "connection number=%d", conIdx)
 			}
 			headEpochs[conIdx] = chainHead.HeadEpoch
+			headBlockRoots[conIdx] = chainHead.HeadBlockRoot
 			justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
 			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
 			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
@@ -196,6 +198,14 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 				i,
 				headEpochs[0],
 				headEpochs[i],
+			)
+		}
+		if !bytes.Equal(headBlockRoots[0], headBlockRoots[i]) {
+			return fmt.Errorf(
+				"received conflicting head block roots on node %d, expected %#x, received %#x",
+				i,
+				headBlockRoots[0],
+				headBlockRoots[i],
 			)
 		}
 		if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {
