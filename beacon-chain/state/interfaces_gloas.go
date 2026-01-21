@@ -11,6 +11,7 @@ type writeOnlyGloasFields interface {
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
+	UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val byte) error
 }
 
 type readOnlyGloasFields interface {
