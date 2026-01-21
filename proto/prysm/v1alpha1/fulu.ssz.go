@@ -2503,7 +2503,7 @@ func (p *PartialDataColumnSidecar) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the PartialDataColumnSidecar object to a target array
 func (p *PartialDataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(12)
+	offset := int(16)
 
 	// Offset (0) 'CellsPresentBitmap'
 	dst = ssz.WriteOffset(dst, offset)
@@ -2516,6 +2516,13 @@ func (p *PartialDataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err err
 	// Offset (2) 'KzgProofs'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(p.KzgProofs) * 48
+
+	// Offset (3) 'Header'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(p.Header); ii++ {
+		offset += 4
+		offset += p.Header[ii].SizeSSZ()
+	}
 
 	// Field (0) 'CellsPresentBitmap'
 	if size := len(p.CellsPresentBitmap); size > 512 {
@@ -2550,6 +2557,24 @@ func (p *PartialDataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err err
 		dst = append(dst, p.KzgProofs[ii]...)
 	}
 
+	// Field (3) 'Header'
+	if size := len(p.Header); size > 1 {
+		err = ssz.ErrListTooBigFn("--.Header", size, 1)
+		return
+	}
+	{
+		offset = 4 * len(p.Header)
+		for ii := 0; ii < len(p.Header); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += p.Header[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(p.Header); ii++ {
+		if dst, err = p.Header[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -2557,19 +2582,19 @@ func (p *PartialDataColumnSidecar) MarshalSSZTo(buf []byte) (dst []byte, err err
 func (p *PartialDataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 12 {
+	if size < 16 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o2 uint64
+	var o0, o1, o2, o3 uint64
 
 	// Offset (0) 'CellsPresentBitmap'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 12 {
+	if o0 != 16 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -2580,6 +2605,11 @@ func (p *PartialDataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 
 	// Offset (2) 'KzgProofs'
 	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (3) 'Header'
+	if o3 = ssz.ReadOffset(buf[12:16]); o3 > size || o2 > o3 {
 		return ssz.ErrOffset
 	}
 
@@ -2613,7 +2643,7 @@ func (p *PartialDataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 
 	// Field (2) 'KzgProofs'
 	{
-		buf = tail[o2:]
+		buf = tail[o2:o3]
 		num, err := ssz.DivideInt2(len(buf), 48, 4096)
 		if err != nil {
 			return err
@@ -2626,12 +2656,34 @@ func (p *PartialDataColumnSidecar) UnmarshalSSZ(buf []byte) error {
 			p.KzgProofs[ii] = append(p.KzgProofs[ii], buf[ii*48:(ii+1)*48]...)
 		}
 	}
+
+	// Field (3) 'Header'
+	{
+		buf = tail[o3:]
+		num, err := ssz.DecodeDynamicLength(buf, 1)
+		if err != nil {
+			return err
+		}
+		p.Header = make([]*PartialDataColumnHeader, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if p.Header[indx] == nil {
+				p.Header[indx] = new(PartialDataColumnHeader)
+			}
+			if err = p.Header[indx].UnmarshalSSZ(buf); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the PartialDataColumnSidecar object
 func (p *PartialDataColumnSidecar) SizeSSZ() (size int) {
-	size = 12
+	size = 16
 
 	// Field (0) 'CellsPresentBitmap'
 	size += len(p.CellsPresentBitmap)
@@ -2641,6 +2693,12 @@ func (p *PartialDataColumnSidecar) SizeSSZ() (size int) {
 
 	// Field (2) 'KzgProofs'
 	size += len(p.KzgProofs) * 48
+
+	// Field (3) 'Header'
+	for ii := 0; ii < len(p.Header); ii++ {
+		size += 4
+		size += p.Header[ii].SizeSSZ()
+	}
 
 	return
 }
@@ -2697,6 +2755,192 @@ func (p *PartialDataColumnSidecar) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 
 		numItems := uint64(len(p.KzgProofs))
 		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (3) 'Header'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(p.Header))
+		if num > 1 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range p.Header {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// MarshalSSZ ssz marshals the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PartialDataColumnHeader object to a target array
+func (p *PartialDataColumnHeader) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(340)
+
+	// Offset (0) 'KzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.KzgCommitments) * 48
+
+	// Field (1) 'SignedBlockHeader'
+	if p.SignedBlockHeader == nil {
+		p.SignedBlockHeader = new(SignedBeaconBlockHeader)
+	}
+	if dst, err = p.SignedBlockHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'KzgCommitmentsInclusionProof'
+	if size := len(p.KzgCommitmentsInclusionProof); size != 4 {
+		err = ssz.ErrVectorLengthFn("--.KzgCommitmentsInclusionProof", size, 4)
+		return
+	}
+	for ii := 0; ii < 4; ii++ {
+		if size := len(p.KzgCommitmentsInclusionProof[ii]); size != 32 {
+			err = ssz.ErrBytesLengthFn("--.KzgCommitmentsInclusionProof[ii]", size, 32)
+			return
+		}
+		dst = append(dst, p.KzgCommitmentsInclusionProof[ii]...)
+	}
+
+	// Field (0) 'KzgCommitments'
+	if size := len(p.KzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.KzgCommitments", size, 4096)
+		return
+	}
+	for ii := 0; ii < len(p.KzgCommitments); ii++ {
+		if size := len(p.KzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.KzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, p.KzgCommitments[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 340 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'KzgCommitments'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 != 340 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'SignedBlockHeader'
+	if p.SignedBlockHeader == nil {
+		p.SignedBlockHeader = new(SignedBeaconBlockHeader)
+	}
+	if err = p.SignedBlockHeader.UnmarshalSSZ(buf[4:212]); err != nil {
+		return err
+	}
+
+	// Field (2) 'KzgCommitmentsInclusionProof'
+	p.KzgCommitmentsInclusionProof = make([][]byte, 4)
+	for ii := 0; ii < 4; ii++ {
+		if cap(p.KzgCommitmentsInclusionProof[ii]) == 0 {
+			p.KzgCommitmentsInclusionProof[ii] = make([]byte, 0, len(buf[212:340][ii*32:(ii+1)*32]))
+		}
+		p.KzgCommitmentsInclusionProof[ii] = append(p.KzgCommitmentsInclusionProof[ii], buf[212:340][ii*32:(ii+1)*32]...)
+	}
+
+	// Field (0) 'KzgCommitments'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		p.KzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(p.KzgCommitments[ii]) == 0 {
+				p.KzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			p.KzgCommitments[ii] = append(p.KzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) SizeSSZ() (size int) {
+	size = 340
+
+	// Field (0) 'KzgCommitments'
+	size += len(p.KzgCommitments) * 48
+
+	return
+}
+
+// HashTreeRoot ssz hashes the PartialDataColumnHeader object
+func (p *PartialDataColumnHeader) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
+// HashTreeRootWith ssz hashes the PartialDataColumnHeader object with a hasher
+func (p *PartialDataColumnHeader) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'KzgCommitments'
+	{
+		if size := len(p.KzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.KzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.KzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(p.KzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
+	}
+
+	// Field (1) 'SignedBlockHeader'
+	if err = p.SignedBlockHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'KzgCommitmentsInclusionProof'
+	{
+		if size := len(p.KzgCommitmentsInclusionProof); size != 4 {
+			err = ssz.ErrVectorLengthFn("--.KzgCommitmentsInclusionProof", size, 4)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range p.KzgCommitmentsInclusionProof {
+			if len(i) != 32 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.Append(i)
+		}
+		hh.Merkleize(subIndx)
 	}
 
 	hh.Merkleize(indx)
