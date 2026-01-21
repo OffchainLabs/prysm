@@ -295,7 +295,7 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 	}
 }
 
-func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string, tickingStartTime time.Time) error {
+func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string) error {
 	matchTimeout := 5 * time.Minute
 	ethNode := eth1.NewNode(i, minerEnr)
 	g.Go(func() error {
@@ -349,12 +349,6 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 	if err != nil {
 		return err
 	}
-
-	// Only execute in the middle of an epoch to prevent race conditions around slot 0.
-	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
-	<-ticker.C()
-	ticker.Done()
 
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 	for _, evaluator := range syncEvaluators {
@@ -561,7 +555,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 		httpEndpoints := helpers.BeaconAPIHostnames(e2e.TestParams.BeaconNodeCount)
 		menr := eth1Miner.ENR()
 		benr := bootNode.ENR()
-		if err := r.testCheckpointSync(ctx, g, index, conns, httpEndpoints[0], benr, menr, tickingStartTime); err != nil {
+		if err := r.testCheckpointSync(ctx, g, index, conns, httpEndpoints[0], benr, menr); err != nil {
 			return errors.Wrap(err, "checkpoint sync test failed")
 		}
 	}
@@ -570,11 +564,6 @@ func (r *testRunner) defaultEndToEndRun() error {
 		if err := r.waitExtra(ctx, primitives.Epoch(config.EpochsToRun+config.ExtraEpochs), conns[0], primitives.Epoch(config.ExtraEpochs)); err != nil {
 			return errors.Wrap(err, "error while waiting for ExtraEpochs")
 		}
-		// Only execute in the middle of an epoch to prevent race conditions around slot 0.
-		secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
-		ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
-		<-ticker.C()
-		ticker.Done()
 		syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 		for _, evaluator := range syncEvaluators {
 			t.Run(evaluator.Name, func(t *testing.T) {
