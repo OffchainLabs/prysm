@@ -687,10 +687,7 @@ func TestFetchOriginColumns(t *testing.T) {
 	cfg.BlobSchedule = []params.BlobScheduleEntry{{Epoch: 0, MaxBlobsPerBlock: 10}}
 	params.OverrideBeaconConfig(cfg)
 
-	const (
-		delay     = 0
-		blobCount = 1
-	)
+	const blobCount = 1
 
 	t.Run("block has no commitments", func(t *testing.T) {
 		service := new(Service)
@@ -702,7 +699,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		roBlock, err := blocks.NewROBlock(signedBlock)
 		require.NoError(t, err)
 
-		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
+		err = service.fetchOriginDataColumnSidecars(roBlock)
 		require.NoError(t, err)
 	})
 
@@ -724,7 +721,7 @@ func TestFetchOriginColumns(t *testing.T) {
 		err := storage.Save(verifiedSidecars)
 		require.NoError(t, err)
 
-		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
+		err = service.fetchOriginDataColumnSidecars(roBlock)
 		require.NoError(t, err)
 	})
 
@@ -829,7 +826,7 @@ func TestFetchOriginColumns(t *testing.T) {
 			attempt++
 		})
 
-		err = service.fetchOriginDataColumnSidecars(roBlock, delay)
+		err = service.fetchOriginDataColumnSidecars(roBlock)
 		require.NoError(t, err)
 
 		// Check all corresponding sidecars are saved in the store.

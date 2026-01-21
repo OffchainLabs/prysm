@@ -207,7 +207,7 @@ func (v *validator) signSlotWithSelectionProof(ctx context.Context, pubKey [fiel
 // such that any attestations from this slot have time to reach the beacon node
 // before creating the aggregated attestation.
 func (v *validator) waitToSlotTwoThirds(ctx context.Context, slot primitives.Slot) {
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().AggregrateDueBPS)
+	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().AggregateDueBPS)
 }
 
 // This returns the signature of validator signing over aggregate and

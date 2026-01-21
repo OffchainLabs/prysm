@@ -71,10 +71,7 @@ func TestValidateDataColumn(t *testing.T) {
 			ctx:                 ctx,
 			newColumnsVerifier:  newDataColumnsVerifier,
 			seenDataColumnCache: newSlotAwareCache(seenDataColumnSize),
-			kzgChan:             make(chan *kzgVerifier, 100),
 		}
-		// Start the KZG verifier routine for batch verification
-		go service.kzgVerifierRoutine()
 
 		// Encode a `beaconBlock` message instead of expected.
 		buf := new(bytes.Buffer)

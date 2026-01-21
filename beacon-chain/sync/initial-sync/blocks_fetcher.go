@@ -668,7 +668,7 @@ func populateBlock(bw *blocks.BlockWithROSidecars, blobs []blocks.ROBlob, req *p
 
 func missingCommitError(root [32]byte, slot primitives.Slot, missing [][]byte) error {
 	missStr := make([]string, 0, len(missing))
-	for k := range missing {
+	for _, k := range missing {
 		missStr = append(missStr, fmt.Sprintf("%#x", k))
 	}
 	return errors.Wrapf(errMissingBlobsForBlockCommitments,

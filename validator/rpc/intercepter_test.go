@@ -107,6 +107,16 @@ func TestServer_AuthTokenHandler(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
 		require.StringContains(t, "Unauthorized", errJson.Message)
 	})
+	t.Run("direct /v2 endpoint also needs auth token (no /api bypass)", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequest(http.MethodGet, "/v2/validator/beacon/status", http.NoBody)
+		require.NoError(t, err)
+		testHandler.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusUnauthorized, rr.Code)
+		errJson := &httputil.DefaultJsonError{}
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), errJson))
+		require.StringContains(t, "Unauthorized", errJson.Message)
+	})
 	t.Run("initialize does not need auth", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, api.WebUrlPrefix+"initialize", http.NoBody)
