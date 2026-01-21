@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/container/trie"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 )
@@ -161,19 +162,13 @@ func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.S
 	return nil, nil
 }
 
-// VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
-// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
-func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
-	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
-		return ErrNilBlockHeader
-	}
-
-	root := sidecar.SignedBlockHeader.Header.BodyRoot
-	if len(root) != fieldparams.RootLength {
+// verifyKzgCommitmentsInclusionProof is the shared implementation for inclusion proof verification.
+func verifyKzgCommitmentsInclusionProof(bodyRoot []byte, kzgCommitments [][]byte, inclusionProof [][]byte) error {
+	if len(bodyRoot) != fieldparams.RootLength {
 		return ErrBadRootLength
 	}
 
-	leaves := blocks.LeavesFromCommitments(sidecar.KzgCommitments)
+	leaves := blocks.LeavesFromCommitments(kzgCommitments)
 
 	sparse, err := trie.GenerateTrieFromItems(leaves, fieldparams.LogMaxBlobCommitments)
 	if err != nil {
@@ -185,12 +180,37 @@ func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
 		return errors.Wrap(err, "hash tree root")
 	}
 
-	verified := trie.VerifyMerkleProof(root, hashTreeRoot[:], kzgPosition, sidecar.KzgCommitmentsInclusionProof)
+	verified := trie.VerifyMerkleProof(bodyRoot, hashTreeRoot[:], kzgPosition, inclusionProof)
 	if !verified {
 		return ErrInvalidInclusionProof
 	}
 
 	return nil
+}
+
+// VerifyDataColumnSidecarInclusionProof verifies if the given KZG commitments included in the given beacon block.
+// https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_inclusion_proof
+func VerifyDataColumnSidecarInclusionProof(sidecar blocks.RODataColumn) error {
+	if sidecar.SignedBlockHeader == nil || sidecar.SignedBlockHeader.Header == nil {
+		return ErrNilBlockHeader
+	}
+	return verifyKzgCommitmentsInclusionProof(
+		sidecar.SignedBlockHeader.Header.BodyRoot,
+		sidecar.KzgCommitments,
+		sidecar.KzgCommitmentsInclusionProof,
+	)
+}
+
+// VerifyPartialDataColumnHeaderInclusionProof verifies if the KZG commitments are included in the beacon block.
+func VerifyPartialDataColumnHeaderInclusionProof(header *ethpb.PartialDataColumnHeader) error {
+	if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
+		return ErrNilBlockHeader
+	}
+	return verifyKzgCommitmentsInclusionProof(
+		header.SignedBlockHeader.Header.BodyRoot,
+		header.KzgCommitments,
+		header.KzgCommitmentsInclusionProof,
+	)
 }
 
 // ComputeSubnetForDataColumnSidecar computes the subnet for a data column sidecar.

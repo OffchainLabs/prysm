@@ -58,6 +58,7 @@ go_library(
         "validate_bls_to_execution_change.go",
         "validate_data_column.go",
         "validate_light_client.go",
+        "validate_partial_header.go",
         "validate_proposer_slashing.go",
         "validate_sync_committee_message.go",
         "validate_sync_contribution_proof.go",
