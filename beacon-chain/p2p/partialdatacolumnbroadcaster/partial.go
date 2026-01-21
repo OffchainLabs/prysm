@@ -2,7 +2,6 @@ package partialdatacolumnbroadcaster
 
 import (
 	"bytes"
-	"errors"
 	"log/slog"
 	"regexp"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p-pubsub/partialmessages/bitmap"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -263,7 +263,7 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	if hasMessage {
 		err := message.UnmarshalSSZ(rpcWithFrom.PartialMessage)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to unmarshal partial message data")
 		}
 	}
 
@@ -309,6 +309,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			header.KzgCommitmentsInclusionProof,
 		)
 		if err != nil {
+			p.logger.WithError(err).WithFields(logrus.Fields{
+				"topic":          topicID,
+				"columnIndex":    columnIndex,
+				"numCommitments": len(header.KzgCommitments),
+			}).Error("Failed to create partial data column from header")
 			return err
 		}
 
