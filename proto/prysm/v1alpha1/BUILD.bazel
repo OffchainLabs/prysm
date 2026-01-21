@@ -371,7 +371,6 @@ go_library(
         "beacon_block.go",
         "cloners.go",
         "eip_7521.go",
-        "empties.go",
         "gloas.go",
         "log.go",
         "sync_committee_mainnet.go",

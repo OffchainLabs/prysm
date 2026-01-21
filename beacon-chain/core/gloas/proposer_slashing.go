@@ -35,8 +35,8 @@ func RemoveBuilderPendingPayment(st state.BeaconState, header *eth.BeaconBlockHe
 		return nil
 	}
 
-	if err := st.SetBuilderPendingPayment(paymentIndex, eth.EmptyBuilderPendingPayment); err != nil {
-		return errors.Wrap(err, "could not set builder pending payment")
+	if err := st.ClearBuilderPendingPayment(paymentIndex); err != nil {
+		return errors.Wrap(err, "could not clear builder pending payment")
 	}
 
 	return nil
