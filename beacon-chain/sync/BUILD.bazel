@@ -64,6 +64,7 @@ go_library(
         "validate_data_column.go",
         "validate_execution_payload_envelope.go",
         "validate_light_client.go",
+        "validate_partial_header.go",
         "validate_payload_attestation.go",
         "validate_proposer_slashing.go",
         "validate_sync_committee_message.go",

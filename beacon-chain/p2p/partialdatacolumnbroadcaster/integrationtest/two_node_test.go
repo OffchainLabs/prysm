@@ -15,6 +15,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -138,7 +139,26 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
 		require.NoError(t, err)
 
-		validator := func(_ []blocks.CellProofBundle) error {
+		// Header validator that verifies the inclusion proof
+		headerValidator := func(header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
+			if header == nil {
+				return false, fmt.Errorf("nil header")
+			}
+			if header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
+				return true, fmt.Errorf("nil signed block header")
+			}
+			if len(header.KzgCommitments) == 0 {
+				return true, fmt.Errorf("empty kzg commitments")
+			}
+			// Verify inclusion proof
+			if err := peerdas.VerifyPartialDataColumnHeaderInclusionProof(header); err != nil {
+				return true, fmt.Errorf("invalid inclusion proof: %w", err)
+			}
+			t.Log("Header validation passed")
+			return false, nil
+		}
+
+		cellValidator := func(_ []blocks.CellProofBundle) error {
 			return nil
 		}
 
@@ -172,9 +192,9 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
-		err = broadcaster1.Subscribe(topic1, validator, handler1)
+		err = broadcaster1.Subscribe(topic1, headerValidator, cellValidator, handler1)
 		require.NoError(t, err)
-		err = broadcaster2.Subscribe(topic2, validator, handler2)
+		err = broadcaster2.Subscribe(topic2, headerValidator, cellValidator, handler2)
 		require.NoError(t, err)
 
 		// Wait for mesh to form

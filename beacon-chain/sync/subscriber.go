@@ -69,9 +69,10 @@ type subscribeParameters struct {
 }
 
 type partialSubscribeParameters struct {
-	broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
-	validate    partialdatacolumnbroadcaster.ColumnValidator
-	handle      partialdatacolumnbroadcaster.SubHandler
+	broadcaster    *partialdatacolumnbroadcaster.PartialColumnBroadcaster
+	validateHeader partialdatacolumnbroadcaster.HeaderValidator
+	validate       partialdatacolumnbroadcaster.ColumnValidator
+	handle         partialdatacolumnbroadcaster.SubHandler
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.
@@ -336,6 +337,9 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 			if broadcaster != nil {
 				ps = &partialSubscribeParameters{
 					broadcaster: broadcaster,
+					validateHeader: func(header *ethpb.PartialDataColumnHeader) (bool, error) {
+						return s.validatePartialDataColumnHeader(context.TODO(), header)
+					},
 					validate: func(cellsToVerify []blocks.CellProofBundle) error {
 						return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
 					},
@@ -651,7 +655,7 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		if requestPartial {
 			log.Info("Subscribing to partial columns on", topicStr)
-			err = t.partial.broadcaster.Subscribe(topic, t.partial.validate, t.partial.handle)
+			err = t.partial.broadcaster.Subscribe(topic, t.partial.validateHeader, t.partial.validate, t.partial.handle)
 
 			if err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")
