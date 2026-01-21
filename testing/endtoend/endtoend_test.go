@@ -289,49 +289,14 @@ func (r *testRunner) waitForMatchingHead(ctx context.Context, timeout time.Durat
 				return errors.Wrap(err, "unexpected error requesting head block root from 'ref' beacon node")
 			}
 			if bytesutil.ToBytes32(cResp.HeadBlockRoot) == bytesutil.ToBytes32(rResp.HeadBlockRoot) {
-				// Head matches, now wait for node to exit optimistic mode.
-				// For Fulu, the execution client may take additional time to sync and verify payloads.
-				// Give extra time (up to 2 minutes) for optimistic status to clear.
-				return r.waitForNonOptimistic(ctx, 2*time.Minute, check)
-			}
-		}
-	}
-}
-
-// waitForNonOptimistic waits for a node to exit optimistic mode, with a bounded timeout.
-// If the timeout is reached, it logs a warning but does not fail - the evaluator will
-// handle optimistic nodes gracefully by skipping finalized/justified checks.
-func (r *testRunner) waitForNonOptimistic(ctx context.Context, timeout time.Duration, conn *grpc.ClientConn) error {
-	start := time.Now()
-	deadline := start.Add(timeout)
-	checkClient := eth.NewBeaconChainClient(conn)
-
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			cResp, err := checkClient.GetChainHead(ctx, &emptypb.Empty{})
-			if err != nil {
-				// If we can't get chain head, just continue - head already matched
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			if !cResp.OptimisticStatus {
-				log.Infof("Node exited optimistic mode after %s", time.Since(start))
 				return nil
 			}
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
-
-	// Timeout reached but node is still optimistic - this is OK, evaluator handles it
-	log.Warnf("Node still in optimistic mode after %s, continuing anyway (evaluator will handle)", timeout)
-	return nil
 }
 
-func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string) error {
-	matchTimeout := 3 * time.Minute
+func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, i int, conns []*grpc.ClientConn, bnAPI, enr, minerEnr string, tickingStartTime time.Time) error {
+	matchTimeout := 5 * time.Minute
 	ethNode := eth1.NewNode(i, minerEnr)
 	g.Go(func() error {
 		return ethNode.Start(ctx)
@@ -384,6 +349,12 @@ func (r *testRunner) testCheckpointSync(ctx context.Context, g *errgroup.Group, 
 	if err != nil {
 		return err
 	}
+
+	// Only execute in the middle of an epoch to prevent race conditions around slot 0.
+	secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+	ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
+	<-ticker.C()
+	ticker.Done()
 
 	syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 	for _, evaluator := range syncEvaluators {
@@ -590,7 +561,7 @@ func (r *testRunner) defaultEndToEndRun() error {
 		httpEndpoints := helpers.BeaconAPIHostnames(e2e.TestParams.BeaconNodeCount)
 		menr := eth1Miner.ENR()
 		benr := bootNode.ENR()
-		if err := r.testCheckpointSync(ctx, g, index, conns, httpEndpoints[0], benr, menr); err != nil {
+		if err := r.testCheckpointSync(ctx, g, index, conns, httpEndpoints[0], benr, menr, tickingStartTime); err != nil {
 			return errors.Wrap(err, "checkpoint sync test failed")
 		}
 	}
@@ -599,6 +570,11 @@ func (r *testRunner) defaultEndToEndRun() error {
 		if err := r.waitExtra(ctx, primitives.Epoch(config.EpochsToRun+config.ExtraEpochs), conns[0], primitives.Epoch(config.ExtraEpochs)); err != nil {
 			return errors.Wrap(err, "error while waiting for ExtraEpochs")
 		}
+		// Only execute in the middle of an epoch to prevent race conditions around slot 0.
+		secondsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot))
+		ticker := helpers.NewEpochTicker(tickingStartTime, secondsPerEpoch)
+		<-ticker.C()
+		ticker.Done()
 		syncEvaluators := []e2etypes.Evaluator{ev.FinishedSyncing, ev.AllNodesHaveSameHead}
 		for _, evaluator := range syncEvaluators {
 			t.Run(evaluator.Name, func(t *testing.T) {

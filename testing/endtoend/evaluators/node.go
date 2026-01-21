@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
@@ -128,13 +129,42 @@ func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 	return nil
 }
 
+// waitForMidEpoch waits until we're at least 2 slots into the current epoch.
+// This prevents race conditions at epoch boundaries where different nodes
+// may report different head epochs.
+func waitForMidEpoch(conn *grpc.ClientConn) error {
+	beaconClient := eth.NewBeaconChainClient(conn)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+
+	for {
+		chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
+		if err != nil {
+			return err
+		}
+		slotInEpoch := chainHead.HeadSlot % slotsPerEpoch
+		// If we're at least 2 slots into the epoch, we're safe
+		if slotInEpoch >= 2 {
+			return nil
+		}
+		// Wait for the remaining slots until slot 2
+		slotsToWait := 2 - slotInEpoch
+		time.Sleep(time.Duration(slotsToWait) * time.Duration(secondsPerSlot) * time.Second)
+	}
+}
+
 func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
-	headSlots := make([]primitives.Slot, len(conns))
+	// Wait until we're at least 2 slots into the epoch to avoid race conditions
+	// at epoch boundaries where nodes may report different epochs.
+	if err := waitForMidEpoch(conns[0]); err != nil {
+		return errors.Wrap(err, "failed waiting for mid-epoch")
+	}
+
+	headEpochs := make([]primitives.Epoch, len(conns))
 	justifiedRoots := make([][]byte, len(conns))
 	prevJustifiedRoots := make([][]byte, len(conns))
 	finalizedRoots := make([][]byte, len(conns))
 	chainHeads := make([]*eth.ChainHead, len(conns))
-	optimisticStatus := make([]bool, len(conns))
 	g, _ := errgroup.WithContext(context.Background())
 
 	for i, conn := range conns {
@@ -146,12 +176,11 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 			if err != nil {
 				return errors.Wrapf(err, "connection number=%d", conIdx)
 			}
-			headSlots[conIdx] = chainHead.HeadSlot
+			headEpochs[conIdx] = chainHead.HeadEpoch
 			justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
 			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
 			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
 			chainHeads[conIdx] = chainHead
-			optimisticStatus[conIdx] = chainHead.OptimisticStatus
 			return nil
 		})
 	}
@@ -160,25 +189,13 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	}
 
 	for i := range conns {
-		// Allow head slots to differ by at most 2 slots to account for timing
-		// differences when querying nodes and chain advancement during evaluation.
-		slotDiff := headSlots[0] - headSlots[i]
-		if headSlots[i] > headSlots[0] {
-			slotDiff = headSlots[i] - headSlots[0]
-		}
-		if slotDiff > 2 {
+		if headEpochs[0] != headEpochs[i] {
 			return fmt.Errorf(
-				"received conflicting head slots on node %d, expected %d (±2), received %d",
+				"received conflicting head epochs on node %d, expected %d, received %d",
 				i,
-				headSlots[0],
-				headSlots[i],
+				headEpochs[0],
+				headEpochs[i],
 			)
-		}
-		// Skip finalized/justified checks for nodes in optimistic mode.
-		// Optimistic nodes haven't verified execution payloads yet, so their
-		// finalized/justified state may lag behind fully verified nodes.
-		if optimisticStatus[i] {
-			continue
 		}
 		if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {
 			return fmt.Errorf(
