@@ -169,7 +169,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
 			flags.InteropMockEth1DataVotesFlag,
-			flags.DisableGetBlobsV2,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.
@@ -246,18 +245,10 @@ func init() {
 	originalHelpPrinter := cli.HelpPrinter
 	cli.HelpPrinter = func(w io.Writer, tmpl string, data any) {
 		if tmpl == appHelpTemplate {
-			filteredGroups := make([]flagGroup, 0, len(appHelpFlagGroups))
 			for _, group := range appHelpFlagGroups {
-				visibleFlags := make([]cli.Flag, 0, len(group.Flags))
-				for _, flag := range group.Flags {
-					if vf, ok := flag.(cli.VisibleFlag); !ok || vf.IsVisible() {
-						visibleFlags = append(visibleFlags, flag)
-					}
-				}
-				sort.Sort(cli.FlagsByName(visibleFlags))
-				filteredGroups = append(filteredGroups, flagGroup{Name: group.Name, Flags: visibleFlags})
+				sort.Sort(cli.FlagsByName(group.Flags))
 			}
-			originalHelpPrinter(w, tmpl, helpData{data, filteredGroups})
+			originalHelpPrinter(w, tmpl, helpData{data, appHelpFlagGroups})
 		} else {
 			originalHelpPrinter(w, tmpl, data)
 		}
