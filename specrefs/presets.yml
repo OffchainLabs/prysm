@@ -694,8 +694,8 @@
       search: data\["UPDATE_TIMEOUT"\]
       regex: true
   spec: |
-    <spec preset_var="UPDATE_TIMEOUT" fork="altair">
-    UPDATE_TIMEOUT = SLOTS_PER_EPOCH * EPOCHS_PER_SYNC_COMMITTEE_PERIOD
+    <spec preset_var="UPDATE_TIMEOUT" fork="altair" hash="e633d57e">
+    UPDATE_TIMEOUT = 8192
     </spec>
 
 - name: VALIDATOR_REGISTRY_LIMIT
