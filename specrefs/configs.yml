@@ -1,5 +1,8 @@
 - name: AGGREGATE_DUE_BPS
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: AggregateDueBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="AGGREGATE_DUE_BPS" fork="phase0" hash="7eaa811a">
     AGGREGATE_DUE_BPS: uint64 = 6667
@@ -26,7 +29,10 @@
     </spec>
 
 - name: ATTESTATION_DUE_BPS
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: AttestationDueBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
     ATTESTATION_DUE_BPS: uint64 = 3333
@@ -172,7 +178,10 @@
     </spec>
 
 - name: CONTRIBUTION_DUE_BPS
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: ContributionDueBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="CONTRIBUTION_DUE_BPS" fork="altair" hash="a3808203">
     CONTRIBUTION_DUE_BPS: uint64 = 6667
@@ -549,7 +558,10 @@
     </spec>
 
 - name: PROPOSER_REORG_CUTOFF_BPS
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: ProposerReorgCutoffBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="PROPOSER_REORG_CUTOFF_BPS" fork="phase0" hash="a487cc43">
     PROPOSER_REORG_CUTOFF_BPS: uint64 = 1667
@@ -636,7 +648,10 @@
     </spec>
 
 - name: SLOT_DURATION_MS
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: SlotDurationMilliseconds\s+uint64
+      regex: true
   spec: |
     <spec config_var="SLOT_DURATION_MS" fork="phase0" hash="b6d4ba6d">
     SLOT_DURATION_MS: uint64 = 12000
@@ -653,7 +668,10 @@
     </spec>
 
 - name: SYNC_MESSAGE_DUE_BPS
-  sources: []
+  sources:
+    - file: config/params/config.go
+      search: SyncMessageDueBPS\s+primitives.BP
+      regex: true
   spec: |
     <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="791b29d8">
     SYNC_MESSAGE_DUE_BPS: uint64 = 3333
