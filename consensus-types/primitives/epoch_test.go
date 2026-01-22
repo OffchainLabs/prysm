@@ -48,6 +48,16 @@ func TestEpoch_Mul(t *testing.T) {
 				t.Errorf("Epoch.Mul() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeMul(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeMul(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeMul() = %v, want %v", res, tt.res)
+			}
+		})
 	}
 }
 
@@ -79,6 +89,16 @@ func TestEpoch_Div(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Epoch.Div() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeDiv(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeDiv(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeDiv() = %v, want %v", res, tt.res)
 			}
 		})
 	}
@@ -115,6 +135,16 @@ func TestEpoch_Add(t *testing.T) {
 				t.Errorf("Epoch.Add() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeAdd(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeAdd(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeAdd() = %v, want %v", res, tt.res)
+			}
+		})
 		t.Run(fmt.Sprintf("Epoch(%v).AddEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
 			var res primitives.Epoch
 			if tt.panicMsg != "" {
@@ -126,6 +156,16 @@ func TestEpoch_Add(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Epoch.AddEpoch() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeAddEpoch(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeAddEpoch(primitives.Epoch(tt.b))
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeAddEpoch() = %v, want %v", res, tt.res)
 			}
 		})
 	}
@@ -164,6 +204,16 @@ func TestEpoch_Sub(t *testing.T) {
 				t.Errorf("Epoch.Sub() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeSub(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeSub(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeSub() = %v, want %v", res, tt.res)
+			}
+		})
 	}
 }
 
@@ -200,6 +250,16 @@ func TestEpoch_Mod(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Epoch.Mod() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Epoch(%v).SafeMod(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Epoch(tt.a).SafeMod(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Epoch.SafeMod() = %v, want %v", res, tt.res)
 			}
 		})
 	}

@@ -7,9 +7,11 @@ import (
 	fssz "github.com/prysmaticlabs/fastssz"
 )
 
-var _ fssz.HashRoot = (Slot)(0)
-var _ fssz.Marshaler = (*Slot)(nil)
-var _ fssz.Unmarshaler = (*Slot)(nil)
+var (
+	_ fssz.HashRoot    = (Slot)(0)
+	_ fssz.Marshaler   = (*Slot)(nil)
+	_ fssz.Unmarshaler = (*Slot)(nil)
+)
 
 // Slot represents a single slot.
 type Slot uint64
@@ -124,12 +126,17 @@ func (s Slot) SubSlot(x Slot) Slot {
 	return s.Sub(uint64(x))
 }
 
-// FlooredSubSlot safely subtracts x from the slot, returning 0 if the result would underflow.
-func (s Slot) FlooredSubSlot(x Slot) Slot {
-	if s < x {
+// FlooredSub safely subtracts x from the slot, returning 0 if the result would underflow.
+func (s Slot) FlooredSub(x uint64) Slot {
+	if uint64(s) < x {
 		return 0
 	}
-	return s - x
+	return s - Slot(x)
+}
+
+// FlooredSubSlot safely subtracts x from the slot, returning 0 if the result would underflow.
+func (s Slot) FlooredSubSlot(x Slot) Slot {
+	return s.FlooredSub(uint64(x))
 }
 
 // SafeSubSlot finds difference between two slot values.

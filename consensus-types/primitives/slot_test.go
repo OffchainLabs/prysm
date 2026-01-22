@@ -25,14 +25,14 @@ func TestSlot_Casting(t *testing.T) {
 			t.Errorf("Unequal: %v = %v", primitives.Slot(x1), slot)
 		}
 
-		var x2 = 42.2
+		x2 := 42.2
 		if primitives.Slot(x2) != slot {
 			t.Errorf("Unequal: %v = %v", primitives.Slot(x2), slot)
 		}
 	})
 
 	t.Run("int", func(t *testing.T) {
-		var x = 42
+		x := 42
 		if primitives.Slot(x) != slot {
 			t.Errorf("Unequal: %v = %v", primitives.Slot(x), slot)
 		}
@@ -68,6 +68,16 @@ func TestSlot_Mul(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Slot.Mul() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Slot(%v).SafeMul(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Slot(tt.a).SafeMul(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Slot.SafeMul() = %v, want %v", res, tt.res)
 			}
 		})
 		t.Run(fmt.Sprintf("Slot(%v).MulSlot(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
@@ -126,6 +136,16 @@ func TestSlot_Div(t *testing.T) {
 				t.Errorf("Slot.Div() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Slot(%v).SafeDiv(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Slot(tt.a).SafeDiv(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Slot.SafeDiv() = %v, want %v", res, tt.res)
+			}
+		})
 		t.Run(fmt.Sprintf("Slot(%v).DivSlot(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
 			var res primitives.Slot
 			if tt.panicMsg != "" {
@@ -181,6 +201,16 @@ func TestSlot_Add(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Slot.Add() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Slot(%v).SafeAdd(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Slot(tt.a).SafeAdd(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Slot.SafeAdd() = %v, want %v", res, tt.res)
 			}
 		})
 		t.Run(fmt.Sprintf("Slot(%v).AddSlot(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
@@ -242,6 +272,16 @@ func TestSlot_Sub(t *testing.T) {
 				t.Errorf("Slot.Sub() = %v, want %v", res, tt.res)
 			}
 		})
+		t.Run(fmt.Sprintf("Slot(%v).SafeSub(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Slot(tt.a).SafeSub(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Slot.SafeSub() = %v, want %v", res, tt.res)
+			}
+		})
 		t.Run(fmt.Sprintf("Slot(%v).SubSlot(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
 			var res primitives.Slot
 			if tt.panicMsg != "" {
@@ -263,6 +303,27 @@ func TestSlot_Sub(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Slot.SafeSubSlot() = %v, want %v", res, tt.res)
+			}
+		})
+		// FlooredSub: on underflow, returns 0 instead of panicking
+		t.Run(fmt.Sprintf("Slot(%v).FlooredSub(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = 0 // FlooredSub floors to 0 on underflow
+			}
+			res := primitives.Slot(tt.a).FlooredSub(tt.b)
+			if res != expectedRes {
+				t.Errorf("Slot.FlooredSub() = %v, want %v", res, expectedRes)
+			}
+		})
+		t.Run(fmt.Sprintf("Slot(%v).FlooredSubSlot(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = 0 // FlooredSubSlot floors to 0 on underflow
+			}
+			res := primitives.Slot(tt.a).FlooredSubSlot(primitives.Slot(tt.b))
+			if res != expectedRes {
+				t.Errorf("Slot.FlooredSubSlot() = %v, want %v", res, expectedRes)
 			}
 		})
 	}
@@ -301,6 +362,16 @@ func TestSlot_Mod(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Slot.Mod() = %v, want %v", res, tt.res)
+			}
+		})
+		t.Run(fmt.Sprintf("Slot(%v).SafeMod(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
+			res, err := primitives.Slot(tt.a).SafeMod(tt.b)
+			if tt.panicMsg != "" && (err == nil || err.Error() != tt.panicMsg) {
+				t.Errorf("Expected error not thrown, wanted: %v, got: %v", tt.panicMsg, err)
+				return
+			}
+			if tt.res != res {
+				t.Errorf("Slot.SafeMod() = %v, want %v", res, tt.res)
 			}
 		})
 		t.Run(fmt.Sprintf("Slot(%v).ModSlot(%v) = %v", tt.a, tt.b, tt.res), func(t *testing.T) {
