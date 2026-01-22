@@ -1,10 +1,11 @@
-package gloas
+package gloas_test
 
 import (
 	"bytes"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -39,7 +40,7 @@ func TestProcessPayloadAttestations_WrongParent(t *testing.T) {
 	}
 	body := buildBody(t, att)
 
-	err := ProcessPayloadAttestations(t.Context(), st, body)
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
 	require.ErrorContains(t, "wrong parent", err)
 }
 
@@ -62,7 +63,7 @@ func TestProcessPayloadAttestations_WrongSlot(t *testing.T) {
 	}
 	body := buildBody(t, att)
 
-	err := ProcessPayloadAttestations(t.Context(), st, body)
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
 	require.ErrorContains(t, "wrong slot", err)
 }
 
@@ -87,7 +88,7 @@ func TestProcessPayloadAttestations_InvalidSignature(t *testing.T) {
 	}
 	body := buildBody(t, att)
 
-	err := ProcessPayloadAttestations(t.Context(), st, body)
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
 	require.ErrorContains(t, "failed to verify indexed form", err)
 	require.ErrorContains(t, "invalid signature", err)
 }
@@ -119,7 +120,7 @@ func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
 	}
 	body := buildBody(t, att)
 
-	err := ProcessPayloadAttestations(t.Context(), st, body)
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
 	require.NoError(t, err)
 }
 
@@ -157,7 +158,7 @@ func TestProcessPayloadAttestations_MultipleAttestations(t *testing.T) {
 
 	body := buildBody(t, att1, att2)
 
-	err := ProcessPayloadAttestations(t.Context(), st, body)
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
 	require.NoError(t, err)
 }
 
@@ -184,7 +185,7 @@ func TestProcessPayloadAttestations_IndexedVerificationError(t *testing.T) {
 		BeaconState: st,
 		errIndex:    0,
 	}
-	err := ProcessPayloadAttestations(t.Context(), errState, body)
+	err := gloas.ProcessPayloadAttestations(t.Context(), errState, body)
 	require.ErrorContains(t, "failed to verify indexed form", err)
 	require.ErrorContains(t, "validator 0", err)
 }
