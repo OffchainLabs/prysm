@@ -43,7 +43,7 @@ var placeholderFields = []string{
 	"EIP7928_FORK_EPOCH",
 	"EIP7928_FORK_VERSION",
 	"EPOCHS_PER_SHUFFLING_PHASE",
-	"FIELD_ELEMENTS_PER_CELL", // Configured as a constant in config/fieldparams/mainnet.go
+	"FIELD_ELEMENTS_PER_CELL",     // Configured as a constant in config/fieldparams/mainnet.go
 	"FIELD_ELEMENTS_PER_EXT_BLOB", // Configured in proto/ssz_proto_library.bzl
 	"GLOAS_FORK_EPOCH",
 	"GLOAS_FORK_VERSION",
@@ -62,6 +62,7 @@ var placeholderFields = []string{
 	"PROPOSER_SELECTION_GAP",
 	"SYNC_MESSAGE_DUE_BPS_GLOAS",
 	"TARGET_NUMBER_OF_PEERS",
+	"UPDATE_TIMEOUT",
 	"VIEW_FREEZE_CUTOFF_BPS",
 	"VIEW_FREEZE_DEADLINE",
 	"WHISK_EPOCHS_PER_SHUFFLING_PHASE",

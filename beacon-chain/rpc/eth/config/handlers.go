@@ -189,6 +189,8 @@ func prepareConfigSpec() (map[string]any, error) {
 	data["FIELD_ELEMENTS_PER_CELL"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.CellsPerBlob)), "FIELD_ELEMENTS_PER_CELL")
 	data["FIELD_ELEMENTS_PER_EXT_BLOB"] = convertValueForJSON(reflect.ValueOf(config.FieldElementsPerBlob*2), "FIELD_ELEMENTS_PER_EXT_BLOB")
 	data["KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH"] = convertValueForJSON(reflect.ValueOf(uint64(4)), "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH")
+	// UPDATE_TIMEOUT is derived from SLOTS_PER_EPOCH * EPOCHS_PER_SYNC_COMMITTEE_PERIOD
+	data["UPDATE_TIMEOUT"] = convertValueForJSON(reflect.ValueOf(uint64(config.SlotsPerEpoch)*uint64(config.EpochsPerSyncCommitteePeriod)), "UPDATE_TIMEOUT")
 
 	return data, nil
 }

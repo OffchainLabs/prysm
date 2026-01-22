@@ -168,7 +168,6 @@ func TestGetSpec(t *testing.T) {
 	config.BlobsidecarSubnetCount = 101
 	config.BlobsidecarSubnetCountElectra = 102
 	config.SyncMessageDueBPS = 103
-	config.UpdateTimeout = 8192
 	config.BuilderWithdrawalPrefixByte = byte('b')
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
 	config.BuilderPaymentThresholdNumerator = 104
@@ -610,7 +609,7 @@ func TestGetSpec(t *testing.T) {
 			case "NUMBER_OF_COLUMNS":
 				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
 			case "UPDATE_TIMEOUT":
-				assert.Equal(t, "8192", v) // SLOTS_PER_EPOCH (32) * EPOCHS_PER_SYNC_COMMITTEE_PERIOD (256)
+				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

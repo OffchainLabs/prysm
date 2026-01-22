@@ -332,9 +332,6 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 
-	// Light client preset values
-	UpdateTimeout: 8192, // SLOTS_PER_EPOCH (32) * EPOCHS_PER_SYNC_COMMITTEE_PERIOD (256)
-
 	// Values related to gloas
 	BuilderPaymentThresholdNumerator:   6,
 	BuilderPaymentThresholdDenominator: 10,
