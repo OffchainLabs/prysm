@@ -13,10 +13,6 @@ specrefs:
 
 exceptions:
   presets:
-    # Not implemented
-    - CELLS_PER_EXT_BLOB#fulu
-    - UPDATE_TIMEOUT#altair
-
     # Not implemented: gloas (future fork)
     - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
@@ -423,10 +419,8 @@ exceptions:
     - update_proposer_boost_root#phase0
 
   presets:
-    - CELLS_PER_EXT_BLOB#fulu
     - BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
     - BUILDER_REGISTRY_LIMIT#gloas
     - MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
     - MAX_PAYLOAD_ATTESTATIONS#gloas
     - PTC_SIZE#gloas
-    - UPDATE_TIMEOUT#altair
