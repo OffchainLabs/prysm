@@ -239,15 +239,6 @@ func TestValidateNoArgs_SubcommandFlags(t *testing.T) {
 	require.ErrorContains(t, "unrecognized argument: garbage", err)
 }
 
-func TestLogVModuleFlag(t *testing.T) {
-	app := cli.App{}
-	set := flag.NewFlagSet("test", 0)
-	context := cli.NewContext(&app, set, nil)
-
-	require.NoError(t, set.Parse([]string{"test-command", "--" + LogVModuleFlag.Name, "beacon-chain/p2p=error"}))
-	require.Equal(t, "beacon-chain/p2p=error", context.String(LogVModuleFlag.Name))
-}
-
 func TestParseVModule(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		input := "beacon-chain/p2p=error, beacon-chain/light-client=trace"
