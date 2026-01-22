@@ -103,6 +103,27 @@ func TestSlot_Mul(t *testing.T) {
 				t.Errorf("Slot.SafeMulSlot() = %v, want %v", res, tt.res)
 			}
 		})
+		// CappedMul: on overflow, returns MaxUint64 instead of panicking
+		t.Run(fmt.Sprintf("Slot(%v).CappedMul(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedMul caps at MaxUint64 on overflow
+			}
+			res := primitives.Slot(tt.a).CappedMul(tt.b)
+			if res != expectedRes {
+				t.Errorf("Slot.CappedMul() = %v, want %v", res, expectedRes)
+			}
+		})
+		t.Run(fmt.Sprintf("Slot(%v).CappedMulSlot(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedMulSlot caps at MaxUint64 on overflow
+			}
+			res := primitives.Slot(tt.a).CappedMulSlot(primitives.Slot(tt.b))
+			if res != expectedRes {
+				t.Errorf("Slot.CappedMulSlot() = %v, want %v", res, expectedRes)
+			}
+		})
 	}
 }
 
@@ -234,6 +255,27 @@ func TestSlot_Add(t *testing.T) {
 			}
 			if tt.res != res {
 				t.Errorf("Slot.SafeAddSlot() = %v, want %v", res, tt.res)
+			}
+		})
+		// CappedAdd: on overflow, returns MaxUint64 instead of panicking
+		t.Run(fmt.Sprintf("Slot(%v).CappedAdd(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedAdd caps at MaxUint64 on overflow
+			}
+			res := primitives.Slot(tt.a).CappedAdd(tt.b)
+			if res != expectedRes {
+				t.Errorf("Slot.CappedAdd() = %v, want %v", res, expectedRes)
+			}
+		})
+		t.Run(fmt.Sprintf("Slot(%v).CappedAddSlot(%v)", tt.a, tt.b), func(t *testing.T) {
+			expectedRes := tt.res
+			if tt.panicMsg != "" {
+				expectedRes = math.MaxUint64 // CappedAddSlot caps at MaxUint64 on overflow
+			}
+			res := primitives.Slot(tt.a).CappedAddSlot(primitives.Slot(tt.b))
+			if res != expectedRes {
+				t.Errorf("Slot.CappedAddSlot() = %v, want %v", res, expectedRes)
 			}
 		})
 	}
