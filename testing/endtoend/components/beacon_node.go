@@ -395,11 +395,16 @@ func (node *BeaconNode) Restart(ctx context.Context) error {
 	// the Start() method's goroutine is already waiting on the command, and calling
 	// Wait() twice on the same process causes "waitid: no child processes" error.
 	// Instead, poll using Signal(0) which returns an error when the process no longer exists.
+	processExited := false
 	for range 100 {
 		if err := node.cmd.Process.Signal(syscall.Signal(0)); err != nil {
+			processExited = true
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if !processExited {
+		log.Warnf("Beacon node %d did not exit within 10 seconds after SIGTERM, proceeding with restart anyway", node.index)
 	}
 
 	restartArgs := make([]string, 0, len(node.args))
@@ -417,6 +422,11 @@ func (node *BeaconNode) Restart(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
+	defer func() {
+		if err := stdOutFile.Close(); err != nil {
+			log.WithError(err).Error("Failed to close stdout file")
+		}
+	}()
 
 	cmd := exec.CommandContext(ctx, binaryPath, restartArgs...)
 	stderr, err := os.OpenFile(
@@ -431,7 +441,15 @@ func (node *BeaconNode) Restart(ctx context.Context) error {
 
 	log.Infof("Restarting beacon chain %d with flags: %s", node.index, strings.Join(restartArgs, " "))
 	if err = cmd.Start(); err != nil {
+		if closeErr := stderr.Close(); closeErr != nil {
+			log.WithError(closeErr).Error("Failed to close stderr file")
+		}
 		return fmt.Errorf("failed to restart beacon node: %w", err)
+	}
+	// Close the parent's file handle after Start(). The child process has its own
+	// copy of the file descriptor via fork/exec, so this won't affect its ability to write.
+	if err := stderr.Close(); err != nil {
+		log.WithError(err).Error("Failed to close stderr file")
 	}
 
 	if err = helpers.WaitForTextInFile(stdOutFile, "Beacon chain gRPC server listening"); err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
 	"github.com/OffchainLabs/prysm/v7/testing/endtoend/types"
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 var _ types.ComponentRunner = &TracingSink{}
@@ -32,6 +34,7 @@ var _ types.ComponentRunner = &TracingSink{}
 type TracingSink struct {
 	cancel   context.CancelFunc
 	started  chan struct{}
+	stopped  chan struct{}
 	endpoint string
 	server   *http.Server
 }
@@ -40,6 +43,7 @@ type TracingSink struct {
 func NewTracingSink(endpoint string) *TracingSink {
 	return &TracingSink{
 		started:  make(chan struct{}, 1),
+		stopped:  make(chan struct{}),
 		endpoint: endpoint,
 	}
 }
@@ -73,62 +77,99 @@ func (ts *TracingSink) Resume() error {
 
 // Stop stops the component and its underlying process.
 func (ts *TracingSink) Stop() error {
-	ts.cancel()
+	if ts.cancel != nil {
+		ts.cancel()
+	}
+	// Wait for server to actually shut down before returning
+	<-ts.stopped
 	return nil
+}
+
+// reusePortListener creates a TCP listener with SO_REUSEADDR set, allowing
+// the port to be reused immediately after the previous listener closes.
+// This is essential for sequential E2E tests that reuse the same port.
+func reusePortListener(addr string) (net.Listener, error) {
+	lc := net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			var setSockOptErr error
+			err := c.Control(func(fd uintptr) {
+				setSockOptErr = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+			})
+			if err != nil {
+				return err
+			}
+			return setSockOptErr
+		},
+	}
+	return lc.Listen(context.Background(), "tcp", addr)
 }
 
 // Initialize an http handler that writes all requests to a file.
 func (ts *TracingSink) initializeSink(ctx context.Context) {
+	defer close(ts.stopped)
+
 	mux := &http.ServeMux{}
 	ts.server = &http.Server{
 		Addr:              ts.endpoint,
 		Handler:           mux,
 		ReadHeaderTimeout: time.Second,
 	}
-	defer func() {
-		if err := ts.server.Close(); err != nil {
-			log.WithError(err).Error("Failed to close http server")
-			return
-		}
-	}()
+	// Disable keep-alives to ensure connections close immediately
+	ts.server.SetKeepAlivesEnabled(false)
+
+	// Create listener with SO_REUSEADDR to allow port reuse between tests
+	listener, err := reusePortListener(ts.endpoint)
+	if err != nil {
+		log.WithError(err).Error("Failed to create listener")
+		return
+	}
+
 	stdOutFile, err := helpers.DeleteAndCreateFile(e2e.TestParams.LogPath, e2e.TracingRequestSinkFileName)
 	if err != nil {
 		log.WithError(err).Error("Failed to create stdout file")
+		if closeErr := listener.Close(); closeErr != nil {
+			log.WithError(closeErr).Error("Failed to close listener after file creation error")
+		}
 		return
 	}
+
 	cleanup := func() {
 		if err := stdOutFile.Close(); err != nil {
 			log.WithError(err).Error("Could not close stdout file")
 		}
-		if err := ts.server.Close(); err != nil {
-			log.WithError(err).Error("Could not close http server")
+		// Use Shutdown for graceful shutdown that releases the port
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := ts.server.Shutdown(shutdownCtx); err != nil {
+			log.WithError(err).Error("Could not gracefully shutdown http server")
+			// Force close if shutdown times out
+			if err := ts.server.Close(); err != nil {
+				log.WithError(err).Error("Could not close http server")
+			}
 		}
 	}
+	defer cleanup()
+
 	mux.HandleFunc("/", func(_ http.ResponseWriter, r *http.Request) {
 		if err := captureRequest(stdOutFile, r); err != nil {
 			log.WithError(err).Error("Failed to capture http request")
 			return
 		}
 	})
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				cleanup()
-				return
-			case <-sigs:
-				cleanup()
-				return
-			default:
-				// Sleep for 100ms and do nothing while waiting for
-				// cancellation.
-				time.Sleep(100 * time.Millisecond)
-			}
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigs:
+			return
 		}
 	}()
-	if err := ts.server.ListenAndServe(); err != http.ErrServerClosed {
+
+	// Use Serve with our custom listener instead of ListenAndServe
+	if err := ts.server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		log.WithError(err).Error("Failed to serve http")
 	}
 }

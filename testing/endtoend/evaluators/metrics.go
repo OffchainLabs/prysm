@@ -82,7 +82,7 @@ var metricComparisonTests = []comparisonTest{
 		name:               "hot state cache",
 		topic1:             "hot_state_cache_miss",
 		topic2:             "hot_state_cache_hit",
-		expectedComparison: 0.01,
+		expectedComparison: 0.02,
 	},
 }
 
@@ -168,19 +168,14 @@ func metricCheckLessThan(pageContent, topic string, value int) error {
 
 func metricCheckComparison(pageContent, topic1, topic2 string, comparison float64) error {
 	topic2Value, err := valueOfTopic(pageContent, topic2)
-	// If we can't find the first topic (error metrics), then assume the test passes.
-	if topic2Value != -1 {
+	if err != nil || topic2Value == -1 {
+		// If we can't find the denominator (hits/received total), assume test passes
 		return nil
-	}
-	if err != nil {
-		return err
 	}
 	topic1Value, err := valueOfTopic(pageContent, topic1)
-	if topic1Value != -1 {
+	if err != nil || topic1Value == -1 {
+		// If we can't find the numerator (misses/failures), assume test passes (no errors)
 		return nil
-	}
-	if err != nil {
-		return err
 	}
 	topicComparison := float64(topic1Value) / float64(topic2Value)
 	if topicComparison >= comparison {

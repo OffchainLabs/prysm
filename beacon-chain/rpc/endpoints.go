@@ -575,7 +575,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".PublishBlockV2",
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.PublishBlockV2,
@@ -586,7 +586,7 @@ func (s *Service) beaconEndpoints(
 			name:     namespace + ".PublishBlindedBlockV2",
 			middleware: []middleware.Middleware{
 				middleware.ContentTypeHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
-				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
 				middleware.AcceptEncodingHeaderHandler(),
 			},
 			handler: server.PublishBlindedBlockV2,

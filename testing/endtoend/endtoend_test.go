@@ -247,7 +247,8 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 				}
 			}
 			// Only generate background transactions when relevant for the test.
-			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+			// Checkpoint sync and REST API tests need EL blocks to advance, so include them.
+			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder || r.config.TestCheckpointSync || r.config.UseBeaconRestApi {
 				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
 			}
 		}()
@@ -823,11 +824,23 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 	secondRecoveryEpochStart, secondRecoveryEpochEnd := lastForkEpoch+8, lastForkEpoch+9
 	thirdRecoveryEpochStart, thirdRecoveryEpochEnd := lastForkEpoch+14, lastForkEpoch+15
 
+	type ForkchoiceUpdatedResponse struct {
+		Status    *enginev1.PayloadStatus  `json:"payloadStatus"`
+		PayloadId *enginev1.PayloadIDBytes `json:"payloadId"`
+	}
+
 	newPayloadMethod := "engine_newPayloadV4"
+	forkChoiceUpdatedMethod := "engine_forkchoiceUpdatedV3"
 	//  Fallback if Electra is not set.
 	if params.BeaconConfig().ElectraForkEpoch == math.MaxUint64 {
 		newPayloadMethod = "engine_newPayloadV3"
 	}
+
+	// Skip evaluators during optimistic sync window (between start and end, exclusive)
+	if primitives.Epoch(epoch) > optimisticStartEpoch && primitives.Epoch(epoch) < optimisticEndEpoch {
+		return true
+	}
+
 	switch primitives.Epoch(epoch) {
 	case valOfflineStartEpoch:
 		require.NoError(r.t, r.comHandler.validatorNodes.PauseAtIndex(0))
@@ -848,17 +861,32 @@ func (r *testRunner) multiScenario(ec *e2etypes.EvaluationContext, epoch uint64,
 		}, func() bool {
 			return true
 		})
+		// Also intercept forkchoiceUpdated to prevent SetOptimisticToValid from
+		// clearing the optimistic status when the beacon node receives VALID.
+		component.(e2etypes.EngineProxy).AddRequestInterceptor(forkChoiceUpdatedMethod, func() any {
+			return &ForkchoiceUpdatedResponse{
+				Status: &enginev1.PayloadStatus{
+					Status:          enginev1.PayloadStatus_SYNCING,
+					LatestValidHash: nil,
+				},
+				PayloadId: nil,
+			}
+		}, func() bool {
+			return true
+		})
 		return true
 	case optimisticEndEpoch:
 		evs := []e2etypes.Evaluator{ev.OptimisticSyncEnabled}
 		r.executeProvidedEvaluators(ec, epoch, []*grpc.ClientConn{conns[0]}, evs)
-		// Disable Interceptor
+		// Disable Interceptors
 		component, err := r.comHandler.eth1Proxy.ComponentAtIndex(0)
 		require.NoError(r.t, err)
 		engineProxy, ok := component.(e2etypes.EngineProxy)
 		require.Equal(r.t, true, ok)
 		engineProxy.RemoveRequestInterceptor(newPayloadMethod)
 		engineProxy.ReleaseBackedUpRequests(newPayloadMethod)
+		engineProxy.RemoveRequestInterceptor(forkChoiceUpdatedMethod)
+		engineProxy.ReleaseBackedUpRequests(forkChoiceUpdatedMethod)
 
 		return true
 	case secondRecoveryEpochStart, secondRecoveryEpochEnd,
