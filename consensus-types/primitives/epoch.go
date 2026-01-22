@@ -125,6 +125,16 @@ func (e Epoch) FlooredSubEpoch(x Epoch) Epoch {
 	return FlooredSubT(e, x)
 }
 
+// Diff returns the absolute difference between epoch and x.
+func (e Epoch) Diff(x uint64) Epoch {
+	return Diff(e, x)
+}
+
+// DiffEpoch returns the absolute difference between two epochs.
+func (e Epoch) DiffEpoch(x Epoch) Epoch {
+	return DiffT(e, x)
+}
+
 // CappedAdd safely adds x to the epoch, returning MaxUint64 if the result would overflow.
 func (e Epoch) CappedAdd(x uint64) Epoch {
 	return CappedAdd(e, x)

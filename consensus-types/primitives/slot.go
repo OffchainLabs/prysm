@@ -120,6 +120,16 @@ func (s Slot) FlooredSubSlot(x Slot) Slot {
 	return FlooredSubT(s, x)
 }
 
+// Diff returns the absolute difference between slot and x.
+func (s Slot) Diff(x uint64) Slot {
+	return Diff(s, x)
+}
+
+// DiffSlot returns the absolute difference between two slots.
+func (s Slot) DiffSlot(x Slot) Slot {
+	return DiffT(s, x)
+}
+
 // CappedAdd safely adds x to the slot, returning MaxUint64 if the result would overflow.
 func (s Slot) CappedAdd(x uint64) Slot {
 	return CappedAdd(s, x)

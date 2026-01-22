@@ -362,9 +362,13 @@ func TestOps_Diff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("Diff(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.Diff(primitives.Slot(tt.a), primitives.Slot(tt.b))
+			got := primitives.Diff(primitives.Slot(tt.a), tt.b)
 			if uint64(got) != tt.want {
 				t.Errorf("Diff() = %d, want %d", got, tt.want)
+			}
+			got = primitives.DiffT(primitives.Slot(tt.a), primitives.Slot(tt.b))
+			if uint64(got) != tt.want {
+				t.Errorf("DiffT() = %d, want %d", got, tt.want)
 			}
 		})
 	}

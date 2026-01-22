@@ -1,3 +1,3 @@
 ### Added
 
-- Generic arithmetic operations module for primitives package with type-safe `Slot` and `Epoch` methods (`CappedAdd`, `CappedMul`, `FlooredSub`).
+- Generic arithmetic operations for type-safe `Slot` and `Epoch` methods

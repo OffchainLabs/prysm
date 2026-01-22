@@ -203,12 +203,17 @@ func CappedMulT[T Uint64Primitive](a, b T) T {
 	return CappedMul(a, uint64(b))
 }
 
-// Diff returns the absolute difference |a - b|.
-func Diff[T Uint64Primitive](a, b T) T {
-	if a > b {
-		return a - b
+// Diff returns the absolute difference |a - x|.
+func Diff[T Uint64Primitive](a T, x uint64) T {
+	if uint64(a) > x {
+		return a - T(x)
 	}
-	return b - a
+	return T(x) - a
+}
+
+// DiffT returns the absolute difference |a - b| (same type).
+func DiffT[T Uint64Primitive](a, b T) T {
+	return Diff(a, uint64(b))
 }
 
 // Max returns the larger of a and b.
