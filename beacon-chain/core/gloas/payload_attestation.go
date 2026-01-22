@@ -119,7 +119,7 @@ func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 		out = append(out, committee...)
 	}
 
-	return selectByBalance(st, out, seed, fieldparams.PTCSize)
+	return selectByBalance(ctx, st, out, seed, fieldparams.PTCSize)
 }
 
 // ptcSeed computes the seed for the payload timeliness committee.
@@ -143,7 +143,7 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	  if compute_balance_weighted_acceptance(state, indices[next], seed, i):
 //	    selected.append(indices[next])
 //	  i += 1
-func selectByBalance(st state.ReadOnlyBeaconState, candidates []primitives.ValidatorIndex, seed [32]byte, count uint64) ([]primitives.ValidatorIndex, error) {
+func selectByBalance(ctx context.Context, st state.ReadOnlyBeaconState, candidates []primitives.ValidatorIndex, seed [32]byte, count uint64) ([]primitives.ValidatorIndex, error) {
 	if len(candidates) == 0 {
 		return nil, errors.New("no candidates for balance weighted selection")
 	}
@@ -157,6 +157,9 @@ func selectByBalance(st state.ReadOnlyBeaconState, candidates []primitives.Valid
 	selected := make([]primitives.ValidatorIndex, 0, count)
 	total := uint64(len(candidates))
 	for i := uint64(0); uint64(len(selected)) < count; i++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		idx := candidates[i%total]
 		ok, err := acceptByBalance(st, idx, buf[:], hashFunc, maxBalance, i)
 		if err != nil {

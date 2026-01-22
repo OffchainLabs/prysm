@@ -93,6 +93,31 @@ func TestProcessPayloadAttestations_InvalidSignature(t *testing.T) {
 	require.ErrorContains(t, "invalid signature", err)
 }
 
+func TestProcessPayloadAttestations_EmptyAggregationBits(t *testing.T) {
+	setupTestConfig(t)
+
+	_, pk := newKey(t)
+	st := newTestState(t, []*eth.Validator{activeValidator(pk)}, 1)
+	require.NoError(t, st.SetSlot(2))
+	parentRoot := bytes.Repeat([]byte{0xaa}, 32)
+	require.NoError(t, st.SetLatestBlockHeader(&eth.BeaconBlockHeader{ParentRoot: parentRoot}))
+
+	attData := &eth.PayloadAttestationData{
+		BeaconBlockRoot: parentRoot,
+		Slot:            1,
+	}
+	att := &eth.PayloadAttestation{
+		Data:            attData,
+		AggregationBits: bitfield.NewBitvector512(),
+		Signature:       make([]byte, 96),
+	}
+	body := buildBody(t, att)
+
+	err := gloas.ProcessPayloadAttestations(t.Context(), st, body)
+	require.ErrorContains(t, "failed to verify indexed form", err)
+	require.ErrorContains(t, "attesting indices empty or unsorted", err)
+}
+
 func TestProcessPayloadAttestations_HappyPath(t *testing.T) {
 	helpers.ClearCache()
 	setupTestConfig(t)
@@ -253,7 +278,7 @@ func newKey(t *testing.T) (common.SecretKey, []byte) {
 }
 
 func signAttestation(t *testing.T, st state.ReadOnlyBeaconState, data *eth.PayloadAttestationData, sks []common.SecretKey) []byte {
-	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(st.Slot()), params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
+	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(data.Slot), params.BeaconConfig().DomainPTCAttester, st.GenesisValidatorsRoot())
 	require.NoError(t, err)
 	root, err := signing.ComputeSigningRoot(data, domain)
 	require.NoError(t, err)
