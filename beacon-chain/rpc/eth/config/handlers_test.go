@@ -212,7 +212,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 180, len(data))
+	assert.Equal(t, 186, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -598,6 +598,18 @@ func TestGetSpec(t *testing.T) {
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
+			case "FIELD_ELEMENTS_PER_CELL":
+				assert.Equal(t, "64", v) // From fieldparams.CellsPerBlob
+			case "FIELD_ELEMENTS_PER_EXT_BLOB":
+				assert.Equal(t, "198", v) // FieldElementsPerBlob (99) * 2
+			case "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH":
+				assert.Equal(t, "4", v) // Preset value
+			case "CELLS_PER_EXT_BLOB":
+				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
+			case "NUMBER_OF_COLUMNS":
+				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
+			case "UPDATE_TIMEOUT":
+				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

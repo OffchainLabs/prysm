@@ -76,6 +76,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.AcceptTosFlag,
 			cmd.ApiTimeoutFlag,
 			flags.DisableEphemeralLogFile,
+			cmd.LogVModuleFlag,
 		},
 	},
 	{

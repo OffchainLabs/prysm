@@ -71,7 +71,7 @@ func main() {
 	flag.Parse()
 
 	if *logFileName != "" {
-		if err := logs.ConfigurePersistentLogging(*logFileName, "text", logrus.DebugLevel); err != nil {
+		if err := logs.ConfigurePersistentLogging(*logFileName, "text", logrus.DebugLevel, map[string]logrus.Level{}); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
 		}
 	}

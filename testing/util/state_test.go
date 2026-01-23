@@ -68,6 +68,26 @@ func TestNewBeaconStateElectra(t *testing.T) {
 	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
 }
 
+func TestNewBeaconStateFulu(t *testing.T) {
+	st, err := NewBeaconStateFulu()
+	require.NoError(t, err)
+	b, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	got := &ethpb.BeaconStateFulu{}
+	require.NoError(t, got.UnmarshalSSZ(b))
+	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+}
+
+func TestNewBeaconStateGloas(t *testing.T) {
+	st, err := NewBeaconStateGloas()
+	require.NoError(t, err)
+	b, err := st.MarshalSSZ()
+	require.NoError(t, err)
+	got := &ethpb.BeaconStateGloas{}
+	require.NoError(t, got.UnmarshalSSZ(b))
+	assert.DeepEqual(t, st.ToProtoUnsafe(), got)
+}
+
 func TestNewBeaconState_HashTreeRoot(t *testing.T) {
 	st, err := NewBeaconState()
 	require.NoError(t, err)
