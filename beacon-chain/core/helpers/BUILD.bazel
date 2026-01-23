@@ -6,6 +6,7 @@ go_library(
         "attestation.go",
         "beacon_committee.go",
         "block.go",
+        "deposit.go",
         "genesis.go",
         "legacy.go",
         "log.go",
@@ -23,6 +24,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
@@ -31,6 +33,7 @@ go_library(
         "//consensus-types/primitives:go_default_library",
         "//container/slice:go_default_library",
         "//container/trie:go_default_library",
+        "//contracts/deposit:go_default_library",
         "//crypto/bls:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
@@ -54,6 +57,7 @@ go_test(
         "attestation_test.go",
         "beacon_committee_test.go",
         "block_test.go",
+        "deposit_test.go",
         "legacy_test.go",
         "private_access_fuzz_noop_test.go",  # keep
         "private_access_test.go",
@@ -72,6 +76,7 @@ go_test(
     tags = ["CI_race_detection"],
     deps = [
         "//beacon-chain/cache:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/forkchoice/types:go_default_library",
         "//beacon-chain/state:go_default_library",
@@ -80,6 +85,8 @@ go_test(
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//container/slice:go_default_library",
+        "//container/trie:go_default_library",
+        "//crypto/bls:go_default_library",
         "//crypto/hash:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
