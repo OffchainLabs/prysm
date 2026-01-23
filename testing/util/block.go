@@ -1473,3 +1473,100 @@ func HydrateBlindedBeaconBlockBodyFulu(b *ethpb.BlindedBeaconBlockBodyElectra) *
 	b.ExecutionRequests = HydrateExecutionRequests(b.ExecutionRequests)
 	return b
 }
+
+// HydrateSignedBeaconBlockGloas hydrates a signed beacon block with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateSignedBeaconBlockGloas(b *ethpb.SignedBeaconBlockGloas) *ethpb.SignedBeaconBlockGloas {
+	if b == nil {
+		b = &ethpb.SignedBeaconBlockGloas{}
+	}
+	if b.Signature == nil {
+		b.Signature = make([]byte, fieldparams.BLSSignatureLength)
+	}
+	b.Block = HydrateBeaconBlockGloas(b.Block)
+	return b
+}
+
+// HydrateBeaconBlockGloas hydrates a beacon block with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateBeaconBlockGloas(b *ethpb.BeaconBlockGloas) *ethpb.BeaconBlockGloas {
+	if b == nil {
+		b = &ethpb.BeaconBlockGloas{}
+	}
+	if b.ParentRoot == nil {
+		b.ParentRoot = make([]byte, fieldparams.RootLength)
+	}
+	if b.StateRoot == nil {
+		b.StateRoot = make([]byte, fieldparams.RootLength)
+	}
+	b.Body = HydrateBeaconBlockBodyGloas(b.Body)
+	return b
+}
+
+// HydrateBeaconBlockBodyGloas hydrates a beacon block body with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateBeaconBlockBodyGloas(b *ethpb.BeaconBlockBodyGloas) *ethpb.BeaconBlockBodyGloas {
+	if b == nil {
+		b = &ethpb.BeaconBlockBodyGloas{}
+	}
+	if b.RandaoReveal == nil {
+		b.RandaoReveal = make([]byte, fieldparams.BLSSignatureLength)
+	}
+	if b.Graffiti == nil {
+		b.Graffiti = make([]byte, fieldparams.RootLength)
+	}
+	if b.Eth1Data == nil {
+		b.Eth1Data = &ethpb.Eth1Data{
+			DepositRoot: make([]byte, fieldparams.RootLength),
+			BlockHash:   make([]byte, fieldparams.RootLength),
+		}
+	}
+	if b.SyncAggregate == nil {
+		b.SyncAggregate = &ethpb.SyncAggregate{
+			SyncCommitteeBits:      make([]byte, fieldparams.SyncAggregateSyncCommitteeBytesLength),
+			SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),
+		}
+	}
+	b.SignedExecutionPayloadBid = HydrateSignedExecutionPayloadBid(b.SignedExecutionPayloadBid)
+	return b
+}
+
+// HydrateSignedExecutionPayloadBid hydrates a signed execution payload bid with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateSignedExecutionPayloadBid(b *ethpb.SignedExecutionPayloadBid) *ethpb.SignedExecutionPayloadBid {
+	if b == nil {
+		b = &ethpb.SignedExecutionPayloadBid{}
+	}
+	if b.Signature == nil {
+		b.Signature = make([]byte, fieldparams.BLSSignatureLength)
+	}
+	b.Message = HydrateExecutionPayloadBid(b.Message)
+	return b
+}
+
+// HydrateExecutionPayloadBid hydrates an execution payload bid with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydrateExecutionPayloadBid(b *ethpb.ExecutionPayloadBid) *ethpb.ExecutionPayloadBid {
+	if b == nil {
+		b = &ethpb.ExecutionPayloadBid{}
+	}
+	if b.ParentBlockHash == nil {
+		b.ParentBlockHash = make([]byte, fieldparams.RootLength)
+	}
+	if b.ParentBlockRoot == nil {
+		b.ParentBlockRoot = make([]byte, fieldparams.RootLength)
+	}
+	if b.BlockHash == nil {
+		b.BlockHash = make([]byte, fieldparams.RootLength)
+	}
+	if b.PrevRandao == nil {
+		b.PrevRandao = make([]byte, fieldparams.RootLength)
+	}
+	if b.FeeRecipient == nil {
+		b.FeeRecipient = make([]byte, 20)
+	}
+	if b.BlobKzgCommitmentsRoot == nil {
+		b.BlobKzgCommitmentsRoot = make([]byte, fieldparams.RootLength)
+	}
+	return b
+}
