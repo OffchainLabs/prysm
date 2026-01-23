@@ -48,7 +48,12 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 		if !bytes.Equal(data.BeaconBlockRoot, header.ParentRoot) {
 			return fmt.Errorf("payload attestation %d has wrong parent: got %x want %x", i, data.BeaconBlockRoot, header.ParentRoot)
 		}
-		if data.Slot.Add(1) != st.Slot() {
+		
+		dataSlot, err := data.Slot.SafeAdd(1)
+		if err != nil {
+			return errors.Wrapf(err, "payload attestation %d has invalid slot addition", i)
+		}
+		if dataSlot != st.Slot() {
 			return fmt.Errorf("payload attestation %d has wrong slot: got %d want %d", i, data.Slot+1, st.Slot())
 		}
 
