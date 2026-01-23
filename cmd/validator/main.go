@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	accountcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/accounts"
@@ -159,7 +160,8 @@ func main() {
 			}
 
 			// determine per package verbosity. if not set, maxLevel will be 0.
-			vmodule, maxLevel, err := cmd.ParseVModule(ctx.String(cmd.LogVModuleFlag.Name))
+			vmoduleInput := strings.Join(ctx.StringSlice(cmd.LogVModuleFlag.Name), ",")
+			vmodule, maxLevel, err := cmd.ParseVModule(vmoduleInput)
 			if err != nil {
 				return errors.Wrap(err, "failed to parse log vmodule")
 			}
