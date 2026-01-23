@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/sirupsen/logrus"
 )
 
 func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -70,6 +71,12 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	if err := s.verifyExecutionProof(executionProof); err != nil {
 		return pubsub.ValidationReject, err
 	}
+
+	log.WithFields(logrus.Fields{
+		"root": fmt.Sprintf("%#x", blockRoot),
+		"slot": executionProof.Slot,
+		"id":   executionProof.ProofId,
+	}).Debug("Accepted execution proof")
 
 	// Validation successful, return accept
 	msg.ValidatorData = executionProof

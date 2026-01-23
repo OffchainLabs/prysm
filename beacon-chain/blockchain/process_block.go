@@ -667,7 +667,7 @@ func (s *Service) isDataAvailable(
 
 	root, blockVersion := roBlock.Root(), roBlock.Version()
 	if blockVersion >= version.Fulu {
-		if err := s.areExecutionProofsAvailable(ctx, root); err != nil {
+		if err := s.areExecutionProofsAvailable(ctx, roBlock); err != nil {
 			return fmt.Errorf("are execution proofs available: %w", err)
 		}
 
@@ -690,16 +690,19 @@ func (s *Service) isDataAvailable(
 // This check is only performed for lightweight verifier nodes that need zkVM proofs
 // to validate block execution (nodes without execution layer + proof generation capability).
 // A nil result means that the data availability check is successful.
-func (s *Service) areExecutionProofsAvailable(ctx context.Context, blockRoot [fieldparams.RootLength]byte) error {
+func (s *Service) areExecutionProofsAvailable(ctx context.Context, roBlock consensusblocks.ROBlock) error {
 	// Return early if zkVM features are disabled (no need to check for execution proofs),
 	// or if the generation proof is enabled (we will generate proofs ourselves).
 	if !features.Get().EnableZkvm || len(flags.Get().ProofGenerationTypes) > 0 {
 		return nil
 	}
 
+	root, slot := roBlock.Root(), roBlock.Block().Slot()
+
 	requiredProofCount := params.BeaconConfig().MinProofsRequired
 	log := log.WithFields(logrus.Fields{
-		"root":               fmt.Sprintf("%#x", blockRoot),
+		"root":               fmt.Sprintf("%#x", root),
+		"slot":               slot,
 		"requiredProofCount": requiredProofCount,
 	})
 
@@ -709,7 +712,7 @@ func (s *Service) areExecutionProofsAvailable(ctx context.Context, blockRoot [fi
 	defer subscription.Unsubscribe()
 
 	// Return early if we already have enough proofs.
-	if actualProofCount := uint64(s.cfg.ExecProofsPool.Count(blockRoot)); actualProofCount >= requiredProofCount {
+	if actualProofCount := uint64(s.cfg.ExecProofsPool.Count(root)); actualProofCount >= requiredProofCount {
 		log.WithField("actualProofCount", actualProofCount).Debug("Already have enough execution proofs")
 		return nil
 	}
@@ -733,12 +736,12 @@ func (s *Service) areExecutionProofsAvailable(ctx context.Context, blockRoot [fi
 			proof := proofWrapper.ExecutionProof
 
 			// Skip if the proof is for a different block.
-			if bytesutil.ToBytes32(proof.BlockRoot) != blockRoot {
+			if bytesutil.ToBytes32(proof.BlockRoot) != root {
 				continue
 			}
 
 			// Return if we have enough proofs.
-			if actualProofCount := uint64(s.cfg.ExecProofsPool.Count(blockRoot)); actualProofCount >= requiredProofCount {
+			if actualProofCount := uint64(s.cfg.ExecProofsPool.Count(root)); actualProofCount >= requiredProofCount {
 				log.WithField("actualProofCount", actualProofCount).Debug("Got enough execution proofs")
 				return nil
 			}
