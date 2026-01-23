@@ -2904,13 +2904,6 @@ func SignedBeaconBlockGloasFromConsensus(b *eth.SignedBeaconBlockGloas) (*Signed
 }
 
 func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, error) {
-	if b == nil {
-		return nil, errNilValue
-	}
-	if b.Body == nil {
-		return nil, errNilValue
-	}
-
 	payloadAttestations := make([]*PayloadAttestation, len(b.Body.PayloadAttestations))
 	for i, pa := range b.Body.PayloadAttestations {
 		payloadAttestations[i] = PayloadAttestationFromConsensus(pa)
@@ -2939,9 +2932,6 @@ func BeaconBlockGloasFromConsensus(b *eth.BeaconBlockGloas) (*BeaconBlockGloas, 
 }
 
 func SignedExecutionPayloadBidFromConsensus(b *eth.SignedExecutionPayloadBid) *SignedExecutionPayloadBid {
-	if b == nil {
-		return nil
-	}
 	return &SignedExecutionPayloadBid{
 		Message:   ExecutionPayloadBidFromConsensus(b.Message),
 		Signature: hexutil.Encode(b.Signature),
@@ -2949,9 +2939,6 @@ func SignedExecutionPayloadBidFromConsensus(b *eth.SignedExecutionPayloadBid) *S
 }
 
 func ExecutionPayloadBidFromConsensus(b *eth.ExecutionPayloadBid) *ExecutionPayloadBid {
-	if b == nil {
-		return nil
-	}
 	return &ExecutionPayloadBid{
 		ParentBlockHash:        hexutil.Encode(b.ParentBlockHash),
 		ParentBlockRoot:        hexutil.Encode(b.ParentBlockRoot),
@@ -2968,9 +2955,6 @@ func ExecutionPayloadBidFromConsensus(b *eth.ExecutionPayloadBid) *ExecutionPayl
 }
 
 func PayloadAttestationFromConsensus(pa *eth.PayloadAttestation) *PayloadAttestation {
-	if pa == nil {
-		return nil
-	}
 	return &PayloadAttestation{
 		AggregationBits: hexutil.Encode(pa.AggregationBits),
 		Data:            PayloadAttestationDataFromConsensus(pa.Data),
@@ -2979,9 +2963,6 @@ func PayloadAttestationFromConsensus(pa *eth.PayloadAttestation) *PayloadAttesta
 }
 
 func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *PayloadAttestationData {
-	if d == nil {
-		return nil
-	}
 	return &PayloadAttestationData{
 		BeaconBlockRoot:   hexutil.Encode(d.BeaconBlockRoot),
 		Slot:              fmt.Sprintf("%d", d.Slot),
@@ -3015,6 +2996,15 @@ func (b *BeaconBlockGloas) ToConsensus() (*eth.BeaconBlockGloas, error) {
 	}
 	if b.Body == nil {
 		return nil, server.NewDecodeError(errNilValue, "Body")
+	}
+	if b.Body.Eth1Data == nil {
+		return nil, server.NewDecodeError(errNilValue, "Body.Eth1Data")
+	}
+	if b.Body.SyncAggregate == nil {
+		return nil, server.NewDecodeError(errNilValue, "Body.SyncAggregate")
+	}
+	if b.Body.SignedExecutionPayloadBid == nil {
+		return nil, server.NewDecodeError(errNilValue, "Body.SignedExecutionPayloadBid")
 	}
 
 	slot, err := strconv.ParseUint(b.Slot, 10, 64)
@@ -3137,7 +3127,7 @@ func (b *BeaconBlockBodyGloas) ToConsensus() (*eth.BeaconBlockBodyGloas, error) 
 
 func (b *SignedExecutionPayloadBid) ToConsensus() (*eth.SignedExecutionPayloadBid, error) {
 	if b == nil {
-		return nil, nil
+		return nil, errNilValue
 	}
 	sig, err := bytesutil.DecodeHexWithLength(b.Signature, fieldparams.BLSSignatureLength)
 	if err != nil {
@@ -3155,7 +3145,7 @@ func (b *SignedExecutionPayloadBid) ToConsensus() (*eth.SignedExecutionPayloadBi
 
 func (b *ExecutionPayloadBid) ToConsensus() (*eth.ExecutionPayloadBid, error) {
 	if b == nil {
-		return nil, nil
+		return nil, errNilValue
 	}
 	parentBlockHash, err := bytesutil.DecodeHexWithLength(b.ParentBlockHash, fieldparams.RootLength)
 	if err != nil {
@@ -3218,7 +3208,7 @@ func (b *ExecutionPayloadBid) ToConsensus() (*eth.ExecutionPayloadBid, error) {
 
 func PayloadAttestationsToConsensus(pa []*PayloadAttestation) ([]*eth.PayloadAttestation, error) {
 	if pa == nil {
-		return nil, nil
+		return nil, errNilValue
 	}
 	result := make([]*eth.PayloadAttestation, len(pa))
 	for i, p := range pa {
@@ -3233,7 +3223,7 @@ func PayloadAttestationsToConsensus(pa []*PayloadAttestation) ([]*eth.PayloadAtt
 
 func (p *PayloadAttestation) ToConsensus() (*eth.PayloadAttestation, error) {
 	if p == nil {
-		return nil, nil
+		return nil, errNilValue
 	}
 	aggregationBits, err := bytesutil.DecodeHexWithMaxLength(p.AggregationBits, 64) // PTC_SIZE is 512 bits = 64 bytes
 	if err != nil {
@@ -3256,7 +3246,7 @@ func (p *PayloadAttestation) ToConsensus() (*eth.PayloadAttestation, error) {
 
 func (d *PayloadAttestationData) ToConsensus() (*eth.PayloadAttestationData, error) {
 	if d == nil {
-		return nil, nil
+		return nil, errNilValue
 	}
 	beaconBlockRoot, err := bytesutil.DecodeHexWithLength(d.BeaconBlockRoot, fieldparams.RootLength)
 	if err != nil {
