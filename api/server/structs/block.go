@@ -541,18 +541,18 @@ type PayloadAttestation struct {
 }
 
 type BeaconBlockBodyGloas struct {
-	RandaoReveal               string                        `json:"randao_reveal"`
-	Eth1Data                   *Eth1Data                     `json:"eth1_data"`
-	Graffiti                   string                        `json:"graffiti"`
-	ProposerSlashings          []*ProposerSlashing           `json:"proposer_slashings"`
-	AttesterSlashings          []*AttesterSlashingElectra    `json:"attester_slashings"`
-	Attestations               []*AttestationElectra         `json:"attestations"`
-	Deposits                   []*Deposit                    `json:"deposits"`
-	VoluntaryExits             []*SignedVoluntaryExit        `json:"voluntary_exits"`
-	SyncAggregate              *SyncAggregate                `json:"sync_aggregate"`
-	BLSToExecutionChanges      []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
-	SignedExecutionPayloadBid  *SignedExecutionPayloadBid    `json:"signed_execution_payload_bid"`
-	PayloadAttestations        []*PayloadAttestation         `json:"payload_attestations"`
+	RandaoReveal              string                        `json:"randao_reveal"`
+	Eth1Data                  *Eth1Data                     `json:"eth1_data"`
+	Graffiti                  string                        `json:"graffiti"`
+	ProposerSlashings         []*ProposerSlashing           `json:"proposer_slashings"`
+	AttesterSlashings         []*AttesterSlashingElectra    `json:"attester_slashings"`
+	Attestations              []*AttestationElectra         `json:"attestations"`
+	Deposits                  []*Deposit                    `json:"deposits"`
+	VoluntaryExits            []*SignedVoluntaryExit        `json:"voluntary_exits"`
+	SyncAggregate             *SyncAggregate                `json:"sync_aggregate"`
+	BLSToExecutionChanges     []*SignedBLSToExecutionChange `json:"bls_to_execution_changes"`
+	SignedExecutionPayloadBid *SignedExecutionPayloadBid    `json:"signed_execution_payload_bid"`
+	PayloadAttestations       []*PayloadAttestation         `json:"payload_attestations"`
 }
 
 type BeaconBlockGloas struct {
