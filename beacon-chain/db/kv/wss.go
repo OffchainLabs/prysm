@@ -111,13 +111,8 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 	if err = s.SaveFinalizedCheckpoint(ctx, chkpt); err != nil {
 		return errors.Wrap(err, "save finalized checkpoint")
 	}
-
-	if features.Get().EnableStateDiff {
-		if err := s.initializeStateDiff(state.Slot(), state); err != nil {
-			return errors.Wrap(err, "failed to initialize state diff")
-		}
-		log.WithField("slot", state.Slot()).Info("Initialized state-diff with checkpoint state")
+	if err := s.initializeStateDiff(state.Slot(), state); err != nil {
+		return errors.Wrap(err, "failed to initialize state diff")
 	}
-
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/hdiff"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -141,6 +142,17 @@ func (s *Store) hasStateDiffOffset() (bool, error) {
 // initializeStateDiff sets up the state-diff schema for a new database.
 // This should be called during checkpoint sync or genesis sync.
 func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.ReadOnlyBeaconState) error {
+	// Return early if the feature is not set
+	if !features.Get().EnableStateDiff {
+		return nil
+	}
+	// Only reinitialize if the offset is different
+	if s.stateDiffCache != nil {
+		if s.stateDiffCache.getOffset() == uint64(slot) {
+			log.WithField("offset", slot).Warning("Ignoring state diff cache reinitialization")
+			return nil
+		}
+	}
 	// Write offset directly to the database (without using cache which doesn't exist yet).
 	err := s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
@@ -168,6 +180,7 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 		return pkgerrors.Wrap(err, "failed to save initial snapshot")
 	}
 
+	log.WithField("offset", slot).Info("Initialized state-diff cache")
 	return nil
 }
 

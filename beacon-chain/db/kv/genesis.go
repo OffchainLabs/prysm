@@ -44,14 +44,9 @@ func (s *Store) SaveGenesisData(ctx context.Context, genesisState state.BeaconSt
 		return errors.Wrap(err, "could not save genesis block root")
 	}
 
-	// Initialize state-diff if enabled and not yet initialized.
-	if features.Get().EnableStateDiff && s.stateDiffCache == nil {
-		if err := s.initializeStateDiff(0, genesisState); err != nil {
-			return errors.Wrap(err, "failed to initialize state diff for genesis")
-		}
-		log.Info("Initialized state-diff with genesis state")
+	if err := s.initializeStateDiff(0, genesisState); err != nil {
+		return errors.Wrap(err, "failed to initialize state diff for genesis")
 	}
-
 	return nil
 }
 
