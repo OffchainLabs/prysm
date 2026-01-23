@@ -48,7 +48,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 		if !bytes.Equal(data.BeaconBlockRoot, header.ParentRoot) {
 			return fmt.Errorf("payload attestation %d has wrong parent: got %x want %x", i, data.BeaconBlockRoot, header.ParentRoot)
 		}
-		if data.Slot+1 != st.Slot() {
+		if data.Slot.Add(1) != st.Slot() {
 			return fmt.Errorf("payload attestation %d has wrong slot: got %d want %d", i, data.Slot+1, st.Slot())
 		}
 
@@ -109,7 +109,7 @@ func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 	}
 
 	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
-	out := make([]primitives.ValidatorIndex, 0, committeesPerSlot)
+	out := make([]primitives.ValidatorIndex, 0, committeesPerSlot*params.BeaconConfig().MaxValidatorsPerCommittee)
 
 	for i := primitives.CommitteeIndex(0); i < primitives.CommitteeIndex(committeesPerSlot); i++ {
 		committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, i)
