@@ -4230,7 +4230,7 @@
   sources:
     - file: beacon-chain/core/electra/deposits.go
       search: func IsValidDepositSignature(
-    - file: beacon-chain/core/blocks/deposit.go
+    - file: beacon-chain/core/helpers/deposit.go
       search: func IsValidDepositSignature(
   spec: |
     <spec fn="is_valid_deposit_signature" fork="electra" hash="7347b754">
