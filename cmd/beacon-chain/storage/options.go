@@ -33,6 +33,10 @@ var (
 		Name:  "data-column-path",
 		Usage: "Location for data column storage. Default location will be a 'data-columns' directory next to the beacon db.",
 	}
+	ExecutionProofStoragePathFlag = &cli.PathFlag{
+		Name:  "execution-proof-path",
+		Usage: "Location for execution proof storage. Default location will be a 'execution-proofs' directory next to the beacon db.",
+	}
 )
 
 // Flags is the list of CLI flags for configuring blob storage.
@@ -40,6 +44,7 @@ var Flags = []cli.Flag{
 	BlobStoragePathFlag,
 	BlobStorageLayout,
 	DataColumnStoragePathFlag,
+	ExecutionProofStoragePathFlag,
 }
 
 func layoutOptions() string {
@@ -72,11 +77,13 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "detecting blob storage layout")
 	}
-	if layout == filesystem.LayoutNameFlat {
-		log.Warnf("Existing '%s' blob storage layout detected. Consider setting the flag --%s=%s for faster startup and more reliable pruning. Setting this flag will automatically migrate your existing blob storage to the newer layout on the next restart.",
 
+	if layout == filesystem.LayoutNameFlat {
+		log.Warningf(
+			"Existing '%s' blob storage layout detected. Consider setting the flag --%s=%s for faster startup and more reliable pruning. Setting this flag will automatically migrate your existing blob storage to the newer layout on the next restart.",
 			filesystem.LayoutNameFlat, BlobStorageLayout.Name, filesystem.LayoutNameByEpoch)
 	}
+
 	blobStorageOptions := node.WithBlobStorageOptions(
 		filesystem.WithBlobRetentionEpochs(blobRetentionEpoch),
 		filesystem.WithBasePath(blobPath),
@@ -93,7 +100,17 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		filesystem.WithDataColumnBasePath(dataColumnStoragePath(c)),
 	)
 
-	opts := []node.Option{blobStorageOptions, dataColumnStorageOption}
+	executionProofRetentionEpoch, err := executionProofRetentionEpoch(c)
+	if err != nil {
+		return nil, errors.Wrap(err, "execution proof retention epoch")
+	}
+
+	proofStorageOption := node.WithProofStorageOption(
+		filesystem.WithProofRetentionEpochs(executionProofRetentionEpoch),
+		filesystem.WithProofBasePath(executionProofStoragePath(c)),
+	)
+
+	opts := []node.Option{blobStorageOptions, dataColumnStorageOption, proofStorageOption}
 	return opts, nil
 }
 
@@ -165,6 +182,17 @@ func dataColumnStoragePath(c *cli.Context) string {
 	return dataColumnsPath
 }
 
+// TODO: Create a generic function for these storage path getters.
+func executionProofStoragePath(c *cli.Context) string {
+	executionProofPath := c.Path(ExecutionProofStoragePathFlag.Name)
+	if executionProofPath == "" {
+		// append a "execution-proofs" subdir to the end of the data dir path
+		executionProofPath = filepath.Join(c.String(cmd.DataDirFlag.Name), "execution-proofs")
+	}
+
+	return executionProofPath
+}
+
 var errInvalidBlobRetentionEpochs = errors.New("value is smaller than spec minimum")
 
 // blobRetentionEpoch returns the spec default MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUEST
@@ -200,6 +228,26 @@ func dataColumnRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
 	// Validate the epoch value against the spec default.
 	if customValue < defaultValue {
 		return defaultValue, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", das.BlobRetentionEpochFlag.Name, customValue, defaultValue)
+	}
+
+	return customValue, nil
+}
+
+// executionProofRetentionEpoch returns the spec default MIN_EPOCHS_FOR_EXECUTION_PROOFS_REQUEST
+// or a user-specified flag overriding this value. If a user-specified override is
+// smaller than the spec default, an error will be returned.
+// TODO: Create a generic function for these retention epoch getters.
+func executionProofRetentionEpoch(cliCtx *cli.Context) (primitives.Epoch, error) {
+	defaultValue := params.BeaconConfig().MinEpochsForExecutionProofRequests
+	if !cliCtx.IsSet(das.ExecutionProofRetentionEpochFlag.Name) {
+		return defaultValue, nil
+	}
+
+	customValue := primitives.Epoch(cliCtx.Uint64(das.ExecutionProofRetentionEpochFlag.Name))
+
+	// Validate the epoch value against the spec default.
+	if customValue < defaultValue {
+		return defaultValue, errors.Wrapf(errInvalidBlobRetentionEpochs, "%s=%d, spec=%d", das.ExecutionProofRetentionEpochFlag.Name, customValue, defaultValue)
 	}
 
 	return customValue, nil

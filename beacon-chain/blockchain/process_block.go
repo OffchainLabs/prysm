@@ -7,8 +7,6 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	coreTime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
@@ -706,15 +704,34 @@ func (s *Service) areExecutionProofsAvailable(ctx context.Context, roBlock conse
 		"requiredProofCount": requiredProofCount,
 	})
 
-	// Subscribe to execution proof received events.
-	eventsChan := make(chan *feed.Event, 1)
-	subscription := s.cfg.OperationNotifier.OperationFeed().Subscribe(eventsChan)
+	// Subscribe to newly execution proofs stored in the database.
+	subscription, identChan := s.proofStorage.Subscribe()
 	defer subscription.Unsubscribe()
 
 	// Return early if we already have enough proofs.
-	if actualProofCount := uint64(s.cfg.ExecProofsPool.Count(root)); actualProofCount >= requiredProofCount {
+	if actualProofCount := uint64(s.proofStorage.Summary(root).Count()); actualProofCount >= requiredProofCount {
 		log.WithField("actualProofCount", actualProofCount).Debug("Already have enough execution proofs")
 		return nil
+	}
+
+	// Log for DA checks that cross over into the next slot; helpful for debugging.
+	nextSlot, err := slots.StartTime(s.genesisTime, roBlock.Block().Slot()+1)
+	if err != nil {
+		return fmt.Errorf("start time: %w", err)
+	}
+
+	// Avoid logging if DA check is called after next slot start.
+	if nextSlot.After(time.Now()) {
+		timer := time.AfterFunc(time.Until(nextSlot), func() {
+			actualCount := uint64(s.proofStorage.Summary(root).Count())
+			if actualCount >= requiredProofCount {
+				return
+			}
+
+			log.WithField("proofsRetrieved", actualCount).Warning("Execution proofs still missing at slot end")
+		})
+
+		defer timer.Stop()
 	}
 
 	// Some proofs are missing; wait for them.
@@ -722,26 +739,14 @@ func (s *Service) areExecutionProofsAvailable(ctx context.Context, roBlock conse
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case event := <-eventsChan:
-			if event.Type != operation.ExecutionProofReceived {
-				continue
-			}
-
-			proofWrapper, ok := event.Data.(*operation.ExecutionProofReceivedData)
-			if !ok {
-				log.Error("Could not cast event data to ExecutionProofReceivedData")
-				continue
-			}
-
-			proof := proofWrapper.ExecutionProof
-
+		case proofIdent := <-identChan:
 			// Skip if the proof is for a different block.
-			if bytesutil.ToBytes32(proof.BlockRoot) != root {
+			if proofIdent.BlockRoot != root {
 				continue
 			}
 
 			// Return if we have enough proofs.
-			if actualProofCount := uint64(s.cfg.ExecProofsPool.Count(root)); actualProofCount >= requiredProofCount {
+			if actualProofCount := uint64(s.proofStorage.Summary(root).Count()); actualProofCount >= requiredProofCount {
 				log.WithField("actualProofCount", actualProofCount).Debug("Got enough execution proofs")
 				return nil
 			}
@@ -885,14 +890,7 @@ func (s *Service) areDataColumnsAvailable(
 			}
 
 		case <-ctx.Done():
-			var missingIndices any = "all"
-			missingIndicesCount := len(missing)
-
-			if missingIndicesCount < fieldparams.NumberOfColumns {
-				missingIndices = helpers.SortedPrettySliceFromMap(missing)
-			}
-
-			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, missingIndices)
+			return errors.Wrapf(ctx.Err(), "data column sidecars slot: %d, BlockRoot: %#x, missing: %v", block.Slot(), root, helpers.SortedPrettySliceFromMap(missing))
 		}
 	}
 }

@@ -175,7 +175,7 @@ func (s *Service) executionProofsByRootRPCHandler(ctx context.Context, msg any, 
 	defer closeStream(stream, log)
 
 	// Get proofs from execution proof pool
-	storedProofs := s.cfg.execProofPool.Get(blockRoot)
+	summary := s.cfg.proofStorage.Summary(blockRoot)
 
 	// Filter out not requested proofs
 	alreadyHave := make(map[primitives.ExecutionProofId]bool)
@@ -183,16 +183,25 @@ func (s *Service) executionProofsByRootRPCHandler(ctx context.Context, msg any, 
 		alreadyHave[id] = true
 	}
 
+	// Determine which proofs to fetch (not already had by requester)
+	proofIDsToFetch := make([]uint64, 0, len(summary.All()))
+	for _, proofId := range summary.All() {
+		if !alreadyHave[primitives.ExecutionProofId(proofId)] {
+			proofIDsToFetch = append(proofIDsToFetch, proofId)
+		}
+	}
+
+	// Load all proofs at once
+	proofs, err := s.cfg.proofStorage.Get(blockRoot, proofIDsToFetch)
+	if err != nil {
+		return fmt.Errorf("proof storage get: %w", err)
+	}
+
 	// Send proofs
 	sentCount := uint64(0)
-	for _, proof := range storedProofs {
+	for _, proof := range proofs {
 		if sentCount >= req.CountNeeded {
 			break
-		}
-
-		// Skip proofs the requester already has
-		if alreadyHave[proof.ProofId] {
-			continue
 		}
 
 		// Write proof to stream

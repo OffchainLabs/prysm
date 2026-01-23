@@ -88,6 +88,7 @@ func (s *Service) generateAndBroadcastExecutionProofs(ctx context.Context, roBlo
 	const delay = 2 * time.Second
 	proofTypes := flags.Get().ProofGenerationTypes
 
+	// Exit early if proof generation is disabled.
 	if len(proofTypes) == 0 {
 		return
 	}
@@ -103,6 +104,10 @@ func (s *Service) generateAndBroadcastExecutionProofs(ctx context.Context, roBlo
 
 			if err := s.cfg.p2p.Broadcast(ctx, execProof); err != nil {
 				return fmt.Errorf("broadcast exec proof: %w", err)
+			}
+
+			if err := s.cfg.chain.ReceiveProof(execProof); err != nil {
+				return errors.Wrap(err, "receive proof")
 			}
 
 			return nil

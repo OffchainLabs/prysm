@@ -40,7 +40,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -103,7 +102,6 @@ type BeaconNode struct {
 	slashingsPool            slashings.PoolManager
 	syncCommitteePool        synccommittee.Pool
 	blsToExecPool            blstoexec.PoolManager
-	execProofsPool           execproofs.PoolManager
 	depositCache             cache.DepositCache
 	trackedValidatorsCache   *cache.TrackedValidatorsCache
 	payloadIDCache           *cache.PayloadIDCache
@@ -126,6 +124,8 @@ type BeaconNode struct {
 	BlobStorageOptions       []filesystem.BlobStorageOption
 	DataColumnStorage        *filesystem.DataColumnStorage
 	DataColumnStorageOptions []filesystem.DataColumnStorageOption
+	ProofStorage             *filesystem.ProofStorage
+	ProofStorageOptions      []filesystem.ProofStorageOption
 	verifyInitWaiter         *verification.InitializerWaiter
 	lhsp                     *verification.LazyHeadStateProvider
 	syncChecker              *initialsync.SyncChecker
@@ -158,7 +158,6 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		slashingsPool:           slashings.NewPool(),
 		syncCommitteePool:       synccommittee.NewPool(),
 		blsToExecPool:           blstoexec.NewPool(),
-		execProofsPool:          execproofs.NewPool(),
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadIDCache:          cache.NewPayloadIDCache(),
 		slasherBlockHeadersFeed: new(event.Feed),
@@ -229,6 +228,15 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 	}
 	if err := dbClearer.clearColumns(beacon.DataColumnStorage); err != nil {
 		return nil, errors.Wrap(err, "could not clear data column storage")
+	}
+
+	if beacon.ProofStorage == nil {
+		proofStorage, err := filesystem.NewProofStorage(cliCtx.Context, beacon.ProofStorageOptions...)
+		if err != nil {
+			return nil, errors.Wrap(err, "new proof storage")
+		}
+
+		beacon.ProofStorage = proofStorage
 	}
 
 	bfs, err := startBaseServices(cliCtx, beacon, depositAddress, dbClearer)
@@ -740,7 +748,6 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
 		blockchain.WithBLSToExecPool(b.blsToExecPool),
-		blockchain.WithExecProofsPool(b.execProofsPool),
 		blockchain.WithP2PBroadcaster(b.fetchP2P()),
 		blockchain.WithStateNotifier(b),
 		blockchain.WithAttestationService(attService),
@@ -751,6 +758,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithSyncComplete(syncComplete),
 		blockchain.WithBlobStorage(b.BlobStorage),
 		blockchain.WithDataColumnStorage(b.DataColumnStorage),
+		blockchain.WithProofStorage(b.ProofStorage),
 		blockchain.WithTrackedValidatorsCache(b.trackedValidatorsCache),
 		blockchain.WithPayloadIDCache(b.payloadIDCache),
 		blockchain.WithSyncChecker(b.syncChecker),
@@ -832,7 +840,6 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithSlashingPool(b.slashingsPool),
 		regularsync.WithSyncCommsPool(b.syncCommitteePool),
 		regularsync.WithBlsToExecPool(b.blsToExecPool),
-		regularsync.WithExecProofPool(b.execProofsPool),
 		regularsync.WithStateGen(b.stateGen),
 		regularsync.WithSlasherAttestationsFeed(b.slasherAttestationsFeed),
 		regularsync.WithSlasherBlockHeadersFeed(b.slasherBlockHeadersFeed),
@@ -842,6 +849,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithStateNotifier(b),
 		regularsync.WithBlobStorage(b.BlobStorage),
 		regularsync.WithDataColumnStorage(b.DataColumnStorage),
+		regularsync.WithExecutionProofStorage(b.ProofStorage),
 		regularsync.WithVerifierWaiter(b.verifyInitWaiter),
 		regularsync.WithAvailableBlocker(bFillStore),
 		regularsync.WithTrackedValidatorsCache(b.trackedValidatorsCache),
@@ -968,6 +976,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		BlockReceiver:             chainService,
 		BlobReceiver:              chainService,
 		DataColumnReceiver:        chainService,
+		ProofReceiver:             chainService,
 		AttestationReceiver:       chainService,
 		GenesisTimeFetcher:        chainService,
 		GenesisFetcher:            chainService,

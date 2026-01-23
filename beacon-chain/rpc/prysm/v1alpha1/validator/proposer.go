@@ -373,6 +373,13 @@ func (vs *Server) generateAndBroadcastExecutionProofs(ctx context.Context, roBlo
 				return fmt.Errorf("broadcast exec proof: %w", err)
 			}
 
+			// Save the proof to storage.
+			if vs.ProofReceiver != nil {
+				if err := vs.ProofReceiver.ReceiveProof(execProof); err != nil {
+					return fmt.Errorf("receive proof: %w", err)
+				}
+			}
+
 			return nil
 		})
 	}

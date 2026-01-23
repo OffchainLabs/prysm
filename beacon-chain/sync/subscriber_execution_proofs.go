@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -17,7 +18,12 @@ func (s *Service) executionProofSubscriber(_ context.Context, msg proto.Message)
 	}
 
 	// Insert the execution proof into the pool
-	s.cfg.execProofPool.Insert(executionProof)
+	s.setSeenProof(executionProof.Slot, bytesutil.ToBytes32(executionProof.BlockRoot), executionProof.ProofId)
+
+	// Save the proof to storage.
+	if err := s.cfg.chain.ReceiveProof(executionProof); err != nil {
+		return errors.Wrap(err, "receive proof")
+	}
 
 	// Notify subscribers about the new execution proof
 	s.cfg.operationNotifier.OperationFeed().Send(&feed.Event{

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -107,6 +108,7 @@ func (s *Service) requestAndSaveMissingExecutionProofs(blks []blocks.ROBlock) er
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -121,20 +123,27 @@ func (s *Service) sendAndSaveExecutionProofs(ctx context.Context, block blocks.R
 	if !params.WithinExecutionProofPeriod(blockEpoch, currentEpoch) {
 		return nil
 	}
-
 	// Check how many proofs are needed with Execution Proof Pool.
-	storedIds := s.cfg.execProofPool.Ids(block.Root())
+	// TODO: All should return the same type ExecutionProofId.
+	root := block.Root()
+	proofStorage := s.cfg.proofStorage
+	storedIds := proofStorage.Summary(root).All()
+
 	count := uint64(len(storedIds))
 	if count >= params.BeaconConfig().MinProofsRequired {
 		return nil
 	}
 
+	alreadyHave := make([]primitives.ExecutionProofId, 0, len(storedIds))
+	for _, id := range storedIds {
+		alreadyHave = append(alreadyHave, primitives.ExecutionProofId(id))
+	}
+
 	// Construct request
-	blockRoot := block.Root()
 	req := &ethpb.ExecutionProofsByRootRequest{
-		BlockRoot:   blockRoot[:],
+		BlockRoot:   root[:],
 		CountNeeded: params.BeaconConfig().MinProofsRequired - count,
-		AlreadyHave: storedIds,
+		AlreadyHave: alreadyHave,
 	}
 
 	// Call SendExecutionProofByRootRequest
@@ -151,10 +160,9 @@ func (s *Service) sendAndSaveExecutionProofs(ctx context.Context, block blocks.R
 		return fmt.Errorf("send execution proofs by root request: %w", err)
 	}
 
-	// Insert ExecProofPool
-	// TODO: Implement multiple proof insertion in ExecProofPool to avoid multiple locks.
-	for _, proof := range proofs {
-		s.cfg.execProofPool.Insert(proof)
+	// Save the proofs into storage.
+	if err := proofStorage.Save(proofs); err != nil {
+		return fmt.Errorf("proof storage save: %w", err)
 	}
 
 	return nil

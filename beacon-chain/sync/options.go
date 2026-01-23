@@ -12,7 +12,6 @@ import (
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/synccommittee"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -85,13 +84,6 @@ func WithSyncCommsPool(syncCommsPool synccommittee.Pool) Option {
 func WithBlsToExecPool(blsToExecPool blstoexec.PoolManager) Option {
 	return func(s *Service) error {
 		s.cfg.blsToExecPool = blsToExecPool
-		return nil
-	}
-}
-
-func WithExecProofPool(execProofPool execproofs.PoolManager) Option {
-	return func(s *Service) error {
-		s.cfg.execProofPool = execProofPool
 		return nil
 	}
 }
@@ -175,17 +167,25 @@ func WithStateNotifier(n statefeed.Notifier) Option {
 }
 
 // WithBlobStorage gives the sync package direct access to BlobStorage.
-func WithBlobStorage(b *filesystem.BlobStorage) Option {
+func WithBlobStorage(storage *filesystem.BlobStorage) Option {
 	return func(s *Service) error {
-		s.cfg.blobStorage = b
+		s.cfg.blobStorage = storage
 		return nil
 	}
 }
 
 // WithDataColumnStorage gives the sync package direct access to DataColumnStorage.
-func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
+func WithDataColumnStorage(storage *filesystem.DataColumnStorage) Option {
 	return func(s *Service) error {
-		s.cfg.dataColumnStorage = b
+		s.cfg.dataColumnStorage = storage
+		return nil
+	}
+}
+
+// WithDataColumnStorage gives the sync package direct access to DataColumnStorage.
+func WithExecutionProofStorage(storage *filesystem.ProofStorage) Option {
+	return func(s *Service) error {
+		s.cfg.proofStorage = storage
 		return nil
 	}
 }

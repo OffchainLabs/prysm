@@ -144,3 +144,45 @@ func NewEphemeralDataColumnStorageWithMocker(t testing.TB) (*DataColumnMocker, *
 	fs, dcs := NewEphemeralDataColumnStorageAndFs(t)
 	return &DataColumnMocker{fs: fs, dcs: dcs}, dcs
 }
+
+// Proofs
+// ------
+
+// NewEphemeralProofStorage should only be used for tests.
+// The instance of ProofStorage returned is backed by an in-memory virtual filesystem,
+// improving test performance and simplifying cleanup.
+func NewEphemeralProofStorage(t testing.TB, opts ...ProofStorageOption) *ProofStorage {
+	return NewWarmedEphemeralProofStorageUsingFs(t, afero.NewMemMapFs(), opts...)
+}
+
+// NewEphemeralProofStorageAndFs can be used by tests that want access to the virtual filesystem
+// in order to interact with it outside the parameters of the ProofStorage API.
+func NewEphemeralProofStorageAndFs(t testing.TB, opts ...ProofStorageOption) (afero.Fs, *ProofStorage) {
+	fs := afero.NewMemMapFs()
+	ps := NewWarmedEphemeralProofStorageUsingFs(t, fs, opts...)
+	return fs, ps
+}
+
+// NewEphemeralProofStorageUsingFs creates a ProofStorage backed by the provided filesystem.
+func NewEphemeralProofStorageUsingFs(t testing.TB, fs afero.Fs, opts ...ProofStorageOption) *ProofStorage {
+	defaultOpts := []ProofStorageOption{
+		WithProofRetentionEpochs(params.BeaconConfig().MinEpochsForDataColumnSidecarsRequest),
+		WithProofFs(fs),
+	}
+	// User opts come last so they can override defaults
+	allOpts := append(defaultOpts, opts...)
+
+	ps, err := NewProofStorage(context.Background(), allOpts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return ps
+}
+
+// NewWarmedEphemeralProofStorageUsingFs creates a ProofStorage with a warmed cache.
+func NewWarmedEphemeralProofStorageUsingFs(t testing.TB, fs afero.Fs, opts ...ProofStorageOption) *ProofStorage {
+	ps := NewEphemeralProofStorageUsingFs(t, fs, opts...)
+	ps.WarmCache()
+	return ps
+}

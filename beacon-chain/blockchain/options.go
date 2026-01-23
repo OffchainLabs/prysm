@@ -14,7 +14,6 @@ import (
 	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/execproofs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
@@ -138,14 +137,6 @@ func WithBLSToExecPool(p blstoexec.PoolManager) Option {
 	}
 }
 
-// WithExecProofsPool to keep track of execution proofs.
-func WithExecProofsPool(p execproofs.PoolManager) Option {
-	return func(s *Service) error {
-		s.cfg.ExecProofsPool = p
-		return nil
-	}
-}
-
 // WithP2PBroadcaster to broadcast messages after appropriate processing.
 func WithP2PBroadcaster(p p2p.Accessor) Option {
 	return func(s *Service) error {
@@ -232,6 +223,14 @@ func WithBlobStorage(b *filesystem.BlobStorage) Option {
 func WithDataColumnStorage(b *filesystem.DataColumnStorage) Option {
 	return func(s *Service) error {
 		s.dataColumnStorage = b
+		return nil
+	}
+}
+
+// WithProofStorage sets the proof storage backend for the blockchain service.
+func WithProofStorage(p *filesystem.ProofStorage) Option {
+	return func(s *Service) error {
+		s.proofStorage = p
 		return nil
 	}
 }

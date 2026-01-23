@@ -35,6 +35,13 @@ func WithBuilderFlagOptions(opts []builder.Option) Option {
 	}
 }
 
+func WithConfigOptions(opt ...params.Option) Option {
+	return func(bn *BeaconNode) error {
+		bn.ConfigOptions = append(bn.ConfigOptions, opt...)
+		return nil
+	}
+}
+
 // WithBlobStorage sets the BlobStorage backend for the BeaconNode
 func WithBlobStorage(bs *filesystem.BlobStorage) Option {
 	return func(bn *BeaconNode) error {
@@ -52,13 +59,6 @@ func WithBlobStorageOptions(opt ...filesystem.BlobStorageOption) Option {
 	}
 }
 
-func WithConfigOptions(opt ...params.Option) Option {
-	return func(bn *BeaconNode) error {
-		bn.ConfigOptions = append(bn.ConfigOptions, opt...)
-		return nil
-	}
-}
-
 // WithDataColumnStorage sets the DataColumnStorage backend for the BeaconNode
 func WithDataColumnStorage(bs *filesystem.DataColumnStorage) Option {
 	return func(bn *BeaconNode) error {
@@ -72,6 +72,23 @@ func WithDataColumnStorage(bs *filesystem.DataColumnStorage) Option {
 func WithDataColumnStorageOptions(opt ...filesystem.DataColumnStorageOption) Option {
 	return func(bn *BeaconNode) error {
 		bn.DataColumnStorageOptions = append(bn.DataColumnStorageOptions, opt...)
+		return nil
+	}
+}
+
+// WithDataColumnStorage sets the DataColumnStorage backend for the BeaconNode
+func WithProofStorage(bs *filesystem.ProofStorage) Option {
+	return func(bn *BeaconNode) error {
+		bn.ProofStorage = bs
+		return nil
+	}
+}
+
+// WithDataColumnStorageOptions appends 1 or more filesystem.DataColumnStorageOption on the beacon node,
+// to be used when initializing data column storage.
+func WithProofStorageOption(opt ...filesystem.ProofStorageOption) Option {
+	return func(bn *BeaconNode) error {
+		bn.ProofStorageOptions = append(bn.ProofStorageOptions, opt...)
 		return nil
 	}
 }

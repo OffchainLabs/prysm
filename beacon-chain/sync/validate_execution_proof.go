@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sirupsen/logrus"
@@ -50,15 +49,10 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationReject, err
 	}
 
-	// 2. Verify proof slot is greater than finalized slot
-	if err := s.proofAboveFinalizedSlot(ctx, executionProof); err != nil {
-		return pubsub.ValidationReject, err
-	}
-
 	// 3. Check if the proof is already in the DA checker cache (execution proof pool)
 	// If it exists in the cache, we know it has already passed validation.
 	blockRoot := bytesutil.ToBytes32(executionProof.BlockRoot)
-	if s.isProofCachedInPool(blockRoot, executionProof.ProofId) {
+	if s.hasSeenProof(blockRoot, executionProof.ProofId) {
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -108,33 +102,30 @@ func (s *Service) proofNotFromFutureSlot(executionProof *ethpb.ExecutionProof) e
 	return nil
 }
 
-// proofAboveFinalizedSlot checks whether the execution proof's slot is after the finalized slot.
-func (s *Service) proofAboveFinalizedSlot(ctx context.Context, executionProof *ethpb.ExecutionProof) error {
-	finalizedCheckpoint, err := s.cfg.beaconDB.FinalizedCheckpoint(ctx)
-	if err != nil {
-		// TODO: Should we penalize the peer for this?
-		return fmt.Errorf("failed to get finalized checkpoint: %w", err)
-	}
-
-	fSlot, err := slots.EpochStart(finalizedCheckpoint.Epoch)
-	if err != nil {
-		// TODO: Should we penalize the peer for this?
-		return fmt.Errorf("failed to compute start slot for finalized epoch %d: %w", finalizedCheckpoint.Epoch, err)
-	}
-
-	if executionProof.Slot <= fSlot {
-		return fmt.Errorf("execution proof slot %d is not after finalized slot %d", executionProof.Slot, fSlot)
-	}
-	return nil
+// Returns true if the column with the same slot, proposer index, and column index has been seen before.
+func (s *Service) hasSeenProof(blockRoot [32]byte, proofId primitives.ExecutionProofId) bool {
+	key := computeProofCacheKey(blockRoot, proofId)
+	_, seen := s.seenProofCache.Get(key)
+	return seen
 }
 
-// isProofCachedInPool checks if the execution proof is already present in the pool.
-func (s *Service) isProofCachedInPool(blockRoot [32]byte, proofId primitives.ExecutionProofId) bool {
-	return s.cfg.execProofPool.Exists(blockRoot, proofId)
+// Sets the data column with the same slot, proposer index, and data column index as seen.
+func (s *Service) setSeenProof(slot primitives.Slot, blockRoot [32]byte, proofId primitives.ExecutionProofId) {
+	key := computeProofCacheKey(blockRoot, proofId)
+	s.seenProofCache.Add(slot, key, true)
 }
 
 // verifyExecutionProof performs the actual verification of the execution proof.
 func (s *Service) verifyExecutionProof(_ *ethpb.ExecutionProof) error {
 	// For now, say all proof are valid.
 	return nil
+}
+
+func computeProofCacheKey(blockRoot [32]byte, proofId primitives.ExecutionProofId) string {
+	key := make([]byte, 0, 33)
+
+	key = append(key, blockRoot[:]...)
+	key = append(key, bytesutil.Bytes1(uint64(proofId))...)
+
+	return string(key)
 }

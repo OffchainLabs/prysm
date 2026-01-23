@@ -70,6 +70,7 @@ type Server struct {
 	BlockReceiver           blockchain.BlockReceiver
 	BlobReceiver            blockchain.BlobReceiver
 	DataColumnReceiver      blockchain.DataColumnReceiver
+	ProofReceiver           blockchain.ProofReceiver
 	MockEth1Votes           bool
 	Eth1BlockFetcher        execution.POWBlockFetcher
 	PendingDepositsFetcher  depositsnapshot.PendingDepositsFetcher
