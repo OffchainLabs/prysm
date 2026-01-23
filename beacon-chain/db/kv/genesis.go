@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	dbIface "github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
-	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
 	"github.com/OffchainLabs/prysm/v7/genesis"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
