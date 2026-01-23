@@ -114,7 +114,7 @@ func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 	}
 
 	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
-	out := make([]primitives.ValidatorIndex, 0, activeCount / uint64(params.BeaconConfig().SlotsPerEpoch))
+	out := make([]primitives.ValidatorIndex, 0, activeCount/uint64(params.BeaconConfig().SlotsPerEpoch))
 
 	for i := primitives.CommitteeIndex(0); i < primitives.CommitteeIndex(committeesPerSlot); i++ {
 		committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, i)
