@@ -112,7 +112,7 @@ func NewBeaconState(options ...NewBeaconStateOption) (state.BeaconState, error) 
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateAltair creates a beacon state with minimum marshalable fields.
@@ -167,7 +167,7 @@ func NewBeaconStateAltair(options ...func(state *ethpb.BeaconStateAltair) error)
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateBellatrix creates a beacon state with minimum marshalable fields.
@@ -234,7 +234,7 @@ func NewBeaconStateBellatrix(options ...func(state *ethpb.BeaconStateBellatrix) 
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateCapella creates a beacon state with minimum marshalable fields.
@@ -302,7 +302,7 @@ func NewBeaconStateCapella(options ...func(state *ethpb.BeaconStateCapella) erro
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateDeneb creates a beacon state with minimum marshalable fields.
@@ -370,7 +370,7 @@ func NewBeaconStateDeneb(options ...func(state *ethpb.BeaconStateDeneb) error) (
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateElectra creates a beacon state with minimum marshalable fields.
@@ -438,7 +438,7 @@ func NewBeaconStateElectra(options ...func(state *ethpb.BeaconStateElectra) erro
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateFulu creates a beacon state with minimum marshalable fields.
@@ -507,7 +507,7 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (st
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateGloas creates a beacon state with minimum marshalable fields.
@@ -586,7 +586,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // SSZ will fill 2D byte slices with their respective values, so we must fill these in too for round
