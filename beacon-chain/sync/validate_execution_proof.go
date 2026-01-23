@@ -72,6 +72,7 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 	}
 
 	// Validation successful, return accept
+	msg.ValidatorData = executionProof
 	return pubsub.ValidationAccept, nil
 }
 

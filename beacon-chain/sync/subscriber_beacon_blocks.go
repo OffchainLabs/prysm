@@ -112,6 +112,12 @@ func (s *Service) generateAndBroadcastExecutionProofs(ctx context.Context, roBlo
 	if err := wg.Wait(); err != nil {
 		log.WithError(err).Error("Failed to generate and broadcast execution proofs")
 	}
+
+	log.WithFields(logrus.Fields{
+		"root":  fmt.Sprintf("%#x", roBlock.Root()),
+		"slot":  roBlock.Block().Slot(),
+		"count": len(proofTypes),
+	}).Debug("Generated and broadcasted execution proofs")
 }
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
