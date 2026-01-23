@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	e2e "github.com/OffchainLabs/prysm/v7/testing/endtoend/params"
@@ -128,8 +129,42 @@ func finishedSyncing(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) e
 	return nil
 }
 
+// waitForMidEpoch waits until we're at least halfway into the current epoch
+// and 3/4 into the current slot. This prevents race conditions at epoch
+// boundaries and slot boundaries where different nodes may report different heads.
+func waitForMidEpoch(conn *grpc.ClientConn) error {
+	beaconClient := eth.NewBeaconChainClient(conn)
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	secondsPerSlot := params.BeaconConfig().SecondsPerSlot
+	midEpochSlot := slotsPerEpoch / 2
+
+	for {
+		chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
+		if err != nil {
+			return err
+		}
+		slotInEpoch := chainHead.HeadSlot % slotsPerEpoch
+		// If we're at least halfway into the epoch, we're safe
+		if slotInEpoch >= midEpochSlot {
+			// Wait 3/4 into the slot to ensure block propagation
+			time.Sleep(time.Duration(secondsPerSlot) * time.Second * 3 / 4)
+			return nil
+		}
+		// Wait for the remaining slots until mid-epoch
+		slotsToWait := midEpochSlot - slotInEpoch
+		time.Sleep(time.Duration(slotsToWait) * time.Duration(secondsPerSlot) * time.Second)
+	}
+}
+
 func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
+	// Wait until we're at least halfway into the epoch to avoid race conditions
+	// at epoch boundaries where nodes may report different epochs.
+	if err := waitForMidEpoch(conns[0]); err != nil {
+		return errors.Wrap(err, "failed waiting for mid-epoch")
+	}
+
 	headEpochs := make([]primitives.Epoch, len(conns))
+	headBlockRoots := make([][]byte, len(conns))
 	justifiedRoots := make([][]byte, len(conns))
 	prevJustifiedRoots := make([][]byte, len(conns))
 	finalizedRoots := make([][]byte, len(conns))
@@ -146,6 +181,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 				return errors.Wrapf(err, "connection number=%d", conIdx)
 			}
 			headEpochs[conIdx] = chainHead.HeadEpoch
+			headBlockRoots[conIdx] = chainHead.HeadBlockRoot
 			justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
 			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
 			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
@@ -164,6 +200,14 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 				i,
 				headEpochs[0],
 				headEpochs[i],
+			)
+		}
+		if !bytes.Equal(headBlockRoots[0], headBlockRoots[i]) {
+			return fmt.Errorf(
+				"received conflicting head block roots on node %d, expected %#x, received %#x",
+				i,
+				headBlockRoots[0],
+				headBlockRoots[i],
 			)
 		}
 		if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {

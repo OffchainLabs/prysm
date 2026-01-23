@@ -27,12 +27,19 @@ func (b *BeaconState) RotateBuilderPendingPayments() error {
 	copy(b.builderPendingPayments[:slotsPerEpoch], b.builderPendingPayments[slotsPerEpoch:2*slotsPerEpoch])
 
 	for i := slotsPerEpoch; i < primitives.Slot(len(b.builderPendingPayments)); i++ {
-		b.builderPendingPayments[i] = emptyPayment()
+		b.builderPendingPayments[i] = emptyBuilderPendingPayment
 	}
 
 	b.markFieldAsDirty(types.BuilderPendingPayments)
 	b.rebuildTrie[types.BuilderPendingPayments] = true
 	return nil
+}
+
+// emptyBuilderPendingPayment is a shared zero-value payment used to clear entries.
+var emptyBuilderPendingPayment = &ethpb.BuilderPendingPayment{
+	Withdrawal: &ethpb.BuilderPendingWithdrawal{
+		FeeRecipient: make([]byte, 20),
+	},
 }
 
 // AppendBuilderPendingWithdrawals appends builder pending withdrawals to the beacon state.
@@ -60,17 +67,6 @@ func (b *BeaconState) AppendBuilderPendingWithdrawals(withdrawals []*ethpb.Build
 	b.builderPendingWithdrawals = append(pendingWithdrawals, withdrawals...)
 	b.markFieldAsDirty(types.BuilderPendingWithdrawals)
 	return nil
-}
-
-func emptyPayment() *ethpb.BuilderPendingPayment {
-	return &ethpb.BuilderPendingPayment{
-		Weight: 0,
-		Withdrawal: &ethpb.BuilderPendingWithdrawal{
-			FeeRecipient: make([]byte, 20),
-			Amount:       0,
-			BuilderIndex: 0,
-		},
-	}
 }
 
 // SetExecutionPayloadBid sets the latest execution payload bid in the state.
@@ -103,6 +99,25 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	}
 	b.markFieldAsDirty(types.LatestExecutionPayloadBid)
 
+	return nil
+}
+
+// ClearBuilderPendingPayment clears a builder pending payment at the specified index.
+func (b *BeaconState) ClearBuilderPendingPayment(index primitives.Slot) error {
+	if b.version < version.Gloas {
+		return errNotSupported("ClearBuilderPendingPayment", b.version)
+	}
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	if uint64(index) >= uint64(len(b.builderPendingPayments)) {
+		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", index, len(b.builderPendingPayments))
+	}
+
+	b.builderPendingPayments[index] = emptyBuilderPendingPayment
+
+	b.markFieldAsDirty(types.BuilderPendingPayments)
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 type writeOnlyGloasFields interface {
 	SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid) error
 	SetBuilderPendingPayment(index primitives.Slot, payment *ethpb.BuilderPendingPayment) error
+	ClearBuilderPendingPayment(index primitives.Slot) error
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
 	UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val byte) error

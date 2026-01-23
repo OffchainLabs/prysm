@@ -141,6 +141,46 @@ func TestSetBuilderPendingPayment(t *testing.T) {
 	})
 }
 
+func TestClearBuilderPendingPayment(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.ClearBuilderPendingPayment(0)
+		require.ErrorContains(t, "is not supported", err)
+	})
+
+	t.Run("clears and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: make([]*ethpb.BuilderPendingPayment, 2),
+		}
+		st.builderPendingPayments[1] = &ethpb.BuilderPendingPayment{
+			Weight: 2,
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				Amount:       99,
+				BuilderIndex: 1,
+			},
+		}
+
+		require.NoError(t, st.ClearBuilderPendingPayment(1))
+		require.Equal(t, emptyBuilderPendingPayment, st.builderPendingPayments[1])
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
+	})
+
+	t.Run("returns error on out of range index", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: make([]*ethpb.BuilderPendingPayment, 1),
+		}
+
+		err := st.ClearBuilderPendingPayment(2)
+
+		require.ErrorContains(t, "out of range", err)
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
+	})
+}
+
 func TestRotateBuilderPendingPayments(t *testing.T) {
 	totalPayments := 2 * params.BeaconConfig().SlotsPerEpoch
 	payments := make([]*ethpb.BuilderPendingPayment, totalPayments)
