@@ -1,4 +1,4 @@
-package electra
+package requests
 
 import (
 	"bytes"
@@ -88,7 +88,7 @@ import (
 //	        withdrawable_epoch=withdrawable_epoch,
 //	    ))
 func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []*enginev1.WithdrawalRequest) (state.BeaconState, error) {
-	ctx, span := trace.StartSpan(ctx, "electra.ProcessWithdrawalRequests")
+	ctx, span := trace.StartSpan(ctx, "requests.ProcessWithdrawalRequests")
 	defer span.End()
 	currentEpoch := slots.ToEpoch(st.Slot())
 	if len(wrs) == 0 {

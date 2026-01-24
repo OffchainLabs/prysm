@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -457,7 +458,7 @@ func TestProcessConsolidationRequests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := electra.ProcessConsolidationRequests(context.TODO(), tt.state, tt.reqs)
+			err := requests.ProcessConsolidationRequests(context.TODO(), tt.state, tt.reqs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ProcessWithdrawalRequests() error = %v, wantErr %v", err, tt.wantErr)
 				return

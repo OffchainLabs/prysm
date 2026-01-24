@@ -29,6 +29,7 @@ go_library(
         "//beacon-chain/core/electra:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/requests:go_default_library",
         "//beacon-chain/core/validators:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/params:go_default_library",
