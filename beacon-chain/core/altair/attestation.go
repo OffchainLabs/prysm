@@ -79,7 +79,7 @@ func ProcessAttestationNoVerifySignature(
 
 	beaconState, err = gloas.UpdatePendingPaymentWeight(beaconState, att, indices, participatedFlags)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to update pending payment weight")
 	}
 
 	return SetParticipationAndRewardProposer(ctx, beaconState, att.GetData().Target.Epoch, indices, participatedFlags, totalBalance, att)
@@ -309,7 +309,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 	}
 	matchedSrcTgtHead := matchedHead && matchedSrcTgt
 
-	// Spec v1.6.1 (pseudocode excerpt):
+	// Spec v1.7.0-alpha pseudocode:
 	//
 	//	# [New in Gloas:EIP7732]
 	//	if is_attestation_same_slot(state, data):
@@ -326,7 +326,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 	if beaconState.Version() >= version.Gloas {
 		sameSlot, err := gloas.SameSlotAttestation(beaconState, [32]byte(data.BeaconBlockRoot), data.Slot)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to get same slot attestation status")
 		}
 		if sameSlot {
 			if data.CommitteeIndex != 0 {
@@ -336,7 +336,7 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		} else {
 			executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(data.Slot)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "failed to get execution payload availability status")
 			}
 			matchingPayload = executionPayloadAvail == uint64(data.CommitteeIndex)
 		}

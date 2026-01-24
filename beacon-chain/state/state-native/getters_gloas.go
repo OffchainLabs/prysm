@@ -1,6 +1,8 @@
 package state_native
 
 import (
+	"fmt"
+
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -16,6 +18,9 @@ func (b *BeaconState) BuilderPendingPayment(index uint64) (*ethpb.BuilderPending
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
+	if index >= uint64(len(b.builderPendingPayments)) {
+		return nil, fmt.Errorf("builder pending payment index %d out of range (len=%d)", index, len(b.builderPendingPayments))
+	}
 	return ethpb.CopyBuilderPendingPayment(b.builderPendingPayments[index]), nil
 }
 
@@ -27,10 +32,6 @@ func (b *BeaconState) ExecutionPayloadAvailability(slot primitives.Slot) (uint64
 
 	b.lock.RLock()
 	defer b.lock.RUnlock()
-
-	if b.executionPayloadAvailability == nil {
-		return 0, nil
-	}
 
 	slotIndex := slot % params.BeaconConfig().SlotsPerHistoricalRoot
 	byteIndex := slotIndex / 8

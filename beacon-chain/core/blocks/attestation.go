@@ -111,7 +111,7 @@ func VerifyAttestationNoVerifySignature(
 	var indexedAtt ethpb.IndexedAtt
 
 	if att.Version() >= version.Electra {
-		// Spec v1.6.1 (pseudocode excerpt):
+		// Spec v1.7.0-alpha pseudocode:
 		//
 		//	# [Modified in Gloas:EIP7732]
 		//	assert data.index < 2
