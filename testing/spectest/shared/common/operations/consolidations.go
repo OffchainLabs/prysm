@@ -32,7 +32,7 @@ func RunConsolidationTest(t *testing.T, config string, fork string, block blockW
 				if err != nil {
 					return nil, err
 				}
-				return nil, requests.ProcessConsolidationRequests(ctx, s, er.Consolidations)
+				return s, requests.ProcessConsolidationRequests(ctx, s, er.Consolidations)
 			})
 		})
 	}
