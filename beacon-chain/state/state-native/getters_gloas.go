@@ -10,51 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 )
 
-// BuilderPendingPayment returns the builder pending payment for the given index.
-func (b *BeaconState) BuilderPendingPayment(index uint64) (*ethpb.BuilderPendingPayment, error) {
-	if b.version < version.Gloas {
-		return nil, errNotSupported("BuilderPendingPayment", b.version)
-	}
-
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
-	if index >= uint64(len(b.builderPendingPayments)) {
-		return nil, fmt.Errorf("builder pending payment index %d out of range (len=%d)", index, len(b.builderPendingPayments))
-	}
-	return ethpb.CopyBuilderPendingPayment(b.builderPendingPayments[index]), nil
-}
-
-// BuilderPendingPayments returns a copy of the builder pending payments.
-func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
-	if b.version < version.Gloas {
-		return nil, errNotSupported("BuilderPendingPayments", b.version)
-	}
-
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
-	return b.builderPendingPaymentsVal(), nil
-}
-
-// ExecutionPayloadAvailability returns the execution payload availability bit for the given slot.
-func (b *BeaconState) ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error) {
-	if b.version < version.Gloas {
-		return 0, errNotSupported("ExecutionPayloadAvailability", b.version)
-	}
-
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
-	slotIndex := slot % params.BeaconConfig().SlotsPerHistoricalRoot
-	byteIndex := slotIndex / 8
-	bitIndex := slotIndex % 8
-
-	bit := (b.executionPayloadAvailability[byteIndex] >> bitIndex) & 1
-
-	return uint64(bit), nil
-}
-
 // LatestBlockHash returns the hash of the latest execution block.
 func (b *BeaconState) LatestBlockHash() ([32]byte, error) {
 	if b.version < version.Gloas {
@@ -179,4 +134,49 @@ func (b *BeaconState) builderPendingBalanceToWithdraw(builderIndex primitives.Bu
 		}
 	}
 	return total
+}
+
+// BuilderPendingPayments returns a copy of the builder pending payments.
+func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingPayments", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingPaymentsVal(), nil
+}
+
+// BuilderPendingPayment returns the builder pending payment for the given index.
+func (b *BeaconState) BuilderPendingPayment(index uint64) (*ethpb.BuilderPendingPayment, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingPayment", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	if index >= uint64(len(b.builderPendingPayments)) {
+		return nil, fmt.Errorf("builder pending payment index %d out of range (len=%d)", index, len(b.builderPendingPayments))
+	}
+	return ethpb.CopyBuilderPendingPayment(b.builderPendingPayments[index]), nil
+}
+
+// ExecutionPayloadAvailability returns the execution payload availability bit for the given slot.
+func (b *BeaconState) ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error) {
+	if b.version < version.Gloas {
+		return 0, errNotSupported("ExecutionPayloadAvailability", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	slotIndex := slot % params.BeaconConfig().SlotsPerHistoricalRoot
+	byteIndex := slotIndex / 8
+	bitIndex := slotIndex % 8
+
+	bit := (b.executionPayloadAvailability[byteIndex] >> bitIndex) & 1
+
+	return uint64(bit), nil
 }

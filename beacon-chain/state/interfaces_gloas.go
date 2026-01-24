@@ -20,8 +20,7 @@ type readOnlyGloasFields interface {
 	IsActiveBuilder(primitives.BuilderIndex) (bool, error)
 	CanBuilderCoverBid(primitives.BuilderIndex, primitives.Gwei) (bool, error)
 	LatestBlockHash() ([32]byte, error)
-	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
-
 	BuilderPendingPayment(index uint64) (*ethpb.BuilderPendingPayment, error)
+	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
 	ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error)
 }

@@ -197,3 +197,46 @@ func TestBuilderPendingPayment_UnsupportedVersion(t *testing.T) {
 	_, err = st.BuilderPendingPayment(0)
 	require.ErrorContains(t, "BuilderPendingPayment", err)
 }
+
+func TestBuilderPendingPayment_OutOfRange(t *testing.T) {
+	stIface, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		BuilderPendingPayments: []*ethpb.BuilderPendingPayment{},
+	})
+	require.NoError(t, err)
+
+	_, err = stIface.BuilderPendingPayment(0)
+	require.ErrorContains(t, "out of range", err)
+}
+
+func TestExecutionPayloadAvailability(t *testing.T) {
+	t.Run("unsupported version", func(t *testing.T) {
+		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*state_native.BeaconState)
+
+		_, err = st.ExecutionPayloadAvailability(0)
+		require.ErrorContains(t, "ExecutionPayloadAvailability", err)
+	})
+
+	t.Run("reads expected bit", func(t *testing.T) {
+		// Ensure the backing slice is large enough.
+		availability := make([]byte, params.BeaconConfig().SlotsPerHistoricalRoot/8)
+
+		// Pick a slot and set its corresponding bit.
+		slot := primitives.Slot(9) // byteIndex=1, bitIndex=1
+		availability[1] = 0b00000010
+
+		stIface, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			ExecutionPayloadAvailability: availability,
+		})
+		require.NoError(t, err)
+
+		bit, err := stIface.ExecutionPayloadAvailability(slot)
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), bit)
+
+		otherBit, err := stIface.ExecutionPayloadAvailability(8)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), otherBit)
+	})
+}

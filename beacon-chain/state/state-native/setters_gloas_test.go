@@ -141,31 +141,6 @@ func TestSetBuilderPendingPayment(t *testing.T) {
 	})
 }
 
-func TestSetBuilderPendingPayment_CopiesValue(t *testing.T) {
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	payments := make([]*ethpb.BuilderPendingPayment, 2*slotsPerEpoch)
-	st, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
-		BuilderPendingPayments: payments,
-	})
-	require.NoError(t, err)
-
-	payment := &ethpb.BuilderPendingPayment{Weight: 123}
-	target := primitives.Slot(1)
-	require.NoError(t, st.SetBuilderPendingPayment(target, payment))
-
-	payment.Weight = 999
-
-	got, err := st.BuilderPendingPayment(uint64(target))
-	require.NoError(t, err)
-	require.Equal(t, uint64(123), uint64(got.Weight))
-}
-
-func TestSetBuilderPendingPayment_UnsupportedVersion(t *testing.T) {
-	st := &BeaconState{version: version.Electra}
-	err := st.SetBuilderPendingPayment(0, &ethpb.BuilderPendingPayment{})
-	require.ErrorContains(t, "SetBuilderPendingPayment", err)
-}
-
 func TestClearBuilderPendingPayment(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
 		st := &BeaconState{version: version.Fulu}

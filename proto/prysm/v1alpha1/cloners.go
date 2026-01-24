@@ -198,12 +198,12 @@ func CopyBuilderPendingPayment(original *BuilderPendingPayment) *BuilderPendingP
 
 	return &BuilderPendingPayment{
 		Weight:     original.Weight,
-		Withdrawal: copyBuilderPendingWithdrawal(original.Withdrawal),
+		Withdrawal: CopyBuilderPendingWithdrawal(original.Withdrawal),
 	}
 }
 
-// copyBuilderPendingWithdrawal creates a deep copy of a builder pending withdrawal.
-func copyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPendingWithdrawal {
+// CopyBuilderPendingWithdrawal creates a deep copy of a builder pending withdrawal.
+func CopyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPendingWithdrawal {
 	if original == nil {
 		return nil
 	}
