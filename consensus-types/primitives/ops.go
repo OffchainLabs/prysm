@@ -16,7 +16,7 @@ type Uint64Primitive interface {
 func Add[T Uint64Primitive](a T, x uint64) T {
 	res, err := SafeAdd(a, x)
 	if err != nil {
-		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc.
+		panic(err) // lint:nopanic -- Panic is communicated in the godoc.
 	}
 	return res
 }
@@ -32,7 +32,7 @@ func AddT[T Uint64Primitive](a, b T) T {
 func Sub[T Uint64Primitive](a T, x uint64) T {
 	res, err := SafeSub(a, x)
 	if err != nil {
-		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc.
+		panic(err) // lint:nopanic -- Panic is communicated in the godoc.
 	}
 	return res
 }
@@ -48,7 +48,7 @@ func SubT[T Uint64Primitive](a, b T) T {
 func Mul[T Uint64Primitive](a T, x uint64) T {
 	res, err := SafeMul(a, x)
 	if err != nil {
-		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc.
+		panic(err) // lint:nopanic -- Panic is communicated in the godoc.
 	}
 	return res
 }
@@ -64,7 +64,7 @@ func MulT[T Uint64Primitive](a, b T) T {
 func Div[T Uint64Primitive](a T, x uint64) T {
 	res, err := SafeDiv(a, x)
 	if err != nil {
-		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc.
+		panic(err) // lint:nopanic -- Panic is communicated in the godoc.
 	}
 	return res
 }
@@ -80,7 +80,7 @@ func DivT[T Uint64Primitive](a, b T) T {
 func Mod[T Uint64Primitive](a T, x uint64) T {
 	res, err := SafeMod(a, x)
 	if err != nil {
-		panic(err.Error()) // lint:nopanic -- Panic is communicated in the godoc.
+		panic(err) // lint:nopanic -- Panic is communicated in the godoc.
 	}
 	return res
 }
