@@ -112,7 +112,7 @@ func NewBeaconState(options ...NewBeaconStateOption) (state.BeaconState, error) 
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateAltair creates a beacon state with minimum marshalable fields.
@@ -167,7 +167,7 @@ func NewBeaconStateAltair(options ...func(state *ethpb.BeaconStateAltair) error)
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateBellatrix creates a beacon state with minimum marshalable fields.
@@ -234,7 +234,7 @@ func NewBeaconStateBellatrix(options ...func(state *ethpb.BeaconStateBellatrix) 
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateCapella creates a beacon state with minimum marshalable fields.
@@ -302,7 +302,7 @@ func NewBeaconStateCapella(options ...func(state *ethpb.BeaconStateCapella) erro
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateDeneb creates a beacon state with minimum marshalable fields.
@@ -370,7 +370,7 @@ func NewBeaconStateDeneb(options ...func(state *ethpb.BeaconStateDeneb) error) (
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateElectra creates a beacon state with minimum marshalable fields.
@@ -438,7 +438,7 @@ func NewBeaconStateElectra(options ...func(state *ethpb.BeaconStateElectra) erro
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
 }
 
 // NewBeaconStateFulu creates a beacon state with minimum marshalable fields.
@@ -507,7 +507,86 @@ func NewBeaconStateFulu(options ...func(state *ethpb.BeaconStateFulu) error) (st
 		return nil, err
 	}
 
-	return st.Copy(), nil
+	return st, nil
+}
+
+// NewBeaconStateGloas creates a beacon state with minimum marshalable fields.
+func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (state.BeaconState, error) {
+	pubkeys := make([][]byte, 512)
+	for i := range pubkeys {
+		pubkeys[i] = make([]byte, 48)
+	}
+
+	builderPendingPayments := make([]*ethpb.BuilderPendingPayment, 64)
+	for i := range builderPendingPayments {
+		builderPendingPayments[i] = &ethpb.BuilderPendingPayment{
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+			},
+		}
+	}
+
+	seed := &ethpb.BeaconStateGloas{
+		BlockRoots:                 filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), 32),
+		StateRoots:                 filledByteSlice2D(uint64(params.BeaconConfig().SlotsPerHistoricalRoot), 32),
+		Slashings:                  make([]uint64, params.BeaconConfig().EpochsPerSlashingsVector),
+		RandaoMixes:                filledByteSlice2D(uint64(params.BeaconConfig().EpochsPerHistoricalVector), 32),
+		Validators:                 make([]*ethpb.Validator, 0),
+		CurrentJustifiedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		Eth1Data: &ethpb.Eth1Data{
+			DepositRoot: make([]byte, fieldparams.RootLength),
+			BlockHash:   make([]byte, 32),
+		},
+		Fork: &ethpb.Fork{
+			PreviousVersion: make([]byte, 4),
+			CurrentVersion:  make([]byte, 4),
+		},
+		Eth1DataVotes:               make([]*ethpb.Eth1Data, 0),
+		HistoricalRoots:             make([][]byte, 0),
+		JustificationBits:           bitfield.Bitvector4{0x0},
+		FinalizedCheckpoint:         &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		LatestBlockHeader:           HydrateBeaconHeader(&ethpb.BeaconBlockHeader{}),
+		PreviousJustifiedCheckpoint: &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+		PreviousEpochParticipation:  make([]byte, 0),
+		CurrentEpochParticipation:   make([]byte, 0),
+		CurrentSyncCommittee: &ethpb.SyncCommittee{
+			Pubkeys:         pubkeys,
+			AggregatePubkey: make([]byte, 48),
+		},
+		NextSyncCommittee: &ethpb.SyncCommittee{
+			Pubkeys:         pubkeys,
+			AggregatePubkey: make([]byte, 48),
+		},
+		ProposerLookahead: make([]uint64, 64),
+		LatestExecutionPayloadBid: &ethpb.ExecutionPayloadBid{
+			ParentBlockHash:        make([]byte, 32),
+			ParentBlockRoot:        make([]byte, 32),
+			BlockHash:              make([]byte, 32),
+			PrevRandao:             make([]byte, 32),
+			FeeRecipient:           make([]byte, 20),
+			BlobKzgCommitmentsRoot: make([]byte, 32),
+		},
+		Builders:                     make([]*ethpb.Builder, 0),
+		ExecutionPayloadAvailability: make([]byte, 1024),
+		BuilderPendingPayments:       builderPendingPayments,
+		BuilderPendingWithdrawals:    make([]*ethpb.BuilderPendingWithdrawal, 0),
+		LatestBlockHash:              make([]byte, 32),
+		PayloadExpectedWithdrawals:   make([]*enginev1.Withdrawal, 0),
+	}
+
+	for _, opt := range options {
+		err := opt(seed)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var st, err = state_native.InitializeFromProtoUnsafeGloas(seed)
+	if err != nil {
+		return nil, err
+	}
+
+	return st, nil
 }
 
 // SSZ will fill 2D byte slices with their respective values, so we must fill these in too for round

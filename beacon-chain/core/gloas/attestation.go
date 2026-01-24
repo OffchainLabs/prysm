@@ -145,7 +145,7 @@ func UpdatePendingPaymentWeight(beaconState state.BeaconState, att ethpb.Att, in
 		}
 	}
 
-	if err := beaconState.SetBuilderPendingPayment(uint64(paymentSlot), payment); err != nil {
+	if err := beaconState.SetBuilderPendingPayment(paymentSlot, payment); err != nil {
 		return nil, errors.Wrapf(err, "set builder pending payment at slot %d", paymentSlot)
 	}
 

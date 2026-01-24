@@ -3,7 +3,6 @@ package electra
 import (
 	"context"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -37,7 +36,7 @@ func ProcessDeposits(
 	defer span.End()
 	// Attempt to verify all deposit signatures at once, if this fails then fall back to processing
 	// individual deposits with signature verification enabled.
-	allSignaturesVerified, err := blocks.BatchVerifyDepositsSignatures(ctx, deposits)
+	allSignaturesVerified, err := helpers.BatchVerifyDepositsSignatures(ctx, deposits)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not verify deposit signatures in batch")
 	}
@@ -82,7 +81,7 @@ func ProcessDeposits(
 //	  signature=deposit.data.signature,
 //	 )
 func ProcessDeposit(beaconState state.BeaconState, deposit *ethpb.Deposit, allSignaturesVerified bool) (state.BeaconState, error) {
-	if err := blocks.VerifyDeposit(beaconState, deposit); err != nil {
+	if err := helpers.VerifyDeposit(beaconState, deposit); err != nil {
 		if deposit == nil || deposit.Data == nil {
 			return nil, err
 		}
@@ -377,7 +376,7 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 		return nil
 	}
 
-	allSignaturesVerified, err := blocks.BatchVerifyPendingDepositsSignatures(ctx, pendingDeposits)
+	allSignaturesVerified, err := helpers.BatchVerifyPendingDepositsSignatures(ctx, pendingDeposits)
 	if err != nil {
 		return errors.Wrap(err, "batch signature verification failed")
 	}
@@ -386,7 +385,7 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 		validSig := allSignaturesVerified
 
 		if !allSignaturesVerified {
-			validSig, err = blocks.IsValidDepositSignature(&ethpb.Deposit_Data{
+			validSig, err = helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 				PublicKey:             bytesutil.SafeCopyBytes(pd.PublicKey),
 				WithdrawalCredentials: bytesutil.SafeCopyBytes(pd.WithdrawalCredentials),
 				Amount:                pd.Amount,
@@ -441,7 +440,7 @@ func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *eth
 	defer span.End()
 	index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(deposit.PublicKey))
 	if !ok {
-		verified, err := blocks.IsValidDepositSignature(&ethpb.Deposit_Data{
+		verified, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 			PublicKey:             bytesutil.SafeCopyBytes(deposit.PublicKey),
 			WithdrawalCredentials: bytesutil.SafeCopyBytes(deposit.WithdrawalCredentials),
 			Amount:                deposit.Amount,

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -236,4 +237,42 @@ func TestValidateNoArgs_SubcommandFlags(t *testing.T) {
 
 	err = app.Run([]string{"command", "bar", "subComm2", "--barfoo100", "garbage", "subComm4"})
 	require.ErrorContains(t, "unrecognized argument: garbage", err)
+}
+
+func TestParseVModule(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		input := "beacon-chain/p2p=error, beacon-chain/light-client=trace"
+		parsed, maxL, err := ParseVModule(input)
+		require.NoError(t, err)
+		require.Equal(t, logrus.ErrorLevel, parsed["beacon-chain/p2p"])
+		require.Equal(t, logrus.TraceLevel, parsed["beacon-chain/light-client"])
+		require.Equal(t, logrus.TraceLevel, maxL)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		parsed, maxL, err := ParseVModule("  ")
+		require.NoError(t, err)
+		require.IsNil(t, parsed)
+		require.Equal(t, logrus.PanicLevel, maxL)
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		tests := []string{
+			"beacon-chain/p2p",
+			"beacon-chain/p2p=",
+			"beacon-chain/p2p/=error",
+			"=info",
+			"beacon-chain/*=info",
+			"beacon-chain/p2p=meow",
+			"/beacon-chain/p2p=info",
+			"beacon-chain/../p2p=info",
+			"beacon-chain/p2p=info,",
+			"beacon-chain/p2p=info,beacon-chain/p2p=debug",
+		}
+		for _, input := range tests {
+			_, maxL, err := ParseVModule(input)
+			require.ErrorContains(t, "invalid", err)
+			require.Equal(t, logrus.PanicLevel, maxL)
+		}
+	})
 }
