@@ -158,7 +158,7 @@ func (p *restConnectionProvider) SetHost(index int) error {
 	log.WithFields(logrus.Fields{
 		"previousHost": p.endpoints[oldIdx%uint64(len(p.endpoints))],
 		"newHost":      p.endpoints[index],
-	}).Debug("Trying REST endpoint")
+	}).Debug("Switched REST endpoint")
 	return nil
 }
 
