@@ -105,7 +105,7 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 	log.WithFields(logrus.Fields{
 		"endpoints": endpoints,
 		"count":     len(endpoints),
-	}).Info("Initialized REST connection provider with endpoints")
+	}).Info("Initialized REST connection provider")
 
 	return p, nil
 }
