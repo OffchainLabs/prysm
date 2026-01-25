@@ -62,7 +62,7 @@ func NewGrpcConnectionProvider(
 	log.WithFields(logrus.Fields{
 		"endpoints": endpoints,
 		"count":     len(endpoints),
-	}).Info("Initialized gRPC connection provider with multiple endpoints")
+	}).Info("Initialized gRPC connection provider")
 
 	return &grpcConnectionProvider{
 		endpoints: endpoints,
