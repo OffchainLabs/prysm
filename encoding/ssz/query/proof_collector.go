@@ -720,7 +720,7 @@ func (pc *proofCollector) optimizedContainerRoots(info *SszInfo, v reflect.Value
 	for i := (n - 1) * groupSize; i < v.Len(); i++ {
 		fRoots, err := pc.containerFieldRoots(ci, v.Index(i))
 		if err != nil {
-			return [][32]byte{}, errors.Wrap(err, "could not compute validators merkleization")
+			return [][32]byte{}, errors.Wrap(err, "could not merkleize container")
 		}
 		for k, root := range fRoots {
 			roots[i*containerFieldRoots+k] = root
