@@ -36,7 +36,9 @@ type grpcConnectionProvider struct {
 	ctx       context.Context
 	dialOpts  []grpc.DialOption
 
-	// Current connection state (protected by mu)
+	// Current connection state (protected by mutex)
+``
+in case you remove the name from the mutex
 	currentIndex uint64
 	conn         *grpc.ClientConn
 
