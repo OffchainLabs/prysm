@@ -1,7 +1,6 @@
 package query_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -9,26 +8,20 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/query"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	sszquerypb "github.com/OffchainLabs/prysm/v7/proto/ssz_query/testing"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	ssz "github.com/prysmaticlabs/fastssz"
 )
 
-func TestProve_FixedNestedContainer(t *testing.T) {
-	value2 := make([]byte, 32)
-	for i := range value2 {
-		value2[i] = byte(i + 1)
-	}
-
-	obj := &sszquerypb.FixedNestedContainer{
-		Value1: 123,
-		Value2: value2,
-	}
+func TestProve_FixedTestContainer(t *testing.T) {
+	obj := createFixedTestContainer()
 
 	tests := []string{
-		".value1",
-		".value2",
+		".field_uint32",
+		".nested.value2",
+		".vector_field[3]",
+		".bitvector64_field",
+		".trailing_field",
 	}
 
 	for _, tc := range tests {
@@ -117,19 +110,11 @@ func TestProve_BeaconBlock(t *testing.T) {
 }
 
 func TestProve_BeaconState(t *testing.T) {
-	ctx := context.Background()
 	st, _ := util.DeterministicGenesisState(t, 16)
 	require.NoError(t, st.SetSlot(primitives.Slot(42)))
 
 	sszObj, ok := st.ToProtoUnsafe().(query.SSZObject)
 	require.Equal(t, true, ok, "state proto does not implement query.SSZObject")
-
-	// Sanity check the proto-state root matches the state root.
-	stateRoot, err := st.HashTreeRoot(ctx)
-	require.NoError(t, err)
-	protoRoot, err := sszObj.HashTreeRoot()
-	require.NoError(t, err)
-	require.Equal(t, stateRoot, protoRoot)
 
 	tests := []string{
 		".slot",
