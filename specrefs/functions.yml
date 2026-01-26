@@ -5388,7 +5388,7 @@
 
 - name: process_consolidation_request
   sources:
-    - file: beacon-chain/core/electra/consolidations.go
+    - file: beacon-chain/core/requests/consolidations.go
       search: func ProcessConsolidationRequests(
   spec: |
     <spec fn="process_consolidation_request" fork="electra" hash="4da4b0fb">
@@ -5528,7 +5528,7 @@
 
 - name: process_deposit_request
   sources:
-    - file: beacon-chain/core/electra/deposits.go
+    - file: beacon-chain/core/requests/deposits.go
       search: func processDepositRequest(
   spec: |
     <spec fn="process_deposit_request" fork="electra" hash="547c4a35">
@@ -6993,7 +6993,7 @@
 
 - name: process_withdrawal_request
   sources:
-    - file: beacon-chain/core/electra/withdrawals.go
+    - file: beacon-chain/core/requests/withdrawals.go
       search: func ProcessWithdrawalRequests(
   spec: |
     <spec fn="process_withdrawal_request" fork="electra" hash="c21a0a53">

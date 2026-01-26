@@ -5,7 +5,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -32,7 +32,7 @@ func RunConsolidationTest(t *testing.T, config string, fork string, block blockW
 				if err != nil {
 					return nil, err
 				}
-				return s, electra.ProcessConsolidationRequests(ctx, s, er.Consolidations)
+				return s, requests.ProcessConsolidationRequests(ctx, s, er.Consolidations)
 			})
 		})
 	}
