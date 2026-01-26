@@ -61,7 +61,6 @@ func (pc *proofCollector) reset() {
 // addTarget register the target leaf and its required sibling nodes for proof construction.
 // Registration should happen before merkleization begins.
 func (pc *proofCollector) addTarget(gindex uint64) {
-	// Lock safe just in case the collector is re-used.
 	pc.Lock()
 	defer pc.Unlock()
 
