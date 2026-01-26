@@ -34,6 +34,25 @@ var (
 			Buckets: []float64{25, 50, 100, 200, 500, 1000, 2000, 4000},
 		},
 	)
+	getBlobsV3RequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV3_requests_total",
+		Help: "Total number of engine_getBlobsV3 requests sent",
+	})
+	getBlobsV3CompleteResponsesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV3_complete_responses_total",
+		Help: "Total number of complete engine_getBlobsV3 successful responses received",
+	})
+	getBlobsV3PartialResponsesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "beacon_engine_getBlobsV3_partial_responses_total",
+		Help: "Total number of engine_getBlobsV3 partial responses received",
+	})
+	getBlobsV3Latency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "beacon_engine_getBlobsV3_request_duration_seconds",
+			Help:    "Duration of engine_getBlobsV3 requests in seconds",
+			Buckets: []float64{0.025, 0.05, 0.1, 0.2, 0.5, 1, 2, 4},
+		},
+	)
 	errParseCount = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "execution_parse_error_count",
 		Help: "The number of errors that occurred while parsing execution payload",

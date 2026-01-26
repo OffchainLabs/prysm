@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	opfeed "github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
@@ -22,6 +23,13 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 	sidecar, ok := msg.(blocks.VerifiedRODataColumn)
 	if !ok {
 		return fmt.Errorf("message was not type blocks.VerifiedRODataColumn, type=%T", msg)
+	}
+
+	// Track useful full columns received via gossip (not previously seen)
+	slot := sidecar.SignedBlockHeader.Header.Slot
+	proposerIndex := sidecar.SignedBlockHeader.Header.ProposerIndex
+	if !s.hasSeenDataColumnIndex(slot, proposerIndex, sidecar.Index) {
+		usefulFullColumnsReceivedTotal.WithLabelValues(strconv.FormatUint(sidecar.Index, 10)).Inc()
 	}
 
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
@@ -59,6 +67,7 @@ func (s *Service) dataColumnSubscriber(ctx context.Context, msg proto.Message) e
 
 func (s *Service) verifiedRODataColumnSubscriber(ctx context.Context, sidecar blocks.VerifiedRODataColumn) error {
 	log.WithField("slot", sidecar.Slot()).WithField("column", sidecar.Index).Info("Received data column sidecar")
+
 	if err := s.receiveDataColumnSidecar(ctx, sidecar); err != nil {
 		return errors.Wrap(err, "receive data column sidecar")
 	}
