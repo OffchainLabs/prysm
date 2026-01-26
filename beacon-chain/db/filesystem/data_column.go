@@ -512,6 +512,11 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 	if err != nil {
 		return nil, errors.Wrap(err, "data column sidecars file path open")
 	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.WithError(closeErr).WithField("file", filePath).Error("Error closing file during Get")
+		}
+	}()
 
 	// Read file metadata.
 	metadata, err := dcs.metadata(file)

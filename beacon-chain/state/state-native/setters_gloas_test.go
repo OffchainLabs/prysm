@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -137,4 +139,192 @@ func TestSetBuilderPendingPayment(t *testing.T) {
 		require.ErrorContains(t, "out of range", err)
 		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
 	})
+}
+
+func TestClearBuilderPendingPayment(t *testing.T) {
+	t.Run("previous fork returns expected error", func(t *testing.T) {
+		st := &BeaconState{version: version.Fulu}
+		err := st.ClearBuilderPendingPayment(0)
+		require.ErrorContains(t, "is not supported", err)
+	})
+
+	t.Run("clears and marks dirty", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: make([]*ethpb.BuilderPendingPayment, 2),
+		}
+		st.builderPendingPayments[1] = &ethpb.BuilderPendingPayment{
+			Weight: 2,
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				Amount:       99,
+				BuilderIndex: 1,
+			},
+		}
+
+		require.NoError(t, st.ClearBuilderPendingPayment(1))
+		require.Equal(t, emptyBuilderPendingPayment, st.builderPendingPayments[1])
+		require.Equal(t, true, st.dirtyFields[types.BuilderPendingPayments])
+	})
+
+	t.Run("returns error on out of range index", func(t *testing.T) {
+		st := &BeaconState{
+			version:                version.Gloas,
+			dirtyFields:            make(map[types.FieldIndex]bool),
+			builderPendingPayments: make([]*ethpb.BuilderPendingPayment, 1),
+		}
+
+		err := st.ClearBuilderPendingPayment(2)
+
+		require.ErrorContains(t, "out of range", err)
+		require.Equal(t, false, st.dirtyFields[types.BuilderPendingPayments])
+	})
+}
+
+func TestRotateBuilderPendingPayments(t *testing.T) {
+	totalPayments := 2 * params.BeaconConfig().SlotsPerEpoch
+	payments := make([]*ethpb.BuilderPendingPayment, totalPayments)
+	for i := range payments {
+		idx := uint64(i)
+		payments[i] = &ethpb.BuilderPendingPayment{
+			Weight: primitives.Gwei(idx * 100e9),
+			Withdrawal: &ethpb.BuilderPendingWithdrawal{
+				FeeRecipient: make([]byte, 20),
+				Amount:       primitives.Gwei(idx * 1e9),
+				BuilderIndex: primitives.BuilderIndex(idx + 100),
+			},
+		}
+	}
+
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		BuilderPendingPayments: payments,
+	})
+	require.NoError(t, err)
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	oldPayments, err := st.BuilderPendingPayments()
+	require.NoError(t, err)
+	require.NoError(t, st.RotateBuilderPendingPayments())
+
+	newPayments, err := st.BuilderPendingPayments()
+	require.NoError(t, err)
+	slotsPerEpoch := int(params.BeaconConfig().SlotsPerEpoch)
+	for i := range slotsPerEpoch {
+		require.DeepEqual(t, oldPayments[slotsPerEpoch+i], newPayments[i])
+	}
+
+	for i := slotsPerEpoch; i < 2*slotsPerEpoch; i++ {
+		payment := newPayments[i]
+		require.Equal(t, primitives.Gwei(0), payment.Weight)
+		require.Equal(t, 20, len(payment.Withdrawal.FeeRecipient))
+		require.Equal(t, primitives.Gwei(0), payment.Withdrawal.Amount)
+		require.Equal(t, primitives.BuilderIndex(0), payment.Withdrawal.BuilderIndex)
+	}
+}
+
+func TestRotateBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
+	st := &BeaconState{version: version.Electra}
+	err := st.RotateBuilderPendingPayments()
+	require.ErrorContains(t, "RotateBuilderPendingPayments", err)
+}
+
+func TestAppendBuilderPendingWithdrawal_CopyOnWrite(t *testing.T) {
+	wd := &ethpb.BuilderPendingWithdrawal{
+		FeeRecipient: make([]byte, 20),
+		Amount:       1,
+		BuilderIndex: 2,
+	}
+	statePb, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		BuilderPendingWithdrawals: []*ethpb.BuilderPendingWithdrawal{wd},
+	})
+	require.NoError(t, err)
+
+	st, ok := statePb.(*BeaconState)
+	require.Equal(t, true, ok)
+
+	copied := st.Copy().(*BeaconState)
+	require.Equal(t, uint(2), st.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs())
+
+	appended := &ethpb.BuilderPendingWithdrawal{
+		FeeRecipient: make([]byte, 20),
+		Amount:       4,
+		BuilderIndex: 5,
+	}
+	require.NoError(t, copied.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{appended}))
+
+	require.Equal(t, 1, len(st.builderPendingWithdrawals))
+	require.Equal(t, 2, len(copied.builderPendingWithdrawals))
+	require.DeepEqual(t, wd, copied.builderPendingWithdrawals[0])
+	require.DeepEqual(t, appended, copied.builderPendingWithdrawals[1])
+	require.DeepEqual(t, wd, st.builderPendingWithdrawals[0])
+	require.Equal(t, uint(1), st.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs())
+	require.Equal(t, uint(1), copied.sharedFieldReferences[types.BuilderPendingWithdrawals].Refs())
+}
+
+func TestAppendBuilderPendingWithdrawals(t *testing.T) {
+	st := &BeaconState{
+		version:     version.Gloas,
+		dirtyFields: make(map[types.FieldIndex]bool),
+		sharedFieldReferences: map[types.FieldIndex]*stateutil.Reference{
+			types.BuilderPendingWithdrawals: stateutil.NewRef(1),
+		},
+		builderPendingWithdrawals: make([]*ethpb.BuilderPendingWithdrawal, 0),
+	}
+
+	first := &ethpb.BuilderPendingWithdrawal{Amount: 1}
+	second := &ethpb.BuilderPendingWithdrawal{Amount: 2}
+	require.NoError(t, st.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{first, second}))
+
+	require.Equal(t, 2, len(st.builderPendingWithdrawals))
+	require.DeepEqual(t, first, st.builderPendingWithdrawals[0])
+	require.DeepEqual(t, second, st.builderPendingWithdrawals[1])
+	require.Equal(t, true, st.dirtyFields[types.BuilderPendingWithdrawals])
+}
+
+func TestAppendBuilderPendingWithdrawals_UnsupportedVersion(t *testing.T) {
+	st := &BeaconState{version: version.Electra}
+	err := st.AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal{{}})
+	require.ErrorContains(t, "AppendBuilderPendingWithdrawals", err)
+}
+
+func TestUpdateExecutionPayloadAvailabilityAtIndex_SetAndClear(t *testing.T) {
+	st := newGloasStateWithAvailability(t, make([]byte, 1024))
+
+	otherIdx := uint64(8) // byte 1, bit 0
+	idx := uint64(9)      // byte 1, bit 1
+
+	require.NoError(t, st.UpdateExecutionPayloadAvailabilityAtIndex(otherIdx, 1))
+	require.Equal(t, byte(0x01), st.executionPayloadAvailability[1])
+
+	require.NoError(t, st.UpdateExecutionPayloadAvailabilityAtIndex(idx, 1))
+	require.Equal(t, byte(0x03), st.executionPayloadAvailability[1])
+
+	require.NoError(t, st.UpdateExecutionPayloadAvailabilityAtIndex(idx, 0))
+	require.Equal(t, byte(0x01), st.executionPayloadAvailability[1])
+}
+
+func TestUpdateExecutionPayloadAvailabilityAtIndex_OutOfRange(t *testing.T) {
+	st := newGloasStateWithAvailability(t, make([]byte, 1024))
+
+	idx := uint64(len(st.executionPayloadAvailability)) * 8
+	err := st.UpdateExecutionPayloadAvailabilityAtIndex(idx, 1)
+	require.ErrorContains(t, "out of range", err)
+
+	for _, b := range st.executionPayloadAvailability {
+		if b != 0 {
+			t.Fatalf("execution payload availability mutated on error")
+		}
+	}
+}
+
+func newGloasStateWithAvailability(t *testing.T, availability []byte) *BeaconState {
+	t.Helper()
+
+	st, err := InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+		ExecutionPayloadAvailability: availability,
+	})
+	require.NoError(t, err)
+
+	return st.(*BeaconState)
 }

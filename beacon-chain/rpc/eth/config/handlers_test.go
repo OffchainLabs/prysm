@@ -132,7 +132,7 @@ func TestGetSpec(t *testing.T) {
 	config.MinSyncCommitteeParticipants = 71
 	config.ProposerReorgCutoffBPS = primitives.BP(121)
 	config.AttestationDueBPS = primitives.BP(122)
-	config.AggregrateDueBPS = primitives.BP(123)
+	config.AggregateDueBPS = primitives.BP(123)
 	config.ContributionDueBPS = primitives.BP(124)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
@@ -170,6 +170,8 @@ func TestGetSpec(t *testing.T) {
 	config.SyncMessageDueBPS = 103
 	config.BuilderWithdrawalPrefixByte = byte('b')
 	config.BuilderIndexSelfBuild = primitives.BuilderIndex(125)
+	config.BuilderPaymentThresholdNumerator = 104
+	config.BuilderPaymentThresholdDenominator = 105
 
 	var dbp [4]byte
 	copy(dbp[:], []byte{'0', '0', '0', '1'})
@@ -210,7 +212,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 178, len(data))
+	assert.Equal(t, 186, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -468,7 +470,7 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "121", v)
 			case "ATTESTATION_DUE_BPS":
 				assert.Equal(t, "122", v)
-			case "AGGREGRATE_DUE_BPS":
+			case "AGGREGATE_DUE_BPS":
 				assert.Equal(t, "123", v)
 			case "CONTRIBUTION_DUE_BPS":
 				assert.Equal(t, "124", v)
@@ -588,10 +590,26 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "102", v)
 			case "SYNC_MESSAGE_DUE_BPS":
 				assert.Equal(t, "103", v)
+			case "BUILDER_PAYMENT_THRESHOLD_NUMERATOR":
+				assert.Equal(t, "104", v)
+			case "BUILDER_PAYMENT_THRESHOLD_DENOMINATOR":
+				assert.Equal(t, "105", v)
 			case "BLOB_SCHEDULE":
 				blobSchedule, ok := v.([]any)
 				assert.Equal(t, true, ok)
 				assert.Equal(t, 2, len(blobSchedule))
+			case "FIELD_ELEMENTS_PER_CELL":
+				assert.Equal(t, "64", v) // From fieldparams.CellsPerBlob
+			case "FIELD_ELEMENTS_PER_EXT_BLOB":
+				assert.Equal(t, "198", v) // FieldElementsPerBlob (99) * 2
+			case "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH":
+				assert.Equal(t, "4", v) // Preset value
+			case "CELLS_PER_EXT_BLOB":
+				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
+			case "NUMBER_OF_COLUMNS":
+				assert.Equal(t, "128", v) // From fieldparams.NumberOfColumns
+			case "UPDATE_TIMEOUT":
+				assert.Equal(t, "1782", v) // SlotsPerEpoch (27) * EpochsPerSyncCommitteePeriod (66)
 			default:
 				t.Errorf("Incorrect key: %s", k)
 			}

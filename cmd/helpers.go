@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 
@@ -101,4 +102,64 @@ func ExpandSingleEndpointIfFile(ctx *cli.Context, flag *cli.StringFlag) error {
 		}
 	}
 	return nil
+}
+
+// ParseVModule parses a comma-separated list of package=level entries.
+func ParseVModule(input string) (map[string]logrus.Level, logrus.Level, error) {
+	var l logrus.Level
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return nil, l, nil
+	}
+
+	parts := strings.Split(trimmed, ",")
+	result := make(map[string]logrus.Level, len(parts))
+	for _, raw := range parts {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			return nil, l, fmt.Errorf("invalid vmodule entry: empty segment")
+		}
+		kv := strings.Split(entry, "=")
+		if len(kv) != 2 {
+			return nil, l, fmt.Errorf("invalid vmodule entry %q: expected path=level", entry)
+		}
+		pkg := strings.TrimSpace(kv[0])
+		levelText := strings.TrimSpace(kv[1])
+		if pkg == "" {
+			return nil, l, fmt.Errorf("invalid vmodule entry %q: empty package path", entry)
+		}
+		if levelText == "" {
+			return nil, l, fmt.Errorf("invalid vmodule entry %q: empty level", entry)
+		}
+		if strings.Contains(pkg, "*") {
+			return nil, l, fmt.Errorf("invalid vmodule package path %q: wildcards are not allowed", pkg)
+		}
+		if strings.ContainsAny(pkg, " \t\n") {
+			return nil, l, fmt.Errorf("invalid vmodule package path %q: whitespace is not allowed", pkg)
+		}
+		if strings.HasPrefix(pkg, "/") {
+			return nil, l, fmt.Errorf("invalid vmodule package path %q: leading slash is not allowed", pkg)
+		}
+		cleaned := path.Clean(pkg)
+		if cleaned != pkg || pkg == "." || pkg == ".." {
+			return nil, l, fmt.Errorf("invalid vmodule package path %q: must be an absolute package path. (trailing slash not allowed)", pkg)
+		}
+		if _, exists := result[pkg]; exists {
+			return nil, l, fmt.Errorf("invalid vmodule package path %q: duplicate entry", pkg)
+		}
+		level, err := logrus.ParseLevel(levelText)
+		if err != nil {
+			return nil, l, fmt.Errorf("invalid vmodule level %q: must be one of panic, fatal, error, warn, info, debug, trace", levelText)
+		}
+		result[pkg] = level
+	}
+
+	maxLevel := logrus.PanicLevel
+	for _, lvl := range result {
+		if lvl > maxLevel {
+			maxLevel = lvl
+		}
+	}
+
+	return result, maxLevel, nil
 }

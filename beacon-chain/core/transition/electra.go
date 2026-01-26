@@ -6,6 +6,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	coreRequests "github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -97,7 +98,7 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 			return nil, electra.NewExecReqError("nil deposit request")
 		}
 	}
-	st, err = electra.ProcessDepositRequests(ctx, st, requests.Deposits)
+	st, err = coreRequests.ProcessDepositRequests(ctx, st, requests.Deposits)
 	if err != nil {
 		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process deposit requests").Error())
 	}
@@ -107,7 +108,7 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 			return nil, electra.NewExecReqError("nil withdrawal request")
 		}
 	}
-	st, err = electra.ProcessWithdrawalRequests(ctx, st, requests.Withdrawals)
+	st, err = coreRequests.ProcessWithdrawalRequests(ctx, st, requests.Withdrawals)
 	if err != nil {
 		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process withdrawal requests").Error())
 	}
@@ -116,7 +117,7 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 			return nil, electra.NewExecReqError("nil consolidation request")
 		}
 	}
-	if err := electra.ProcessConsolidationRequests(ctx, st, requests.Consolidations); err != nil {
+	if err := coreRequests.ProcessConsolidationRequests(ctx, st, requests.Consolidations); err != nil {
 		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process consolidation requests").Error())
 	}
 	return st, nil

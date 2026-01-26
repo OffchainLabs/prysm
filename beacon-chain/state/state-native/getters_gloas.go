@@ -135,3 +135,15 @@ func (b *BeaconState) builderPendingBalanceToWithdraw(builderIndex primitives.Bu
 	}
 	return total
 }
+
+// BuilderPendingPayments returns a copy of the builder pending payments.
+func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingPayments", b.version)
+	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingPaymentsVal(), nil
+}

@@ -123,7 +123,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	// Time-based protocol parameters.
 	ProposerReorgCutoffBPS: primitives.BP(1667),
 	AttestationDueBPS:      primitives.BP(3333),
-	AggregrateDueBPS:       primitives.BP(6667),
+	AggregateDueBPS:        primitives.BP(6667),
 	SyncMessageDueBPS:      primitives.BP(3333),
 	ContributionDueBPS:     primitives.BP(6667),
 
@@ -331,6 +331,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
+
+	// Values related to gloas
+	BuilderPaymentThresholdNumerator:   6,
+	BuilderPaymentThresholdDenominator: 10,
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

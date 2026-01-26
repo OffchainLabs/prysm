@@ -157,3 +157,12 @@ func TestBuilderHelpers(t *testing.T) {
 		require.Equal(t, false, ok)
 	})
 }
+
+func TestBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
+	stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+	require.NoError(t, err)
+	st := stIface.(*state_native.BeaconState)
+
+	_, err = st.BuilderPendingPayments()
+	require.ErrorContains(t, "BuilderPendingPayments", err)
+}

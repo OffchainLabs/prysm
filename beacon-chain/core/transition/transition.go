@@ -142,6 +142,18 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 	); err != nil {
 		return nil, err
 	}
+
+	// Spec v1.6.1 (pseudocode):
+	// # [New in Gloas:EIP7732]
+	// # Unset the next payload availability
+	// state.execution_payload_availability[(state.slot + 1) % SLOTS_PER_HISTORICAL_ROOT] = 0b0
+	if state.Version() >= version.Gloas {
+		index := uint64((state.Slot() + 1) % params.BeaconConfig().SlotsPerHistoricalRoot)
+		if err := state.UpdateExecutionPayloadAvailabilityAtIndex(index, 0x0); err != nil {
+			return nil, err
+		}
+	}
+
 	return state, nil
 }
 
