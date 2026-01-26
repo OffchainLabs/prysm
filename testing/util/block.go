@@ -1563,7 +1563,7 @@ func HydrateExecutionPayloadBid(b *ethpb.ExecutionPayloadBid) *ethpb.ExecutionPa
 		b.PrevRandao = make([]byte, fieldparams.RootLength)
 	}
 	if b.FeeRecipient == nil {
-		b.FeeRecipient = make([]byte, 20)
+		b.FeeRecipient = make([]byte, fieldparams.FeeRecipientLength)
 	}
 	if b.BlobKzgCommitmentsRoot == nil {
 		b.BlobKzgCommitmentsRoot = make([]byte, fieldparams.RootLength)

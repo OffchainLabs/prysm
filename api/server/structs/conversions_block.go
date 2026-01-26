@@ -3163,7 +3163,7 @@ func (b *ExecutionPayloadBid) ToConsensus() (*eth.ExecutionPayloadBid, error) {
 	if err != nil {
 		return nil, server.NewDecodeError(err, "PrevRandao")
 	}
-	feeRecipient, err := bytesutil.DecodeHexWithLength(b.FeeRecipient, 20)
+	feeRecipient, err := bytesutil.DecodeHexWithLength(b.FeeRecipient, fieldparams.FeeRecipientLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "FeeRecipient")
 	}
