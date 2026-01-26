@@ -233,7 +233,6 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 //   - "justified"
 //   - <slot>
 //   - <hex encoded block root with '0x' prefix>
-//   - <block root>
 func (p *BeaconDbBlocker) BlockRoot(ctx context.Context, id []byte) ([fieldparams.RootLength]byte, error) {
 	root, _, err := p.resolveBlockID(ctx, string(id))
 	return root, err
