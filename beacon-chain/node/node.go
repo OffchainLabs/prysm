@@ -66,7 +66,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/prometheus"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -468,10 +467,6 @@ func (b *BeaconNode) OperationFeed() event.SubscriberSender {
 // Start the BeaconNode and kicks off every registered service.
 func (b *BeaconNode) Start() {
 	b.lock.Lock()
-
-	log.WithFields(logrus.Fields{
-		"version": version.Version(),
-	}).Info("Starting beacon node")
 
 	b.services.StartAll()
 

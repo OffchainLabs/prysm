@@ -31,7 +31,7 @@ func addLogWriter(w io.Writer) {
 
 // ConfigurePersistentLogging adds a log-to-file writer. File content is identical to stdout.
 func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Level, vmodule map[string]logrus.Level) error {
-	logrus.WithField("logFileName", logFileName).Info("Logs will be made persistent")
+	logrus.WithField("logFileName", logFileName).Debug("Logs will be made persistent")
 	if err := file.MkdirAll(filepath.Dir(logFileName)); err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 	if format != "text" {
 		addLogWriter(f)
 
-		logrus.Info("File logging initialized")
+		logrus.Debug("File logging initialized")
 		return nil
 	}
 
@@ -70,7 +70,7 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 		AllowedLevels: logrus.AllLevels[:max(lvl, maxVmoduleLevel)+1],
 	})
 
-	logrus.Info("File logging initialized")
+	logrus.Debug("File logging initialized")
 	return nil
 }
 
@@ -103,7 +103,7 @@ func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 		AllowedLevels: logrus.AllLevels[:ephemeralLogFileVerbosity+1],
 	})
 
-	logrus.Info("Ephemeral log file initialized")
+	logrus.Debug("Ephemeral log file initialized")
 	return nil
 }
 

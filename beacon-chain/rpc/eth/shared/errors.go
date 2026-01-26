@@ -26,21 +26,30 @@ func WriteStateFetchError(w http.ResponseWriter, err error) {
 	httputil.HandleError(w, "Could not get state: "+err.Error(), http.StatusInternalServerError)
 }
 
-// WriteBlockFetchError writes an appropriate error based on the supplied argument.
-// The argument error should be a result of fetching block.
-func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock, err error) bool {
+// writeBlockIdError handles common block ID lookup errors.
+// Returns true if an error was handled and written to the response, false if no error.
+func writeBlockIdError(w http.ResponseWriter, err error, fallbackMsg string) bool {
+	if err == nil {
+		return false
+	}
 	var blockNotFoundErr *lookup.BlockNotFoundError
 	if errors.As(err, &blockNotFoundErr) {
 		httputil.HandleError(w, "Block not found: "+blockNotFoundErr.Error(), http.StatusNotFound)
-		return false
+		return true
 	}
 	var invalidBlockIdErr *lookup.BlockIdParseError
 	if errors.As(err, &invalidBlockIdErr) {
 		httputil.HandleError(w, "Invalid block ID: "+invalidBlockIdErr.Error(), http.StatusBadRequest)
-		return false
+		return true
 	}
-	if err != nil {
-		httputil.HandleError(w, "Could not get block from block ID: "+err.Error(), http.StatusInternalServerError)
+	httputil.HandleError(w, fallbackMsg+": "+err.Error(), http.StatusInternalServerError)
+	return true
+}
+
+// WriteBlockFetchError writes an appropriate error based on the supplied argument.
+// The argument error should be a result of fetching block.
+func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock, err error) bool {
+	if writeBlockIdError(w, err, "Could not get block from block ID") {
 		return false
 	}
 	if err = blocks.BeaconBlockIsNil(blk); err != nil {
@@ -48,4 +57,11 @@ func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBe
 		return false
 	}
 	return true
+}
+
+// WriteBlockRootFetchError writes an appropriate error based on the supplied argument.
+// The argument error should be a result of fetching block root.
+// Returns true if no error occurred, false otherwise.
+func WriteBlockRootFetchError(w http.ResponseWriter, err error) bool {
+	return !writeBlockIdError(w, err, "Could not get block root from block ID")
 }
