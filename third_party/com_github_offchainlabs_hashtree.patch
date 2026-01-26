@@ -44,14 +44,14 @@ diff -urN a/BUILD.bazel b/BUILD.bazel
 +    name = "hashtree_arm64_syso",
 +    srcs = [":hashtree_arm64"],
 +    outs = ["hashtree_arm64.syso"],
-+    cmd = "cp $(location :hashtree_arm64) $@",
++    cmd = "cp $$(echo $(locations :hashtree_arm64) | tr ' ' '\\n' | grep -v '\\.pic\\.' | head -1) $@",
 +)
 +
 +genrule(
 +    name = "hashtree_amd64_syso",
 +    srcs = [":hashtree_amd64"],
 +    outs = ["hashtree_amd64.syso"],
-+    cmd = "cp $(location :hashtree_amd64) $@",
++    cmd = "cp $$(echo $(locations :hashtree_amd64) | tr ' ' '\\n' | grep -v '\\.pic\\.' | head -1) $@",
 +)
 +
 +cc_library(
