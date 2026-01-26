@@ -555,13 +555,16 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV3")
 	defer span.End()
+	start := time.Now()
 
 	if !s.capabilityCache.has(GetBlobsV3) {
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV3))
 	}
 
+	getBlobsV3RequestsTotal.Inc()
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
+	getBlobsV3Latency.Observe(time.Since(start).Seconds())
 	return result, handleRPCError(err)
 }
 
@@ -727,7 +730,8 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	// Fetch all blobsAndCellsProofs from the execution client.
 	var err error
-	if s.capabilityCache.has(GetBlobsV3) {
+	useV3 := s.capabilityCache.has(GetBlobsV3)
+	if useV3 {
 		// v3 can return a partial response. V2 is all or nothing
 		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
 	} else {
@@ -736,6 +740,21 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	if err != nil {
 		return nil, nil, nil, errors.Wrapf(err, "get blobs V2/3")
+	}
+
+	// Track complete vs partial responses for V3
+	if useV3 && len(blobAndProofs) > 0 {
+		nonNilCount := 0
+		for _, bp := range blobAndProofs {
+			if bp != nil {
+				nonNilCount++
+			}
+		}
+		if nonNilCount == len(versionedHashes) {
+			getBlobsV3CompleteResponsesTotal.Inc()
+		} else if nonNilCount > 0 {
+			getBlobsV3PartialResponsesTotal.Inc()
+		}
 	}
 
 	// Compute cells and proofs from the blobs and cell proofs.
