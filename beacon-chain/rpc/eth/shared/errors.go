@@ -42,14 +42,14 @@ func writeBlockIdError(w http.ResponseWriter, err error, fallbackMsg string) boo
 		httputil.HandleError(w, "Invalid block ID: "+invalidBlockIdErr.Error(), http.StatusBadRequest)
 		return true
 	}
-	httputil.HandleError(w, fallbackMsg+err.Error(), http.StatusInternalServerError)
+	httputil.HandleError(w, fallbackMsg+": "+err.Error(), http.StatusInternalServerError)
 	return true
 }
 
 // WriteBlockFetchError writes an appropriate error based on the supplied argument.
 // The argument error should be a result of fetching block.
 func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBeaconBlock, err error) bool {
-	if writeBlockIdError(w, err, "Could not get block from block ID: ") {
+	if writeBlockIdError(w, err, "Could not get block from block ID") {
 		return false
 	}
 	if err = blocks.BeaconBlockIsNil(blk); err != nil {
@@ -63,5 +63,5 @@ func WriteBlockFetchError(w http.ResponseWriter, blk interfaces.ReadOnlySignedBe
 // The argument error should be a result of fetching block root.
 // Returns true if no error occurred, false otherwise.
 func WriteBlockRootFetchError(w http.ResponseWriter, err error) bool {
-	return !writeBlockIdError(w, err, "Could not get block root from block ID: ")
+	return !writeBlockIdError(w, err, "Could not get block root from block ID")
 }
