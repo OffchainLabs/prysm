@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -28,6 +29,7 @@ type Client struct {
 // `host` is the base host + port used to construct request urls. This value can be
 // a URL string, or NewClient will assume an http endpoint if just `host:port` is used.
 func NewClient(host string, opts ...ClientOpt) (*Client, error) {
+	log.Info("hi")
 	u, err := urlForHost(host)
 	if err != nil {
 		return nil, err
