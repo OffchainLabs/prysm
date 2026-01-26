@@ -50,6 +50,14 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// fillGloasBlockTestData populates a Gloas block with non-zero test values for the
+// Gloas-specific fields: SignedExecutionPayloadBid and PayloadAttestations.
+func fillGloasBlockTestData(b *eth.SignedBeaconBlockGloas, numPayloadAttestations int) {
+	slot := b.Block.Slot
+	b.Block.Body.SignedExecutionPayloadBid = util.GenerateTestSignedExecutionPayloadBid(slot)
+	b.Block.Body.PayloadAttestations = util.GenerateTestPayloadAttestations(numPayloadAttestations, slot)
+}
+
 func fillDBTestBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (*eth.SignedBeaconBlock, []*eth.BeaconBlockContainer) {
 	parentRoot := [32]byte{1, 2, 3}
 	genBlk := util.NewBeaconBlock()
@@ -338,6 +346,7 @@ func TestGetBlockV2(t *testing.T) {
 	t.Run("gloas", func(t *testing.T) {
 		b := util.NewBeaconBlockGloas()
 		b.Block.Slot = 123
+		fillGloasBlockTestData(b, 2)
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
@@ -366,6 +375,17 @@ func TestGetBlockV2(t *testing.T) {
 		blk, err := sbb.ToConsensus()
 		require.NoError(t, err)
 		assert.DeepEqual(t, blk, b)
+
+		// Verify Gloas-specific fields are correctly serialized/deserialized
+		require.NotNil(t, blk.Block.Body.SignedExecutionPayloadBid)
+		assert.Equal(t, primitives.Slot(123), blk.Block.Body.SignedExecutionPayloadBid.Message.Slot)
+		assert.Equal(t, primitives.BuilderIndex(1), blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex)
+		require.Equal(t, 2, len(blk.Block.Body.PayloadAttestations))
+		for _, att := range blk.Block.Body.PayloadAttestations {
+			assert.Equal(t, primitives.Slot(123), att.Data.Slot)
+			assert.Equal(t, true, att.Data.PayloadPresent)
+			assert.Equal(t, true, att.Data.BlobDataAvailable)
+		}
 	})
 	t.Run("execution optimistic", func(t *testing.T) {
 		b := util.NewBeaconBlockBellatrix()
@@ -609,6 +629,7 @@ func TestGetBlockSSZV2(t *testing.T) {
 	t.Run("gloas", func(t *testing.T) {
 		b := util.NewBeaconBlockGloas()
 		b.Block.Slot = 123
+		fillGloasBlockTestData(b, 2)
 		sb, err := blocks.NewSignedBeaconBlock(b)
 		require.NoError(t, err)
 
@@ -628,6 +649,13 @@ func TestGetBlockSSZV2(t *testing.T) {
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
+
+		// Verify SSZ round-trip preserves Gloas-specific fields
+		decoded := &eth.SignedBeaconBlockGloas{}
+		require.NoError(t, decoded.UnmarshalSSZ(writer.Body.Bytes()))
+		require.NotNil(t, decoded.Block.Body.SignedExecutionPayloadBid)
+		assert.Equal(t, primitives.Slot(123), decoded.Block.Body.SignedExecutionPayloadBid.Message.Slot)
+		require.Equal(t, 2, len(decoded.Block.Body.PayloadAttestations))
 	})
 }
 

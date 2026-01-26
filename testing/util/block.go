@@ -1528,6 +1528,9 @@ func HydrateBeaconBlockBodyGloas(b *ethpb.BeaconBlockBodyGloas) *ethpb.BeaconBlo
 		}
 	}
 	b.SignedExecutionPayloadBid = HydrateSignedExecutionPayloadBid(b.SignedExecutionPayloadBid)
+	if b.PayloadAttestations == nil {
+		b.PayloadAttestations = make([]*ethpb.PayloadAttestation, 0)
+	}
 	return b
 }
 
@@ -1569,4 +1572,86 @@ func HydrateExecutionPayloadBid(b *ethpb.ExecutionPayloadBid) *ethpb.ExecutionPa
 		b.BlobKzgCommitmentsRoot = make([]byte, fieldparams.RootLength)
 	}
 	return b
+}
+
+// HydratePayloadAttestation hydrates a payload attestation with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydratePayloadAttestation(p *ethpb.PayloadAttestation) *ethpb.PayloadAttestation {
+	if p == nil {
+		p = &ethpb.PayloadAttestation{}
+	}
+	if p.AggregationBits == nil {
+		p.AggregationBits = make([]byte, 64)
+	}
+	if p.Signature == nil {
+		p.Signature = make([]byte, fieldparams.BLSSignatureLength)
+	}
+	p.Data = HydratePayloadAttestationData(p.Data)
+	return p
+}
+
+// HydratePayloadAttestationData hydrates a payload attestation data with correct field length sizes
+// to comply with fssz marshalling and unmarshalling rules.
+func HydratePayloadAttestationData(d *ethpb.PayloadAttestationData) *ethpb.PayloadAttestationData {
+	if d == nil {
+		d = &ethpb.PayloadAttestationData{}
+	}
+	if d.BeaconBlockRoot == nil {
+		d.BeaconBlockRoot = make([]byte, fieldparams.RootLength)
+	}
+	return d
+}
+
+// GenerateTestPayloadAttestations generates a slice of payload attestations with non-zero test values.
+// This is useful for testing Gloas-specific fields.
+func GenerateTestPayloadAttestations(count int, slot primitives.Slot) []*ethpb.PayloadAttestation {
+	attestations := make([]*ethpb.PayloadAttestation, count)
+	for i := range count {
+		aggregationBits := make([]byte, 64)
+		aggregationBits[0] = 0x01 // Set at least one bit
+		signature := make([]byte, fieldparams.BLSSignatureLength)
+		signature[0] = byte(i + 1) // Make each signature unique
+		beaconBlockRoot := make([]byte, fieldparams.RootLength)
+		beaconBlockRoot[0] = byte(i + 1) // Make each root unique
+
+		attestations[i] = &ethpb.PayloadAttestation{
+			AggregationBits: aggregationBits,
+			Signature:       signature,
+			Data: &ethpb.PayloadAttestationData{
+				BeaconBlockRoot:   beaconBlockRoot,
+				Slot:              slot,
+				PayloadPresent:    true,
+				BlobDataAvailable: true,
+			},
+		}
+	}
+	return attestations
+}
+
+// GenerateTestSignedExecutionPayloadBid generates a signed execution payload bid with non-zero test values.
+// This is useful for testing Gloas-specific fields.
+func GenerateTestSignedExecutionPayloadBid(slot primitives.Slot) *ethpb.SignedExecutionPayloadBid {
+	parentBlockHash := bytesutil.PadTo([]byte{0x01}, fieldparams.RootLength)
+	parentBlockRoot := bytesutil.PadTo([]byte{0x02}, fieldparams.RootLength)
+	blockHash := bytesutil.PadTo([]byte{0x03}, fieldparams.RootLength)
+	prevRandao := bytesutil.PadTo([]byte{0x04}, fieldparams.RootLength)
+	feeRecipient := bytesutil.PadTo([]byte{0x05}, fieldparams.FeeRecipientLength)
+	blobKzgRoot := bytesutil.PadTo([]byte{0x06}, fieldparams.RootLength)
+	signature := bytesutil.PadTo([]byte{0x07}, fieldparams.BLSSignatureLength)
+
+	return &ethpb.SignedExecutionPayloadBid{
+		Message: &ethpb.ExecutionPayloadBid{
+			Slot:                   slot,
+			BuilderIndex:           1,
+			ParentBlockHash:        parentBlockHash,
+			ParentBlockRoot:        parentBlockRoot,
+			BlockHash:              blockHash,
+			GasLimit:               30000000,
+			PrevRandao:             prevRandao,
+			FeeRecipient:           feeRecipient,
+			Value:                  1000000,
+			BlobKzgCommitmentsRoot: blobKzgRoot,
+		},
+		Signature: signature,
+	}
 }
