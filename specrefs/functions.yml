@@ -5528,7 +5528,7 @@
 
 - name: process_deposit_request
   sources:
-    - file: beacon-chain/core/electra/deposits.go
+    - file: beacon-chain/core/requests/deposits.go
       search: func processDepositRequest(
   spec: |
     <spec fn="process_deposit_request" fork="electra" hash="547c4a35">
