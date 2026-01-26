@@ -161,7 +161,7 @@ var (
 		Name: "p2p_pubsub_rpc_recv_pub_size_total",
 		Help: "The total size of publish messages received via rpc for a particular topic",
 	},
-		[]string{"topic"})
+		[]string{"topic", "is_partial"})
 	pubsubRPCDrop = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_drop_total",
 		Help: "The number of messages dropped via rpc for a particular control message",
@@ -180,7 +180,7 @@ var (
 		Name: "p2p_pubsub_rpc_drop_pub_size_total",
 		Help: "The total size of publish messages dropped via rpc for a particular topic",
 	},
-		[]string{"topic"})
+		[]string{"topic", "is_partial"})
 	pubsubRPCSent = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "p2p_pubsub_rpc_sent_total",
 		Help: "The number of messages sent via rpc for a particular control message",
@@ -196,10 +196,10 @@ var (
 	},
 		[]string{"topic"})
 	pubsubRPCPubSentSize = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "p2p_pubsub_rpc_sent_pub_size_total",
+		Name: "gossipsub_pubsub_rpc_sent_pub_size_total",
 		Help: "The total size of publish messages sent via rpc for a particular topic",
 	},
-		[]string{"topic"})
+		[]string{"topic", "is_partial"})
 )
 
 func (s *Service) updateMetrics() {

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -346,6 +347,14 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 					handle: func(topic string, col blocks.VerifiedRODataColumn) {
 						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
 						defer cancel()
+
+						slot := col.SignedBlockHeader.Header.Slot
+						proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
+						if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
+							s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
+							// This column was completed from a partial message.
+							partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
+						}
 						err := s.verifiedRODataColumnSubscriber(ctx, col)
 						if err != nil {
 							log.WithError(err).Error("Failed to handle verified RO data column subscriber")
