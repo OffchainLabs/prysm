@@ -84,6 +84,9 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 		dataColumns:     roDataColumns,
 		results:         newResults(reqs...),
 		verifyDataColumnsCommitment: func(rc []blocks.RODataColumn) error {
+			if len(rc) == 0 {
+				return nil
+			}
 			var sizeHint int
 			if len(rc) > 0 {
 				sizeHint = len(rc[0].Column)
