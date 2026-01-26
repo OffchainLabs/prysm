@@ -73,6 +73,9 @@ type PartialColumnBroadcaster struct {
 
 	groupTTL map[string]int8
 
+	// validHeaderCache caches validated headers by group ID (works across topics)
+	validHeaderCache map[string]*ethpb.PartialDataColumnHeader
+
 	incomingReq chan request
 }
 
@@ -133,6 +136,7 @@ func NewBroadcaster(logger *logrus.Logger) *PartialColumnBroadcaster {
 		topics:           make(map[string]*pubsub.Topic),
 		partialMsgStore:  make(map[string]map[string]*blocks.PartialDataColumn),
 		groupTTL:         make(map[string]int8),
+		validHeaderCache: make(map[string]*ethpb.PartialDataColumnHeader),
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
 		incomingReq: make(chan request, 128*16),
@@ -208,6 +212,7 @@ func (p *PartialColumnBroadcaster) loop() {
 				}
 
 				delete(p.groupTTL, groupID)
+				delete(p.validHeaderCache, groupID)
 				for topic, msgStore := range p.partialMsgStore {
 					delete(msgStore, groupID)
 					if len(msgStore) == 0 {
@@ -273,28 +278,36 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 	var shouldRepublish bool
 
 	if ourDataColumn == nil && hasMessage {
-		// We haven't seen this group before. Check if we have a valid header.
-		if len(message.Header) == 0 {
-			p.logger.Debug("No partial column found and no header in message, ignoring")
-			return nil
-		}
-
-		header := message.Header[0]
-		headerValidator, ok := p.headerValidators[topicID]
-		if !ok || headerValidator == nil {
-			p.logger.Debug("No header validator registered for topic")
-			return nil
-		}
-
-		reject, err := headerValidator(header)
-		if err != nil {
-			p.logger.Debug("Header validation failed", "err", err, "reject", reject)
-			if reject {
-				// REJECT case: penalize the peer
-				_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
+		var header *ethpb.PartialDataColumnHeader
+		// Check cache first for this group
+		if cachedHeader, ok := p.validHeaderCache[string(groupID)]; ok {
+			header = cachedHeader
+		} else {
+			// We haven't seen this group before. Check if we have a valid header.
+			if len(message.Header) == 0 {
+				p.logger.Debug("No partial column found and no header in message, ignoring")
+				return nil
 			}
-			// Both REJECT and IGNORE: don't process further
-			return nil
+
+			header = message.Header[0]
+			headerValidator, ok := p.headerValidators[topicID]
+			if !ok || headerValidator == nil {
+				p.logger.Debug("No header validator registered for topic")
+				return nil
+			}
+
+			reject, err := headerValidator(header)
+			if err != nil {
+				p.logger.Debug("Header validation failed", "err", err, "reject", reject)
+				if reject {
+					// REJECT case: penalize the peer
+					_ = p.ps.PeerFeedback(topicID, rpcWithFrom.from, pubsub.PeerFeedbackInvalidMessage)
+				}
+				// Both REJECT and IGNORE: don't process further
+				return nil
+			}
+			// Cache the valid header
+			p.validHeaderCache[string(groupID)] = header
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
