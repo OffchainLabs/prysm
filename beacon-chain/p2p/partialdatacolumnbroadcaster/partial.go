@@ -352,6 +352,11 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 		if err != nil {
 			return err
 		}
+		// Track cells received via partial message
+		if len(cellIndices) > 0 {
+			columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
+			partialMessageCellsReceivedTotal.WithLabelValues(columnIndexStr).Add(float64(len(cellIndices)))
+		}
 		if len(cellsToVerify) > 0 {
 			p.concurrentValidatorSemaphore <- struct{}{}
 			go func() {
@@ -405,7 +410,11 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 	extended := ourDataColumn.ExtendFromVerfifiedCells(cells.cellIndices, cells.cells)
 	p.logger.Debug("Extended partial message", "duration", cells.validationTook, "extended", extended)
 
+	columnIndexStr := strconv.FormatUint(ourDataColumn.Index, 10)
 	if extended {
+		// Track useful cells (cells that extended our data)
+		partialMessageUsefulCellsTotal.WithLabelValues(columnIndexStr).Add(float64(len(cells.cells)))
+
 		// TODO: we could use the heuristic here that if this data was
 		// useful to us, it's likely useful to our peers and we should
 		// republish eagerly

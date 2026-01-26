@@ -555,13 +555,16 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsV3")
 	defer span.End()
+	start := time.Now()
 
 	if !s.capabilityCache.has(GetBlobsV3) {
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV3))
 	}
 
+	getBlobsV3RequestsTotal.Inc()
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes)
+	getBlobsV3Latency.Observe(time.Since(start).Seconds())
 	return result, handleRPCError(err)
 }
 
@@ -727,7 +730,8 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 
 	// Fetch all blobsAndCellsProofs from the execution client.
 	var err error
-	if s.capabilityCache.has(GetBlobsV3) {
+	useV3 := s.capabilityCache.has(GetBlobsV3)
+	if useV3 {
 		// v3 can return a partial response. V2 is all or nothing
 		blobAndProofs, err = s.GetBlobsV3(ctx, versionedHashes)
 	} else {
@@ -742,6 +746,11 @@ func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommi
 	included, cellsPerBlob, proofsPerBlob, err := peerdas.ComputeCellsAndProofsFromStructured(uint64(len(kzgCommitments)), blobAndProofs)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "compute cells and proofs")
+	}
+	if included.Count() == uint64(len(kzgCommitments)) {
+		getBlobsV3CompleteResponsesTotal.Inc()
+	} else if included.Count() > 0 {
+		getBlobsV3PartialResponsesTotal.Inc()
 	}
 
 	return included, cellsPerBlob, proofsPerBlob, nil

@@ -110,17 +110,17 @@ func (g gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pu
 		ctrlCtr.WithLabelValues("iwant").Add(float64(len(rpc.Control.Iwant)))
 		ctrlCtr.WithLabelValues("idontwant").Add(float64(len(rpc.Control.Idontwant)))
 	}
+	// For incoming messages from pubsub, we do not record metrics for them as these values
+	// could be junk.
+	if act == recv {
+		return
+	}
 	for _, msg := range rpc.Publish {
-		// For incoming messages from pubsub, we do not record metrics for them as these values
-		// could be junk.
-		if act == recv {
-			continue
-		}
 		pubCtr.WithLabelValues(msg.GetTopic()).Inc()
-		pubSizeCtr.WithLabelValues(msg.GetTopic()).Add(float64(msg.Size()))
+		pubSizeCtr.WithLabelValues(msg.GetTopic(), "false").Add(float64(msg.Size()))
 	}
 	if rpc.Partial != nil {
 		pubCtr.WithLabelValues(rpc.Partial.GetTopicID()).Inc()
-		pubSizeCtr.WithLabelValues(rpc.Partial.GetTopicID()).Add(float64(rpc.Partial.Size()))
+		pubSizeCtr.WithLabelValues(rpc.Partial.GetTopicID(), "true").Add(float64(rpc.Partial.Size()))
 	}
 }
