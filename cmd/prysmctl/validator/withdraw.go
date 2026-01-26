@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/logrusorgru/aurora"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -143,7 +143,7 @@ func checkIfWithdrawsAreInPool(ctx context.Context, client *beacon.Client, reque
 	}
 	if len(requestMap) != 0 {
 		for key, address := range requestMap {
-			log.WithFields(log.Fields{
+			log.WithFields(logrus.Fields{
 				"validatorIndex":    key,
 				"executionAddress:": address,
 			}).Warn("Set withdrawal address message not found in the node's operations pool.")

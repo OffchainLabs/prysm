@@ -5,11 +5,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/runtime/tos"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "wallet")
 
 // Commands for wallets for Prysm validators.
 var Commands = &cli.Command{
