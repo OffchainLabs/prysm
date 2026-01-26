@@ -16,7 +16,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-// Unit testing for ProofCollector
 func TestProofCollector_New(t *testing.T) {
 	pc := newProofCollector()
 
