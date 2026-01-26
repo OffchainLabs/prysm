@@ -3225,7 +3225,7 @@ func (p *PayloadAttestation) ToConsensus() (*eth.PayloadAttestation, error) {
 	if p == nil {
 		return nil, errNilValue
 	}
-	aggregationBits, err := bytesutil.DecodeHexWithMaxLength(p.AggregationBits, 64) // PTC_SIZE is 512 bits = 64 bytes
+	aggregationBits, err := hexutil.Decode(p.AggregationBits)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "AggregationBits")
 	}
