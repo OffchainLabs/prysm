@@ -7,7 +7,6 @@ import (
 	"github.com/OffchainLabs/hashtree"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/prysmaticlabs/gohashtree"
-	log "github.com/sirupsen/logrus"
 )
 
 const minSliceSizeToParallelize = 5000

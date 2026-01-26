@@ -2509,6 +2509,10 @@ func TestServer_GetBlockRoot(t *testing.T) {
 			HeadFetcher:           mockChainFetcher,
 			OptimisticModeFetcher: mockChainFetcher,
 			FinalizationFetcher:   mockChainFetcher,
+			Blocker: &lookup.BeaconDbBlocker{
+				BeaconDB:         beaconDB,
+				ChainInfoFetcher: mockChainFetcher,
+			},
 		}
 
 		root, err := genBlk.Block.HashTreeRoot()
@@ -2524,7 +2528,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 			{
 				name:     "bad formatting",
 				blockID:  map[string]string{"block_id": "3bad0"},
-				wantErr:  "Could not parse block ID",
+				wantErr:  "Invalid block ID",
 				wantCode: http.StatusBadRequest,
 			},
 			{
@@ -2572,7 +2576,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 			{
 				name:     "non-existent root",
 				blockID:  map[string]string{"block_id": hexutil.Encode(bytesutil.PadTo([]byte("hi there"), 32))},
-				wantErr:  "Could not find block",
+				wantErr:  "Block not found",
 				wantCode: http.StatusNotFound,
 			},
 			{
@@ -2585,7 +2589,7 @@ func TestServer_GetBlockRoot(t *testing.T) {
 			{
 				name:     "no block",
 				blockID:  map[string]string{"block_id": "105"},
-				wantErr:  "Could not find any blocks with given slot",
+				wantErr:  "Block not found",
 				wantCode: http.StatusNotFound,
 			},
 		}
@@ -2633,6 +2637,10 @@ func TestServer_GetBlockRoot(t *testing.T) {
 			HeadFetcher:           mockChainFetcher,
 			OptimisticModeFetcher: mockChainFetcher,
 			FinalizationFetcher:   mockChainFetcher,
+			Blocker: &lookup.BeaconDbBlocker{
+				BeaconDB:         beaconDB,
+				ChainInfoFetcher: mockChainFetcher,
+			},
 		}
 
 		request := httptest.NewRequest(http.MethodGet, url, nil)
@@ -2668,6 +2676,10 @@ func TestServer_GetBlockRoot(t *testing.T) {
 			HeadFetcher:           mockChainFetcher,
 			OptimisticModeFetcher: mockChainFetcher,
 			FinalizationFetcher:   mockChainFetcher,
+			Blocker: &lookup.BeaconDbBlocker{
+				BeaconDB:         beaconDB,
+				ChainInfoFetcher: mockChainFetcher,
+			},
 		}
 		t.Run("true", func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, url, nil)

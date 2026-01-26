@@ -1,9 +1,9 @@
-package electra_test
+package requests_test
 
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/requests"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -289,7 +289,7 @@ func TestProcessWithdrawRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			got, err := electra.ProcessWithdrawalRequests(t.Context(), tt.args.st, tt.args.wrs)
+			got, err := requests.ProcessWithdrawalRequests(t.Context(), tt.args.st, tt.args.wrs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ProcessWithdrawalRequests() error = %v, wantErr %v", err, tt.wantErr)
 				return
