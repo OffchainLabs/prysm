@@ -1,9 +1,9 @@
-package blocks_test
+package helpers_test
 
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -45,7 +45,7 @@ func TestBatchVerifyDepositsSignatures_Ok(t *testing.T) {
 
 	deposit.Proof = proof
 	require.NoError(t, err)
-	verified, err := blocks.BatchVerifyDepositsSignatures(t.Context(), []*ethpb.Deposit{deposit})
+	verified, err := helpers.BatchVerifyDepositsSignatures(t.Context(), []*ethpb.Deposit{deposit})
 	require.NoError(t, err)
 	require.Equal(t, true, verified)
 }
@@ -68,7 +68,7 @@ func TestBatchVerifyDepositsSignatures_InvalidSignature(t *testing.T) {
 
 	deposit.Proof = proof
 	require.NoError(t, err)
-	verified, err := blocks.BatchVerifyDepositsSignatures(t.Context(), []*ethpb.Deposit{deposit})
+	verified, err := helpers.BatchVerifyDepositsSignatures(t.Context(), []*ethpb.Deposit{deposit})
 	require.NoError(t, err)
 	require.Equal(t, false, verified)
 }
@@ -99,7 +99,7 @@ func TestVerifyDeposit_MerkleBranchFailsVerification(t *testing.T) {
 	})
 	require.NoError(t, err)
 	want := "deposit root did not verify"
-	err = blocks.VerifyDeposit(beaconState, deposit)
+	err = helpers.VerifyDeposit(beaconState, deposit)
 	require.ErrorContains(t, want, err)
 }
 
@@ -123,7 +123,7 @@ func TestIsValidDepositSignature_Ok(t *testing.T) {
 	require.NoError(t, err)
 	sig := sk.Sign(sr[:])
 	depositData.Signature = sig.Marshal()
-	valid, err := blocks.IsValidDepositSignature(depositData)
+	valid, err := helpers.IsValidDepositSignature(depositData)
 	require.NoError(t, err)
 	require.Equal(t, true, valid)
 }
@@ -163,7 +163,7 @@ func TestBatchVerifyPendingDepositsSignatures_Ok(t *testing.T) {
 	sig2 := sk2.Sign(sr2[:])
 	pendingDeposit2.Signature = sig2.Marshal()
 
-	verified, err := blocks.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit, pendingDeposit2})
+	verified, err := helpers.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit, pendingDeposit2})
 	require.NoError(t, err)
 	require.Equal(t, true, verified)
 }
@@ -174,7 +174,7 @@ func TestBatchVerifyPendingDepositsSignatures_InvalidSignature(t *testing.T) {
 		WithdrawalCredentials: make([]byte, 32),
 		Signature:             make([]byte, 96),
 	}
-	verified, err := blocks.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit})
+	verified, err := helpers.BatchVerifyPendingDepositsSignatures(t.Context(), []*ethpb.PendingDeposit{pendingDeposit})
 	require.NoError(t, err)
 	require.Equal(t, false, verified)
 }
