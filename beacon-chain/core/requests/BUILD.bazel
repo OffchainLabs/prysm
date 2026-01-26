@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "consolidations.go",
+        "deposits.go",
         "log.go",
         "withdrawals.go",
     ],
@@ -35,14 +36,17 @@ go_test(
     name = "go_default_test",
     srcs = [
         "consolidations_test.go",
+        "deposits_test.go",
         "withdrawals_test.go",
     ],
     deps = [
         ":go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//crypto/bls:go_default_library",
         "//encoding/bytesutil:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",

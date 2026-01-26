@@ -6,7 +6,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	stateTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/state/testing"
@@ -15,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
-	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
@@ -359,60 +357,6 @@ func TestBatchProcessNewPendingDeposits(t *testing.T) {
 		require.Equal(t, 1, len(st.Balances()))
 		require.Equal(t, 2*params.BeaconConfig().MinActivationBalance, st.Balances()[0])
 	})
-}
-
-func TestProcessDepositRequests(t *testing.T) {
-	st, _ := util.DeterministicGenesisStateElectra(t, 1)
-	sk, err := bls.RandKey()
-	require.NoError(t, err)
-	require.NoError(t, st.SetDepositRequestsStartIndex(1))
-
-	t.Run("empty requests continues", func(t *testing.T) {
-		newSt, err := electra.ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{})
-		require.NoError(t, err)
-		require.DeepEqual(t, newSt, st)
-	})
-	t.Run("nil request errors", func(t *testing.T) {
-		_, err = electra.ProcessDepositRequests(t.Context(), st, []*enginev1.DepositRequest{nil})
-		require.ErrorContains(t, "nil deposit request", err)
-	})
-
-	vals := st.Validators()
-	vals[0].PublicKey = sk.PublicKey().Marshal()
-	vals[0].WithdrawalCredentials[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
-	require.NoError(t, st.SetValidators(vals))
-	bals := st.Balances()
-	bals[0] = params.BeaconConfig().MinActivationBalance + 2000
-	require.NoError(t, st.SetBalances(bals))
-	require.NoError(t, st.SetPendingDeposits(make([]*eth.PendingDeposit, 0))) // reset pbd as the determinitstic state populates this already
-	withdrawalCred := make([]byte, 32)
-	withdrawalCred[0] = params.BeaconConfig().CompoundingWithdrawalPrefixByte
-	depositMessage := &eth.DepositMessage{
-		PublicKey:             sk.PublicKey().Marshal(),
-		Amount:                1000,
-		WithdrawalCredentials: withdrawalCred,
-	}
-	domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
-	require.NoError(t, err)
-	sr, err := signing.ComputeSigningRoot(depositMessage, domain)
-	require.NoError(t, err)
-	sig := sk.Sign(sr[:])
-	requests := []*enginev1.DepositRequest{
-		{
-			Pubkey:                depositMessage.PublicKey,
-			Index:                 0,
-			WithdrawalCredentials: depositMessage.WithdrawalCredentials,
-			Amount:                depositMessage.Amount,
-			Signature:             sig.Marshal(),
-		},
-	}
-	st, err = electra.ProcessDepositRequests(t.Context(), st, requests)
-	require.NoError(t, err)
-
-	pbd, err := st.PendingDeposits()
-	require.NoError(t, err)
-	require.Equal(t, 1, len(pbd))
-	require.Equal(t, uint64(1000), pbd[0].Amount)
 }
 
 func TestProcessDeposit_Electra_Simple(t *testing.T) {

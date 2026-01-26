@@ -98,7 +98,7 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 			return nil, electra.NewExecReqError("nil deposit request")
 		}
 	}
-	st, err = electra.ProcessDepositRequests(ctx, st, requests.Deposits)
+	st, err = coreRequests.ProcessDepositRequests(ctx, st, requests.Deposits)
 	if err != nil {
 		return nil, electra.NewExecReqError(errors.Wrap(err, "could not process deposit requests").Error())
 	}
