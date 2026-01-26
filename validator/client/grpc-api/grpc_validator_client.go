@@ -387,7 +387,7 @@ func (c *grpcValidatorClient) SetHost(host string) {
 	// Find the index of the requested host and switch to it
 	for i, h := range provider.Hosts() {
 		if h == host {
-			if err := provider.SetHost(i); err != nil {
+			if err := provider.SwitchHost(i); err != nil {
 				log.WithError(err).WithField("host", host).Error("Failed to set gRPC host")
 			}
 			return

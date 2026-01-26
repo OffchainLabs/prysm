@@ -32,10 +32,6 @@ func newGrpcClientManager[T any](
 
 // getClient returns the current client, recreating it if the connection has changed.
 func (m *grpcClientManager[T]) getClient() T {
-	// Safety check for tests that create manager directly without connection
-	if m.conn == nil || m.conn.GetGrpcConnectionProvider() == nil {
-		return m.client
-	}
 	currentHost := m.conn.GetGrpcConnectionProvider().CurrentHost()
 	m.RLock()
 	if m.lastHost == currentHost {

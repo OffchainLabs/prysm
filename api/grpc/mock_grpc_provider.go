@@ -15,6 +15,6 @@ func (m *MockGrpcProvider) CurrentHost() string {
 	}
 	return ""
 }
-func (m *MockGrpcProvider) Hosts() []string   { return m.MockHosts }
-func (m *MockGrpcProvider) SetHost(int) error { return nil }
-func (m *MockGrpcProvider) Close() error      { return nil }
+func (m *MockGrpcProvider) Hosts() []string      { return m.MockHosts }
+func (m *MockGrpcProvider) SwitchHost(int) error { return nil }
+func (m *MockGrpcProvider) Close()               {}

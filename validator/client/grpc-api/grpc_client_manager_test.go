@@ -19,7 +19,7 @@ type mockProvider struct {
 
 func (m *mockProvider) CurrentConn() *grpc.ClientConn { return nil }
 func (m *mockProvider) Hosts() []string               { return m.hosts }
-func (m *mockProvider) Close() error                  { return nil }
+func (m *mockProvider) Close()                        {}
 
 func (m *mockProvider) CurrentHost() string {
 	m.mu.Lock()
@@ -27,7 +27,7 @@ func (m *mockProvider) CurrentHost() string {
 	return m.hosts[m.currentIndex]
 }
 
-func (m *mockProvider) SetHost(index int) error {
+func (m *mockProvider) SwitchHost(index int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.currentIndex = index

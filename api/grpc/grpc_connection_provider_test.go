@@ -58,7 +58,7 @@ func TestGrpcConnectionProvider_LazyConnection(t *testing.T) {
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	provider, err := NewGrpcConnectionProvider(ctx, endpoint, dialOpts)
 	require.NoError(t, err, "Provider creation should succeed with lazy connections")
-	defer func() { _ = provider.Close() }()
+	defer func() { provider.Close() }()
 
 	// First endpoint should work
 	conn := provider.CurrentConn()
@@ -89,7 +89,7 @@ func TestGrpcConnectionProvider_SingleConnectionModel(t *testing.T) {
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	provider, err := NewGrpcConnectionProvider(ctx, endpoint, dialOpts)
 	require.NoError(t, err)
-	defer func() { _ = provider.Close() }()
+	defer func() { provider.Close() }()
 
 	// Access the internal state to verify single connection behavior
 	p := provider.(*grpcConnectionProvider)
@@ -113,7 +113,7 @@ func TestGrpcConnectionProvider_SingleConnectionModel(t *testing.T) {
 	assert.Equal(t, conn0, conn0Again, "Should return same connection")
 
 	// Switch to different host - old connection should be closed, new one created lazily
-	require.NoError(t, provider.SetHost(1))
+	require.NoError(t, provider.SwitchHost(1))
 
 	p.mu.Lock()
 	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil after SetHost (lazy)")
@@ -147,7 +147,7 @@ func testProvider(t *testing.T, n int) (GrpcConnectionProvider, []string, func()
 	require.NoError(t, err)
 
 	cleanup := func() {
-		_ = provider.Close()
+		provider.Close()
 		for _, c := range cleanups {
 			c()
 		}
@@ -165,21 +165,21 @@ func TestGrpcConnectionProvider(t *testing.T) {
 		assert.NotNil(t, provider.CurrentConn())
 	})
 
-	t.Run("SetHost", func(t *testing.T) {
-		require.NoError(t, provider.SetHost(1))
+	t.Run("SwitchHost", func(t *testing.T) {
+		require.NoError(t, provider.SwitchHost(1))
 		assert.Equal(t, addrs[1], provider.CurrentHost())
 		assert.NotNil(t, provider.CurrentConn()) // New connection created lazily
-		require.NoError(t, provider.SetHost(0))
+		require.NoError(t, provider.SwitchHost(0))
 		assert.Equal(t, addrs[0], provider.CurrentHost())
-		require.ErrorContains(t, "invalid host index", provider.SetHost(-1))
-		require.ErrorContains(t, "invalid host index", provider.SetHost(3))
+		require.ErrorContains(t, "invalid host index", provider.SwitchHost(-1))
+		require.ErrorContains(t, "invalid host index", provider.SwitchHost(3))
 	})
 
 	t.Run("SetHost circular", func(t *testing.T) {
 		// Test round-robin style switching using SetHost with manual index
 		indices := []int{1, 2, 0, 1} // Simulate circular switching
 		for i, idx := range indices {
-			require.NoError(t, provider.SetHost(idx))
+			require.NoError(t, provider.SwitchHost(idx))
 			assert.Equal(t, addrs[idx], provider.CurrentHost(), "iteration %d", i)
 		}
 	})
@@ -197,7 +197,7 @@ func TestGrpcConnectionProvider_Close(t *testing.T) {
 	defer cleanup()
 
 	assert.NotNil(t, provider.CurrentConn())
-	require.NoError(t, provider.Close())
+	provider.Close()
 	assert.Equal(t, (*grpc.ClientConn)(nil), provider.CurrentConn())
-	require.NoError(t, provider.Close()) // Double close is safe
+	provider.Close() // Double close is safe
 }

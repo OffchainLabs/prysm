@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	pkgErrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -23,11 +23,11 @@ type GrpcConnectionProvider interface {
 	CurrentHost() string
 	// Hosts returns all configured endpoint addresses.
 	Hosts() []string
-	// SetHost switches to the endpoint at the given index.
+	// SwitchHost switches to the endpoint at the given index.
 	// The new connection is created lazily on next CurrentConn() call.
-	SetHost(index int) error
+	SwitchHost(index int) error
 	// Close closes the current connection.
-	Close() error
+	Close()
 }
 
 type grpcConnectionProvider struct {
@@ -37,8 +37,6 @@ type grpcConnectionProvider struct {
 	dialOpts  []grpc.DialOption
 
 	// Current connection state (protected by mutex)
-``
-in case you remove the name from the mutex
 	currentIndex uint64
 	conn         *grpc.ClientConn
 
@@ -56,7 +54,7 @@ func NewGrpcConnectionProvider(
 ) (GrpcConnectionProvider, error) {
 	endpoints := parseEndpoints(endpoint)
 	if len(endpoints) == 0 {
-		return nil, pkgErrors.New("no gRPC endpoints provided")
+		return nil, errors.New("no gRPC endpoints provided")
 	}
 
 	log.WithFields(logrus.Fields{
@@ -124,9 +122,9 @@ func (p *grpcConnectionProvider) Hosts() []string {
 	return hosts
 }
 
-func (p *grpcConnectionProvider) SetHost(index int) error {
+func (p *grpcConnectionProvider) SwitchHost(index int) error {
 	if index < 0 || index >= len(p.endpoints) {
-		return pkgErrors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
+		return errors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
 	}
 
 	p.mu.Lock()
@@ -155,20 +153,19 @@ func (p *grpcConnectionProvider) SetHost(index int) error {
 	return nil
 }
 
-func (p *grpcConnectionProvider) Close() error {
+func (p *grpcConnectionProvider) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.closed.Load() {
-		return nil
+		return
 	}
 	p.closed.Store(true)
 
 	if p.conn != nil {
 		if err := p.conn.Close(); err != nil {
-			return pkgErrors.Wrapf(err, "failed to close connection to %s", p.endpoints[p.currentIndex])
+			log.WithError(err).WithField("endpoint", p.endpoints[p.currentIndex]).Debug("Failed to close gRPC connection")
 		}
 		p.conn = nil
 	}
-	return nil
 }

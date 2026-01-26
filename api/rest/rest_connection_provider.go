@@ -12,8 +12,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-var log = logrus.WithField("prefix", "rest")
-
 // RestConnectionProvider manages HTTP client configuration for REST API with failover support.
 // It allows switching between different beacon node REST endpoints when the current one becomes unavailable.
 type RestConnectionProvider interface {
@@ -25,10 +23,8 @@ type RestConnectionProvider interface {
 	CurrentHost() string
 	// Hosts returns all configured REST API endpoint URLs.
 	Hosts() []string
-	// SetHost switches to the endpoint at the given index.
-	SetHost(index int) error
-	// NextHost switches to the next endpoint in round-robin fashion.
-	NextHost()
+	// SwitchHost switches to the endpoint at the given index.
+	SwitchHost(index int) error
 }
 
 // RestConnectionProviderOption is a functional option for configuring the REST connection provider.
@@ -133,8 +129,7 @@ func (p *restConnectionProvider) RestHandler() RestHandler {
 }
 
 func (p *restConnectionProvider) CurrentHost() string {
-	idx := p.currentIndex.Load() % uint64(len(p.endpoints))
-	return p.endpoints[idx]
+	return p.endpoints[p.currentIndex.Load()]
 }
 
 func (p *restConnectionProvider) Hosts() []string {
@@ -144,7 +139,7 @@ func (p *restConnectionProvider) Hosts() []string {
 	return hosts
 }
 
-func (p *restConnectionProvider) SetHost(index int) error {
+func (p *restConnectionProvider) SwitchHost(index int) error {
 	if index < 0 || index >= len(p.endpoints) {
 		return pkgErrors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
 	}
@@ -156,22 +151,8 @@ func (p *restConnectionProvider) SetHost(index int) error {
 	p.restHandler.SetHost(p.endpoints[index])
 
 	log.WithFields(logrus.Fields{
-		"previousHost": p.endpoints[oldIdx%uint64(len(p.endpoints))],
+		"previousHost": p.endpoints[oldIdx],
 		"newHost":      p.endpoints[index],
 	}).Debug("Switched REST endpoint")
 	return nil
-}
-
-func (p *restConnectionProvider) NextHost() {
-	oldIdx := p.currentIndex.Load()
-	newIdx := (oldIdx + 1) % uint64(len(p.endpoints))
-	p.currentIndex.Store(newIdx)
-
-	// Update the rest handler's host
-	p.restHandler.SetHost(p.endpoints[newIdx])
-
-	log.WithFields(logrus.Fields{
-		"previousHost": p.endpoints[oldIdx],
-		"newHost":      p.endpoints[newIdx],
-	}).Debug("Switched to next REST endpoint")
 }

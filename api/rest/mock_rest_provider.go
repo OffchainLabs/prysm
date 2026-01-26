@@ -18,6 +18,5 @@ func (m *MockRestProvider) CurrentHost() string {
 	}
 	return ""
 }
-func (m *MockRestProvider) Hosts() []string         { return m.MockHosts }
-func (m *MockRestProvider) SetHost(index int) error { m.HostIndex = index; return nil }
-func (m *MockRestProvider) NextHost()               { m.HostIndex = (m.HostIndex + 1) % len(m.MockHosts) }
+func (m *MockRestProvider) Hosts() []string            { return m.MockHosts }
+func (m *MockRestProvider) SwitchHost(index int) error { m.HostIndex = index; return nil }
