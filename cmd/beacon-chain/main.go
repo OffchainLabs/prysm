@@ -243,6 +243,9 @@ func before(ctx *cli.Context) error {
 		}
 	}
 
+	// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+	log.Info("Prysm Beacon Chain started. ", "[", version.Version(), "]")
+
 	if err := cmd.ExpandSingleEndpointIfFile(ctx, flags.ExecutionEngineEndpoint); err != nil {
 		return errors.Wrap(err, "failed to expand single endpoint")
 	}

@@ -221,6 +221,9 @@ func main() {
 				}
 			}
 
+			// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+			log.Info("Prysm Validator started. ", "[", version.Version(), "]")
+
 			// Fix data dir for Windows users.
 			outdatedDataDir := filepath.Join(file.HomeDir(), "AppData", "Roaming", "Eth2Validators")
 			currentDataDir := flags.DefaultValidatorDir()
