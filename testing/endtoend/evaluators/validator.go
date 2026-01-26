@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
@@ -123,6 +124,25 @@ func validatorsAreActive(ec *types.EvaluationContext, conns ...*grpc.ClientConn)
 
 // validatorsParticipating ensures the validators have an acceptable participation rate.
 func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+	// Retry up to 3 times with 2 second delays to handle timing flakes where
+	// attestations haven't been fully processed yet due to block propagation delays.
+	const maxRetries = 3
+	const retryDelay = 2 * time.Second
+	var lastErr error
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(retryDelay)
+		}
+		lastErr = checkValidatorsParticipating(conns)
+		if lastErr == nil {
+			return nil
+		}
+	}
+	return lastErr
+}
+
+func checkValidatorsParticipating(conns []*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewBeaconChainClient(conn)
 	validatorRequest := &ethpb.GetValidatorParticipationRequest{}
@@ -234,6 +254,25 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 // validatorsSyncParticipation ensures the validators have an acceptable participation rate for
 // sync committee assignments.
 func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.ClientConn) error {
+	// Retry up to 3 times with 2 second delays to handle timing flakes where
+	// sync committee messages haven't fully propagated yet.
+	const maxRetries = 3
+	const retryDelay = 2 * time.Second
+	var lastErr error
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(retryDelay)
+		}
+		lastErr = checkSyncParticipation(conns)
+		if lastErr == nil {
+			return nil
+		}
+	}
+	return lastErr
+}
+
+func checkSyncParticipation(conns []*grpc.ClientConn) error {
 	conn := conns[0]
 	client := ethpb.NewNodeClient(conn)
 	altairClient := ethpb.NewBeaconChainClient(conn)

@@ -163,80 +163,103 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
-	headEpochs := make([]primitives.Epoch, len(conns))
-	headBlockRoots := make([][]byte, len(conns))
-	justifiedRoots := make([][]byte, len(conns))
-	prevJustifiedRoots := make([][]byte, len(conns))
-	finalizedRoots := make([][]byte, len(conns))
-	chainHeads := make([]*eth.ChainHead, len(conns))
-	g, _ := errgroup.WithContext(context.Background())
+	// Retry up to 3 times with 2 second delays to handle data availability delays.
+	// With PeerDAS, non-proposer nodes may take longer to sync blocks while
+	// fetching data columns from the network.
+	const maxRetries = 3
+	const retryDelay = 2 * time.Second
+	var lastErr error
 
-	for i, conn := range conns {
-		conIdx := i
-		currConn := conn
-		g.Go(func() error {
-			beaconClient := eth.NewBeaconChainClient(currConn)
-			chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
-			if err != nil {
-				return errors.Wrapf(err, "connection number=%d", conIdx)
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			time.Sleep(retryDelay)
+		}
+
+		headEpochs := make([]primitives.Epoch, len(conns))
+		headBlockRoots := make([][]byte, len(conns))
+		justifiedRoots := make([][]byte, len(conns))
+		prevJustifiedRoots := make([][]byte, len(conns))
+		finalizedRoots := make([][]byte, len(conns))
+		chainHeads := make([]*eth.ChainHead, len(conns))
+		g, _ := errgroup.WithContext(context.Background())
+
+		for i, conn := range conns {
+			conIdx := i
+			currConn := conn
+			g.Go(func() error {
+				beaconClient := eth.NewBeaconChainClient(currConn)
+				chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
+				if err != nil {
+					return errors.Wrapf(err, "connection number=%d", conIdx)
+				}
+				headEpochs[conIdx] = chainHead.HeadEpoch
+				headBlockRoots[conIdx] = chainHead.HeadBlockRoot
+				justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
+				prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
+				finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
+				chainHeads[conIdx] = chainHead
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			return err
+		}
+
+		lastErr = nil
+		for i := range conns {
+			if headEpochs[0] != headEpochs[i] {
+				lastErr = fmt.Errorf(
+					"received conflicting head epochs on node %d, expected %d, received %d",
+					i,
+					headEpochs[0],
+					headEpochs[i],
+				)
+				break
 			}
-			headEpochs[conIdx] = chainHead.HeadEpoch
-			headBlockRoots[conIdx] = chainHead.HeadBlockRoot
-			justifiedRoots[conIdx] = chainHead.JustifiedBlockRoot
-			prevJustifiedRoots[conIdx] = chainHead.PreviousJustifiedBlockRoot
-			finalizedRoots[conIdx] = chainHead.FinalizedBlockRoot
-			chainHeads[conIdx] = chainHead
+			if !bytes.Equal(headBlockRoots[0], headBlockRoots[i]) {
+				lastErr = fmt.Errorf(
+					"received conflicting head block roots on node %d, expected %#x, received %#x",
+					i,
+					headBlockRoots[0],
+					headBlockRoots[i],
+				)
+				break
+			}
+			if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {
+				lastErr = fmt.Errorf(
+					"received conflicting justified block roots on node %d, expected %#x, received %#x: %s and %s",
+					i,
+					justifiedRoots[0],
+					justifiedRoots[i],
+					chainHeads[0].String(),
+					chainHeads[i].String(),
+				)
+				break
+			}
+			if !bytes.Equal(prevJustifiedRoots[0], prevJustifiedRoots[i]) {
+				lastErr = fmt.Errorf(
+					"received conflicting previous justified block roots on node %d, expected %#x, received %#x",
+					i,
+					prevJustifiedRoots[0],
+					prevJustifiedRoots[i],
+				)
+				break
+			}
+			if !bytes.Equal(finalizedRoots[0], finalizedRoots[i]) {
+				lastErr = fmt.Errorf(
+					"received conflicting finalized epoch roots on node %d, expected %#x, received %#x",
+					i,
+					finalizedRoots[0],
+					finalizedRoots[i],
+				)
+				break
+			}
+		}
+
+		if lastErr == nil {
 			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	for i := range conns {
-		if headEpochs[0] != headEpochs[i] {
-			return fmt.Errorf(
-				"received conflicting head epochs on node %d, expected %d, received %d",
-				i,
-				headEpochs[0],
-				headEpochs[i],
-			)
-		}
-		if !bytes.Equal(headBlockRoots[0], headBlockRoots[i]) {
-			return fmt.Errorf(
-				"received conflicting head block roots on node %d, expected %#x, received %#x",
-				i,
-				headBlockRoots[0],
-				headBlockRoots[i],
-			)
-		}
-		if !bytes.Equal(justifiedRoots[0], justifiedRoots[i]) {
-			return fmt.Errorf(
-				"received conflicting justified block roots on node %d, expected %#x, received %#x: %s and %s",
-				i,
-				justifiedRoots[0],
-				justifiedRoots[i],
-				chainHeads[0].String(),
-				chainHeads[i].String(),
-			)
-		}
-		if !bytes.Equal(prevJustifiedRoots[0], prevJustifiedRoots[i]) {
-			return fmt.Errorf(
-				"received conflicting previous justified block roots on node %d, expected %#x, received %#x",
-				i,
-				prevJustifiedRoots[0],
-				prevJustifiedRoots[i],
-			)
-		}
-		if !bytes.Equal(finalizedRoots[0], finalizedRoots[i]) {
-			return fmt.Errorf(
-				"received conflicting finalized epoch roots on node %d, expected %#x, received %#x",
-				i,
-				finalizedRoots[0],
-				finalizedRoots[i],
-			)
 		}
 	}
 
-	return nil
+	return lastErr
 }
