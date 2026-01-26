@@ -334,7 +334,7 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys 
 		_, err = fmt.Fprintf(b, "%s %s%s "+messageFormat, colorScheme.TimestampColor(timestamp), level, prefix, message)
 	}
 	for _, k := range keys {
-		if k != "package" {
+		if k != "package" && k != "prefix" {
 			v := entry.Data[k]
 
 			format := "%+v"
