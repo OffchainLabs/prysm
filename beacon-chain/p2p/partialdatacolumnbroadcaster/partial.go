@@ -308,6 +308,8 @@ func (p *PartialColumnBroadcaster) handleIncomingRPC(rpcWithFrom rpcWithFrom) er
 			}
 			// Cache the valid header
 			p.validHeaderCache[string(groupID)] = header
+
+			// TODO: We now have the information we need to call GetBlobsV3, we should do that to see what we have locally.
 		}
 
 		columnIndex, err := extractColumnIndexFromTopic(topicID)
