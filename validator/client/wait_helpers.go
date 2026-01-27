@@ -51,11 +51,19 @@ func (v *validator) slotComponentSpanName(component primitives.BP) string {
 	switch component {
 	case cfg.AttestationDueBPS:
 		return "validator.waitAttestationWindow"
+	case cfg.AttestationDueBPSGloas:
+		return "validator.waitAttestationWindow"
 	case cfg.AggregateDueBPS:
+		return "validator.waitAggregateWindow"
+	case cfg.AggregateDueBPSGloas:
 		return "validator.waitAggregateWindow"
 	case cfg.SyncMessageDueBPS:
 		return "validator.waitSyncMessageWindow"
+	case cfg.SyncMessageDueBPSGloas:
+		return "validator.waitSyncMessageWindow"
 	case cfg.ContributionDueBPS:
+		return "validator.waitContributionWindow"
+	case cfg.ContributionDueBPSGloas:
 		return "validator.waitContributionWindow"
 	case cfg.ProposerReorgCutoffBPS:
 		return "validator.waitProposerReorgWindow"
