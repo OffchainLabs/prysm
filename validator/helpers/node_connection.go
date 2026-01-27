@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"context"
-	"net/http"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
@@ -22,9 +21,6 @@ type NodeConnection interface {
 	// GetRestHandler returns the REST handler for making API requests.
 	// Returns nil if no REST provider is configured.
 	GetRestHandler() rest.RestHandler
-	// GetHttpClient returns the configured HTTP client for REST API requests.
-	// Returns nil if no REST provider is configured.
-	GetHttpClient() *http.Client
 }
 
 type nodeConnection struct {
@@ -52,13 +48,6 @@ func (c *nodeConnection) GetRestHandler() rest.RestHandler {
 		return nil
 	}
 	return c.restConnectionProvider.RestHandler()
-}
-
-func (c *nodeConnection) GetHttpClient() *http.Client {
-	if c.restConnectionProvider == nil {
-		return nil
-	}
-	return c.restConnectionProvider.HttpClient()
 }
 
 // nodeConnectionBuilder is used internally to build a NodeConnection.

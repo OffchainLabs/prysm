@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"context"
-	"net/http"
 	"testing"
 
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
@@ -43,7 +42,7 @@ func TestNewNodeConnection(t *testing.T) {
 
 		assert.Equal(t, grpcProvider, conn.GetGrpcConnectionProvider())
 		assert.Equal(t, (rest.RestConnectionProvider)(nil), conn.GetRestConnectionProvider())
-		assert.Equal(t, (*http.Client)(nil), conn.GetHttpClient())
+		assert.Equal(t, (rest.RestHandler)(nil), conn.GetRestHandler())
 	})
 
 	t.Run("with no providers returns error", func(t *testing.T) {
@@ -83,20 +82,20 @@ func TestNodeConnection_GetGrpcClientConn(t *testing.T) {
 	})
 }
 
-func TestNodeConnection_GetHttpClient(t *testing.T) {
+func TestNodeConnection_GetRestHandler(t *testing.T) {
 	t.Run("delegates to provider", func(t *testing.T) {
-		mockClient := &http.Client{}
-		restProvider := &rest.MockRestProvider{MockClient: mockClient, MockHosts: []string{"http://localhost:3500"}}
+		mockHandler := &rest.MockRestHandler{}
+		restProvider := &rest.MockRestProvider{MockHandler: mockHandler, MockHosts: []string{"http://localhost:3500"}}
 		conn, err := NewNodeConnection(WithRestProvider(restProvider))
 		require.NoError(t, err)
 
-		assert.Equal(t, mockClient, conn.GetHttpClient())
+		assert.Equal(t, mockHandler, conn.GetRestHandler())
 	})
 
 	t.Run("returns nil when provider is nil", func(t *testing.T) {
 		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
 		conn, err := NewNodeConnection(WithGrpcProvider(grpcProvider))
 		require.NoError(t, err)
-		assert.Equal(t, (*http.Client)(nil), conn.GetHttpClient())
+		assert.Equal(t, (rest.RestHandler)(nil), conn.GetRestHandler())
 	})
 }
