@@ -144,9 +144,13 @@ func DataColumnSidecars(cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, 
 	return roSidecars, nil
 }
 
+// Note: cellsPerBlob
+// We should also assert that "included.Count() (i.e. number of bits set) == uint64(len(cellsPerBlob))" otherwise "cells[idx] = cells[idx][1:]" below will be out of bounds.
 func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofsPerBlob [][]kzg.Proof, src ConstructionPopulator) ([]blocks.PartialDataColumn, error) {
 	start := time.Now()
 	const numberOfColumns = uint64(fieldparams.NumberOfColumns)
+	// rotate the cells and proofs from being per blob(i.e. "row indexed") to being per column ("column indexed").
+	// The returned arrays are of size "numberOfColumns" in length and the "included" bitfield is used to filter out cells that are not present in each column.
 	cells, proofs, err := rotateRowsToCols(cellsPerBlob, proofsPerBlob, numberOfColumns)
 	if err != nil {
 		return nil, errors.Wrap(err, "rotate cells and proofs")
@@ -163,10 +167,17 @@ func PartialColumns(included bitfield.Bitlist, cellsPerBlob [][]kzg.Cell, proofs
 			return nil, errors.Wrap(err, "new ro data column")
 		}
 
+		// info.kzgCommitments is the array of KZG commitments for each blob in the block so it's length is the number of blobs in the block.
+		// The included bitlist is the bitlist of which blobs are present i.e. which are the blobs we have the blob data for.
+		// we're now iterating over each row and extending the column one cell at a time for each blob that is present.
 		for i := range len(info.kzgCommitments) {
 			if !included.BitAt(uint64(i)) {
 				continue
 			}
+			// TODO: Check for "out of bounds" here. How do we know that cells always have upto "numberOfColumns" entries?
+			// Okay, this probably works because "rotateRowsToCols" above allocates "numberOfColumns" entries for each cell and proof.
+			// The "included" bitlist is used to filter out cells that are not present in each column so we only set the cells that are present in
+			// this call to "ExtendFromVerfifiedCell".
 			dc.ExtendFromVerfifiedCell(uint64(i), cells[idx][0], proofs[idx][0])
 			cells[idx] = cells[idx][1:]
 			proofs[idx] = proofs[idx][1:]

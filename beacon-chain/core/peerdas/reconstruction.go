@@ -340,7 +340,9 @@ func ComputeCellsAndProofsFromFlat(blobs [][]byte, cellProofs [][]byte) ([][]kzg
 }
 
 // ComputeCellsAndProofsFromStructured computes the cells and proofs from blobs and cell proofs.
-// commitmentCount is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
+// commitmentCount (i.e. number of blobs) is required to return the correct sized bitlist even if we see a nil slice of blobsAndProofs.
+// Returns the bitlist of which blobs are present, the cells for each blob that is present, and the proofs for each cell in each blob that is present.
+// The returned cells and proofs are compacted and will not contain entries for missing blobs.
 func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs []*pb.BlobAndProofV2) (bitfield.Bitlist /* parts included */, [][]kzg.Cell, [][]kzg.Proof, error) {
 	start := time.Now()
 	defer func() {
@@ -355,20 +357,21 @@ func ComputeCellsAndProofsFromStructured(commitmentCount uint64, blobsAndProofs 
 			blobsPresent++
 		}
 	}
-	cellsPerBlob := make([][]kzg.Cell, blobsPresent)
-	proofsPerBlob := make([][]kzg.Proof, blobsPresent)
-	included := bitfield.NewBitlist(commitmentCount)
+	cellsPerBlob := make([][]kzg.Cell, blobsPresent)   // array of cells for each blob
+	proofsPerBlob := make([][]kzg.Proof, blobsPresent) // array of proofs for each blob
+	included := bitfield.NewBitlist(commitmentCount)   // bitlist of which blobs are present
 
 	var j int
 	for i, blobAndProof := range blobsAndProofs {
 		if blobAndProof == nil {
 			continue
 		}
-		included.SetBitAt(uint64(i), true)
+		included.SetBitAt(uint64(i), true) // blob at index i is present
 
-		compactIndex := j
+		compactIndex := j // compact index is the index of the blob in the returned arrays after accounting for nil/missing blocks.
 		wg.Go(func() error {
 			var kzgBlob kzg.Blob
+			// the number of copied bytes should be equal to the expected size of a blob.
 			if copy(kzgBlob[:], blobAndProof.Blob) != len(kzgBlob) {
 				return errors.New("wrong blob size - should never happen")
 			}

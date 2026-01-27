@@ -697,6 +697,7 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 	haveAllBlobs := included.Count() == uint64(len(commitments))
 	log.Info("Constructed partial columns", "haveAllBlobs", haveAllBlobs)
 
+	// TODO: Check for err==nil before we go here.
 	if haveAllBlobs {
 		// Construct data column sidears from the signed block and cells and proofs.
 		roSidecars, err := peerdas.DataColumnSidecars(cellsPerBlob, proofsPerBlob, populator)
@@ -718,6 +719,9 @@ func (s *Service) ConstructDataColumnSidecars(ctx context.Context, populator pee
 }
 
 // fetchCellsAndProofsFromExecution fetches cells and proofs from the execution client (using engine_getBlobsV2 execution API method)
+// The returned cells and proofs are compacted and will not contain entries for missing blobs.
+// The returned bitlist is the bitlist of which blobs are present i.e. which are the blobs we have the blob data for. This
+// will help index into the cells and proofs arrays.
 func (s *Service) fetchCellsAndProofsFromExecution(ctx context.Context, kzgCommitments [][]byte) (bitfield.Bitlist /* included parts */, [][]kzg.Cell, [][]kzg.Proof, error) {
 	// Collect KZG hashes for all blobs.
 	versionedHashes := make([]common.Hash, 0, len(kzgCommitments))

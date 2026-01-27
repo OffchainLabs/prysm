@@ -65,10 +65,11 @@ func VerifyDataColumnSidecar(sidecar blocks.RODataColumn) error {
 // CellProofBundleSegment is returned when a batch fails. The caller can call
 // the `.Verify` method to verify just this segment.
 type CellProofBundleSegment struct {
-	indices     []uint64
-	commitments []kzg.Bytes48
-	cells       []kzg.Cell
-	proofs      []kzg.Bytes48
+	indices     []uint64      // column index i.e in [0-127] for each cell
+	commitments []kzg.Bytes48 // KZG commitment for the blob that contains the cell that needs to be verified
+	cells       []kzg.Cell    // actual cell data for each cell (2KB each)
+	proofs      []kzg.Bytes48 // Cell proof for each cell
+	// Note: All the above arrays are of the same length.
 }
 
 // Verify verifies this segment without batching.
@@ -87,7 +88,9 @@ func (s CellProofBundleSegment) Verify() error {
 }
 
 func VerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIter iter.Seq[blocks.CellProofBundle]) error {
-	// ignore the failed segment list since we are just passing in one segment.
+	// The BatchVerifyDataColumnsCellsKZGProofs call also returns the failed segments if beatch verification fails
+	// so we can verify each segment seperately to identify the failed cell ("BatchVerifyDataColumnsCellsKZGProofs" is all or nothing).
+	// But we ignore the failed segment list since we are just passing in one segment.
 	_, err := BatchVerifyDataColumnsCellsKZGProofs(sizeHint, []iter.Seq[blocks.CellProofBundle]{cellProofsIter})
 	return err
 }
@@ -102,6 +105,7 @@ func VerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIter iter.Seq[block
 // batching. On success the failed segment list is empty.
 //
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/p2p-interface.md#verify_data_column_sidecar_kzg_proofs
+// sizeHint is the total number of cells to verify across all sidecars.
 func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.Seq[blocks.CellProofBundle]) ( /* failed segment list */ []CellProofBundleSegment, error) {
 	commitments := make([]kzg.Bytes48, 0, sizeHint)
 	indices := make([]uint64, 0, sizeHint)
@@ -111,7 +115,7 @@ func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.S
 	var anySegmentEmpty bool
 	var segments []CellProofBundleSegment
 	for _, cellProofsIter := range cellProofsIters {
-		startIdx := len(cells)
+		startIdx := len(cells) // starts at 0, and increments by the number of cells in the current segment
 		for bundle := range cellProofsIter {
 			var (
 				commitment kzg.Bytes48
@@ -119,6 +123,7 @@ func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.S
 				proof      kzg.Bytes48
 			)
 
+			// sanity check that each commitment is 48 bytes, each cell is 2KB and each proof is 48 bytes.
 			if len(bundle.Commitment) != len(commitment) ||
 				len(bundle.Cell) != len(cell) ||
 				len(bundle.Proof) != len(proof) {
@@ -135,6 +140,8 @@ func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.S
 			proofs = append(proofs, proof)
 		}
 		if len(cells[startIdx:]) == 0 {
+			// this basically means that the current segment i.e. the current  "bundle" we're
+			// iterating over is empty because "startIdx" did not increment after the last iteration.
 			anySegmentEmpty = true
 		}
 		segments = append(segments, CellProofBundleSegment{
@@ -146,6 +153,8 @@ func BatchVerifyDataColumnsCellsKZGProofs(sizeHint int, cellProofsIters []iter.S
 	}
 
 	if anySegmentEmpty {
+		// if any segment is empty, we don't verify anything as it's a malformed batch and we return all
+		// the segments here so caller can verify each segment seperately.
 		return segments, ErrEmptySegment
 	}
 
