@@ -50,19 +50,13 @@ func (c *nodeConnection) GetRestHandler() rest.RestHandler {
 	return c.restConnectionProvider.RestHandler()
 }
 
-// nodeConnectionBuilder is used internally to build a NodeConnection.
-type nodeConnectionBuilder struct {
-	grpcProvider grpcutil.GrpcConnectionProvider
-	restProvider rest.RestConnectionProvider
-}
-
 // NodeConnectionOption is a functional option for configuring a NodeConnection.
-type NodeConnectionOption func(*nodeConnectionBuilder) error
+type NodeConnectionOption func(*nodeConnection) error
 
 // WithGrpc configures a gRPC connection provider for the NodeConnection.
 // If endpoint is empty, this option is a no-op.
 func WithGrpc(ctx context.Context, endpoint string, dialOpts []grpc.DialOption) NodeConnectionOption {
-	return func(b *nodeConnectionBuilder) error {
+	return func(c *nodeConnection) error {
 		if endpoint == "" {
 			return nil
 		}
@@ -70,7 +64,7 @@ func WithGrpc(ctx context.Context, endpoint string, dialOpts []grpc.DialOption) 
 		if err != nil {
 			return errors.Wrap(err, "failed to create gRPC connection provider")
 		}
-		b.grpcProvider = provider
+		c.grpcConnectionProvider = provider
 		return nil
 	}
 }
@@ -78,7 +72,7 @@ func WithGrpc(ctx context.Context, endpoint string, dialOpts []grpc.DialOption) 
 // WithREST configures a REST connection provider for the NodeConnection.
 // If endpoint is empty, this option is a no-op.
 func WithREST(endpoint string, opts ...rest.RestConnectionProviderOption) NodeConnectionOption {
-	return func(b *nodeConnectionBuilder) error {
+	return func(c *nodeConnection) error {
 		if endpoint == "" {
 			return nil
 		}
@@ -86,25 +80,23 @@ func WithREST(endpoint string, opts ...rest.RestConnectionProviderOption) NodeCo
 		if err != nil {
 			return errors.Wrap(err, "failed to create REST connection provider")
 		}
-		b.restProvider = provider
+		c.restConnectionProvider = provider
 		return nil
 	}
 }
 
 // WithGrpcProvider sets a pre-built gRPC connection provider.
-// This is primarily useful for testing with mock providers.
 func WithGrpcProvider(provider grpcutil.GrpcConnectionProvider) NodeConnectionOption {
-	return func(b *nodeConnectionBuilder) error {
-		b.grpcProvider = provider
+	return func(c *nodeConnection) error {
+		c.grpcConnectionProvider = provider
 		return nil
 	}
 }
 
 // WithRestProvider sets a pre-built REST connection provider.
-// This is primarily useful for testing with mock providers.
 func WithRestProvider(provider rest.RestConnectionProvider) NodeConnectionOption {
-	return func(b *nodeConnectionBuilder) error {
-		b.restProvider = provider
+	return func(c *nodeConnection) error {
+		c.restConnectionProvider = provider
 		return nil
 	}
 }
@@ -113,25 +105,21 @@ func WithRestProvider(provider rest.RestConnectionProvider) NodeConnectionOption
 // At least one provider (gRPC or REST) must be configured via options.
 // Returns an error if no providers are configured.
 func NewNodeConnection(opts ...NodeConnectionOption) (NodeConnection, error) {
-	b := &nodeConnectionBuilder{}
+	c := &nodeConnection{}
 	for _, opt := range opts {
-		if err := opt(b); err != nil {
+		if err := opt(c); err != nil {
 			return nil, err
 		}
 	}
 
-	if b.grpcProvider == nil && b.restProvider == nil {
+	if c.grpcConnectionProvider == nil && c.restConnectionProvider == nil {
 		return nil, errors.New("at least one beacon node endpoint must be provided (--beacon-rpc-provider or --beacon-rest-api-provider)")
 	}
 
-	return &nodeConnection{
-		grpcConnectionProvider: b.grpcProvider,
-		restConnectionProvider: b.restProvider,
-	}, nil
+	return c, nil
 }
 
 // MockNodeConnection creates a minimal NodeConnection for testing.
-// It uses a mock gRPC provider with no actual connection.
 func MockNodeConnection() NodeConnection {
 	return &nodeConnection{
 		grpcConnectionProvider: &grpcutil.MockGrpcProvider{
