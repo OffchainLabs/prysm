@@ -71,18 +71,19 @@ func (ns *Server) GetHealth(ctx context.Context, request *ethpb.HealthRequest) (
 	if ns.SyncChecker.Synced() && !isOptimistic {
 		return &empty.Empty{}, nil
 	}
-	if ns.SyncChecker.Syncing() || ns.SyncChecker.Initialized() || isOptimistic {
-		if request.SyncingStatus != 0 {
-			// override the 200 success with the provided request status
-			if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(request.SyncingStatus, 10))); err != nil {
-				return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set custom success code header: %v", err)
-			}
-			return &empty.Empty{}, nil
-		}
+	if ns.SyncChecker.Syncing() || ns.SyncChecker.Initialized() {
+		// Set header for REST API clients (via gRPC-gateway)
 		if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(http.StatusPartialContent, 10))); err != nil {
-			return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set custom success code header: %v", err)
+			return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set status code header: %v", err)
 		}
-		return &empty.Empty{}, nil
+		return &empty.Empty{}, status.Error(codes.Unavailable, "node is syncing")
+	}
+	if isOptimistic {
+		// Set header for REST API clients (via gRPC-gateway)
+		if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(http.StatusPartialContent, 10))); err != nil {
+			return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set status code header: %v", err)
+		}
+		return &empty.Empty{}, status.Error(codes.Unavailable, "node is optimistic")
 	}
 	return &empty.Empty{}, status.Errorf(codes.Unavailable, "service unavailable")
 }

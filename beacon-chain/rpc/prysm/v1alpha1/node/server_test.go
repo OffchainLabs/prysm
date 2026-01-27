@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"maps"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -187,12 +189,24 @@ func TestNodeServer_GetETH1ConnectionStatus(t *testing.T) {
 	assert.Equal(t, errStr, res.CurrentConnectionError)
 }
 
+// mockServerTransportStream implements grpc.ServerTransportStream for testing
+type mockServerTransportStream struct {
+	headers map[string][]string
+}
+
+func (m *mockServerTransportStream) Method() string { return "" }
+func (m *mockServerTransportStream) SetHeader(md metadata.MD) error {
+	maps.Copy(m.headers, md)
+	return nil
+}
+func (m *mockServerTransportStream) SendHeader(metadata.MD) error { return nil }
+func (m *mockServerTransportStream) SetTrailer(metadata.MD) error { return nil }
+
 func TestNodeServer_GetHealth(t *testing.T) {
 	tests := []struct {
 		name         string
 		input        *mockSync.Sync
 		isOptimistic bool
-		customStatus uint64
 		wantedErr    string
 	}{
 		{
@@ -201,13 +215,29 @@ func TestNodeServer_GetHealth(t *testing.T) {
 			isOptimistic: false,
 		},
 		{
-			name:         "returns error when syncing",
-			input:        &mockSync.Sync{IsSyncing: false},
+			name:         "returns error when not synced and not syncing",
+			input:        &mockSync.Sync{IsSyncing: false, IsSynced: false},
 			isOptimistic: false,
 			wantedErr:    "service unavailable",
 		},
-		// Note: Testing optimistic mode returning 206 requires a real gRPC stream context
-		// for header setting to work. This is covered by integration tests.
+		{
+			name:         "returns error when syncing",
+			input:        &mockSync.Sync{IsSyncing: true, IsSynced: false},
+			isOptimistic: false,
+			wantedErr:    "node is syncing",
+		},
+		{
+			name:         "returns error when synced but optimistic",
+			input:        &mockSync.Sync{IsSyncing: false, IsSynced: true},
+			isOptimistic: true,
+			wantedErr:    "node is optimistic",
+		},
+		{
+			name:         "returns error when syncing and optimistic",
+			input:        &mockSync.Sync{IsSyncing: true, IsSynced: false},
+			isOptimistic: true,
+			wantedErr:    "node is syncing",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -218,7 +248,12 @@ func TestNodeServer_GetHealth(t *testing.T) {
 			}
 			ethpb.RegisterNodeServer(server, ns)
 			reflection.Register(server)
-			_, err := ns.GetHealth(t.Context(), &ethpb.HealthRequest{SyncingStatus: tt.customStatus})
+
+			// Create context with mock transport stream so grpc.SetHeader works
+			stream := &mockServerTransportStream{headers: make(map[string][]string)}
+			ctx := grpc.NewContextWithServerTransportStream(t.Context(), stream)
+
+			_, err := ns.GetHealth(ctx, &ethpb.HealthRequest{})
 			if tt.wantedErr == "" {
 				require.NoError(t, err)
 				return
