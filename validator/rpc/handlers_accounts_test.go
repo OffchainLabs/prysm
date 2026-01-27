@@ -23,7 +23,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
-	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/derived"
 	constant "github.com/OffchainLabs/prysm/v7/validator/testing"
@@ -54,7 +53,7 @@ func TestServer_ListAccounts(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorHelpers.MockNodeConnection(),
+		Conn:   constant.MockNodeConnection(),
 		Wallet: w,
 		Validator: &testutil.FakeValidator{
 			Km: km,
@@ -160,7 +159,7 @@ func TestServer_BackupAccounts(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorHelpers.MockNodeConnection(),
+		Conn:   constant.MockNodeConnection(),
 		Wallet: w,
 		Validator: &testutil.FakeValidator{
 			Km: km,
@@ -285,7 +284,7 @@ func TestServer_VoluntaryExit(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorHelpers.MockNodeConnection(),
+		Conn:   constant.MockNodeConnection(),
 		Wallet: w,
 		Validator: &testutil.FakeValidator{
 			Km: km,

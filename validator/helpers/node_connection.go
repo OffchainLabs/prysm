@@ -53,9 +53,9 @@ func (c *nodeConnection) GetRestHandler() rest.RestHandler {
 // NodeConnectionOption is a functional option for configuring a NodeConnection.
 type NodeConnectionOption func(*nodeConnection) error
 
-// WithGrpc configures a gRPC connection provider for the NodeConnection.
+// WithGRPC configures a gRPC connection provider for the NodeConnection.
 // If endpoint is empty, this option is a no-op.
-func WithGrpc(ctx context.Context, endpoint string, dialOpts []grpc.DialOption) NodeConnectionOption {
+func WithGRPC(ctx context.Context, endpoint string, dialOpts []grpc.DialOption) NodeConnectionOption {
 	return func(c *nodeConnection) error {
 		if endpoint == "" {
 			return nil
@@ -85,8 +85,8 @@ func WithREST(endpoint string, opts ...rest.RestConnectionProviderOption) NodeCo
 	}
 }
 
-// WithGrpcProvider sets a pre-built gRPC connection provider.
-func WithGrpcProvider(provider grpcutil.GrpcConnectionProvider) NodeConnectionOption {
+// WithGRPCProvider sets a pre-built gRPC connection provider.
+func WithGRPCProvider(provider grpcutil.GrpcConnectionProvider) NodeConnectionOption {
 	return func(c *nodeConnection) error {
 		c.grpcConnectionProvider = provider
 		return nil
@@ -117,13 +117,4 @@ func NewNodeConnection(opts ...NodeConnectionOption) (NodeConnection, error) {
 	}
 
 	return c, nil
-}
-
-// MockNodeConnection creates a minimal NodeConnection for testing.
-func MockNodeConnection() NodeConnection {
-	return &nodeConnection{
-		grpcConnectionProvider: &grpcutil.MockGrpcProvider{
-			MockHosts: []string{"mock:4000"},
-		},
-	}
 }

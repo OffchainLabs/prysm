@@ -14,7 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	mock2 "github.com/OffchainLabs/prysm/v7/testing/mock"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/OffchainLabs/prysm/v7/validator/helpers"
+	validatorTesting "github.com/OffchainLabs/prysm/v7/validator/testing"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
@@ -137,7 +137,7 @@ func TestWaitForChainStart_StreamSetupFails(t *testing.T) {
 
 	validatorClient := &grpcValidatorClient{
 		grpcClientManager: newGrpcClientManager(
-			helpers.MockNodeConnection(),
+			validatorTesting.MockNodeConnection(),
 			func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient {
 				return beaconNodeValidatorClient
 			},
@@ -158,7 +158,7 @@ func TestStartEventStream(t *testing.T) {
 	beaconNodeValidatorClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
 	grpcClient := &grpcValidatorClient{
 		grpcClientManager: newGrpcClientManager(
-			helpers.MockNodeConnection(),
+			validatorTesting.MockNodeConnection(),
 			func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient {
 				return beaconNodeValidatorClient
 			},

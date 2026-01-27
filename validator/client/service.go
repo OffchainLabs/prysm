@@ -68,7 +68,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
-	Conn                    validatorHelpers.NodeConnection // Optional: inject connection for testing
+	Conn                    validatorHelpers.NodeConnection // Optional: pre-built connection (if nil, built from endpoint configs)
 	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint
@@ -119,7 +119,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		maxHealthChecks:         cfg.MaxHealthChecks,
 	}
 
-	// Use injected connection if provided (for testing)
+	// Use pre-built connection if provided
 	if cfg.Conn != nil {
 		s.conn = cfg.Conn
 		return s, nil
@@ -138,7 +138,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 	s.ctx = grpcutil.AppendHeaders(ctx, cfg.GRPCHeaders)
 
 	conn, err := validatorHelpers.NewNodeConnection(
-		validatorHelpers.WithGrpc(s.ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts),
+		validatorHelpers.WithGRPC(s.ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts),
 		validatorHelpers.WithREST(cfg.BeaconApiEndpoint,
 			rest.WithHttpHeaders(cfg.BeaconApiHeaders),
 			rest.WithHttpTimeout(cfg.BeaconApiTimeout),

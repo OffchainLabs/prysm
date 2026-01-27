@@ -46,7 +46,7 @@ type testClient struct{ id int }
 
 // testManager creates a manager with client creation counting.
 func testManager(t *testing.T, provider *mockProvider) (*grpcClientManager[*testClient], *int) {
-	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGrpcProvider(provider))
+	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(provider))
 	require.NoError(t, err)
 
 	clientCount := new(int)

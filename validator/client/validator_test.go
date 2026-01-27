@@ -2851,7 +2851,7 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 		gomock.Any()).Return(mockResponse, nil)
 
 	mockProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000", "localhost:4001"}}
-	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGrpcProvider(mockProvider))
+	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithGRPCProvider(mockProvider))
 	require.NoError(t, err)
 
 	v := &validator{

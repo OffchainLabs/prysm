@@ -38,7 +38,7 @@ func (s *Server) registerBeaconClient() error {
 	s.ctx = grpcutil.AppendHeaders(s.ctx, s.grpcHeaders)
 
 	conn, err := validatorHelpers.NewNodeConnection(
-		validatorHelpers.WithGrpc(s.ctx, s.beaconNodeEndpoint, dialOpts),
+		validatorHelpers.WithGRPC(s.ctx, s.beaconNodeEndpoint, dialOpts),
 		validatorHelpers.WithREST(s.beaconApiEndpoint,
 			rest.WithHttpHeaders(s.beaconApiHeaders),
 			rest.WithHttpTimeout(s.beaconApiTimeout),

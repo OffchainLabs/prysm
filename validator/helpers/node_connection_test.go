@@ -16,7 +16,7 @@ func TestNewNodeConnection(t *testing.T) {
 		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
 		restProvider := &rest.MockRestProvider{MockHosts: []string{"http://localhost:3500"}}
 		conn, err := NewNodeConnection(
-			WithGrpcProvider(grpcProvider),
+			WithGRPCProvider(grpcProvider),
 			WithRestProvider(restProvider),
 		)
 		require.NoError(t, err)
@@ -37,7 +37,7 @@ func TestNewNodeConnection(t *testing.T) {
 
 	t.Run("with only grpc provider", func(t *testing.T) {
 		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
-		conn, err := NewNodeConnection(WithGrpcProvider(grpcProvider))
+		conn, err := NewNodeConnection(WithGRPCProvider(grpcProvider))
 		require.NoError(t, err)
 
 		assert.Equal(t, grpcProvider, conn.GetGrpcConnectionProvider())
@@ -54,7 +54,7 @@ func TestNewNodeConnection(t *testing.T) {
 	t.Run("with empty endpoints is no-op", func(t *testing.T) {
 		// Empty endpoints should be skipped, resulting in no providers
 		conn, err := NewNodeConnection(
-			WithGrpc(context.Background(), "", nil),
+			WithGRPC(context.Background(), "", nil),
 			WithREST(""),
 		)
 		require.ErrorContains(t, "at least one beacon node endpoint must be provided", err)
@@ -67,7 +67,7 @@ func TestNodeConnection_GetGrpcClientConn(t *testing.T) {
 		// We can't easily create a real grpc.ClientConn in tests,
 		// but we can verify the delegation works with nil
 		grpcProvider := &grpcutil.MockGrpcProvider{MockConn: nil, MockHosts: []string{"localhost:4000"}}
-		conn, err := NewNodeConnection(WithGrpcProvider(grpcProvider))
+		conn, err := NewNodeConnection(WithGRPCProvider(grpcProvider))
 		require.NoError(t, err)
 
 		// Should delegate to provider.CurrentConn()
@@ -94,7 +94,7 @@ func TestNodeConnection_GetRestHandler(t *testing.T) {
 
 	t.Run("returns nil when provider is nil", func(t *testing.T) {
 		grpcProvider := &grpcutil.MockGrpcProvider{MockHosts: []string{"localhost:4000"}}
-		conn, err := NewNodeConnection(WithGrpcProvider(grpcProvider))
+		conn, err := NewNodeConnection(WithGRPCProvider(grpcProvider))
 		require.NoError(t, err)
 		assert.Equal(t, (rest.RestHandler)(nil), conn.GetRestHandler())
 	})

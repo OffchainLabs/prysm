@@ -21,8 +21,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/client/testutil"
-	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
+	validatorTesting "github.com/OffchainLabs/prysm/v7/validator/testing"
 	"github.com/google/uuid"
 	"github.com/tyler-smith/go-bip39"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
@@ -47,7 +47,7 @@ func TestServer_CreateWallet_Local(t *testing.T) {
 	km, err := w.InitializeKeymanager(ctx, iface.InitKeymanagerConfig{ListenForChanges: false})
 	require.NoError(t, err)
 	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorHelpers.MockNodeConnection(),
+		Conn:   validatorTesting.MockNodeConnection(),
 		Wallet: w,
 		Validator: &testutil.FakeValidator{
 			Km: km,
@@ -445,7 +445,7 @@ func TestServer_WalletConfig(t *testing.T) {
 	require.NoError(t, err)
 	s.wallet = w
 	vs, err := client.NewValidatorService(ctx, &client.Config{
-		Conn:   validatorHelpers.MockNodeConnection(),
+		Conn:   validatorTesting.MockNodeConnection(),
 		Wallet: w,
 		Validator: &testutil.FakeValidator{
 			Km: km,

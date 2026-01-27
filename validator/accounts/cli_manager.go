@@ -78,7 +78,7 @@ func (acm *CLIManager) prepareBeaconClients(ctx context.Context) (*iface.Validat
 	ctx = grpcutil.AppendHeaders(ctx, acm.grpcHeaders)
 
 	conn, err := validatorHelpers.NewNodeConnection(
-		validatorHelpers.WithGrpc(ctx, acm.beaconRPCProvider, acm.dialOpts),
+		validatorHelpers.WithGRPC(ctx, acm.beaconRPCProvider, acm.dialOpts),
 		validatorHelpers.WithREST(acm.beaconApiEndpoint, rest.WithHttpTimeout(acm.beaconApiTimeout)),
 	)
 	if err != nil {
