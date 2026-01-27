@@ -280,6 +280,7 @@ var BeaconChainFlags = combinedFlags([]cli.Flag{
 	DisableQUIC,
 	EnableDiscoveryReboot,
 	enableExperimentalAttestationPool,
+	EnableStateDiff,
 	forceHeadFlag,
 	blacklistRoots,
 	enableHashtree,

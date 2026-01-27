@@ -22,6 +22,10 @@ var ErrNotFoundFeeRecipient = errors.Wrap(ErrNotFound, "fee recipient")
 // ErrNotFoundMetadataSeqNum is a not found error specifically for the metadata sequence number getter
 var ErrNotFoundMetadataSeqNum = errors.Wrap(ErrNotFound, "metadata sequence number")
 
+// ErrStateDiffIncompatible is returned when state-diff feature is enabled
+// but the database was created without state-diff support.
+var ErrStateDiffIncompatible = errors.New("state-diff feature enabled but database was created without state-diff support")
+
 var errEmptyBlockSlice = errors.New("[]blocks.ROBlock is empty")
 var errIncorrectBlockParent = errors.New("unexpected missing or forked blocks in a []ROBlock")
 var errFinalizedChildNotFound = errors.New("unable to find finalized root descending from backfill batch")

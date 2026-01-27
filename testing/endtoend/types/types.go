@@ -76,6 +76,15 @@ func WithSSZOnly() E2EConfigOpt {
 	}
 }
 
+func WithStateDiff() E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.BeaconFlags = append(cfg.BeaconFlags,
+			"--enable-state-diff",
+			"--state-diff-exponents=6,5", // Small exponents for quick testing
+		)
+	}
+}
+
 // WithExitEpoch sets a custom epoch for voluntary exit submission.
 // This affects ProposeVoluntaryExit, ValidatorsHaveExited, SubmitWithdrawal, and ValidatorsHaveWithdrawn evaluators.
 func WithExitEpoch(e primitives.Epoch) E2EConfigOpt {
