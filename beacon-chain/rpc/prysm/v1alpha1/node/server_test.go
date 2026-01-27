@@ -191,24 +191,30 @@ func TestNodeServer_GetHealth(t *testing.T) {
 	tests := []struct {
 		name         string
 		input        *mockSync.Sync
+		isOptimistic bool
 		customStatus uint64
 		wantedErr    string
 	}{
 		{
-			name:  "happy path",
-			input: &mockSync.Sync{IsSyncing: false, IsSynced: true},
+			name:         "happy path - synced and not optimistic",
+			input:        &mockSync.Sync{IsSyncing: false, IsSynced: true},
+			isOptimistic: false,
 		},
 		{
-			name:      "syncing",
-			input:     &mockSync.Sync{IsSyncing: false},
-			wantedErr: "service unavailable",
+			name:         "returns error when syncing",
+			input:        &mockSync.Sync{IsSyncing: false},
+			isOptimistic: false,
+			wantedErr:    "service unavailable",
 		},
+		// Note: Testing optimistic mode returning 206 requires a real gRPC stream context
+		// for header setting to work. This is covered by integration tests.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := grpc.NewServer()
 			ns := &Server{
-				SyncChecker: tt.input,
+				SyncChecker:           tt.input,
+				OptimisticModeFetcher: &mock.ChainService{Optimistic: tt.isOptimistic},
 			}
 			ethpb.RegisterNodeServer(server, ns)
 			reflection.Register(server)

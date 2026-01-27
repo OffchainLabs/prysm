@@ -35,18 +35,19 @@ import (
 // providing RPC endpoints for verifying a beacon node's sync status, genesis and
 // version information, and services the node implements and runs.
 type Server struct {
-	LogsStreamer         logs.Streamer
-	StreamLogsBufferSize int
-	SyncChecker          sync.Checker
-	Server               *grpc.Server
-	BeaconDB             db.ReadOnlyDatabase
-	PeersFetcher         p2p.PeersProvider
-	PeerManager          p2p.PeerManager
-	GenesisTimeFetcher   blockchain.TimeFetcher
-	GenesisFetcher       blockchain.GenesisFetcher
-	POWChainInfoFetcher  execution.ChainInfoFetcher
-	BeaconMonitoringHost string
-	BeaconMonitoringPort int
+	LogsStreamer          logs.Streamer
+	StreamLogsBufferSize  int
+	SyncChecker           sync.Checker
+	Server                *grpc.Server
+	BeaconDB              db.ReadOnlyDatabase
+	PeersFetcher          p2p.PeersProvider
+	PeerManager           p2p.PeerManager
+	GenesisTimeFetcher    blockchain.TimeFetcher
+	GenesisFetcher        blockchain.GenesisFetcher
+	POWChainInfoFetcher   execution.ChainInfoFetcher
+	BeaconMonitoringHost  string
+	BeaconMonitoringPort  int
+	OptimisticModeFetcher blockchain.OptimisticModeFetcher
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
@@ -61,10 +62,16 @@ func (ns *Server) GetHealth(ctx context.Context, request *ethpb.HealthRequest) (
 	ctx, cancel := context.WithTimeout(ctx, timeoutDuration)
 	defer cancel() // Important to avoid a context leak
 
-	if ns.SyncChecker.Synced() {
+	// Check optimistic status - validators should not participate when optimistic
+	isOptimistic, err := ns.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		return &empty.Empty{}, status.Errorf(codes.Internal, "Could not check optimistic status: %v", err)
+	}
+
+	if ns.SyncChecker.Synced() && !isOptimistic {
 		return &empty.Empty{}, nil
 	}
-	if ns.SyncChecker.Syncing() || ns.SyncChecker.Initialized() {
+	if ns.SyncChecker.Syncing() || ns.SyncChecker.Initialized() || isOptimistic {
 		if request.SyncingStatus != 0 {
 			// override the 200 success with the provided request status
 			if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(request.SyncingStatus, 10))); err != nil {
