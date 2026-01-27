@@ -103,7 +103,7 @@ func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 		AllowedLevels: logrus.AllLevels[:ephemeralLogFileVerbosity+1],
 	})
 
-	logrus.Debug("Ephemeral log file initialized")
+	logrus.WithField("path", logFilePath).Debug("Ephemeral log file initialized")
 	return nil
 }
 
