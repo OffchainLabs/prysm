@@ -382,7 +382,7 @@ func (c *grpcValidatorClient) Host() string {
 	return c.grpcClientManager.conn.GetGrpcConnectionProvider().CurrentHost()
 }
 
-func (c *grpcValidatorClient) SetHost(host string) {
+func (c *grpcValidatorClient) SwitchHost(host string) {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
 	// Find the index of the requested host and switch to it
 	for i, h := range provider.Hosts() {

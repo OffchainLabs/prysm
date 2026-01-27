@@ -120,7 +120,7 @@ func TestGrpcConnectionProvider_SingleConnectionModel(t *testing.T) {
 	require.NoError(t, provider.SwitchHost(1))
 
 	p.mu.Lock()
-	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil after SetHost (lazy)")
+	assert.Equal(t, (*grpc.ClientConn)(nil), p.conn, "Connection should be nil after SwitchHost (lazy)")
 	p.mu.Unlock()
 
 	// Get new connection
@@ -179,8 +179,8 @@ func TestGrpcConnectionProvider(t *testing.T) {
 		require.ErrorContains(t, "invalid host index", provider.SwitchHost(3))
 	})
 
-	t.Run("SetHost circular", func(t *testing.T) {
-		// Test round-robin style switching using SetHost with manual index
+	t.Run("SwitchHost circular", func(t *testing.T) {
+		// Test round-robin style switching using SwitchHost with manual index
 		indices := []int{1, 2, 0, 1} // Simulate circular switching
 		for i, idx := range indices {
 			require.NoError(t, provider.SwitchHost(idx))

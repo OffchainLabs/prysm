@@ -30,7 +30,7 @@ type RestHandler interface {
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
 	HttpClient() *http.Client
 	Host() string
-	SetHost(host string)
+	SwitchHost(host string)
 }
 
 type restHandler struct {
@@ -311,6 +311,6 @@ func decodeResp(httpResp *http.Response, resp any) error {
 	return nil
 }
 
-func (c *restHandler) SetHost(host string) {
+func (c *restHandler) SwitchHost(host string) {
 	c.host = host
 }

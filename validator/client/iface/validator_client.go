@@ -152,5 +152,5 @@ type ValidatorClient interface {
 	AggregatedSelections(ctx context.Context, selections []BeaconCommitteeSelection) ([]BeaconCommitteeSelection, error)
 	AggregatedSyncSelections(ctx context.Context, selections []SyncCommitteeSelection) ([]SyncCommitteeSelection, error)
 	Host() string
-	SetHost(host string)
+	SwitchHost(host string)
 }

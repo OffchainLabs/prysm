@@ -1321,7 +1321,7 @@ func (v *validator) changeHost() {
 		"currentHost": hosts[v.currentHostIndex],
 		"nextHost":    hosts[next],
 	}).Warn("Beacon node is not responding, switching host")
-	v.validatorClient.SetHost(hosts[next])
+	v.validatorClient.SwitchHost(hosts[next])
 	v.currentHostIndex = next
 }
 

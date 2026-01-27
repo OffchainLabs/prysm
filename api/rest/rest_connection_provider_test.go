@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
@@ -17,13 +18,16 @@ func TestParseEndpoints(t *testing.T) {
 		{"multiple endpoints", "http://host1:3500,http://host2:3500,http://host3:3500", []string{"http://host1:3500", "http://host2:3500", "http://host3:3500"}},
 		{"endpoints with spaces", "http://host1:3500, http://host2:3500 , http://host3:3500", []string{"http://host1:3500", "http://host2:3500", "http://host3:3500"}},
 		{"empty string", "", nil},
-		{"only commas", ",,,", nil},
+		{"only commas", ",,,", []string{}},
 		{"trailing comma", "http://host1:3500,http://host2:3500,", []string{"http://host1:3500", "http://host2:3500"}},
 		{"leading comma", ",http://host1:3500,http://host2:3500", []string{"http://host1:3500", "http://host2:3500"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.DeepEqual(t, tt.expected, parseEndpoints(tt.input))
+			got := parseEndpoints(tt.input)
+			if !reflect.DeepEqual(tt.expected, got) {
+				t.Errorf("parseEndpoints(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
 		})
 	}
 }

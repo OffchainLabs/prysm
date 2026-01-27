@@ -108,6 +108,9 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 
 // parseEndpoints splits a comma-separated endpoint string into individual endpoints.
 func parseEndpoints(endpoint string) []string {
+	if endpoint == "" {
+		return nil
+	}
 	endpoints := make([]string, 0, 1)
 	for p := range strings.SplitSeq(endpoint, ",") {
 		if p = strings.TrimSpace(p); p != "" {
@@ -145,7 +148,7 @@ func (p *restConnectionProvider) SwitchHost(index int) error {
 	p.currentIndex.Store(uint64(index))
 
 	// Update the rest handler's host
-	p.restHandler.SetHost(p.endpoints[index])
+	p.restHandler.SwitchHost(p.endpoints[index])
 
 	log.WithFields(logrus.Fields{
 		"previousHost": p.endpoints[oldIdx],

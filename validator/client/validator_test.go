@@ -2795,7 +2795,7 @@ func TestValidator_Host(t *testing.T) {
 }
 
 func TestValidator_ChangeHost(t *testing.T) {
-	// Enable REST API mode for this test since changeHost only calls SetHost in REST API mode
+	// Enable REST API mode for this test since changeHost only calls SwitchHost in REST API mode
 	resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: true})
 	defer resetCfg()
 
@@ -2814,8 +2814,8 @@ func TestValidator_ChangeHost(t *testing.T) {
 		currentHostIndex: 0,
 	}
 
-	client.EXPECT().SetHost(hosts[1])
-	client.EXPECT().SetHost(hosts[0])
+	client.EXPECT().SwitchHost(hosts[1])
+	client.EXPECT().SwitchHost(hosts[0])
 	v.changeHost()
 	assert.Equal(t, uint64(1), v.currentHostIndex)
 	v.changeHost()
