@@ -413,7 +413,7 @@ func CreateDefaultLightClientUpdate(attestedBlock interfaces.ReadOnlySignedBeaco
 				SyncCommitteeSignature: make([]byte, 96),
 			},
 		}
-	case version.Electra, version.Fulu:
+	case version.Electra, version.Fulu, version.Gloas:
 		m = &pb.LightClientUpdateElectra{
 			AttestedHeader: &pb.LightClientHeaderDeneb{
 				Beacon: &pb.BeaconBlockHeader{
@@ -515,7 +515,7 @@ func ComputeWithdrawalsRoot(payload interfaces.ExecutionData) ([]byte, error) {
 
 func BlockToLightClientHeader(
 	ctx context.Context,
-	attestedBlockVersion int, // this is the version that the light client header should be in, based on the attested block.
+	attestedBlockVersion int,                   // this is the version that the light client header should be in, based on the attested block.
 	block interfaces.ReadOnlySignedBeaconBlock, // this block is either the attested block, or the finalized block. in case of the latter, we might need to upgrade it to the attested block's version.
 ) (interfaces.LightClientHeader, error) {
 	if block.Version() > attestedBlockVersion {
@@ -543,7 +543,7 @@ func BlockToLightClientHeader(
 			Execution:       payloadHeader,
 			ExecutionBranch: payloadProof,
 		}
-	case version.Deneb, version.Electra, version.Fulu:
+	case version.Deneb, version.Electra, version.Fulu, version.Gloas:
 		payloadHeader, payloadProof, err := makeExecutionAndProofDeneb(ctx, block)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not make execution payload header and proof")
