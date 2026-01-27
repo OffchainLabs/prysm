@@ -15,6 +15,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
+	"github.com/OffchainLabs/prysm/v7/math"
 	fastssz "github.com/prysmaticlabs/fastssz"
 )
 
@@ -97,7 +98,11 @@ func (pc *proofCollector) toProof() (*fastssz.Proof, error) {
 
 	// single proof resides in leafGindices[0]
 	targetGindex := leafGindices[0]
-	proof.Index = int(targetGindex)
+	proofIndex, err := math.Int(targetGindex)
+	if err != nil {
+		return nil, fmt.Errorf("gindex %d overflows int: %w", targetGindex, err)
+	}
+	proof.Index = proofIndex
 
 	// store the leaf
 	leaf := pc.leaves[targetGindex]
@@ -305,16 +310,19 @@ func (pc *proofCollector) merkleizeContainer(info *SszInfo, v reflect.Value, cur
 // - [32]byte: Merkle root of the data subtree.
 // - error: any error encountered while merkleizing composite elements.
 func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value, length int, limit uint64, subtreeRootGindex uint64) ([32]byte, error) {
-	depth := int(ssz.Depth(limit))
+	depth := uint64(ssz.Depth(limit))
 
 	var chunks [][32]byte
 	if elemInfo.sszType.isBasic() {
 		// Serialize basic elements and pack into 32-byte chunks using ssz.PackByChunk.
-		elemSize := int(itemLength(elemInfo))
+		elemSize, err := math.Int(itemLength(elemInfo))
+		if err != nil {
+			return [32]byte{}, fmt.Errorf("element size %d overflows int: %w", itemLength(elemInfo), err)
+		}
 		serialized := make([][]byte, length)
 		// Single contiguous allocation for all element data
 		allData := make([]byte, length*elemSize)
-		for i := 0; i < length; i++ {
+		for i := range length {
 			buf := allData[i*elemSize : (i+1)*elemSize]
 			elem := v.Index(i)
 			if elemInfo.sszType == Boolean && elem.Bool() {
@@ -324,7 +332,6 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 			}
 			serialized[i] = buf
 		}
-		var err error
 		chunks, err = ssz.PackByChunk(serialized)
 		if err != nil {
 			return [32]byte{}, err
@@ -335,10 +342,7 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 
 		// Fall back to per-element merkleization with proper gindices for proof collection.
 		// Parallel execution
-		workerCount := runtime.GOMAXPROCS(0)
-		if workerCount > length {
-			workerCount = length
-		}
+		workerCount := min(runtime.GOMAXPROCS(0), length)
 
 		jobs := make(chan int, workerCount*16)
 		errCh := make(chan error, 1) // only need the first error
@@ -370,13 +374,13 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		}
 
 		wg.Add(workerCount)
-		for w := 0; w < workerCount; w++ {
+		for range workerCount {
 			go worker()
 		}
 
 		// Enqueue jobs; stop early if any worker reports an error.
 	enqueue:
-		for i := 0; i < length; i++ {
+		for i := range length {
 			select {
 			case <-stopCh:
 				break enqueue
@@ -394,7 +398,7 @@ func (pc *proofCollector) merkleizeVectorBody(elemInfo *SszInfo, v reflect.Value
 		}
 	}
 
-	root := pc.merkleizeVectorAndCollect(chunks, subtreeRootGindex, uint64(depth))
+	root := pc.merkleizeVectorAndCollect(chunks, subtreeRootGindex, depth)
 	return root, nil
 }
 
@@ -420,7 +424,10 @@ func (pc *proofCollector) merkleizeVector(info *SszInfo, v reflect.Value, curren
 		return [32]byte{}, err
 	}
 
-	length := int(vi.Length())
+	length, err := math.Int(vi.Length())
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("vector length %d overflows int: %w", vi.Length(), err)
+	}
 	elemInfo := vi.element
 
 	// Determine the virtual leaf capacity for the vector.
