@@ -37,7 +37,7 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot primitives.Slot,
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
-	v.waitOneThirdOrValidBlock(ctx, slot)
+	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
 	var b strings.Builder
 	if err := b.WriteByte(byte(iface.RoleAttester)); err != nil {
@@ -259,12 +259,12 @@ func (v *validator) setHighestSlot(slot primitives.Slot) {
 	}
 }
 
-// waitOneThirdOrValidBlock waits until (a) or (b) whichever comes first:
+// waitUntilAttestationDueOrValidBlock waits until (a) or (b) whichever comes first:
 //
 //	(a) the validator has received a valid block that is the same slot as input slot
-//	(b) one-third of the slot has transpired (SECONDS_PER_SLOT / 3 seconds after the start of slot)
-func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitives.Slot) {
-	ctx, span := trace.StartSpan(ctx, "validator.waitOneThirdOrValidBlock")
+//	(b) the configured attestation due time has transpired (as basis points of the slot duration)
+func (v *validator) waitUntilAttestationDueOrValidBlock(ctx context.Context, slot primitives.Slot) {
+	ctx, span := trace.StartSpan(ctx, "validator.waitUntilAttestationDueOrValidBlock")
 	defer span.End()
 
 	// Don't need to wait if requested slot is the same as highest valid slot.
