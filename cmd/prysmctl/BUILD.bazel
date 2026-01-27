@@ -4,7 +4,10 @@ load("//tools:prysm_image.bzl", "prysm_image_upload")
 
 go_library(
     name = "go_default_library",
-    srcs = ["main.go"],
+    srcs = [
+        "log.go",
+        "main.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/prysmctl",
     visibility = ["//visibility:private"],
     deps = [

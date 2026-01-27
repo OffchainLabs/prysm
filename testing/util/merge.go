@@ -88,3 +88,12 @@ func NewBeaconBlockContentsFulu() *ethpb.SignedBeaconBlockContentsFulu {
 func NewBlindedBeaconBlockFulu() *ethpb.SignedBlindedBeaconBlockFulu {
 	return HydrateSignedBlindedBeaconBlockFulu(&ethpb.SignedBlindedBeaconBlockFulu{})
 }
+
+// ----------------------------------------------------------------------------
+// Gloas
+// ----------------------------------------------------------------------------
+
+// NewBeaconBlockGloas creates a beacon block with minimum marshalable fields.
+func NewBeaconBlockGloas() *ethpb.SignedBeaconBlockGloas {
+	return HydrateSignedBeaconBlockGloas(&ethpb.SignedBeaconBlockGloas{})
+}

@@ -34,8 +34,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var log = logrus.WithField("prefix", "main")
-
 func startNode(ctx *cli.Context) error {
 	// Verify if ToS is accepted.
 	if err := tos.VerifyTosAcceptedOrPrompt(ctx); err != nil {
