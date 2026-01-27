@@ -137,12 +137,15 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		_, lvl, err := s.beaconDB.SlotInDiffTree(slot)
+		offset, lvl, err := s.beaconDB.SlotInDiffTree(slot)
 		if err != nil {
 			log.WithError(err).Errorf("could not determine if slot %d is in diff tree", slot)
 			continue
 		}
 		if lvl == -1 {
+			continue
+		}
+		if uint64(slot) == offset {
 			continue
 		}
 		// The state needs to be saved.
