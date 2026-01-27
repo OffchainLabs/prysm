@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -41,7 +40,7 @@ type grpcConnectionProvider struct {
 	conn         *grpc.ClientConn
 
 	mu     sync.Mutex
-	closed atomic.Bool
+	closed bool
 }
 
 // NewGrpcConnectionProvider creates a new connection provider that manages gRPC connections.
@@ -84,12 +83,12 @@ func parseEndpoints(endpoint string) []string {
 }
 
 func (p *grpcConnectionProvider) CurrentConn() *grpc.ClientConn {
-	if p.closed.Load() {
-		return nil
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.closed {
+		return nil
+	}
 
 	// Return existing connection if available
 	if p.conn != nil {
@@ -157,10 +156,10 @@ func (p *grpcConnectionProvider) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.closed.Load() {
+	if p.closed {
 		return
 	}
-	p.closed.Store(true)
+	p.closed = true
 
 	if p.conn != nil {
 		if err := p.conn.Close(); err != nil {
