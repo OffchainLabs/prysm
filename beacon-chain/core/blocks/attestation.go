@@ -111,19 +111,21 @@ func VerifyAttestationNoVerifySignature(
 	var indexedAtt ethpb.IndexedAtt
 
 	if att.Version() >= version.Electra {
+		ci := att.GetData().CommitteeIndex
 		// Spec v1.7.0-alpha pseudocode:
 		//
 		//	# [Modified in Gloas:EIP7732]
 		//	assert data.index < 2
 		//
 		if beaconState.Version() >= version.Gloas {
-			if att.GetData().CommitteeIndex >= 2 {
-				return fmt.Errorf("incorrect committee index %d", att.GetData().CommitteeIndex)
+			if ci >= 2 {
+				return fmt.Errorf("incorrect committee index for gloas %d", ci)
 			}
-		} else if att.GetData().CommitteeIndex != 0 {
-			return errors.New("committee index must be 0 post-Electra")
+		} else {
+			if ci != 0 {
+				return errors.New("committee index must be 0 post-Electra")
+			}
 		}
-
 		aggBits := att.GetAggregationBits()
 		committeeIndices := att.CommitteeBitsVal().BitIndices()
 		committees := make([][]primitives.ValidatorIndex, len(committeeIndices))

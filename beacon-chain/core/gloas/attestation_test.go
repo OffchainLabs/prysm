@@ -21,34 +21,9 @@ func buildStateWithBlockRoots(t *testing.T, stateSlot primitives.Slot, roots map
 		blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
 	}
 
-	stateRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
-	for i := range stateRoots {
-		stateRoots[i] = bytes.Repeat([]byte{0x11}, 32)
-	}
-
-	randaoMixes := make([][]byte, cfg.EpochsPerHistoricalVector)
-	for i := range randaoMixes {
-		randaoMixes[i] = bytes.Repeat([]byte{0x22}, 32)
-	}
-
-	execPayloadAvailability := make([]byte, cfg.SlotsPerHistoricalRoot/8)
-
 	stProto := &ethpb.BeaconStateGloas{
 		Slot:                  stateSlot,
-		GenesisValidatorsRoot: bytes.Repeat([]byte{0x33}, 32),
-		Fork: &ethpb.Fork{
-			CurrentVersion:  bytes.Repeat([]byte{0x44}, 4),
-			PreviousVersion: bytes.Repeat([]byte{0x44}, 4),
-			Epoch:           0,
-		},
 		BlockRoots:                   blockRoots,
-		StateRoots:                   stateRoots,
-		RandaoMixes:                  randaoMixes,
-		ExecutionPayloadAvailability: execPayloadAvailability,
-		Validators:                   []*ethpb.Validator{},
-		Balances:                     []uint64{},
-		BuilderPendingPayments:       make([]*ethpb.BuilderPendingPayment, cfg.SlotsPerEpoch*2),
-		BuilderPendingWithdrawals:    []*ethpb.BuilderPendingWithdrawal{},
 	}
 
 	state, err := state_native.InitializeFromProtoGloas(stProto)
@@ -213,7 +188,7 @@ func TestUpdatePendingPaymentWeight(t *testing.T) {
 			name:          "same slot current epoch adds weight",
 			targetEpoch:   currentEpoch,
 			blockRoot:     rootA,
-			initialAmount: 10,
+			initialAmount: 1,
 			initialWeight: 0,
 			wantWeight:    primitives.Gwei(cfg.MinActivationBalance),
 		},
@@ -229,7 +204,7 @@ func TestUpdatePendingPaymentWeight(t *testing.T) {
 			name:          "non matching block root no change",
 			targetEpoch:   currentEpoch,
 			blockRoot:     rootB,
-			initialAmount: 10,
+			initialAmount: 1,
 			initialWeight: 7,
 			wantWeight:    7,
 		},
@@ -237,7 +212,7 @@ func TestUpdatePendingPaymentWeight(t *testing.T) {
 			name:          "previous epoch target uses earlier slot",
 			targetEpoch:   currentEpoch - 1,
 			blockRoot:     rootA,
-			initialAmount: 20,
+			initialAmount: 1,
 			initialWeight: 0,
 			wantWeight:    primitives.Gwei(cfg.MinActivationBalance),
 		},

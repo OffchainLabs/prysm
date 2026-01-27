@@ -167,45 +167,47 @@ func TestBuilderPendingPayments_UnsupportedVersion(t *testing.T) {
 	require.ErrorContains(t, "BuilderPendingPayments", err)
 }
 
-func TestBuilderPendingPayment_ReturnsCopy(t *testing.T) {
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	payments := make([]*ethpb.BuilderPendingPayment, 2*slotsPerEpoch)
-	target := uint64(slotsPerEpoch + 1)
-	payments[target] = &ethpb.BuilderPendingPayment{Weight: 10}
+func TestBuilderPendingPayment(t *testing.T) {
+	t.Run("returns copy", func(t *testing.T) {
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		payments := make([]*ethpb.BuilderPendingPayment, 2*slotsPerEpoch)
+		target := uint64(slotsPerEpoch + 1)
+		payments[target] = &ethpb.BuilderPendingPayment{Weight: 10}
 
-	st, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
-		BuilderPendingPayments: payments,
+		st, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			BuilderPendingPayments: payments,
+		})
+		require.NoError(t, err)
+
+		payment, err := st.BuilderPendingPayment(target)
+		require.NoError(t, err)
+
+		// mutate returned copy
+		payment.Weight = 99
+
+		original, err := st.BuilderPendingPayment(target)
+		require.NoError(t, err)
+		require.Equal(t, uint64(10), uint64(original.Weight))
 	})
-	require.NoError(t, err)
 
-	payment, err := st.BuilderPendingPayment(target)
-	require.NoError(t, err)
+	t.Run("unsupported version", func(t *testing.T) {
+		stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
+		require.NoError(t, err)
+		st := stIface.(*state_native.BeaconState)
 
-	// mutate returned copy
-	payment.Weight = 99
-
-	original, err := st.BuilderPendingPayment(target)
-	require.NoError(t, err)
-	require.Equal(t, uint64(10), uint64(original.Weight))
-}
-
-func TestBuilderPendingPayment_UnsupportedVersion(t *testing.T) {
-	stIface, err := state_native.InitializeFromProtoElectra(&ethpb.BeaconStateElectra{})
-	require.NoError(t, err)
-	st := stIface.(*state_native.BeaconState)
-
-	_, err = st.BuilderPendingPayment(0)
-	require.ErrorContains(t, "BuilderPendingPayment", err)
-}
-
-func TestBuilderPendingPayment_OutOfRange(t *testing.T) {
-	stIface, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
-		BuilderPendingPayments: []*ethpb.BuilderPendingPayment{},
+		_, err = st.BuilderPendingPayment(0)
+		require.ErrorContains(t, "BuilderPendingPayment", err)
 	})
-	require.NoError(t, err)
 
-	_, err = stIface.BuilderPendingPayment(0)
-	require.ErrorContains(t, "out of range", err)
+	t.Run("out of range", func(t *testing.T) {
+		stIface, err := state_native.InitializeFromProtoUnsafeGloas(&ethpb.BeaconStateGloas{
+			BuilderPendingPayments: []*ethpb.BuilderPendingPayment{},
+		})
+		require.NoError(t, err)
+
+		_, err = stIface.BuilderPendingPayment(0)
+		require.ErrorContains(t, "out of range", err)
+	})
 }
 
 func TestExecutionPayloadAvailability(t *testing.T) {

@@ -661,17 +661,10 @@ func TestRetrieveAttestationSignatureSet_VerifiesMultipleAttestations(t *testing
 	require.NoError(t, err)
 	for i := range validators {
 		validators[i] = &ethpb.Validator{
-			ExitEpoch:                  params.BeaconConfig().FarFutureEpoch,
-			PublicKey:                  keys[i].PublicKey().Marshal(),
-			WithdrawalCredentials:      make([]byte, 32),
-			EffectiveBalance:           params.BeaconConfig().MaxEffectiveBalance,
-			ActivationEligibilityEpoch: 0,
-			ActivationEpoch:            0,
+			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
+			PublicKey:             keys[i].PublicKey().Marshal(),
+			WithdrawalCredentials: make([]byte, 32),
 		}
-	}
-	balances := make([]uint64, numOfValidators)
-	for i := range balances {
-		balances[i] = uint64(params.BeaconConfig().MaxEffectiveBalance)
 	}
 
 	t.Run("pre-Electra", func(t *testing.T) {
@@ -679,7 +672,6 @@ func TestRetrieveAttestationSignatureSet_VerifiesMultipleAttestations(t *testing
 		require.NoError(t, err)
 		require.NoError(t, st.SetSlot(5))
 		require.NoError(t, st.SetValidators(validators))
-		require.NoError(t, st.SetBalances(balances))
 
 		comm1, err := helpers.BeaconCommitteeFromState(t.Context(), st, 1 /*slot*/, 0 /*committeeIndex*/)
 		require.NoError(t, err)
@@ -729,7 +721,6 @@ func TestRetrieveAttestationSignatureSet_VerifiesMultipleAttestations(t *testing
 		require.NoError(t, err)
 		require.NoError(t, st.SetSlot(5))
 		require.NoError(t, st.SetValidators(validators))
-		require.NoError(t, st.SetBalances(balances))
 
 		comm1, err := helpers.BeaconCommitteeFromState(t.Context(), st, 1 /*slot*/, 0 /*committeeIndex*/)
 		require.NoError(t, err)
