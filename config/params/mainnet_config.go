@@ -32,6 +32,8 @@ const (
 	mainnetElectraForkEpoch = 364032 // May 7, 2025, 10:05:11 UTC
 	// Fulu Fork Epoch for mainnet config
 	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
+	// Gloas Fork Epoch for mainnet config
+	mainnetGloasForkEpoch = math.MaxUint64
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -121,11 +123,15 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	IntervalsPerSlot:                3,
 
 	// Time-based protocol parameters.
-	ProposerReorgCutoffBPS: primitives.BP(1667),
-	AttestationDueBPS:      primitives.BP(3333),
-	AggregateDueBPS:        primitives.BP(6667),
-	SyncMessageDueBPS:      primitives.BP(3333),
-	ContributionDueBPS:     primitives.BP(6667),
+	ProposerReorgCutoffBPS:  primitives.BP(1667),
+	AttestationDueBPS:       primitives.BP(3333),
+	AggregateDueBPS:         primitives.BP(6667),
+	SyncMessageDueBPS:       primitives.BP(3333),
+	ContributionDueBPS:      primitives.BP(6667),
+	AttestationDueBPSGloas:  primitives.BP(2500),
+	AggregateDueBPSGloas:    primitives.BP(5000),
+	SyncMessageDueBPSGloas:  primitives.BP(2500),
+	ContributionDueBPSGloas: primitives.BP(5000),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.
@@ -235,6 +241,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ElectraForkEpoch:     mainnetElectraForkEpoch,
 	FuluForkVersion:      []byte{6, 0, 0, 0},
 	FuluForkEpoch:        mainnetFuluForkEpoch,
+	GloasForkEpoch:       mainnetGloasForkEpoch,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.

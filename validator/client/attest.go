@@ -272,7 +272,12 @@ func (v *validator) waitOneThirdOrValidBlock(ctx context.Context, slot primitive
 		return
 	}
 
-	finalTime, err := v.slotComponentDeadline(slot, params.BeaconConfig().AttestationDueBPS)
+	cfg := params.BeaconConfig()
+	component := cfg.AttestationDueBPS
+	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+		component = cfg.AttestationDueBPSGloas
+	}
+	finalTime, err := v.slotComponentDeadline(slot, component)
 	if err != nil {
 		log.WithError(err).WithField("slot", slot).Error("Slot overflows, unable to wait for attestation deadline")
 		return
