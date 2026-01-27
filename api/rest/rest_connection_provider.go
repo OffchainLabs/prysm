@@ -108,10 +108,7 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 
 // parseEndpoints splits a comma-separated endpoint string into individual endpoints.
 func parseEndpoints(endpoint string) []string {
-	if endpoint == "" {
-		return nil
-	}
-	var endpoints []string
+	endpoints := make([]string, 0, 1)
 	for p := range strings.SplitSeq(endpoint, ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			endpoints = append(endpoints, p)

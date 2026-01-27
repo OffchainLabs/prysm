@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -22,13 +23,16 @@ func TestParseEndpoints(t *testing.T) {
 		{"multiple endpoints", "host1:4000,host2:4000,host3:4000", []string{"host1:4000", "host2:4000", "host3:4000"}},
 		{"endpoints with spaces", "host1:4000, host2:4000 , host3:4000", []string{"host1:4000", "host2:4000", "host3:4000"}},
 		{"empty string", "", nil},
-		{"only commas", ",,,", nil},
+		{"only commas", ",,,", []string{}},
 		{"trailing comma", "host1:4000,host2:4000,", []string{"host1:4000", "host2:4000"}},
 		{"leading comma", ",host1:4000,host2:4000", []string{"host1:4000", "host2:4000"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.DeepEqual(t, tt.expected, parseEndpoints(tt.input))
+			got := parseEndpoints(tt.input)
+			if !reflect.DeepEqual(tt.expected, got) {
+				t.Errorf("parseEndpoints(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
 		})
 	}
 }
