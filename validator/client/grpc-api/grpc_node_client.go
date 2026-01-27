@@ -35,7 +35,7 @@ func (c *grpcNodeClient) Peers(ctx context.Context, in *empty.Empty) (*ethpb.Pee
 
 func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
 	// GetHealth returns 200 OK only if node is synced and not optimistic.
-	// It returns 206 Partial Content if syncing or optimistic, 503 if unavailable.
+	// otherwise it will throw an error
 	_, err := c.getClient().GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
 		log.WithError(err).Debug("Node is not ready")

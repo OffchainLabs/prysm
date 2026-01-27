@@ -134,16 +134,19 @@ func (p *grpcConnectionProvider) SwitchHost(index int) error {
 	}
 
 	oldHost := p.endpoints[p.currentIndex]
+	oldConn := p.conn
 
-	// Close existing connection if any
-	if p.conn != nil {
-		if err := p.conn.Close(); err != nil {
-			log.WithError(err).WithField("endpoint", oldHost).Debug("Failed to close previous connection")
-		}
-		p.conn = nil
-	}
-
+	p.conn = nil // Clear immediately - new connection created lazily
 	p.currentIndex = uint64(index)
+
+	// Close old connection asynchronously to avoid blocking the caller
+	if oldConn != nil {
+		go func() {
+			if err := oldConn.Close(); err != nil {
+				log.WithError(err).WithField("endpoint", oldHost).Debug("Failed to close previous connection")
+			}
+		}()
+	}
 
 	log.WithFields(logrus.Fields{
 		"previousHost": oldHost,
