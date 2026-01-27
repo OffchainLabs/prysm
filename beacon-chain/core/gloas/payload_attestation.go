@@ -114,17 +114,24 @@ func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 	}
 
 	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
-	out := make([]primitives.ValidatorIndex, 0, activeCount/uint64(params.BeaconConfig().SlotsPerEpoch))
 
+	selected := make([]primitives.ValidatorIndex, 0, fieldparams.PTCSize)
 	for i := primitives.CommitteeIndex(0); i < primitives.CommitteeIndex(committeesPerSlot); i++ {
+		if uint64(len(selected)) >= fieldparams.PTCSize {
+			break
+		}
+
 		committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, i)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get beacon committee %d", i)
 		}
-		out = append(out, committee...)
+
+		if err := selectByBalanceFill(ctx, st, committee, seed, &selected); err != nil {
+			return nil, errors.Wrapf(err, "failed to sample beacon committee %d", i)
+		}
 	}
 
-	return selectByBalance(ctx, st, out, seed, fieldparams.PTCSize)
+	return selected, nil
 }
 
 // ptcSeed computes the seed for the payload timeliness committee.
@@ -148,9 +155,16 @@ func ptcSeed(st state.ReadOnlyBeaconState, epoch primitives.Epoch, slot primitiv
 //	  if compute_balance_weighted_acceptance(state, indices[next], seed, i):
 //	    selected.append(indices[next])
 //	  i += 1
-func selectByBalance(ctx context.Context, st state.ReadOnlyBeaconState, candidates []primitives.ValidatorIndex, seed [32]byte, count uint64) ([]primitives.ValidatorIndex, error) {
-	if len(candidates) == 0 {
-		return nil, errors.New("no candidates for balance weighted selection")
+func selectByBalanceFill(
+	ctx context.Context,
+	st state.ReadOnlyBeaconState,
+	candidates []primitives.ValidatorIndex,
+	seed [32]byte,
+	selected *[]primitives.ValidatorIndex,
+) error {
+	need := fieldparams.PTCSize - uint64(len(*selected))
+	if len(candidates) == 0 || need == 0 {
+		return nil
 	}
 
 	hashFunc := hash.CustomSHA256Hasher()
@@ -159,22 +173,26 @@ func selectByBalance(ctx context.Context, st state.ReadOnlyBeaconState, candidat
 	copy(buf[:], seed[:])
 	maxBalance := params.BeaconConfig().MaxEffectiveBalanceElectra
 
-	selected := make([]primitives.ValidatorIndex, 0, count)
+	out := *selected
 	total := uint64(len(candidates))
-	for i := uint64(0); uint64(len(selected)) < count; i++ {
+	var i uint64
+	for need > 0 {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 		idx := candidates[i%total]
 		ok, err := acceptByBalance(st, idx, buf[:], hashFunc, maxBalance, i)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if ok {
-			selected = append(selected, idx)
+			out = append(out, idx)
+			need--
 		}
+		i++
 	}
-	return selected, nil
+	*selected = out
+	return nil
 }
 
 // acceptByBalance determines if a validator is accepted based on its effective balance.
