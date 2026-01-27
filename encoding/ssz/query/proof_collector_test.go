@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -339,7 +340,8 @@ func TestProofCollector_MerkleizeVectorAndCollect(t *testing.T) {
 	pc.addTarget(6)
 
 	elements := [][32]byte{{1}, {2}}
-	expected := ssz.MerkleizeVector(append([][32]byte{}, elements...), 2)
+	// expected := ssz.MerkleizeVector(append([][32]byte{}, elements...), 2)
+	expected := ssz.MerkleizeVector(slices.Clone(elements), 2)
 	root := pc.merkleizeVectorAndCollect(elements, 3, 1)
 
 	storedLeaf, hasLeaf := pc.leaves[6]
@@ -399,7 +401,7 @@ func BenchmarkOptimizedValidatorRoots(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := stateutil.OptimizedValidatorRoots(validators)
 		if err != nil {
 			b.Fatal(err)
@@ -417,7 +419,7 @@ func BenchmarkProofCollectorMerkleize(b *testing.B) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, val := range validators {
 			pc := newProofCollector()
 			v := reflect.ValueOf(val)
