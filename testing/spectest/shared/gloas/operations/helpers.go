@@ -15,7 +15,6 @@ func sszToState(b []byte) (state.BeaconState, error) {
 	}
 	return state_native.InitializeFromProtoGloas(base)
 }
-
 func sszToBlock(b []byte) (interfaces.SignedBeaconBlock, error) {
 	base := &ethpb.BeaconBlockGloas{}
 	if err := base.UnmarshalSSZ(b); err != nil {

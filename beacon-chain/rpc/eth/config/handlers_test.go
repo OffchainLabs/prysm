@@ -83,6 +83,7 @@ func TestGetSpec(t *testing.T) {
 	config.ElectraForkEpoch = 107
 	config.FuluForkVersion = []byte("FuluForkVersion")
 	config.FuluForkEpoch = 109
+	config.GloasForkEpoch = 110
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
 	config.GenesisDelay = 24
@@ -134,6 +135,10 @@ func TestGetSpec(t *testing.T) {
 	config.AttestationDueBPS = primitives.BP(122)
 	config.AggregateDueBPS = primitives.BP(123)
 	config.ContributionDueBPS = primitives.BP(124)
+	config.AttestationDueBPSGloas = primitives.BP(126)
+	config.AggregateDueBPSGloas = primitives.BP(127)
+	config.SyncMessageDueBPSGloas = primitives.BP(128)
+	config.ContributionDueBPSGloas = primitives.BP(129)
 	config.TerminalBlockHash = common.HexToHash("TerminalBlockHash")
 	config.TerminalBlockHashActivationEpoch = 72
 	config.TerminalTotalDifficulty = "73"
@@ -197,6 +202,9 @@ func TestGetSpec(t *testing.T) {
 	var dbb [4]byte
 	copy(dbb[:], []byte{'0', '0', '0', '8'})
 	config.DomainBeaconBuilder = dbb
+	var dptc [4]byte
+	copy(dptc[:], []byte{'0', '0', '0', '8'})
+	config.DomainPTCAttester = dptc
 	var dam [4]byte
 	copy(dam[:], []byte{'1', '0', '0', '0'})
 	config.DomainApplicationMask = dam
@@ -212,7 +220,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 186, len(data))
+	assert.Equal(t, 192, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -292,6 +300,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x"+hex.EncodeToString([]byte("FuluForkVersion")), v)
 			case "FULU_FORK_EPOCH":
 				assert.Equal(t, "109", v)
+			case "GLOAS_FORK_EPOCH":
+				assert.Equal(t, "110", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
 				assert.Equal(t, "1000", v)
 			case "BLS_WITHDRAWAL_PREFIX":
@@ -414,6 +424,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "0x30303036", v)
 			case "DOMAIN_AGGREGATE_AND_PROOF":
 				assert.Equal(t, "0x30303037", v)
+			case "DOMAIN_PTC_ATTESTER":
+				assert.Equal(t, "0x30303038", v)
 			case "DOMAIN_APPLICATION_MASK":
 				assert.Equal(t, "0x31303030", v)
 			case "DOMAIN_SYNC_COMMITTEE":
@@ -474,6 +486,14 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "123", v)
 			case "CONTRIBUTION_DUE_BPS":
 				assert.Equal(t, "124", v)
+			case "ATTESTATION_DUE_BPS_GLOAS":
+				assert.Equal(t, "126", v)
+			case "AGGREGATE_DUE_BPS_GLOAS":
+				assert.Equal(t, "127", v)
+			case "SYNC_MESSAGE_DUE_BPS_GLOAS":
+				assert.Equal(t, "128", v)
+			case "CONTRIBUTION_DUE_BPS_GLOAS":
+				assert.Equal(t, "129", v)
 			case "MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT":
 				assert.Equal(t, "8", v)
 			case "MAX_REQUEST_LIGHT_CLIENT_UPDATES":

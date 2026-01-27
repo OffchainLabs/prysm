@@ -260,7 +260,7 @@ func TestWaitForSlotTwoThird_WaitCorrectly(t *testing.T) {
 			timeToSleep := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AggregateDueBPS)
 
 			twoThirdTime := currentTime.Add(timeToSleep)
-			validator.waitToSlotTwoThirds(t.Context(), numOfSlots)
+			validator.waitUntilAggregateDue(t.Context(), numOfSlots)
 			currentTime = time.Now()
 			assert.Equal(t, twoThirdTime.Unix(), currentTime.Unix())
 		})
@@ -280,7 +280,7 @@ func TestWaitForSlotTwoThird_DoneContext_ReturnsImmediately(t *testing.T) {
 			expectedTime := time.Now()
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
-			validator.waitToSlotTwoThirds(ctx, numOfSlots)
+			validator.waitUntilAggregateDue(ctx, numOfSlots)
 			currentTime = time.Now()
 			assert.Equal(t, expectedTime.Unix(), currentTime.Unix())
 		})

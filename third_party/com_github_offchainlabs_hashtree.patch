@@ -1,7 +1,7 @@
 diff -urN a/BUILD.bazel b/BUILD.bazel
 --- a/BUILD.bazel	1969-12-31 18:00:00.000000000 -0600
 +++ b/BUILD.bazel	2025-01-05 12:00:00.000000000 -0600
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,90 @@
 +load("@io_bazel_rules_go//go:def.bzl", "go_library")
 +
 +go_library(
@@ -32,6 +32,7 @@ diff -urN a/BUILD.bazel b/BUILD.bazel
 +        ],
 +        "@io_bazel_rules_go//go/platform:darwin_amd64": [
 +            "bindings_darwin_amd64.go",
++            "wrapper_darwin_amd64.s",
 +        ],
 +        "//conditions:default": [],
 +    }),
