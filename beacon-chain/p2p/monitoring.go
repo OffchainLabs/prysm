@@ -200,6 +200,11 @@ var (
 		Help: "The total size of publish messages sent via rpc for a particular topic",
 	},
 		[]string{"topic", "is_partial"})
+	pubsubMeshPeers = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gossipsub_mesh_peers",
+		Help: "The number of capable peers in mesh",
+	},
+		[]string{"topic", "supports_partial"})
 )
 
 func (s *Service) updateMetrics() {
