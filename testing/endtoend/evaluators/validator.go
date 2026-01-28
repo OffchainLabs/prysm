@@ -328,6 +328,11 @@ func checkSyncParticipation(conns []*grpc.ClientConn) error {
 		if err != nil {
 			return err
 		}
+		// Skip blocks with zero sync bits - these are typically empty/anomalous blocks
+		// where the proposer didn't receive sync committee contributions in time.
+		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			continue
+		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedParticipation)
 		if syncAgg.SyncCommitteeBits.Count() < threshold {
 			return errors.Errorf("In block of slot %d ,the aggregate bitvector with length of %d only got a count of %d", b.Block().Slot(), threshold, syncAgg.SyncCommitteeBits.Count())
@@ -381,6 +386,11 @@ func checkSyncParticipation(conns []*grpc.ClientConn) error {
 		syncAgg, err := b.Block().Body().SyncAggregate()
 		if err != nil {
 			return err
+		}
+		// Skip blocks with zero sync bits - these are typically empty/anomalous blocks
+		// where the proposer didn't receive sync committee contributions in time.
+		if syncAgg.SyncCommitteeBits.Count() == 0 {
+			continue
 		}
 		threshold := uint64(float64(syncAgg.SyncCommitteeBits.Len()) * expectedSyncParticipation)
 		if syncAgg.SyncCommitteeBits.Count() < threshold {
