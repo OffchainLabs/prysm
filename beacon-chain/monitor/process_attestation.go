@@ -99,7 +99,7 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 			inclusionSlotGauge.WithLabelValues(fmt.Sprintf("%d", idx)).Set(float64(latestPerf.inclusionSlot))
 			aggregatedPerf.totalDistance += uint64(latestPerf.inclusionSlot - latestPerf.attestedSlot)
 
-			if state.Version() == version.Altair {
+			if state.Version() >= version.Altair {
 				targetIdx := params.BeaconConfig().TimelyTargetFlagIndex
 				sourceIdx := params.BeaconConfig().TimelySourceFlagIndex
 				headIdx := params.BeaconConfig().TimelyHeadFlagIndex
