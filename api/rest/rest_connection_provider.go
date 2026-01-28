@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
-	pkgErrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -66,7 +66,7 @@ type restConnectionProvider struct {
 func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOption) (RestConnectionProvider, error) {
 	endpoints := parseEndpoints(endpoint)
 	if len(endpoints) == 0 {
-		return nil, pkgErrors.New("no REST API endpoints provided")
+		return nil, errors.New("no REST API endpoints provided")
 	}
 
 	p := &restConnectionProvider{
@@ -141,7 +141,7 @@ func (p *restConnectionProvider) Hosts() []string {
 
 func (p *restConnectionProvider) SwitchHost(index int) error {
 	if index < 0 || index >= len(p.endpoints) {
-		return pkgErrors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
+		return errors.Errorf("invalid host index %d, must be between 0 and %d", index, len(p.endpoints)-1)
 	}
 
 	oldIdx := p.currentIndex.Load()
