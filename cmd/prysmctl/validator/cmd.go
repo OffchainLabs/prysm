@@ -10,7 +10,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/runtime/tos"
 	"github.com/logrusorgru/aurora"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 

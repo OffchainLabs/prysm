@@ -66,7 +66,7 @@ func (v *validator) SubmitAggregateAndProof(ctx context.Context, slot primitives
 	// As specified in spec, an aggregator should wait until two thirds of the way through slot
 	// to broadcast the best aggregate to the global aggregate channel.
 	// https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/validator/0_beacon-chain-validator.md#broadcast-aggregate
-	v.waitToSlotTwoThirds(ctx, slot)
+	v.waitUntilAggregateDue(ctx, slot)
 
 	// In a DV setup, selection proofs need to be agreed upon by the DV.
 	// Checking for selection proofs at slot 0 of the epoch will result in an error, as the call to the DV executes slower than the start of this function.
@@ -203,11 +203,18 @@ func (v *validator) signSlotWithSelectionProof(ctx context.Context, pubKey [fiel
 	return sig.Marshal(), nil
 }
 
-// waitToSlotTwoThirds waits until two third through the current slot period
-// such that any attestations from this slot have time to reach the beacon node
-// before creating the aggregated attestation.
-func (v *validator) waitToSlotTwoThirds(ctx context.Context, slot primitives.Slot) {
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().AggregateDueBPS)
+// waitUntilAggregateDue waits until the configured aggregation due time within the current slot
+// such that any attestations from this slot have time to reach the beacon node before creating
+// the aggregated attestation.
+//
+// Note: Historically this was ~2/3 of the slot, but may differ across forks (e.g. Gloas).
+func (v *validator) waitUntilAggregateDue(ctx context.Context, slot primitives.Slot) {
+	cfg := params.BeaconConfig()
+	component := cfg.AggregateDueBPS
+	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+		component = cfg.AggregateDueBPSGloas
+	}
+	v.waitUntilSlotComponent(ctx, slot, component)
 }
 
 // This returns the signature of validator signing over aggregate and

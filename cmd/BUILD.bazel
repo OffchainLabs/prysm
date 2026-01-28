@@ -9,6 +9,7 @@ go_library(
         "defaults.go",
         "flags.go",
         "helpers.go",
+        "log.go",
         "password_reader.go",
         "wrap_flags.go",
     ],

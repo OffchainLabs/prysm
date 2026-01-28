@@ -50,6 +50,14 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// fillGloasBlockTestData populates a Gloas block with non-zero test values for the
+// Gloas-specific fields: SignedExecutionPayloadBid and PayloadAttestations.
+func fillGloasBlockTestData(b *eth.SignedBeaconBlockGloas, numPayloadAttestations int) {
+	slot := b.Block.Slot
+	b.Block.Body.SignedExecutionPayloadBid = util.GenerateTestSignedExecutionPayloadBid(slot)
+	b.Block.Body.PayloadAttestations = util.GenerateTestPayloadAttestations(numPayloadAttestations, slot)
+}
+
 func fillDBTestBlocks(ctx context.Context, t *testing.T, beaconDB db.Database) (*eth.SignedBeaconBlock, []*eth.BeaconBlockContainer) {
 	parentRoot := [32]byte{1, 2, 3}
 	genBlk := util.NewBeaconBlock()
@@ -335,6 +343,50 @@ func TestGetBlockV2(t *testing.T) {
 		require.NoError(t, err)
 		assert.DeepEqual(t, blk, b)
 	})
+	t.Run("gloas", func(t *testing.T) {
+		b := util.NewBeaconBlockGloas()
+		b.Block.Slot = 123
+		fillGloasBlockTestData(b, 2)
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+		mockBlockFetcher := &testutil.MockBlocker{BlockToReturn: sb}
+		mockChainService := &chainMock.ChainService{
+			FinalizedRoots: map[[32]byte]bool{},
+		}
+		s := &Server{
+			OptimisticModeFetcher: mockChainService,
+			FinalizationFetcher:   mockChainService,
+			Blocker:               mockBlockFetcher,
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
+		request.SetPathValue("block_id", "head")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlockV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetBlockV2Response{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, version.String(version.Gloas), resp.Version)
+		sbb := &structs.SignedBeaconBlockGloas{Message: &structs.BeaconBlockGloas{}}
+		require.NoError(t, json.Unmarshal(resp.Data.Message, sbb.Message))
+		sbb.Signature = resp.Data.Signature
+		blk, err := sbb.ToConsensus()
+		require.NoError(t, err)
+		assert.DeepEqual(t, blk, b)
+
+		// Verify Gloas-specific fields are correctly serialized/deserialized
+		require.NotNil(t, blk.Block.Body.SignedExecutionPayloadBid)
+		assert.Equal(t, primitives.Slot(123), blk.Block.Body.SignedExecutionPayloadBid.Message.Slot)
+		assert.Equal(t, primitives.BuilderIndex(1), blk.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex)
+		require.Equal(t, 2, len(blk.Block.Body.PayloadAttestations))
+		for _, att := range blk.Block.Body.PayloadAttestations {
+			assert.Equal(t, primitives.Slot(123), att.Data.Slot)
+			assert.Equal(t, true, att.Data.PayloadPresent)
+			assert.Equal(t, true, att.Data.BlobDataAvailable)
+		}
+	})
 	t.Run("execution optimistic", func(t *testing.T) {
 		b := util.NewBeaconBlockBellatrix()
 		sb, err := blocks.NewSignedBeaconBlock(b)
@@ -573,6 +625,37 @@ func TestGetBlockSSZV2(t *testing.T) {
 		sszExpected, err := b.MarshalSSZ()
 		require.NoError(t, err)
 		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
+	})
+	t.Run("gloas", func(t *testing.T) {
+		b := util.NewBeaconBlockGloas()
+		b.Block.Slot = 123
+		fillGloasBlockTestData(b, 2)
+		sb, err := blocks.NewSignedBeaconBlock(b)
+		require.NoError(t, err)
+
+		s := &Server{
+			Blocker: &testutil.MockBlocker{BlockToReturn: sb},
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "http://foo.example/eth/v2/beacon/blocks/{block_id}", nil)
+		request.SetPathValue("block_id", "head")
+		request.Header.Set("Accept", api.OctetStreamMediaType)
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetBlockV2(writer, request)
+		require.Equal(t, http.StatusOK, writer.Code)
+		assert.Equal(t, version.String(version.Gloas), writer.Header().Get(api.VersionHeader))
+		sszExpected, err := b.MarshalSSZ()
+		require.NoError(t, err)
+		assert.DeepEqual(t, sszExpected, writer.Body.Bytes())
+
+		// Verify SSZ round-trip preserves Gloas-specific fields
+		decoded := &eth.SignedBeaconBlockGloas{}
+		require.NoError(t, decoded.UnmarshalSSZ(writer.Body.Bytes()))
+		require.NotNil(t, decoded.Block.Body.SignedExecutionPayloadBid)
+		assert.Equal(t, primitives.Slot(123), decoded.Block.Body.SignedExecutionPayloadBid.Message.Slot)
+		require.Equal(t, 2, len(decoded.Block.Body.PayloadAttestations))
 	})
 }
 
