@@ -259,18 +259,19 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	}
 	s.validatorServer = validatorServer
 	nodeServer := &nodev1alpha1.Server{
-		LogsStreamer:         logs.NewStreamServer(),
-		StreamLogsBufferSize: 1000, // Enough to handle bursts of beacon node logs for gRPC streaming.
-		BeaconDB:             s.cfg.BeaconDB,
-		Server:               s.grpcServer,
-		SyncChecker:          s.cfg.SyncService,
-		GenesisTimeFetcher:   s.cfg.GenesisTimeFetcher,
-		PeersFetcher:         s.cfg.PeersFetcher,
-		PeerManager:          s.cfg.PeerManager,
-		GenesisFetcher:       s.cfg.GenesisFetcher,
-		POWChainInfoFetcher:  s.cfg.ExecutionChainInfoFetcher,
-		BeaconMonitoringHost: s.cfg.BeaconMonitoringHost,
-		BeaconMonitoringPort: s.cfg.BeaconMonitoringPort,
+		LogsStreamer:          logs.NewStreamServer(),
+		StreamLogsBufferSize:  1000, // Enough to handle bursts of beacon node logs for gRPC streaming.
+		BeaconDB:              s.cfg.BeaconDB,
+		Server:                s.grpcServer,
+		SyncChecker:           s.cfg.SyncService,
+		GenesisTimeFetcher:    s.cfg.GenesisTimeFetcher,
+		PeersFetcher:          s.cfg.PeersFetcher,
+		PeerManager:           s.cfg.PeerManager,
+		GenesisFetcher:        s.cfg.GenesisFetcher,
+		POWChainInfoFetcher:   s.cfg.ExecutionChainInfoFetcher,
+		BeaconMonitoringHost:  s.cfg.BeaconMonitoringHost,
+		BeaconMonitoringPort:  s.cfg.BeaconMonitoringPort,
+		OptimisticModeFetcher: s.cfg.OptimisticModeFetcher,
 	}
 	beaconChainServer := &beaconv1alpha1.Server{
 		Ctx:                         s.ctx,
