@@ -45,8 +45,11 @@ func (g *gossipTracer) RemovePeer(p peer.ID) {
 	for _, peers := range g.partialMessagePeers {
 		delete(peers, p)
 	}
-	for _, peers := range g.meshPeers {
-		delete(peers, p)
+	for topic, peers := range g.meshPeers {
+		if _, ok := peers[p]; ok {
+			delete(peers, p)
+			g.updateMeshPeersMetric(topic)
+		}
 	}
 }
 
@@ -87,6 +90,7 @@ func (g *gossipTracer) Graft(p peer.ID, topic string) {
 	if m, ok := g.meshPeers[topic]; ok {
 		m[p] = struct{}{}
 	}
+	g.updateMeshPeersMetric(topic)
 }
 
 // Prune .
@@ -97,6 +101,7 @@ func (g *gossipTracer) Prune(p peer.ID, topic string) {
 	if m, ok := g.meshPeers[topic]; ok {
 		delete(m, p)
 	}
+	g.updateMeshPeersMetric(topic)
 }
 
 // ValidateMessage .
@@ -181,4 +186,28 @@ func (g *gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, p
 		pubCtr.WithLabelValues(rpc.Partial.GetTopicID()).Inc()
 		pubSizeCtr.WithLabelValues(rpc.Partial.GetTopicID(), "true").Add(float64(rpc.Partial.Size()))
 	}
+}
+
+// updateMeshPeersMetric requires the caller to hold the state mutex
+func (g *gossipTracer) updateMeshPeersMetric(topic string) {
+	meshPeers, ok := g.meshPeers[topic]
+	if !ok {
+		return
+	}
+	partialPeers, ok := g.partialMessagePeers[topic]
+	if !ok {
+		return
+	}
+
+	var supportsPartial, doesNotSupportPartial float64
+	for p := range meshPeers {
+		if _, ok := partialPeers[p]; ok {
+			supportsPartial++
+		} else {
+			doesNotSupportPartial++
+		}
+	}
+
+	pubsubMeshPeers.WithLabelValues(topic, "true").Set(supportsPartial)
+	pubsubMeshPeers.WithLabelValues(topic, "false").Set(doesNotSupportPartial)
 }
