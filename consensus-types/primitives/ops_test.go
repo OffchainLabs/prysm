@@ -1,11 +1,10 @@
-package primitives_test
+package primitives
 
 import (
 	"fmt"
 	"math"
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	mathprysm "github.com/OffchainLabs/prysm/v7/math"
 )
 
@@ -31,27 +30,19 @@ func TestOps_Add(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Add(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("add(%d,%d)", tt.a, tt.b), func(t *testing.T) {
 			if tt.panicMsg != "" {
-				assertPanic(t, tt.panicMsg, func() { primitives.Add(primitives.Slot(tt.a), tt.b) })
-				assertPanic(t, tt.panicMsg, func() { primitives.AddT(primitives.Slot(tt.a), primitives.Slot(tt.b)) })
+				assertPanic(t, tt.panicMsg, func() { add(tt.a, tt.b) })
 			} else {
-				got := primitives.Add(primitives.Slot(tt.a), tt.b)
-				if uint64(got) != tt.want {
-					t.Errorf("Add() = %d, want %d", got, tt.want)
-				}
-				got = primitives.AddT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-				if uint64(got) != tt.want {
-					t.Errorf("AddT() = %d, want %d", got, tt.want)
+				got := add(tt.a, tt.b)
+				if got != tt.want {
+					t.Errorf("add() = %d, want %d", got, tt.want)
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("SafeAdd(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got, err := primitives.SafeAdd(primitives.Slot(tt.a), tt.b)
-			checkSafeOp(t, "SafeAdd()", uint64(got), err, tt.want, tt.panicMsg)
-
-			got, err = primitives.SafeAddT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			checkSafeOp(t, "SafeAddT()", uint64(got), err, tt.want, tt.panicMsg)
+		t.Run(fmt.Sprintf("safeAdd(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got, err := safeAdd(tt.a, tt.b)
+			checkSafeOp(t, "safeAdd()", got, err, tt.want, tt.panicMsg)
 		})
 	}
 }
@@ -79,27 +70,19 @@ func TestOps_Sub(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Sub(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("sub(%d,%d)", tt.a, tt.b), func(t *testing.T) {
 			if tt.panicMsg != "" {
-				assertPanic(t, tt.panicMsg, func() { primitives.Sub(primitives.Slot(tt.a), tt.b) })
-				assertPanic(t, tt.panicMsg, func() { primitives.SubT(primitives.Slot(tt.a), primitives.Slot(tt.b)) })
+				assertPanic(t, tt.panicMsg, func() { sub(tt.a, tt.b) })
 			} else {
-				got := primitives.Sub(primitives.Slot(tt.a), tt.b)
-				if uint64(got) != tt.want {
-					t.Errorf("Sub() = %d, want %d", got, tt.want)
-				}
-				got = primitives.SubT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-				if uint64(got) != tt.want {
-					t.Errorf("SubT() = %d, want %d", got, tt.want)
+				got := sub(tt.a, tt.b)
+				if got != tt.want {
+					t.Errorf("sub() = %d, want %d", got, tt.want)
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("SafeSub(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got, err := primitives.SafeSub(primitives.Slot(tt.a), tt.b)
-			checkSafeOp(t, "SafeSub()", uint64(got), err, tt.want, tt.panicMsg)
-
-			got, err = primitives.SafeSubT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			checkSafeOp(t, "SafeSubT()", uint64(got), err, tt.want, tt.panicMsg)
+		t.Run(fmt.Sprintf("safeSub(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got, err := safeSub(tt.a, tt.b)
+			checkSafeOp(t, "safeSub()", got, err, tt.want, tt.panicMsg)
 		})
 	}
 }
@@ -127,27 +110,19 @@ func TestOps_Mul(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Mul(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("mul(%d,%d)", tt.a, tt.b), func(t *testing.T) {
 			if tt.panicMsg != "" {
-				assertPanic(t, tt.panicMsg, func() { primitives.Mul(primitives.Slot(tt.a), tt.b) })
-				assertPanic(t, tt.panicMsg, func() { primitives.MulT(primitives.Slot(tt.a), primitives.Slot(tt.b)) })
+				assertPanic(t, tt.panicMsg, func() { mul(tt.a, tt.b) })
 			} else {
-				got := primitives.Mul(primitives.Slot(tt.a), tt.b)
-				if uint64(got) != tt.want {
-					t.Errorf("Mul() = %d, want %d", got, tt.want)
-				}
-				got = primitives.MulT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-				if uint64(got) != tt.want {
-					t.Errorf("MulT() = %d, want %d", got, tt.want)
+				got := mul(tt.a, tt.b)
+				if got != tt.want {
+					t.Errorf("mul() = %d, want %d", got, tt.want)
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("SafeMul(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got, err := primitives.SafeMul(primitives.Slot(tt.a), tt.b)
-			checkSafeOp(t, "SafeMul()", uint64(got), err, tt.want, tt.panicMsg)
-
-			got, err = primitives.SafeMulT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			checkSafeOp(t, "SafeMulT()", uint64(got), err, tt.want, tt.panicMsg)
+		t.Run(fmt.Sprintf("safeMul(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got, err := safeMul(tt.a, tt.b)
+			checkSafeOp(t, "safeMul()", got, err, tt.want, tt.panicMsg)
 		})
 	}
 }
@@ -174,27 +149,19 @@ func TestOps_Div(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Div(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("div(%d,%d)", tt.a, tt.b), func(t *testing.T) {
 			if tt.panicMsg != "" {
-				assertPanic(t, tt.panicMsg, func() { primitives.Div(primitives.Slot(tt.a), tt.b) })
-				assertPanic(t, tt.panicMsg, func() { primitives.DivT(primitives.Slot(tt.a), primitives.Slot(tt.b)) })
+				assertPanic(t, tt.panicMsg, func() { div(tt.a, tt.b) })
 			} else {
-				got := primitives.Div(primitives.Slot(tt.a), tt.b)
-				if uint64(got) != tt.want {
-					t.Errorf("Div() = %d, want %d", got, tt.want)
-				}
-				got = primitives.DivT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-				if uint64(got) != tt.want {
-					t.Errorf("DivT() = %d, want %d", got, tt.want)
+				got := div(tt.a, tt.b)
+				if got != tt.want {
+					t.Errorf("div() = %d, want %d", got, tt.want)
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("SafeDiv(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got, err := primitives.SafeDiv(primitives.Slot(tt.a), tt.b)
-			checkSafeOp(t, "SafeDiv()", uint64(got), err, tt.want, tt.panicMsg)
-
-			got, err = primitives.SafeDivT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			checkSafeOp(t, "SafeDivT()", uint64(got), err, tt.want, tt.panicMsg)
+		t.Run(fmt.Sprintf("safeDiv(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got, err := safeDiv(tt.a, tt.b)
+			checkSafeOp(t, "safeDiv()", got, err, tt.want, tt.panicMsg)
 		})
 	}
 }
@@ -222,27 +189,19 @@ func TestOps_Mod(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Mod(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+		t.Run(fmt.Sprintf("mod(%d,%d)", tt.a, tt.b), func(t *testing.T) {
 			if tt.panicMsg != "" {
-				assertPanic(t, tt.panicMsg, func() { primitives.Mod(primitives.Slot(tt.a), tt.b) })
-				assertPanic(t, tt.panicMsg, func() { primitives.ModT(primitives.Slot(tt.a), primitives.Slot(tt.b)) })
+				assertPanic(t, tt.panicMsg, func() { mod(tt.a, tt.b) })
 			} else {
-				got := primitives.Mod(primitives.Slot(tt.a), tt.b)
-				if uint64(got) != tt.want {
-					t.Errorf("Mod() = %d, want %d", got, tt.want)
-				}
-				got = primitives.ModT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-				if uint64(got) != tt.want {
-					t.Errorf("ModT() = %d, want %d", got, tt.want)
+				got := mod(tt.a, tt.b)
+				if got != tt.want {
+					t.Errorf("mod() = %d, want %d", got, tt.want)
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("SafeMod(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got, err := primitives.SafeMod(primitives.Slot(tt.a), tt.b)
-			checkSafeOp(t, "SafeMod()", uint64(got), err, tt.want, tt.panicMsg)
-
-			got, err = primitives.SafeModT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			checkSafeOp(t, "SafeModT()", uint64(got), err, tt.want, tt.panicMsg)
+		t.Run(fmt.Sprintf("safeMod(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got, err := safeMod(tt.a, tt.b)
+			checkSafeOp(t, "safeMod()", got, err, tt.want, tt.panicMsg)
 		})
 	}
 }
@@ -264,16 +223,10 @@ func TestOps_CappedAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("CappedAdd(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.CappedAdd(primitives.Slot(tt.a), tt.b)
-			if uint64(got) != tt.want {
-				t.Errorf("CappedAdd() = %d, want %d", got, tt.want)
-			}
-		})
-		t.Run(fmt.Sprintf("CappedAddT(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.CappedAddT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			if uint64(got) != tt.want {
-				t.Errorf("CappedAddT() = %d, want %d", got, tt.want)
+		t.Run(fmt.Sprintf("cappedAdd(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got := cappedAdd(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("cappedAdd() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -296,16 +249,10 @@ func TestOps_FlooredSub(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("FlooredSub(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.FlooredSub(primitives.Slot(tt.a), tt.b)
-			if uint64(got) != tt.want {
-				t.Errorf("FlooredSub() = %d, want %d", got, tt.want)
-			}
-		})
-		t.Run(fmt.Sprintf("FlooredSubT(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.FlooredSubT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			if uint64(got) != tt.want {
-				t.Errorf("FlooredSubT() = %d, want %d", got, tt.want)
+		t.Run(fmt.Sprintf("flooredSub(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got := flooredSub(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("flooredSub() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -330,16 +277,10 @@ func TestOps_CappedMul(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("CappedMul(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.CappedMul(primitives.Slot(tt.a), tt.b)
-			if uint64(got) != tt.want {
-				t.Errorf("CappedMul() = %d, want %d", got, tt.want)
-			}
-		})
-		t.Run(fmt.Sprintf("CappedMulT(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.CappedMulT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			if uint64(got) != tt.want {
-				t.Errorf("CappedMulT() = %d, want %d", got, tt.want)
+		t.Run(fmt.Sprintf("cappedMul(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got := cappedMul(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("cappedMul() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -361,66 +302,10 @@ func TestOps_Diff(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Diff(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.Diff(primitives.Slot(tt.a), tt.b)
-			if uint64(got) != tt.want {
-				t.Errorf("Diff() = %d, want %d", got, tt.want)
-			}
-			got = primitives.DiffT(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			if uint64(got) != tt.want {
-				t.Errorf("DiffT() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestOps_Max(t *testing.T) {
-	tests := []struct {
-		a, b uint64
-		want uint64
-	}{
-		{a: 0, b: 0, want: 0},
-		{a: 0, b: 1, want: 1},
-		{a: 1, b: 0, want: 1},
-		{a: 10, b: 20, want: 20},
-		{a: 20, b: 10, want: 20},
-		{a: 100, b: 100, want: 100},
-		{a: 0, b: math.MaxUint64, want: math.MaxUint64},
-		{a: math.MaxUint64, b: 0, want: math.MaxUint64},
-		{a: math.MaxUint64, b: math.MaxUint64, want: math.MaxUint64},
-	}
-
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Max(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.Max(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			if uint64(got) != tt.want {
-				t.Errorf("Max() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestOps_Min(t *testing.T) {
-	tests := []struct {
-		a, b uint64
-		want uint64
-	}{
-		{a: 0, b: 0, want: 0},
-		{a: 0, b: 1, want: 0},
-		{a: 1, b: 0, want: 0},
-		{a: 10, b: 20, want: 10},
-		{a: 20, b: 10, want: 10},
-		{a: 100, b: 100, want: 100},
-		{a: 0, b: math.MaxUint64, want: 0},
-		{a: math.MaxUint64, b: 0, want: 0},
-		{a: math.MaxUint64, b: math.MaxUint64, want: math.MaxUint64},
-	}
-
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Min(%d,%d)", tt.a, tt.b), func(t *testing.T) {
-			got := primitives.Min(primitives.Slot(tt.a), primitives.Slot(tt.b))
-			if uint64(got) != tt.want {
-				t.Errorf("Min() = %d, want %d", got, tt.want)
+		t.Run(fmt.Sprintf("diff(%d,%d)", tt.a, tt.b), func(t *testing.T) {
+			got := diff(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("diff() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -448,10 +333,10 @@ func TestOps_Clamp(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("Clamp(%d,%d,%d)", tt.val, tt.min, tt.max), func(t *testing.T) {
-			got := primitives.Clamp(primitives.Slot(tt.val), primitives.Slot(tt.min), primitives.Slot(tt.max))
-			if uint64(got) != tt.want {
-				t.Errorf("Clamp() = %d, want %d", got, tt.want)
+		t.Run(fmt.Sprintf("clamp(%d,%d,%d)", tt.val, tt.min, tt.max), func(t *testing.T) {
+			got := clamp(tt.val, tt.min, tt.max)
+			if got != tt.want {
+				t.Errorf("clamp() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -469,10 +354,10 @@ func TestOps_IsZero(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("IsZero(%d)", tt.val), func(t *testing.T) {
-			got := primitives.IsZero(primitives.Slot(tt.val))
+		t.Run(fmt.Sprintf("isZero(%d)", tt.val), func(t *testing.T) {
+			got := isZero(tt.val)
 			if got != tt.want {
-				t.Errorf("IsZero() = %v, want %v", got, tt.want)
+				t.Errorf("isZero() = %v, want %v", got, tt.want)
 			}
 		})
 	}

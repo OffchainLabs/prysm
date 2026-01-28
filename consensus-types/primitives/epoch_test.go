@@ -419,3 +419,23 @@ func TestEpoch_Mod(t *testing.T) {
 		})
 	}
 }
+
+func assertPanic(t *testing.T, panicMessage string, f func()) {
+	t.Helper()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Errorf("Expected panic not thrown")
+			return
+		}
+		err, ok := r.(error)
+		if !ok {
+			t.Errorf("Expected panic with error, got: %T", r)
+			return
+		}
+		if err.Error() != panicMessage {
+			t.Errorf("Unexpected panic message, want: %q, got: %q", panicMessage, err.Error())
+		}
+	}()
+	f()
+}
