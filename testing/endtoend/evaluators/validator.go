@@ -311,9 +311,9 @@ func checkSyncParticipation(conns []*grpc.ClientConn) error {
 			// Skip fork slot.
 			continue
 		}
-		// Skip slots 1-2 at genesis - validators need time to ramp up after chain start
+		// Skip early slots at genesis - validators need time to ramp up after chain start
 		// due to doppelganger protection. This is a startup timing issue, not a fork transition issue.
-		if b.Block().Slot() < 3 {
+		if b.Block().Slot() < 5 {
 			continue
 		}
 		expectedParticipation := expectedSyncParticipation

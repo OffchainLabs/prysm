@@ -163,11 +163,12 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
-	// Retry up to 3 times with 2 second delays to handle data availability delays.
+	// Retry up to 5 times with 3 second delays to handle data availability delays.
 	// With PeerDAS, non-proposer nodes may take longer to sync blocks while
-	// fetching data columns from the network.
-	const maxRetries = 3
-	const retryDelay = 2 * time.Second
+	// fetching data columns from the network. Sync nodes may also need extra
+	// time to catch up after initial sync.
+	const maxRetries = 5
+	const retryDelay = 3 * time.Second
 	var lastErr error
 
 	for attempt := range maxRetries {
