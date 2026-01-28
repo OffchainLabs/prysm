@@ -13,6 +13,7 @@ type writeOnlyGloasFields interface {
 	RotateBuilderPendingPayments() error
 	AppendBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
 	UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val byte) error
+	UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error
 }
 
 type readOnlyGloasFields interface {
@@ -20,6 +21,7 @@ type readOnlyGloasFields interface {
 	IsActiveBuilder(primitives.BuilderIndex) (bool, error)
 	CanBuilderCoverBid(primitives.BuilderIndex, primitives.Gwei) (bool, error)
 	LatestBlockHash() ([32]byte, error)
+	IsAttestationSameSlot(blockRoot [32]byte, slot primitives.Slot) (bool, error)
 	BuilderPendingPayment(index uint64) (*ethpb.BuilderPendingPayment, error)
 	BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error)
 	ExecutionPayloadAvailability(slot primitives.Slot) (uint64, error)

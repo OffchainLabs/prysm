@@ -17,7 +17,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -77,8 +76,7 @@ func ProcessAttestationNoVerifySignature(
 		return nil, err
 	}
 
-	beaconState, err = gloas.UpdatePendingPaymentWeight(beaconState, att, indices, participatedFlags)
-	if err != nil {
+	if err := beaconState.UpdatePendingPaymentWeight(att, indices, participatedFlags); err != nil {
 		return nil, errors.Wrap(err, "failed to update pending payment weight")
 	}
 
@@ -309,39 +307,18 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 	}
 	matchedSrcTgtHead := matchedHead && matchedSrcTgt
 
-	// Spec v1.7.0-alpha pseudocode:
-	//
-	//	# [New in Gloas:EIP7732]
-	//	if is_attestation_same_slot(state, data):
-	//	    assert data.index == 0
-	//	    payload_matches = True
-	//	else:
-	//	    slot_index = data.slot % SLOTS_PER_HISTORICAL_ROOT
-	//	    payload_index = state.execution_payload_availability[slot_index]
-	//	    payload_matches = data.index == payload_index
-	//
-	//	# [Modified in Gloas:EIP7732]
-	//	is_matching_head = is_matching_target and head_root_matches and payload_matches
-	var matchingPayload bool
-	if beaconState.Version() >= version.Gloas {
-		sameSlot, err := gloas.SameSlotAttestation(beaconState, [32]byte(data.BeaconBlockRoot), data.Slot)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get same slot attestation status")
-		}
-		if sameSlot {
-			if data.CommitteeIndex != 0 {
-				return nil, fmt.Errorf("committee index %d for same slot attestation must be 0", data.CommitteeIndex)
-			}
-			matchingPayload = true
-		} else {
-			executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(data.Slot)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to get execution payload availability status")
-			}
-			matchingPayload = executionPayloadAvail == uint64(data.CommitteeIndex)
-		}
-		matchedSrcTgtHead = matchedSrcTgtHead && matchingPayload
+	var beaconBlockRoot [32]byte
+	copy(beaconBlockRoot[:], data.BeaconBlockRoot)
+	matchingPayload, err := gloas.MatchingPayload(
+		beaconState,
+		beaconBlockRoot,
+		data.Slot,
+		uint64(data.CommitteeIndex),
+	)
+	if err != nil {
+		return nil, err
 	}
+	matchedSrcTgtHead = matchedSrcTgtHead && matchingPayload
 	if matchedSrcTgtHead && delay == cfg.MinAttestationInclusionDelay {
 		participatedFlags[headFlagIndex] = true
 	}

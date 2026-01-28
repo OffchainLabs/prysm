@@ -263,7 +263,7 @@ func TestVerifyAttestationNoVerifySignature_Electra(t *testing.T) {
 			CommitteeBits:   bitfield.NewBitvector64(),
 		}
 		err = blocks.VerifyAttestationNoVerifySignature(context.TODO(), beaconState, att)
-		assert.ErrorContains(t, "committee index must be 0 post-Electra", err)
+		assert.ErrorContains(t, "committee index must be 0", err)
 	})
 	t.Run("index of committee too big", func(t *testing.T) {
 		aggBits := bitfield.NewBitlist(3)

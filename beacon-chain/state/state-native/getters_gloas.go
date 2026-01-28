@@ -1,13 +1,16 @@
 package state_native
 
 import (
+	"bytes"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/pkg/errors"
 )
 
 // LatestBlockHash returns the hash of the latest execution block.
@@ -24,6 +27,41 @@ func (b *BeaconState) LatestBlockHash() ([32]byte, error) {
 	}
 
 	return [32]byte(b.latestBlockHash), nil
+}
+
+// IsAttestationSameSlot checks if the attestation is for the same slot as the block root in the state.
+// Spec v1.7.0-alpha pseudocode:
+//
+//	is_attestation_same_slot(state, data):
+//	    if data.slot == 0:
+//	        return True
+//
+//	    blockroot = data.beacon_block_root
+//	    slot_blockroot = get_block_root_at_slot(state, data.slot)
+//	    prev_blockroot = get_block_root_at_slot(state, Slot(data.slot - 1))
+//
+//	    return blockroot == slot_blockroot and blockroot != prev_blockroot
+func (b *BeaconState) IsAttestationSameSlot(blockRoot [32]byte, slot primitives.Slot) (bool, error) {
+	if b.version < version.Gloas {
+		return false, errNotSupported("IsAttestationSameSlot", b.version)
+	}
+	if slot == 0 {
+		return true, nil
+	}
+
+	blockRootAtSlot, err := helpers.BlockRootAtSlot(b, slot)
+	if err != nil {
+		return false, errors.Wrapf(err, "block root at slot %d", slot)
+	}
+	matchingBlockRoot := bytes.Equal(blockRoot[:], blockRootAtSlot)
+
+	blockRootAtPrevSlot, err := helpers.BlockRootAtSlot(b, slot-1)
+	if err != nil {
+		return false, errors.Wrapf(err, "block root at slot %d", slot-1)
+	}
+	matchingPrevBlockRoot := bytes.Equal(blockRoot[:], blockRootAtPrevSlot)
+
+	return matchingBlockRoot && !matchingPrevBlockRoot, nil
 }
 
 // BuilderPubkey returns the builder pubkey at the provided index.

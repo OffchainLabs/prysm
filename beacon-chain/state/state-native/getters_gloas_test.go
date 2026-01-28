@@ -44,6 +44,92 @@ func TestLatestBlockHash(t *testing.T) {
 	})
 }
 
+func TestIsAttestationSameSlot(t *testing.T) {
+	buildStateWithBlockRoots := func(t *testing.T, stateSlot primitives.Slot, roots map[primitives.Slot][]byte) *state_native.BeaconState {
+		t.Helper()
+
+		cfg := params.BeaconConfig()
+		blockRoots := make([][]byte, cfg.SlotsPerHistoricalRoot)
+		for slot, root := range roots {
+			blockRoots[slot%cfg.SlotsPerHistoricalRoot] = root
+		}
+
+		stIface, err := state_native.InitializeFromProtoGloas(&ethpb.BeaconStateGloas{
+			Slot:       stateSlot,
+			BlockRoots: blockRoots,
+		})
+		require.NoError(t, err)
+		return stIface.(*state_native.BeaconState)
+	}
+
+	rootA := bytes.Repeat([]byte{0xAA}, 32)
+	rootB := bytes.Repeat([]byte{0xBB}, 32)
+	rootC := bytes.Repeat([]byte{0xCC}, 32)
+
+	tests := []struct {
+		name      string
+		stateSlot primitives.Slot
+		slot      primitives.Slot
+		blockRoot []byte
+		roots     map[primitives.Slot][]byte
+		want      bool
+	}{
+		{
+			name:      "slot zero always true",
+			stateSlot: 1,
+			slot:      0,
+			blockRoot: rootA,
+			roots:     map[primitives.Slot][]byte{},
+			want:      true,
+		},
+		{
+			name:      "matching current different previous",
+			stateSlot: 6,
+			slot:      4,
+			blockRoot: rootA,
+			roots: map[primitives.Slot][]byte{
+				4: rootA,
+				3: rootB,
+			},
+			want: true,
+		},
+		{
+			name:      "matching current same previous",
+			stateSlot: 6,
+			slot:      4,
+			blockRoot: rootA,
+			roots: map[primitives.Slot][]byte{
+				4: rootA,
+				3: rootA,
+			},
+			want: false,
+		},
+		{
+			name:      "non matching current",
+			stateSlot: 6,
+			slot:      4,
+			blockRoot: rootC,
+			roots: map[primitives.Slot][]byte{
+				4: rootA,
+				3: rootB,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := buildStateWithBlockRoots(t, tt.stateSlot, tt.roots)
+			var rootArr [32]byte
+			copy(rootArr[:], tt.blockRoot)
+
+			got, err := st.IsAttestationSameSlot(rootArr, tt.slot)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestBuilderPubkey(t *testing.T) {
 	t.Run("returns error before gloas", func(t *testing.T) {
 		stIface, _ := util.DeterministicGenesisState(t, 1)

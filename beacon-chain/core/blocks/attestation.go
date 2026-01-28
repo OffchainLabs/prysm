@@ -123,7 +123,7 @@ func VerifyAttestationNoVerifySignature(
 			}
 		} else {
 			if ci != 0 {
-				return errors.New("committee index must be 0 post-Electra")
+				return errors.New("committee index must be 0 between Electra and Gloas forks")
 			}
 		}
 		aggBits := att.GetAggregationBits()
