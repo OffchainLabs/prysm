@@ -119,7 +119,7 @@ func VerifyAttestationNoVerifySignature(
 		//
 		if beaconState.Version() >= version.Gloas {
 			if ci >= 2 {
-				return fmt.Errorf("incorrect committee index for gloas %d", ci)
+				return fmt.Errorf("incorrect committee index %d", ci)
 			}
 		} else {
 			if ci != 0 {
