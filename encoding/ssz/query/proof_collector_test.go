@@ -340,7 +340,6 @@ func TestProofCollector_MerkleizeVectorAndCollect(t *testing.T) {
 	pc.addTarget(6)
 
 	elements := [][32]byte{{1}, {2}}
-	// expected := ssz.MerkleizeVector(append([][32]byte{}, elements...), 2)
 	expected := ssz.MerkleizeVector(slices.Clone(elements), 2)
 	root := pc.merkleizeVectorAndCollect(elements, 3, 1)
 
