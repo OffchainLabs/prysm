@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"sync"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -8,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var _ = pubsub.RawTracer(gossipTracer{})
+var _ = pubsub.RawTracer(&gossipTracer{})
 
 // Initializes the values for the pubsub rpc action.
 type action int
@@ -23,85 +25,141 @@ const (
 // and broadcasted through gossipsub.
 type gossipTracer struct {
 	host host.Host
+
+	mu sync.Mutex
+	// map topic -> Set(peerID). Peer is in set if it supports partial messages.
+	partialMessagePeers map[string]map[peer.ID]struct{}
+	// map topic -> Set(peerID). Peer is in set if in the mesh.
+	meshPeers map[string]map[peer.ID]struct{}
 }
 
 // AddPeer .
-func (g gossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
+func (g *gossipTracer) AddPeer(p peer.ID, proto protocol.ID) {
 	// no-op
 }
 
 // RemovePeer .
-func (g gossipTracer) RemovePeer(p peer.ID) {
-	// no-op
+func (g *gossipTracer) RemovePeer(p peer.ID) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, peers := range g.partialMessagePeers {
+		delete(peers, p)
+	}
+	for _, peers := range g.meshPeers {
+		delete(peers, p)
+	}
 }
 
 // Join .
-func (g gossipTracer) Join(topic string) {
+func (g *gossipTracer) Join(topic string) {
 	pubsubTopicsActive.WithLabelValues(topic).Set(1)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.partialMessagePeers == nil {
+		g.partialMessagePeers = make(map[string]map[peer.ID]struct{})
+	}
+	if g.partialMessagePeers[topic] == nil {
+		g.partialMessagePeers[topic] = make(map[peer.ID]struct{})
+	}
+
+	if g.meshPeers == nil {
+		g.meshPeers = make(map[string]map[peer.ID]struct{})
+	}
+	if g.meshPeers[topic] == nil {
+		g.meshPeers[topic] = make(map[peer.ID]struct{})
+	}
 }
 
 // Leave .
-func (g gossipTracer) Leave(topic string) {
+func (g *gossipTracer) Leave(topic string) {
 	pubsubTopicsActive.WithLabelValues(topic).Set(0)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.partialMessagePeers, topic)
+	delete(g.meshPeers, topic)
 }
 
 // Graft .
-func (g gossipTracer) Graft(p peer.ID, topic string) {
+func (g *gossipTracer) Graft(p peer.ID, topic string) {
 	pubsubTopicsGraft.WithLabelValues(topic).Inc()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if m, ok := g.meshPeers[topic]; ok {
+		m[p] = struct{}{}
+	}
 }
 
 // Prune .
-func (g gossipTracer) Prune(p peer.ID, topic string) {
+func (g *gossipTracer) Prune(p peer.ID, topic string) {
 	pubsubTopicsPrune.WithLabelValues(topic).Inc()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if m, ok := g.meshPeers[topic]; ok {
+		delete(m, p)
+	}
 }
 
 // ValidateMessage .
-func (g gossipTracer) ValidateMessage(msg *pubsub.Message) {
+func (g *gossipTracer) ValidateMessage(msg *pubsub.Message) {
 	pubsubMessageValidate.WithLabelValues(*msg.Topic).Inc()
 }
 
 // DeliverMessage .
-func (g gossipTracer) DeliverMessage(msg *pubsub.Message) {
+func (g *gossipTracer) DeliverMessage(msg *pubsub.Message) {
 	pubsubMessageDeliver.WithLabelValues(*msg.Topic).Inc()
 }
 
 // RejectMessage .
-func (g gossipTracer) RejectMessage(msg *pubsub.Message, reason string) {
+func (g *gossipTracer) RejectMessage(msg *pubsub.Message, reason string) {
 	pubsubMessageReject.WithLabelValues(*msg.Topic, reason).Inc()
 }
 
 // DuplicateMessage .
-func (g gossipTracer) DuplicateMessage(msg *pubsub.Message) {
+func (g *gossipTracer) DuplicateMessage(msg *pubsub.Message) {
 	pubsubMessageDuplicate.WithLabelValues(*msg.Topic).Inc()
 }
 
 // UndeliverableMessage .
-func (g gossipTracer) UndeliverableMessage(msg *pubsub.Message) {
+func (g *gossipTracer) UndeliverableMessage(msg *pubsub.Message) {
 	pubsubMessageUndeliverable.WithLabelValues(*msg.Topic).Inc()
 }
 
 // ThrottlePeer .
-func (g gossipTracer) ThrottlePeer(p peer.ID) {
+func (g *gossipTracer) ThrottlePeer(p peer.ID) {
 	agent := agentFromPid(p, g.host.Peerstore())
 	pubsubPeerThrottle.WithLabelValues(agent).Inc()
 }
 
 // RecvRPC .
-func (g gossipTracer) RecvRPC(rpc *pubsub.RPC) {
+func (g *gossipTracer) RecvRPC(rpc *pubsub.RPC, from peer.ID) {
 	g.setMetricFromRPC(recv, pubsubRPCSubRecv, pubsubRPCPubRecv, pubsubRPCPubRecvSize, pubsubRPCRecv, rpc)
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, sub := range rpc.Subscriptions {
+		m, ok := g.partialMessagePeers[sub.GetTopicid()]
+		if !ok {
+			continue
+		}
+		if sub.GetSubscribe() && sub.GetRequestsPartial() {
+			m[from] = struct{}{}
+		} else {
+			delete(m, from)
+		}
+	}
 }
 
 // SendRPC .
-func (g gossipTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
+func (g *gossipTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 	g.setMetricFromRPC(send, pubsubRPCSubSent, pubsubRPCPubSent, pubsubRPCPubSentSize, pubsubRPCSent, rpc)
 }
 
 // DropRPC .
-func (g gossipTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {
+func (g *gossipTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {
 	g.setMetricFromRPC(drop, pubsubRPCSubDrop, pubsubRPCPubDrop, pubsubRPCPubDropSize, pubsubRPCDrop, rpc)
 }
 
-func (g gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pubCtr, pubSizeCtr, ctrlCtr *prometheus.CounterVec, rpc *pubsub.RPC) {
+func (g *gossipTracer) setMetricFromRPC(act action, subCtr prometheus.Counter, pubCtr, pubSizeCtr, ctrlCtr *prometheus.CounterVec, rpc *pubsub.RPC) {
 	subCtr.Add(float64(len(rpc.Subscriptions)))
 	if rpc.Control != nil {
 		ctrlCtr.WithLabelValues("graft").Add(float64(len(rpc.Control.Graft)))
