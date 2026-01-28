@@ -156,6 +156,30 @@ func waitForMidEpoch(conn *grpc.ClientConn) error {
 	}
 }
 
+// getHeadEpochs fetches the head epoch from all beacon nodes concurrently.
+func getHeadEpochs(conns []*grpc.ClientConn) ([]primitives.Epoch, error) {
+	epochs := make([]primitives.Epoch, len(conns))
+	g, _ := errgroup.WithContext(context.Background())
+
+	for i, conn := range conns {
+		conIdx := i
+		currConn := conn
+		g.Go(func() error {
+			beaconClient := eth.NewBeaconChainClient(currConn)
+			chainHead, err := beaconClient.GetChainHead(context.Background(), &emptypb.Empty{})
+			if err != nil {
+				return errors.Wrapf(err, "connection number=%d", conIdx)
+			}
+			epochs[conIdx] = chainHead.HeadEpoch
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return epochs, nil
+}
+
 func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientConn) error {
 	// Wait until we're at least halfway into the epoch to avoid race conditions
 	// at epoch boundaries where nodes may report different epochs.
@@ -163,10 +187,34 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 		return errors.Wrap(err, "failed waiting for mid-epoch")
 	}
 
-	// Retry up to 5 times with 3 second delays to handle data availability delays.
-	// With PeerDAS, non-proposer nodes may take longer to sync blocks while
-	// fetching data columns from the network. Sync nodes may also need extra
-	// time to catch up after initial sync.
+	// First, wait for all nodes to reach the same epoch. Sync nodes may be
+	// behind and need time to catch up. We poll every 2 seconds with a
+	// 60 second timeout - this adapts to actual sync progress rather than
+	// using fixed delays.
+	const epochTimeout = 60 * time.Second
+	const epochPollInterval = 2 * time.Second
+	epochDeadline := time.Now().Add(epochTimeout)
+
+	for time.Now().Before(epochDeadline) {
+		epochs, err := getHeadEpochs(conns)
+		if err != nil {
+			return err
+		}
+		allSame := true
+		for i := 1; i < len(epochs); i++ {
+			if epochs[0] != epochs[i] {
+				allSame = false
+				break
+			}
+		}
+		if allSame {
+			break
+		}
+		time.Sleep(epochPollInterval)
+	}
+
+	// Now that epochs match (or timeout reached), do detailed head comparison
+	// with a few retries to handle block propagation delays.
 	const maxRetries = 5
 	const retryDelay = 3 * time.Second
 	var lastErr error
