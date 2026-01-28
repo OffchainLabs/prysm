@@ -125,6 +125,7 @@ func (p *PartialDataColumn) PartialMessageBytes(metadata partialmessages.PartsMe
 }
 
 func (p *PartialDataColumn) EagerPartialMessageBytes() ([]byte, partialmessages.PartsMetadata, error) {
+	// TODO: do we want to send this once per groupID per peer
 	// Eagerly push the PartialDataColumnHeader
 	outHeader := &ethpb.PartialDataColumnHeader{
 		KzgCommitments:               p.KzgCommitments,

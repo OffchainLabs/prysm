@@ -32,6 +32,7 @@ var (
 
 // validatePartialDataColumnHeader validates a PartialDataColumnHeader per the consensus spec.
 // Returns (reject, err) where reject=true means the peer should be penalized.
+// TODO: we should consolidate this with the existing DataColumn validation pipeline.
 func (s *Service) validatePartialDataColumnHeader(ctx context.Context, header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
 	if header == nil || header.SignedBlockHeader == nil || header.SignedBlockHeader.Header == nil {
 		return false, errHeaderNil // IGNORE
