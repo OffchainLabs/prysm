@@ -136,7 +136,6 @@ func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot pr
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to sample beacon committee %d", committeeIndex)
 			}
-			i %= activeCount
 		}
 	}
 
