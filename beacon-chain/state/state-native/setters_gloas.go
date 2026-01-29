@@ -198,73 +198,77 @@ func (b *BeaconState) UpdateExecutionPayloadAvailabilityAtIndex(idx uint64, val 
 //	else:
 //	    state.builder_pending_payments[data.slot % SLOTS_PER_EPOCH] = payment
 func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64, participatedFlags map[uint8]bool) error {
-	b.lock.RLock()
-	if b.version < version.Gloas {
-		b.lock.RUnlock()
-		return nil
-	}
+	var (
+		paymentSlot    primitives.Slot
+		currentPayment *ethpb.BuilderPendingPayment
+		weight         primitives.Gwei
+	)
 
-	data := att.GetData()
-	var beaconBlockRoot [32]byte
-	copy(beaconBlockRoot[:], data.BeaconBlockRoot)
-	sameSlot, err := b.IsAttestationSameSlot(beaconBlockRoot, data.Slot)
+	err := func() error {
+		b.lock.RLock()
+		defer b.lock.RUnlock()
+
+		if b.version < version.Gloas {
+			return nil
+		}
+
+		data := att.GetData()
+		var beaconBlockRoot [32]byte
+		copy(beaconBlockRoot[:], data.BeaconBlockRoot)
+		sameSlot, err := b.IsAttestationSameSlot(beaconBlockRoot, data.Slot)
+		if err != nil {
+			return err
+		}
+		if !sameSlot {
+			return nil
+		}
+
+		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+		var epochParticipation []byte
+
+		if data.Target != nil && data.Target.Epoch == slots.ToEpoch(b.slot) {
+			paymentSlot = slotsPerEpoch + (data.Slot % slotsPerEpoch)
+			epochParticipation = b.currentEpochParticipation
+		} else {
+			paymentSlot = data.Slot % slotsPerEpoch
+			epochParticipation = b.previousEpochParticipation
+		}
+
+		if uint64(paymentSlot) >= uint64(len(b.builderPendingPayments)) {
+			return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentSlot, len(b.builderPendingPayments))
+		}
+		currentPayment = b.builderPendingPayments[paymentSlot]
+		if currentPayment.Withdrawal.Amount == 0 {
+			return nil
+		}
+
+		cfg := params.BeaconConfig()
+		flagIndices := []uint8{cfg.TimelySourceFlagIndex, cfg.TimelyTargetFlagIndex, cfg.TimelyHeadFlagIndex}
+		for _, idx := range indices {
+			if idx >= uint64(len(epochParticipation)) {
+				return fmt.Errorf("index %d exceeds participation length %d", idx, len(epochParticipation))
+			}
+			participation := epochParticipation[idx]
+			for _, f := range flagIndices {
+				if !participatedFlags[f] {
+					continue
+				}
+				if participation&(1<<f) == 0 {
+					v, err := b.validatorAtIndexReadOnly(primitives.ValidatorIndex(idx))
+					if err != nil {
+						return fmt.Errorf("validator at index %d: %w", idx, err)
+					}
+					weight += primitives.Gwei(v.EffectiveBalance())
+					break
+				}
+			}
+		}
+		return nil
+	}()
 	if err != nil {
-		b.lock.RUnlock()
 		return err
 	}
-	if !sameSlot {
-		b.lock.RUnlock()
-		return nil
-	}
-
-	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
-	var paymentSlot primitives.Slot
-	var epochParticipation []byte
-
-	if data.Target != nil && data.Target.Epoch == slots.ToEpoch(b.slot) {
-		paymentSlot = slotsPerEpoch + (data.Slot % slotsPerEpoch)
-		epochParticipation = b.currentEpochParticipation
-	} else {
-		paymentSlot = data.Slot % slotsPerEpoch
-		epochParticipation = b.previousEpochParticipation
-	}
-
-	if uint64(paymentSlot) >= uint64(len(b.builderPendingPayments)) {
-		b.lock.RUnlock()
-		return fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentSlot, len(b.builderPendingPayments))
-	}
-	currentPayment := b.builderPendingPayments[paymentSlot]
-	if currentPayment.Withdrawal.Amount == 0 {
-		return nil
-	}
-
-	cfg := params.BeaconConfig()
-	flagIndices := []uint8{cfg.TimelySourceFlagIndex, cfg.TimelyTargetFlagIndex, cfg.TimelyHeadFlagIndex}
-	var weight primitives.Gwei
-	for _, idx := range indices {
-		if idx >= uint64(len(epochParticipation)) {
-			b.lock.RUnlock()
-			return fmt.Errorf("index %d exceeds participation length %d", idx, len(epochParticipation))
-		}
-		participation := epochParticipation[idx]
-		for _, f := range flagIndices {
-			if !participatedFlags[f] {
-				continue
-			}
-			if participation&(1<<f) == 0 {
-				v, err := b.validatorAtIndexReadOnly(primitives.ValidatorIndex(idx))
-				if err != nil {
-					b.lock.RUnlock()
-					return fmt.Errorf("validator at index %d: %w", idx, err)
-				}
-				weight += primitives.Gwei(v.EffectiveBalance())
-				break
-			}
-		}
-	}
-	b.lock.RUnlock()
-
-	if weight == 0 {
+	if weight == 0 || currentPayment.Withdrawal.Amount == 0  {
 		return nil
 	}
 
