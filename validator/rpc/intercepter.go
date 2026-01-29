@@ -56,13 +56,18 @@ func (s *Server) AuthTokenHandler(next http.Handler) http.Handler {
 				httputil.HandleError(w, "Unauthorized: no Authorization header passed. Please use an Authorization header with the jwt created in the prysm wallet", http.StatusUnauthorized)
 				return
 			}
-			if !strings.HasPrefix(reqToken, bearerPrefix) {
+
+			token, ok := strings.CutPrefix(reqToken, bearerPrefix)
+			if !ok {
 				httputil.HandleError(w, "Invalid token format", http.StatusBadRequest)
 				return
 			}
 
-			token := strings.TrimSpace(reqToken[len(bearerPrefix):])
-			if len(s.authToken) == 0 || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
+			token = strings.TrimSpace(token)
+			if token == "" ||
+				len(s.authToken) == 0 ||
+				len(token) != len(s.authToken) ||
+				subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
 				httputil.HandleError(w, "Forbidden: token value is invalid", http.StatusForbidden)
 				return
 			}
@@ -83,14 +88,17 @@ func (s *Server) authorize(ctx context.Context) error {
 		return status.Error(codes.Unauthenticated, "Authorization token could not be found")
 	}
 
-	if !strings.HasPrefix(authHeader[0], bearerPrefix) {
+	token, ok := strings.CutPrefix(authHeader[0], bearerPrefix)
+	if !ok {
 		return status.Error(codes.Unauthenticated, "Invalid auth header, needs Bearer {token}")
 	}
 
-	token := strings.TrimSpace(authHeader[0][len(bearerPrefix):])
-
-	if len(s.authToken) == 0 || len(token) != len(s.authToken) || subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
-		return status.Errorf(codes.Unauthenticated, "Forbidden: token value is invalid")
+	token = strings.TrimSpace(token)
+	if token == "" ||
+		len(s.authToken) == 0 ||
+		len(token) != len(s.authToken) ||
+		subtle.ConstantTimeCompare([]byte(token), []byte(s.authToken)) != 1 {
+		return status.Error(codes.Unauthenticated, "Forbidden: token value is invalid")
 	}
 
 	return nil
