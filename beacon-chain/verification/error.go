@@ -81,6 +81,17 @@ var (
 	errDataColumnVerificationImplementationFault = errors.New("could not verify blob data or create a valid VerifiedROBlob")
 )
 
+var (
+	// ErrProofInvalid is joined with all other execution proof verification errors.
+	ErrProofInvalid = AsVerificationFailure(errors.New("invalid execution proof"))
+
+	// ErrProofSizeTooLarge means RequireProofSizeLimits failed.
+	ErrProofSizeTooLarge = errors.Join(ErrProofInvalid, errors.New("proof data exceeds maximum size"))
+
+	// errProofsInvalid is a general error for proof verification failures.
+	errProofsInvalid = errors.New("execution proofs failed verification")
+)
+
 // VerificationMultiError is a custom error that can be used to access individual verification failures.
 type VerificationMultiError struct {
 	r   *results

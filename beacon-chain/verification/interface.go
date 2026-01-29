@@ -54,3 +54,17 @@ type DataColumnsVerifier interface {
 // NewDataColumnsVerifier is a function signature that can be used to mock a setup where a
 // column verifier can be easily initialized.
 type NewDataColumnsVerifier func(dataColumns []blocks.RODataColumn, reqs []Requirement) DataColumnsVerifier
+
+// ExecutionProofsVerifier defines the methods implemented by ROExecutionProofsVerifier.
+type ExecutionProofsVerifier interface {
+	VerifiedROExecutionProofs() ([]blocks.VerifiedROExecutionProof, error)
+	SatisfyRequirement(Requirement)
+
+	NotFromFutureSlot() error
+	ProofSizeLimits() error
+	ProofVerified() error
+}
+
+// NewExecutionProofsVerifier is a function signature that can be used to mock a setup where an
+// execution proofs verifier can be easily initialized.
+type NewExecutionProofsVerifier func(proofs []blocks.ROExecutionProof, reqs []Requirement) ExecutionProofsVerifier

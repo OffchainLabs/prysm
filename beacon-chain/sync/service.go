@@ -175,6 +175,7 @@ type Service struct {
 	verifierWaiter                   *verification.InitializerWaiter
 	newBlobVerifier                  verification.NewBlobVerifier
 	newColumnsVerifier               verification.NewDataColumnsVerifier
+	newProofsVerifier                verification.NewExecutionProofsVerifier
 	columnSidecarsExecSingleFlight   singleflight.Group
 	reconstructionSingleFlight       singleflight.Group
 	availableBlocker                 coverage.AvailableBlocker
@@ -254,6 +255,12 @@ func newDataColumnsVerifierFromInitializer(ini *verification.Initializer) verifi
 	}
 }
 
+func newExecutionProofsVerifierFromInitializer(ini *verification.Initializer) verification.NewExecutionProofsVerifier {
+	return func(proofs []blocks.ROExecutionProof, reqs []verification.Requirement) verification.ExecutionProofsVerifier {
+		return ini.NewExecutionProofsVerifier(proofs, reqs)
+	}
+}
+
 // Start the regular sync service.
 func (s *Service) Start() {
 	v, err := s.verifierWaiter.WaitForInitializer(s.ctx)
@@ -263,6 +270,7 @@ func (s *Service) Start() {
 	}
 	s.newBlobVerifier = newBlobVerifierFromInitializer(v)
 	s.newColumnsVerifier = newDataColumnsVerifierFromInitializer(v)
+	s.newProofsVerifier = newExecutionProofsVerifierFromInitializer(v)
 
 	go s.verifierRoutine()
 	go s.kzgVerifierRoutine()

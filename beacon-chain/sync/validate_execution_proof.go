@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
-	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -15,7 +16,7 @@ import (
 )
 
 func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
-	// Always accept messages our own messages.
+	// Always accept our own messages.
 	if pid == s.cfg.p2p.PeerID() {
 		return pubsub.ValidationAccept, nil
 	}
@@ -44,81 +45,59 @@ func (s *Service) validateExecutionProof(ctx context.Context, pid peer.ID, msg *
 		return pubsub.ValidationReject, errWrongMessage
 	}
 
-	// 1. Verify proof is not from the future
-	if err := s.proofNotFromFutureSlot(executionProof); err != nil {
+	// Convert to ROExecutionProof.
+	roProof, err := blocks.NewROExecutionProof(executionProof)
+	if err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	// 3. Check if the proof is already in the DA checker cache (execution proof pool)
-	// If it exists in the cache, we know it has already passed validation.
-	blockRoot := bytesutil.ToBytes32(executionProof.BlockRoot)
-	if s.hasSeenProof(blockRoot, executionProof.ProofId) {
+	// Check if the proof has already been seen.
+	if s.hasSeenProof(roProof.BlockRoot(), roProof.ProofId()) {
 		return pubsub.ValidationIgnore, nil
 	}
 
-	// 4. Verify proof size limits
-	if uint64(len(executionProof.ProofData)) > params.BeaconConfig().MaxProofDataBytes {
-		return pubsub.ValidationReject, fmt.Errorf("execution proof data size %d exceeds maximum allowed %d", len(executionProof.ProofData), params.BeaconConfig().MaxProofDataBytes)
-	}
+	// Create the verifier with gossip requirements.
+	verifier := s.newProofsVerifier([]blocks.ROExecutionProof{roProof}, verification.GossipExecutionProofRequirements)
 
-	// 5. Run zkVM proof verification
-	if err := s.verifyExecutionProof(executionProof); err != nil {
+	// Run verifications.
+	if err := verifier.NotFromFutureSlot(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	if err := verifier.ProofSizeLimits(); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	if err := verifier.ProofVerified(); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
+	// Get verified proofs.
+	verifiedProofs, err := verifier.VerifiedROExecutionProofs()
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
 	log.WithFields(logrus.Fields{
-		"root": fmt.Sprintf("%#x", blockRoot),
-		"slot": executionProof.Slot,
-		"id":   executionProof.ProofId,
+		"root": fmt.Sprintf("%#x", roProof.BlockRoot()),
+		"slot": roProof.Slot(),
+		"id":   roProof.ProofId(),
 	}).Debug("Accepted execution proof")
 
-	// Validation successful, return accept
-	msg.ValidatorData = executionProof
+	// Set validator data to the verified proof.
+	msg.ValidatorData = verifiedProofs[0]
 	return pubsub.ValidationAccept, nil
 }
 
-// TODO: Do we need encapsulation for all those verification functions?
-
-// proofNotFromFutureSlot checks whether the execution proof is from a future slot.
-func (s *Service) proofNotFromFutureSlot(executionProof *ethpb.ExecutionProof) error {
-	currentSlot := s.cfg.clock.CurrentSlot()
-	proofSlot := executionProof.Slot
-
-	if currentSlot == proofSlot {
-		return nil
-	}
-
-	earliestStart, err := s.cfg.clock.SlotStart(proofSlot)
-	if err != nil {
-		// TODO: Should we penalize the peer for this?
-		return fmt.Errorf("failed to compute start time for proof slot %d: %w", proofSlot, err)
-	}
-
-	earliestStart = earliestStart.Add(-1 * params.BeaconConfig().MaximumGossipClockDisparityDuration())
-	// If the system time is still before earliestStart, we consider the proof from a future slot and return an error.
-	if s.cfg.clock.Now().Before(earliestStart) {
-		return fmt.Errorf("slot %d is too far in the future (current slot: %d)", proofSlot, currentSlot)
-	}
-	return nil
-}
-
-// Returns true if the column with the same slot, proposer index, and column index has been seen before.
+// hasSeenProof returns true if the proof with the same block root and proof ID has been seen before.
 func (s *Service) hasSeenProof(blockRoot [32]byte, proofId primitives.ExecutionProofId) bool {
 	key := computeProofCacheKey(blockRoot, proofId)
 	_, seen := s.seenProofCache.Get(key)
 	return seen
 }
 
-// Sets the data column with the same slot, proposer index, and data column index as seen.
+// setSeenProof marks the proof with the given block root and proof ID as seen.
 func (s *Service) setSeenProof(slot primitives.Slot, blockRoot [32]byte, proofId primitives.ExecutionProofId) {
 	key := computeProofCacheKey(blockRoot, proofId)
 	s.seenProofCache.Add(slot, key, true)
-}
-
-// verifyExecutionProof performs the actual verification of the execution proof.
-func (s *Service) verifyExecutionProof(_ *ethpb.ExecutionProof) error {
-	// For now, say all proof are valid.
-	return nil
 }
 
 func computeProofCacheKey(blockRoot [32]byte, proofId primitives.ExecutionProofId) string {

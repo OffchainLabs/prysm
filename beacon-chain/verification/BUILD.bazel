@@ -8,6 +8,7 @@ go_library(
         "cache.go",
         "data_column.go",
         "error.go",
+        "execution_proof.go",
         "fake.go",
         "filesystem.go",
         "initializer.go",

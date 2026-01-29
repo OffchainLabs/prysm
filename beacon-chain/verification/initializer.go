@@ -86,6 +86,16 @@ func (ini *Initializer) NewDataColumnsVerifier(roDataColumns []blocks.RODataColu
 	}
 }
 
+// NewExecutionProofsVerifier creates an ExecutionProofsVerifier for a slice of execution proofs,
+// with the given set of requirements.
+func (ini *Initializer) NewExecutionProofsVerifier(proofs []blocks.ROExecutionProof, reqs []Requirement) *ROExecutionProofsVerifier {
+	return &ROExecutionProofsVerifier{
+		sharedResources: ini.shared,
+		proofs:          proofs,
+		results:         newResults(reqs...),
+	}
+}
+
 // InitializerWaiter provides an Initializer once all dependent resources are ready
 // via the WaitForInitializer method.
 type InitializerWaiter struct {

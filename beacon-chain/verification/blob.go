@@ -30,6 +30,10 @@ const (
 	// Data columns specific.
 	RequireValidFields
 	RequireCorrectSubnet
+
+	// Execution proof specific.
+	RequireProofSizeLimits
+	RequireProofVerified
 )
 
 var allBlobSidecarRequirements = []Requirement{
