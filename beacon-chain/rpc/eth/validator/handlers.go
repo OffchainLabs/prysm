@@ -984,11 +984,11 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 
 // proposerDutiesInfo holds the computed proposer duties and associated metadata.
 type proposerDutiesInfo struct {
-	duties         []*structs.ProposerDuty
-	isOptimistic   bool
-	requestedEpoch primitives.Epoch // epoch used for state lookup (adjusted for lookahead)
-	dutiesEpoch    primitives.Epoch // actual epoch duties are for
-	st             state.BeaconState
+	duties       []*structs.ProposerDuty
+	isOptimistic bool
+	lookupEpoch  primitives.Epoch // epoch used for state lookup (adjusted for lookahead)
+	dutiesEpoch  primitives.Epoch // actual epoch duties are for
+	st           state.BeaconState
 }
 
 // computeProposerDuties computes proposer duties for the given epoch. It handles sync checking,
@@ -1070,11 +1070,11 @@ func (s *Server) computeProposerDuties(ctx context.Context, w http.ResponseWrite
 	}
 
 	return &proposerDutiesInfo{
-		duties:         duties,
-		isOptimistic:   isOptimistic,
-		requestedEpoch: requestedEpoch,
-		dutiesEpoch:    dutiesEpoch,
-		st:             st,
+		duties:       duties,
+		isOptimistic: isOptimistic,
+		lookupEpoch:  requestedEpoch,
+		dutiesEpoch:  dutiesEpoch,
+		st:           st,
 	}
 }
 
@@ -1089,7 +1089,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var dependentRoot []byte
-	if info.requestedEpoch == 0 {
+	if info.lookupEpoch == 0 {
 		root, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
@@ -1098,7 +1098,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 		dependentRoot = root[:]
 	} else {
 		var err error
-		dependentRoot, err = proposalDependentRoot(info.st, info.requestedEpoch)
+		dependentRoot, err = proposalDependentRoot(info.st, info.lookupEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return

@@ -77,6 +77,7 @@ type ChainService struct {
 	DataColumns                 []blocks.VerifiedRODataColumn
 	TargetRoot                  [32]byte
 	MockHeadSlot                *primitives.Slot
+	DependentRootCB             func([32]byte, primitives.Epoch) ([32]byte, error)
 }
 
 func (s *ChainService) Ancestor(ctx context.Context, root []byte, slot primitives.Slot) ([]byte, error) {
@@ -758,7 +759,10 @@ func (c *ChainService) ReceiveDataColumns(dcs []blocks.VerifiedRODataColumn) err
 }
 
 // DependentRootForEpoch mocks the same method in the chain service
-func (c *ChainService) DependentRootForEpoch(_ [32]byte, _ primitives.Epoch) ([32]byte, error) {
+func (c *ChainService) DependentRootForEpoch(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+	if c.DependentRootCB != nil {
+		return c.DependentRootCB(root, epoch)
+	}
 	return c.TargetRoot, nil
 }
 
