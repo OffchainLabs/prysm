@@ -2,14 +2,15 @@ version: v1.7.0-alpha.1
 style: full
 
 specrefs:
-  search_root: ..
+  search_root: .
+
   files:
-    - configs.yml
-    - constants.yml
-    - containers.yml
-    - dataclasses.yml
-    - functions.yml
-    - presets.yml
+    - specrefs/configs.yml
+    - specrefs/constants.yml
+    - specrefs/containers.yml
+    - specrefs/dataclasses.yml
+    - specrefs/functions.yml
+    - specrefs/presets.yml
 
 exceptions:
   presets:
