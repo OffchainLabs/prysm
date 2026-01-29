@@ -52,7 +52,7 @@ func (s *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error)
 
 ### SSZ Types
 
-The package now supports [all standard SSZ types](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#typing) except `ProgressiveList` and `Union`.
+The package now supports [all standard SSZ types](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#typing) except `ProgressiveList`, `ProgressiveContainer`, `ProgressiveBitlist`, `Union` and `CompatibleUnion`.
 
 ### Core Data Structures
 
