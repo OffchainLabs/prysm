@@ -434,6 +434,33 @@ message SignedExecutionPayloadEnvelope {
   bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
 }
 
+// BlindedExecutionPayloadEnvelope is the blinded version of ExecutionPayloadEnvelope.
+// It replaces the full ExecutionPayload with its hash tree root,
+// minimizing storage while preserving all other metadata.
+message BlindedExecutionPayloadEnvelope {
+  bytes payload_root = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  ethereum.engine.v1.ExecutionRequests execution_requests = 2;
+  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
+  "github.com/OffchainLabs/prysm/v7/"
+      "consensus-types/primitives.BuilderIndex" ];
+  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 slot = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  repeated bytes blob_kzg_commitments = 6 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
+  bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+// SignedBlindedExecutionPayloadEnvelope wraps a blinded execution payload envelope with a signature.
+message SignedBlindedExecutionPayloadEnvelope {
+  BlindedExecutionPayloadEnvelope message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
 // Builder represents a builder in the Gloas fork.
 //
 // Spec:
