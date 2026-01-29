@@ -1,4 +1,4 @@
-- name: AGGREGATE_DUE_BPS
+- name: AGGREGATE_DUE_BPS#phase0
   sources:
     - file: config/params/config.go
       search: AggregateDueBPS\s+primitives.BP
@@ -8,7 +8,7 @@
     AGGREGATE_DUE_BPS: uint64 = 6667
     </spec>
 
-- name: ALTAIR_FORK_EPOCH
+- name: ALTAIR_FORK_EPOCH#altair
   sources:
     - file: config/params/config.go
       search: AltairForkEpoch\s+primitives.Epoch
@@ -18,7 +18,7 @@
     ALTAIR_FORK_EPOCH: Epoch = 74240
     </spec>
 
-- name: ALTAIR_FORK_VERSION
+- name: ALTAIR_FORK_VERSION#altair
   sources:
     - file: config/params/config.go
       search: AltairForkVersion\s+\[]byte
@@ -28,7 +28,7 @@
     ALTAIR_FORK_VERSION: Version = '0x01000000'
     </spec>
 
-- name: ATTESTATION_DUE_BPS
+- name: ATTESTATION_DUE_BPS#phase0
   sources:
     - file: config/params/config.go
       search: AttestationDueBPS\s+primitives.BP
@@ -38,7 +38,7 @@
     ATTESTATION_DUE_BPS: uint64 = 3333
     </spec>
 
-- name: ATTESTATION_PROPAGATION_SLOT_RANGE
+- name: ATTESTATION_PROPAGATION_SLOT_RANGE#phase0
   sources:
     - file: config/params/config.go
       search: AttestationPropagationSlotRange\s+primitives.Slot
@@ -48,7 +48,7 @@
     ATTESTATION_PROPAGATION_SLOT_RANGE = 32
     </spec>
 
-- name: ATTESTATION_SUBNET_COUNT
+- name: ATTESTATION_SUBNET_COUNT#phase0
   sources:
     - file: config/params/config.go
       search: AttestationSubnetCount\s+uint64
@@ -58,7 +58,7 @@
     ATTESTATION_SUBNET_COUNT = 64
     </spec>
 
-- name: ATTESTATION_SUBNET_EXTRA_BITS
+- name: ATTESTATION_SUBNET_EXTRA_BITS#phase0
   sources:
     - file: config/params/config.go
       search: AttestationSubnetExtraBits\s+uint64
@@ -68,7 +68,7 @@
     ATTESTATION_SUBNET_EXTRA_BITS = 0
     </spec>
 
-- name: ATTESTATION_SUBNET_PREFIX_BITS
+- name: ATTESTATION_SUBNET_PREFIX_BITS#phase0
   sources:
     - file: config/params/config.go
       search: AttestationSubnetPrefixBits\s+uint64
@@ -78,7 +78,7 @@
     ATTESTATION_SUBNET_PREFIX_BITS: int = 6
     </spec>
 
-- name: BALANCE_PER_ADDITIONAL_CUSTODY_GROUP
+- name: BALANCE_PER_ADDITIONAL_CUSTODY_GROUP#fulu
   sources:
     - file: config/params/config.go
       search: BalancePerAdditionalCustodyGroup\s+uint64
@@ -88,7 +88,7 @@
     BALANCE_PER_ADDITIONAL_CUSTODY_GROUP: Gwei = 32000000000
     </spec>
 
-- name: BELLATRIX_FORK_EPOCH
+- name: BELLATRIX_FORK_EPOCH#bellatrix
   sources:
     - file: config/params/config.go
       search: BellatrixForkEpoch\s+primitives.Epoch
@@ -98,7 +98,7 @@
     BELLATRIX_FORK_EPOCH: Epoch = 144896
     </spec>
 
-- name: BELLATRIX_FORK_VERSION
+- name: BELLATRIX_FORK_VERSION#bellatrix
   sources:
     - file: config/params/config.go
       search: BellatrixForkVersion\s+\[]byte
@@ -108,7 +108,7 @@
     BELLATRIX_FORK_VERSION: Version = '0x02000000'
     </spec>
 
-- name: BLOB_SCHEDULE
+- name: BLOB_SCHEDULE#fulu
   sources:
     - file: config/params/config.go
       search: BlobSchedule\s+\[]BlobScheduleEntry
@@ -127,7 +127,7 @@
     )
     </spec>
 
-- name: BLOB_SIDECAR_SUBNET_COUNT
+- name: BLOB_SIDECAR_SUBNET_COUNT#deneb
   sources:
     - file: config/params/config.go
       search: BlobsidecarSubnetCount\s+uint64
@@ -137,7 +137,7 @@
     BLOB_SIDECAR_SUBNET_COUNT = 6
     </spec>
 
-- name: BLOB_SIDECAR_SUBNET_COUNT_ELECTRA
+- name: BLOB_SIDECAR_SUBNET_COUNT_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: BlobsidecarSubnetCountElectra\s+uint64
@@ -147,7 +147,7 @@
     BLOB_SIDECAR_SUBNET_COUNT_ELECTRA = 9
     </spec>
 
-- name: CAPELLA_FORK_EPOCH
+- name: CAPELLA_FORK_EPOCH#capella
   sources:
     - file: config/params/config.go
       search: CapellaForkEpoch\s+primitives.Epoch
@@ -157,7 +157,7 @@
     CAPELLA_FORK_EPOCH: Epoch = 194048
     </spec>
 
-- name: CAPELLA_FORK_VERSION
+- name: CAPELLA_FORK_VERSION#capella
   sources:
     - file: config/params/config.go
       search: CapellaForkVersion\s+\[]byte
@@ -167,7 +167,7 @@
     CAPELLA_FORK_VERSION: Version = '0x03000000'
     </spec>
 
-- name: CHURN_LIMIT_QUOTIENT
+- name: CHURN_LIMIT_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
       search: ChurnLimitQuotient\s+uint64
@@ -177,7 +177,7 @@
     CHURN_LIMIT_QUOTIENT: uint64 = 65536
     </spec>
 
-- name: CONTRIBUTION_DUE_BPS
+- name: CONTRIBUTION_DUE_BPS#altair
   sources:
     - file: config/params/config.go
       search: ContributionDueBPS\s+primitives.BP
@@ -187,7 +187,7 @@
     CONTRIBUTION_DUE_BPS: uint64 = 6667
     </spec>
 
-- name: CUSTODY_REQUIREMENT
+- name: CUSTODY_REQUIREMENT#fulu
   sources:
     - file: config/params/config.go
       search: CustodyRequirement\s+uint64.*yaml:"CUSTODY_REQUIREMENT"
@@ -197,7 +197,7 @@
     CUSTODY_REQUIREMENT = 4
     </spec>
 
-- name: DATA_COLUMN_SIDECAR_SUBNET_COUNT
+- name: DATA_COLUMN_SIDECAR_SUBNET_COUNT#fulu
   sources:
     - file: config/params/config.go
       search: DataColumnSidecarSubnetCount\s+uint64
@@ -207,7 +207,7 @@
     DATA_COLUMN_SIDECAR_SUBNET_COUNT = 128
     </spec>
 
-- name: DENEB_FORK_EPOCH
+- name: DENEB_FORK_EPOCH#deneb
   sources:
     - file: config/params/config.go
       search: DenebForkEpoch\s+primitives.Epoch
@@ -217,7 +217,7 @@
     DENEB_FORK_EPOCH: Epoch = 269568
     </spec>
 
-- name: DENEB_FORK_VERSION
+- name: DENEB_FORK_VERSION#deneb
   sources:
     - file: config/params/config.go
       search: DenebForkVersion\s+\[]byte
@@ -227,7 +227,7 @@
     DENEB_FORK_VERSION: Version = '0x04000000'
     </spec>
 
-- name: EJECTION_BALANCE
+- name: EJECTION_BALANCE#phase0
   sources:
     - file: config/params/config.go
       search: EjectionBalance\s+uint64
@@ -237,7 +237,7 @@
     EJECTION_BALANCE: Gwei = 16000000000
     </spec>
 
-- name: ELECTRA_FORK_EPOCH
+- name: ELECTRA_FORK_EPOCH#electra
   sources:
     - file: config/params/config.go
       search: ElectraForkEpoch\s+primitives.Epoch
@@ -247,7 +247,7 @@
     ELECTRA_FORK_EPOCH: Epoch = 364032
     </spec>
 
-- name: ELECTRA_FORK_VERSION
+- name: ELECTRA_FORK_VERSION#electra
   sources:
     - file: config/params/config.go
       search: ElectraForkVersion\s+\[]byte
@@ -257,7 +257,7 @@
     ELECTRA_FORK_VERSION: Version = '0x05000000'
     </spec>
 
-- name: EPOCHS_PER_SUBNET_SUBSCRIPTION
+- name: EPOCHS_PER_SUBNET_SUBSCRIPTION#phase0
   sources:
     - file: config/params/config.go
       search: EpochsPerSubnetSubscription\s+uint64
@@ -267,7 +267,7 @@
     EPOCHS_PER_SUBNET_SUBSCRIPTION = 256
     </spec>
 
-- name: ETH1_FOLLOW_DISTANCE
+- name: ETH1_FOLLOW_DISTANCE#phase0
   sources:
     - file: config/params/config.go
       search: Eth1FollowDistance\s+uint64
@@ -277,7 +277,7 @@
     ETH1_FOLLOW_DISTANCE: uint64 = 2048
     </spec>
 
-- name: FULU_FORK_EPOCH
+- name: FULU_FORK_EPOCH#fulu
   sources:
     - file: config/params/config.go
       search: FuluForkEpoch\s+primitives.Epoch
@@ -287,7 +287,7 @@
     FULU_FORK_EPOCH: Epoch = 411392
     </spec>
 
-- name: FULU_FORK_VERSION
+- name: FULU_FORK_VERSION#fulu
   sources:
     - file: config/params/config.go
       search: FuluForkVersion\s+\[]byte
@@ -297,7 +297,7 @@
     FULU_FORK_VERSION: Version = '0x06000000'
     </spec>
 
-- name: GENESIS_DELAY
+- name: GENESIS_DELAY#phase0
   sources:
     - file: config/params/config.go
       search: GenesisDelay\s+uint64
@@ -307,7 +307,7 @@
     GENESIS_DELAY: uint64 = 604800
     </spec>
 
-- name: GENESIS_FORK_VERSION
+- name: GENESIS_FORK_VERSION#phase0
   sources:
     - file: config/params/config.go
       search: GenesisForkVersion\s+\[]byte
@@ -317,7 +317,7 @@
     GENESIS_FORK_VERSION: Version = '0x00000000'
     </spec>
 
-- name: INACTIVITY_SCORE_BIAS
+- name: INACTIVITY_SCORE_BIAS#altair
   sources:
     - file: config/params/config.go
       search: InactivityScoreBias\s+uint64
@@ -327,7 +327,7 @@
     INACTIVITY_SCORE_BIAS: uint64 = 4
     </spec>
 
-- name: INACTIVITY_SCORE_RECOVERY_RATE
+- name: INACTIVITY_SCORE_RECOVERY_RATE#altair
   sources:
     - file: config/params/config.go
       search: InactivityScoreRecoveryRate\s+uint64
@@ -337,7 +337,7 @@
     INACTIVITY_SCORE_RECOVERY_RATE: uint64 = 16
     </spec>
 
-- name: MAXIMUM_GOSSIP_CLOCK_DISPARITY
+- name: MAXIMUM_GOSSIP_CLOCK_DISPARITY#phase0
   sources:
     - file: config/params/config.go
       search: MaximumGossipClockDisparity\s+uint64
@@ -347,7 +347,7 @@
     MAXIMUM_GOSSIP_CLOCK_DISPARITY = 500
     </spec>
 
-- name: MAX_BLOBS_PER_BLOCK
+- name: MAX_BLOBS_PER_BLOCK#deneb
   sources:
     - file: config/params/config.go
       search: DeprecatedMaxBlobsPerBlock\s+int
@@ -357,7 +357,7 @@
     MAX_BLOBS_PER_BLOCK: uint64 = 6
     </spec>
 
-- name: MAX_BLOBS_PER_BLOCK_ELECTRA
+- name: MAX_BLOBS_PER_BLOCK_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: DeprecatedMaxBlobsPerBlockElectra\s+int
@@ -367,7 +367,7 @@
     MAX_BLOBS_PER_BLOCK_ELECTRA: uint64 = 9
     </spec>
 
-- name: MAX_PAYLOAD_SIZE
+- name: MAX_PAYLOAD_SIZE#phase0
   sources:
     - file: config/params/config.go
       search: MaxPayloadSize\s+uint64
@@ -377,7 +377,7 @@
     MAX_PAYLOAD_SIZE = 10485760
     </spec>
 
-- name: MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT
+- name: MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT#deneb
   sources:
     - file: config/params/config.go
       search: MaxPerEpochActivationChurnLimit\s+uint64
@@ -387,7 +387,7 @@
     MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT: uint64 = 8
     </spec>
 
-- name: MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT
+- name: MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT#electra
   sources:
     - file: config/params/config.go
       search: MaxPerEpochActivationExitChurnLimit\s+uint64
@@ -397,7 +397,7 @@
     MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT: Gwei = 256000000000
     </spec>
 
-- name: MAX_REQUEST_BLOB_SIDECARS
+- name: MAX_REQUEST_BLOB_SIDECARS#deneb
   sources:
     - file: config/params/config.go
       search: MaxRequestBlobSidecars\s+uint64
@@ -407,7 +407,7 @@
     MAX_REQUEST_BLOB_SIDECARS = 768
     </spec>
 
-- name: MAX_REQUEST_BLOB_SIDECARS_ELECTRA
+- name: MAX_REQUEST_BLOB_SIDECARS_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: MaxRequestBlobSidecarsElectra\s+uint64
@@ -417,7 +417,7 @@
     MAX_REQUEST_BLOB_SIDECARS_ELECTRA = 1152
     </spec>
 
-- name: MAX_REQUEST_BLOCKS
+- name: MAX_REQUEST_BLOCKS#phase0
   sources:
     - file: config/params/config.go
       search: MaxRequestBlocks\s+uint64
@@ -427,7 +427,7 @@
     MAX_REQUEST_BLOCKS = 1024
     </spec>
 
-- name: MAX_REQUEST_BLOCKS_DENEB
+- name: MAX_REQUEST_BLOCKS_DENEB#deneb
   sources:
     - file: config/params/config.go
       search: MaxRequestBlocksDeneb\s+uint64
@@ -437,7 +437,7 @@
     MAX_REQUEST_BLOCKS_DENEB = 128
     </spec>
 
-- name: MAX_REQUEST_DATA_COLUMN_SIDECARS
+- name: MAX_REQUEST_DATA_COLUMN_SIDECARS#fulu
   sources:
     - file: config/params/config.go
       search: MaxRequestDataColumnSidecars\s+uint64
@@ -447,7 +447,7 @@
     MAX_REQUEST_DATA_COLUMN_SIDECARS = 16384
     </spec>
 
-- name: MESSAGE_DOMAIN_INVALID_SNAPPY
+- name: MESSAGE_DOMAIN_INVALID_SNAPPY#phase0
   sources:
     - file: config/params/config.go
       search: MessageDomainInvalidSnappy\s+\[4\]byte
@@ -457,7 +457,7 @@
     MESSAGE_DOMAIN_INVALID_SNAPPY: DomainType = '0x00000000'
     </spec>
 
-- name: MESSAGE_DOMAIN_VALID_SNAPPY
+- name: MESSAGE_DOMAIN_VALID_SNAPPY#phase0
   sources:
     - file: config/params/config.go
       search: MessageDomainValidSnappy\s+\[4\]byte
@@ -467,7 +467,7 @@
     MESSAGE_DOMAIN_VALID_SNAPPY: DomainType = '0x01000000'
     </spec>
 
-- name: MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
+- name: MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS#deneb
   sources:
     - file: config/params/config.go
       search: MinEpochsForBlobsSidecarsRequest\s+primitives.Epoch
@@ -477,7 +477,7 @@
     MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS = 4096
     </spec>
 
-- name: MIN_EPOCHS_FOR_BLOCK_REQUESTS
+- name: MIN_EPOCHS_FOR_BLOCK_REQUESTS#phase0
   sources:
     - file: config/params/config.go
       search: MinEpochsForBlockRequests\s+uint64
@@ -487,7 +487,7 @@
     MIN_EPOCHS_FOR_BLOCK_REQUESTS = 33024
     </spec>
 
-- name: MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
+- name: MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS#fulu
   sources:
     - file: config/params/config.go
       search: MinEpochsForDataColumnSidecarsRequest\s+primitives.Epoch
@@ -497,7 +497,7 @@
     MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS = 4096
     </spec>
 
-- name: MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
+- name: MIN_GENESIS_ACTIVE_VALIDATOR_COUNT#phase0
   sources:
     - file: config/params/config.go
       search: MinGenesisActiveValidatorCount\s+uint64
@@ -507,7 +507,7 @@
     MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: uint64 = 16384
     </spec>
 
-- name: MIN_GENESIS_TIME
+- name: MIN_GENESIS_TIME#phase0
   sources:
     - file: config/params/config.go
       search: MinGenesisTime\s+uint64
@@ -517,7 +517,7 @@
     MIN_GENESIS_TIME: uint64 = 1606824000
     </spec>
 
-- name: MIN_PER_EPOCH_CHURN_LIMIT
+- name: MIN_PER_EPOCH_CHURN_LIMIT#phase0
   sources:
     - file: config/params/config.go
       search: MinPerEpochChurnLimit\s+uint64
@@ -527,7 +527,7 @@
     MIN_PER_EPOCH_CHURN_LIMIT: uint64 = 4
     </spec>
 
-- name: MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
+- name: MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: MinPerEpochChurnLimitElectra\s+uint64
@@ -537,7 +537,7 @@
     MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: Gwei = 128000000000
     </spec>
 
-- name: MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+- name: MIN_VALIDATOR_WITHDRAWABILITY_DELAY#phase0
   sources:
     - file: config/params/config.go
       search: MinValidatorWithdrawabilityDelay\s+primitives.Epoch
@@ -547,7 +547,7 @@
     MIN_VALIDATOR_WITHDRAWABILITY_DELAY: uint64 = 256
     </spec>
 
-- name: NUMBER_OF_CUSTODY_GROUPS
+- name: NUMBER_OF_CUSTODY_GROUPS#fulu
   sources:
     - file: config/params/config.go
       search: NumberOfCustodyGroups\s+uint64
@@ -557,7 +557,7 @@
     NUMBER_OF_CUSTODY_GROUPS = 128
     </spec>
 
-- name: PROPOSER_REORG_CUTOFF_BPS
+- name: PROPOSER_REORG_CUTOFF_BPS#phase0
   sources:
     - file: config/params/config.go
       search: ProposerReorgCutoffBPS\s+primitives.BP
@@ -567,7 +567,7 @@
     PROPOSER_REORG_CUTOFF_BPS: uint64 = 1667
     </spec>
 
-- name: PROPOSER_SCORE_BOOST
+- name: PROPOSER_SCORE_BOOST#phase0
   sources:
     - file: config/params/config.go
       search: ProposerScoreBoost\s+uint64
@@ -577,7 +577,7 @@
     PROPOSER_SCORE_BOOST: uint64 = 40
     </spec>
 
-- name: REORG_HEAD_WEIGHT_THRESHOLD
+- name: REORG_HEAD_WEIGHT_THRESHOLD#phase0
   sources:
     - file: config/params/config.go
       search: ReorgHeadWeightThreshold\s+uint64
@@ -587,7 +587,7 @@
     REORG_HEAD_WEIGHT_THRESHOLD: uint64 = 20
     </spec>
 
-- name: REORG_MAX_EPOCHS_SINCE_FINALIZATION
+- name: REORG_MAX_EPOCHS_SINCE_FINALIZATION#phase0
   sources:
     - file: config/params/config.go
       search: ReorgMaxEpochsSinceFinalization\s+primitives.Epoch
@@ -597,7 +597,7 @@
     REORG_MAX_EPOCHS_SINCE_FINALIZATION: Epoch = 2
     </spec>
 
-- name: REORG_PARENT_WEIGHT_THRESHOLD
+- name: REORG_PARENT_WEIGHT_THRESHOLD#phase0
   sources:
     - file: config/params/config.go
       search: ReorgParentWeightThreshold\s+uint64
@@ -607,7 +607,7 @@
     REORG_PARENT_WEIGHT_THRESHOLD: uint64 = 160
     </spec>
 
-- name: SAMPLES_PER_SLOT
+- name: SAMPLES_PER_SLOT#fulu
   sources:
     - file: config/params/config.go
       search: SamplesPerSlot\s+uint64
@@ -617,7 +617,7 @@
     SAMPLES_PER_SLOT = 8
     </spec>
 
-- name: SECONDS_PER_ETH1_BLOCK
+- name: SECONDS_PER_ETH1_BLOCK#phase0
   sources:
     - file: config/params/config.go
       search: SecondsPerETH1Block\s+uint64
@@ -627,7 +627,7 @@
     SECONDS_PER_ETH1_BLOCK: uint64 = 14
     </spec>
 
-- name: SECONDS_PER_SLOT
+- name: SECONDS_PER_SLOT#phase0
   sources:
     - file: config/params/config.go
       search: SecondsPerSlot\s+uint64
@@ -637,7 +637,7 @@
     SECONDS_PER_SLOT: uint64 = 12
     </spec>
 
-- name: SHARD_COMMITTEE_PERIOD
+- name: SHARD_COMMITTEE_PERIOD#phase0
   sources:
     - file: config/params/config.go
       search: ShardCommitteePeriod\s+primitives.Epoch
@@ -647,7 +647,7 @@
     SHARD_COMMITTEE_PERIOD: uint64 = 256
     </spec>
 
-- name: SLOT_DURATION_MS
+- name: SLOT_DURATION_MS#phase0
   sources:
     - file: config/params/config.go
       search: SlotDurationMilliseconds\s+uint64
@@ -657,7 +657,7 @@
     SLOT_DURATION_MS: uint64 = 12000
     </spec>
 
-- name: SUBNETS_PER_NODE
+- name: SUBNETS_PER_NODE#phase0
   sources:
     - file: config/params/config.go
       search: SubnetsPerNode\s+uint64
@@ -667,7 +667,7 @@
     SUBNETS_PER_NODE = 2
     </spec>
 
-- name: SYNC_MESSAGE_DUE_BPS
+- name: SYNC_MESSAGE_DUE_BPS#altair
   sources:
     - file: config/params/config.go
       search: SyncMessageDueBPS\s+primitives.BP
@@ -677,7 +677,7 @@
     SYNC_MESSAGE_DUE_BPS: uint64 = 3333
     </spec>
 
-- name: TERMINAL_BLOCK_HASH
+- name: TERMINAL_BLOCK_HASH#bellatrix
   sources:
     - file: config/params/config.go
       search: TerminalBlockHash\s+common.Hash
@@ -687,7 +687,7 @@
     TERMINAL_BLOCK_HASH: Hash32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
     </spec>
 
-- name: TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH
+- name: TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH#bellatrix
   sources:
     - file: config/params/config.go
       search: TerminalBlockHashActivationEpoch\s+primitives.Epoch
@@ -697,7 +697,7 @@
     TERMINAL_BLOCK_HASH_ACTIVATION_EPOCH = 18446744073709551615
     </spec>
 
-- name: TERMINAL_TOTAL_DIFFICULTY
+- name: TERMINAL_TOTAL_DIFFICULTY#bellatrix
   sources:
     - file: config/params/config.go
       search: TerminalTotalDifficulty\s+string
@@ -707,7 +707,7 @@
     TERMINAL_TOTAL_DIFFICULTY = 58750000000000000000000
     </spec>
 
-- name: VALIDATOR_CUSTODY_REQUIREMENT
+- name: VALIDATOR_CUSTODY_REQUIREMENT#fulu
   sources:
     - file: config/params/config.go
       search: ValidatorCustodyRequirement\s+uint64

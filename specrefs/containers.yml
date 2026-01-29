@@ -50,7 +50,7 @@
         committee_bits: Bitvector[MAX_COMMITTEES_PER_SLOT]
     </spec>
 
-- name: AttestationData
+- name: AttestationData#phase0
   sources:
     - file: proto/eth/v1/attestation.proto
       search: message AttestationData {
@@ -88,7 +88,7 @@
         attestation_2: IndexedAttestation
     </spec>
 
-- name: BLSToExecutionChange
+- name: BLSToExecutionChange#capella
   sources:
     - file: proto/prysm/v1alpha1/withdrawals.proto
       search: message BLSToExecutionChange {
@@ -100,7 +100,7 @@
         to_execution_address: ExecutionAddress
     </spec>
 
-- name: BeaconBlock
+- name: BeaconBlock#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
       search: message BeaconBlock {
@@ -239,7 +239,7 @@
         execution_requests: ExecutionRequests
     </spec>
 
-- name: BeaconBlockHeader
+- name: BeaconBlockHeader#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
       search: message BeaconBlockHeader {
@@ -538,7 +538,7 @@
         proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
     </spec>
 
-- name: BlobIdentifier
+- name: BlobIdentifier#deneb
   sources:
     - file: proto/prysm/v1alpha1/blobs.proto
       search: message BlobIdentifier {
@@ -549,7 +549,7 @@
         index: BlobIndex
     </spec>
 
-- name: BlobSidecar
+- name: BlobSidecar#deneb
   sources:
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message BlobSidecar {
@@ -564,7 +564,7 @@
         kzg_commitment_inclusion_proof: Vector[Bytes32, KZG_COMMITMENT_INCLUSION_PROOF_DEPTH]
     </spec>
 
-- name: Checkpoint
+- name: Checkpoint#phase0
   sources:
     - file: proto/eth/v1/attestation.proto
       search: message Checkpoint {
@@ -575,7 +575,7 @@
         root: Root
     </spec>
 
-- name: ConsolidationRequest
+- name: ConsolidationRequest#electra
   sources:
     - file: proto/engine/v1/electra.proto
       search: message ConsolidationRequest {
@@ -587,7 +587,7 @@
         target_pubkey: BLSPubkey
     </spec>
 
-- name: ContributionAndProof
+- name: ContributionAndProof#altair
   sources:
     - file: proto/prysm/v1alpha1/sync_committee.proto
       search: message ContributionAndProof {
@@ -599,7 +599,7 @@
         selection_proof: BLSSignature
     </spec>
 
-- name: DataColumnSidecar
+- name: DataColumnSidecar#fulu
   sources:
     - file: proto/prysm/v1alpha1/data_columns.proto
       search: message DataColumnSidecar {
@@ -614,7 +614,7 @@
         kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
     </spec>
 
-- name: DataColumnsByRootIdentifier
+- name: DataColumnsByRootIdentifier#fulu
   sources:
     - file: proto/prysm/v1alpha1/data_columns.proto
       search: message DataColumnsByRootIdentifier {
@@ -625,7 +625,7 @@
         columns: List[ColumnIndex, NUMBER_OF_COLUMNS]
     </spec>
 
-- name: Deposit
+- name: Deposit#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
       search: message Deposit {
@@ -636,7 +636,7 @@
         data: DepositData
     </spec>
 
-- name: DepositData
+- name: DepositData#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Data {
@@ -649,7 +649,7 @@
         signature: BLSSignature
     </spec>
 
-- name: DepositMessage
+- name: DepositMessage#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message DepositMessage {
@@ -661,7 +661,7 @@
         amount: Gwei
     </spec>
 
-- name: DepositRequest
+- name: DepositRequest#electra
   sources:
     - file: proto/engine/v1/electra.proto
       search: message DepositRequest {
@@ -675,7 +675,7 @@
         index: uint64
     </spec>
 
-- name: Eth1Data
+- name: Eth1Data#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Eth1Data {
@@ -839,7 +839,7 @@
         excess_blob_gas: uint64
     </spec>
 
-- name: ExecutionRequests
+- name: ExecutionRequests#electra
   sources:
     - file: proto/engine/v1/electra.proto
       search: message ExecutionRequests {
@@ -854,7 +854,7 @@
         consolidations: List[ConsolidationRequest, MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD]
     </spec>
 
-- name: Fork
+- name: Fork#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Fork {
@@ -866,7 +866,7 @@
         epoch: Epoch
     </spec>
 
-- name: ForkData
+- name: ForkData#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message ForkData {
@@ -877,7 +877,7 @@
         genesis_validators_root: Root
     </spec>
 
-- name: HistoricalBatch
+- name: HistoricalBatch#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message HistoricalBatch {
@@ -888,7 +888,7 @@
         state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
     </spec>
 
-- name: HistoricalSummary
+- name: HistoricalSummary#capella
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message HistoricalSummary {
@@ -924,7 +924,7 @@
         signature: BLSSignature
     </spec>
 
-- name: LightClientBootstrap
+- name: LightClientBootstrap#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
       search: message LightClientBootstrapAltair {
@@ -938,7 +938,7 @@
         current_sync_committee_branch: CurrentSyncCommitteeBranch
     </spec>
 
-- name: LightClientFinalityUpdate
+- name: LightClientFinalityUpdate#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
       search: message LightClientFinalityUpdateAltair {
@@ -980,7 +980,7 @@
         execution_branch: ExecutionBranch
     </spec>
 
-- name: LightClientOptimisticUpdate
+- name: LightClientOptimisticUpdate#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
       search: message LightClientOptimisticUpdateAltair {
@@ -995,7 +995,7 @@
         signature_slot: Slot
     </spec>
 
-- name: LightClientUpdate
+- name: LightClientUpdate#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
       search: message LightClientUpdateAltair {
@@ -1016,7 +1016,7 @@
         signature_slot: Slot
     </spec>
 
-- name: PendingAttestation
+- name: PendingAttestation#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message PendingAttestation {
@@ -1029,7 +1029,7 @@
         proposer_index: ValidatorIndex
     </spec>
 
-- name: PendingConsolidation
+- name: PendingConsolidation#electra
   sources:
     - file: proto/prysm/v1alpha1/eip_7251.proto
       search: message PendingConsolidation {
@@ -1040,7 +1040,7 @@
         target_index: ValidatorIndex
     </spec>
 
-- name: PendingDeposit
+- name: PendingDeposit#electra
   sources:
     - file: proto/prysm/v1alpha1/eip_7251.proto
       search: message PendingDeposit {
@@ -1054,7 +1054,7 @@
         slot: Slot
     </spec>
 
-- name: PendingPartialWithdrawal
+- name: PendingPartialWithdrawal#electra
   sources:
     - file: proto/prysm/v1alpha1/eip_7251.proto
       search: message PendingPartialWithdrawal {
@@ -1066,7 +1066,7 @@
         withdrawable_epoch: Epoch
     </spec>
 
-- name: PowBlock
+- name: PowBlock#bellatrix
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message PowBlock {
@@ -1078,7 +1078,7 @@
         total_difficulty: uint256
     </spec>
 
-- name: ProposerSlashing
+- name: ProposerSlashing#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
       search: message ProposerSlashing {
@@ -1112,7 +1112,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SignedBLSToExecutionChange
+- name: SignedBLSToExecutionChange#capella
   sources:
     - file: proto/prysm/v1alpha1/withdrawals.proto
       search: message SignedBLSToExecutionChange {
@@ -1123,7 +1123,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SignedBeaconBlock
+- name: SignedBeaconBlock#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_block.proto
       search: message SignedBeaconBlock {
@@ -1134,7 +1134,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SignedBeaconBlockHeader
+- name: SignedBeaconBlockHeader#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SignedBeaconBlockHeader {
@@ -1145,7 +1145,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SignedContributionAndProof
+- name: SignedContributionAndProof#altair
   sources:
     - file: proto/prysm/v1alpha1/sync_committee.proto
       search: message SignedContributionAndProof {
@@ -1156,7 +1156,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SignedVoluntaryExit
+- name: SignedVoluntaryExit#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SignedVoluntaryExit {
@@ -1167,7 +1167,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SigningData
+- name: SigningData#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message SigningData {
@@ -1178,7 +1178,7 @@
         domain: Domain
     </spec>
 
-- name: SingleAttestation
+- name: SingleAttestation#electra
   sources:
     - file: proto/prysm/v1alpha1/attestation.proto
       search: message SingleAttestation {
@@ -1191,7 +1191,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SyncAggregate
+- name: SyncAggregate#altair
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SyncAggregate {
@@ -1202,7 +1202,7 @@
         sync_committee_signature: BLSSignature
     </spec>
 
-- name: SyncAggregatorSelectionData
+- name: SyncAggregatorSelectionData#altair
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
       search: message SyncAggregatorSelectionData {
@@ -1213,7 +1213,7 @@
         subcommittee_index: uint64
     </spec>
 
-- name: SyncCommittee
+- name: SyncCommittee#altair
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message SyncCommittee {
@@ -1224,7 +1224,7 @@
         aggregate_pubkey: BLSPubkey
     </spec>
 
-- name: SyncCommitteeContribution
+- name: SyncCommitteeContribution#altair
   sources:
     - file: proto/prysm/v1alpha1/sync_committee.proto
       search: message SyncCommitteeContribution {
@@ -1238,7 +1238,7 @@
         signature: BLSSignature
     </spec>
 
-- name: SyncCommitteeMessage
+- name: SyncCommitteeMessage#altair
   sources:
     - file: proto/prysm/v1alpha1/sync_committee.proto
       search: message SyncCommitteeMessage {
@@ -1251,7 +1251,7 @@
         signature: BLSSignature
     </spec>
 
-- name: Validator
+- name: Validator#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_core_types.proto
       search: message Validator {
@@ -1268,7 +1268,7 @@
         withdrawable_epoch: Epoch
     </spec>
 
-- name: VoluntaryExit
+- name: VoluntaryExit#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
       search: message VoluntaryExit {
@@ -1279,7 +1279,7 @@
         validator_index: ValidatorIndex
     </spec>
 
-- name: Withdrawal
+- name: Withdrawal#capella
   sources:
     - file: proto/engine/v1/execution_engine.proto
       search: message Withdrawal {
@@ -1292,7 +1292,7 @@
         amount: Gwei
     </spec>
 
-- name: WithdrawalRequest
+- name: WithdrawalRequest#electra
   sources:
     - file: proto/engine/v1/electra.proto
       search: message WithdrawalRequest {

@@ -3,6 +3,7 @@ style: full
 
 specrefs:
   search_root: .
+  auto_standardize_names: true
 
   files:
     - specrefs/configs.yml

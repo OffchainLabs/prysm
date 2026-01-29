@@ -1,4 +1,4 @@
-- name: add_flag
+- name: add_flag#altair
   sources:
     - file: beacon-chain/core/altair/attestation.go
       search: func AddValidatorFlag(
@@ -130,7 +130,7 @@
         )
     </spec>
 
-- name: apply_light_client_update
+- name: apply_light_client_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientUpdateFromBeaconState(
@@ -155,7 +155,7 @@
                 store.optimistic_header = store.finalized_header
     </spec>
 
-- name: apply_pending_deposit
+- name: apply_pending_deposit#electra
   sources:
     - file: beacon-chain/core/electra/deposits.go
       search: func ApplyPendingDeposit(
@@ -307,7 +307,7 @@
         )
     </spec>
 
-- name: bytes_to_uint64
+- name: bytes_to_uint64#phase0
   sources:
     - file: encoding/bytesutil/integers.go
       search: func FromBytes8(
@@ -320,7 +320,7 @@
         return uint64(int.from_bytes(data, ENDIANNESS))
     </spec>
 
-- name: calculate_committee_fraction
+- name: calculate_committee_fraction#phase0
   sources: []
   spec: |
     <spec fn="calculate_committee_fraction" fork="phase0" hash="782b50e9">
@@ -329,7 +329,7 @@
         return Gwei((committee_weight * committee_percent) // 100)
     </spec>
 
-- name: check_if_validator_active
+- name: check_if_validator_active#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func IsActiveValidator(
@@ -340,7 +340,7 @@
         return is_active_validator(validator, get_current_epoch(state))
     </spec>
 
-- name: compute_activation_exit_epoch
+- name: compute_activation_exit_epoch#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func ActivationExitEpoch(
@@ -353,7 +353,7 @@
         return Epoch(epoch + 1 + MAX_SEED_LOOKAHEAD)
     </spec>
 
-- name: compute_columns_for_custody_group
+- name: compute_columns_for_custody_group#fulu
   sources:
     - file: beacon-chain/core/peerdas/das_core.go
       search: func ComputeColumnsForCustodyGroup(
@@ -367,7 +367,7 @@
         ]
     </spec>
 
-- name: compute_committee
+- name: compute_committee#phase0
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func ComputeCommittee(
@@ -387,7 +387,7 @@
         ]
     </spec>
 
-- name: compute_consolidation_epoch_and_update_churn
+- name: compute_consolidation_epoch_and_update_churn#electra
   sources:
     - file: beacon-chain/core/electra/churn.go
       search: func ComputeConsolidationEpochAndUpdateChurn(
@@ -422,7 +422,7 @@
         return state.earliest_consolidation_epoch
     </spec>
 
-- name: compute_domain
+- name: compute_domain#phase0
   sources:
     - file: beacon-chain/core/signing/signing_root.go
       search: func ComputeDomain(
@@ -442,7 +442,7 @@
         return Domain(domain_type + fork_data_root[:28])
     </spec>
 
-- name: compute_epoch_at_slot
+- name: compute_epoch_at_slot#phase0
   sources:
     - file: time/slots/slottime.go
       search: func ToEpoch(
@@ -455,7 +455,7 @@
         return Epoch(slot // SLOTS_PER_EPOCH)
     </spec>
 
-- name: compute_exit_epoch_and_update_churn
+- name: compute_exit_epoch_and_update_churn#electra
   sources:
     - file: beacon-chain/state/state-native/setters_churn.go
       search: func (b *BeaconState) ExitEpochAndUpdateChurn(
@@ -486,7 +486,7 @@
         return state.earliest_exit_epoch
     </spec>
 
-- name: compute_fork_data_root
+- name: compute_fork_data_root#phase0
   sources:
     - file: beacon-chain/core/signing/signing_root.go
       search: func computeForkDataRoot(
@@ -695,7 +695,7 @@
         return GENESIS_FORK_VERSION
     </spec>
 
-- name: compute_matrix
+- name: compute_matrix#fulu
   sources: []
   spec: |
     <spec fn="compute_matrix" fork="fulu" hash="0b88eac1">
@@ -721,7 +721,7 @@
         return matrix
     </spec>
 
-- name: compute_new_state_root
+- name: compute_new_state_root#phase0
   sources:
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer.go
       search: func (vs *Server) computeStateRoot(
@@ -734,7 +734,7 @@
         return hash_tree_root(temp_state)
     </spec>
 
-- name: compute_on_chain_aggregate
+- name: compute_on_chain_aggregate#electra
   sources:
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_attestations_electra.go
       search: func computeOnChainAggregate(
@@ -822,7 +822,7 @@
             i += 1
     </spec>
 
-- name: compute_proposer_indices
+- name: compute_proposer_indices#fulu
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func PrecomputeProposerIndices(
@@ -839,7 +839,7 @@
         return [compute_proposer_index(state, indices, seed) for seed in seeds]
     </spec>
 
-- name: compute_pulled_up_tip
+- name: compute_pulled_up_tip#phase0
   sources: []
   spec: |
     <spec fn="compute_pulled_up_tip" fork="phase0" hash="ef9c1f02">
@@ -860,7 +860,7 @@
             update_checkpoints(store, state.current_justified_checkpoint, state.finalized_checkpoint)
     </spec>
 
-- name: compute_shuffled_index
+- name: compute_shuffled_index#phase0
   sources:
     - file: beacon-chain/core/helpers/shuffle.go
       search: func ComputeShuffledIndex(
@@ -888,7 +888,7 @@
         return index
     </spec>
 
-- name: compute_signed_block_header
+- name: compute_signed_block_header#deneb
   sources:
     - file: consensus-types/interfaces/utils.go
       search: func SignedBeaconBlockHeaderFromBlock(
@@ -906,7 +906,7 @@
         return SignedBeaconBlockHeader(message=block_header, signature=signed_block.signature)
     </spec>
 
-- name: compute_signing_root
+- name: compute_signing_root#phase0
   sources:
     - file: beacon-chain/core/signing/signing_root.go
       search: func ComputeSigningRoot(
@@ -924,7 +924,7 @@
         )
     </spec>
 
-- name: compute_slots_since_epoch_start
+- name: compute_slots_since_epoch_start#phase0
   sources:
     - file: time/slots/slottime.go
       search: func SinceEpochStarts(
@@ -934,7 +934,7 @@
         return slot - compute_start_slot_at_epoch(compute_epoch_at_slot(slot))
     </spec>
 
-- name: compute_start_slot_at_epoch
+- name: compute_start_slot_at_epoch#phase0
   sources:
     - file: time/slots/slottime.go
       search: func EpochStart(
@@ -947,7 +947,7 @@
         return Slot(epoch * SLOTS_PER_EPOCH)
     </spec>
 
-- name: compute_subnet_for_attestation
+- name: compute_subnet_for_attestation#phase0
   sources:
     - file: beacon-chain/core/helpers/attestation.go
       search: func ComputeSubnetForAttestation(
@@ -988,7 +988,7 @@
         return SubnetID(blob_index % BLOB_SIDECAR_SUBNET_COUNT_ELECTRA)
     </spec>
 
-- name: compute_subnet_for_data_column_sidecar
+- name: compute_subnet_for_data_column_sidecar#fulu
   sources:
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func ComputeSubnetForDataColumnSidecar(
@@ -998,7 +998,7 @@
         return SubnetID(column_index % DATA_COLUMN_SIDECAR_SUBNET_COUNT)
     </spec>
 
-- name: compute_subnets_for_sync_committee
+- name: compute_subnets_for_sync_committee#altair
   sources:
     - file: beacon-chain/sync/validate_sync_committee_message.go
       search: func (s *Service) rejectIncorrectSyncCommittee(
@@ -1027,7 +1027,7 @@
         )
     </spec>
 
-- name: compute_subscribed_subnet
+- name: compute_subscribed_subnet#phase0
   sources:
     - file: beacon-chain/p2p/subnets.go
       search: func computeSubscribedSubnet(
@@ -1047,7 +1047,7 @@
         return SubnetID((permutated_prefix + index) % ATTESTATION_SUBNET_COUNT)
     </spec>
 
-- name: compute_subscribed_subnets
+- name: compute_subscribed_subnets#phase0
   sources:
     - file: beacon-chain/p2p/subnets.go
       search: func computeSubscribedSubnets(
@@ -1057,7 +1057,7 @@
         return [compute_subscribed_subnet(node_id, epoch, index) for index in range(SUBNETS_PER_NODE)]
     </spec>
 
-- name: compute_sync_committee_period
+- name: compute_sync_committee_period#altair
   sources:
     - file: time/slots/slottime.go
       search: func SyncCommitteePeriod(
@@ -1067,7 +1067,7 @@
         return epoch // EPOCHS_PER_SYNC_COMMITTEE_PERIOD
     </spec>
 
-- name: compute_sync_committee_period_at_slot
+- name: compute_sync_committee_period_at_slot#altair
   sources: []
   spec: |
     <spec fn="compute_sync_committee_period_at_slot" fork="altair" hash="6ad449b8">
@@ -1075,7 +1075,7 @@
         return compute_sync_committee_period(compute_epoch_at_slot(slot))
     </spec>
 
-- name: compute_time_at_slot
+- name: compute_time_at_slot#phase0
   sources:
     - file: time/slots/slottime.go
       search: func StartTime(
@@ -1139,7 +1139,7 @@
         return MIN_VALIDATOR_WITHDRAWABILITY_DELAY + epochs_for_validator_set_churn
     </spec>
 
-- name: create_light_client_bootstrap
+- name: create_light_client_bootstrap#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientBootstrapFromBeaconState(
@@ -1164,7 +1164,7 @@
         )
     </spec>
 
-- name: create_light_client_finality_update
+- name: create_light_client_finality_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientFinalityUpdateFromBeaconState(
@@ -1180,7 +1180,7 @@
         )
     </spec>
 
-- name: create_light_client_optimistic_update
+- name: create_light_client_optimistic_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientOptimisticUpdateFromBeaconState(
@@ -1194,7 +1194,7 @@
         )
     </spec>
 
-- name: create_light_client_update
+- name: create_light_client_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientUpdateFromBeaconState(
@@ -1285,7 +1285,7 @@
         return CURRENT_SYNC_COMMITTEE_GINDEX
     </spec>
 
-- name: decrease_balance
+- name: decrease_balance#phase0
   sources:
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func DecreaseBalance(
@@ -1298,7 +1298,7 @@
         state.balances[index] = 0 if delta > state.balances[index] else state.balances[index] - delta
     </spec>
 
-- name: eth_aggregate_pubkeys
+- name: eth_aggregate_pubkeys#altair
   sources:
     - file: crypto/bls/bls.go
       search: func AggregatePublicKeys(
@@ -1323,7 +1323,7 @@
         return result
     </spec>
 
-- name: eth_fast_aggregate_verify
+- name: eth_fast_aggregate_verify#altair
   sources:
     - file: crypto/bls/blst/signature.go
       search: func (s *Signature) Eth2FastAggregateVerify(
@@ -1340,7 +1340,7 @@
         return bls.FastAggregateVerify(pubkeys, message, signature)
     </spec>
 
-- name: filter_block_tree
+- name: filter_block_tree#phase0
   sources: []
   spec: |
     <spec fn="filter_block_tree" fork="phase0" hash="a1924421">
@@ -1413,7 +1413,7 @@
         return FINALIZED_ROOT_GINDEX
     </spec>
 
-- name: get_activation_exit_churn_limit
+- name: get_activation_exit_churn_limit#electra
   sources:
     - file: beacon-chain/core/helpers/validator_churn.go
       search: func ActivationExitChurnLimit(
@@ -1426,7 +1426,7 @@
         return min(MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT, get_balance_churn_limit(state))
     </spec>
 
-- name: get_active_validator_indices
+- name: get_active_validator_indices#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func ActiveValidatorIndices(
@@ -1441,7 +1441,7 @@
         ]
     </spec>
 
-- name: get_aggregate_and_proof
+- name: get_aggregate_and_proof#phase0
   sources: []
   spec: |
     <spec fn="get_aggregate_and_proof" fork="phase0" hash="bb7f6018">
@@ -1455,7 +1455,7 @@
         )
     </spec>
 
-- name: get_aggregate_and_proof_signature
+- name: get_aggregate_and_proof_signature#phase0
   sources:
     - file: validator/client/aggregate.go
       search: func (v *validator) aggregateAndProofSig(
@@ -1472,7 +1472,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_aggregate_signature
+- name: get_aggregate_signature#phase0
   sources:
     - file: crypto/bls/bls.go
       search: func AggregateSignatures(
@@ -1483,7 +1483,7 @@
         return bls.Aggregate(signatures)
     </spec>
 
-- name: get_ancestor
+- name: get_ancestor#phase0
   sources:
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) AncestorRoot(
@@ -1496,7 +1496,7 @@
         return root
     </spec>
 
-- name: get_attestation_component_deltas
+- name: get_attestation_component_deltas#phase0
   sources: []
   spec: |
     <spec fn="get_attestation_component_deltas" fork="phase0" hash="c6d7c444">
@@ -1526,7 +1526,7 @@
         return rewards, penalties
     </spec>
 
-- name: get_attestation_deltas
+- name: get_attestation_deltas#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
       search: func AttestationsDelta(
@@ -1640,7 +1640,7 @@
         return participation_flag_indices
     </spec>
 
-- name: get_attestation_signature
+- name: get_attestation_signature#phase0
   sources:
     - file: beacon-chain/core/blocks/signature.go
       search: func AttestationSignatureBatch(
@@ -1654,7 +1654,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_attesting_balance
+- name: get_attesting_balance#phase0
   sources: []
   spec: |
     <spec fn="get_attesting_balance" fork="phase0" hash="bc7890c1">
@@ -1707,7 +1707,7 @@
         return output
     </spec>
 
-- name: get_balance_churn_limit
+- name: get_balance_churn_limit#electra
   sources:
     - file: beacon-chain/core/helpers/validator_churn.go
       search: func BalanceChurnLimit(
@@ -1752,7 +1752,7 @@
         return Gwei(increments * get_base_reward_per_increment(state))
     </spec>
 
-- name: get_base_reward_per_increment
+- name: get_base_reward_per_increment#altair
   sources:
     - file: beacon-chain/core/altair/reward.go
       search: func BaseRewardPerIncrement(
@@ -1766,7 +1766,7 @@
         )
     </spec>
 
-- name: get_beacon_committee
+- name: get_beacon_committee#phase0
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func BeaconCommittee(
@@ -1819,7 +1819,7 @@
         return state.proposer_lookahead[state.slot % SLOTS_PER_EPOCH]
     </spec>
 
-- name: get_beacon_proposer_indices
+- name: get_beacon_proposer_indices#fulu
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func PrecomputeProposerIndices(
@@ -1836,7 +1836,7 @@
         return compute_proposer_indices(state, epoch, seed, indices)
     </spec>
 
-- name: get_blob_parameters
+- name: get_blob_parameters#fulu
   sources: []
   spec: |
     <spec fn="get_blob_parameters" fork="fulu" hash="e390b1c8">
@@ -1850,7 +1850,7 @@
         return BlobParameters(ELECTRA_FORK_EPOCH, MAX_BLOBS_PER_BLOCK_ELECTRA)
     </spec>
 
-- name: get_blob_sidecars
+- name: get_blob_sidecars#deneb
   sources:
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_deneb.go
       search: func BuildBlobSidecars(
@@ -1877,7 +1877,7 @@
         ]
     </spec>
 
-- name: get_block_root
+- name: get_block_root#phase0
   sources:
     - file: beacon-chain/core/helpers/block.go
       search: func BlockRoot(
@@ -1890,7 +1890,7 @@
         return get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch))
     </spec>
 
-- name: get_block_root_at_slot
+- name: get_block_root_at_slot#phase0
   sources:
     - file: beacon-chain/core/helpers/block.go
       search: func BlockRootAtSlot(
@@ -1904,7 +1904,7 @@
         return state.block_roots[slot % SLOTS_PER_HISTORICAL_ROOT]
     </spec>
 
-- name: get_block_signature
+- name: get_block_signature#phase0
   sources:
     - file: testing/util/helpers.go
       search: func BlockSignature(
@@ -1916,7 +1916,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_checkpoint_block
+- name: get_checkpoint_block#phase0
   sources: []
   spec: |
     <spec fn="get_checkpoint_block" fork="phase0" hash="9d8daa22">
@@ -1928,7 +1928,7 @@
         return get_ancestor(store, root, epoch_first_slot)
     </spec>
 
-- name: get_committee_assignment
+- name: get_committee_assignment#phase0
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func CommitteeAssignments(
@@ -1958,7 +1958,7 @@
         return None
     </spec>
 
-- name: get_committee_count_per_slot
+- name: get_committee_count_per_slot#phase0
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func SlotCommitteeCount(
@@ -1979,7 +1979,7 @@
         )
     </spec>
 
-- name: get_committee_indices
+- name: get_committee_indices#electra
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func CommitteeIndices(
@@ -1989,7 +1989,7 @@
         return [CommitteeIndex(index) for index, bit in enumerate(committee_bits) if bit]
     </spec>
 
-- name: get_consolidation_churn_limit
+- name: get_consolidation_churn_limit#electra
   sources:
     - file: beacon-chain/core/helpers/validator_churn.go
       search: func ConsolidationChurnLimit(
@@ -1999,7 +1999,7 @@
         return get_balance_churn_limit(state) - get_activation_exit_churn_limit(state)
     </spec>
 
-- name: get_contribution_and_proof
+- name: get_contribution_and_proof#altair
   sources: []
   spec: |
     <spec fn="get_contribution_and_proof" fork="altair" hash="ea4e6980">
@@ -2022,7 +2022,7 @@
         )
     </spec>
 
-- name: get_contribution_and_proof_signature
+- name: get_contribution_and_proof_signature#altair
   sources:
     - file: validator/client/sync_committee.go
       search: func (v *validator) signContributionAndProof(
@@ -2039,7 +2039,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_current_epoch
+- name: get_current_epoch#phase0
   sources:
     - file: beacon-chain/core/time/slot_epoch.go
       search: func CurrentEpoch(
@@ -2052,7 +2052,7 @@
         return compute_epoch_at_slot(state.slot)
     </spec>
 
-- name: get_current_slot
+- name: get_current_slot#phase0
   sources:
     - file: time/slots/slottime.go
       search: func CurrentSlot(
@@ -2062,7 +2062,7 @@
         return Slot(GENESIS_SLOT + get_slots_since_genesis(store))
     </spec>
 
-- name: get_current_store_epoch
+- name: get_current_store_epoch#phase0
   sources: []
   spec: |
     <spec fn="get_current_store_epoch" fork="phase0" hash="4d86e690">
@@ -2070,7 +2070,7 @@
         return compute_epoch_at_slot(get_current_slot(store))
     </spec>
 
-- name: get_custody_groups
+- name: get_custody_groups#fulu
   sources:
     - file: beacon-chain/core/peerdas/das_core.go
       search: func CustodyGroups(
@@ -2101,7 +2101,7 @@
         return sorted(custody_groups)
     </spec>
 
-- name: get_data_column_sidecars
+- name: get_data_column_sidecars#fulu
   sources:
     - file: beacon-chain/core/peerdas/validator.go
       search: func DataColumnSidecars(
@@ -2140,7 +2140,7 @@
         return sidecars
     </spec>
 
-- name: get_domain
+- name: get_domain#phase0
   sources:
     - file: beacon-chain/core/signing/domain.go
       search: func Domain(
@@ -2157,7 +2157,7 @@
         return compute_domain(domain_type, fork_version, state.genesis_validators_root)
     </spec>
 
-- name: get_eligible_validator_indices
+- name: get_eligible_validator_indices#phase0
   sources: []
   spec: |
     <spec fn="get_eligible_validator_indices" fork="phase0" hash="22a24ce4">
@@ -2171,7 +2171,7 @@
         ]
     </spec>
 
-- name: get_epoch_signature
+- name: get_epoch_signature#phase0
   sources: []
   spec: |
     <spec fn="get_epoch_signature" fork="phase0" hash="31a86d34">
@@ -2181,7 +2181,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_eth1_pending_deposit_count
+- name: get_eth1_pending_deposit_count#electra
   sources:
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_deposits.go
       search: func (vs *Server) deposits(
@@ -2277,7 +2277,7 @@
         )
     </spec>
 
-- name: get_execution_payload
+- name: get_execution_payload#bellatrix
   sources: []
   spec: |
     <spec fn="get_execution_payload" fork="bellatrix" hash="abcc202e">
@@ -2291,7 +2291,7 @@
             return execution_engine.get_payload(payload_id).execution_payload
     </spec>
 
-- name: get_execution_requests
+- name: get_execution_requests#electra
   sources:
     - file: proto/engine/v1/electra.go
       search: func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(
@@ -2341,7 +2341,7 @@
         )
     </spec>
 
-- name: get_execution_requests_list
+- name: get_execution_requests_list#electra
   sources:
     - file: proto/engine/v1/electra.go
       search: func EncodeExecutionRequests(
@@ -2414,7 +2414,7 @@
         )
     </spec>
 
-- name: get_filtered_block_tree
+- name: get_filtered_block_tree#phase0
   sources: []
   spec: |
     <spec fn="get_filtered_block_tree" fork="phase0" hash="31b703b4">
@@ -2429,7 +2429,7 @@
         return blocks
     </spec>
 
-- name: get_finality_delay
+- name: get_finality_delay#phase0
   sources:
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func FinalityDelay(
@@ -2439,7 +2439,7 @@
         return get_previous_epoch(state) - state.finalized_checkpoint.epoch
     </spec>
 
-- name: get_flag_index_deltas
+- name: get_flag_index_deltas#altair
   sources:
     - file: beacon-chain/core/altair/epoch_precompute.go
       search: func AttestationsDelta(
@@ -2474,7 +2474,7 @@
         return rewards, penalties
     </spec>
 
-- name: get_forkchoice_store
+- name: get_forkchoice_store#phase0
   sources: []
   spec: |
     <spec fn="get_forkchoice_store" fork="phase0" hash="aaa3553b">
@@ -2501,7 +2501,7 @@
         )
     </spec>
 
-- name: get_head
+- name: get_head#phase0
   sources:
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) Head(
@@ -2521,7 +2521,7 @@
             head = max(children, key=lambda root: (get_weight(store, root), root))
     </spec>
 
-- name: get_head_deltas
+- name: get_head_deltas#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
       search: func AttestationsDelta(
@@ -2623,7 +2623,7 @@
         return rewards, penalties
     </spec>
 
-- name: get_inclusion_delay_deltas
+- name: get_inclusion_delay_deltas#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
       search: func AttestationsDelta(
@@ -2653,7 +2653,7 @@
         return rewards, penalties
     </spec>
 
-- name: get_index_for_new_validator
+- name: get_index_for_new_validator#altair
   sources: []
   spec: |
     <spec fn="get_index_for_new_validator" fork="altair" hash="e78e8714">
@@ -2661,7 +2661,7 @@
         return ValidatorIndex(len(state.validators))
     </spec>
 
-- name: get_indexed_attestation
+- name: get_indexed_attestation#phase0
   sources:
     - file: proto/prysm/v1alpha1/attestation/attestation_utils.go
       search: func ConvertToIndexed(
@@ -2785,7 +2785,7 @@
         return Root()
     </spec>
 
-- name: get_matching_head_attestations
+- name: get_matching_head_attestations#phase0
   sources: []
   spec: |
     <spec fn="get_matching_head_attestations" fork="phase0" hash="9e3ca171">
@@ -2799,7 +2799,7 @@
         ]
     </spec>
 
-- name: get_matching_source_attestations
+- name: get_matching_source_attestations#phase0
   sources: []
   spec: |
     <spec fn="get_matching_source_attestations" fork="phase0" hash="4771b4df">
@@ -2814,7 +2814,7 @@
         )
     </spec>
 
-- name: get_matching_target_attestations
+- name: get_matching_target_attestations#phase0
   sources: []
   spec: |
     <spec fn="get_matching_target_attestations" fork="phase0" hash="811f3459">
@@ -2828,7 +2828,7 @@
         ]
     </spec>
 
-- name: get_max_effective_balance
+- name: get_max_effective_balance#electra
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func ValidatorMaxEffectiveBalance(
@@ -2844,7 +2844,7 @@
             return MIN_ACTIVATION_BALANCE
     </spec>
 
-- name: get_next_sync_committee
+- name: get_next_sync_committee#altair
   sources:
     - file: beacon-chain/core/altair/sync_committee.go
       search: func NextSyncCommittee(
@@ -2929,7 +2929,7 @@
         return sync_committee_indices
     </spec>
 
-- name: get_pending_balance_to_withdraw
+- name: get_pending_balance_to_withdraw#electra
   sources:
     - file: beacon-chain/state/state-native/getters_validator.go
       search: func (b *BeaconState) PendingBalanceToWithdraw(
@@ -2943,7 +2943,7 @@
         )
     </spec>
 
-- name: get_pow_block_at_terminal_total_difficulty
+- name: get_pow_block_at_terminal_total_difficulty#bellatrix
   sources:
     - file: beacon-chain/execution/engine_client.go
       search: func (s *Service) GetTerminalBlockHash(
@@ -2967,7 +2967,7 @@
         return None
     </spec>
 
-- name: get_previous_epoch
+- name: get_previous_epoch#phase0
   sources:
     - file: beacon-chain/core/time/slot_epoch.go
       search: func PrevEpoch(
@@ -2981,7 +2981,7 @@
         return GENESIS_EPOCH if current_epoch == GENESIS_EPOCH else Epoch(current_epoch - 1)
     </spec>
 
-- name: get_proposer_head
+- name: get_proposer_head#phase0
   sources: []
   spec: |
     <spec fn="get_proposer_head" fork="phase0" hash="99e8fc05">
@@ -3040,7 +3040,7 @@
             return head_root
     </spec>
 
-- name: get_proposer_reward
+- name: get_proposer_reward#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
       search: func ProposersDelta(
@@ -3050,7 +3050,7 @@
         return Gwei(get_base_reward(state, attesting_index) // PROPOSER_REWARD_QUOTIENT)
     </spec>
 
-- name: get_proposer_score
+- name: get_proposer_score#phase0
   sources: []
   spec: |
     <spec fn="get_proposer_score" fork="phase0" hash="2c8d8a27">
@@ -3059,7 +3059,7 @@
         return compute_proposer_score(justified_checkpoint_state)
     </spec>
 
-- name: get_randao_mix
+- name: get_randao_mix#phase0
   sources:
     - file: beacon-chain/core/helpers/randao.go
       search: func RandaoMix(
@@ -3072,7 +3072,7 @@
         return state.randao_mixes[epoch % EPOCHS_PER_HISTORICAL_VECTOR]
     </spec>
 
-- name: get_safety_threshold
+- name: get_safety_threshold#altair
   sources: []
   spec: |
     <spec fn="get_safety_threshold" fork="altair" hash="72f3d7ff">
@@ -3086,7 +3086,7 @@
         )
     </spec>
 
-- name: get_seed
+- name: get_seed#phase0
   sources:
     - file: beacon-chain/core/helpers/randao.go
       search: func Seed(
@@ -3102,7 +3102,7 @@
         return hash(domain_type + uint_to_bytes(epoch) + mix)
     </spec>
 
-- name: get_slot_component_duration_ms
+- name: get_slot_component_duration_ms#phase0
   sources: []
   spec: |
     <spec fn="get_slot_component_duration_ms" fork="phase0" hash="b81504df">
@@ -3113,7 +3113,7 @@
         return basis_points * SLOT_DURATION_MS // BASIS_POINTS
     </spec>
 
-- name: get_slot_signature
+- name: get_slot_signature#phase0
   sources: []
   spec: |
     <spec fn="get_slot_signature" fork="phase0" hash="b28edd87">
@@ -3123,7 +3123,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_slots_since_genesis
+- name: get_slots_since_genesis#phase0
   sources:
     - file: time/slots/slottime.go
       search: func CurrentSlot(
@@ -3133,7 +3133,7 @@
         return (store.time - store.genesis_time) // SECONDS_PER_SLOT
     </spec>
 
-- name: get_source_deltas
+- name: get_source_deltas#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
       search: func AttestationsDelta(
@@ -3149,7 +3149,7 @@
         return get_attestation_component_deltas(state, matching_source_attestations)
     </spec>
 
-- name: get_subtree_index
+- name: get_subtree_index#altair
   sources: []
   spec: |
     <spec fn="get_subtree_index" fork="altair" hash="74962089">
@@ -3157,7 +3157,7 @@
         return uint64(generalized_index % 2 ** (floorlog2(generalized_index)))
     </spec>
 
-- name: get_sync_committee_message
+- name: get_sync_committee_message#altair
   sources: []
   spec: |
     <spec fn="get_sync_committee_message" fork="altair" hash="f5ff7ff2">
@@ -3177,7 +3177,7 @@
         )
     </spec>
 
-- name: get_sync_committee_selection_proof
+- name: get_sync_committee_selection_proof#altair
   sources: []
   spec: |
     <spec fn="get_sync_committee_selection_proof" fork="altair" hash="fa4e7704">
@@ -3193,7 +3193,7 @@
         return bls.Sign(privkey, signing_root)
     </spec>
 
-- name: get_sync_subcommittee_pubkeys
+- name: get_sync_subcommittee_pubkeys#altair
   sources:
     - file: beacon-chain/core/altair/sync_committee.go
       search: func SyncSubCommitteePubkeys(
@@ -3218,7 +3218,7 @@
         return sync_committee.pubkeys[i : i + sync_subcommittee_size]
     </spec>
 
-- name: get_target_deltas
+- name: get_target_deltas#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/reward_penalty.go
       search: func AttestationsDelta(
@@ -3234,7 +3234,7 @@
         return get_attestation_component_deltas(state, matching_target_attestations)
     </spec>
 
-- name: get_terminal_pow_block
+- name: get_terminal_pow_block#bellatrix
   sources:
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer_execution_payload.go
       search: func (vs *Server) getTerminalBlockHashIfExists(
@@ -3251,7 +3251,7 @@
         return get_pow_block_at_terminal_total_difficulty(pow_chain)
     </spec>
 
-- name: get_total_active_balance
+- name: get_total_active_balance#phase0
   sources:
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func TotalActiveBalance(
@@ -3267,7 +3267,7 @@
         )
     </spec>
 
-- name: get_total_balance
+- name: get_total_balance#phase0
   sources:
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func TotalBalance(
@@ -3287,7 +3287,7 @@
         )
     </spec>
 
-- name: get_unslashed_attesting_indices
+- name: get_unslashed_attesting_indices#phase0
   sources: []
   spec: |
     <spec fn="get_unslashed_attesting_indices" fork="phase0" hash="21c7dd12">
@@ -3300,7 +3300,7 @@
         return set(filter(lambda index: not state.validators[index].slashed, output))
     </spec>
 
-- name: get_unslashed_participating_indices
+- name: get_unslashed_participating_indices#altair
   sources: []
   spec: |
     <spec fn="get_unslashed_participating_indices" fork="altair" hash="8a8aae5f">
@@ -3322,7 +3322,7 @@
         return set(filter(lambda index: not state.validators[index].slashed, participating_indices))
     </spec>
 
-- name: get_validator_activation_churn_limit
+- name: get_validator_activation_churn_limit#deneb
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func ValidatorActivationChurnLimitDeneb(
@@ -3335,7 +3335,7 @@
         return min(MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT, get_validator_churn_limit(state))
     </spec>
 
-- name: get_validator_churn_limit
+- name: get_validator_churn_limit#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func ValidatorExitChurnLimit(
@@ -3403,7 +3403,7 @@
         return validator
     </spec>
 
-- name: get_validators_custody_requirement
+- name: get_validators_custody_requirement#fulu
   sources:
     - file: beacon-chain/core/peerdas/validator.go
       search: func ValidatorsCustodyRequirement(
@@ -3419,7 +3419,7 @@
         return min(max(count, VALIDATOR_CUSTODY_REQUIREMENT), NUMBER_OF_CUSTODY_GROUPS)
     </spec>
 
-- name: get_voting_source
+- name: get_voting_source#phase0
   sources: []
   spec: |
     <spec fn="get_voting_source" fork="phase0" hash="0af91bae">
@@ -3439,7 +3439,7 @@
             return head_state.current_justified_checkpoint
     </spec>
 
-- name: get_weight
+- name: get_weight#phase0
   sources:
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) Weight(
@@ -3460,7 +3460,7 @@
         return attestation_score + proposer_score
     </spec>
 
-- name: has_compounding_withdrawal_credential
+- name: has_compounding_withdrawal_credential#electra
   sources:
     - file: beacon-chain/state/state-native/readonly_validator.go
       search: func (v readOnlyValidator) HasCompoundingWithdrawalCredentials(
@@ -3473,7 +3473,7 @@
         return is_compounding_withdrawal_credential(validator.withdrawal_credentials)
     </spec>
 
-- name: has_eth1_withdrawal_credential
+- name: has_eth1_withdrawal_credential#capella
   sources:
     - file: beacon-chain/state/state-native/readonly_validator.go
       search: func (v readOnlyValidator) HasETH1WithdrawalCredentials(
@@ -3486,7 +3486,7 @@
         return validator.withdrawal_credentials[:1] == ETH1_ADDRESS_WITHDRAWAL_PREFIX
     </spec>
 
-- name: has_execution_withdrawal_credential
+- name: has_execution_withdrawal_credential#electra
   sources:
     - file: beacon-chain/state/state-native/readonly_validator.go
       search: func (v readOnlyValidator) HasExecutionWithdrawalCredentials(
@@ -3502,7 +3502,7 @@
         )
     </spec>
 
-- name: has_flag
+- name: has_flag#altair
   sources:
     - file: beacon-chain/core/altair/attestation.go
       search: func HasValidatorFlag(
@@ -3516,7 +3516,7 @@
         return flags & flag == flag
     </spec>
 
-- name: increase_balance
+- name: increase_balance#phase0
   sources:
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func IncreaseBalance(
@@ -3529,7 +3529,7 @@
         state.balances[index] += delta
     </spec>
 
-- name: initialize_beacon_state_from_eth1
+- name: initialize_beacon_state_from_eth1#phase0
   sources:
     - file: beacon-chain/core/transition/state.go
       search: func GenesisBeaconState(
@@ -3575,7 +3575,7 @@
         return state
     </spec>
 
-- name: initialize_light_client_store
+- name: initialize_light_client_store#altair
   sources:
     - file: beacon-chain/light-client/store.go
       search: func NewLightClientStore(
@@ -3605,7 +3605,7 @@
         )
     </spec>
 
-- name: initialize_proposer_lookahead
+- name: initialize_proposer_lookahead#fulu
   sources:
     - file: beacon-chain/core/helpers/beacon_committee.go
       search: func InitializeProposerLookahead(
@@ -3675,7 +3675,7 @@
         validator.withdrawable_epoch = Epoch(validator.exit_epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY)
     </spec>
 
-- name: integer_squareroot
+- name: integer_squareroot#phase0
   sources:
     - file: math/math_helper.go
       search: func IntegerSquareRoot(
@@ -3695,7 +3695,7 @@
         return x
     </spec>
 
-- name: is_active_validator
+- name: is_active_validator#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func IsActiveValidator(
@@ -3708,7 +3708,7 @@
         return validator.activation_epoch <= epoch < validator.exit_epoch
     </spec>
 
-- name: is_aggregator
+- name: is_aggregator#phase0
   sources:
     - file: beacon-chain/core/helpers/attestation.go
       search: func IsAggregator(
@@ -3722,7 +3722,7 @@
         return bytes_to_uint64(hash(slot_signature)[0:8]) % modulo == 0
     </spec>
 
-- name: is_assigned_to_sync_committee
+- name: is_assigned_to_sync_committee#altair
   sources: []
   spec: |
     <spec fn="is_assigned_to_sync_committee" fork="altair" hash="b83187d8">
@@ -3742,7 +3742,7 @@
             return pubkey in state.next_sync_committee.pubkeys
     </spec>
 
-- name: is_better_update
+- name: is_better_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func IsBetterUpdate(
@@ -3801,7 +3801,7 @@
         return new_update.signature_slot < old_update.signature_slot
     </spec>
 
-- name: is_candidate_block
+- name: is_candidate_block#phase0
   sources: []
   spec: |
     <spec fn="is_candidate_block" fork="phase0" hash="c588dc0a">
@@ -3812,7 +3812,7 @@
         )
     </spec>
 
-- name: is_compounding_withdrawal_credential
+- name: is_compounding_withdrawal_credential#electra
   sources: []
   spec: |
     <spec fn="is_compounding_withdrawal_credential" fork="electra" hash="5f97fbb0">
@@ -3862,7 +3862,7 @@
         )
     </spec>
 
-- name: is_eligible_for_activation
+- name: is_eligible_for_activation#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func IsEligibleForActivation(
@@ -3913,7 +3913,7 @@
         )
     </spec>
 
-- name: is_execution_block
+- name: is_execution_block#bellatrix
   sources:
     - file: beacon-chain/core/blocks/payload.go
       search: func IsExecutionBlock(
@@ -3923,7 +3923,7 @@
         return block.body.execution_payload != ExecutionPayload()
     </spec>
 
-- name: is_execution_enabled
+- name: is_execution_enabled#bellatrix
   sources:
     - file: beacon-chain/core/blocks/payload.go
       search: func IsExecutionEnabled(
@@ -3933,7 +3933,7 @@
         return is_merge_transition_block(state, body) or is_merge_transition_complete(state)
     </spec>
 
-- name: is_ffg_competitive
+- name: is_ffg_competitive#phase0
   sources: []
   spec: |
     <spec fn="is_ffg_competitive" fork="phase0" hash="f6a3c0c5">
@@ -3943,7 +3943,7 @@
         )
     </spec>
 
-- name: is_finality_update
+- name: is_finality_update#altair
   sources: []
   spec: |
     <spec fn="is_finality_update" fork="altair" hash="4d0080ac">
@@ -3951,7 +3951,7 @@
         return update.finality_branch != FinalityBranch()
     </spec>
 
-- name: is_finalization_ok
+- name: is_finalization_ok#phase0
   sources: []
   spec: |
     <spec fn="is_finalization_ok" fork="phase0" hash="760ff77e">
@@ -3997,7 +3997,7 @@
         )
     </spec>
 
-- name: is_head_late
+- name: is_head_late#phase0
   sources: []
   spec: |
     <spec fn="is_head_late" fork="phase0" hash="e393dce6">
@@ -4005,7 +4005,7 @@
         return not store.block_timeliness[head_root]
     </spec>
 
-- name: is_head_weak
+- name: is_head_weak#phase0
   sources: []
   spec: |
     <spec fn="is_head_weak" fork="phase0" hash="3a6650d7">
@@ -4016,7 +4016,7 @@
         return head_weight < reorg_threshold
     </spec>
 
-- name: is_in_inactivity_leak
+- name: is_in_inactivity_leak#phase0
   sources:
     - file: beacon-chain/core/helpers/rewards_penalties.go
       search: func IsInInactivityLeak(
@@ -4026,7 +4026,7 @@
         return get_finality_delay(state) > MIN_EPOCHS_TO_INACTIVITY_PENALTY
     </spec>
 
-- name: is_merge_transition_block
+- name: is_merge_transition_block#bellatrix
   sources: []
   spec: |
     <spec fn="is_merge_transition_block" fork="bellatrix" hash="f0b5e2a0">
@@ -4034,7 +4034,7 @@
         return not is_merge_transition_complete(state) and body.execution_payload != ExecutionPayload()
     </spec>
 
-- name: is_merge_transition_complete
+- name: is_merge_transition_complete#bellatrix
   sources:
     - file: beacon-chain/core/blocks/payload.go
       search: func IsMergeTransitionComplete(
@@ -4044,7 +4044,7 @@
         return state.latest_execution_payload_header != ExecutionPayloadHeader()
     </spec>
 
-- name: is_next_sync_committee_known
+- name: is_next_sync_committee_known#altair
   sources: []
   spec: |
     <spec fn="is_next_sync_committee_known" fork="altair" hash="f5d3196e">
@@ -4052,7 +4052,7 @@
         return store.next_sync_committee != SyncCommittee()
     </spec>
 
-- name: is_optimistic
+- name: is_optimistic#bellatrix
   sources:
     - file: beacon-chain/blockchain/chain_info.go
       search: func (s *Service) IsOptimistic(
@@ -4062,7 +4062,7 @@
         return hash_tree_root(block) in opt_store.optimistic_roots
     </spec>
 
-- name: is_optimistic_candidate_block
+- name: is_optimistic_candidate_block#bellatrix
   sources: []
   spec: |
     <spec fn="is_optimistic_candidate_block" fork="bellatrix" hash="fdb54007">
@@ -4078,7 +4078,7 @@
         return False
     </spec>
 
-- name: is_parent_strong
+- name: is_parent_strong#phase0
   sources: []
   spec: |
     <spec fn="is_parent_strong" fork="phase0" hash="02a3fd0b">
@@ -4136,7 +4136,7 @@
         )
     </spec>
 
-- name: is_proposer
+- name: is_proposer#phase0
   sources: []
   spec: |
     <spec fn="is_proposer" fork="phase0" hash="d9e66d76">
@@ -4144,7 +4144,7 @@
         return get_beacon_proposer_index(state) == validator_index
     </spec>
 
-- name: is_proposing_on_time
+- name: is_proposing_on_time#phase0
   sources: []
   spec: |
     <spec fn="is_proposing_on_time" fork="phase0" hash="dc5256b4">
@@ -4156,7 +4156,7 @@
         return time_into_slot_ms <= proposer_reorg_cutoff_ms
     </spec>
 
-- name: is_shuffling_stable
+- name: is_shuffling_stable#phase0
   sources: []
   spec: |
     <spec fn="is_shuffling_stable" fork="phase0" hash="680f0aa0">
@@ -4164,7 +4164,7 @@
         return slot % SLOTS_PER_EPOCH != 0
     </spec>
 
-- name: is_slashable_attestation_data
+- name: is_slashable_attestation_data#phase0
   sources:
     - file: beacon-chain/core/blocks/attester_slashing.go
       search: func IsSlashableAttestationData(
@@ -4183,7 +4183,7 @@
         )
     </spec>
 
-- name: is_slashable_validator
+- name: is_slashable_validator#phase0
   sources:
     - file: beacon-chain/core/helpers/validators.go
       search: func IsSlashableValidator(
@@ -4198,7 +4198,7 @@
         )
     </spec>
 
-- name: is_sync_committee_aggregator
+- name: is_sync_committee_aggregator#altair
   sources:
     - file: beacon-chain/core/altair/sync_committee.go
       search: func IsSyncCommitteeAggregator(
@@ -4216,7 +4216,7 @@
         return bytes_to_uint64(hash(signature)[0:8]) % modulo == 0
     </spec>
 
-- name: is_sync_committee_update
+- name: is_sync_committee_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func HasRelevantSyncCommittee(
@@ -4226,7 +4226,7 @@
         return update.next_sync_committee_branch != NextSyncCommitteeBranch()
     </spec>
 
-- name: is_valid_deposit_signature
+- name: is_valid_deposit_signature#electra
   sources:
     - file: beacon-chain/core/electra/deposits.go
       search: func IsValidDepositSignature(
@@ -4248,7 +4248,7 @@
         return bls.Verify(pubkey, signing_root, signature)
     </spec>
 
-- name: is_valid_genesis_state
+- name: is_valid_genesis_state#phase0
   sources:
     - file: beacon-chain/core/transition/state.go
       search: func IsValidGenesisState(
@@ -4262,7 +4262,7 @@
         return True
     </spec>
 
-- name: is_valid_indexed_attestation
+- name: is_valid_indexed_attestation#phase0
   sources:
     - file: beacon-chain/core/blocks/attestation.go
       search: func VerifyIndexedAttestation(
@@ -4344,7 +4344,7 @@
         )
     </spec>
 
-- name: is_valid_merkle_branch
+- name: is_valid_merkle_branch#phase0
   sources: []
   spec: |
     <spec fn="is_valid_merkle_branch" fork="phase0" hash="f754117e">
@@ -4363,7 +4363,7 @@
         return value == root
     </spec>
 
-- name: is_valid_normalized_merkle_branch
+- name: is_valid_normalized_merkle_branch#altair
   sources: []
   spec: |
     <spec fn="is_valid_normalized_merkle_branch" fork="altair" hash="ef32cdea">
@@ -4379,7 +4379,7 @@
         return is_valid_merkle_branch(leaf, branch[num_extra:], depth, index, root)
     </spec>
 
-- name: is_valid_switch_to_compounding_request
+- name: is_valid_switch_to_compounding_request#electra
   sources:
     - file: beacon-chain/core/electra/consolidations.go
       search: func IsValidSwitchToCompoundingRequest(
@@ -4420,7 +4420,7 @@
         return True
     </spec>
 
-- name: is_valid_terminal_pow_block
+- name: is_valid_terminal_pow_block#bellatrix
   sources:
     - file: beacon-chain/blockchain/pow_block.go
       search: func validateTerminalBlockDifficulties(
@@ -4469,7 +4469,7 @@
         return current_epoch <= ws_state_epoch + ws_period
     </spec>
 
-- name: kzg_commitment_to_versioned_hash
+- name: kzg_commitment_to_versioned_hash#deneb
   sources:
     - file: consensus-types/primitives/kzg.go
       search: func ConvertKzgCommitmentToVersionedHash(
@@ -4479,7 +4479,7 @@
         return VERSIONED_HASH_VERSION_KZG + hash(kzg_commitment)[1:]
     </spec>
 
-- name: latest_verified_ancestor
+- name: latest_verified_ancestor#bellatrix
   sources: []
   spec: |
     <spec fn="latest_verified_ancestor" fork="bellatrix" hash="c2ee2c55">
@@ -4491,7 +4491,7 @@
             block = opt_store.blocks[block.parent_root]
     </spec>
 
-- name: max_compressed_len
+- name: max_compressed_len#phase0
   sources:
     - file: beacon-chain/p2p/encoder/ssz.go
       search: func MaxCompressedLen(
@@ -4503,7 +4503,7 @@
         return uint64(32 + n + n / 6)
     </spec>
 
-- name: max_message_size
+- name: max_message_size#phase0
   sources:
     - file: beacon-chain/p2p/pubsub.go
       search: func MaxMessageSize(
@@ -4537,7 +4537,7 @@
         return NEXT_SYNC_COMMITTEE_GINDEX
     </spec>
 
-- name: normalize_merkle_branch
+- name: normalize_merkle_branch#electra
   sources: []
   spec: |
     <spec fn="normalize_merkle_branch" fork="electra" hash="149d7b0c">
@@ -4549,7 +4549,7 @@
         return [Bytes32()] * num_extra + [*branch]
     </spec>
 
-- name: on_attestation
+- name: on_attestation#phase0
   sources:
     - file: beacon-chain/blockchain/process_attestation.go
       search: func (s *Service) OnAttestation(
@@ -4575,7 +4575,7 @@
         update_latest_messages(store, indexed_attestation.attesting_indices, attestation)
     </spec>
 
-- name: on_attester_slashing
+- name: on_attester_slashing#phase0
   sources:
     - file: beacon-chain/core/blocks/attester_slashing.go
       search: func ProcessAttesterSlashing(
@@ -4853,7 +4853,7 @@
         compute_pulled_up_tip(store, block_root)
     </spec>
 
-- name: on_tick
+- name: on_tick#phase0
   sources: []
   spec: |
     <spec fn="on_tick" fork="phase0" hash="9cc6e040">
@@ -4867,7 +4867,7 @@
         on_tick_per_slot(store, time)
     </spec>
 
-- name: on_tick_per_slot
+- name: on_tick_per_slot#phase0
   sources: []
   spec: |
     <spec fn="on_tick_per_slot" fork="phase0" hash="ae9ef172">
@@ -5219,7 +5219,7 @@
         increase_balance(state, get_beacon_proposer_index(state), proposer_reward)
     </spec>
 
-- name: process_attester_slashing
+- name: process_attester_slashing#phase0
   sources:
     - file: beacon-chain/core/blocks/attester_slashing.go
       search: func ProcessAttesterSlashing(
@@ -5327,7 +5327,7 @@
         process_sync_aggregate(state, block.body.sync_aggregate)
     </spec>
 
-- name: process_block_header
+- name: process_block_header#phase0
   sources:
     - file: beacon-chain/core/blocks/header.go
       search: func ProcessBlockHeader(
@@ -5356,7 +5356,7 @@
         assert not proposer.slashed
     </spec>
 
-- name: process_bls_to_execution_change
+- name: process_bls_to_execution_change#capella
   sources:
     - file: beacon-chain/core/blocks/withdrawals.go
       search: func ProcessBLSToExecutionChanges(
@@ -5386,7 +5386,7 @@
         )
     </spec>
 
-- name: process_consolidation_request
+- name: process_consolidation_request#electra
   sources:
     - file: beacon-chain/core/requests/consolidations.go
       search: func ProcessConsolidationRequests(
@@ -5526,7 +5526,7 @@
         )
     </spec>
 
-- name: process_deposit_request
+- name: process_deposit_request#electra
   sources:
     - file: beacon-chain/core/requests/deposits.go
       search: func processDepositRequest(
@@ -5703,7 +5703,7 @@
         process_proposer_lookahead(state)
     </spec>
 
-- name: process_eth1_data
+- name: process_eth1_data#phase0
   sources:
     - file: beacon-chain/core/blocks/eth1_data.go
       search: func ProcessEth1DataInBlock(
@@ -5718,7 +5718,7 @@
             state.eth1_data = body.eth1_data
     </spec>
 
-- name: process_eth1_data_reset
+- name: process_eth1_data_reset#phase0
   sources:
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessEth1DataReset(
@@ -5997,7 +5997,7 @@
         )
     </spec>
 
-- name: process_historical_roots_update
+- name: process_historical_roots_update#phase0
   sources:
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessHistoricalDataUpdate(
@@ -6013,7 +6013,7 @@
             state.historical_roots.append(hash_tree_root(historical_batch))
     </spec>
 
-- name: process_historical_summaries_update
+- name: process_historical_summaries_update#capella
   sources:
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessHistoricalDataUpdate(
@@ -6030,7 +6030,7 @@
             state.historical_summaries.append(historical_summary)
     </spec>
 
-- name: process_inactivity_updates
+- name: process_inactivity_updates#altair
   sources:
     - file: beacon-chain/core/altair/epoch_precompute.go
       search: func ProcessInactivityScores(
@@ -6102,7 +6102,7 @@
         )
     </spec>
 
-- name: process_light_client_finality_update
+- name: process_light_client_finality_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientFinalityUpdateFromBeaconState(
@@ -6126,7 +6126,7 @@
         process_light_client_update(store, update, current_slot, genesis_validators_root)
     </spec>
 
-- name: process_light_client_optimistic_update
+- name: process_light_client_optimistic_update#altair
   sources:
     - file: beacon-chain/light-client/lightclient.go
       search: func NewLightClientOptimisticUpdateFromBeaconState(
@@ -6150,7 +6150,7 @@
         process_light_client_update(store, update, current_slot, genesis_validators_root)
     </spec>
 
-- name: process_light_client_store_force_update
+- name: process_light_client_store_force_update#altair
   sources: []
   spec: |
     <spec fn="process_light_client_store_force_update" fork="altair" hash="fbb77069">
@@ -6172,7 +6172,7 @@
             store.best_valid_update = None
     </spec>
 
-- name: process_light_client_update
+- name: process_light_client_update#altair
   sources: []
   spec: |
     <spec fn="process_light_client_update" fork="altair" hash="b64a67ff">
@@ -6309,7 +6309,7 @@
         for_ops(body.execution_requests.consolidations, process_consolidation_request)
     </spec>
 
-- name: process_participation_flag_updates
+- name: process_participation_flag_updates#altair
   sources:
     - file: beacon-chain/core/altair/epoch_spec.go
       search: func ProcessParticipationFlagUpdates(
@@ -6322,7 +6322,7 @@
         ]
     </spec>
 
-- name: process_participation_record_updates
+- name: process_participation_record_updates#phase0
   sources:
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessParticipationRecordUpdates(
@@ -6334,7 +6334,7 @@
         state.current_epoch_attestations = []
     </spec>
 
-- name: process_pending_consolidations
+- name: process_pending_consolidations#electra
   sources:
     - file: beacon-chain/core/electra/consolidations.go
       search: func ProcessPendingConsolidations(
@@ -6364,7 +6364,7 @@
         state.pending_consolidations = state.pending_consolidations[next_pending_consolidation:]
     </spec>
 
-- name: process_pending_deposits
+- name: process_pending_deposits#electra
   sources:
     - file: beacon-chain/core/electra/deposits.go
       search: func ProcessPendingDeposits(
@@ -6437,7 +6437,7 @@
             state.deposit_balance_to_consume = Gwei(0)
     </spec>
 
-- name: process_proposer_lookahead
+- name: process_proposer_lookahead#fulu
   sources:
     - file: beacon-chain/core/fulu/transition.go
       search: func ProcessProposerLookahead(
@@ -6454,7 +6454,7 @@
         state.proposer_lookahead[last_epoch_start:] = last_epoch_proposers
     </spec>
 
-- name: process_proposer_slashing
+- name: process_proposer_slashing#phase0
   sources:
     - file: beacon-chain/core/blocks/proposer_slashing.go
       search: func ProcessProposerSlashing(
@@ -6484,7 +6484,7 @@
         slash_validator(state, header_1.proposer_index)
     </spec>
 
-- name: process_randao
+- name: process_randao#phase0
   sources:
     - file: beacon-chain/core/blocks/randao.go
       search: func ProcessRandao(
@@ -6501,7 +6501,7 @@
         state.randao_mixes[epoch % EPOCHS_PER_HISTORICAL_VECTOR] = mix
     </spec>
 
-- name: process_randao_mixes_reset
+- name: process_randao_mixes_reset#phase0
   sources:
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessRandaoMixesReset(
@@ -6756,7 +6756,7 @@
                 decrease_balance(state, ValidatorIndex(index), penalty)
     </spec>
 
-- name: process_slashings_reset
+- name: process_slashings_reset#phase0
   sources:
     - file: beacon-chain/core/epoch/epoch_processing.go
       search: func ProcessSlashingsReset(
@@ -6768,7 +6768,7 @@
         state.slashings[next_epoch % EPOCHS_PER_SLASHINGS_VECTOR] = Gwei(0)
     </spec>
 
-- name: process_slot
+- name: process_slot#phase0
   sources:
     - file: beacon-chain/core/transition/transition.go
       search: func ProcessSlot(
@@ -6786,7 +6786,7 @@
         state.block_roots[state.slot % SLOTS_PER_HISTORICAL_ROOT] = previous_block_root
     </spec>
 
-- name: process_slots
+- name: process_slots#phase0
   sources:
     - file: beacon-chain/core/transition/transition.go
       search: func ProcessSlots(
@@ -6802,7 +6802,7 @@
             state.slot = Slot(state.slot + 1)
     </spec>
 
-- name: process_sync_aggregate
+- name: process_sync_aggregate#altair
   sources:
     - file: beacon-chain/core/altair/block.go
       search: func ProcessSyncAggregate(
@@ -6871,7 +6871,7 @@
                 decrease_balance(state, participant_index, participant_reward)
     </spec>
 
-- name: process_sync_committee_contributions
+- name: process_sync_committee_contributions#altair
   sources: []
   spec: |
     <spec fn="process_sync_committee_contributions" fork="altair" hash="34e95c46">
@@ -6895,7 +6895,7 @@
         block.body.sync_aggregate = sync_aggregate
     </spec>
 
-- name: process_sync_committee_updates
+- name: process_sync_committee_updates#altair
   sources:
     - file: beacon-chain/core/altair/epoch_spec.go
       search: func ProcessSyncCommitteeUpdates(
@@ -6991,7 +6991,7 @@
         initiate_validator_exit(state, voluntary_exit.validator_index)
     </spec>
 
-- name: process_withdrawal_request
+- name: process_withdrawal_request#electra
   sources:
     - file: beacon-chain/core/requests/withdrawals.go
       search: func ProcessWithdrawalRequests(
@@ -7106,7 +7106,7 @@
         update_next_withdrawal_validator_index(state, expected.withdrawals)
     </spec>
 
-- name: queue_excess_active_balance
+- name: queue_excess_active_balance#electra
   sources:
     - file: beacon-chain/core/electra/validator.go
       search: func QueueExcessActiveBalance(
@@ -7131,7 +7131,7 @@
             )
     </spec>
 
-- name: recover_matrix
+- name: recover_matrix#fulu
   sources: []
   spec: |
     <spec fn="recover_matrix" fork="fulu" hash="3db21f50">
@@ -7161,7 +7161,7 @@
         return matrix
     </spec>
 
-- name: saturating_sub
+- name: saturating_sub#phase0
   sources:
     - file: consensus-types/primitives/slot.go
       search: func (s Slot) SafeSub(
@@ -7174,7 +7174,7 @@
         return a - b if a > b else 0
     </spec>
 
-- name: seconds_to_milliseconds
+- name: seconds_to_milliseconds#phase0
   sources: []
   spec: |
     <spec fn="seconds_to_milliseconds" fork="phase0" hash="b2cc9743">
@@ -7188,7 +7188,7 @@
         return seconds * 1000
     </spec>
 
-- name: set_or_append_list
+- name: set_or_append_list#altair
   sources: []
   spec: |
     <spec fn="set_or_append_list" fork="altair" hash="a48f6f4c">
@@ -7199,7 +7199,7 @@
             list[index] = value
     </spec>
 
-- name: should_override_forkchoice_update
+- name: should_override_forkchoice_update#bellatrix
   sources:
     - file: beacon-chain/forkchoice/ro.go
       search: func (ro *ROForkChoice) ShouldOverrideFCU(
@@ -7403,7 +7403,7 @@
         increase_balance(state, whistleblower_index, Gwei(whistleblower_reward - proposer_reward))
     </spec>
 
-- name: state_transition
+- name: state_transition#phase0
   sources:
     - file: beacon-chain/core/transition/transition.go
       search: func ExecuteStateTransition(
@@ -7425,7 +7425,7 @@
             assert block.state_root == hash_tree_root(state)
     </spec>
 
-- name: store_target_checkpoint_state
+- name: store_target_checkpoint_state#phase0
   sources: []
   spec: |
     <spec fn="store_target_checkpoint_state" fork="phase0" hash="2e4ff2b7">
@@ -7438,7 +7438,7 @@
             store.checkpoint_states[target] = base_state
     </spec>
 
-- name: switch_to_compounding_validator
+- name: switch_to_compounding_validator#electra
   sources:
     - file: beacon-chain/core/electra/validator.go
       search: func SwitchToCompoundingValidator(
@@ -7452,7 +7452,7 @@
         queue_excess_active_balance(state, index)
     </spec>
 
-- name: translate_participation
+- name: translate_participation#altair
   sources:
     - file: beacon-chain/core/altair/upgrade.go
       search: func TranslateParticipation(
@@ -7476,7 +7476,7 @@
                     epoch_participation[index] = add_flag(epoch_participation[index], flag_index)
     </spec>
 
-- name: update_checkpoints
+- name: update_checkpoints#phase0
   sources:
     - file: beacon-chain/forkchoice/doubly-linked-tree/forkchoice.go
       search: func (f *ForkChoice) updateCheckpoints(
@@ -7497,7 +7497,7 @@
             store.finalized_checkpoint = finalized_checkpoint
     </spec>
 
-- name: update_latest_messages
+- name: update_latest_messages#phase0
   sources: []
   spec: |
     <spec fn="update_latest_messages" fork="phase0" hash="3da3b413">
@@ -7514,7 +7514,7 @@
                 store.latest_messages[i] = LatestMessage(epoch=target.epoch, root=beacon_block_root)
     </spec>
 
-- name: update_unrealized_checkpoints
+- name: update_unrealized_checkpoints#phase0
   sources:
     - file: beacon-chain/forkchoice/doubly-linked-tree/unrealized_justification.go
       search: func (f *ForkChoice) updateUnrealizedCheckpoints(
@@ -7537,7 +7537,7 @@
             store.unrealized_finalized_checkpoint = unrealized_finalized_checkpoint
     </spec>
 
-- name: upgrade_lc_bootstrap_to_capella
+- name: upgrade_lc_bootstrap_to_capella#capella
   sources: []
   spec: |
     <spec fn="upgrade_lc_bootstrap_to_capella" fork="capella" hash="d5f1203a">
@@ -7549,7 +7549,7 @@
         )
     </spec>
 
-- name: upgrade_lc_bootstrap_to_deneb
+- name: upgrade_lc_bootstrap_to_deneb#deneb
   sources: []
   spec: |
     <spec fn="upgrade_lc_bootstrap_to_deneb" fork="deneb" hash="f91baf71">
@@ -7561,7 +7561,7 @@
         )
     </spec>
 
-- name: upgrade_lc_bootstrap_to_electra
+- name: upgrade_lc_bootstrap_to_electra#electra
   sources: []
   spec: |
     <spec fn="upgrade_lc_bootstrap_to_electra" fork="electra" hash="93818ed1">
@@ -7575,7 +7575,7 @@
         )
     </spec>
 
-- name: upgrade_lc_finality_update_to_capella
+- name: upgrade_lc_finality_update_to_capella#capella
   sources: []
   spec: |
     <spec fn="upgrade_lc_finality_update_to_capella" fork="capella" hash="c314b172">
@@ -7591,7 +7591,7 @@
         )
     </spec>
 
-- name: upgrade_lc_finality_update_to_deneb
+- name: upgrade_lc_finality_update_to_deneb#deneb
   sources: []
   spec: |
     <spec fn="upgrade_lc_finality_update_to_deneb" fork="deneb" hash="bfa53da6">
@@ -7607,7 +7607,7 @@
         )
     </spec>
 
-- name: upgrade_lc_finality_update_to_electra
+- name: upgrade_lc_finality_update_to_electra#electra
   sources: []
   spec: |
     <spec fn="upgrade_lc_finality_update_to_electra" fork="electra" hash="1bcc6b97">
@@ -7623,7 +7623,7 @@
         )
     </spec>
 
-- name: upgrade_lc_header_to_capella
+- name: upgrade_lc_header_to_capella#capella
   sources: []
   spec: |
     <spec fn="upgrade_lc_header_to_capella" fork="capella" hash="9f7a832d">
@@ -7635,7 +7635,7 @@
         )
     </spec>
 
-- name: upgrade_lc_header_to_deneb
+- name: upgrade_lc_header_to_deneb#deneb
   sources: []
   spec: |
     <spec fn="upgrade_lc_header_to_deneb" fork="deneb" hash="7dc12b61">
@@ -7667,7 +7667,7 @@
         )
     </spec>
 
-- name: upgrade_lc_header_to_electra
+- name: upgrade_lc_header_to_electra#electra
   sources: []
   spec: |
     <spec fn="upgrade_lc_header_to_electra" fork="electra" hash="90aa82aa">
@@ -7679,7 +7679,7 @@
         )
     </spec>
 
-- name: upgrade_lc_optimistic_update_to_capella
+- name: upgrade_lc_optimistic_update_to_capella#capella
   sources: []
   spec: |
     <spec fn="upgrade_lc_optimistic_update_to_capella" fork="capella" hash="c4c29295">
@@ -7693,7 +7693,7 @@
         )
     </spec>
 
-- name: upgrade_lc_optimistic_update_to_deneb
+- name: upgrade_lc_optimistic_update_to_deneb#deneb
   sources: []
   spec: |
     <spec fn="upgrade_lc_optimistic_update_to_deneb" fork="deneb" hash="66aa73ab">
@@ -7707,7 +7707,7 @@
         )
     </spec>
 
-- name: upgrade_lc_optimistic_update_to_electra
+- name: upgrade_lc_optimistic_update_to_electra#electra
   sources: []
   spec: |
     <spec fn="upgrade_lc_optimistic_update_to_electra" fork="electra" hash="a6059e7d">
@@ -7721,7 +7721,7 @@
         )
     </spec>
 
-- name: upgrade_lc_store_to_capella
+- name: upgrade_lc_store_to_capella#capella
   sources: []
   spec: |
     <spec fn="upgrade_lc_store_to_capella" fork="capella" hash="d02773ec">
@@ -7741,7 +7741,7 @@
         )
     </spec>
 
-- name: upgrade_lc_store_to_deneb
+- name: upgrade_lc_store_to_deneb#deneb
   sources: []
   spec: |
     <spec fn="upgrade_lc_store_to_deneb" fork="deneb" hash="29b26f52">
@@ -7761,7 +7761,7 @@
         )
     </spec>
 
-- name: upgrade_lc_store_to_electra
+- name: upgrade_lc_store_to_electra#electra
   sources: []
   spec: |
     <spec fn="upgrade_lc_store_to_electra" fork="electra" hash="e9096017">
@@ -7781,7 +7781,7 @@
         )
     </spec>
 
-- name: upgrade_lc_update_to_capella
+- name: upgrade_lc_update_to_capella#capella
   sources: []
   spec: |
     <spec fn="upgrade_lc_update_to_capella" fork="capella" hash="ba863d2f">
@@ -7797,7 +7797,7 @@
         )
     </spec>
 
-- name: upgrade_lc_update_to_deneb
+- name: upgrade_lc_update_to_deneb#deneb
   sources: []
   spec: |
     <spec fn="upgrade_lc_update_to_deneb" fork="deneb" hash="64adb1e0">
@@ -7813,7 +7813,7 @@
         )
     </spec>
 
-- name: upgrade_lc_update_to_electra
+- name: upgrade_lc_update_to_electra#electra
   sources: []
   spec: |
     <spec fn="upgrade_lc_update_to_electra" fork="electra" hash="4d42b63e">
@@ -7831,7 +7831,7 @@
         )
     </spec>
 
-- name: upgrade_to_altair
+- name: upgrade_to_altair#altair
   sources:
     - file: beacon-chain/core/altair/upgrade.go
       search: func UpgradeToAltair(
@@ -7881,7 +7881,7 @@
         return post
     </spec>
 
-- name: upgrade_to_bellatrix
+- name: upgrade_to_bellatrix#bellatrix
   sources:
     - file: beacon-chain/core/execution/upgrade.go
       search: func UpgradeToBellatrix(
@@ -7926,7 +7926,7 @@
         return post
     </spec>
 
-- name: upgrade_to_capella
+- name: upgrade_to_capella#capella
   sources:
     - file: beacon-chain/core/capella/upgrade.go
       search: func UpgradeToCapella(
@@ -7993,7 +7993,7 @@
         return post
     </spec>
 
-- name: upgrade_to_deneb
+- name: upgrade_to_deneb#deneb
   sources:
     - file: beacon-chain/core/deneb/upgrade.go
       search: func UpgradeToDeneb(
@@ -8062,7 +8062,7 @@
         return post
     </spec>
 
-- name: upgrade_to_electra
+- name: upgrade_to_electra#electra
   sources:
     - file: beacon-chain/core/electra/upgrade.go
       search: func UpgradeToElectra(
@@ -8172,7 +8172,7 @@
         return post
     </spec>
 
-- name: upgrade_to_fulu
+- name: upgrade_to_fulu#fulu
   sources:
     - file: beacon-chain/core/fulu/upgrade.go
       search: func UpgradeToFulu(
@@ -8230,7 +8230,7 @@
         return post
     </spec>
 
-- name: validate_light_client_update
+- name: validate_light_client_update#altair
   sources: []
   spec: |
     <spec fn="validate_light_client_update" fork="altair" hash="eb5d169b">
@@ -8317,7 +8317,7 @@
         )
     </spec>
 
-- name: validate_merge_block
+- name: validate_merge_block#bellatrix
   sources:
     - file: beacon-chain/blockchain/pow_block.go
       search: func (s *Service) validateMergeBlock(
@@ -8347,7 +8347,7 @@
         assert is_valid_terminal_pow_block(pow_block, pow_parent)
     </spec>
 
-- name: validate_on_attestation
+- name: validate_on_attestation#phase0
   sources: []
   spec: |
     <spec fn="validate_on_attestation" fork="phase0" hash="4571ccf8">
@@ -8379,7 +8379,7 @@
         assert get_current_slot(store) >= attestation.data.slot + 1
     </spec>
 
-- name: validate_target_epoch_against_current_time
+- name: validate_target_epoch_against_current_time#phase0
   sources: []
   spec: |
     <spec fn="validate_target_epoch_against_current_time" fork="phase0" hash="f7352056">
@@ -8394,7 +8394,7 @@
         assert target.epoch in [current_epoch, previous_epoch]
     </spec>
 
-- name: verify_blob_sidecar_inclusion_proof
+- name: verify_blob_sidecar_inclusion_proof#deneb
   sources:
     - file: consensus-types/blocks/kzg.go
       search: func VerifyKZGInclusionProof(
@@ -8413,7 +8413,7 @@
         )
     </spec>
 
-- name: verify_block_signature
+- name: verify_block_signature#phase0
   sources:
     - file: beacon-chain/core/blocks/signature.go
       search: func VerifyBlockSignature(
@@ -8427,7 +8427,7 @@
         return bls.Verify(proposer.pubkey, signing_root, signed_block.signature)
     </spec>
 
-- name: verify_data_column_sidecar
+- name: verify_data_column_sidecar#fulu
   sources:
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnSidecar(
@@ -8459,7 +8459,7 @@
         return True
     </spec>
 
-- name: verify_data_column_sidecar_inclusion_proof
+- name: verify_data_column_sidecar_inclusion_proof#fulu
   sources:
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnSidecarInclusionProof(
@@ -8478,7 +8478,7 @@
         )
     </spec>
 
-- name: verify_data_column_sidecar_kzg_proofs
+- name: verify_data_column_sidecar_kzg_proofs#fulu
   sources:
     - file: beacon-chain/core/peerdas/p2p_interface.go
       search: func VerifyDataColumnsSidecarKZGProofs(
@@ -8500,7 +8500,7 @@
         )
     </spec>
 
-- name: voting_period_start_time
+- name: voting_period_start_time#phase0
   sources:
     - file: time/slots/slottime.go
       search: func VotingPeriodStartTime(
@@ -8513,7 +8513,7 @@
         return compute_time_at_slot(state, eth1_voting_period_start_slot)
     </spec>
 
-- name: weigh_justification_and_finalization
+- name: weigh_justification_and_finalization#phase0
   sources:
     - file: beacon-chain/core/epoch/precompute/justification_finalization.go
       search: func weighJustificationAndFinalization(
@@ -8561,7 +8561,7 @@
             state.finalized_checkpoint = old_current_justified_checkpoint
     </spec>
 
-- name: xor
+- name: xor#phase0
   sources: []
   spec: |
     <spec fn="xor" fork="phase0" hash="3b45f2e1">

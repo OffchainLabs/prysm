@@ -1,4 +1,4 @@
-- name: BlobParameters
+- name: BlobParameters#fulu
   sources: []
   spec: |
     <spec dataclass="BlobParameters" fork="fulu" hash="a4575aa8">
@@ -126,7 +126,7 @@
         execution_requests: Sequence[bytes]
     </spec>
 
-- name: LatestMessage
+- name: LatestMessage#phase0
   sources: []
   spec: |
     <spec dataclass="LatestMessage" fork="phase0" hash="44e832d0">
@@ -136,7 +136,7 @@
         root: Root
     </spec>
 
-- name: LightClientStore
+- name: LightClientStore#altair
   sources: []
   spec: |
     <spec dataclass="LightClientStore" fork="altair" hash="24725cec">
@@ -191,7 +191,7 @@
         execution_requests: ExecutionRequests
     </spec>
 
-- name: OptimisticStore
+- name: OptimisticStore#bellatrix
   sources: []
   spec: |
     <spec dataclass="OptimisticStore" fork="bellatrix" hash="a2b2182c">
@@ -246,7 +246,7 @@
         parent_beacon_block_root: Root
     </spec>
 
-- name: Store
+- name: Store#phase0
   sources: []
   spec: |
     <spec dataclass="Store" fork="phase0" hash="abe525d6">
