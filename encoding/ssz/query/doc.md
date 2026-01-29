@@ -145,8 +145,8 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
 #### Algorithm Overview
 
 1. **Registration Phase** (`addTarget`)
-   - Marks target gindex and all required sibling nodes
-   - Walks from target leaf to root (gindex=1)
+   - Marks the target gindex
+   - Marks every required sibling node by walking from the target leaf to the root (gindex=1).
 
 2. **Merkleization Phase** (`merkleize`)
    - Traverses data structure **recursively**
