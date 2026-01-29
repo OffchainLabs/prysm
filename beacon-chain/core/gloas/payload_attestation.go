@@ -25,24 +25,20 @@ import (
 
 // ProcessPayloadAttestations validates payload attestations in a block body.
 //
-// <spec fn="process_payload_attestation" fork="gloas" hash="f46bf0b0">
-// def process_payload_attestation(
+//	<spec fn="process_payload_attestation" fork="gloas" hash="f46bf0b0">
+//	def process_payload_attestation(
+//	    state: BeaconState, payload_attestation: PayloadAttestation
+//	) -> None:
+//	    data = payload_attestation.data
 //
-//	state: BeaconState, payload_attestation: PayloadAttestation
-//
-// ) -> None:
-//
-//	data = payload_attestation.data
-//
-//	# Check that the attestation is for the parent beacon block
-//	assert data.beacon_block_root == state.latest_block_header.parent_root
-//	# Check that the attestation is for the previous slot
-//	assert data.slot + 1 == state.slot
-//	# Verify signature
-//	indexed_payload_attestation = get_indexed_payload_attestation(state, payload_attestation)
-//	assert is_valid_indexed_payload_attestation(state, indexed_payload_attestation)
-//
-// </spec>
+//	    # Check that the attestation is for the parent beacon block
+//	    assert data.beacon_block_root == state.latest_block_header.parent_root
+//	    # Check that the attestation is for the previous slot
+//	    assert data.slot + 1 == state.slot
+//	    # Verify signature
+//	    indexed_payload_attestation = get_indexed_payload_attestation(state, payload_attestation)
+//	    assert is_valid_indexed_payload_attestation(state, indexed_payload_attestation)
+//	</spec>
 func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body interfaces.ReadOnlyBeaconBlockBody) error {
 	atts, err := body.PayloadAttestations()
 	if err != nil {
