@@ -4,6 +4,7 @@ style: full
 specrefs:
   search_root: .
   auto_standardize_names: true
+  auto_add_missing_entries: true
 
   files:
     - specrefs/configs.yml
