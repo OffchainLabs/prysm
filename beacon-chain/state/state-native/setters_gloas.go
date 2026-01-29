@@ -202,17 +202,14 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 		paymentSlot    primitives.Slot
 		currentPayment *ethpb.BuilderPendingPayment
 		weight         primitives.Gwei
-		readErr        error
-		earlyReturn    bool
 	)
 
-	func() {
+	early, err := func() (bool, error) {
 		b.lock.RLock()
 		defer b.lock.RUnlock()
 
 		if b.version < version.Gloas {
-			earlyReturn = true
-			return
+			return true, nil
 		}
 
 		data := att.GetData()
@@ -220,12 +217,10 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 		copy(beaconBlockRoot[:], data.BeaconBlockRoot)
 		sameSlot, err := b.IsAttestationSameSlot(beaconBlockRoot, data.Slot)
 		if err != nil {
-			readErr = err
-			return
+			return false, err
 		}
 		if !sameSlot {
-			earlyReturn = true
-			return
+			return true, nil
 		}
 
 		slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
@@ -240,21 +235,18 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 		}
 
 		if uint64(paymentSlot) >= uint64(len(b.builderPendingPayments)) {
-			readErr = fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentSlot, len(b.builderPendingPayments))
-			return
+			return false, fmt.Errorf("builder pending payments index %d out of range (len=%d)", paymentSlot, len(b.builderPendingPayments))
 		}
 		currentPayment = b.builderPendingPayments[paymentSlot]
 		if currentPayment.Withdrawal.Amount == 0 {
-			earlyReturn = true
-			return
+			return true, nil
 		}
 
 		cfg := params.BeaconConfig()
 		flagIndices := []uint8{cfg.TimelySourceFlagIndex, cfg.TimelyTargetFlagIndex, cfg.TimelyHeadFlagIndex}
 		for _, idx := range indices {
 			if idx >= uint64(len(epochParticipation)) {
-				readErr = fmt.Errorf("index %d exceeds participation length %d", idx, len(epochParticipation))
-				return
+				return false, fmt.Errorf("index %d exceeds participation length %d", idx, len(epochParticipation))
 			}
 			participation := epochParticipation[idx]
 			for _, f := range flagIndices {
@@ -264,19 +256,19 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 				if participation&(1<<f) == 0 {
 					v, err := b.validatorAtIndexReadOnly(primitives.ValidatorIndex(idx))
 					if err != nil {
-						readErr = fmt.Errorf("validator at index %d: %w", idx, err)
-						return
+						return false, fmt.Errorf("validator at index %d: %w", idx, err)
 					}
 					weight += primitives.Gwei(v.EffectiveBalance())
 					break
 				}
 			}
 		}
+		return false, nil
 	}()
-	if readErr != nil {
-		return readErr
+	if err != nil {
+		return err
 	}
-	if earlyReturn || weight == 0 {
+	if early || weight == 0 {
 		return nil
 	}
 
