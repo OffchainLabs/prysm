@@ -70,23 +70,12 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 		return errors.New("nil deposit request")
 	}
 
-	if beaconState.Version() >= version.Gloas {
-		pubkey := bytesutil.ToBytes48(request.Pubkey)
-		_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
-		_, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
-		isBuilderPrefix := IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
-		if isBuilder || (isBuilderPrefix && !isValidator) {
-			if err := ApplyDepositForBuilder(
-				beaconState,
-				request.Pubkey,
-				request.WithdrawalCredentials,
-				request.Amount,
-				request.Signature,
-			); err != nil {
-				return errors.Wrap(err, "could not apply builder deposit")
-			}
-			return nil
-		}
+	applied, err := applyBuilderDepositRequest(beaconState, request)
+	if err != nil {
+		return errors.Wrap(err, "could not apply builder deposit")
+	}
+	if applied {
+		return nil
 	}
 
 	if err := beaconState.AppendPendingDeposit(&ethpb.PendingDeposit{
@@ -99,6 +88,31 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 		return errors.Wrap(err, "could not append deposit request")
 	}
 	return nil
+}
+
+func applyBuilderDepositRequest(beaconState state.BeaconState, request *enginev1.DepositRequest) (bool, error) {
+	if beaconState.Version() < version.Gloas {
+		return false, nil
+	}
+
+	pubkey := bytesutil.ToBytes48(request.Pubkey)
+	_, isValidator := beaconState.ValidatorIndexByPubkey(pubkey)
+	_, isBuilder := beaconState.BuilderIndexByPubkey(pubkey)
+	isBuilderPrefix := IsBuilderWithdrawalCredential(request.WithdrawalCredentials)
+	if !isBuilder && (!isBuilderPrefix || isValidator) {
+		return false, nil
+	}
+
+	if err := applyDepositForBuilder(
+		beaconState,
+		request.Pubkey,
+		request.WithdrawalCredentials,
+		request.Amount,
+		request.Signature,
+	); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ApplyDepositForBuilder processes an execution-layer deposit for a builder.
@@ -122,7 +136,7 @@ func processDepositRequest(beaconState state.BeaconState, request *enginev1.Depo
 //	    # Increase balance by deposit amount
 //	    builder_index = builder_pubkeys.index(pubkey)
 //	    state.builders[builder_index].balance += amount
-func ApplyDepositForBuilder(
+func applyDepositForBuilder(
 	beaconState state.BeaconState,
 	pubkey []byte,
 	withdrawalCredentials []byte,

@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
@@ -226,6 +227,41 @@ func ProcessExecutionPayload(
 	return nil
 }
 
+func envelopePublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
+	if builderIdx == params.BeaconConfig().BuilderIndexSelfBuild {
+		return proposerPublicKey(st)
+	}
+	return builderPublicKey(st, builderIdx)
+}
+
+func proposerPublicKey(st state.BeaconState) (bls.PublicKey, error) {
+	header := st.LatestBlockHeader()
+	if header == nil {
+		return nil, fmt.Errorf("latest block header is nil")
+	}
+	proposerPubkey := st.PubkeyAtIndex(header.ProposerIndex)
+	publicKey, err := bls.PublicKeyFromBytes(proposerPubkey[:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid proposer public key: %w", err)
+	}
+	return publicKey, nil
+}
+
+func builderPublicKey(st state.BeaconState, builderIdx primitives.BuilderIndex) (bls.PublicKey, error) {
+	builder, err := st.Builder(builderIdx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get builder: %w", err)
+	}
+	if builder == nil {
+		return nil, fmt.Errorf("builder at index %d not found", builderIdx)
+	}
+	publicKey, err := bls.PublicKeyFromBytes(builder.Pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid builder public key: %w", err)
+	}
+	return publicKey, nil
+}
+
 // processExecutionRequests processes deposits, withdrawals, and consolidations from execution requests.
 // Spec v1.7.0-alpha.0 (pseudocode):
 // for op in requests.deposits: process_deposit_request(state, op)
@@ -273,31 +309,9 @@ func verifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelop
 	}
 
 	builderIdx := envelope.BuilderIndex()
-	var publicKey bls.PublicKey
-	if builderIdx == params.BeaconConfig().BuilderIndexSelfBuild {
-		header := st.LatestBlockHeader()
-		if header == nil {
-			return fmt.Errorf("latest block header is nil")
-		}
-		proposerPubkey := st.PubkeyAtIndex(header.ProposerIndex)
-		key, err := bls.PublicKeyFromBytes(proposerPubkey[:])
-		if err != nil {
-			return fmt.Errorf("invalid proposer public key: %w", err)
-		}
-		publicKey = key
-	} else {
-		builder, err := st.Builder(builderIdx)
-		if err != nil {
-			return fmt.Errorf("failed to get builder: %w", err)
-		}
-		if builder == nil {
-			return fmt.Errorf("builder at index %d not found", builderIdx)
-		}
-		key, err := bls.PublicKeyFromBytes(builder.Pubkey)
-		if err != nil {
-			return fmt.Errorf("invalid builder public key: %w", err)
-		}
-		publicKey = key
+	publicKey, err := envelopePublicKey(st, builderIdx)
+	if err != nil {
+		return err
 	}
 
 	signatureBytes := signedEnvelope.Signature()
