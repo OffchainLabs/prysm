@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "debounce.go",
         "every.go",
+        "log.go",
         "multilock.go",
         "scatter.go",
     ],

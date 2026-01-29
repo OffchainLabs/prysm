@@ -64,7 +64,6 @@ go_library(
         "//monitoring/tracing:go_default_library",
         "//runtime:go_default_library",
         "//runtime/prereqs:go_default_library",
-        "//runtime/version:go_default_library",
         "@com_github_ethereum_go_ethereum//common:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@com_github_prometheus_client_golang//prometheus:go_default_library",

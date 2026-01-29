@@ -60,6 +60,7 @@ func (e BlockIdParseError) Error() string {
 // Blocker is responsible for retrieving blocks.
 type Blocker interface {
 	Block(ctx context.Context, id []byte) (interfaces.ReadOnlySignedBeaconBlock, error)
+	BlockRoot(ctx context.Context, id []byte) ([fieldparams.RootLength]byte, error)
 	BlobSidecars(ctx context.Context, id string, opts ...options.BlobsOption) ([]*blocks.VerifiedROBlob, *core.RpcError)
 	Blobs(ctx context.Context, id string, opts ...options.BlobsOption) ([][]byte, *core.RpcError)
 	DataColumns(ctx context.Context, id string, indices []int) ([]blocks.VerifiedRODataColumn, *core.RpcError)
@@ -223,6 +224,18 @@ func (p *BeaconDbBlocker) Block(ctx context.Context, id []byte) (interfaces.Read
 		return nil, err
 	}
 	return blk, nil
+}
+
+// BlockRoot returns the block root for a given identifier. The identifier can be one of:
+//   - "head" (canonical head in node's view)
+//   - "genesis"
+//   - "finalized"
+//   - "justified"
+//   - <slot>
+//   - <hex encoded block root with '0x' prefix>
+func (p *BeaconDbBlocker) BlockRoot(ctx context.Context, id []byte) ([fieldparams.RootLength]byte, error) {
+	root, _, err := p.resolveBlockID(ctx, string(id))
+	return root, err
 }
 
 // blobsContext holds common information needed for blob retrieval

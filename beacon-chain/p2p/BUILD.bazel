@@ -19,6 +19,7 @@ go_library(
         "info.go",
         "interfaces.go",
         "log.go",
+        "log_helpers.go",
         "message_id.go",
         "monitoring.go",
         "options.go",

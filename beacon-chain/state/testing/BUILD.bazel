@@ -16,7 +16,7 @@ go_library(
         "//beacon-chain/state:__subpackages__",
     ],
     deps = [
-        "//beacon-chain/core/blocks:go_default_library",
+        "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/fieldparams:go_default_library",

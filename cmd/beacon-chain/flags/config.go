@@ -18,6 +18,7 @@ type GlobalFlags struct {
 	SubscribeToAllSubnets           bool
 	Supernode                       bool
 	SemiSupernode                   bool
+	DisableGetBlobsV2               bool
 	MinimumSyncPeers                int
 	MinimumPeersPerSubnet           int
 	MaxConcurrentDials              int
@@ -72,6 +73,11 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 	if semiSupernodeSet {
 		log.Info("Operating in semi-supernode mode (custody just enough data to serve the blobs and blob sidecars beacon API)")
 		cfg.SemiSupernode = true
+	}
+
+	if ctx.Bool(DisableGetBlobsV2.Name) {
+		log.Warning("Disabling `engine_getBlobsV2` API")
+		cfg.DisableGetBlobsV2 = true
 	}
 
 	// State-diff-exponents

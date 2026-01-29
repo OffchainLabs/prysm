@@ -42,6 +42,10 @@ func (s *Store) SaveGenesisData(ctx context.Context, genesisState state.BeaconSt
 	if err := s.SaveGenesisBlockRoot(ctx, genesisBlkRoot); err != nil {
 		return errors.Wrap(err, "could not save genesis block root")
 	}
+
+	if err := s.initializeStateDiff(0, genesisState); err != nil {
+		return errors.Wrap(err, "failed to initialize state diff for genesis")
+	}
 	return nil
 }
 

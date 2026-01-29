@@ -775,7 +775,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 30,
 				},
 			},
-			log:    "Validator deposited, entering activation queue after finalization\" prefix=client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
+			log:    "Validator deposited, entering activation queue after finalization\" package=validator/client pubkey=0x000000000000 status=DEPOSITED validatorIndex=30",
 			active: false,
 		},
 		{
@@ -789,7 +789,7 @@ func TestCheckAndLogValidatorStatus_OK(t *testing.T) {
 					PositionInActivationQueue: 6,
 				},
 			},
-			log:    "Waiting for activation... Check validator queue status in a block explorer\" prefix=client pubkey=0x000000000000 status=PENDING validatorIndex=50",
+			log:    "Waiting for activation... Check validator queue status in a block explorer\" package=validator/client pubkey=0x000000000000 status=PENDING validatorIndex=50",
 			active: false,
 		},
 		{
@@ -2976,4 +2976,208 @@ func TestValidator_CheckDependentRoots(t *testing.T) {
 		require.DeepEqual(t, curr, v.duties.CurrDependentRoot)
 		require.NoError(t, v.checkDependentRoots(ctx, head))
 	})
+}
+
+func TestGetAttestationData_PreElectraNoCaching(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	client := validatormock.NewMockValidatorClient(ctrl)
+	v := &validator{validatorClient: client}
+
+	// Pre-Electra slot (Electra fork epoch is far in the future by default)
+	preElectraSlot := primitives.Slot(10)
+
+	expectedData := &ethpb.AttestationData{
+		Slot:            preElectraSlot,
+		CommitteeIndex:  5,
+		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
+		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
+		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
+	}
+
+	// Each call should go to the beacon node (no caching pre-Electra)
+	client.EXPECT().AttestationData(gomock.Any(), &ethpb.AttestationDataRequest{
+		Slot:           preElectraSlot,
+		CommitteeIndex: 5,
+	}).Return(expectedData, nil)
+	client.EXPECT().AttestationData(gomock.Any(), &ethpb.AttestationDataRequest{
+		Slot:           preElectraSlot,
+		CommitteeIndex: 7,
+	}).Return(expectedData, nil)
+
+	// First call with committee index 5
+	data1, err := v.getAttestationData(context.Background(), preElectraSlot, 5)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedData, data1)
+
+	// Second call with different committee index 7 - should still call beacon node
+	data2, err := v.getAttestationData(context.Background(), preElectraSlot, 7)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedData, data2)
+}
+
+func TestGetAttestationData_PostElectraCaching(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Set up Electra fork epoch for this test
+	cfg := params.BeaconConfig().Copy()
+	originalElectraForkEpoch := cfg.ElectraForkEpoch
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+	defer func() {
+		cfg.ElectraForkEpoch = originalElectraForkEpoch
+		params.OverrideBeaconConfig(cfg)
+	}()
+
+	client := validatormock.NewMockValidatorClient(ctrl)
+	v := &validator{validatorClient: client}
+
+	// Post-Electra slot
+	postElectraSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch + 5)
+
+	expectedData := &ethpb.AttestationData{
+		Slot:            postElectraSlot,
+		CommitteeIndex:  0,
+		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
+		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
+		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
+	}
+
+	// Only ONE call should go to the beacon node (caching post-Electra)
+	client.EXPECT().AttestationData(gomock.Any(), &ethpb.AttestationDataRequest{
+		Slot:           postElectraSlot,
+		CommitteeIndex: 0,
+	}).Return(expectedData, nil).Times(1)
+
+	// First call - should hit beacon node
+	data1, err := v.getAttestationData(context.Background(), postElectraSlot, 5)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedData, data1)
+
+	// Second call with different committee index - should use cache
+	data2, err := v.getAttestationData(context.Background(), postElectraSlot, 7)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedData, data2)
+
+	// Third call - should still use cache
+	data3, err := v.getAttestationData(context.Background(), postElectraSlot, 10)
+	require.NoError(t, err)
+	require.DeepEqual(t, expectedData, data3)
+}
+
+func TestGetAttestationData_PostElectraCacheInvalidatesOnNewSlot(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Set up Electra fork epoch for this test
+	cfg := params.BeaconConfig().Copy()
+	originalElectraForkEpoch := cfg.ElectraForkEpoch
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+	defer func() {
+		cfg.ElectraForkEpoch = originalElectraForkEpoch
+		params.OverrideBeaconConfig(cfg)
+	}()
+
+	client := validatormock.NewMockValidatorClient(ctrl)
+	v := &validator{validatorClient: client}
+
+	slot1 := primitives.Slot(params.BeaconConfig().SlotsPerEpoch + 5)
+	slot2 := primitives.Slot(params.BeaconConfig().SlotsPerEpoch + 6)
+
+	dataSlot1 := &ethpb.AttestationData{
+		Slot:            slot1,
+		CommitteeIndex:  0,
+		BeaconBlockRoot: bytesutil.PadTo([]byte("root1"), 32),
+		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
+		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
+	}
+	dataSlot2 := &ethpb.AttestationData{
+		Slot:            slot2,
+		CommitteeIndex:  0,
+		BeaconBlockRoot: bytesutil.PadTo([]byte("root2"), 32),
+		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
+		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
+	}
+
+	// Expect one call per slot
+	client.EXPECT().AttestationData(gomock.Any(), &ethpb.AttestationDataRequest{
+		Slot:           slot1,
+		CommitteeIndex: 0,
+	}).Return(dataSlot1, nil).Times(1)
+	client.EXPECT().AttestationData(gomock.Any(), &ethpb.AttestationDataRequest{
+		Slot:           slot2,
+		CommitteeIndex: 0,
+	}).Return(dataSlot2, nil).Times(1)
+
+	// First slot - should hit beacon node
+	data1, err := v.getAttestationData(context.Background(), slot1, 5)
+	require.NoError(t, err)
+	require.DeepEqual(t, dataSlot1, data1)
+
+	// Same slot - should use cache
+	data1Again, err := v.getAttestationData(context.Background(), slot1, 7)
+	require.NoError(t, err)
+	require.DeepEqual(t, dataSlot1, data1Again)
+
+	// New slot - should invalidate cache and hit beacon node
+	data2, err := v.getAttestationData(context.Background(), slot2, 5)
+	require.NoError(t, err)
+	require.DeepEqual(t, dataSlot2, data2)
+}
+
+func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Set up Electra fork epoch for this test
+	cfg := params.BeaconConfig().Copy()
+	originalElectraForkEpoch := cfg.ElectraForkEpoch
+	cfg.ElectraForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+	defer func() {
+		cfg.ElectraForkEpoch = originalElectraForkEpoch
+		params.OverrideBeaconConfig(cfg)
+	}()
+
+	client := validatormock.NewMockValidatorClient(ctrl)
+	v := &validator{validatorClient: client}
+
+	postElectraSlot := primitives.Slot(params.BeaconConfig().SlotsPerEpoch + 5)
+
+	expectedData := &ethpb.AttestationData{
+		Slot:            postElectraSlot,
+		CommitteeIndex:  0,
+		BeaconBlockRoot: bytesutil.PadTo([]byte("root"), 32),
+		Source:          &ethpb.Checkpoint{Epoch: 1, Root: bytesutil.PadTo([]byte("source"), 32)},
+		Target:          &ethpb.Checkpoint{Epoch: 2, Root: bytesutil.PadTo([]byte("target"), 32)},
+	}
+
+	// Should only call beacon node once despite concurrent requests
+	client.EXPECT().AttestationData(gomock.Any(), &ethpb.AttestationDataRequest{
+		Slot:           postElectraSlot,
+		CommitteeIndex: 0,
+	}).Return(expectedData, nil).Times(1)
+
+	var wg sync.WaitGroup
+	numGoroutines := 10
+	results := make([]*ethpb.AttestationData, numGoroutines)
+	errs := make([]error, numGoroutines)
+
+	for i := range numGoroutines {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			results[idx], errs[idx] = v.getAttestationData(context.Background(), postElectraSlot, primitives.CommitteeIndex(idx))
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := range numGoroutines {
+		require.NoError(t, errs[i])
+		require.DeepEqual(t, expectedData, results[i])
+	}
 }

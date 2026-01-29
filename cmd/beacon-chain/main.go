@@ -4,9 +4,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
@@ -112,6 +114,7 @@ var appFlags = []cli.Flag{
 	cmd.PubsubQueueSize,
 	cmd.DataDirFlag,
 	cmd.VerbosityFlag,
+	cmd.LogVModuleFlag,
 	cmd.EnableTracingFlag,
 	cmd.TracingProcessNameFlag,
 	cmd.TracingEndpointFlag,
@@ -147,6 +150,7 @@ var appFlags = []cli.Flag{
 	flags.SlasherDirFlag,
 	flags.SlasherFlag,
 	flags.JwtId,
+	flags.DisableGetBlobsV2,
 	storage.BlobStoragePathFlag,
 	storage.DataColumnStoragePathFlag,
 	storage.BlobStorageLayout,
@@ -156,6 +160,8 @@ var appFlags = []cli.Flag{
 	dasFlags.BackfillOldestSlot,
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
+	flags.StateDiffExponents,
+	flags.DisableEphemeralLogFile,
 	flags.ZkvmGenerationProofTypeFlag,
 }
 
@@ -169,18 +175,43 @@ func before(ctx *cli.Context) error {
 		return errors.Wrap(err, "failed to load flags from config file")
 	}
 
-	format := ctx.String(cmd.LogFormat.Name)
+	// determine default log verbosity
+	verbosity := ctx.String(cmd.VerbosityFlag.Name)
+	verbosityLevel, err := logrus.ParseLevel(verbosity)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse log verbosity")
+	}
 
+	// determine per package verbosity. if not set, maxLevel will be 0.
+	vmoduleInput := strings.Join(ctx.StringSlice(cmd.LogVModuleFlag.Name), ",")
+	vmodule, maxLevel, err := cmd.ParseVModule(vmoduleInput)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse log vmodule")
+	}
+
+	// set the global logging level to allow for the highest verbosity requested
+	logs.SetLoggingLevel(max(verbosityLevel, maxLevel))
+
+	format := ctx.String(cmd.LogFormat.Name)
 	switch format {
 	case "text":
+		// disabling logrus default output so we can control it via different hooks
+		logrus.SetOutput(io.Discard)
+
+		// create a custom formatter and hook for terminal output
 		formatter := new(prefixed.TextFormatter)
 		formatter.TimestampFormat = "2006-01-02 15:04:05.00"
 		formatter.FullTimestamp = true
+		formatter.ForceFormatting = true
+		formatter.ForceColors = true
+		formatter.VModule = vmodule
+		formatter.BaseVerbosity = verbosityLevel
 
-		// If persistent log files are written - we disable the log messages coloring because
-		// the colors are ANSI codes and seen as gibberish in the log files.
-		formatter.DisableColors = ctx.String(cmd.LogFileName.Name) != ""
-		logrus.SetFormatter(formatter)
+		logrus.AddHook(&logs.WriterHook{
+			Formatter:     formatter,
+			Writer:        os.Stderr,
+			AllowedLevels: logrus.AllLevels[:max(verbosityLevel, maxLevel)+1],
+		})
 	case "fluentd":
 		f := joonix.NewFormatter()
 
@@ -203,10 +234,21 @@ func before(ctx *cli.Context) error {
 
 	logFileName := ctx.String(cmd.LogFileName.Name)
 	if logFileName != "" {
-		if err := logs.ConfigurePersistentLogging(logFileName); err != nil {
+		if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel, vmodule); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
 		}
 	}
+
+	if !ctx.Bool(flags.DisableEphemeralLogFile.Name) {
+		if err := logs.ConfigureEphemeralLogFile(ctx.String(cmd.DataDirFlag.Name), ctx.App.Name); err != nil {
+			log.WithError(err).Error("Failed to configure debug log file")
+		}
+	}
+
+	// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+	log.WithFields(logrus.Fields{
+		"version": version.Version(),
+	}).Info("Prysm Beacon Chain started")
 
 	if err := cmd.ExpandSingleEndpointIfFile(ctx, flags.ExecutionEngineEndpoint); err != nil {
 		return errors.Wrap(err, "failed to expand single endpoint")
@@ -249,9 +291,11 @@ func main() {
 		Commands: []*cli.Command{
 			dbcommands.Commands,
 			jwtcommands.Commands,
+			cmd.CompletionCommand("beacon-chain"),
 		},
-		Flags:  appFlags,
-		Before: before,
+		Flags:                appFlags,
+		Before:               before,
+		EnableBashCompletion: true,
 	}
 
 	defer func() {
@@ -284,7 +328,7 @@ func startNode(ctx *cli.Context, cancel context.CancelFunc) error {
 	if err != nil {
 		return err
 	}
-	logrus.SetLevel(level)
+
 	// Set libp2p logger to only panic logs for the info level.
 	golog.SetAllLoggers(golog.LevelPanic)
 

@@ -641,6 +641,8 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			},
 			Signature: sig[:],
 		}
+	case version.Gloas:
+		return nil, errors.Wrap(errUnsupportedBeaconBlock, "gloas blocks are not supported in this function")
 	default:
 		return nil, errors.New("Block not of known type")
 	}

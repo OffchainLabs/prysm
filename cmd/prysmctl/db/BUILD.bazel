@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "buckets.go",
         "cmd.go",
+        "log.go",
         "query.go",
         "span.go",
     ],

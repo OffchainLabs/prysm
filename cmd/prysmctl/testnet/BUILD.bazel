@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "generate_genesis.go",
+        "log.go",
         "testnet.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/cmd/prysmctl/testnet",

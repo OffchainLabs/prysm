@@ -22,7 +22,7 @@ func TestProcessSyncCommitteeContribution(t *testing.T) {
 	}
 
 	s.processSyncCommitteeContribution(contrib)
-	require.LogsContain(t, hook, "\"Sync committee aggregation processed\" prefix=monitor validatorIndex=1")
+	require.LogsContain(t, hook, "\"Sync committee aggregation processed\" package=beacon-chain/monitor validatorIndex=1")
 	require.LogsDoNotContain(t, hook, "validatorIndex=2")
 }
 
@@ -53,7 +53,7 @@ func TestProcessSyncAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	s.processSyncAggregate(beaconState, wrappedBlock)
-	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=0 contribCount=1 expectedContribCount=4 newBalance=32000000000 prefix=monitor validatorIndex=1")
-	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=100000000 contribCount=2 expectedContribCount=2 newBalance=32000000000 prefix=monitor validatorIndex=12")
+	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=0 contribCount=1 expectedContribCount=4 newBalance=32000000000 package=beacon-chain/monitor validatorIndex=1")
+	require.LogsContain(t, hook, "\"Sync committee contribution included\" balanceChange=100000000 contribCount=2 expectedContribCount=2 newBalance=32000000000 package=beacon-chain/monitor validatorIndex=12")
 	require.LogsDoNotContain(t, hook, "validatorIndex=2")
 }

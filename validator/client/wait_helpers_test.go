@@ -47,7 +47,7 @@ func TestSlotComponentSpanName(t *testing.T) {
 		},
 		{
 			name:      "aggregate",
-			component: cfg.AggregrateDueBPS,
+			component: cfg.AggregateDueBPS,
 			expected:  "validator.waitAggregateWindow",
 		},
 		{

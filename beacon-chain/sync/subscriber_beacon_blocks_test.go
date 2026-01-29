@@ -194,7 +194,8 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 					},
 					seenBlobCache: lruwrpr.New(1),
 				}
-				s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+				err := s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+				require.NoError(t, err)
 				require.Equal(t, tt.expectedBlobCount, len(chainService.Blobs))
 			})
 		}
@@ -293,7 +294,8 @@ func TestProcessSidecarsFromExecutionFromBlock(t *testing.T) {
 				roBlock, err := blocks.NewROBlock(sb)
 				require.NoError(t, err)
 
-				s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+				err = s.processSidecarsFromExecutionFromBlock(t.Context(), roBlock)
+				require.NoError(t, err)
 				require.Equal(t, tt.expectedDataColumnCount, len(chainService.DataColumns))
 			})
 		}

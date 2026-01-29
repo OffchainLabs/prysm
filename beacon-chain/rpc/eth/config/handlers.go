@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
@@ -180,6 +181,16 @@ func prepareConfigSpec() (map[string]any, error) {
 		val := v.Field(i)
 		data[tag] = convertValueForJSON(val, tag)
 	}
+
+	// Add Fulu preset values. These are compile-time constants from fieldparams,
+	// not runtime configs, but are required by the /eth/v1/config/spec API.
+	data["NUMBER_OF_COLUMNS"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.NumberOfColumns)), "NUMBER_OF_COLUMNS")
+	data["CELLS_PER_EXT_BLOB"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.NumberOfColumns)), "CELLS_PER_EXT_BLOB")
+	data["FIELD_ELEMENTS_PER_CELL"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.CellsPerBlob)), "FIELD_ELEMENTS_PER_CELL")
+	data["FIELD_ELEMENTS_PER_EXT_BLOB"] = convertValueForJSON(reflect.ValueOf(config.FieldElementsPerBlob*2), "FIELD_ELEMENTS_PER_EXT_BLOB")
+	data["KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH"] = convertValueForJSON(reflect.ValueOf(uint64(4)), "KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH")
+	// UPDATE_TIMEOUT is derived from SLOTS_PER_EPOCH * EPOCHS_PER_SYNC_COMMITTEE_PERIOD
+	data["UPDATE_TIMEOUT"] = convertValueForJSON(reflect.ValueOf(uint64(config.SlotsPerEpoch)*uint64(config.EpochsPerSyncCommitteePeriod)), "UPDATE_TIMEOUT")
 
 	return data, nil
 }

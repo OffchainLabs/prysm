@@ -50,7 +50,14 @@ func (s *Service) beaconBlockSubscriber(ctx context.Context, msg proto.Message) 
 		return errors.Wrap(err, "new ro block with root")
 	}
 
-	go s.processSidecarsFromExecutionFromBlock(ctx, roBlock)
+	go func() {
+		if err := s.processSidecarsFromExecutionFromBlock(ctx, roBlock); err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"root": fmt.Sprintf("%#x", root),
+				"slot": block.Slot(),
+			}).Error("Failed to process sidecars from execution from block")
+		}
+	}()
 
 	if err := s.cfg.chain.ReceiveBlock(ctx, signed, root, nil); err != nil {
 		if blockchain.IsInvalidBlock(err) {
@@ -127,20 +134,27 @@ func (s *Service) generateAndBroadcastExecutionProofs(ctx context.Context, roBlo
 
 // processSidecarsFromExecutionFromBlock retrieves (if available) sidecars data from the execution client,
 // builds corresponding sidecars, save them to the storage, and broadcasts them over P2P if necessary.
-func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) {
+func (s *Service) processSidecarsFromExecutionFromBlock(ctx context.Context, roBlock blocks.ROBlock) error {
 	if roBlock.Version() >= version.Fulu {
 		if err := s.processDataColumnSidecarsFromExecution(ctx, peerdas.PopulateFromBlock(roBlock)); err != nil {
-			log.WithError(err).Error("Failed to process data column sidecars from execution")
-			return
+			// Do not log if the context was cancelled on purpose.
+			// (Still log other context errors such as deadlines exceeded).
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+
+			return errors.Wrap(err, "process data column sidecars from execution")
 		}
 
-		return
+		return nil
 	}
 
 	if roBlock.Version() >= version.Deneb {
 		s.processBlobSidecarsFromExecution(ctx, roBlock)
-		return
+		return nil
 	}
+
+	return nil
 }
 
 // processBlobSidecarsFromExecution retrieves (if available) blob sidecars data from the execution client,
@@ -218,7 +232,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 	key := fmt.Sprintf("%#x", source.Root())
 	if _, err, _ := s.columnSidecarsExecSingleFlight.Do(key, func() (any, error) {
 		const delay = 250 * time.Millisecond
-		secondsPerHalfSlot := time.Duration(params.BeaconConfig().SecondsPerSlot/2) * time.Second
 
 		commitments, err := source.Commitments()
 		if err != nil {
@@ -235,9 +248,6 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 		if err != nil {
 			return nil, errors.Wrap(err, "column indices to sample")
 		}
-
-		ctx, cancel := context.WithTimeout(ctx, secondsPerHalfSlot)
-		defer cancel()
 
 		log := log.WithFields(logrus.Fields{
 			"root":          fmt.Sprintf("%#x", source.Root()),
@@ -259,6 +269,11 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, nil
 			}
 
+			// Return if the context is done.
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
 			if iteration == 0 {
 				dataColumnsRecoveredFromELAttempts.Inc()
 			}
@@ -270,20 +285,10 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 			}
 
 			// No sidecars are retrieved from the EL, retry later
-			constructedSidecarCount = uint64(len(constructedSidecars))
-			if constructedSidecarCount == 0 {
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
-
-				time.Sleep(delay)
-				continue
-			}
-
-			dataColumnsRecoveredFromELTotal.Inc()
+			constructedCount := uint64(len(constructedSidecars))
 
 			// Boundary check.
-			if constructedSidecarCount != fieldparams.NumberOfColumns {
+			if constructedSidecarCount > 0 && constructedSidecarCount != fieldparams.NumberOfColumns {
 				return nil, errors.Errorf("reconstruct data column sidecars returned %d sidecars, expected %d - should never happen", constructedSidecarCount, fieldparams.NumberOfColumns)
 			}
 
@@ -292,14 +297,24 @@ func (s *Service) processDataColumnSidecarsFromExecution(ctx context.Context, so
 				return nil, errors.Wrap(err, "broadcast and receive unseen data column sidecars")
 			}
 
-			log.WithFields(logrus.Fields{
-				"count":   len(unseenIndices),
-				"indices": helpers.SortedPrettySliceFromMap(unseenIndices),
-			}).Debug("Constructed data column sidecars from the execution client")
+			if constructedCount > 0 {
+				dataColumnsRecoveredFromELTotal.Inc()
 
-			dataColumnSidecarsObtainedViaELCount.Observe(float64(len(unseenIndices)))
+				log.WithFields(logrus.Fields{
+					"root":          fmt.Sprintf("%#x", source.Root()),
+					"slot":          source.Slot(),
+					"proposerIndex": source.ProposerIndex(),
+					"iteration":     iteration,
+					"type":          source.Type(),
+					"count":         len(unseenIndices),
+					"indices":       helpers.SortedPrettySliceFromMap(unseenIndices),
+				}).Debug("Constructed data column sidecars from the execution client")
 
-			return nil, nil
+				return nil, nil
+			}
+
+			// Wait before retrying.
+			time.Sleep(delay)
 		}
 	}); err != nil {
 		return err
@@ -332,6 +347,11 @@ func (s *Service) broadcastAndReceiveUnseenDataColumnSidecars(
 
 		unseenSidecars = append(unseenSidecars, sidecar)
 		unseenIndices[sidecar.Index] = true
+	}
+
+	// Exit early if there are no nothing to broadcast or receive.
+	if len(unseenSidecars) == 0 {
+		return nil, nil
 	}
 
 	// Broadcast all the data column sidecars we reconstructed but did not see via gossip (non blocking).

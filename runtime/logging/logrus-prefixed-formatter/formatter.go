@@ -19,6 +19,8 @@ import (
 
 const defaultTimestampFormat = time.RFC3339
 
+var regex = regexp.MustCompile(`^\\[(.*?)\\]`)
+
 var (
 	baseTimestamp      time.Time    = time.Now()
 	defaultColorScheme *ColorScheme = &ColorScheme{
@@ -118,6 +120,13 @@ type TextFormatter struct {
 
 	// Timestamp format to use for display when a full timestamp is printed.
 	TimestampFormat string
+
+	// VModule overrides the allowed log level for exact package paths.
+	// When using VModule, you should also set BaseVerbosity to the default verbosity level provided by the user.
+	VModule map[string]logrus.Level
+
+	// BaseVerbosity is the default verbosity level for all packages.
+	BaseVerbosity logrus.Level
 }
 
 func getCompiledColor(main string, fallback string) func(string) string {
@@ -166,6 +175,11 @@ func (f *TextFormatter) SetColorScheme(colorScheme *ColorScheme) {
 }
 
 func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	// check for vmodule compatibility
+	if !f.shouldLog(entry) {
+		return []byte{}, nil
+	}
+
 	var b *bytes.Buffer
 	keys := make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
@@ -234,6 +248,39 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+func (f *TextFormatter) shouldLog(entry *logrus.Entry) bool {
+	if len(f.VModule) == 0 {
+		return true
+	}
+	packagePath, ok := entry.Data["package"]
+	if !ok {
+		return entry.Level <= f.BaseVerbosity
+	}
+	packageName, ok := packagePath.(string)
+	if !ok {
+		return entry.Level <= f.BaseVerbosity
+	}
+
+	packageLevel := f.bestMatchLevel(packageName)
+
+	return entry.Level <= packageLevel
+}
+
+// bestMatchLevel returns the level of the most specific path that matches package name.
+func (f *TextFormatter) bestMatchLevel(pkg string) logrus.Level {
+	bestLen := 0
+	bestLevel := f.BaseVerbosity
+	for k, v := range f.VModule {
+		if k == pkg || strings.HasPrefix(pkg, k+"/") {
+			if len(k) > bestLen {
+				bestLen = len(k)
+				bestLevel = v
+			}
+		}
+	}
+	return bestLevel
+}
+
 func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys []string, timestampFormat string, colorScheme *compiledColorScheme) (err error) {
 	var levelColor func(string) string
 	var levelText string
@@ -263,17 +310,11 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys 
 	}
 
 	level := levelColor(fmt.Sprintf("%5s", levelText))
-	prefix := ""
-	message := entry.Message
 
-	if prefixValue, ok := entry.Data["prefix"]; ok {
-		prefix = colorScheme.PrefixColor(" " + prefixValue.(string) + ":")
-	} else {
-		prefixValue, trimmedMsg := extractPrefix(entry.Message)
-		if len(prefixValue) > 0 {
-			prefix = colorScheme.PrefixColor(" " + prefixValue + ":")
-			message = trimmedMsg
-		}
+	prefix := ""
+	prefixValue, message := getPrefixAndMessage(entry)
+	if len(prefixValue) > 0 {
+		prefix = colorScheme.PrefixColor(" " + prefixValue + ":")
 	}
 
 	messageFormat := "%s"
@@ -293,7 +334,7 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys 
 		_, err = fmt.Fprintf(b, "%s %s%s "+messageFormat, colorScheme.TimestampColor(timestamp), level, prefix, message)
 	}
 	for _, k := range keys {
-		if k != "prefix" {
+		if k != "package" {
 			v := entry.Data[k]
 
 			format := "%+v"
@@ -333,9 +374,39 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 	return false
 }
 
+// getPrefixAndMessage extracts the prefix and the message from the entry by the following order:
+//  1. If the "prefix" field is set in entry.Data, use that as prefix.
+//  2. If the "package" field is set in entry.Data, use that to determine the prefix.
+//     If a replacement is found in prefixReplacements, use that. Otherwise, use the package name.
+//  3. Try to extract the prefix from the message itself by looking for a pattern like "[prefix] message".
+//  4. If none of the above methods yield a prefix, return an empty prefix and the original message.
+func getPrefixAndMessage(entry *logrus.Entry) (string, string) {
+	prefix := ""
+	msg := entry.Message
+
+	if prefixOldMethod, ok := entry.Data["prefix"]; ok {
+		return prefixOldMethod.(string), msg
+	}
+
+	if packagePath, ok := entry.Data["package"]; ok {
+		if prefixReplacement, ok := prefixReplacements[packagePath.(string)]; ok {
+			return prefixReplacement, msg
+		}
+		pathSplit := strings.Split(packagePath.(string), "/")
+		prefix = pathSplit[len(pathSplit)-1]
+		return prefix, msg
+	}
+
+	if prefixExtracted, trimmedMsg := extractPrefix(msg); len(prefixExtracted) > 0 {
+		return prefixExtracted, trimmedMsg
+	}
+
+	return "", msg
+}
+
 func extractPrefix(msg string) (string, string) {
 	prefix := ""
-	regex := regexp.MustCompile(`^\\[(.*?)\\]`)
+
 	if regex.MatchString(msg) {
 		match := regex.FindString(msg)
 		prefix, msg = match[1:len(match)-1], strings.TrimSpace(msg[len(match):])

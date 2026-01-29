@@ -68,7 +68,6 @@ func TestNodeClose_OK(t *testing.T) {
 }
 
 func TestNodeStart_Ok(t *testing.T) {
-	hook := logTest.NewGlobal()
 	app := cli.App{}
 	tmp := fmt.Sprintf("%s/datadirtest2", t.TempDir())
 	set := flag.NewFlagSet("test", 0)
@@ -97,11 +96,9 @@ func TestNodeStart_Ok(t *testing.T) {
 	}()
 	time.Sleep(3 * time.Second)
 	node.Close()
-	require.LogsContain(t, hook, "Starting beacon node")
 }
 
 func TestNodeStart_SyncChecker(t *testing.T) {
-	hook := logTest.NewGlobal()
 	app := cli.App{}
 	tmp := fmt.Sprintf("%s/datadirtest2", t.TempDir())
 	set := flag.NewFlagSet("test", 0)
@@ -127,7 +124,6 @@ func TestNodeStart_SyncChecker(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	assert.NotNil(t, node.syncChecker.Svc)
 	node.Close()
-	require.LogsContain(t, hook, "Starting beacon node")
 }
 
 // TestClearDB tests clearing the database

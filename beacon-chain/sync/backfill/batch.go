@@ -148,7 +148,7 @@ func (b batch) ensureParent(expected [32]byte) error {
 func (b batch) blockRequest() *eth.BeaconBlocksByRangeRequest {
 	return &eth.BeaconBlocksByRangeRequest{
 		StartSlot: b.begin,
-		Count:     uint64(b.end - b.begin),
+		Count:     uint64(b.end.FlooredSubSlot(b.begin)),
 		Step:      1,
 	}
 }
@@ -156,7 +156,7 @@ func (b batch) blockRequest() *eth.BeaconBlocksByRangeRequest {
 func (b batch) blobRequest() *eth.BlobSidecarsByRangeRequest {
 	return &eth.BlobSidecarsByRangeRequest{
 		StartSlot: b.begin,
-		Count:     uint64(b.end - b.begin),
+		Count:     uint64(b.end.FlooredSubSlot(b.begin)),
 	}
 }
 
