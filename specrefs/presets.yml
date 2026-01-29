@@ -8,6 +8,20 @@
     BASE_REWARD_FACTOR: uint64 = 64
     </spec>
 
+- name: BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
+  sources: []
+  spec: |
+    <spec preset_var="BUILDER_PENDING_WITHDRAWALS_LIMIT" fork="gloas" hash="40b31377">
+    BUILDER_PENDING_WITHDRAWALS_LIMIT: uint64 = 1048576
+    </spec>
+
+- name: BUILDER_REGISTRY_LIMIT#gloas
+  sources: []
+  spec: |
+    <spec preset_var="BUILDER_REGISTRY_LIMIT" fork="gloas" hash="e951ff73">
+    BUILDER_REGISTRY_LIMIT: uint64 = 1099511627776
+    </spec>
+
 - name: BYTES_PER_LOGS_BLOOM#bellatrix
   sources:
     - file: config/params/config.go
@@ -258,6 +272,13 @@
     MAX_BLS_TO_EXECUTION_CHANGES = 16
     </spec>
 
+- name: MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="1556b314">
+    MAX_BUILDERS_PER_WITHDRAWALS_SWEEP = 16384
+    </spec>
+
 - name: MAX_BYTES_PER_TRANSACTION#bellatrix
   sources:
     - file: config/params/config.go
@@ -346,6 +367,13 @@
   spec: |
     <spec preset_var="MAX_EXTRA_DATA_BYTES" fork="bellatrix" hash="9d278744">
     MAX_EXTRA_DATA_BYTES = 32
+    </spec>
+
+- name: MAX_PAYLOAD_ATTESTATIONS#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_PAYLOAD_ATTESTATIONS" fork="gloas" hash="fc24e7ea">
+    MAX_PAYLOAD_ATTESTATIONS = 4
     </spec>
 
 - name: MAX_PENDING_DEPOSITS_PER_EPOCH#electra
@@ -636,6 +664,13 @@
   spec: |
     <spec preset_var="PROPOSER_REWARD_QUOTIENT" fork="phase0" hash="a60dab3e">
     PROPOSER_REWARD_QUOTIENT: uint64 = 8
+    </spec>
+
+- name: PTC_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="PTC_SIZE" fork="gloas" hash="d61c5930">
+    PTC_SIZE: uint64 = 512
     </spec>
 
 - name: SHUFFLE_ROUND_COUNT#phase0

@@ -8,6 +8,13 @@
     AGGREGATE_DUE_BPS: uint64 = 6667
     </spec>
 
+- name: AGGREGATE_DUE_BPS_GLOAS#gloas
+  sources: []
+  spec: |
+    <spec config_var="AGGREGATE_DUE_BPS_GLOAS" fork="gloas" hash="34aa3164">
+    AGGREGATE_DUE_BPS_GLOAS: uint64 = 5000
+    </spec>
+
 - name: ALTAIR_FORK_EPOCH#altair
   sources:
     - file: config/params/config.go
@@ -36,6 +43,13 @@
   spec: |
     <spec config_var="ATTESTATION_DUE_BPS" fork="phase0" hash="929dd1c9">
     ATTESTATION_DUE_BPS: uint64 = 3333
+    </spec>
+
+- name: ATTESTATION_DUE_BPS_GLOAS#gloas
+  sources: []
+  spec: |
+    <spec config_var="ATTESTATION_DUE_BPS_GLOAS" fork="gloas" hash="3863c1ef">
+    ATTESTATION_DUE_BPS_GLOAS: uint64 = 2500
     </spec>
 
 - name: ATTESTATION_PROPAGATION_SLOT_RANGE#phase0
@@ -187,6 +201,13 @@
     CONTRIBUTION_DUE_BPS: uint64 = 6667
     </spec>
 
+- name: CONTRIBUTION_DUE_BPS_GLOAS#gloas
+  sources: []
+  spec: |
+    <spec config_var="CONTRIBUTION_DUE_BPS_GLOAS" fork="gloas" hash="0ead2ac1">
+    CONTRIBUTION_DUE_BPS_GLOAS: uint64 = 5000
+    </spec>
+
 - name: CUSTODY_REQUIREMENT#fulu
   sources:
     - file: config/params/config.go
@@ -315,6 +336,20 @@
   spec: |
     <spec config_var="GENESIS_FORK_VERSION" fork="phase0" hash="32bbe06e">
     GENESIS_FORK_VERSION: Version = '0x00000000'
+    </spec>
+
+- name: GLOAS_FORK_EPOCH#gloas
+  sources: []
+  spec: |
+    <spec config_var="GLOAS_FORK_EPOCH" fork="gloas" hash="c25152cf">
+    GLOAS_FORK_EPOCH: Epoch = 18446744073709551615
+    </spec>
+
+- name: GLOAS_FORK_VERSION#gloas
+  sources: []
+  spec: |
+    <spec config_var="GLOAS_FORK_VERSION" fork="gloas" hash="c1c5c007">
+    GLOAS_FORK_VERSION: Version = '0x07000000'
     </spec>
 
 - name: INACTIVITY_SCORE_BIAS#altair
@@ -447,6 +482,13 @@
     MAX_REQUEST_DATA_COLUMN_SIDECARS = 16384
     </spec>
 
+- name: MAX_REQUEST_PAYLOADS#gloas
+  sources: []
+  spec: |
+    <spec config_var="MAX_REQUEST_PAYLOADS" fork="gloas" hash="23399ee5">
+    MAX_REQUEST_PAYLOADS = 128
+    </spec>
+
 - name: MESSAGE_DOMAIN_INVALID_SNAPPY#phase0
   sources:
     - file: config/params/config.go
@@ -465,6 +507,13 @@
   spec: |
     <spec config_var="MESSAGE_DOMAIN_VALID_SNAPPY" fork="phase0" hash="a6de155f">
     MESSAGE_DOMAIN_VALID_SNAPPY: DomainType = '0x01000000'
+    </spec>
+
+- name: MIN_BUILDER_WITHDRAWABILITY_DELAY#gloas
+  sources: []
+  spec: |
+    <spec config_var="MIN_BUILDER_WITHDRAWABILITY_DELAY" fork="gloas" hash="d378428f">
+    MIN_BUILDER_WITHDRAWABILITY_DELAY: uint64 = 4096
     </spec>
 
 - name: MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS#deneb
@@ -555,6 +604,13 @@
   spec: |
     <spec config_var="NUMBER_OF_CUSTODY_GROUPS" fork="fulu" hash="05e3016e">
     NUMBER_OF_CUSTODY_GROUPS = 128
+    </spec>
+
+- name: PAYLOAD_ATTESTATION_DUE_BPS#gloas
+  sources: []
+  spec: |
+    <spec config_var="PAYLOAD_ATTESTATION_DUE_BPS" fork="gloas" hash="17307d0e">
+    PAYLOAD_ATTESTATION_DUE_BPS: uint64 = 7500
     </spec>
 
 - name: PROPOSER_REORG_CUTOFF_BPS#phase0
@@ -675,6 +731,13 @@
   spec: |
     <spec config_var="SYNC_MESSAGE_DUE_BPS" fork="altair" hash="791b29d8">
     SYNC_MESSAGE_DUE_BPS: uint64 = 3333
+    </spec>
+
+- name: SYNC_MESSAGE_DUE_BPS_GLOAS#gloas
+  sources: []
+  spec: |
+    <spec config_var="SYNC_MESSAGE_DUE_BPS_GLOAS" fork="gloas" hash="47f14d95">
+    SYNC_MESSAGE_DUE_BPS_GLOAS: uint64 = 2500
     </spec>
 
 - name: TERMINAL_BLOCK_HASH#bellatrix

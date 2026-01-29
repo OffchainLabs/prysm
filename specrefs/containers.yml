@@ -239,6 +239,33 @@
         execution_requests: ExecutionRequests
     </spec>
 
+- name: BeaconBlockBody#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconBlockBody" fork="gloas" hash="7e472a77">
+    class BeaconBlockBody(Container):
+        randao_reveal: BLSSignature
+        eth1_data: Eth1Data
+        graffiti: Bytes32
+        proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
+        attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS_ELECTRA]
+        attestations: List[Attestation, MAX_ATTESTATIONS_ELECTRA]
+        deposits: List[Deposit, MAX_DEPOSITS]
+        voluntary_exits: List[SignedVoluntaryExit, MAX_VOLUNTARY_EXITS]
+        sync_aggregate: SyncAggregate
+        # [Modified in Gloas:EIP7732]
+        # Removed `execution_payload`
+        bls_to_execution_changes: List[SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES]
+        # [Modified in Gloas:EIP7732]
+        # Removed `blob_kzg_commitments`
+        # [Modified in Gloas:EIP7732]
+        # Removed `execution_requests`
+        # [New in Gloas:EIP7732]
+        signed_execution_payload_bid: SignedExecutionPayloadBid
+        # [New in Gloas:EIP7732]
+        payload_attestations: List[PayloadAttestation, MAX_PAYLOAD_ATTESTATIONS]
+    </spec>
+
 - name: BeaconBlockHeader#phase0
   sources:
     - file: proto/eth/v1/beacon_block.proto
@@ -538,6 +565,68 @@
         proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
     </spec>
 
+- name: BeaconState#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BeaconState" fork="gloas" hash="c33b0db2">
+    class BeaconState(Container):
+        genesis_time: uint64
+        genesis_validators_root: Root
+        slot: Slot
+        fork: Fork
+        latest_block_header: BeaconBlockHeader
+        block_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        state_roots: Vector[Root, SLOTS_PER_HISTORICAL_ROOT]
+        historical_roots: List[Root, HISTORICAL_ROOTS_LIMIT]
+        eth1_data: Eth1Data
+        eth1_data_votes: List[Eth1Data, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH]
+        eth1_deposit_index: uint64
+        validators: List[Validator, VALIDATOR_REGISTRY_LIMIT]
+        balances: List[Gwei, VALIDATOR_REGISTRY_LIMIT]
+        randao_mixes: Vector[Bytes32, EPOCHS_PER_HISTORICAL_VECTOR]
+        slashings: Vector[Gwei, EPOCHS_PER_SLASHINGS_VECTOR]
+        previous_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        current_epoch_participation: List[ParticipationFlags, VALIDATOR_REGISTRY_LIMIT]
+        justification_bits: Bitvector[JUSTIFICATION_BITS_LENGTH]
+        previous_justified_checkpoint: Checkpoint
+        current_justified_checkpoint: Checkpoint
+        finalized_checkpoint: Checkpoint
+        inactivity_scores: List[uint64, VALIDATOR_REGISTRY_LIMIT]
+        current_sync_committee: SyncCommittee
+        next_sync_committee: SyncCommittee
+        # [Modified in Gloas:EIP7732]
+        # Removed `latest_execution_payload_header`
+        # [New in Gloas:EIP7732]
+        latest_execution_payload_bid: ExecutionPayloadBid
+        next_withdrawal_index: WithdrawalIndex
+        next_withdrawal_validator_index: ValidatorIndex
+        historical_summaries: List[HistoricalSummary, HISTORICAL_ROOTS_LIMIT]
+        deposit_requests_start_index: uint64
+        deposit_balance_to_consume: Gwei
+        exit_balance_to_consume: Gwei
+        earliest_exit_epoch: Epoch
+        consolidation_balance_to_consume: Gwei
+        earliest_consolidation_epoch: Epoch
+        pending_deposits: List[PendingDeposit, PENDING_DEPOSITS_LIMIT]
+        pending_partial_withdrawals: List[PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT]
+        pending_consolidations: List[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
+        proposer_lookahead: Vector[ValidatorIndex, (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH]
+        # [New in Gloas:EIP7732]
+        builders: List[Builder, BUILDER_REGISTRY_LIMIT]
+        # [New in Gloas:EIP7732]
+        next_withdrawal_builder_index: BuilderIndex
+        # [New in Gloas:EIP7732]
+        execution_payload_availability: Bitvector[SLOTS_PER_HISTORICAL_ROOT]
+        # [New in Gloas:EIP7732]
+        builder_pending_payments: Vector[BuilderPendingPayment, 2 * SLOTS_PER_EPOCH]
+        # [New in Gloas:EIP7732]
+        builder_pending_withdrawals: List[BuilderPendingWithdrawal, BUILDER_PENDING_WITHDRAWALS_LIMIT]
+        # [New in Gloas:EIP7732]
+        latest_block_hash: Hash32
+        # [New in Gloas:EIP7732]
+        payload_expected_withdrawals: List[Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD]
+    </spec>
+
 - name: BlobIdentifier#deneb
   sources:
     - file: proto/prysm/v1alpha1/blobs.proto
@@ -562,6 +651,38 @@
         kzg_proof: KZGProof
         signed_block_header: SignedBeaconBlockHeader
         kzg_commitment_inclusion_proof: Vector[Bytes32, KZG_COMMITMENT_INCLUSION_PROOF_DEPTH]
+    </spec>
+
+- name: Builder#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="Builder" fork="gloas" hash="ae177179">
+    class Builder(Container):
+        pubkey: BLSPubkey
+        version: uint8
+        execution_address: ExecutionAddress
+        balance: Gwei
+        deposit_epoch: Epoch
+        withdrawable_epoch: Epoch
+    </spec>
+
+- name: BuilderPendingPayment#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BuilderPendingPayment" fork="gloas" hash="73cf1649">
+    class BuilderPendingPayment(Container):
+        weight: Gwei
+        withdrawal: BuilderPendingWithdrawal
+    </spec>
+
+- name: BuilderPendingWithdrawal#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="BuilderPendingWithdrawal" fork="gloas" hash="0579f0ac">
+    class BuilderPendingWithdrawal(Container):
+        fee_recipient: ExecutionAddress
+        amount: Gwei
+        builder_index: BuilderIndex
     </spec>
 
 - name: Checkpoint#phase0
@@ -612,6 +733,25 @@
         kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
         signed_block_header: SignedBeaconBlockHeader
         kzg_commitments_inclusion_proof: Vector[Bytes32, KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH]
+    </spec>
+
+- name: DataColumnSidecar#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="DataColumnSidecar" fork="gloas" hash="8028928b">
+    class DataColumnSidecar(Container):
+        index: ColumnIndex
+        column: List[Cell, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        kzg_proofs: List[KZGProof, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        # [Modified in Gloas:EIP7732]
+        # Removed `signed_block_header`
+        # [Modified in Gloas:EIP7732]
+        # Removed `kzg_commitments_inclusion_proof`
+        # [New in Gloas:EIP7732]
+        slot: Slot
+        # [New in Gloas:EIP7732]
+        beacon_block_root: Root
     </spec>
 
 - name: DataColumnsByRootIdentifier#fulu
@@ -673,6 +813,16 @@
         amount: Gwei
         signature: BLSSignature
         index: uint64
+    </spec>
+
+- name: Eth1Block#phase0
+  sources: []
+  spec: |
+    <spec ssz_object="Eth1Block" fork="phase0" hash="0a5c6b45">
+    class Eth1Block(Container):
+        timestamp: uint64
+        deposit_root: Root
+        deposit_count: uint64
     </spec>
 
 - name: Eth1Data#phase0
@@ -761,6 +911,38 @@
         blob_gas_used: uint64
         # [New in Deneb:EIP4844]
         excess_blob_gas: uint64
+    </spec>
+
+- name: ExecutionPayloadBid#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionPayloadBid" fork="gloas" hash="aa71ba16">
+    class ExecutionPayloadBid(Container):
+        parent_block_hash: Hash32
+        parent_block_root: Root
+        block_hash: Hash32
+        prev_randao: Bytes32
+        fee_recipient: ExecutionAddress
+        gas_limit: uint64
+        builder_index: BuilderIndex
+        slot: Slot
+        value: Gwei
+        execution_payment: Gwei
+        blob_kzg_commitments_root: Root
+    </spec>
+
+- name: ExecutionPayloadEnvelope#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ExecutionPayloadEnvelope" fork="gloas" hash="cd522f7f">
+    class ExecutionPayloadEnvelope(Container):
+        payload: ExecutionPayload
+        execution_requests: ExecutionRequests
+        builder_index: BuilderIndex
+        beacon_block_root: Root
+        slot: Slot
+        blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
+        state_root: Root
     </spec>
 
 - name: ExecutionPayloadHeader#bellatrix
@@ -866,6 +1048,15 @@
         epoch: Epoch
     </spec>
 
+- name: ForkChoiceNode#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ForkChoiceNode" fork="gloas" hash="755a4b34">
+    class ForkChoiceNode(Container):
+        root: Root
+        payload_status: PayloadStatus  # One of PAYLOAD_STATUS_* values
+    </spec>
+
 - name: ForkData#phase0
   sources:
     - file: proto/prysm/v1alpha1/beacon_state.proto
@@ -924,6 +1115,16 @@
         signature: BLSSignature
     </spec>
 
+- name: IndexedPayloadAttestation#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="IndexedPayloadAttestation" fork="gloas" hash="fa4832c8">
+    class IndexedPayloadAttestation(Container):
+        attesting_indices: List[ValidatorIndex, PTC_SIZE]
+        data: PayloadAttestationData
+        signature: BLSSignature
+    </spec>
+
 - name: LightClientBootstrap#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
@@ -934,6 +1135,17 @@
         # Header matching the requested beacon block root
         header: LightClientHeader
         # Current sync committee corresponding to `header.beacon.state_root`
+        current_sync_committee: SyncCommittee
+        current_sync_committee_branch: CurrentSyncCommitteeBranch
+    </spec>
+
+- name: LightClientBootstrap#capella
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientBootstrap" fork="capella" hash="85f4f5fe">
+    class LightClientBootstrap(Container):
+        # [Modified in Capella]
+        header: LightClientHeader
         current_sync_committee: SyncCommittee
         current_sync_committee_branch: CurrentSyncCommitteeBranch
     </spec>
@@ -953,6 +1165,20 @@
         # Sync committee aggregate signature
         sync_aggregate: SyncAggregate
         # Slot at which the aggregate signature was created (untrusted)
+        signature_slot: Slot
+    </spec>
+
+- name: LightClientFinalityUpdate#capella
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientFinalityUpdate" fork="capella" hash="9d2b55dd">
+    class LightClientFinalityUpdate(Container):
+        # [Modified in Capella]
+        attested_header: LightClientHeader
+        # [Modified in Capella]
+        finalized_header: LightClientHeader
+        finality_branch: FinalityBranch
+        sync_aggregate: SyncAggregate
         signature_slot: Slot
     </spec>
 
@@ -995,6 +1221,17 @@
         signature_slot: Slot
     </spec>
 
+- name: LightClientOptimisticUpdate#capella
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientOptimisticUpdate" fork="capella" hash="bdce7b1d">
+    class LightClientOptimisticUpdate(Container):
+        # [Modified in Capella]
+        attested_header: LightClientHeader
+        sync_aggregate: SyncAggregate
+        signature_slot: Slot
+    </spec>
+
 - name: LightClientUpdate#altair
   sources:
     - file: proto/prysm/v1alpha1/light_client.proto
@@ -1014,6 +1251,64 @@
         sync_aggregate: SyncAggregate
         # Slot at which the aggregate signature was created (untrusted)
         signature_slot: Slot
+    </spec>
+
+- name: LightClientUpdate#capella
+  sources: []
+  spec: |
+    <spec ssz_object="LightClientUpdate" fork="capella" hash="8d215165">
+    class LightClientUpdate(Container):
+        # [Modified in Capella]
+        attested_header: LightClientHeader
+        next_sync_committee: SyncCommittee
+        next_sync_committee_branch: NextSyncCommitteeBranch
+        # [Modified in Capella]
+        finalized_header: LightClientHeader
+        finality_branch: FinalityBranch
+        sync_aggregate: SyncAggregate
+        signature_slot: Slot
+    </spec>
+
+- name: MatrixEntry#fulu
+  sources: []
+  spec: |
+    <spec ssz_object="MatrixEntry" fork="fulu" hash="0da9cc8e">
+    class MatrixEntry(Container):
+        cell: Cell
+        kzg_proof: KZGProof
+        column_index: ColumnIndex
+        row_index: RowIndex
+    </spec>
+
+- name: PayloadAttestation#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PayloadAttestation" fork="gloas" hash="c769473d">
+    class PayloadAttestation(Container):
+        aggregation_bits: Bitvector[PTC_SIZE]
+        data: PayloadAttestationData
+        signature: BLSSignature
+    </spec>
+
+- name: PayloadAttestationData#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PayloadAttestationData" fork="gloas" hash="9f1b7f92">
+    class PayloadAttestationData(Container):
+        beacon_block_root: Root
+        slot: Slot
+        payload_present: boolean
+        blob_data_available: boolean
+    </spec>
+
+- name: PayloadAttestationMessage#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="PayloadAttestationMessage" fork="gloas" hash="3707678d">
+    class PayloadAttestationMessage(Container):
+        validator_index: ValidatorIndex
+        data: PayloadAttestationData
+        signature: BLSSignature
     </spec>
 
 - name: PendingAttestation#phase0
@@ -1076,6 +1371,17 @@
         block_hash: Hash32
         parent_hash: Hash32
         total_difficulty: uint256
+    </spec>
+
+- name: ProposerPreferences#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="ProposerPreferences" fork="gloas" hash="2a38b149">
+    class ProposerPreferences(Container):
+        proposal_slot: Slot
+        validator_index: ValidatorIndex
+        fee_recipient: ExecutionAddress
+        gas_limit: uint64
     </spec>
 
 - name: ProposerSlashing#phase0
@@ -1153,6 +1459,33 @@
     <spec ssz_object="SignedContributionAndProof" fork="altair" hash="56c7a91a">
     class SignedContributionAndProof(Container):
         message: ContributionAndProof
+        signature: BLSSignature
+    </spec>
+
+- name: SignedExecutionPayloadBid#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="SignedExecutionPayloadBid" fork="gloas" hash="6b344341">
+    class SignedExecutionPayloadBid(Container):
+        message: ExecutionPayloadBid
+        signature: BLSSignature
+    </spec>
+
+- name: SignedExecutionPayloadEnvelope#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="SignedExecutionPayloadEnvelope" fork="gloas" hash="ab8f3404">
+    class SignedExecutionPayloadEnvelope(Container):
+        message: ExecutionPayloadEnvelope
+        signature: BLSSignature
+    </spec>
+
+- name: SignedProposerPreferences#gloas
+  sources: []
+  spec: |
+    <spec ssz_object="SignedProposerPreferences" fork="gloas" hash="2142774c">
+    class SignedProposerPreferences(Container):
+        message: ProposerPreferences
         signature: BLSSignature
     </spec>
 

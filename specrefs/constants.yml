@@ -1,3 +1,10 @@
+- name: ATTESTATION_TIMELINESS_INDEX#gloas
+  sources: []
+  spec: |
+    <spec constant_var="ATTESTATION_TIMELINESS_INDEX" fork="gloas" hash="7d373fc8">
+    ATTESTATION_TIMELINESS_INDEX = 0
+    </spec>
+
 - name: BASE_REWARDS_PER_EPOCH#phase0
   sources:
     - file: config/params/config.go
@@ -30,6 +37,41 @@
   spec: |
     <spec constant_var="BLS_WITHDRAWAL_PREFIX" fork="phase0" hash="4153ae92">
     BLS_WITHDRAWAL_PREFIX: Bytes1 = '0x00'
+    </spec>
+
+- name: BUILDER_INDEX_FLAG#gloas
+  sources: []
+  spec: |
+    <spec constant_var="BUILDER_INDEX_FLAG" fork="gloas" hash="e9dca70d">
+    BUILDER_INDEX_FLAG: uint64 = 2**40
+    </spec>
+
+- name: BUILDER_INDEX_SELF_BUILD#gloas
+  sources: []
+  spec: |
+    <spec constant_var="BUILDER_INDEX_SELF_BUILD" fork="gloas" hash="622fd1b5">
+    BUILDER_INDEX_SELF_BUILD: BuilderIndex = UINT64_MAX
+    </spec>
+
+- name: BUILDER_PAYMENT_THRESHOLD_DENOMINATOR#gloas
+  sources: []
+  spec: |
+    <spec constant_var="BUILDER_PAYMENT_THRESHOLD_DENOMINATOR" fork="gloas" hash="2b5e020f">
+    BUILDER_PAYMENT_THRESHOLD_DENOMINATOR: uint64 = 10
+    </spec>
+
+- name: BUILDER_PAYMENT_THRESHOLD_NUMERATOR#gloas
+  sources: []
+  spec: |
+    <spec constant_var="BUILDER_PAYMENT_THRESHOLD_NUMERATOR" fork="gloas" hash="f7d031d3">
+    BUILDER_PAYMENT_THRESHOLD_NUMERATOR: uint64 = 6
+    </spec>
+
+- name: BUILDER_WITHDRAWAL_PREFIX#gloas
+  sources: []
+  spec: |
+    <spec constant_var="BUILDER_WITHDRAWAL_PREFIX" fork="gloas" hash="1094ce21">
+    BUILDER_WITHDRAWAL_PREFIX: Bytes1 = '0x03'
     </spec>
 
 - name: BYTES_PER_COMMITMENT#deneb
@@ -123,6 +165,13 @@
     DOMAIN_BEACON_ATTESTER: DomainType = '0x01000000'
     </spec>
 
+- name: DOMAIN_BEACON_BUILDER#gloas
+  sources: []
+  spec: |
+    <spec constant_var="DOMAIN_BEACON_BUILDER" fork="gloas" hash="76709e39">
+    DOMAIN_BEACON_BUILDER: DomainType = '0x0B000000'
+    </spec>
+
 - name: DOMAIN_BEACON_PROPOSER#phase0
   sources:
     - file: config/params/config.go
@@ -161,6 +210,20 @@
   spec: |
     <spec constant_var="DOMAIN_DEPOSIT" fork="phase0" hash="eab99f9f">
     DOMAIN_DEPOSIT: DomainType = '0x03000000'
+    </spec>
+
+- name: DOMAIN_PROPOSER_PREFERENCES#gloas
+  sources: []
+  spec: |
+    <spec constant_var="DOMAIN_PROPOSER_PREFERENCES" fork="gloas" hash="9377ecfb">
+    DOMAIN_PROPOSER_PREFERENCES: DomainType = '0x0D000000'
+    </spec>
+
+- name: DOMAIN_PTC_ATTESTER#gloas
+  sources: []
+  spec: |
+    <spec constant_var="DOMAIN_PTC_ATTESTER" fork="gloas" hash="4feba202">
+    DOMAIN_PTC_ATTESTER: DomainType = '0x0C000000'
     </spec>
 
 - name: DOMAIN_RANDAO#phase0
@@ -362,11 +425,39 @@
     NODE_ID_BITS = 256
     </spec>
 
+- name: NUM_BLOCK_TIMELINESS_DEADLINES#gloas
+  sources: []
+  spec: |
+    <spec constant_var="NUM_BLOCK_TIMELINESS_DEADLINES" fork="gloas" hash="c4e721d9">
+    NUM_BLOCK_TIMELINESS_DEADLINES = 2
+    </spec>
+
 - name: PARTICIPATION_FLAG_WEIGHTS#altair
   sources: []
   spec: |
     <spec constant_var="PARTICIPATION_FLAG_WEIGHTS" fork="altair" hash="0068cac2">
     PARTICIPATION_FLAG_WEIGHTS = [TIMELY_SOURCE_WEIGHT, TIMELY_TARGET_WEIGHT, TIMELY_HEAD_WEIGHT]
+    </spec>
+
+- name: PAYLOAD_STATUS_EMPTY#gloas
+  sources: []
+  spec: |
+    <spec constant_var="PAYLOAD_STATUS_EMPTY" fork="gloas" hash="b78dfbcf">
+    PAYLOAD_STATUS_EMPTY: PayloadStatus = 1
+    </spec>
+
+- name: PAYLOAD_STATUS_FULL#gloas
+  sources: []
+  spec: |
+    <spec constant_var="PAYLOAD_STATUS_FULL" fork="gloas" hash="82f773dc">
+    PAYLOAD_STATUS_FULL: PayloadStatus = 2
+    </spec>
+
+- name: PAYLOAD_STATUS_PENDING#gloas
+  sources: []
+  spec: |
+    <spec constant_var="PAYLOAD_STATUS_PENDING" fork="gloas" hash="640761d7">
+    PAYLOAD_STATUS_PENDING: PayloadStatus = 0
     </spec>
 
 - name: PRIMITIVE_ROOT_OF_UNITY#deneb
@@ -384,6 +475,13 @@
   spec: |
     <spec constant_var="PROPOSER_WEIGHT" fork="altair" hash="4dcb6f6c">
     PROPOSER_WEIGHT: uint64 = 8
+    </spec>
+
+- name: PTC_TIMELINESS_INDEX#gloas
+  sources: []
+  spec: |
+    <spec constant_var="PTC_TIMELINESS_INDEX" fork="gloas" hash="ffca13bd">
+    PTC_TIMELINESS_INDEX = 1
     </spec>
 
 - name: RANDOM_CHALLENGE_KZG_BATCH_DOMAIN#deneb
