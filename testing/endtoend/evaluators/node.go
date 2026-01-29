@@ -216,7 +216,7 @@ func allNodesHaveSameHead(_ *e2etypes.EvaluationContext, conns ...*grpc.ClientCo
 	// Now that epochs match (or timeout reached), do detailed head comparison
 	// with a few retries to handle block propagation delays.
 	const maxRetries = 5
-	const retryDelay = 3 * time.Second
+	const retryDelay = 1 * time.Second
 	var lastErr error
 
 	for attempt := range maxRetries {

@@ -40,6 +40,7 @@ type TransactionGenerator struct {
 	cancel        context.CancelFunc
 	paused        bool
 	useLargeBlobs bool // Use large blob transactions (6 blobs per tx) for BPO testing
+	blobTxCount   int  // Number of blob transactions per slot (0 means default of 5)
 }
 
 func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
@@ -48,8 +49,8 @@ func (t *TransactionGenerator) UnderlyingProcess() *os.Process {
 	return &os.Process{}
 }
 
-func NewTransactionGenerator(keystore string, seed int64, useLargeBlobs bool) *TransactionGenerator {
-	return &TransactionGenerator{keystore: keystore, seed: seed, useLargeBlobs: useLargeBlobs}
+func NewTransactionGenerator(keystore string, seed int64, useLargeBlobs bool, blobTxCount int) *TransactionGenerator {
+	return &TransactionGenerator{keystore: keystore, seed: seed, useLargeBlobs: useLargeBlobs, blobTxCount: blobTxCount}
 }
 
 func (t *TransactionGenerator) Start(ctx context.Context) error {
@@ -114,7 +115,7 @@ func (t *TransactionGenerator) Start(ctx context.Context) error {
 				continue
 			}
 			backend := ethclient.NewClient(client)
-			err = SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false, t.useLargeBlobs)
+			err = SendTransaction(client, mineKey.PrivateKey, gasPrice, mineKey.Address.String(), txCount, backend, false, t.useLargeBlobs, t.blobTxCount)
 			if err != nil {
 				return err
 			}
@@ -128,7 +129,7 @@ func (s *TransactionGenerator) Started() <-chan struct{} {
 	return s.started
 }
 
-func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool) error {
+func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.Int, addr string, txCount uint64, backend *ethclient.Client, al bool, useLargeBlobs bool, blobTxCount int) error {
 	sender := common.HexToAddress(addr)
 	nonce, err := backend.PendingNonceAt(context.Background(), fundedAccount.Address)
 	if err != nil {
@@ -150,14 +151,19 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 	clock := startup.NewClock(e2e.TestParams.CLGenesisTime, [32]byte{})
 	isPostFulu := clock.CurrentEpoch() >= params.BeaconConfig().FuluForkEpoch
 
+	// Default to 5 blob transactions per slot if not configured.
+	numBlobTxs := blobTxCount
+	if numBlobTxs <= 0 {
+		numBlobTxs = 5
+	}
+
 	g, _ := errgroup.WithContext(context.Background())
-	txs := make([]*types.Transaction, 10)
+	txs := make([]*types.Transaction, numBlobTxs)
 
 	// Send blob transactions - use different versions pre/post Fulu
 	if isPostFulu {
 		logrus.Info("Sending blob transactions with cell proofs")
-		// Reduced from 10 to 5 to reduce load and prevent builder/EL timeouts
-		for index := range uint64(5) {
+		for index := range uint64(numBlobTxs) {
 
 			g.Go(func() error {
 				tx, err := RandomBlobCellTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)
@@ -176,8 +182,7 @@ func SendTransaction(client *rpc.Client, key *ecdsa.PrivateKey, gasPrice *big.In
 		}
 	} else {
 		logrus.Info("Sending blob transactions with sidecars")
-		// Reduced from 10 to 5 to reduce load and prevent builder/EL timeouts
-		for index := range uint64(5) {
+		for index := range uint64(numBlobTxs) {
 
 			g.Go(func() error {
 				tx, err := RandomBlobTx(client, fundedAccount.Address, nonce+index, gasPrice, chainid, al, useLargeBlobs)

@@ -68,6 +68,14 @@ func WithLargeBlobs() E2EConfigOpt {
 	}
 }
 
+// WithBlobTxCount sets the number of blob transactions sent per slot.
+// Default is 5 when not specified.
+func WithBlobTxCount(n int) E2EConfigOpt {
+	return func(cfg *E2EConfig) {
+		cfg.BlobTxCount = n
+	}
+}
+
 func WithSSZOnly() E2EConfigOpt {
 	return func(cfg *E2EConfig) {
 		if err := os.Setenv(params.EnvNameOverrideAccept, api.OctetStreamMediaType); err != nil {
@@ -108,6 +116,7 @@ type E2EConfig struct {
 	UseBeaconRestApi        bool
 	UseBuilder              bool
 	UseLargeBlobs           bool // Use large blob transactions (6 blobs per tx) for BPO testing
+	BlobTxCount             int  // Number of blob transactions per slot (0 means default of 5)
 	EpochsToRun             uint64
 	ExitEpoch               primitives.Epoch // Custom epoch for voluntary exit submission (0 means use default)
 	Seed                    int64

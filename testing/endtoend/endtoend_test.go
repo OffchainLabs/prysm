@@ -225,9 +225,9 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 		if err := helpers.ComponentsStarted(ctx, []e2etypes.ComponentRunner{r.depositor}); err != nil {
 			return errors.Wrap(err, "testDepositsAndTx unable to run, depositor did not Start")
 		}
-        go func() {
-            if r.config.TestDeposits {
-                log.Info("Running deposit tests")
+		go func() {
+			if r.config.TestDeposits {
+				log.Info("Running deposit tests")
 				// The validators with an index < minGenesisActiveCount all have deposits already from the chain start.
 				// Skip all of those chain start validators by seeking to minGenesisActiveCount in the validator list
 				// for further deposit testing.
@@ -238,12 +238,12 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 						r.t.Error(errors.Wrap(err, "depositor.SendAndMine failed"))
 					}
 				}
-            }
-            // Only generate background transactions when relevant for the test.
-            if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
-                r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
-            }
-        }()
+			}
+			// Only generate background transactions when relevant for the test.
+			if r.config.TestDeposits || r.config.TestFeature || r.config.UseBuilder {
+				r.testTxGeneration(ctx, g, keystorePath, []e2etypes.ComponentRunner{})
+			}
+		}()
 		if r.config.TestDeposits {
 			return depositCheckValidator.Start(ctx)
 		}
@@ -252,7 +252,7 @@ func (r *testRunner) testDepositsAndTx(ctx context.Context, g *errgroup.Group,
 }
 
 func (r *testRunner) testTxGeneration(ctx context.Context, g *errgroup.Group, keystorePath string, requiredNodes []e2etypes.ComponentRunner) {
-	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed, r.config.UseLargeBlobs)
+	txGenerator := eth1.NewTransactionGenerator(keystorePath, r.config.Seed, r.config.UseLargeBlobs, r.config.BlobTxCount)
 	r.comHandler.txGen = txGenerator
 	g.Go(func() error {
 		if err := helpers.ComponentsStarted(ctx, requiredNodes); err != nil {
