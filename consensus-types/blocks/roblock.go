@@ -64,6 +64,16 @@ func NewROBlockSlice(blks []interfaces.ReadOnlySignedBeaconBlock) ([]ROBlock, er
 	return robs, nil
 }
 
+// BlockRoot returns the hash tree root for a ReadOnlySignedBeaconBlock.
+// If the block implements a Root() method (e.g. ROBlock), it returns the
+// cached value and avoids expensive HTR recomputation.
+func BlockRoot(b interfaces.ReadOnlySignedBeaconBlock) ([32]byte, error) {
+	if rootCacher, ok := b.(interface{ Root() [32]byte }); ok {
+		return rootCacher.Root(), nil
+	}
+	return b.Block().HashTreeRoot()
+}
+
 // ROBlockSlice implements sort.Interface so that slices of ROBlocks can be easily sorted.
 // A slice of ROBlock is sorted first by slot, with ties broken by cached block roots.
 type ROBlockSlice []ROBlock

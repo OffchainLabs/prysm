@@ -550,16 +550,9 @@ func (s *Store) SaveBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.SaveBlock")
 	defer span.End()
 
-	var blockRoot [32]byte
-	if rob, ok := signed.(blocks.ROBlock); ok {
-		// Root is cached, avoid HTR recomputation.
-		blockRoot = rob.Root()
-	} else {
-		var err error
-		blockRoot, err = signed.Block().HashTreeRoot()
-		if err != nil {
-			return err
-		}
+	blockRoot, err := blocks.BlockRoot(signed)
+	if err != nil {
+		return err
 	}
 	if v, ok := s.blockCache.Get(string(blockRoot[:])); v != nil && ok {
 		return nil
