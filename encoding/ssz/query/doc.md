@@ -160,11 +160,12 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
 
 #### Type-Specific Merkleization
 
-- **Basic Types**: Serializes to 32-byte leaf, little-endian, zero-padded
-- **Containers**: Merkleizes each field, then merkleizes field roots
-- **Vectors**: Fixed-size collections with direct merkleization
-- **Lists**: Two-part merkleization (data subtree + length mixin)
-- **Bitlists/Bitvectors**: Packs bits into 32-byte chunks
+   - **Basic Types**: Merkleize as a single 32-byte chunk containing the SSZ-encoded value, little-endian and zero-padded.
+   - **Containers**: Merkleize by computing the 32-byte root of each field, then merkleizing the field roots.
+   - **Vectors**: Merkleize fixed-size collections by chunking elements (basic types are packed; composite types use their 32-byte roots).
+   - **Lists**: Merkleize variable-size collections by chunking elements up to the type’s maximum, then mix in the actual element count.
+   - **Bitvectors**: Merkleize packed bits in 32-byte, LSB-first chunks, using the type’s chunk count.
+   - **Bitlists**: Merkleize packed bits in 32-byte, LSB-first chunks (excluding the termination bit), using the type’s chunk count, then mix in the bit length.
 
 ## Dependencies
 
