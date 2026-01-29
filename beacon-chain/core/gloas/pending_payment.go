@@ -10,17 +10,22 @@ import (
 )
 
 // ProcessBuilderPendingPayments processes the builder pending payments from the previous epoch.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def process_builder_pending_payments(state: BeaconState) -> None:
 //
-//	quorum = get_builder_payment_quorum_threshold(state)
-//	for payment in state.builder_pending_payments[:SLOTS_PER_EPOCH]:
-//	    if payment.weight >= quorum:
-//	        state.builder_pending_withdrawals.append(payment.withdrawal)
+//	<spec fn="process_builder_pending_payments" fork="gloas" hash="10da48dd">
+//	def process_builder_pending_payments(state: BeaconState) -> None:
+//	    """
+//	    Processes the builder pending payments from the previous epoch.
+//	    """
+//	    quorum = get_builder_payment_quorum_threshold(state)
+//	    for payment in state.builder_pending_payments[:SLOTS_PER_EPOCH]:
+//	        if payment.weight >= quorum:
+//	            state.builder_pending_withdrawals.append(payment.withdrawal)
 //
-//	old_payments = state.builder_pending_payments[SLOTS_PER_EPOCH:]
-//	new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
-//	state.builder_pending_payments = old_payments + new_payments
+//	    old_payments = state.builder_pending_payments[SLOTS_PER_EPOCH:]
+//	    new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
+//	    state.builder_pending_payments = old_payments + new_payments
+//	</spec>
+//
 func ProcessBuilderPendingPayments(state state.BeaconState) error {
 	quorum, err := builderQuorumThreshold(state)
 	if err != nil {
@@ -53,12 +58,16 @@ func ProcessBuilderPendingPayments(state state.BeaconState) error {
 }
 
 // builderQuorumThreshold calculates the quorum threshold for builder payments.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// def get_builder_payment_quorum_threshold(state: BeaconState) -> uint64:
 //
-//	per_slot_balance = get_total_active_balance(state) // SLOTS_PER_EPOCH
-//	quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
-//	return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
+//	<spec fn="get_builder_payment_quorum_threshold" fork="gloas" hash="a64b7ffb">
+//	def get_builder_payment_quorum_threshold(state: BeaconState) -> uint64:
+//	    """
+//	    Calculate the quorum threshold for builder payments.
+//	    """
+//	    per_slot_balance = get_total_active_balance(state) // SLOTS_PER_EPOCH
+//	    quorum = per_slot_balance * BUILDER_PAYMENT_THRESHOLD_NUMERATOR
+//	    return uint64(quorum // BUILDER_PAYMENT_THRESHOLD_DENOMINATOR)
+//	</spec>
 func builderQuorumThreshold(state state.ReadOnlyBeaconState) (primitives.Gwei, error) {
 	activeBalance, err := helpers.TotalActiveBalance(state)
 	if err != nil {

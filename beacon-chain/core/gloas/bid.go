@@ -17,27 +17,50 @@ import (
 )
 
 // ProcessExecutionPayloadBid processes a signed execution payload bid in the Gloas fork.
-// Spec v1.7.0-alpha.0 (pseudocode):
-// process_execution_payload_bid(state: BeaconState, block: BeaconBlock):
 //
-//	signed_bid = block.body.signed_execution_payload_bid
-//	bid = signed_bid.message
-//	builder_index = bid.builder_index
-//	amount = bid.value
-//	if builder_index == BUILDER_INDEX_SELF_BUILD:
-//	  assert amount == 0
-//	  assert signed_bid.signature == G2_POINT_AT_INFINITY
-//	else:
-//	  assert is_active_builder(state, builder_index)
-//	  assert can_builder_cover_bid(state, builder_index, amount)
-//	  assert verify_execution_payload_bid_signature(state, signed_bid)
-//	assert bid.slot == block.slot
-//	assert bid.parent_block_hash == state.latest_block_hash
-//	assert bid.parent_block_root == block.parent_root
-//	assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
-//	if amount > 0:
-//	  state.builder_pending_payments[...] = BuilderPendingPayment(weight=0, withdrawal=BuilderPendingWithdrawal(fee_recipient=bid.fee_recipient, amount=amount, builder_index=builder_index))
-//	state.latest_execution_payload_bid = bid
+//	<spec fn="process_execution_payload_bid" fork="gloas" hash="6dc696bb">
+//	def process_execution_payload_bid(state: BeaconState, block: BeaconBlock) -> None:
+//	    signed_bid = block.body.signed_execution_payload_bid
+//	    bid = signed_bid.message
+//	    builder_index = bid.builder_index
+//	    amount = bid.value
+//
+//	    # For self-builds, amount must be zero regardless of withdrawal credential prefix
+//	    if builder_index == BUILDER_INDEX_SELF_BUILD:
+//	        assert amount == 0
+//	        assert signed_bid.signature == bls.G2_POINT_AT_INFINITY
+//	    else:
+//	        # Verify that the builder is active
+//	        assert is_active_builder(state, builder_index)
+//	        # Verify that the builder has funds to cover the bid
+//	        assert can_builder_cover_bid(state, builder_index, amount)
+//	        # Verify that the bid signature is valid
+//	        assert verify_execution_payload_bid_signature(state, signed_bid)
+//
+//	    # Verify that the bid is for the current slot
+//	    assert bid.slot == block.slot
+//	    # Verify that the bid is for the right parent block
+//	    assert bid.parent_block_hash == state.latest_block_hash
+//	    assert bid.parent_block_root == block.parent_root
+//	    assert bid.prev_randao == get_randao_mix(state, get_current_epoch(state))
+//
+//	    # Record the pending payment if there is some payment
+//	    if amount > 0:
+//	        pending_payment = BuilderPendingPayment(
+//	            weight=0,
+//	            withdrawal=BuilderPendingWithdrawal(
+//	                fee_recipient=bid.fee_recipient,
+//	                amount=amount,
+//	                builder_index=builder_index,
+//	            ),
+//	        )
+//	        state.builder_pending_payments[SLOTS_PER_EPOCH + bid.slot % SLOTS_PER_EPOCH] = (
+//	            pending_payment
+//	        )
+//
+//	    # Cache the signed execution payload bid
+//	    state.latest_execution_payload_bid = bid
+//	</spec>
 func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyBeaconBlock) error {
 	signedBid, err := block.Body().SignedExecutionPayloadBid()
 	if err != nil {
