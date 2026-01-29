@@ -45,6 +45,10 @@ func (b *BeaconState) IsAttestationSameSlot(blockRoot [32]byte, slot primitives.
 	if b.version < version.Gloas {
 		return false, errNotSupported("IsAttestationSameSlot", b.version)
 	}
+
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
 	if slot == 0 {
 		return true, nil
 	}

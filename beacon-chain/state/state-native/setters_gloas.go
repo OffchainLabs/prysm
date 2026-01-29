@@ -202,8 +202,8 @@ func (b *BeaconState) UpdatePendingPaymentWeight(att ethpb.Att, indices []uint64
 		paymentSlot    primitives.Slot
 		currentPayment *ethpb.BuilderPendingPayment
 		weight         primitives.Gwei
-		readErr     error
-		earlyReturn bool
+		readErr        error
+		earlyReturn    bool
 	)
 
 	func() {
