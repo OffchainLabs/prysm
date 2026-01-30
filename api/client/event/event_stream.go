@@ -34,6 +34,18 @@ type Event struct {
 	Data      []byte
 }
 
+// PublishEvent enqueues an event without blocking the producer. If the channel is full,
+// the event is dropped since only the most recent heads are relevant.
+func PublishEvent(eventsChannel chan<- *Event, event *Event) {
+	if eventsChannel == nil || event == nil {
+		return
+	}
+	select {
+	case eventsChannel <- event:
+	default:
+	}
+}
+
 // EventStream is responsible for subscribing to the Beacon API events endpoint
 // and dispatching received events to subscribers.
 type EventStream struct {
@@ -67,19 +79,20 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
-		eventsChannel <- &Event{
+		PublishEvent(eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
-		}
+		})
+		return
 	}
 	req.Header.Set("Accept", api.EventStreamMediaType)
 	req.Header.Set("Connection", api.KeepAlive)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		eventsChannel <- &Event{
+		PublishEvent(eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
-		}
+		})
 		return
 	}
 
@@ -100,7 +113,6 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 		select {
 		case <-h.ctx.Done():
 			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
 			return
 		default:
 			line := scanner.Text()
@@ -109,7 +121,7 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 				// Empty line indicates the end of an event
 				if eventType != "" && data != "" {
 					// Process the event when both eventType and data are set
-					eventsChannel <- &Event{EventType: eventType, Data: []byte(data)}
+					PublishEvent(eventsChannel, &Event{EventType: eventType, Data: []byte(data)})
 				}
 
 				// Reset eventType and data for the next event
@@ -130,9 +142,9 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		eventsChannel <- &Event{
+		PublishEvent(eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
-		}
+		})
 	}
 }

@@ -64,6 +64,11 @@ var (
 	msgNoKeysFetched     = "No validating keys fetched. Waiting for keys..."
 )
 
+const (
+	eventStreamStopped uint32 = iota
+	eventStreamRunning
+)
+
 type validator struct {
 	logValidatorPerformance            bool
 	distributed                        bool
@@ -82,6 +87,7 @@ type validator struct {
 	cachedAttestationData              *ethpb.AttestationData
 	accountsChangedChannel             chan [][fieldparams.BLSPubkeyLength]byte
 	eventsChannel                      chan *eventClient.Event
+	eventStreamState                   atomic.Uint32
 	highestValidSlot                   primitives.Slot
 	submittedAggregates                map[submittedAttKey]*submittedAtt
 	graffitiStruct                     *graffiti.Graffiti
@@ -1211,12 +1217,40 @@ func (v *validator) PushProposerSettings(ctx context.Context, slot primitives.Sl
 }
 
 func (v *validator) StartEventStream(ctx context.Context, topics []string) {
-	if v.EventStreamIsRunning() {
+	if !v.eventStreamState.CompareAndSwap(eventStreamStopped, eventStreamRunning) {
 		log.Debug("EventStream is already running")
 		return
 	}
 	log.WithField("topics", topics).Info("Starting event stream")
-	v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
+	go v.runEventStream(ctx, topics)
+}
+
+func (v *validator) runEventStream(ctx context.Context, topics []string) {
+	defer v.eventStreamState.Store(eventStreamStopped)
+	backoff := time.Second
+	const maxBackoff = 30 * time.Second
+
+	for {
+		v.validatorClient.StartEventStream(ctx, topics, v.eventsChannel)
+		if ctx.Err() != nil {
+			return
+		}
+
+		log.WithField("retryIn", backoff).Warn("Event stream ended unexpectedly, attempting to resubscribe")
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		if backoff < maxBackoff {
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
 }
 
 func (v *validator) checkDependentRoots(ctx context.Context, head *structs.HeadEvent) error {
@@ -1303,7 +1337,7 @@ func (v *validator) ProcessEvent(ctx context.Context, event *eventClient.Event) 
 }
 
 func (v *validator) EventStreamIsRunning() bool {
-	return v.validatorClient.EventStreamIsRunning()
+	return v.eventStreamState.Load() == eventStreamRunning
 }
 
 func (v *validator) Host() string {

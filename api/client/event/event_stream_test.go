@@ -53,7 +53,7 @@ func TestEventStream(t *testing.T) {
 	defer server.Close()
 
 	topics := []string{"head"}
-	eventsChannel := make(chan *Event, 1)
+	eventsChannel := make(chan *Event, 4)
 	stream, err := NewEventStream(t.Context(), http.DefaultClient, server.URL, topics)
 	require.NoError(t, err)
 	go stream.Subscribe(eventsChannel)
@@ -80,7 +80,7 @@ func TestEventStream(t *testing.T) {
 
 func TestEventStreamRequestError(t *testing.T) {
 	topics := []string{"head"}
-	eventsChannel := make(chan *Event, 1)
+	eventsChannel := make(chan *Event, 4)
 	ctx := t.Context()
 
 	// use valid url that will result in failed request with nil body

@@ -223,7 +223,7 @@ func TestStartEventStream(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			eventsChannel := make(chan *eventClient.Event, 1) // Buffer to prevent blocking
+			eventsChannel := make(chan *eventClient.Event, 4) // Buffer to prevent blocking
 			tc.prepare()                                      // Setup mock expectations
 
 			go grpcClient.StartEventStream(ctx, tc.topics, eventsChannel)

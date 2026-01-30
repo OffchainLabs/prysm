@@ -66,6 +66,8 @@ type ValidatorService struct {
 	closeClientFunc         func() // validator client stop function is used here
 }
 
+const eventChannelBufferSize = 32
+
 // Config for the validator service.
 type Config struct {
 	Validator               iface.Validator
@@ -234,7 +236,7 @@ func (v *ValidatorService) Start() {
 		distributed:                    v.distributed,
 		disableDutiesPolling:           v.disableDutiesPolling,
 		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
-		eventsChannel:                  make(chan *eventClient.Event, 1),
+		eventsChannel:                  make(chan *eventClient.Event, eventChannelBufferSize),
 	}
 
 	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)

@@ -441,7 +441,6 @@ func TestRunnerPushesProposerSettings_ValidContext(t *testing.T) {
 		defer assertValidContext(t, timedCtx, ctx)
 		delay(t)
 	})
-	vcm.EXPECT().EventStreamIsRunning().Return(true).AnyTimes().Do(func() { delay(t) })
 	vcm.EXPECT().SubmitValidatorRegistrations(liveCtx, gomock.Any()).Do(func(ctx context.Context, _ any) {
 		defer assertValidContext(t, timedCtx, ctx) // This is the specific regression test assertion for PR 15369.
 		delay(t)
