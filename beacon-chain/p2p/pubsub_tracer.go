@@ -26,6 +26,8 @@ const (
 type gossipTracer struct {
 	host host.Host
 
+	allowedTopics pubsub.SubscriptionFilter
+
 	mu sync.Mutex
 	// map topic -> Set(peerID). Peer is in set if it supports partial messages.
 	partialMessagePeers map[string]map[peer.ID]struct{}
@@ -136,20 +138,32 @@ func (g *gossipTracer) ThrottlePeer(p peer.ID) {
 }
 
 // RecvRPC .
-func (g *gossipTracer) RecvRPC(rpc *pubsub.RPC, from peer.ID) {
+func (g *gossipTracer) RecvRPC(rpc *pubsub.RPC) {
+	from := rpc.From()
 	g.setMetricFromRPC(recv, pubsubRPCSubRecv, pubsubRPCPubRecv, pubsubRPCPubRecvSize, pubsubRPCRecv, rpc)
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for _, sub := range rpc.Subscriptions {
-		m, ok := g.partialMessagePeers[sub.GetTopicid()]
-		if !ok {
+		topic := sub.GetTopicid()
+		if !g.allowedTopics.CanSubscribe(topic) {
 			continue
+		}
+		if g.partialMessagePeers == nil {
+			g.partialMessagePeers = make(map[string]map[peer.ID]struct{})
+		}
+		m, ok := g.partialMessagePeers[topic]
+		if !ok {
+			m = make(map[peer.ID]struct{})
+			g.partialMessagePeers[topic] = m
 		}
 		if sub.GetSubscribe() && sub.GetRequestsPartial() {
 			m[from] = struct{}{}
 		} else {
 			delete(m, from)
+			if len(m) == 0 {
+				delete(g.partialMessagePeers, topic)
+			}
 		}
 	}
 }
