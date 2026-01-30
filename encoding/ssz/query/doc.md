@@ -1,6 +1,6 @@
 # SSZ Query Package
 
-The `encoding/ssz/query` package provides a system for analyzing, querying, and generating Merkle proofs for SSZ ([Simple Serialize](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md)) data structures. It enables runtime analysis of SSZ-serialized Go objects with reflection, path-based queries through nested structures, generalized index calculation, and Merkle proof generation.
+The `encoding/ssz/query` package provides a system for analyzing and querying SSZ ([Simple Serialize](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md)) data structures, as well as generating Merkle proofs from them. It enables runtime analysis of SSZ-serialized Go objects with reflection, path-based queries through nested structures, generalized index calculation, and Merkle proof generation.
 
 This package is designed to be generic. It operates on arbitrary SSZ-serialized Go values at runtime, so the same query/proof machinery applies equally to any SSZ type, including the BeaconState/BeaconBlock.
 
@@ -153,27 +153,8 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
    - Builds Merkle tree from leaves to root
    - Collects hashes at registered gindices during traversal
 
-3. **Proof Conversion Phase** (`toProof`)
-   - Converts collected hashes to `fastssz.Proof`
-   - Stores leaf value at proof index
-   - Orders sibling hashes from leaf upward
-
-#### Type-Specific Merkleization
-
-   - **Basic Types**: Merkleize as a single 32-byte chunk containing the SSZ-encoded value, little-endian and zero-padded.
-   - **Containers**: Merkleize by computing the 32-byte root of each field, then merkleizing the field roots.
-   - **Vectors**: Merkleize fixed-size collections by chunking elements (basic types are packed; composite types use their 32-byte roots).
-   - **Lists**: Merkleize variable-size collections by chunking elements up to the type’s maximum, then mix in the actual element count.
-   - **Bitvectors**: Merkleize packed bits in 32-byte, LSB-first chunks, using the type’s chunk count.
-   - **Bitlists**: Merkleize packed bits in 32-byte, LSB-first chunks (excluding the termination bit), using the type’s chunk count, then mix in the bit length.
-
-## Dependencies
-
-### Internal Packages
-- `encoding/ssz` - Core SSZ utilities (`Depth()`, `PackByChunk()`, `MixInLength()`)
-- `container/trie` - Zero hash caching (`trie.ZeroHashes`)
-- `crypto/hash/htr` - Vectorized hashing (`htr.VectorizedSha256()`)
-
-### External Libraries
-- `github.com/prysmaticlabs/fastssz` - SSZ serialization framework (`fastssz.Proof`)
-- `github.com/prysmaticlabs/go-bitfield` - Bitlist/Bitvector handling
+3. **Proof Assembly Phase** (`toProof`)
+   - Assembles collected hashes into a `fastssz.Proof` structure
+   - Sets `Proof.Leaf` to the 32-byte hash of the target node
+   - Sets `Proof.Index` to the target's generalized index
+   - Builds `Proof.Hashes` by walking from the target leaf up to the root, appending each sibling hash (XOR gindex to find sibling, then divide by 2 to move up)
