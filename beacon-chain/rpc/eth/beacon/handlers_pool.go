@@ -893,3 +893,89 @@ func (s *Server) SubmitProposerSlashing(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 }
+
+// SubmitPayloadAttestations submits payload attestation messages to the node's pool.
+func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitPayloadAttestations")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
+	versionHeader := r.Header.Get(api.VersionHeader)
+	if versionHeader == "" {
+		httputil.HandleError(w, api.VersionHeader+" header is required", http.StatusBadRequest)
+		return
+	}
+
+	var msgs []*structs.PayloadAttestationMessage
+	if err := json.NewDecoder(r.Body).Decode(&msgs); err != nil {
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var failures []*server.IndexedError
+	for i, msg := range msgs {
+		consensusMsg, err := msg.ToConsensus()
+		if err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not convert message: " + err.Error(),
+			})
+			continue
+		}
+
+		// TODO: Add full gossip validation (BLS signatures, PTC membership).
+		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not insert payload attestation: " + err.Error(),
+			})
+			continue
+		}
+
+		if err := s.Broadcaster.Broadcast(ctx, consensusMsg); err != nil {
+			log.WithError(err).Error("Could not broadcast payload attestation message")
+		}
+	}
+
+	if len(failures) > 0 {
+		failuresErr := &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		}
+		httputil.WriteError(w, failuresErr)
+		return
+	}
+}
+
+// ListPayloadAttestations retrieves payload attestations from the pool.
+func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request) {
+	_, span := trace.StartSpan(r.Context(), "beacon.ListPayloadAttestations")
+	defer span.End()
+
+	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
+	if !ok {
+		return
+	}
+
+	var atts []*eth.PayloadAttestation
+	if rawSlot != "" {
+		atts = s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
+	} else {
+		atts = s.PayloadAttestationPool.PendingPayloadAttestations()
+	}
+
+	data := make([]*structs.PayloadAttestation, len(atts))
+	for i, att := range atts {
+		data[i] = structs.PayloadAttestationFromConsensus(att)
+	}
+
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	httputil.WriteJson(w, &structs.GetPoolPayloadAttestationsResponse{
+		Version: version.String(version.Gloas),
+		Data:    data,
+	})
+}

@@ -217,6 +217,7 @@ func (s *Service) validatorEndpoints(
 		OperationNotifier:      s.cfg.OperationNotifier,
 		TrackedValidatorsCache: s.cfg.TrackedValidatorsCache,
 		PayloadIDCache:         s.cfg.PayloadIDCache,
+		PayloadAttestationPool: s.cfg.PayloadAttestationPool,
 		CoreService:            coreService,
 		BlockRewardFetcher:     rewardFetcher,
 	}
@@ -390,6 +391,16 @@ func (s *Service) validatorEndpoints(
 			handler: server.SyncCommitteeSelections,
 			methods: []string{http.MethodPost},
 		},
+		{
+			template: "/eth/v1/validator/payload_attestation_data/{slot}",
+			name:     namespace + ".GetPayloadAttestationData",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType, api.OctetStreamMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.GetPayloadAttestationData,
+			methods: []string{http.MethodGet},
+		},
 	}
 }
 
@@ -512,6 +523,7 @@ func (s *Service) beaconEndpoints(
 		SyncChecker:             s.cfg.SyncService,
 		ExecutionReconstructor:  s.cfg.ExecutionReconstructor,
 		BLSChangesPool:          s.cfg.BLSChangesPool,
+		PayloadAttestationPool:  s.cfg.PayloadAttestationPool,
 		FinalizationFetcher:     s.cfg.FinalizationFetcher,
 		ForkchoiceFetcher:       s.cfg.ForkchoiceFetcher,
 		CoreService:             coreService,
@@ -868,6 +880,27 @@ func (s *Service) beaconEndpoints(
 			},
 			handler: server.GetProposerLookahead,
 			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/pool/payload_attestations",
+			name:     namespace + ".ListPayloadAttestations",
+			middleware: []middleware.Middleware{
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.ListPayloadAttestations,
+			methods: []string{http.MethodGet},
+		},
+		{
+			template: "/eth/v1/beacon/pool/payload_attestations",
+			name:     namespace + ".SubmitPayloadAttestations",
+			middleware: []middleware.Middleware{
+				middleware.ContentTypeHandler([]string{api.JsonMediaType}),
+				middleware.AcceptHeaderHandler([]string{api.JsonMediaType}),
+				middleware.AcceptEncodingHeaderHandler(),
+			},
+			handler: server.SubmitPayloadAttestations,
+			methods: []string{http.MethodPost},
 		},
 	}
 }

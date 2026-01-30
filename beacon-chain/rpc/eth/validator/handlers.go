@@ -1427,3 +1427,54 @@ func sortProposerDuties(duties []*structs.ProposerDuty) error {
 	})
 	return err
 }
+
+// GetPayloadAttestationData produces payload attestation data for the requested slot.
+func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetPayloadAttestationData")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
+	_, slot, ok := shared.UintFromRoute(w, r, "slot")
+	if !ok {
+		return
+	}
+
+	headRoot, err := s.HeadFetcher.HeadRoot(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// TODO: Determine payload_present and blob_data_available from the SignedExecutionPayloadEnvelope
+	// once that handling is implemented. For now, stub with false.
+	payloadPresent := false
+	blobDataAvailable := false
+
+	data := &ethpbalpha.PayloadAttestationData{
+		BeaconBlockRoot:   headRoot,
+		Slot:              primitives.Slot(slot),
+		PayloadPresent:    payloadPresent,
+		BlobDataAvailable: blobDataAvailable,
+	}
+
+	if httputil.RespondWithSsz(r) {
+		sszData, err := data.MarshalSSZ()
+		if err != nil {
+			httputil.HandleError(w, "Could not marshal payload attestation data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+		httputil.WriteSsz(w, sszData)
+		return
+	}
+
+	response := &structs.GetPayloadAttestationDataResponse{
+		Version: version.String(version.Gloas),
+		Data:    structs.PayloadAttestationDataFromConsensus(data),
+	}
+	w.Header().Set(api.VersionHeader, version.String(version.Gloas))
+	httputil.WriteJson(w, response)
+}
