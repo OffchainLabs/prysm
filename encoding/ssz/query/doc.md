@@ -78,7 +78,7 @@ type SszInfo struct {
 
 #### `Path`
 
-The `Path` structure represents navigation paths through SSZ structures. It supports accessing a field by field name, accessing an element by index (list/vector type), and length of homogenous collection types. `ParsePath` function parses a raw string into `Path` instance, which is commonly used in other APIs like `CalculateOffsetAndLength` and `GetGeneralizedIndexFromPath`.
+The `Path` structure represents navigation paths through SSZ structures. It supports accessing a field by field name, accessing an element by index (list/vector type), and finding the length of homogenous collection types. The `ParsePath` function parses a raw string into a `Path` instance, which is commonly used in other APIs like `CalculateOffsetAndLength` and `GetGeneralizedIndexFromPath`.
 
 ```go
 type Path struct {
