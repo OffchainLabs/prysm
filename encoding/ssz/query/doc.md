@@ -52,7 +52,7 @@ func (s *SszInfo) Prove(gindex uint64) (*fastssz.Proof, error)
 
 ### SSZ Types
 
-The package now supports [all standard SSZ types](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#typing) except `ProgressiveList`, `ProgressiveContainer`, `ProgressiveBitlist`, `Union` and `CompatibleUnion`.
+The package now supports [all standard SSZ types](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md#typing) except `ProgressiveList`, `ProgressiveContainer`, `ProgressiveBitlist`, `Union`, and `CompatibleUnion`.
 
 ### Core Data Structures
 
@@ -105,9 +105,9 @@ The `AnalyzeObject` function performs recursive type introspection using Go refl
    - Pointers: Dereferenced automatically
 
 2. **Variable-Length Population** - Determines actual sizes at runtime
-   - For Lists: Iterates elements, caches sizes for variable-element lists
-   - For Containers: Recursively populates variable fields, adjusts offsets
-   - For Bitlists: Decodes bit length from bitvector
+   - For lists: Iterates elements, caches sizes for variable-element lists
+   - For containers: Recursively populates variable fields, adjusts offsets
+   - For bitlists: Decodes bit length from bitvector
 
 3. **Offset Calculation** - Computes byte positions within serialized data
    - Fixed-size fields: Offset = sum of preceding field sizes
@@ -146,7 +146,8 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
 
 **Key Terms:**
 
-- **Target gindex** (generalized index): The position of the SSZ element you want to prove, expressed as a generalized Merkle tree index (root is 1).
+- **Target gindex** (generalized index): The position of the SSZ element you want to prove, expressed as a generalized Merkle tree index.
+  - Note: The generalized index for root is 1.
 - **Registered gindices**: The set of tree positions whose node hashes must be captured during merkleization in order to later assemble the proof.
 - **Sibling node**: The node that shares the same parent as another node.
 - **Leaf value**: The 32-byte hash of the target node (the node being proven). Stored in `Proof.Leaf`.
@@ -156,23 +157,35 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
 
 1. **Registration Phase** (`addTarget`)
 > Goal: determine exactly which sibling hashes are needed for the proof.
+
    - Record the target gindex as the proof target.
    - Starting from the target node, walk the Merkle tree from the leaf (target gindex) to the root (gindex = 1).
    - At each step:
-     - Compute and register the sibling gindex (i XOR 1) as “must collect”.
-     - Move to the parent (i = i / 2).
-This produces the full set of registered gindices (the sibling nodes on the target-to-root path).
+     - Compute and register the sibling gindex (`i XOR 1`) as “must collect”.
+     - Move to the parent (`i = i/2`).
+   - This produces the full set of registered gindices (the sibling nodes on the target-to-root path).
 
 2. **Merkleization Phase** (`merkleize`)
 > Goal: recursively merkleize the tree and capture the needed hashes.
+
    - Recursively traverse the SSZ structure and compute Merkle tree node hashes from leaves to root.
    - Whenever the traversal computes a node whose gindex is in registered gindices, store that node’s hash for later proof construction.
 
 3. **Proof Assembly Phase** (`toProof`)
-> Goal: create the final fastssz.Proof object in the correct format and order.
+> Goal: create the final `fastssz.Proof` object in the correct format and order.
+
+```go
+// Proof represents a merkle proof against a general index.
+type Proof struct {
+	Index  int
+	Leaf   []byte
+	Hashes [][]byte
+}
+```
+
    - Set `Proof.Index` to the target gindex.
    - Set `Proof.Leaf` to the 32-byte hash of the target node.
    - Build `Proof.Hashes` by walking from the target node up to (but not including) the root:
-     - At node i, append the stored hash for the sibling (i XOR 1).
-     - Move to the parent (i = i / 2).
+     - At node `i`, append the stored hash for the sibling (`i XOR 1`).
+     - Move to the parent (`i = i/2`).
    - The resulting `Proof.Hashes` is ordered from the target level upward, containing one sibling hash per tree level on the path to the root.
