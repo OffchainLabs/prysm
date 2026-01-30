@@ -149,7 +149,7 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
    - Marks every required sibling node by walking from the target leaf to the root (gindex=1).
 
 2. **Merkleization Phase** (`merkleize`)
-   - Traverses data structure **recursively**
+   - Traverses data structure recursively
    - Builds Merkle tree from leaves to root
    - Collects hashes at registered gindices during traversal
 
