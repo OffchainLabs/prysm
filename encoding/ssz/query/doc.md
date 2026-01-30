@@ -2,7 +2,7 @@
 
 The `encoding/ssz/query` package provides a system for analyzing, querying, and generating Merkle proofs for SSZ ([Simple Serialize](https://github.com/ethereum/consensus-specs/blob/master/ssz/simple-serialize.md)) data structures. It enables runtime analysis of SSZ-serialized Go objects with reflection, path-based queries through nested structures, generalized index calculation, and Merkle proof generation.
 
-This package is designed to be **generic**, it operates on arbitrary SSZ-serialized Go values at runtime, so the same query/proof machinery applies equally to core consensus types like BeaconState/BeaconBlock and to any customized SSZ schemas.
+This package is designed to be generic. It operates on arbitrary SSZ-serialized Go values at runtime, so the same query/proof machinery applies equally to any SSZ type, including the BeaconState/BeaconBlock.
 
 ## Usage Example
 
