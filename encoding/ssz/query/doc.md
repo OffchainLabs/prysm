@@ -96,7 +96,7 @@ type PathElement struct {
 
 ### Type Analysis (`analyzer.go`)
 
-The `AnalyzeObject` function performs **recursive** type introspection using Go reflection:
+The `AnalyzeObject` function performs recursive type introspection using Go reflection:
 
 1. **Type Inspection** - Examines Go `reflect.Value` to determine SSZ type
    - Basic types: `uint8`, `uint16`, `uint32`, `uint64`, `bool` → SSZType constants
