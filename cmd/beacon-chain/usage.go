@@ -74,6 +74,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.RPCHost,
 			flags.RPCPort,
 			flags.BatchVerifierLimit,
+			flags.StateDiffExponents,
 		},
 	},
 	{
@@ -169,7 +170,6 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ExecutionJWTSecretFlag,
 			flags.JwtId,
 			flags.InteropMockEth1DataVotesFlag,
-			flags.DisableGetBlobsV2,
 		},
 	},
 	{ // Flags relevant to configuring beacon chain monitoring.
@@ -201,6 +201,7 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.LogFileName,
 			cmd.VerbosityFlag,
 			flags.DisableEphemeralLogFile,
+			cmd.LogVModuleFlag,
 		},
 	},
 	{ // Feature flags.

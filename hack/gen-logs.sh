@@ -14,7 +14,6 @@ EXCLUDED_PATH_PREFIXES=(
   "runtime"
   "monitoring"
   "io"
-  "cmd"
   ".well-known"
   "changelog"
   "hack"

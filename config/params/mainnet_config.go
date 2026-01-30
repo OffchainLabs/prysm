@@ -32,6 +32,8 @@ const (
 	mainnetElectraForkEpoch = 364032 // May 7, 2025, 10:05:11 UTC
 	// Fulu Fork Epoch for mainnet config
 	mainnetFuluForkEpoch = 411392 // December 3, 2025, 09:49:11pm UTC
+	// Gloas Fork Epoch for mainnet config
+	mainnetGloasForkEpoch = math.MaxUint64
 )
 
 var mainnetNetworkConfig = &NetworkConfig{
@@ -94,6 +96,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BLSWithdrawalPrefixByte:         byte(0),
 	ETH1AddressWithdrawalPrefixByte: byte(1),
 	CompoundingWithdrawalPrefixByte: byte(2),
+	BuilderWithdrawalPrefixByte:     byte(3),
+	BuilderIndexSelfBuild:           primitives.BuilderIndex(math.MaxUint64),
 	ZeroHash:                        [32]byte{},
 
 	// Time parameter constants.
@@ -119,11 +123,15 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	IntervalsPerSlot:                3,
 
 	// Time-based protocol parameters.
-	ProposerReorgCutoffBPS: primitives.BP(1667),
-	AttestationDueBPS:      primitives.BP(3333),
-	AggregrateDueBPS:       primitives.BP(6667),
-	SyncMessageDueBPS:      primitives.BP(3333),
-	ContributionDueBPS:     primitives.BP(6667),
+	ProposerReorgCutoffBPS:  primitives.BP(1667),
+	AttestationDueBPS:       primitives.BP(3333),
+	AggregateDueBPS:         primitives.BP(6667),
+	SyncMessageDueBPS:       primitives.BP(3333),
+	ContributionDueBPS:      primitives.BP(6667),
+	AttestationDueBPSGloas:  primitives.BP(2500),
+	AggregateDueBPSGloas:    primitives.BP(5000),
+	SyncMessageDueBPSGloas:  primitives.BP(2500),
+	ContributionDueBPSGloas: primitives.BP(5000),
 
 	// Ethereum PoW parameters.
 	DepositChainID:         1, // Chain ID of eth1 mainnet.
@@ -182,6 +190,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	DomainApplicationMask:             bytesutil.Uint32ToBytes4(0x00000001),
 	DomainApplicationBuilder:          bytesutil.Uint32ToBytes4(0x00000001),
 	DomainBLSToExecutionChange:        bytesutil.Uint32ToBytes4(0x0A000000),
+	DomainBeaconBuilder:               bytesutil.Uint32ToBytes4(0x0B000000),
+	DomainPTCAttester:                 bytesutil.Uint32ToBytes4(0x0C000000),
 
 	// Prysm constants.
 	GenesisValidatorsRoot:          [32]byte{75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107, 243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149},
@@ -231,6 +241,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	ElectraForkEpoch:     mainnetElectraForkEpoch,
 	FuluForkVersion:      []byte{6, 0, 0, 0},
 	FuluForkEpoch:        mainnetFuluForkEpoch,
+	GloasForkEpoch:       mainnetGloasForkEpoch,
 
 	// New values introduced in Altair hard fork 1.
 	// Participation flag indices.
@@ -328,6 +339,11 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MinEpochsForDataColumnSidecarsRequest: 4096,
 	ValidatorCustodyRequirement:           8,
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
+
+	// Values related to gloas
+	BuilderPaymentThresholdNumerator:   6,
+	BuilderPaymentThresholdDenominator: 10,
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

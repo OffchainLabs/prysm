@@ -30,8 +30,8 @@ func addLogWriter(w io.Writer) {
 }
 
 // ConfigurePersistentLogging adds a log-to-file writer. File content is identical to stdout.
-func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Level) error {
-	logrus.WithField("logFileName", logFileName).Info("Logs will be made persistent")
+func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Level, vmodule map[string]logrus.Level) error {
+	logrus.WithField("logFileName", logFileName).Debug("Logs will be made persistent")
 	if err := file.MkdirAll(filepath.Dir(logFileName)); err != nil {
 		return err
 	}
@@ -43,8 +43,15 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 	if format != "text" {
 		addLogWriter(f)
 
-		logrus.Info("File logging initialized")
+		logrus.Debug("File logging initialized")
 		return nil
+	}
+
+	maxVmoduleLevel := logrus.PanicLevel
+	for _, level := range vmodule {
+		if level > maxVmoduleLevel {
+			maxVmoduleLevel = level
+		}
 	}
 
 	// Create formatter and writer hook
@@ -54,14 +61,16 @@ func ConfigurePersistentLogging(logFileName string, format string, lvl logrus.Le
 	// If persistent log files are written - we disable the log messages coloring because
 	// the colors are ANSI codes and seen as gibberish in the log files.
 	formatter.DisableColors = true
+	formatter.BaseVerbosity = lvl
+	formatter.VModule = vmodule
 
 	logrus.AddHook(&WriterHook{
 		Formatter:     formatter,
 		Writer:        f,
-		AllowedLevels: logrus.AllLevels[:lvl+1],
+		AllowedLevels: logrus.AllLevels[:max(lvl, maxVmoduleLevel)+1],
 	})
 
-	logrus.Info("File logging initialized")
+	logrus.Debug("File logging initialized")
 	return nil
 }
 
@@ -94,7 +103,7 @@ func ConfigureEphemeralLogFile(datadirPath string, app string) error {
 		AllowedLevels: logrus.AllLevels[:ephemeralLogFileVerbosity+1],
 	})
 
-	logrus.Info("Ephemeral log file initialized")
+	logrus.WithField("path", logFilePath).Debug("Ephemeral log file initialized")
 	return nil
 }
 

@@ -364,7 +364,8 @@ var (
 	}
 	// DisableGetBlobsV2 disables the engine_getBlobsV2 usage.
 	DisableGetBlobsV2 = &cli.BoolFlag{
-		Name:  "disable-get-blobs-v2",
-		Usage: "Disables the engine_getBlobsV2 usage.",
+		Name:   "disable-get-blobs-v2",
+		Usage:  "Disables the engine_getBlobsV2 usage.",
+		Hidden: true,
 	}
 )

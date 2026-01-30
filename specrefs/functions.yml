@@ -2366,8 +2366,8 @@
     - file: beacon-chain/state/state-native/getters_withdrawal.go
       search: func (b *BeaconState) ExpectedWithdrawals(
   spec: |
-    <spec fn="get_expected_withdrawals" fork="capella" hash="d6a98c14">
-    def get_expected_withdrawals(state: BeaconState) -> Tuple[Sequence[Withdrawal], uint64]:
+    <spec fn="get_expected_withdrawals" fork="capella" hash="12088347">
+    def get_expected_withdrawals(state: BeaconState) -> ExpectedWithdrawals:
         withdrawal_index = state.next_withdrawal_index
         withdrawals: List[Withdrawal] = []
 
@@ -2377,7 +2377,10 @@
         )
         withdrawals.extend(validators_sweep_withdrawals)
 
-        return withdrawals, processed_validators_sweep_count
+        return ExpectedWithdrawals(
+            withdrawals,
+            processed_validators_sweep_count,
+        )
     </spec>
 
 - name: get_expected_withdrawals#electra
@@ -2385,8 +2388,8 @@
     - file: beacon-chain/state/state-native/getters_withdrawal.go
       search: func (b *BeaconState) ExpectedWithdrawals(
   spec: |
-    <spec fn="get_expected_withdrawals" fork="electra" hash="cfce862b">
-    def get_expected_withdrawals(state: BeaconState) -> Tuple[Sequence[Withdrawal], uint64, uint64]:
+    <spec fn="get_expected_withdrawals" fork="electra" hash="254541e3">
+    def get_expected_withdrawals(state: BeaconState) -> ExpectedWithdrawals:
         withdrawal_index = state.next_withdrawal_index
         withdrawals: List[Withdrawal] = []
 
@@ -2403,8 +2406,12 @@
         )
         withdrawals.extend(validators_sweep_withdrawals)
 
-        # [Modified in Electra:EIP7251]
-        return withdrawals, processed_partial_withdrawals_count, processed_validators_sweep_count
+        return ExpectedWithdrawals(
+            withdrawals,
+            # [New in Electra:EIP7251]
+            processed_partial_withdrawals_count,
+            processed_validators_sweep_count,
+        )
     </spec>
 
 - name: get_filtered_block_tree
@@ -4223,7 +4230,7 @@
   sources:
     - file: beacon-chain/core/electra/deposits.go
       search: func IsValidDepositSignature(
-    - file: beacon-chain/core/blocks/deposit.go
+    - file: beacon-chain/core/helpers/deposit.go
       search: func IsValidDepositSignature(
   spec: |
     <spec fn="is_valid_deposit_signature" fork="electra" hash="7347b754">
@@ -4932,7 +4939,7 @@
 - name: prepare_execution_payload#capella
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="capella" hash="c258893e">
+    <spec fn="prepare_execution_payload" fork="capella" hash="998e8b92">
     def prepare_execution_payload(
         state: BeaconState,
         safe_block_hash: Hash32,
@@ -4945,15 +4952,12 @@
         parent_hash = state.latest_execution_payload_header.block_hash
 
         # Set the forkchoice head and initiate the payload build process
-        # [New in Capella]
-        withdrawals, _ = get_expected_withdrawals(state)
-
         payload_attributes = PayloadAttributes(
             timestamp=compute_time_at_slot(state, state.slot),
             prev_randao=get_randao_mix(state, get_current_epoch(state)),
             suggested_fee_recipient=suggested_fee_recipient,
             # [New in Capella]
-            withdrawals=withdrawals,
+            withdrawals=get_expected_withdrawals(state).withdrawals,
         )
         return execution_engine.notify_forkchoice_updated(
             head_block_hash=parent_hash,
@@ -4966,7 +4970,7 @@
 - name: prepare_execution_payload#deneb
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="deneb" hash="59f61f3a">
+    <spec fn="prepare_execution_payload" fork="deneb" hash="c617aa1b">
     def prepare_execution_payload(
         state: BeaconState,
         safe_block_hash: Hash32,
@@ -4978,13 +4982,11 @@
         parent_hash = state.latest_execution_payload_header.block_hash
 
         # Set the forkchoice head and initiate the payload build process
-        withdrawals, _ = get_expected_withdrawals(state)
-
         payload_attributes = PayloadAttributes(
             timestamp=compute_time_at_slot(state, state.slot),
             prev_randao=get_randao_mix(state, get_current_epoch(state)),
             suggested_fee_recipient=suggested_fee_recipient,
-            withdrawals=withdrawals,
+            withdrawals=get_expected_withdrawals(state).withdrawals,
             # [New in Deneb:EIP4788]
             parent_beacon_block_root=hash_tree_root(state.latest_block_header),
         )
@@ -4999,7 +5001,7 @@
 - name: prepare_execution_payload#electra
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="electra" hash="5414b883">
+    <spec fn="prepare_execution_payload" fork="electra" hash="c617aa1b">
     def prepare_execution_payload(
         state: BeaconState,
         safe_block_hash: Hash32,
@@ -5010,15 +5012,13 @@
         # Verify consistency of the parent hash with respect to the previous execution payload header
         parent_hash = state.latest_execution_payload_header.block_hash
 
-        # [Modified in EIP7251]
         # Set the forkchoice head and initiate the payload build process
-        withdrawals, _, _ = get_expected_withdrawals(state)
-
         payload_attributes = PayloadAttributes(
             timestamp=compute_time_at_slot(state, state.slot),
             prev_randao=get_randao_mix(state, get_current_epoch(state)),
             suggested_fee_recipient=suggested_fee_recipient,
-            withdrawals=withdrawals,
+            withdrawals=get_expected_withdrawals(state).withdrawals,
+            # [New in Deneb:EIP4788]
             parent_beacon_block_root=hash_tree_root(state.latest_block_header),
         )
         return execution_engine.notify_forkchoice_updated(
@@ -5388,7 +5388,7 @@
 
 - name: process_consolidation_request
   sources:
-    - file: beacon-chain/core/electra/consolidations.go
+    - file: beacon-chain/core/requests/consolidations.go
       search: func ProcessConsolidationRequests(
   spec: |
     <spec fn="process_consolidation_request" fork="electra" hash="4da4b0fb">
@@ -5528,7 +5528,7 @@
 
 - name: process_deposit_request
   sources:
-    - file: beacon-chain/core/electra/deposits.go
+    - file: beacon-chain/core/requests/deposits.go
       search: func processDepositRequest(
   spec: |
     <spec fn="process_deposit_request" fork="electra" hash="547c4a35">
@@ -6272,8 +6272,8 @@
 
 - name: process_operations#electra
   sources:
-    - file: beacon-chain/core/electra/transition_no_verify_sig.go
-      search: func ProcessOperations(
+    - file: beacon-chain/core/transition/electra.go
+      search: func electraOperations(
   spec: |
     <spec fn="process_operations" fork="electra" hash="643f18b4">
     def process_operations(state: BeaconState, body: BeaconBlockBody) -> None:
@@ -6993,7 +6993,7 @@
 
 - name: process_withdrawal_request
   sources:
-    - file: beacon-chain/core/electra/withdrawals.go
+    - file: beacon-chain/core/requests/withdrawals.go
       search: func ProcessWithdrawalRequests(
   spec: |
     <spec fn="process_withdrawal_request" fork="electra" hash="c21a0a53">
@@ -7071,18 +7071,18 @@
     - file: beacon-chain/core/blocks/withdrawals.go
       search: func ProcessWithdrawals(
   spec: |
-    <spec fn="process_withdrawals" fork="capella" hash="901f9fc4">
+    <spec fn="process_withdrawals" fork="capella" hash="47327ef6">
     def process_withdrawals(state: BeaconState, payload: ExecutionPayload) -> None:
         # Get expected withdrawals
-        withdrawals, processed_validators_sweep_count = get_expected_withdrawals(state)
-        assert payload.withdrawals == withdrawals
+        expected = get_expected_withdrawals(state)
+        assert payload.withdrawals == expected.withdrawals
 
         # Apply expected withdrawals
-        apply_withdrawals(state, withdrawals)
+        apply_withdrawals(state, expected.withdrawals)
 
         # Update withdrawals fields in the state
-        update_next_withdrawal_index(state, withdrawals)
-        update_next_withdrawal_validator_index(state, processed_validators_sweep_count)
+        update_next_withdrawal_index(state, expected.withdrawals)
+        update_next_withdrawal_validator_index(state, expected.withdrawals)
     </spec>
 
 - name: process_withdrawals#electra
@@ -7090,23 +7090,20 @@
     - file: beacon-chain/core/blocks/withdrawals.go
       search: func ProcessWithdrawals(
   spec: |
-    <spec fn="process_withdrawals" fork="electra" hash="67870972">
+    <spec fn="process_withdrawals" fork="electra" hash="24a50daa">
     def process_withdrawals(state: BeaconState, payload: ExecutionPayload) -> None:
-        # [Modified in Electra:EIP7251]
         # Get expected withdrawals
-        withdrawals, processed_partial_withdrawals_count, processed_validators_sweep_count = (
-            get_expected_withdrawals(state)
-        )
-        assert payload.withdrawals == withdrawals
+        expected = get_expected_withdrawals(state)
+        assert payload.withdrawals == expected.withdrawals
 
         # Apply expected withdrawals
-        apply_withdrawals(state, withdrawals)
+        apply_withdrawals(state, expected.withdrawals)
 
         # Update withdrawals fields in the state
-        update_next_withdrawal_index(state, withdrawals)
+        update_next_withdrawal_index(state, expected.withdrawals)
         # [New in Electra:EIP7251]
-        update_pending_partial_withdrawals(state, processed_partial_withdrawals_count)
-        update_next_withdrawal_validator_index(state, processed_validators_sweep_count)
+        update_pending_partial_withdrawals(state, expected.processed_partial_withdrawals_count)
+        update_next_withdrawal_validator_index(state, expected.withdrawals)
     </spec>
 
 - name: queue_excess_active_balance

@@ -1,7 +1,6 @@
 package verification
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -293,55 +293,57 @@ func (dv *RODataColumnsVerifier) ValidProposerSignature(ctx context.Context) (er
 // The returned state is guaranteed to be at the same epoch as the data column's epoch, and have the same randao mix and active
 // validator indices as the data column's parent state advanced to the data column's slot.
 func (dv *RODataColumnsVerifier) getVerifyingState(ctx context.Context, dataColumn blocks.RODataColumn) (state.ReadOnlyBeaconState, error) {
+	dataColumnSlot := dataColumn.Slot()
+	dataColumnEpoch := slots.ToEpoch(dataColumnSlot)
+	if dataColumnEpoch == 0 {
+		return dv.hsp.HeadStateReadOnly(ctx)
+	}
+	parentRoot := dataColumn.ParentRoot()
+	dcDependentRoot, err := dv.fc.DependentRootForEpoch(parentRoot, dataColumnEpoch-1)
+	if err != nil {
+		return nil, err
+	}
 	headRoot, err := dv.hsp.HeadRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	parentRoot := dataColumn.ParentRoot()
-	dataColumnSlot := dataColumn.Slot()
-	dataColumnEpoch := slots.ToEpoch(dataColumnSlot)
-	headSlot := dv.hsp.HeadSlot()
-	headEpoch := slots.ToEpoch(headSlot)
-
-	// Use head if it's the parent
-	if bytes.Equal(parentRoot[:], headRoot) {
-		// If they are in the same epoch, then we can return the head state directly
-		if dataColumnEpoch == headEpoch {
-			return dv.hsp.HeadStateReadOnly(ctx)
-		}
-		// Otherwise, we need to process the head state to the data column's slot
-		headState, err := dv.hsp.HeadState(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, dataColumnSlot)
-	}
-
-	// If head and data column are in the same epoch and head is compatible with the parent's depdendent root, then use head
-	if dataColumnEpoch == headEpoch {
-		headDependent, err := dv.fc.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dataColumnEpoch)
-		if err != nil {
-			return nil, err
-		}
-		parentDependent, err := dv.fc.DependentRootForEpoch(parentRoot, dataColumnEpoch)
-		if err != nil {
-			return nil, err
-		}
-		if bytes.Equal(headDependent[:], parentDependent[:]) {
-			return dv.hsp.HeadStateReadOnly(ctx)
-		}
-	}
-
-	// Otherwise retrieve the parent state and advance it to the data column's slot
-	parentState, err := dv.sr.StateByRoot(ctx, parentRoot)
+	headDependentRoot, err := dv.fc.DependentRootForEpoch(bytesutil.ToBytes32(headRoot), dataColumnEpoch-1)
 	if err != nil {
 		return nil, err
 	}
-	parentEpoch := slots.ToEpoch(parentState.Slot())
-	if dataColumnEpoch == parentEpoch {
-		return parentState, nil
+	if dcDependentRoot == headDependentRoot {
+		headSlot := dv.hsp.HeadSlot()
+		headEpoch := slots.ToEpoch(headSlot)
+		if headEpoch == dataColumnEpoch || headEpoch == dataColumnEpoch-1 {
+			return dv.hsp.HeadStateReadOnly(ctx)
+		}
+		if headEpoch+1 < dataColumnEpoch {
+			headState, err := dv.hsp.HeadState(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return transition.ProcessSlotsUsingNextSlotCache(ctx, headState, headRoot, dataColumnSlot)
+		}
 	}
-	return transition.ProcessSlotsUsingNextSlotCache(ctx, parentState, parentRoot[:], dataColumnSlot)
+
+	logrus.WithFields(logrus.Fields{
+		"slot":       dataColumnSlot,
+		"parentRoot": fmt.Sprintf("%#x", parentRoot),
+		"headRoot":   fmt.Sprintf("%#x", headRoot),
+	}).Debug("Replying state for data column verification")
+	targetRoot, err := dv.fc.TargetRootForEpoch(parentRoot, dataColumnEpoch)
+	if err != nil {
+		return nil, err
+	}
+	targetState, err := dv.sr.StateByRoot(ctx, targetRoot)
+	if err != nil {
+		return nil, err
+	}
+	targetEpoch := slots.ToEpoch(targetState.Slot())
+	if targetEpoch == dataColumnEpoch || targetEpoch == dataColumnEpoch-1 {
+		return targetState, nil
+	}
+	return transition.ProcessSlotsUsingNextSlotCache(ctx, targetState, parentRoot[:], dataColumnSlot)
 }
 
 func (dv *RODataColumnsVerifier) SidecarParentSeen(parentSeen func([fieldparams.RootLength]byte) bool) (err error) {

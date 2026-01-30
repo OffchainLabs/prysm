@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
@@ -113,6 +114,7 @@ var appFlags = []cli.Flag{
 	cmd.PubsubQueueSize,
 	cmd.DataDirFlag,
 	cmd.VerbosityFlag,
+	cmd.LogVModuleFlag,
 	cmd.EnableTracingFlag,
 	cmd.TracingProcessNameFlag,
 	cmd.TracingEndpointFlag,
@@ -158,6 +160,7 @@ var appFlags = []cli.Flag{
 	dasFlags.BackfillOldestSlot,
 	dasFlags.BlobRetentionEpochFlag,
 	flags.BatchVerifierLimit,
+	flags.StateDiffExponents,
 	flags.DisableEphemeralLogFile,
 }
 
@@ -171,13 +174,22 @@ func before(ctx *cli.Context) error {
 		return errors.Wrap(err, "failed to load flags from config file")
 	}
 
-	// determine log verbosity
+	// determine default log verbosity
 	verbosity := ctx.String(cmd.VerbosityFlag.Name)
 	verbosityLevel, err := logrus.ParseLevel(verbosity)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse log verbosity")
 	}
-	logs.SetLoggingLevel(verbosityLevel)
+
+	// determine per package verbosity. if not set, maxLevel will be 0.
+	vmoduleInput := strings.Join(ctx.StringSlice(cmd.LogVModuleFlag.Name), ",")
+	vmodule, maxLevel, err := cmd.ParseVModule(vmoduleInput)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse log vmodule")
+	}
+
+	// set the global logging level to allow for the highest verbosity requested
+	logs.SetLoggingLevel(max(verbosityLevel, maxLevel))
 
 	format := ctx.String(cmd.LogFormat.Name)
 	switch format {
@@ -191,11 +203,13 @@ func before(ctx *cli.Context) error {
 		formatter.FullTimestamp = true
 		formatter.ForceFormatting = true
 		formatter.ForceColors = true
+		formatter.VModule = vmodule
+		formatter.BaseVerbosity = verbosityLevel
 
 		logrus.AddHook(&logs.WriterHook{
 			Formatter:     formatter,
 			Writer:        os.Stderr,
-			AllowedLevels: logrus.AllLevels[:verbosityLevel+1],
+			AllowedLevels: logrus.AllLevels[:max(verbosityLevel, maxLevel)+1],
 		})
 	case "fluentd":
 		f := joonix.NewFormatter()
@@ -219,7 +233,7 @@ func before(ctx *cli.Context) error {
 
 	logFileName := ctx.String(cmd.LogFileName.Name)
 	if logFileName != "" {
-		if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel); err != nil {
+		if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel, vmodule); err != nil {
 			log.WithError(err).Error("Failed to configuring logging to disk.")
 		}
 	}
@@ -229,6 +243,11 @@ func before(ctx *cli.Context) error {
 			log.WithError(err).Error("Failed to configure debug log file")
 		}
 	}
+
+	// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+	log.WithFields(logrus.Fields{
+		"version": version.Version(),
+	}).Info("Prysm Beacon Chain started")
 
 	if err := cmd.ExpandSingleEndpointIfFile(ctx, flags.ExecutionEngineEndpoint); err != nil {
 		return errors.Wrap(err, "failed to expand single endpoint")
@@ -271,9 +290,11 @@ func main() {
 		Commands: []*cli.Command{
 			dbcommands.Commands,
 			jwtcommands.Commands,
+			cmd.CompletionCommand("beacon-chain"),
 		},
-		Flags:  appFlags,
-		Before: before,
+		Flags:                appFlags,
+		Before:               before,
+		EnableBashCompletion: true,
 	}
 
 	defer func() {

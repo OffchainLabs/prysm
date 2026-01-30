@@ -29,7 +29,7 @@ func (v *validator) SubmitSyncCommitteeMessage(ctx context.Context, slot primiti
 	defer span.End()
 	span.SetAttributes(trace.StringAttribute("validator", fmt.Sprintf("%#x", pubKey)))
 
-	v.waitOneThirdOrValidBlock(ctx, slot)
+	v.waitUntilAttestationDueOrValidBlock(ctx, slot)
 
 	res, err := v.validatorClient.SyncMessageBlockRoot(ctx, &emptypb.Empty{})
 	if err != nil {
@@ -127,7 +127,12 @@ func (v *validator) SubmitSignedContributionAndProof(ctx context.Context, slot p
 		return
 	}
 
-	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().ContributionDueBPS)
+	cfg := params.BeaconConfig()
+	component := cfg.ContributionDueBPS
+	if slots.ToEpoch(slot) >= cfg.GloasForkEpoch {
+		component = cfg.ContributionDueBPSGloas
+	}
+	v.waitUntilSlotComponent(ctx, slot, component)
 
 	coveredSubnets := make(map[uint64]bool)
 	for i, comIdx := range indexRes.Indices {

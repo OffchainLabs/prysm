@@ -70,7 +70,9 @@ type Flags struct {
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 	IgnoreUnviableAttestations bool // Ignore attestations whose target state is not viable (avoids lagging-node DoS).
 
+	EnableHashtree               bool // Enables usage of the hashtree library for hashing
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
+	EnableProposerPreprocessing  bool // EnableProposerPreprocessing enables proposer pre-processing of blocks before proposing.
 
 	PrepareAllPayloads bool // PrepareAllPayloads informs the engine to prepare a block on every slot.
 	// BlobSaveFsync requires blob saving to block on fsync to ensure blobs are durably persisted before passing DA.
@@ -80,7 +82,6 @@ type Flags struct {
 	SaveInvalidBlob  bool // SaveInvalidBlob saves invalid blob to temp.
 
 	EnableDiscoveryReboot bool // EnableDiscoveryReboot allows the node to have its local listener to be rebooted in the event of discovery issues.
-	LowValcountSweep      bool // LowValcountSweep bounds withdrawal sweep by validator count.
 
 	// KeystoreImportDebounceInterval specifies the time duration the validator waits to reload new keys if they have
 	// changed on disk. This feature is for advanced use cases only.
@@ -237,10 +238,18 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(enableFullSSZDataLogging)
 		cfg.EnableFullSSZDataLogging = true
 	}
+	if ctx.IsSet(enableHashtree.Name) {
+		logEnabled(enableHashtree)
+		cfg.EnableHashtree = true
+	}
 	cfg.EnableVerboseSigVerification = true
 	if ctx.IsSet(disableVerboseSigVerification.Name) {
 		logEnabled(disableVerboseSigVerification)
 		cfg.EnableVerboseSigVerification = false
+	}
+	cfg.EnableProposerPreprocessing = ctx.Bool(enableProposerPreprocessing.Name)
+	if cfg.EnableProposerPreprocessing {
+		logEnabled(enableProposerPreprocessing)
 	}
 	if ctx.IsSet(prepareAllPayloads.Name) {
 		logEnabled(prepareAllPayloads)
@@ -285,11 +294,6 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(ignoreUnviableAttestations)
 		cfg.IgnoreUnviableAttestations = true
 	}
-	if ctx.Bool(lowValcountSweep.Name) {
-		logEnabled(lowValcountSweep)
-		cfg.LowValcountSweep = true
-	}
-
 	if ctx.IsSet(EnableStateDiff.Name) {
 		logEnabled(EnableStateDiff)
 		cfg.EnableStateDiff = true

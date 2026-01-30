@@ -1,6 +1,13 @@
 package prefixed
 
 var prefixReplacements = map[string]string{
+	"cmd/beacon-chain":                                "main",
+	"cmd/client-stats":                                "main",
+	"cmd/prysmctl/p2p":                                "prysmctl-p2p",
+	"cmd/prysmctl/testnet":                            "genesis",
+	"cmd/validator/slashing-protection":               "historycmd",
+	"cmd/validator":                                   "main",
+	"cmd":                                             "node",
 	"beacon-chain/cache/depositsnapshot":              "cache",
 	"beacon-chain/core/transition":                    "state",
 	"beacon-chain/db/kv":                              "db",

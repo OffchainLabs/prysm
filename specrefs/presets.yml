@@ -19,7 +19,10 @@
     </spec>
 
 - name: CELLS_PER_EXT_BLOB
-  sources: []
+  sources:
+    - file: beacon-chain/rpc/eth/config/handlers.go
+      search: data\["CELLS_PER_EXT_BLOB"\]
+      regex: true
   spec: |
     <spec preset_var="CELLS_PER_EXT_BLOB" fork="fulu" hash="217075f3">
     CELLS_PER_EXT_BLOB = 128
@@ -683,6 +686,16 @@
   spec: |
     <spec preset_var="TARGET_COMMITTEE_SIZE" fork="phase0" hash="d56fdb68">
     TARGET_COMMITTEE_SIZE: uint64 = 128
+    </spec>
+
+- name: UPDATE_TIMEOUT
+  sources:
+    - file: beacon-chain/rpc/eth/config/handlers.go
+      search: data\["UPDATE_TIMEOUT"\]
+      regex: true
+  spec: |
+    <spec preset_var="UPDATE_TIMEOUT" fork="altair" hash="e633d57e">
+    UPDATE_TIMEOUT = 8192
     </spec>
 
 - name: VALIDATOR_REGISTRY_LIMIT
