@@ -144,17 +144,35 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
 
 #### Algorithm Overview
 
+**Key Terms:**
+
+- **Target gindex** (generalized index): The position of the SSZ element you want to prove, expressed as a generalized Merkle tree index (root is 1).
+- **Registered gindices**: The set of tree positions whose node hashes must be captured during merkleization in order to later assemble the proof.
+- **Sibling node**: The node that shares the same parent as another node.
+- **Leaf value**: The 32-byte hash of the target node (the node being proven). Stored in `Proof.Leaf`.
+- **Proof index**: The generalized index of the target node. Stored in `Proof.Index`.
+
+**Phases:**
+
 1. **Registration Phase** (`addTarget`)
-   - Marks the target gindex
-   - Marks every required sibling node by walking from the target leaf to the root (gindex=1).
+> Goal: determine exactly which sibling hashes are needed for the proof.
+   - Record the target gindex as the proof target.
+   - Starting from the target node, walk the Merkle tree from the leaf (target gindex) to the root (gindex = 1).
+   - At each step:
+     - Compute and register the sibling gindex (i XOR 1) as “must collect”.
+     - Move to the parent (i = i / 2).
+This produces the full set of registered gindices (the sibling nodes on the target-to-root path).
 
 2. **Merkleization Phase** (`merkleize`)
-   - Traverses data structure recursively
-   - Builds Merkle tree from leaves to root
-   - Collects hashes at registered gindices during traversal
+> Goal: recursively merkleize the tree and capture the needed hashes.
+   - Recursively traverse the SSZ structure and compute Merkle tree node hashes from leaves to root.
+   - Whenever the traversal computes a node whose gindex is in registered gindices, store that node’s hash for later proof construction.
 
 3. **Proof Assembly Phase** (`toProof`)
-   - Assembles collected hashes into a `fastssz.Proof` structure
-   - Sets `Proof.Leaf` to the 32-byte hash of the target node
-   - Sets `Proof.Index` to the target's generalized index
-   - Builds `Proof.Hashes` by walking from the target leaf up to the root, appending each sibling hash (XOR gindex to find sibling, then divide by 2 to move up)
+> Goal: create the final fastssz.Proof object in the correct format and order.
+   - Set `Proof.Index` to the target gindex.
+   - Set `Proof.Leaf` to the 32-byte hash of the target node.
+   - Build `Proof.Hashes` by walking from the target node up to (but not including) the root:
+     - At node i, append the stored hash for the sibling (i XOR 1).
+     - Move to the parent (i = i / 2).
+   - The resulting `Proof.Hashes` is ordered from the target level upward, containing one sibling hash per tree level on the path to the root.
