@@ -99,7 +99,7 @@ type PathElement struct {
 The `AnalyzeObject` function performs recursive type introspection using Go reflection:
 
 1. **Type Inspection** - Examines Go `reflect.Value` to determine SSZ type
-   - Basic types: `uint8`, `uint16`, `uint32`, `uint64`, `bool` → SSZType constants
+   - Basic types (`uint8`, `uint16`, `uint32`, `uint64`, `bool`): `SSZType` constants
    - Slices: Determined from struct tags. (`ssz-size` for vectors, `ssz-max` for lists) There is a related [write-up](https://hackmd.io/@junsong/H101DKnwxl) regarding struct tags.
    - Structs: Analyzed as Containers with field ordering from JSON tags
    - Pointers: Dereferenced automatically
