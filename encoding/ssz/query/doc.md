@@ -146,12 +146,11 @@ The `Prove` method generates Merkle proofs using a single-sweep merkleization al
 
 **Key Terms:**
 
-- **Target gindex** (generalized index): The position of the SSZ element you want to prove, expressed as a generalized Merkle tree index.
+- **Target gindex** (generalized index): The position of the SSZ element you want to prove, expressed as a generalized Merkle tree index. Stored in `Proof.Index`.
   - Note: The generalized index for root is 1.
 - **Registered gindices**: The set of tree positions whose node hashes must be captured during merkleization in order to later assemble the proof.
 - **Sibling node**: The node that shares the same parent as another node.
 - **Leaf value**: The 32-byte hash of the target node (the node being proven). Stored in `Proof.Leaf`.
-- **Proof index**: The generalized index of the target node. Stored in `Proof.Index`.
 
 **Phases:**
 
