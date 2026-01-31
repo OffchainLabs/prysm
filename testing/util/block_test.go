@@ -420,7 +420,8 @@ func TestGenerateTestSignedExecutionPayloadBid(t *testing.T) {
 	require.NotNil(t, bid.Message.BlockHash)
 	require.NotNil(t, bid.Message.PrevRandao)
 	require.NotNil(t, bid.Message.FeeRecipient)
-	require.NotNil(t, bid.Message.BlobKzgCommitmentsRoot)
+	require.NotNil(t, bid.Message.BlobKzgCommitments)
+	require.Equal(t, 1, len(bid.Message.BlobKzgCommitments))
 
 	// Verify HashTreeRoot works
 	_, err := bid.HashTreeRoot()

@@ -18,7 +18,7 @@ type testExecutionPayloadBid struct {
 	parentBlockRoot        [32]byte
 	blockHash              [32]byte
 	prevRandao             [32]byte
-	blobKzgCommitmentsRoot [32]byte
+	blobKzgCommitments     [][]byte
 	feeRecipient           [20]byte
 	gasLimit               uint64
 	builderIndex           primitives.BuilderIndex
@@ -40,9 +40,9 @@ func (t testExecutionPayloadBid) Value() primitives.Gwei { return t.value }
 func (t testExecutionPayloadBid) ExecutionPayment() primitives.Gwei {
 	return t.executionPayment
 }
-func (t testExecutionPayloadBid) BlobKzgCommitmentsRoot() [32]byte { return t.blobKzgCommitmentsRoot }
-func (t testExecutionPayloadBid) FeeRecipient() [20]byte           { return t.feeRecipient }
-func (t testExecutionPayloadBid) IsNil() bool                      { return false }
+func (t testExecutionPayloadBid) BlobKzgCommitments() [][]byte { return t.blobKzgCommitments }
+func (t testExecutionPayloadBid) FeeRecipient() [20]byte       { return t.feeRecipient }
+func (t testExecutionPayloadBid) IsNil() bool                  { return false }
 
 func TestSetExecutionPayloadBid(t *testing.T) {
 	t.Run("previous fork returns expected error", func(t *testing.T) {
@@ -57,7 +57,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			parentBlockRoot = [32]byte(bytes.Repeat([]byte{0xCD}, 32))
 			blockHash       = [32]byte(bytes.Repeat([]byte{0xEF}, 32))
 			prevRandao      = [32]byte(bytes.Repeat([]byte{0x11}, 32))
-			blobRoot        = [32]byte(bytes.Repeat([]byte{0x22}, 32))
+			blobCommitments = [][]byte{bytes.Repeat([]byte{0x22}, 48)}
 			feeRecipient    [20]byte
 		)
 		copy(feeRecipient[:], bytes.Repeat([]byte{0x33}, len(feeRecipient)))
@@ -70,7 +70,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 			parentBlockRoot:        parentBlockRoot,
 			blockHash:              blockHash,
 			prevRandao:             prevRandao,
-			blobKzgCommitmentsRoot: blobRoot,
+			blobKzgCommitments:     blobCommitments,
 			feeRecipient:           feeRecipient,
 			gasLimit:               123,
 			builderIndex:           7,
@@ -86,7 +86,7 @@ func TestSetExecutionPayloadBid(t *testing.T) {
 		require.DeepEqual(t, parentBlockRoot[:], st.latestExecutionPayloadBid.ParentBlockRoot)
 		require.DeepEqual(t, blockHash[:], st.latestExecutionPayloadBid.BlockHash)
 		require.DeepEqual(t, prevRandao[:], st.latestExecutionPayloadBid.PrevRandao)
-		require.DeepEqual(t, blobRoot[:], st.latestExecutionPayloadBid.BlobKzgCommitmentsRoot)
+		require.DeepEqual(t, blobCommitments, st.latestExecutionPayloadBid.BlobKzgCommitments)
 		require.DeepEqual(t, feeRecipient[:], st.latestExecutionPayloadBid.FeeRecipient)
 		require.Equal(t, uint64(123), st.latestExecutionPayloadBid.GasLimit)
 		require.Equal(t, primitives.BuilderIndex(7), st.latestExecutionPayloadBid.BuilderIndex)

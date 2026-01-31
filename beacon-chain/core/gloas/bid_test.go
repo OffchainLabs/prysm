@@ -184,6 +184,28 @@ func signBid(t *testing.T, sk common.SecretKey, bid *ethpb.ExecutionPayloadBid, 
 	return out
 }
 
+func blobCommitmentsForSlot(slot primitives.Slot, count int) [][]byte {
+	max := int(params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(slot)))
+	if count > max {
+		count = max
+	}
+	commitments := make([][]byte, count)
+	for i := range commitments {
+		commitments[i] = bytes.Repeat([]byte{0xEE}, 48)
+	}
+	return commitments
+}
+
+func tooManyBlobCommitmentsForSlot(slot primitives.Slot) [][]byte {
+	max := int(params.BeaconConfig().MaxBlobsPerBlockAtEpoch(slots.ToEpoch(slot)))
+	count := max + 1
+	commitments := make([][]byte, count)
+	for i := range commitments {
+		commitments[i] = bytes.Repeat([]byte{0xEE}, 48)
+	}
+	return commitments
+}
+
 func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 	slot := primitives.Slot(12)
 	proposerIdx := primitives.ValidatorIndex(0)
@@ -203,7 +225,7 @@ func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 		Slot:                   slot,
 		Value:                  0,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 	signed := &ethpb.SignedExecutionPayloadBid{
@@ -244,7 +266,7 @@ func TestProcessExecutionPayloadBid_SelfBuildNonZeroAmountFails(t *testing.T) {
 		Slot:                   slot,
 		Value:                  10,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xCC}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0xDD}, 20),
 	}
 	signed := &ethpb.SignedExecutionPayloadBid{
@@ -289,7 +311,7 @@ func TestProcessExecutionPayloadBid_PendingPaymentAndCacheBid(t *testing.T) {
 		Slot:                   slot,
 		Value:                  500_000,
 		ExecutionPayment:       1,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 
@@ -350,7 +372,7 @@ func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
 		Slot:                   slot,
 		Value:                  10,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x05}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0x06}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -403,7 +425,7 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 		Slot:                   slot,
 		Value:                  25,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -445,7 +467,7 @@ func TestProcessExecutionPayloadBid_InvalidSignature(t *testing.T) {
 		Slot:                   slot,
 		Value:                  10,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 	// Use an invalid signature.
@@ -461,6 +483,42 @@ func TestProcessExecutionPayloadBid_InvalidSignature(t *testing.T) {
 
 	err = ProcessExecutionPayloadBid(state, block)
 	require.ErrorContains(t, "bid signature validation failed", err)
+}
+
+func TestProcessExecutionPayloadBid_TooManyBlobCommitments(t *testing.T) {
+	slot := primitives.Slot(9)
+	proposerIdx := primitives.ValidatorIndex(0)
+	builderIdx := params.BeaconConfig().BuilderIndexSelfBuild
+	randao := [32]byte(bytes.Repeat([]byte{0xAA}, 32))
+	latestHash := [32]byte(bytes.Repeat([]byte{0xBB}, 32))
+	pubKey := [48]byte{}
+	state := buildGloasState(t, slot, proposerIdx, builderIdx, params.BeaconConfig().MinActivationBalance+1000, randao, latestHash, pubKey)
+
+	bid := &ethpb.ExecutionPayloadBid{
+		ParentBlockHash:        latestHash[:],
+		ParentBlockRoot:        bytes.Repeat([]byte{0xCC}, 32),
+		BlockHash:              bytes.Repeat([]byte{0xDD}, 32),
+		PrevRandao:             randao[:],
+		BuilderIndex:           builderIdx,
+		Slot:                   slot,
+		BlobKzgCommitments:     tooManyBlobCommitmentsForSlot(slot),
+		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
+	}
+	signed := &ethpb.SignedExecutionPayloadBid{
+		Message:   bid,
+		Signature: common.InfiniteSignature[:],
+	}
+
+	block := stubBlock{
+		slot:       slot,
+		proposer:   proposerIdx,
+		parentRoot: bytesutil.ToBytes32(bid.ParentBlockRoot),
+		body:       stubBlockBody{signedBid: signed},
+		v:          version.Gloas,
+	}
+
+	err := ProcessExecutionPayloadBid(state, block)
+	require.ErrorContains(t, "blob KZG commitments over max", err)
 }
 
 func TestProcessExecutionPayloadBid_SlotMismatch(t *testing.T) {
@@ -487,7 +545,7 @@ func TestProcessExecutionPayloadBid_SlotMismatch(t *testing.T) {
 		Slot:                   slot + 1, // mismatch
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xCC}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0xDD}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -529,7 +587,7 @@ func TestProcessExecutionPayloadBid_ParentHashMismatch(t *testing.T) {
 		Slot:                   slot,
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x44}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0x55}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -572,7 +630,7 @@ func TestProcessExecutionPayloadBid_ParentRootMismatch(t *testing.T) {
 		Slot:                   slot,
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x44}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0x55}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -614,7 +672,7 @@ func TestProcessExecutionPayloadBid_PrevRandaoMismatch(t *testing.T) {
 		Slot:                   slot,
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x44}, 32),
+		BlobKzgCommitments:     blobCommitmentsForSlot(slot, 1),
 		FeeRecipient:           bytes.Repeat([]byte{0x55}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())

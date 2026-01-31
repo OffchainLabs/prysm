@@ -1215,15 +1215,15 @@ func genSignedExecutionPayloadBidGloas() *v1alpha1.SignedExecutionPayloadBid {
 
 func genExecutionPayloadBidGloas() *v1alpha1.ExecutionPayloadBid {
 	return &v1alpha1.ExecutionPayloadBid{
-		ParentBlockHash:        bytes(32),
-		ParentBlockRoot:        bytes(32),
-		BlockHash:              bytes(32),
-		FeeRecipient:           bytes(20),
-		GasLimit:               rand.Uint64(),
-		BuilderIndex:           primitives.BuilderIndex(rand.Uint64()),
-		Slot:                   primitives.Slot(rand.Uint64()),
-		Value:                  primitives.Gwei(rand.Uint64()),
-		BlobKzgCommitmentsRoot: bytes(32),
+		ParentBlockHash:    bytes(32),
+		ParentBlockRoot:    bytes(32),
+		BlockHash:          bytes(32),
+		FeeRecipient:       bytes(20),
+		GasLimit:           rand.Uint64(),
+		BuilderIndex:       primitives.BuilderIndex(rand.Uint64()),
+		Slot:               primitives.Slot(rand.Uint64()),
+		Value:              primitives.Gwei(rand.Uint64()),
+		BlobKzgCommitments: [][]byte{bytes(48)},
 	}
 }
 

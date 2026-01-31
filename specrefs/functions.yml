@@ -427,9 +427,11 @@
     - file: beacon-chain/core/signing/signing_root.go
       search: func ComputeDomain(
   spec: |
-    <spec fn="compute_domain" fork="phase0" hash="948e1334">
+    <spec fn="compute_domain" fork="phase0" hash="a78b32e4">
     def compute_domain(
-        domain_type: DomainType, fork_version: Version = None, genesis_validators_root: Root = None
+        domain_type: DomainType,
+        fork_version: Optional[Version] = None,
+        genesis_validators_root: Optional[Root] = None,
     ) -> Domain:
         """
         Return the domain for the ``domain_type`` and ``fork_version``.
@@ -2145,8 +2147,10 @@
     - file: beacon-chain/core/signing/domain.go
       search: func Domain(
   spec: |
-    <spec fn="get_domain" fork="phase0" hash="99ea23f6">
-    def get_domain(state: BeaconState, domain_type: DomainType, epoch: Epoch = None) -> Domain:
+    <spec fn="get_domain" fork="phase0" hash="e60c5fbc">
+    def get_domain(
+        state: BeaconState, domain_type: DomainType, epoch: Optional[Epoch] = None
+    ) -> Domain:
         """
         Return the signature domain (fork version concatenated with domain type) of a message.
         """
@@ -4939,13 +4943,15 @@
 - name: prepare_execution_payload#capella
   sources: []
   spec: |
-    <spec fn="prepare_execution_payload" fork="capella" hash="998e8b92">
+    <spec fn="prepare_execution_payload" fork="capella" hash="bdb15c3f">
     def prepare_execution_payload(
         state: BeaconState,
         safe_block_hash: Hash32,
         finalized_block_hash: Hash32,
         suggested_fee_recipient: ExecutionAddress,
         execution_engine: ExecutionEngine,
+        # [Modified in Capella]
+        # Removed `pow_chain`
     ) -> Optional[PayloadId]:
         # [Modified in Capella]
         # Removed `is_merge_transition_complete` check
@@ -7269,9 +7275,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="phase0" hash="85d8d7c9">
+    <spec fn="slash_validator" fork="phase0" hash="d2b5fafa">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -7303,9 +7311,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="altair" hash="88f6c284">
+    <spec fn="slash_validator" fork="altair" hash="179ea102">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -7337,9 +7347,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="bellatrix" hash="124f6889">
+    <spec fn="slash_validator" fork="bellatrix" hash="5964268e">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.
@@ -7371,9 +7383,11 @@
     - file: beacon-chain/core/validators/validator.go
       search: func SlashValidator(
   spec: |
-    <spec fn="slash_validator" fork="electra" hash="54b64d21">
+    <spec fn="slash_validator" fork="electra" hash="07e584e2">
     def slash_validator(
-        state: BeaconState, slashed_index: ValidatorIndex, whistleblower_index: ValidatorIndex = None
+        state: BeaconState,
+        slashed_index: ValidatorIndex,
+        whistleblower_index: Optional[ValidatorIndex] = None,
     ) -> None:
         """
         Slash the validator with index ``slashed_index``.

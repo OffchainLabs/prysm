@@ -43,9 +43,14 @@ func (h executionPayloadBidGloas) IsNil() bool {
 		len(h.payload.ParentBlockRoot) != 32 ||
 		len(h.payload.BlockHash) != 32 ||
 		len(h.payload.PrevRandao) != 32 ||
-		len(h.payload.BlobKzgCommitmentsRoot) != 32 ||
 		len(h.payload.FeeRecipient) != 20 {
 		return true
+	}
+
+	for _, commitment := range h.payload.BlobKzgCommitments {
+		if len(commitment) != 48 {
+			return true
+		}
 	}
 
 	return false
@@ -131,9 +136,9 @@ func (h executionPayloadBidGloas) ExecutionPayment() primitives.Gwei {
 	return primitives.Gwei(h.payload.ExecutionPayment)
 }
 
-// BlobKzgCommitmentsRoot returns the root of the KZG commitments for blobs.
-func (h executionPayloadBidGloas) BlobKzgCommitmentsRoot() [32]byte {
-	return [32]byte(h.payload.BlobKzgCommitmentsRoot)
+// BlobKzgCommitments returns the KZG commitments for blobs.
+func (h executionPayloadBidGloas) BlobKzgCommitments() [][]byte {
+	return h.payload.BlobKzgCommitments
 }
 
 // FeeRecipient returns the execution address that will receive the builder payment.
