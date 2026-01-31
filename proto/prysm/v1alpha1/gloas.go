@@ -20,7 +20,7 @@ func (header *ExecutionPayloadBid) Copy() *ExecutionPayloadBid {
 		Slot:                   header.Slot,
 		Value:                  header.Value,
 		ExecutionPayment:       header.ExecutionPayment,
-		BlobKzgCommitmentsRoot: bytesutil.SafeCopyBytes(header.BlobKzgCommitmentsRoot),
+		BlobKzgCommitments:     bytesutil.SafeCopy2dBytes(header.BlobKzgCommitments),
 	}
 }
 

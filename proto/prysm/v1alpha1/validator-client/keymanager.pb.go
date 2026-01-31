@@ -7,15 +7,14 @@
 package validatorpb
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	github_com_OffchainLabs_prysm_v7_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	github_com_OffchainLabs_prysm_v7_consensus_types_validator "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	v1alpha1 "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (

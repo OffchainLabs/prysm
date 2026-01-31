@@ -564,7 +564,7 @@ func NewBeaconStateGloas(options ...func(state *ethpb.BeaconStateGloas) error) (
 			BlockHash:              make([]byte, 32),
 			PrevRandao:             make([]byte, 32),
 			FeeRecipient:           make([]byte, 20),
-			BlobKzgCommitmentsRoot: make([]byte, 32),
+			BlobKzgCommitments:     [][]byte{make([]byte, 48)},
 		},
 		Builders:                     make([]*ethpb.Builder, 0),
 		ExecutionPayloadAvailability: make([]byte, 1024),

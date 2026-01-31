@@ -33,7 +33,7 @@ func TestExecutionPayloadBid_Copy(t *testing.T) {
 				Slot:                   primitives.Slot(12345),
 				ExecutionPayment:       5645654,
 				Value:                  1000000000000000000,
-				BlobKzgCommitmentsRoot: []byte("blob_kzg_commitments_32_bytes!!"),
+				BlobKzgCommitments:     [][]byte{[]byte("blob_kzg_commitments_48_bytes_longer_than_needed")},
 			},
 		},
 	}

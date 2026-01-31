@@ -8,9 +8,6 @@ package eth
 
 import (
 	context "context"
-	reflect "reflect"
-	sync "sync"
-
 	github_com_OffchainLabs_prysm_v7_consensus_types_primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
@@ -21,6 +18,8 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (

@@ -15,6 +15,7 @@ func (e *ExecutionPayloadBid) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionPayloadBid object to a target array
 func (e *ExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
+	offset := int(192)
 
 	// Field (0) 'ParentBlockHash'
 	if size := len(e.ParentBlockHash); size != 32 {
@@ -66,12 +67,22 @@ func (e *ExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Field (9) 'ExecutionPayment'
 	dst = ssz.MarshalUint64(dst, uint64(e.ExecutionPayment))
 
-	// Field (10) 'BlobKzgCommitmentsRoot'
-	if size := len(e.BlobKzgCommitmentsRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.BlobKzgCommitmentsRoot", size, 32)
+	// Offset (10) 'BlobKzgCommitments'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.BlobKzgCommitments) * 48
+
+	// Field (10) 'BlobKzgCommitments'
+	if size := len(e.BlobKzgCommitments); size > 4096 {
+		err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
 		return
 	}
-	dst = append(dst, e.BlobKzgCommitmentsRoot...)
+	for ii := 0; ii < len(e.BlobKzgCommitments); ii++ {
+		if size := len(e.BlobKzgCommitments[ii]); size != 48 {
+			err = ssz.ErrBytesLengthFn("--.BlobKzgCommitments[ii]", size, 48)
+			return
+		}
+		dst = append(dst, e.BlobKzgCommitments[ii]...)
+	}
 
 	return
 }
@@ -80,9 +91,12 @@ func (e *ExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (e *ExecutionPayloadBid) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 220 {
+	if size < 192 {
 		return ssz.ErrSize
 	}
+
+	tail := buf
+	var o10 uint64
 
 	// Field (0) 'ParentBlockHash'
 	if cap(e.ParentBlockHash) == 0 {
@@ -129,18 +143,40 @@ func (e *ExecutionPayloadBid) UnmarshalSSZ(buf []byte) error {
 	// Field (9) 'ExecutionPayment'
 	e.ExecutionPayment = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[180:188]))
 
-	// Field (10) 'BlobKzgCommitmentsRoot'
-	if cap(e.BlobKzgCommitmentsRoot) == 0 {
-		e.BlobKzgCommitmentsRoot = make([]byte, 0, len(buf[188:220]))
+	// Offset (10) 'BlobKzgCommitments'
+	if o10 = ssz.ReadOffset(buf[188:192]); o10 > size {
+		return ssz.ErrOffset
 	}
-	e.BlobKzgCommitmentsRoot = append(e.BlobKzgCommitmentsRoot, buf[188:220]...)
 
+	if o10 != 192 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (10) 'BlobKzgCommitments'
+	{
+		buf = tail[o10:]
+		num, err := ssz.DivideInt2(len(buf), 48, 4096)
+		if err != nil {
+			return err
+		}
+		e.BlobKzgCommitments = make([][]byte, num)
+		for ii := 0; ii < num; ii++ {
+			if cap(e.BlobKzgCommitments[ii]) == 0 {
+				e.BlobKzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
+			}
+			e.BlobKzgCommitments[ii] = append(e.BlobKzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
+		}
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadBid object
 func (e *ExecutionPayloadBid) SizeSSZ() (size int) {
-	size = 220
+	size = 192
+
+	// Field (10) 'BlobKzgCommitments'
+	size += len(e.BlobKzgCommitments) * 48
+
 	return
 }
 
@@ -203,12 +239,24 @@ func (e *ExecutionPayloadBid) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field (9) 'ExecutionPayment'
 	hh.PutUint64(uint64(e.ExecutionPayment))
 
-	// Field (10) 'BlobKzgCommitmentsRoot'
-	if size := len(e.BlobKzgCommitmentsRoot); size != 32 {
-		err = ssz.ErrBytesLengthFn("--.BlobKzgCommitmentsRoot", size, 32)
-		return
+	// Field (10) 'BlobKzgCommitments'
+	{
+		if size := len(e.BlobKzgCommitments); size > 4096 {
+			err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
+			return
+		}
+		subIndx := hh.Index()
+		for _, i := range e.BlobKzgCommitments {
+			if len(i) != 48 {
+				err = ssz.ErrBytesLength
+				return
+			}
+			hh.PutBytes(i)
+		}
+
+		numItems := uint64(len(e.BlobKzgCommitments))
+		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
 	}
-	hh.PutBytes(e.BlobKzgCommitmentsRoot)
 
 	hh.Merkleize(indx)
 	return
@@ -222,14 +270,14 @@ func (s *SignedExecutionPayloadBid) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the SignedExecutionPayloadBid object to a target array
 func (s *SignedExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
+	offset := int(100)
 
-	// Field (0) 'Message'
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
 	if s.Message == nil {
 		s.Message = new(ExecutionPayloadBid)
 	}
-	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
-		return
-	}
+	offset += s.Message.SizeSSZ()
 
 	// Field (1) 'Signature'
 	if size := len(s.Signature); size != 96 {
@@ -238,6 +286,11 @@ func (s *SignedExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err er
 	}
 	dst = append(dst, s.Signature...)
 
+	// Field (0) 'Message'
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -245,30 +298,51 @@ func (s *SignedExecutionPayloadBid) MarshalSSZTo(buf []byte) (dst []byte, err er
 func (s *SignedExecutionPayloadBid) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 316 {
+	if size < 100 {
 		return ssz.ErrSize
 	}
 
-	// Field (0) 'Message'
-	if s.Message == nil {
-		s.Message = new(ExecutionPayloadBid)
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Message'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
 	}
-	if err = s.Message.UnmarshalSSZ(buf[0:220]); err != nil {
-		return err
+
+	if o0 != 100 {
+		return ssz.ErrInvalidVariableOffset
 	}
 
 	// Field (1) 'Signature'
 	if cap(s.Signature) == 0 {
-		s.Signature = make([]byte, 0, len(buf[220:316]))
+		s.Signature = make([]byte, 0, len(buf[4:100]))
 	}
-	s.Signature = append(s.Signature, buf[220:316]...)
+	s.Signature = append(s.Signature, buf[4:100]...)
 
+	// Field (0) 'Message'
+	{
+		buf = tail[o0:]
+		if s.Message == nil {
+			s.Message = new(ExecutionPayloadBid)
+		}
+		if err = s.Message.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the SignedExecutionPayloadBid object
 func (s *SignedExecutionPayloadBid) SizeSSZ() (size int) {
-	size = 316
+	size = 100
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(ExecutionPayloadBid)
+	}
+	size += s.Message.SizeSSZ()
+
 	return
 }
 
@@ -742,7 +816,7 @@ func (b *BeaconBlockBodyGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BeaconBlockBodyGloas object to a target array
 func (b *BeaconBlockBodyGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(704)
+	offset := int(392)
 
 	// Field (0) 'RandaoReveal'
 	if size := len(b.RandaoReveal); size != 96 {
@@ -804,13 +878,12 @@ func (b *BeaconBlockBodyGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.BlsToExecutionChanges) * 172
 
-	// Field (10) 'SignedExecutionPayloadBid'
+	// Offset (10) 'SignedExecutionPayloadBid'
+	dst = ssz.WriteOffset(dst, offset)
 	if b.SignedExecutionPayloadBid == nil {
 		b.SignedExecutionPayloadBid = new(SignedExecutionPayloadBid)
 	}
-	if dst, err = b.SignedExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
-		return
-	}
+	offset += b.SignedExecutionPayloadBid.SizeSSZ()
 
 	// Offset (11) 'PayloadAttestations'
 	dst = ssz.WriteOffset(dst, offset)
@@ -896,6 +969,11 @@ func (b *BeaconBlockBodyGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 		}
 	}
 
+	// Field (10) 'SignedExecutionPayloadBid'
+	if dst, err = b.SignedExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
 	// Field (11) 'PayloadAttestations'
 	if size := len(b.PayloadAttestations); size > 4 {
 		err = ssz.ErrListTooBigFn("--.PayloadAttestations", size, 4)
@@ -914,12 +992,12 @@ func (b *BeaconBlockBodyGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 704 {
+	if size < 392 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o3, o4, o5, o6, o7, o9, o11 uint64
+	var o3, o4, o5, o6, o7, o9, o10, o11 uint64
 
 	// Field (0) 'RandaoReveal'
 	if cap(b.RandaoReveal) == 0 {
@@ -946,7 +1024,7 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o3 != 704 {
+	if o3 != 392 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -983,16 +1061,13 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Field (10) 'SignedExecutionPayloadBid'
-	if b.SignedExecutionPayloadBid == nil {
-		b.SignedExecutionPayloadBid = new(SignedExecutionPayloadBid)
-	}
-	if err = b.SignedExecutionPayloadBid.UnmarshalSSZ(buf[384:700]); err != nil {
-		return err
+	// Offset (10) 'SignedExecutionPayloadBid'
+	if o10 = ssz.ReadOffset(buf[384:388]); o10 > size || o9 > o10 {
+		return ssz.ErrOffset
 	}
 
 	// Offset (11) 'PayloadAttestations'
-	if o11 = ssz.ReadOffset(buf[700:704]); o11 > size || o9 > o11 {
+	if o11 = ssz.ReadOffset(buf[388:392]); o11 > size || o10 > o11 {
 		return ssz.ErrOffset
 	}
 
@@ -1096,7 +1171,7 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Field (9) 'BlsToExecutionChanges'
 	{
-		buf = tail[o9:o11]
+		buf = tail[o9:o10]
 		num, err := ssz.DivideInt2(len(buf), 172, 16)
 		if err != nil {
 			return err
@@ -1109,6 +1184,17 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 			if err = b.BlsToExecutionChanges[ii].UnmarshalSSZ(buf[ii*172 : (ii+1)*172]); err != nil {
 				return err
 			}
+		}
+	}
+
+	// Field (10) 'SignedExecutionPayloadBid'
+	{
+		buf = tail[o10:o11]
+		if b.SignedExecutionPayloadBid == nil {
+			b.SignedExecutionPayloadBid = new(SignedExecutionPayloadBid)
+		}
+		if err = b.SignedExecutionPayloadBid.UnmarshalSSZ(buf); err != nil {
+			return err
 		}
 	}
 
@@ -1134,7 +1220,7 @@ func (b *BeaconBlockBodyGloas) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockBodyGloas object
 func (b *BeaconBlockBodyGloas) SizeSSZ() (size int) {
-	size = 704
+	size = 392
 
 	// Field (3) 'ProposerSlashings'
 	size += len(b.ProposerSlashings) * 416
@@ -1159,6 +1245,12 @@ func (b *BeaconBlockBodyGloas) SizeSSZ() (size int) {
 
 	// Field (9) 'BlsToExecutionChanges'
 	size += len(b.BlsToExecutionChanges) * 172
+
+	// Field (10) 'SignedExecutionPayloadBid'
+	if b.SignedExecutionPayloadBid == nil {
+		b.SignedExecutionPayloadBid = new(SignedExecutionPayloadBid)
+	}
+	size += b.SignedExecutionPayloadBid.SizeSSZ()
 
 	// Field (11) 'PayloadAttestations'
 	size += len(b.PayloadAttestations) * 202
@@ -1437,7 +1529,7 @@ func (b *BeaconStateGloas) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BeaconStateGloas object to a target array
 func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(2741333)
+	offset := int(2741117)
 
 	// Field (0) 'GenesisTime'
 	dst = ssz.MarshalUint64(dst, b.GenesisTime)
@@ -1602,13 +1694,12 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		return
 	}
 
-	// Field (24) 'LatestExecutionPayloadBid'
+	// Offset (24) 'LatestExecutionPayloadBid'
+	dst = ssz.WriteOffset(dst, offset)
 	if b.LatestExecutionPayloadBid == nil {
 		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
 	}
-	if dst, err = b.LatestExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
-		return
-	}
+	offset += b.LatestExecutionPayloadBid.SizeSSZ()
 
 	// Field (25) 'NextWithdrawalIndex'
 	dst = ssz.MarshalUint64(dst, b.NextWithdrawalIndex)
@@ -1766,6 +1857,11 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = ssz.MarshalUint64(dst, b.InactivityScores[ii])
 	}
 
+	// Field (24) 'LatestExecutionPayloadBid'
+	if dst, err = b.LatestExecutionPayloadBid.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
 	// Field (27) 'HistoricalSummaries'
 	if size := len(b.HistoricalSummaries); size > 16777216 {
 		err = ssz.ErrListTooBigFn("--.HistoricalSummaries", size, 16777216)
@@ -1850,12 +1946,12 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 2741333 {
+	if size < 2741117 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o7, o9, o11, o12, o15, o16, o21, o27, o34, o35, o36, o38, o42, o44 uint64
+	var o7, o9, o11, o12, o15, o16, o21, o24, o27, o34, o35, o36, o38, o42, o44 uint64
 
 	// Field (0) 'GenesisTime'
 	b.GenesisTime = ssz.UnmarshallUint64(buf[0:8])
@@ -1908,7 +2004,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	if o7 != 2741333 {
+	if o7 != 2741117 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -2014,77 +2110,74 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		return err
 	}
 
-	// Field (24) 'LatestExecutionPayloadBid'
-	if b.LatestExecutionPayloadBid == nil {
-		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
-	}
-	if err = b.LatestExecutionPayloadBid.UnmarshalSSZ(buf[2736629:2736849]); err != nil {
-		return err
+	// Offset (24) 'LatestExecutionPayloadBid'
+	if o24 = ssz.ReadOffset(buf[2736629:2736633]); o24 > size || o21 > o24 {
+		return ssz.ErrOffset
 	}
 
 	// Field (25) 'NextWithdrawalIndex'
-	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736849:2736857])
+	b.NextWithdrawalIndex = ssz.UnmarshallUint64(buf[2736633:2736641])
 
 	// Field (26) 'NextWithdrawalValidatorIndex'
-	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736857:2736865]))
+	b.NextWithdrawalValidatorIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.ValidatorIndex(ssz.UnmarshallUint64(buf[2736641:2736649]))
 
 	// Offset (27) 'HistoricalSummaries'
-	if o27 = ssz.ReadOffset(buf[2736865:2736869]); o27 > size || o21 > o27 {
+	if o27 = ssz.ReadOffset(buf[2736649:2736653]); o27 > size || o24 > o27 {
 		return ssz.ErrOffset
 	}
 
 	// Field (28) 'DepositRequestsStartIndex'
-	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736869:2736877])
+	b.DepositRequestsStartIndex = ssz.UnmarshallUint64(buf[2736653:2736661])
 
 	// Field (29) 'DepositBalanceToConsume'
-	b.DepositBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736877:2736885]))
+	b.DepositBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736661:2736669]))
 
 	// Field (30) 'ExitBalanceToConsume'
-	b.ExitBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736885:2736893]))
+	b.ExitBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736669:2736677]))
 
 	// Field (31) 'EarliestExitEpoch'
-	b.EarliestExitEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736893:2736901]))
+	b.EarliestExitEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736677:2736685]))
 
 	// Field (32) 'ConsolidationBalanceToConsume'
-	b.ConsolidationBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736901:2736909]))
+	b.ConsolidationBalanceToConsume = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Gwei(ssz.UnmarshallUint64(buf[2736685:2736693]))
 
 	// Field (33) 'EarliestConsolidationEpoch'
-	b.EarliestConsolidationEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736909:2736917]))
+	b.EarliestConsolidationEpoch = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Epoch(ssz.UnmarshallUint64(buf[2736693:2736701]))
 
 	// Offset (34) 'PendingDeposits'
-	if o34 = ssz.ReadOffset(buf[2736917:2736921]); o34 > size || o27 > o34 {
+	if o34 = ssz.ReadOffset(buf[2736701:2736705]); o34 > size || o27 > o34 {
 		return ssz.ErrOffset
 	}
 
 	// Offset (35) 'PendingPartialWithdrawals'
-	if o35 = ssz.ReadOffset(buf[2736921:2736925]); o35 > size || o34 > o35 {
+	if o35 = ssz.ReadOffset(buf[2736705:2736709]); o35 > size || o34 > o35 {
 		return ssz.ErrOffset
 	}
 
 	// Offset (36) 'PendingConsolidations'
-	if o36 = ssz.ReadOffset(buf[2736925:2736929]); o36 > size || o35 > o36 {
+	if o36 = ssz.ReadOffset(buf[2736709:2736713]); o36 > size || o35 > o36 {
 		return ssz.ErrOffset
 	}
 
 	// Field (37) 'ProposerLookahead'
 	b.ProposerLookahead = ssz.ExtendUint64(b.ProposerLookahead, 64)
 	for ii := 0; ii < 64; ii++ {
-		b.ProposerLookahead[ii] = ssz.UnmarshallUint64(buf[2736929:2737441][ii*8 : (ii+1)*8])
+		b.ProposerLookahead[ii] = ssz.UnmarshallUint64(buf[2736713:2737225][ii*8 : (ii+1)*8])
 	}
 
 	// Offset (38) 'Builders'
-	if o38 = ssz.ReadOffset(buf[2737441:2737445]); o38 > size || o36 > o38 {
+	if o38 = ssz.ReadOffset(buf[2737225:2737229]); o38 > size || o36 > o38 {
 		return ssz.ErrOffset
 	}
 
 	// Field (39) 'NextWithdrawalBuilderIndex'
-	b.NextWithdrawalBuilderIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex(ssz.UnmarshallUint64(buf[2737445:2737453]))
+	b.NextWithdrawalBuilderIndex = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.BuilderIndex(ssz.UnmarshallUint64(buf[2737229:2737237]))
 
 	// Field (40) 'ExecutionPayloadAvailability'
 	if cap(b.ExecutionPayloadAvailability) == 0 {
-		b.ExecutionPayloadAvailability = make([]byte, 0, len(buf[2737453:2738477]))
+		b.ExecutionPayloadAvailability = make([]byte, 0, len(buf[2737237:2738261]))
 	}
-	b.ExecutionPayloadAvailability = append(b.ExecutionPayloadAvailability, buf[2737453:2738477]...)
+	b.ExecutionPayloadAvailability = append(b.ExecutionPayloadAvailability, buf[2737237:2738261]...)
 
 	// Field (41) 'BuilderPendingPayments'
 	b.BuilderPendingPayments = make([]*BuilderPendingPayment, 64)
@@ -2092,24 +2185,24 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		if b.BuilderPendingPayments[ii] == nil {
 			b.BuilderPendingPayments[ii] = new(BuilderPendingPayment)
 		}
-		if err = b.BuilderPendingPayments[ii].UnmarshalSSZ(buf[2738477:2741293][ii*44 : (ii+1)*44]); err != nil {
+		if err = b.BuilderPendingPayments[ii].UnmarshalSSZ(buf[2738261:2741077][ii*44 : (ii+1)*44]); err != nil {
 			return err
 		}
 	}
 
 	// Offset (42) 'BuilderPendingWithdrawals'
-	if o42 = ssz.ReadOffset(buf[2741293:2741297]); o42 > size || o38 > o42 {
+	if o42 = ssz.ReadOffset(buf[2741077:2741081]); o42 > size || o38 > o42 {
 		return ssz.ErrOffset
 	}
 
 	// Field (43) 'LatestBlockHash'
 	if cap(b.LatestBlockHash) == 0 {
-		b.LatestBlockHash = make([]byte, 0, len(buf[2741297:2741329]))
+		b.LatestBlockHash = make([]byte, 0, len(buf[2741081:2741113]))
 	}
-	b.LatestBlockHash = append(b.LatestBlockHash, buf[2741297:2741329]...)
+	b.LatestBlockHash = append(b.LatestBlockHash, buf[2741081:2741113]...)
 
 	// Offset (44) 'PayloadExpectedWithdrawals'
-	if o44 = ssz.ReadOffset(buf[2741329:2741333]); o44 > size || o42 > o44 {
+	if o44 = ssz.ReadOffset(buf[2741113:2741117]); o44 > size || o42 > o44 {
 		return ssz.ErrOffset
 	}
 
@@ -2204,7 +2297,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 	// Field (21) 'InactivityScores'
 	{
-		buf = tail[o21:o27]
+		buf = tail[o21:o24]
 		num, err := ssz.DivideInt2(len(buf), 8, 1099511627776)
 		if err != nil {
 			return err
@@ -2212,6 +2305,17 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 		b.InactivityScores = ssz.ExtendUint64(b.InactivityScores, num)
 		for ii := 0; ii < num; ii++ {
 			b.InactivityScores[ii] = ssz.UnmarshallUint64(buf[ii*8 : (ii+1)*8])
+		}
+	}
+
+	// Field (24) 'LatestExecutionPayloadBid'
+	{
+		buf = tail[o24:o27]
+		if b.LatestExecutionPayloadBid == nil {
+			b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
+		}
+		if err = b.LatestExecutionPayloadBid.UnmarshalSSZ(buf); err != nil {
+			return err
 		}
 	}
 
@@ -2345,7 +2449,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the BeaconStateGloas object
 func (b *BeaconStateGloas) SizeSSZ() (size int) {
-	size = 2741333
+	size = 2741117
 
 	// Field (7) 'HistoricalRoots'
 	size += len(b.HistoricalRoots) * 32
@@ -2367,6 +2471,12 @@ func (b *BeaconStateGloas) SizeSSZ() (size int) {
 
 	// Field (21) 'InactivityScores'
 	size += len(b.InactivityScores) * 8
+
+	// Field (24) 'LatestExecutionPayloadBid'
+	if b.LatestExecutionPayloadBid == nil {
+		b.LatestExecutionPayloadBid = new(ExecutionPayloadBid)
+	}
+	size += b.LatestExecutionPayloadBid.SizeSSZ()
 
 	// Field (27) 'HistoricalSummaries'
 	size += len(b.HistoricalSummaries) * 64
@@ -3249,7 +3359,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ExecutionPayloadEnvelope object to a target array
 func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(92)
+	offset := int(88)
 
 	// Offset (0) 'Payload'
 	dst = ssz.WriteOffset(dst, offset)
@@ -3278,11 +3388,7 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 	// Field (4) 'Slot'
 	dst = ssz.MarshalUint64(dst, uint64(e.Slot))
 
-	// Offset (5) 'BlobKzgCommitments'
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(e.BlobKzgCommitments) * 48
-
-	// Field (6) 'StateRoot'
+	// Field (5) 'StateRoot'
 	if size := len(e.StateRoot); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
 		return
@@ -3299,19 +3405,6 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 		return
 	}
 
-	// Field (5) 'BlobKzgCommitments'
-	if size := len(e.BlobKzgCommitments); size > 4096 {
-		err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
-		return
-	}
-	for ii := 0; ii < len(e.BlobKzgCommitments); ii++ {
-		if size := len(e.BlobKzgCommitments[ii]); size != 48 {
-			err = ssz.ErrBytesLengthFn("--.BlobKzgCommitments[ii]", size, 48)
-			return
-		}
-		dst = append(dst, e.BlobKzgCommitments[ii]...)
-	}
-
 	return
 }
 
@@ -3319,19 +3412,19 @@ func (e *ExecutionPayloadEnvelope) MarshalSSZTo(buf []byte) (dst []byte, err err
 func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 92 {
+	if size < 88 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o5 uint64
+	var o0, o1 uint64
 
 	// Offset (0) 'Payload'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	if o0 != 92 {
+	if o0 != 88 {
 		return ssz.ErrInvalidVariableOffset
 	}
 
@@ -3352,16 +3445,11 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 	// Field (4) 'Slot'
 	e.Slot = github_com_OffchainLabs_prysm_v7_consensus_types_primitives.Slot(ssz.UnmarshallUint64(buf[48:56]))
 
-	// Offset (5) 'BlobKzgCommitments'
-	if o5 = ssz.ReadOffset(buf[56:60]); o5 > size || o1 > o5 {
-		return ssz.ErrOffset
-	}
-
-	// Field (6) 'StateRoot'
+	// Field (5) 'StateRoot'
 	if cap(e.StateRoot) == 0 {
-		e.StateRoot = make([]byte, 0, len(buf[60:92]))
+		e.StateRoot = make([]byte, 0, len(buf[56:88]))
 	}
-	e.StateRoot = append(e.StateRoot, buf[60:92]...)
+	e.StateRoot = append(e.StateRoot, buf[56:88]...)
 
 	// Field (0) 'Payload'
 	{
@@ -3376,7 +3464,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 
 	// Field (1) 'ExecutionRequests'
 	{
-		buf = tail[o1:o5]
+		buf = tail[o1:]
 		if e.ExecutionRequests == nil {
 			e.ExecutionRequests = new(v1.ExecutionRequests)
 		}
@@ -3384,28 +3472,12 @@ func (e *ExecutionPayloadEnvelope) UnmarshalSSZ(buf []byte) error {
 			return err
 		}
 	}
-
-	// Field (5) 'BlobKzgCommitments'
-	{
-		buf = tail[o5:]
-		num, err := ssz.DivideInt2(len(buf), 48, 4096)
-		if err != nil {
-			return err
-		}
-		e.BlobKzgCommitments = make([][]byte, num)
-		for ii := 0; ii < num; ii++ {
-			if cap(e.BlobKzgCommitments[ii]) == 0 {
-				e.BlobKzgCommitments[ii] = make([]byte, 0, len(buf[ii*48:(ii+1)*48]))
-			}
-			e.BlobKzgCommitments[ii] = append(e.BlobKzgCommitments[ii], buf[ii*48:(ii+1)*48]...)
-		}
-	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadEnvelope object
 func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
-	size = 92
+	size = 88
 
 	// Field (0) 'Payload'
 	if e.Payload == nil {
@@ -3418,9 +3490,6 @@ func (e *ExecutionPayloadEnvelope) SizeSSZ() (size int) {
 		e.ExecutionRequests = new(v1.ExecutionRequests)
 	}
 	size += e.ExecutionRequests.SizeSSZ()
-
-	// Field (5) 'BlobKzgCommitments'
-	size += len(e.BlobKzgCommitments) * 48
 
 	return
 }
@@ -3457,26 +3526,7 @@ func (e *ExecutionPayloadEnvelope) HashTreeRootWith(hh *ssz.Hasher) (err error) 
 	// Field (4) 'Slot'
 	hh.PutUint64(uint64(e.Slot))
 
-	// Field (5) 'BlobKzgCommitments'
-	{
-		if size := len(e.BlobKzgCommitments); size > 4096 {
-			err = ssz.ErrListTooBigFn("--.BlobKzgCommitments", size, 4096)
-			return
-		}
-		subIndx := hh.Index()
-		for _, i := range e.BlobKzgCommitments {
-			if len(i) != 48 {
-				err = ssz.ErrBytesLength
-				return
-			}
-			hh.PutBytes(i)
-		}
-
-		numItems := uint64(len(e.BlobKzgCommitments))
-		hh.MerkleizeWithMixin(subIndx, numItems, 4096)
-	}
-
-	// Field (6) 'StateRoot'
+	// Field (5) 'StateRoot'
 	if size := len(e.StateRoot); size != 32 {
 		err = ssz.ErrBytesLengthFn("--.StateRoot", size, 32)
 		return

@@ -33,7 +33,7 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 //     slot: Slot
 //     value: Gwei
 //     execution_payment: Gwei
-//     blob_kzg_commitments_root: Root
+//     blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
 message ExecutionPayloadBid {
   bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
@@ -56,7 +56,10 @@ message ExecutionPayloadBid {
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
-  bytes blob_kzg_commitments_root = 11 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated bytes blob_kzg_commitments = 11 [
+    (ethereum.eth.ext.ssz_size) = "?,48",
+    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
+  ];
 }
 
 // SignedExecutionPayloadBid wraps an execution payload bid with a signature.
@@ -402,7 +405,6 @@ message DataColumnSidecarGloas {
 //     builder_index: BuilderIndex
 //     beacon_block_root: Root
 //     slot: Slot
-//     blob_kzg_commitments: List[KZGCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK]
 //     state_root: Root
 message ExecutionPayloadEnvelope {
   ethereum.engine.v1.ExecutionPayloadDeneb payload = 1;
@@ -414,10 +416,6 @@ message ExecutionPayloadEnvelope {
   uint64 slot = 5 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
-  ];
-  repeated bytes blob_kzg_commitments = 6 [
-    (ethereum.eth.ext.ssz_size) = "?,48",
-    (ethereum.eth.ext.ssz_max) = "max_blob_commitments.size"
   ];
   bytes state_root = 7 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }

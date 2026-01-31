@@ -203,7 +203,7 @@ func TestProcessExecutionPayloadBid_SelfBuildSuccess(t *testing.T) {
 		Slot:                   slot,
 		Value:                  0,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0xEE}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 	signed := &ethpb.SignedExecutionPayloadBid{
@@ -244,7 +244,7 @@ func TestProcessExecutionPayloadBid_SelfBuildNonZeroAmountFails(t *testing.T) {
 		Slot:                   slot,
 		Value:                  10,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xCC}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0xCC}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0xDD}, 20),
 	}
 	signed := &ethpb.SignedExecutionPayloadBid{
@@ -289,7 +289,7 @@ func TestProcessExecutionPayloadBid_PendingPaymentAndCacheBid(t *testing.T) {
 		Slot:                   slot,
 		Value:                  500_000,
 		ExecutionPayment:       1,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0xEE}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 
@@ -350,7 +350,7 @@ func TestProcessExecutionPayloadBid_BuilderNotActive(t *testing.T) {
 		Slot:                   slot,
 		Value:                  10,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x05}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0x05}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0x06}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -403,7 +403,7 @@ func TestProcessExecutionPayloadBid_CannotCoverBid(t *testing.T) {
 		Slot:                   slot,
 		Value:                  25,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0xEE}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -445,7 +445,7 @@ func TestProcessExecutionPayloadBid_InvalidSignature(t *testing.T) {
 		Slot:                   slot,
 		Value:                  10,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xEE}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0xEE}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0xFF}, 20),
 	}
 	// Use an invalid signature.
@@ -487,7 +487,7 @@ func TestProcessExecutionPayloadBid_SlotMismatch(t *testing.T) {
 		Slot:                   slot + 1, // mismatch
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0xCC}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0xCC}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0xDD}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -529,7 +529,7 @@ func TestProcessExecutionPayloadBid_ParentHashMismatch(t *testing.T) {
 		Slot:                   slot,
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x44}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0x44}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0x55}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -572,7 +572,7 @@ func TestProcessExecutionPayloadBid_ParentRootMismatch(t *testing.T) {
 		Slot:                   slot,
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x44}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0x44}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0x55}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())
@@ -614,7 +614,7 @@ func TestProcessExecutionPayloadBid_PrevRandaoMismatch(t *testing.T) {
 		Slot:                   slot,
 		Value:                  1,
 		ExecutionPayment:       0,
-		BlobKzgCommitmentsRoot: bytes.Repeat([]byte{0x44}, 32),
+		BlobKzgCommitments:     [][]byte{bytes.Repeat([]byte{0x44}, 48)},
 		FeeRecipient:           bytes.Repeat([]byte{0x55}, 20),
 	}
 	genesis := bytesutil.ToBytes32(state.GenesisValidatorsRoot())

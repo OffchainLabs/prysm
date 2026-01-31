@@ -7,13 +7,12 @@
 package testing
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	github_com_OffchainLabs_go_bitfield "github.com/OffchainLabs/go-bitfield"
 	_ "github.com/OffchainLabs/prysm/v7/proto/eth/ext"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (

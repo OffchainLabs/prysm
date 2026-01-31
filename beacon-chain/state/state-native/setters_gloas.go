@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -131,7 +132,7 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 	parentBlockRoot := h.ParentBlockRoot()
 	blockHash := h.BlockHash()
 	randao := h.PrevRandao()
-	blobKzgCommitmentsRoot := h.BlobKzgCommitmentsRoot()
+	blobKzgCommitments := bytesutil.SafeCopy2dBytes(h.BlobKzgCommitments())
 	feeRecipient := h.FeeRecipient()
 	b.latestExecutionPayloadBid = &ethpb.ExecutionPayloadBid{
 		ParentBlockHash:        parentBlockHash[:],
@@ -143,7 +144,7 @@ func (b *BeaconState) SetExecutionPayloadBid(h interfaces.ROExecutionPayloadBid)
 		Slot:                   h.Slot(),
 		Value:                  h.Value(),
 		ExecutionPayment:       h.ExecutionPayment(),
-		BlobKzgCommitmentsRoot: blobKzgCommitmentsRoot[:],
+		BlobKzgCommitments:     blobKzgCommitments,
 		FeeRecipient:           feeRecipient[:],
 	}
 	b.markFieldAsDirty(types.LatestExecutionPayloadBid)
