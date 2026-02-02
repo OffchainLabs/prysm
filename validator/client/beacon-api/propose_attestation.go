@@ -22,7 +22,7 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 	}
 
 	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
-	err = c.jsonRestHandler.Post(
+	err = c.handler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",
 		headers,
@@ -51,7 +51,7 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 	}
 	consensusVersion := version.String(slots.ToForkVersion(attestation.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
-	if err = c.jsonRestHandler.Post(
+	if err = c.handler.Post(
 		ctx,
 		"/eth/v2/beacon/pool/attestations",
 		headers,

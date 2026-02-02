@@ -17,8 +17,8 @@ import (
 type RestConnectionProvider interface {
 	// HttpClient returns the configured HTTP client with headers, timeout, and optional tracing.
 	HttpClient() *http.Client
-	// RestHandler returns the REST handler for making API requests.
-	RestHandler() RestHandler
+	// Handler returns the REST handler for making API requests.
+	Handler() Handler
 	// CurrentHost returns the current REST API endpoint URL.
 	CurrentHost() string
 	// Hosts returns all configured REST API endpoint URLs.
@@ -54,7 +54,7 @@ func WithTracing() RestConnectionProviderOption {
 type restConnectionProvider struct {
 	endpoints     []string
 	httpClient    *http.Client
-	restHandler   RestHandler
+	restHandler   Handler
 	currentIndex  atomic.Uint64
 	timeout       time.Duration
 	headers       map[string][]string
@@ -96,7 +96,7 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 	}
 
 	// Create the REST handler with the HTTP client and initial host
-	p.restHandler = newRestHandler(*p.httpClient, endpoints[0])
+	p.restHandler = newHandler(*p.httpClient, endpoints[0])
 
 	log.WithFields(logrus.Fields{
 		"endpoints": endpoints,
@@ -124,7 +124,7 @@ func (p *restConnectionProvider) HttpClient() *http.Client {
 	return p.httpClient
 }
 
-func (p *restConnectionProvider) RestHandler() RestHandler {
+func (p *restConnectionProvider) Handler() Handler {
 	return p.restHandler
 }
 

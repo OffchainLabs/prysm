@@ -120,10 +120,10 @@ func TestGetGenesis(t *testing.T) {
 			)
 
 			depositContractJson := structs.GetDepositContractResponse{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			if testCase.queriesDepositContract {
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					"/eth/v1/config/deposit_contract",
 					&depositContractJson,
@@ -137,7 +137,7 @@ func TestGetGenesis(t *testing.T) {
 
 			nodeClient := &beaconApiNodeClient{
 				genesisProvider: genesisProvider,
-				jsonRestHandler: jsonRestHandler,
+				handler:         handler,
 			}
 			response, err := nodeClient.Genesis(ctx, &emptypb.Empty{})
 
@@ -201,8 +201,8 @@ func TestGetSyncStatus(t *testing.T) {
 			ctx := t.Context()
 
 			syncingResponse := structs.SyncStatusResponse{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler.EXPECT().Get(
 				gomock.Any(),
 				syncingEndpoint,
 				&syncingResponse,
@@ -213,7 +213,7 @@ func TestGetSyncStatus(t *testing.T) {
 				testCase.restEndpointResponse,
 			)
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &beaconApiNodeClient{handler: handler}
 			syncStatus, err := nodeClient.SyncStatus(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
@@ -265,8 +265,8 @@ func TestGetVersion(t *testing.T) {
 			ctx := t.Context()
 
 			var versionResponse structs.GetVersionResponse
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler.EXPECT().Get(
 				gomock.Any(),
 				versionEndpoint,
 				&versionResponse,
@@ -277,7 +277,7 @@ func TestGetVersion(t *testing.T) {
 				testCase.restEndpointResponse,
 			)
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &beaconApiNodeClient{handler: handler}
 			version, err := nodeClient.Version(ctx, &emptypb.Empty{})
 
 			if testCase.expectedResponse == nil {
@@ -331,14 +331,14 @@ func TestIsReady(t *testing.T) {
 			defer ctrl.Finish()
 			ctx := t.Context()
 
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().GetStatusCode(
+			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler.EXPECT().GetStatusCode(
 				gomock.Any(),
 				healthEndpoint,
 			).Return(tc.statusCode, tc.err)
-			jsonRestHandler.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
+			handler.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
-			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
+			nodeClient := &beaconApiNodeClient{handler: handler}
 			result := nodeClient.IsReady(ctx)
 
 			assert.Equal(t, tc.expectedResult, result)
