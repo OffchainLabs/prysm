@@ -547,29 +547,12 @@ func TestBeaconApiValidatorClient_Host(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	hosts := []string{"http://localhost:8080", "http://localhost:8081"}
 	handler := mock.NewMockJsonRestHandler(ctrl)
-	handler.EXPECT().SwitchHost(
-		hosts[0],
-	).Times(1)
-	handler.EXPECT().Host().Return(
-		hosts[0],
-	).Times(1)
+	handler.EXPECT().Host().Return("http://localhost:8080").Times(1)
 
 	validatorClient := beaconApiValidatorClient{handler: handler}
-	validatorClient.SwitchHost(hosts[0])
 	host := validatorClient.Host()
-	require.Equal(t, hosts[0], host)
-
-	handler.EXPECT().SwitchHost(
-		hosts[1],
-	).Times(1)
-	handler.EXPECT().Host().Return(
-		hosts[1],
-	).Times(1)
-	validatorClient.SwitchHost(hosts[1])
-	host = validatorClient.Host()
-	require.Equal(t, hosts[1], host)
+	require.Equal(t, "http://localhost:8080", host)
 }
 
 // Helper functions for generating test blocks for newer consensus versions

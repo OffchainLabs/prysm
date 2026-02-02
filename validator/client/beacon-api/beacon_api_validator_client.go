@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/failover"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -23,21 +24,27 @@ type beaconApiValidatorClient struct {
 	genesisProvider         GenesisProvider
 	dutiesProvider          dutiesProvider
 	stateValidatorsProvider StateValidatorsProvider
+	restProvider            rest.RestConnectionProvider
 	handler                 rest.Handler
+	nodeClient              *beaconApiNodeClient
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
 }
 
-func NewBeaconApiValidatorClient(handler rest.Handler, opts ...ValidatorClientOpt) iface.ValidatorClient {
+func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...ValidatorClientOpt) iface.ValidatorClient {
+	handler := provider.Handler()
+	nc := &beaconApiNodeClient{handler: handler}
 	c := &beaconApiValidatorClient{
 		genesisProvider:         &beaconApiGenesisProvider{handler: handler},
 		dutiesProvider:          beaconApiDutiesProvider{handler: handler},
 		stateValidatorsProvider: beaconApiStateValidatorsProvider{handler: handler},
+		restProvider:            provider,
 		handler:                 handler,
+		nodeClient:              nc,
 		beaconBlockConverter:    beaconApiBeaconBlockConverter{},
 		prysmChainClient: prysmChainClient{
-			nodeClient: &beaconApiNodeClient{handler: handler},
+			nodeClient: nc,
 			handler:    handler,
 		},
 		isEventStreamRunning: false,
@@ -280,7 +287,7 @@ func (c *beaconApiValidatorClient) WaitForChainStart(ctx context.Context, _ *emp
 }
 
 func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics []string, eventsChannel chan<- *event.Event) {
-	client := &http.Client{} // event stream should not be subject to the same settings as other api calls, so we won't use c.handler.HttpClient()
+	client := &http.Client{} // event stream should not be subject to the same settings as other api calls
 	eventStream, err := event.NewEventStream(ctx, client, c.handler.Host(), topics)
 	if err != nil {
 		eventsChannel <- &event.Event{
@@ -332,6 +339,6 @@ func (c *beaconApiValidatorClient) Host() string {
 	return c.handler.Host()
 }
 
-func (c *beaconApiValidatorClient) SwitchHost(host string) {
-	c.handler.SwitchHost(host)
+func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
+	return failover.EnsureReady(ctx, c.restProvider, c.nodeClient)
 }

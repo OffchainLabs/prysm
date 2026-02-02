@@ -49,7 +49,7 @@ func (m *healthMonitor) IsHealthy() bool {
 }
 
 func (m *healthMonitor) performHealthCheck() {
-	ishealthy := m.v.FindHealthyHost(m.ctx)
+	ishealthy := m.v.EnsureReady(m.ctx)
 	m.Lock()
 	defer m.Unlock()
 	if ishealthy {

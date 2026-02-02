@@ -15,6 +15,7 @@ go_library(
     deps = [
         "//api/client:go_default_library",
         "//api/client/event:go_default_library",
+        "//api/failover:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/rpc/eth/helpers:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
@@ -49,6 +50,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//api/client/event:go_default_library",
+        "//api/grpc:go_default_library",
         "//api/server/structs:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",

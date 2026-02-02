@@ -27,8 +27,7 @@ func (m *MockRestProvider) SwitchHost(index int) error { m.HostIndex = index; re
 
 // MockHandler implements Handler for testing.
 type MockHandler struct {
-	MockHost   string
-	MockClient *http.Client
+	MockHost string
 }
 
 func (m *MockHandler) Get(_ context.Context, _ string, _ any) error { return nil }
@@ -44,6 +43,4 @@ func (m *MockHandler) Post(_ context.Context, _ string, _ map[string]string, _ *
 func (m *MockHandler) PostSSZ(_ context.Context, _ string, _ map[string]string, _ *bytes.Buffer) ([]byte, http.Header, error) {
 	return nil, nil, nil
 }
-func (m *MockHandler) HttpClient() *http.Client { return m.MockClient }
-func (m *MockHandler) Host() string             { return m.MockHost }
-func (m *MockHandler) SwitchHost(host string)   { m.MockHost = host }
+func (m *MockHandler) Host() string { return m.MockHost }

@@ -54,7 +54,7 @@ func WithTracing() RestConnectionProviderOption {
 type restConnectionProvider struct {
 	endpoints     []string
 	httpClient    *http.Client
-	restHandler   Handler
+	restHandler   *handler
 	currentIndex  atomic.Uint64
 	timeout       time.Duration
 	headers       map[string][]string

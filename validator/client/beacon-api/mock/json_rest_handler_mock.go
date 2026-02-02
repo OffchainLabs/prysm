@@ -109,20 +109,6 @@ func (mr *MockHandlerMockRecorder) Host() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockHandler)(nil).Host))
 }
 
-// HttpClient mocks base method.
-func (m *MockHandler) HttpClient() *http.Client {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HttpClient")
-	ret0, _ := ret[0].(*http.Client)
-	return ret0
-}
-
-// HttpClient indicates an expected call of HttpClient.
-func (mr *MockHandlerMockRecorder) HttpClient() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HttpClient", reflect.TypeOf((*MockHandler)(nil).HttpClient))
-}
-
 // Post mocks base method.
 func (m *MockHandler) Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error {
 	m.ctrl.T.Helper()
@@ -151,16 +137,4 @@ func (m *MockHandler) PostSSZ(ctx context.Context, endpoint string, headers map[
 func (mr *MockHandlerMockRecorder) PostSSZ(ctx, endpoint, headers, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostSSZ", reflect.TypeOf((*MockHandler)(nil).PostSSZ), ctx, endpoint, headers, data)
-}
-
-// SwitchHost mocks base method.
-func (m *MockHandler) SwitchHost(host string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SwitchHost", host)
-}
-
-// SwitchHost indicates an expected call of SwitchHost.
-func (mr *MockHandlerMockRecorder) SwitchHost(host any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SwitchHost", reflect.TypeOf((*MockHandler)(nil).SwitchHost), host)
 }

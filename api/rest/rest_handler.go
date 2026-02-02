@@ -28,9 +28,7 @@ type Handler interface {
 	GetSSZ(ctx context.Context, endpoint string) ([]byte, http.Header, error)
 	Post(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer, resp any) error
 	PostSSZ(ctx context.Context, endpoint string, headers map[string]string, data *bytes.Buffer) ([]byte, http.Header, error)
-	HttpClient() *http.Client
 	Host() string
-	SwitchHost(host string)
 }
 
 type handler struct {
@@ -39,9 +37,14 @@ type handler struct {
 	reqOverrides []reqOption
 }
 
-// newHandler returns a Handler (internal use)
-func newHandler(client http.Client, host string) Handler {
-	return NewHandler(client, host)
+// newHandler returns a *handler for internal use within the rest package.
+func newHandler(client http.Client, host string) *handler {
+	rh := &handler{
+		client: client,
+		host:   host,
+	}
+	rh.appendAcceptOverride()
+	return rh
 }
 
 // NewHandler returns a Handler

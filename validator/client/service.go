@@ -207,7 +207,6 @@ func (v *ValidatorService) Start() {
 		graffitiStruct:                 v.graffitiStruct,
 		graffitiOrderedIndex:           graffitiOrderedIndex,
 		conn:                           v.conn,
-		currentHostIndex:               0,
 		validatorClient:                validatorClient,
 		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn),
 		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn),
