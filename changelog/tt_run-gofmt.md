@@ -1,2 +1,2 @@
 ### Ignored
-Run go fmt
+- Run go fmt
