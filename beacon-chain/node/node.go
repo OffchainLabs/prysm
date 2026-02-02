@@ -157,7 +157,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		slashingsPool:     slashings.NewPool(),
 		syncCommitteePool: synccommittee.NewPool(),
 		blsToExecPool:     blstoexec.NewPool(),
-		// payloadAttestationPool: set once a PoolManager implementation exists.
+		// TODO payloadAttestationPool: set once a PoolManager implementation exists.
 		trackedValidatorsCache:  cache.NewTrackedValidatorsCache(),
 		payloadIDCache:          cache.NewPayloadIDCache(),
 		slasherBlockHeadersFeed: new(event.Feed),

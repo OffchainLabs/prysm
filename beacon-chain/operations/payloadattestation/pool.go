@@ -8,7 +8,7 @@ import (
 // PoolManager maintains pending payload attestations.
 // This pool is used by proposers to insert payload attestations into new blocks.
 type PoolManager interface {
-	PendingPayloadAttestations(slot ...primitives.Slot) []*ethpb.PayloadAttestation
+	PendingPayloadAttestations() []*ethpb.PayloadAttestation
 	InsertPayloadAttestation(msg *ethpb.PayloadAttestationMessage) error
 	MarkIncluded(att *ethpb.PayloadAttestation)
 }

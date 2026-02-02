@@ -95,6 +95,7 @@ go_test(
         "//beacon-chain/operations/attestations:go_default_library",
         "//beacon-chain/operations/blstoexec:go_default_library",
         "//beacon-chain/operations/blstoexec/mock:go_default_library",
+        "//beacon-chain/operations/payloadattestation/mock:go_default_library",
         "//beacon-chain/operations/slashings/mock:go_default_library",
         "//beacon-chain/operations/synccommittee:go_default_library",
         "//beacon-chain/operations/voluntaryexits/mock:go_default_library",

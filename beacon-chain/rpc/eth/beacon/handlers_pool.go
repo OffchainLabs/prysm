@@ -899,6 +899,12 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 	ctx, span := trace.StartSpan(r.Context(), "beacon.SubmitPayloadAttestations")
 	defer span.End()
 
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, fmt.Sprintf("payload attestations require the Gloas fork, current epoch %d, Gloas epoch %d", currentEpoch, params.BeaconConfig().GloasForkEpoch), http.StatusBadRequest)
+		return
+	}
+
 	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
 		return
 	}
@@ -927,14 +933,12 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		}
 
 		// TODO: Add full gossip validation (BLS signatures, PTC membership).
-		if s.PayloadAttestationPool != nil {
-			if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg); err != nil {
-				failures = append(failures, &server.IndexedError{
-					Index:   i,
-					Message: "Could not insert payload attestation: " + err.Error(),
-				})
-				continue
-			}
+		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg); err != nil {
+			failures = append(failures, &server.IndexedError{
+				Index:   i,
+				Message: "Could not insert payload attestation: " + err.Error(),
+			})
+			continue
 		}
 
 		if err := s.Broadcaster.Broadcast(ctx, consensusMsg); err != nil {
@@ -958,23 +962,25 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 	_, span := trace.StartSpan(r.Context(), "beacon.ListPayloadAttestations")
 	defer span.End()
 
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, fmt.Sprintf("payload attestations require the Gloas fork, current epoch %d, Gloas epoch %d", currentEpoch, params.BeaconConfig().GloasForkEpoch), http.StatusBadRequest)
+		return
+	}
+
 	rawSlot, slot, ok := shared.UintFromQuery(w, r, "slot", false)
 	if !ok {
 		return
 	}
 
-	var atts []*eth.PayloadAttestation
-	if s.PayloadAttestationPool != nil {
-		if rawSlot != "" {
-			atts = s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
-		} else {
-			atts = s.PayloadAttestationPool.PendingPayloadAttestations()
-		}
-	}
+	allAtts := s.PayloadAttestationPool.PendingPayloadAttestations()
 
-	data := make([]*structs.PayloadAttestation, len(atts))
-	for i, att := range atts {
-		data[i] = structs.PayloadAttestationFromConsensus(att)
+	var data []*structs.PayloadAttestation
+	for _, att := range allAtts {
+		if rawSlot != "" && att.Data.Slot != primitives.Slot(slot) {
+			continue
+		}
+		data = append(data, structs.PayloadAttestationFromConsensus(att))
 	}
 
 	w.Header().Set(api.VersionHeader, version.String(version.Gloas))

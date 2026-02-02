@@ -1433,6 +1433,12 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 	ctx, span := trace.StartSpan(r.Context(), "validator.GetPayloadAttestationData")
 	defer span.End()
 
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if currentEpoch < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, fmt.Sprintf("payload attestation data requires the Gloas fork, current epoch %d, Gloas epoch %d", currentEpoch, params.BeaconConfig().GloasForkEpoch), http.StatusBadRequest)
+		return
+	}
+
 	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
 		return
 	}
