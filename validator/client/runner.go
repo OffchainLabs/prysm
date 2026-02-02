@@ -94,7 +94,7 @@ func (r *runner) run(ctx context.Context) {
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
-				log.Warn("Beacon node unhealthy, stopping runner")
+				log.WithField("beaconNodeUrl", r.validator.Host()).Warn("Beacon node unhealthy, stopping runner")
 				return
 			}
 

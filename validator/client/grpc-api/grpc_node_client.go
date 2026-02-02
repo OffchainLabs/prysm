@@ -38,7 +38,7 @@ func (c *grpcNodeClient) IsReady(ctx context.Context) bool {
 	// otherwise it will throw an error
 	_, err := c.getClient().GetHealth(ctx, &ethpb.HealthRequest{})
 	if err != nil {
-		log.WithError(err).Debug("Node is not ready")
+		log.WithError(err).WithField("beaconNodeUrl", c.conn.GetGrpcConnectionProvider().CurrentHost()).Debug("Node is not ready")
 		return false
 	}
 	return true

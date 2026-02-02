@@ -336,6 +336,7 @@ func TestIsReady(t *testing.T) {
 				gomock.Any(),
 				healthEndpoint,
 			).Return(tc.statusCode, tc.err)
+			jsonRestHandler.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
 			nodeClient := &beaconApiNodeClient{jsonRestHandler: jsonRestHandler}
 			result := nodeClient.IsReady(ctx)

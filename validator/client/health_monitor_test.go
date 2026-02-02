@@ -27,6 +27,7 @@ func TestHealthMonitor_IsHealthy_Concurrency(t *testing.T) {
 
 	// Expectation for newHealthMonitor's FindHealthyHost call
 	mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(true).Times(1)
+	mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
 	monitor := newHealthMonitor(parentCtx, parentCancel, 3, mockValidator)
 	require.NotNil(t, monitor)
@@ -164,6 +165,7 @@ func TestHealthMonitor_PerformHealthCheck(t *testing.T) {
 			monitor.healthEventFeed.Subscribe(monitor.healthyCh)
 
 			mockValidator.EXPECT().FindHealthyHost(gomock.Any()).Return(tt.findHealthyHostReturns)
+			mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
 			monitor.performHealthCheck()
 
@@ -217,6 +219,8 @@ func TestHealthMonitor_HealthyChan_ReceivesUpdates(t *testing.T) {
 
 	ch := monitor.HealthyChan()
 	require.NotNil(t, ch)
+
+	mockValidator.EXPECT().Host().Return("http://localhost:3500").AnyTimes()
 
 	first := mockValidator.EXPECT().
 		FindHealthyHost(gomock.Any()).

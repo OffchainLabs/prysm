@@ -247,7 +247,7 @@ func (v *ValidatorService) Start() {
 		case isHealthy := <-hm.HealthyChan():
 			if !isHealthy {
 				// wait until the next health tracker update
-				log.Warn("Validator service health check failed, waiting for healthy beacon node...")
+				log.WithField("beaconNodeUrl", v.validator.Host()).Warn("Validator service health check failed, waiting for healthy beacon node...")
 				continue
 			}
 
