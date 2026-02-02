@@ -87,36 +87,32 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte, justified, finalized *ethpb.Checkpoint, receivedTime time.Time, genesis time.Time, daWaitedTime time.Duration) error {
 	startTime, err := slots.StartTime(genesis, block.Slot())
 	if err != nil {
-		return err
+		return fmt.Errorf("start time: %w", err)
 	}
-	level := log.Logger.GetLevel()
-	if level >= logrus.DebugLevel {
+
+	log := log.WithFields(logrus.Fields{
+		"slot":           block.Slot(),
+		"block":          fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
+		"finalizedEpoch": finalized.Epoch,
+		"finalizedRoot":  fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
+		"epoch":          slots.ToEpoch(block.Slot()),
+	})
+
+	if log.Logger.GetLevel() >= logrus.DebugLevel {
 		parentRoot := block.ParentRoot()
-		lf := logrus.Fields{
-			"slot":                       block.Slot(),
+		log = log.WithFields(logrus.Fields{
 			"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
-			"block":                      fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-			"epoch":                      slots.ToEpoch(block.Slot()),
 			"justifiedEpoch":             justified.Epoch,
 			"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
-			"finalizedEpoch":             finalized.Epoch,
-			"finalizedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
 			"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
 			"version":                    version.String(block.Version()),
 			"sinceSlotStartTime":         prysmTime.Now().Sub(startTime),
 			"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
 			"dataAvailabilityWaitedTime": daWaitedTime,
-		}
-		log.WithFields(lf).Debug("Synced new block")
-	} else {
-		log.WithFields(logrus.Fields{
-			"slot":           block.Slot(),
-			"block":          fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-			"finalizedEpoch": finalized.Epoch,
-			"finalizedRoot":  fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
-			"epoch":          slots.ToEpoch(block.Slot()),
-		}).Info("Synced new block")
+		})
 	}
+
+	log.Info("Synced new block")
 	return nil
 }
 
