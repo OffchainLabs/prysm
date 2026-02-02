@@ -1,5 +1,6 @@
 # bazel build @consensus_spec_tests//:test_data
 # bazel build @consensus_spec_tests//:test_data --repo_env=CONSENSUS_SPEC_TESTS_VERSION=nightly
+# bazel build @consensus_spec_tests//:test_data --repo_env=CONSENSUS_SPEC_TESTS_VERSION=nightly-<run_id>
 
 def _get_redirected_url(repository_ctx, url, headers):
     if not repository_ctx.which("curl"):
@@ -24,7 +25,7 @@ def _impl(repository_ctx):
     version = repository_ctx.getenv("CONSENSUS_SPEC_TESTS_VERSION") or repository_ctx.attr.version
     token = repository_ctx.getenv("GITHUB_TOKEN") or ""
 
-    if version == "nightly":
+    if version == "nightly" or version.startswith("nightly-"):
         print("Downloading nightly tests")
         if not token:
             fail("Error GITHUB_TOKEN is not set")
@@ -34,16 +35,22 @@ def _impl(repository_ctx):
             "Accept": "application/vnd.github+json",
         }
 
-        repository_ctx.download(
-            "https://api.github.com/repos/%s/actions/workflows/%s/runs?branch=%s&status=success&per_page=1"
-                % (repository_ctx.attr.repo, repository_ctx.attr.workflow, repository_ctx.attr.branch),
-            headers = headers,
-            output = "runs.json"
-        )
+        if version.startswith("nightly-"):
+            run_id = version.split("nightly-", 1)[1]
+            if not run_id:
+                fail("Error invalid run id")
+        else:
+            repository_ctx.download(
+                "https://api.github.com/repos/%s/actions/workflows/%s/runs?branch=%s&status=success&per_page=1"
+                    % (repository_ctx.attr.repo, repository_ctx.attr.workflow, repository_ctx.attr.branch),
+                headers = headers,
+                output = "runs.json"
+            )
 
-        run_id = json.decode(repository_ctx.read("runs.json"))["workflow_runs"][0]["id"]
-        repository_ctx.delete("runs.json")
+            run_id = json.decode(repository_ctx.read("runs.json"))["workflow_runs"][0]["id"]
+            repository_ctx.delete("runs.json")
 
+        print("Run id:", run_id)
         repository_ctx.download(
             "https://api.github.com/repos/%s/actions/runs/%s/artifacts"
                 % (repository_ctx.attr.repo, run_id),
@@ -108,8 +115,8 @@ consensus_spec_tests = repository_rule(
         "version": attr.string(mandatory = True),
         "flavors": attr.string_dict(mandatory = True),
         "repo": attr.string(default = "ethereum/consensus-specs"),
-        "workflow": attr.string(default = "generate_vectors.yml"),
-        "branch": attr.string(default = "dev"),
+        "workflow": attr.string(default = "nightly-reftests.yml"),
+        "branch": attr.string(default = "master"),
         "release_url_template": attr.string(default = "https://github.com/ethereum/consensus-specs/releases/download/%s"),
     },
 )

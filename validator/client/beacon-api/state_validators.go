@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/pkg/errors"
@@ -21,7 +22,7 @@ type StateValidatorsProvider interface {
 }
 
 type beaconApiStateValidatorsProvider struct {
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 }
 
 func (c beaconApiStateValidatorsProvider) StateValidators(
