@@ -33,7 +33,6 @@ formatters:
     generated: lax
     paths:
       - validator/web/site_data.go
-      - .*_test.go
       - proto
       - tools/analyzers
       - third_party$
