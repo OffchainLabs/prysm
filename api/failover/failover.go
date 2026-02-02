@@ -6,8 +6,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("package", "api/failover")
-
 // HostProvider is the subset of connection-provider methods that EnsureReady
 // needs. Both grpc.GrpcConnectionProvider and rest.RestConnectionProvider
 // satisfy this interface.
