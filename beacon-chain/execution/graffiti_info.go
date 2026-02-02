@@ -35,13 +35,13 @@ func (g *GraffitiInfo) UpdateFromEngine(code, commit string) {
 
 // GenerateGraffiti generates graffiti using the flexible standard
 // with the provided user graffiti from the validator client request.
-// It packs as much client info as space allows, followed by user graffiti (no space separator).
+// It places user graffiti first, then appends as much client info as space allows.
 //
 // Available Space | Format
-// ≥12 bytes       | EL(2)+commit(4)+CL(2)+commit(4)+user  e.g. "GEabcdPRxxxxSushi"
-// 8-11 bytes      | EL(2)+commit(2)+CL(2)+commit(2)+user  e.g. "GEabPRxxSushi"
-// 4-7 bytes       | EL(2)+CL(2)+user                      e.g. "GEPRSushi"
-// 2-3 bytes       | code(2)+user                          e.g. "GESushi" or "PRSushi"
+// ≥12 bytes       | user+EL(2)+commit(4)+CL(2)+commit(4)  e.g. "SushiGEabcdPRxxxx"
+// 8-11 bytes      | user+EL(2)+commit(2)+CL(2)+commit(2)  e.g. "SushiGEabPRxx"
+// 4-7 bytes       | user+EL(2)+CL(2)                      e.g. "SushiGEPR"
+// 2-3 bytes       | user+code(2)                          e.g. "SushiGE" or "SushiPR"
 // <2 bytes        | user only                             e.g. "Sushi"
 func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	g.mu.RLock()
@@ -74,20 +74,20 @@ func (g *GraffitiInfo) GenerateGraffiti(userGraffiti []byte) [32]byte {
 	var graffiti string
 	switch {
 	case available >= 12:
-		// Full: EL(2)+commit(4)+CL(2)+commit(4)+user
-		graffiti = g.elCode + elCommit4 + CLCode + clCommit4 + userStr
+		// Full: user+EL(2)+commit(4)+CL(2)+commit(4)
+		graffiti = userStr + g.elCode + elCommit4 + CLCode + clCommit4
 	case available >= 8:
-		// Reduced commits: EL(2)+commit(2)+CL(2)+commit(2)+user
-		graffiti = g.elCode + elCommit2 + CLCode + clCommit2 + userStr
+		// Reduced commits: user+EL(2)+commit(2)+CL(2)+commit(2)
+		graffiti = userStr + g.elCode + elCommit2 + CLCode + clCommit2
 	case available >= 4:
-		// Codes only: EL(2)+CL(2)+user
-		graffiti = g.elCode + CLCode + userStr
+		// Codes only: user+EL(2)+CL(2)
+		graffiti = userStr + g.elCode + CLCode
 	case available >= 2:
-		// EL code only (or CL code if no EL): code(2)+user
+		// Single code: user+code(2)
 		if g.elCode != "" {
-			graffiti = g.elCode + userStr
+			graffiti = userStr + g.elCode
 		} else {
-			graffiti = CLCode + userStr
+			graffiti = userStr + CLCode
 		}
 	default:
 		// User graffiti only
