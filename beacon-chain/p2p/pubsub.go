@@ -161,7 +161,7 @@ func (s *Service) pubsubOptions() []pubsub.Option {
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageIdFn(func(pmsg *pubsubpb.Message) string {
-			return MsgID(s.genesisValidatorsRoot, pmsg)
+			return MsgID(pmsg)
 		}),
 		pubsub.WithSubscriptionFilter(filt),
 		pubsub.WithPeerOutboundQueueSize(int(s.cfg.QueueSize)),
