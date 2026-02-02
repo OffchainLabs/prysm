@@ -38,6 +38,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/db"
 	dbCommon "github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/OffchainLabs/prysm/v7/validator/graffiti"
+	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager/local"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
@@ -101,9 +102,9 @@ type validator struct {
 	pubkeyToStatus                     map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus
 	wallet                             *wallet.Wallet
 	walletInitializedChan              chan *wallet.Wallet
-	currentHostIndex                   uint64
 	walletInitializedFeed              *event.Feed
 	graffitiOrderedIndex               uint64
+	conn                               validatorHelpers.NodeConnection
 	submittedAtts                      map[submittedAttKey]*submittedAtt
 	validatorsRegBatchSize             int
 	validatorClient                    iface.ValidatorClient
@@ -114,7 +115,7 @@ type validator struct {
 	km                                 keymanager.IKeymanager
 	accountChangedSub                  event.Subscription
 	ticker                             slots.Ticker
-	beaconNodeHosts                    []string
+	currentHostIndex                   uint64
 	genesisTime                        time.Time
 	graffiti                           []byte
 	voteStats                          voteStats
@@ -1311,34 +1312,64 @@ func (v *validator) Host() string {
 }
 
 func (v *validator) changeHost() {
-	next := (v.currentHostIndex + 1) % uint64(len(v.beaconNodeHosts))
+	hosts := v.hosts()
+	if len(hosts) <= 1 {
+		return
+	}
+	next := (v.currentHostIndex + 1) % uint64(len(hosts))
 	log.WithFields(logrus.Fields{
-		"currentHost": v.beaconNodeHosts[v.currentHostIndex],
-		"nextHost":    v.beaconNodeHosts[next],
+		"currentHost": hosts[v.currentHostIndex],
+		"nextHost":    hosts[next],
 	}).Warn("Beacon node is not responding, switching host")
-	v.validatorClient.SetHost(v.beaconNodeHosts[next])
+	v.validatorClient.SwitchHost(hosts[next])
 	v.currentHostIndex = next
 }
 
+// hosts returns the list of configured beacon node hosts.
+func (v *validator) hosts() []string {
+	if features.Get().EnableBeaconRESTApi {
+		return v.conn.GetRestConnectionProvider().Hosts()
+	}
+	return v.conn.GetGrpcConnectionProvider().Hosts()
+}
+
+// numHosts returns the number of configured beacon node hosts.
+func (v *validator) numHosts() int {
+	return len(v.hosts())
+}
+
 func (v *validator) FindHealthyHost(ctx context.Context) bool {
-	// Tail-recursive closure keeps retry count private.
-	var check func(remaining int) bool
-	check = func(remaining int) bool {
-		if v.nodeClient.IsReady(ctx) { // ready → done
+	numHosts := v.numHosts()
+	startingHost := v.Host()
+	attemptedHosts := []string{}
+
+	// Check all hosts for a fully synced node
+	for i := range numHosts {
+		if v.nodeClient.IsReady(ctx) {
+			if len(attemptedHosts) > 0 {
+				log.WithFields(logrus.Fields{
+					"previousHost":   startingHost,
+					"newHost":        v.Host(),
+					"failedAttempts": attemptedHosts,
+				}).Info("Failover succeeded: connected to healthy beacon node")
+			}
 			return true
 		}
-		if len(v.beaconNodeHosts) == 1 && features.Get().EnableBeaconRESTApi {
-			log.WithField("host", v.Host()).Warn("Beacon node is not responding, no backup node configured")
-			return false
+		log.WithField("host", v.Host()).Debug("Beacon node not fully synced")
+		attemptedHosts = append(attemptedHosts, v.Host())
+
+		// Try next host if not the last iteration
+		if i < numHosts-1 {
+			v.changeHost()
 		}
-		if remaining == 0 || !features.Get().EnableBeaconRESTApi {
-			return false // exhausted or REST disabled
-		}
-		v.changeHost()
-		return check(remaining - 1) // recurse
 	}
 
-	return check(len(v.beaconNodeHosts))
+	if numHosts == 1 {
+		log.WithField("host", v.Host()).Warn("Beacon node is not fully synced, no backup node configured")
+	} else {
+		log.Warn("No fully synced beacon node found")
+	}
+	return false
 }
 
 func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {

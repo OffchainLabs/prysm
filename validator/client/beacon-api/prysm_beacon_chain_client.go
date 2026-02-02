@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	validator2 "github.com/OffchainLabs/prysm/v7/consensus-types/validator"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -18,7 +19,7 @@ import (
 )
 
 // NewPrysmChainClient returns implementation of iface.PrysmChainClient.
-func NewPrysmChainClient(jsonRestHandler RestHandler, nodeClient iface.NodeClient) iface.PrysmChainClient {
+func NewPrysmChainClient(jsonRestHandler rest.RestHandler, nodeClient iface.NodeClient) iface.PrysmChainClient {
 	return prysmChainClient{
 		jsonRestHandler: jsonRestHandler,
 		nodeClient:      nodeClient,
@@ -26,7 +27,7 @@ func NewPrysmChainClient(jsonRestHandler RestHandler, nodeClient iface.NodeClien
 }
 
 type prysmChainClient struct {
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 	nodeClient      iface.NodeClient
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -22,13 +23,13 @@ type beaconApiValidatorClient struct {
 	genesisProvider         GenesisProvider
 	dutiesProvider          dutiesProvider
 	stateValidatorsProvider StateValidatorsProvider
-	jsonRestHandler         RestHandler
+	jsonRestHandler         rest.RestHandler
 	beaconBlockConverter    BeaconBlockConverter
 	prysmChainClient        iface.PrysmChainClient
 	isEventStreamRunning    bool
 }
 
-func NewBeaconApiValidatorClient(jsonRestHandler RestHandler, opts ...ValidatorClientOpt) iface.ValidatorClient {
+func NewBeaconApiValidatorClient(jsonRestHandler rest.RestHandler, opts ...ValidatorClientOpt) iface.ValidatorClient {
 	c := &beaconApiValidatorClient{
 		genesisProvider:         &beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler},
 		dutiesProvider:          beaconApiDutiesProvider{jsonRestHandler: jsonRestHandler},
@@ -331,6 +332,6 @@ func (c *beaconApiValidatorClient) Host() string {
 	return c.jsonRestHandler.Host()
 }
 
-func (c *beaconApiValidatorClient) SetHost(host string) {
-	c.jsonRestHandler.SetHost(host)
+func (c *beaconApiValidatorClient) SwitchHost(host string) {
+	c.jsonRestHandler.SwitchHost(host)
 }
