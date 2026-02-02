@@ -40,4 +40,5 @@ type Server struct {
 	TrackedValidatorsCache *cache.TrackedValidatorsCache
 	PayloadIDCache         *cache.PayloadIDCache
 	PayloadAttestationPool payloadattestation.PoolManager
+	PayloadStatusFetcher   payloadattestation.PayloadStatusFetcher
 }

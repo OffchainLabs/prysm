@@ -927,12 +927,14 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		}
 
 		// TODO: Add full gossip validation (BLS signatures, PTC membership).
-		if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg); err != nil {
-			failures = append(failures, &server.IndexedError{
-				Index:   i,
-				Message: "Could not insert payload attestation: " + err.Error(),
-			})
-			continue
+		if s.PayloadAttestationPool != nil {
+			if err := s.PayloadAttestationPool.InsertPayloadAttestation(consensusMsg); err != nil {
+				failures = append(failures, &server.IndexedError{
+					Index:   i,
+					Message: "Could not insert payload attestation: " + err.Error(),
+				})
+				continue
+			}
 		}
 
 		if err := s.Broadcaster.Broadcast(ctx, consensusMsg); err != nil {
@@ -962,10 +964,12 @@ func (s *Server) ListPayloadAttestations(w http.ResponseWriter, r *http.Request)
 	}
 
 	var atts []*eth.PayloadAttestation
-	if rawSlot != "" {
-		atts = s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
-	} else {
-		atts = s.PayloadAttestationPool.PendingPayloadAttestations()
+	if s.PayloadAttestationPool != nil {
+		if rawSlot != "" {
+			atts = s.PayloadAttestationPool.PendingPayloadAttestations(primitives.Slot(slot))
+		} else {
+			atts = s.PayloadAttestationPool.PendingPayloadAttestations()
+		}
 	}
 
 	data := make([]*structs.PayloadAttestation, len(atts))

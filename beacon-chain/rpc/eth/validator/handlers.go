@@ -1448,10 +1448,15 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// TODO: Determine payload_present and blob_data_available from the SignedExecutionPayloadEnvelope
-	// once that handling is implemented. For now, stub with false.
-	payloadPresent := false
-	blobDataAvailable := false
+	var payloadPresent, blobDataAvailable bool
+	if s.PayloadStatusFetcher != nil {
+		var err error
+		payloadPresent, blobDataAvailable, err = s.PayloadStatusFetcher.PayloadStatus(primitives.Slot(slot))
+		if err != nil {
+			httputil.HandleError(w, "Could not get payload status: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 
 	data := &ethpbalpha.PayloadAttestationData{
 		BeaconBlockRoot:   headRoot,
