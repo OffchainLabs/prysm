@@ -14,6 +14,7 @@ import (
 type mockProvider struct {
 	hosts        []string
 	currentIndex int
+	connCounter  uint64
 	mu           sync.Mutex
 }
 
@@ -31,7 +32,14 @@ func (m *mockProvider) SwitchHost(index int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.currentIndex = index
+	m.connCounter++
 	return nil
+}
+
+func (m *mockProvider) ConnectionCounter() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.connCounter
 }
 
 // nextHost is a test helper for round-robin simulation (not part of the interface).
@@ -39,6 +47,7 @@ func (m *mockProvider) nextHost() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.currentIndex = (m.currentIndex + 1) % len(m.hosts)
+	m.connCounter++
 }
 
 // testClient is a simple type for testing the generic client manager.
@@ -61,11 +70,11 @@ func testManager(t *testing.T, provider *mockProvider) (*grpcClientManager[*test
 }
 
 func TestGrpcClientManager(t *testing.T) {
-	t.Run("tracks host", func(t *testing.T) {
+	t.Run("tracks connection counter", func(t *testing.T) {
 		provider := &mockProvider{hosts: []string{"host1:4000", "host2:4000"}}
 		manager, count := testManager(t, provider)
 		assert.Equal(t, 1, *count)
-		assert.Equal(t, "host1:4000", manager.lastHost)
+		assert.Equal(t, uint64(0), manager.lastConnCounter)
 	})
 
 	t.Run("same host returns same client", func(t *testing.T) {
@@ -94,6 +103,30 @@ func TestGrpcClientManager(t *testing.T) {
 		c3 := manager.getClient()
 		assert.Equal(t, 2, *count)
 		assert.Equal(t, c2, c3)
+	})
+
+	t.Run("host bounce recreates client", func(t *testing.T) {
+		// Regression test: when host bounces (host0 → host1 → host0), the client
+		// must be recreated even though the host string returns to its original value,
+		// because the underlying *grpc.ClientConn was destroyed and replaced.
+		provider := &mockProvider{hosts: []string{"host1:4000", "host2:4000"}}
+		manager, count := testManager(t, provider)
+
+		c1 := manager.getClient()
+		assert.Equal(t, 1, c1.id)
+
+		// Switch to host2
+		provider.nextHost()
+		c2 := manager.getClient()
+		assert.Equal(t, 2, *count)
+		assert.Equal(t, 2, c2.id)
+
+		// Switch back to host1 — same host string but new connection
+		provider.nextHost()
+		assert.Equal(t, "host1:4000", provider.CurrentHost())
+		c3 := manager.getClient()
+		assert.Equal(t, 3, *count, "client should be recreated on host bounce")
+		assert.Equal(t, 3, c3.id)
 	})
 
 	t.Run("multiple host switches", func(t *testing.T) {
