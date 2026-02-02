@@ -91,22 +91,22 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 	}
 
 	log := log.WithFields(logrus.Fields{
-		"slot":           block.Slot(),
-		"block":          fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-		"finalizedEpoch": finalized.Epoch,
-		"finalizedRoot":  fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
-		"epoch":          slots.ToEpoch(block.Slot()),
+		"slot":               block.Slot(),
+		"block":              fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
+		"finalizedEpoch":     finalized.Epoch,
+		"finalizedRoot":      fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
+		"epoch":              slots.ToEpoch(block.Slot()),
+		"slotInEpoch":        block.Slot() % params.BeaconConfig().SlotsPerEpoch,
+		"sinceSlotStartTime": prysmTime.Now().Sub(startTime),
 	})
 
 	if log.Logger.GetLevel() >= logrus.DebugLevel {
 		parentRoot := block.ParentRoot()
 		log = log.WithFields(logrus.Fields{
-			"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
 			"justifiedEpoch":             justified.Epoch,
 			"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
 			"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
 			"version":                    version.String(block.Version()),
-			"sinceSlotStartTime":         prysmTime.Now().Sub(startTime),
 			"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
 			"dataAvailabilityWaitedTime": daWaitedTime,
 		})
