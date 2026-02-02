@@ -28,6 +28,7 @@ go_library(
         "testutils_develop.go",  # keep
         "values.go",
     ],
+    embedsrcs = ["testdata/e2e_config.yaml"],
     importpath = "github.com/OffchainLabs/prysm/v7/config/params",
     visibility = ["//visibility:public"],
     deps = [

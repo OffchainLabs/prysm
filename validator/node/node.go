@@ -30,7 +30,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/runtime"
 	"github.com/OffchainLabs/prysm/v7/runtime/prereqs"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
 	"github.com/OffchainLabs/prysm/v7/validator/client"
 	"github.com/OffchainLabs/prysm/v7/validator/db"
@@ -74,13 +73,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 	); err != nil {
 		return nil, err
 	}
-
-	verbosity := cliCtx.String(cmd.VerbosityFlag.Name)
-	level, err := logrus.ParseLevel(verbosity)
-	if err != nil {
-		return nil, err
-	}
-	logrus.SetLevel(level)
 
 	// Warn if user's platform is not supported
 	prereqs.WarnIfPlatformNotSupported(cliCtx.Context)
@@ -130,10 +122,6 @@ func NewValidatorClient(cliCtx *cli.Context) (*ValidatorClient, error) {
 // Start every service in the validator client.
 func (c *ValidatorClient) Start() {
 	c.lock.Lock()
-
-	log.WithFields(logrus.Fields{
-		"version": version.Version(),
-	}).Info("Starting validator node")
 
 	c.services.StartAll()
 

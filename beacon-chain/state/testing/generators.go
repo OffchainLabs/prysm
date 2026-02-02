@@ -3,7 +3,7 @@ package testing
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -31,7 +31,7 @@ func GeneratePendingDeposit(t *testing.T, key common.SecretKey, amount uint64, w
 		Amount:                dm.Amount,
 		Signature:             sig.Marshal(),
 	}
-	valid, err := blocks.IsValidDepositSignature(depositData)
+	valid, err := helpers.IsValidDepositSignature(depositData)
 	require.NoError(t, err)
 	require.Equal(t, true, valid)
 	return &ethpb.PendingDeposit{

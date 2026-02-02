@@ -74,6 +74,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.RPCHost,
 			flags.RPCPort,
 			flags.BatchVerifierLimit,
+			flags.StateDiffExponents,
 		},
 	},
 	{
@@ -199,6 +200,8 @@ var appHelpFlagGroups = []flagGroup{
 			cmd.LogFormat,
 			cmd.LogFileName,
 			cmd.VerbosityFlag,
+			flags.DisableEphemeralLogFile,
+			cmd.LogVModuleFlag,
 		},
 	},
 	{ // Feature flags.

@@ -203,15 +203,45 @@ func NewKVStore(ctx context.Context, dirPath string, opts ...KVStoreOption) (*St
 		return nil, err
 	}
 
-	if features.Get().EnableStateDiff {
-		sdCache, err := newStateDiffCache(kv)
-		if err != nil {
-			return nil, err
+	if err := kv.startStateDiff(ctx); err != nil {
+		if errors.Is(err, ErrStateDiffIncompatible) {
+			return kv, err
 		}
-		kv.stateDiffCache = sdCache
+		return nil, err
+	}
+	return kv, nil
+}
+
+func (kv *Store) startStateDiff(ctx context.Context) error {
+	if !features.Get().EnableStateDiff {
+		return nil
+	}
+	// Check if offset already exists (existing state-diff database).
+	hasOffset, err := kv.hasStateDiffOffset()
+	if err != nil {
+		return err
 	}
 
-	return kv, nil
+	if hasOffset {
+		// Existing state-diff database - restarts not yet supported.
+		return errors.New("restarting with existing state-diff database not yet supported")
+	}
+
+	// Check if this is a new database (no head block).
+	headBlock, err := kv.HeadBlock(ctx)
+	if err != nil {
+		return errors.Wrap(err, "could not get head block")
+	}
+
+	if headBlock == nil {
+		// New database - will be initialized later during checkpoint/genesis sync.
+		// stateDiffCache stays nil until SaveOrigin or SaveGenesisData initializes it.
+		log.Info("State-diff enabled: will be initialized during checkpoint or genesis sync")
+	} else {
+		// Existing database without state-diff - return store with error for caller to handle.
+		return ErrStateDiffIncompatible
+	}
+	return nil
 }
 
 // ClearDB removes the previously stored database in the data directory.

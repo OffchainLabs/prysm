@@ -1,6 +1,7 @@
 package verification
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -281,7 +283,7 @@ func TestColumnSlotAboveFinalized(t *testing.T) {
 
 func TestValidProposerSignature(t *testing.T) {
 	const (
-		columnSlot = 0
+		columnSlot = 97
 		blobCount  = 1
 	)
 
@@ -294,59 +296,83 @@ func TestValidProposerSignature(t *testing.T) {
 	// The signature data does not depend on the data column itself, so we can use the first one.
 	expectedSignatureData := columnToSignatureData(firstColumn)
 
+	// Create a proper Fulu state for verification.
+	// We need enough validators to cover the proposer index.
+	numValidators := max(uint64(firstColumn.ProposerIndex()+1), 64)
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, numValidators)
+
+	// Head state provider that returns the fuluState via HeadStateReadOnly path.
+	headStateWithState := &mockHeadStateProvider{
+		headRoot:          parentRoot[:],
+		headSlot:          columnSlot,
+		headStateReadOnly: fuluState,
+	}
+
+	// Head state provider that will fail (headStateReadOnly is nil).
+	headStateNotFound := &mockHeadStateProvider{
+		headRoot: parentRoot[:],
+		headSlot: columnSlot,
+	}
+
 	testCases := []struct {
-		isError         bool
-		vscbShouldError bool
-		svcbReturn      bool
-		stateByRooter   StateByRooter
-		vscbError       error
-		svcbError       error
-		name            string
+		isError           bool
+		vscbShouldError   bool
+		svcbReturn        bool
+		stateByRooter     StateByRooter
+		headStateProvider *mockHeadStateProvider
+		vscbError         error
+		svcbError         error
+		name              string
 	}{
 		{
-			name:            "cache hit - success",
-			svcbReturn:      true,
-			svcbError:       nil,
-			vscbShouldError: true,
-			vscbError:       nil,
-			stateByRooter:   &mockStateByRooter{sbr: sbrErrorIfCalled(t)},
-			isError:         false,
+			name:              "cache hit - success",
+			svcbReturn:        true,
+			svcbError:         nil,
+			vscbShouldError:   true,
+			vscbError:         nil,
+			stateByRooter:     &mockStateByRooter{sbr: sbrErrorIfCalled(t)},
+			headStateProvider: headStateWithState,
+			isError:           false,
 		},
 		{
-			name:            "cache hit - error",
-			svcbReturn:      true,
-			svcbError:       errors.New("derp"),
-			vscbShouldError: true,
-			vscbError:       nil,
-			stateByRooter:   &mockStateByRooter{sbr: sbrErrorIfCalled(t)},
-			isError:         true,
+			name:              "cache hit - error",
+			svcbReturn:        true,
+			svcbError:         errors.New("derp"),
+			vscbShouldError:   true,
+			vscbError:         nil,
+			stateByRooter:     &mockStateByRooter{sbr: sbrErrorIfCalled(t)},
+			headStateProvider: headStateWithState,
+			isError:           true,
 		},
 		{
-			name:            "cache miss - success",
-			svcbReturn:      false,
-			svcbError:       nil,
-			vscbShouldError: false,
-			vscbError:       nil,
-			stateByRooter:   sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
-			isError:         false,
+			name:              "cache miss - success",
+			svcbReturn:        false,
+			svcbError:         nil,
+			vscbShouldError:   false,
+			vscbError:         nil,
+			stateByRooter:     sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
+			headStateProvider: headStateWithState,
+			isError:           false,
 		},
 		{
-			name:            "cache miss - state not found",
-			svcbReturn:      false,
-			svcbError:       nil,
-			vscbShouldError: false,
-			vscbError:       nil,
-			stateByRooter:   sbrNotFound(t, expectedSignatureData.Parent),
-			isError:         true,
+			name:              "cache miss - state not found",
+			svcbReturn:        false,
+			svcbError:         nil,
+			vscbShouldError:   false,
+			vscbError:         nil,
+			stateByRooter:     sbrNotFound(t, expectedSignatureData.Parent),
+			headStateProvider: headStateNotFound,
+			isError:           true,
 		},
 		{
-			name:            "cache miss - signature failure",
-			svcbReturn:      false,
-			svcbError:       nil,
-			vscbShouldError: false,
-			vscbError:       errors.New("signature, not so good!"),
-			stateByRooter:   sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
-			isError:         true,
+			name:              "cache miss - signature failure",
+			svcbReturn:        false,
+			svcbError:         nil,
+			vscbShouldError:   false,
+			vscbError:         errors.New("signature, not so good!"),
+			stateByRooter:     sbrForValOverrideWithT(t, firstColumn.ProposerIndex(), validator),
+			headStateProvider: headStateWithState,
+			isError:           true,
 		},
 	}
 
@@ -377,9 +403,10 @@ func TestValidProposerSignature(t *testing.T) {
 				shared: &sharedResources{
 					sc:  signatureCache,
 					sr:  tc.stateByRooter,
-					hsp: &mockHeadStateProvider{},
+					hsp: tc.headStateProvider,
 					fc: &mockForkchoicer{
-						TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+						DependentRootForEpochCB: fcReturnsDependentRoot(),
+						TargetRootForEpochCB:    fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
 					},
 				},
 			}
@@ -405,7 +432,7 @@ func TestValidProposerSignature(t *testing.T) {
 
 func TestDataColumnsSidecarParentSeen(t *testing.T) {
 	const (
-		columnSlot = 0
+		columnSlot = 97
 		blobCount  = 1
 	)
 
@@ -509,7 +536,7 @@ func TestDataColumnsSidecarParentValid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			const (
-				columnSlot = 0
+				columnSlot = 97
 				blobCount  = 1
 			)
 
@@ -630,7 +657,7 @@ func TestDataColumnsSidecarDescendsFromFinalized(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			const (
-				columnSlot = 0
+				columnSlot = 97
 				blobCount  = 1
 			)
 
@@ -693,7 +720,7 @@ func TestDataColumnsSidecarInclusionProven(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			const (
-				columnSlot = 0
+				columnSlot = 97
 				blobCount  = 1
 			)
 
@@ -748,7 +775,7 @@ func TestDataColumnsSidecarKzgProofVerified(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			const (
-				columnSlot = 0
+				columnSlot = 97
 				blobCount  = 1
 			)
 
@@ -924,3 +951,135 @@ func TestColumnRequirementSatisfaction(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestGetVerifyingStateEdgeCases(t *testing.T) {
+	const (
+		columnSlot = 97 // epoch 3
+		blobCount  = 1
+	)
+
+	parentRoot := [fieldparams.RootLength]byte{}
+	columns := GenerateTestDataColumns(t, parentRoot, columnSlot, blobCount)
+
+	// Create a proper Fulu state for verification.
+	numValidators := max(uint64(columns[0].ProposerIndex()+1), 64)
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, numValidators)
+
+	t.Run("different dependent roots - uses StateByRoot path", func(t *testing.T) {
+		// Parent and head are on different forks with different dependent roots.
+		// This forces the code to use TargetRootForEpoch -> StateByRoot path.
+		signatureCache := &mockSignatureCache{
+			svcb: func(signatureData signatureData) (bool, error) {
+				return false, nil // Cache miss
+			},
+			vscb: func(signatureData signatureData, _ validatorAtIndexer) (err error) {
+				return nil // Signature valid
+			},
+		}
+
+		// StateByRoot will be called because dependent roots differ
+		stateByRootCalled := false
+		stateByRooter := &mockStateByRooter{
+			sbr: func(_ context.Context, root [32]byte) (state.BeaconState, error) {
+				stateByRootCalled = true
+				return fuluState, nil
+			},
+		}
+
+		initializer := Initializer{
+			shared: &sharedResources{
+				sc: signatureCache,
+				sr: stateByRooter,
+				hsp: &mockHeadStateProvider{
+					headRoot: []byte{0xff}, // Different from parentRoot
+					headSlot: columnSlot,
+				},
+				fc: &mockForkchoicer{
+					// Return different roots for parent vs head to simulate different forks
+					DependentRootForEpochCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+						return root, nil // Returns input, so parent [0...] != head [0xff...]
+					},
+					TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+				},
+			},
+		}
+
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+		err := verifier.ValidProposerSignature(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, true, stateByRootCalled, "StateByRoot should be called when dependent roots differ")
+	})
+
+	t.Run("same dependent root head far ahead - uses head state with ProcessSlots", func(t *testing.T) {
+		// Parent is ancestor of head on same chain, but head is in epoch 1 while column is in epoch 3.
+		// headEpoch (1) + 1 < dataColumnEpoch (3), so ProcessSlots is called on head state.
+		signatureCache := &mockSignatureCache{
+			svcb: func(signatureData signatureData) (bool, error) {
+				return false, nil // Cache miss
+			},
+			vscb: func(signatureData signatureData, _ validatorAtIndexer) (err error) {
+				return nil // Signature valid
+			},
+		}
+
+		headStateCalled := false
+		initializer := Initializer{
+			shared: &sharedResources{
+				sc: signatureCache,
+				sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}, // Should not be called
+				hsp: &mockHeadStateProvider{
+					headRoot: parentRoot[:],     // Same as parent
+					headSlot: 32,                // Epoch 1
+					headState: fuluState.Copy(), // HeadState (not ReadOnly) for ProcessSlots
+					headStateReadOnly: nil,      // Should not use ReadOnly path
+				},
+				fc: &mockForkchoicer{
+					// Return same root for both to simulate same chain
+					DependentRootForEpochCB: func(root [32]byte, epoch primitives.Epoch) ([32]byte, error) {
+						return [32]byte{0xaa}, nil // Same for all inputs
+					},
+					TargetRootForEpochCB: fcReturnsTargetRoot([fieldparams.RootLength]byte{}),
+				},
+			},
+		}
+
+		// Wrap to detect HeadState call
+		originalHsp := initializer.shared.hsp.(*mockHeadStateProvider)
+		wrappedHsp := &mockHeadStateProvider{
+			headRoot: originalHsp.headRoot,
+			headSlot: originalHsp.headSlot,
+			headState: originalHsp.headState,
+		}
+		initializer.shared.hsp = &headStateCallTracker{
+			mockHeadStateProvider: wrappedHsp,
+			headStateCalled:       &headStateCalled,
+		}
+
+		verifier := initializer.NewDataColumnsVerifier(columns, GossipDataColumnSidecarRequirements)
+		err := verifier.ValidProposerSignature(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, true, headStateCalled, "HeadState should be called when head is far ahead")
+	})
+}
+
+// headStateCallTracker wraps mockHeadStateProvider to track HeadState calls.
+type headStateCallTracker struct {
+	*mockHeadStateProvider
+	headStateCalled *bool
+}
+
+func (h *headStateCallTracker) HeadState(ctx context.Context) (state.BeaconState, error) {
+	*h.headStateCalled = true
+	return h.mockHeadStateProvider.HeadState(ctx)
+}
+
+func (h *headStateCallTracker) HeadRoot(ctx context.Context) ([]byte, error) {
+	return h.mockHeadStateProvider.HeadRoot(ctx)
+}
+
+func (h *headStateCallTracker) HeadSlot() primitives.Slot {
+	return h.mockHeadStateProvider.HeadSlot()
+}
+
+func (h *headStateCallTracker) HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error) {
+	return h.mockHeadStateProvider.HeadStateReadOnly(ctx)
+}

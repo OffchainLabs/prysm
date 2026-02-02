@@ -34,6 +34,26 @@
         blobs: List[Blob, MAX_BLOB_COMMITMENTS_PER_BLOCK]
     </spec>
 
+- name: ExpectedWithdrawals#capella
+  sources: []
+  spec: |
+    <spec dataclass="ExpectedWithdrawals" fork="capella" hash="73becb4c">
+    class ExpectedWithdrawals(object):
+        withdrawals: Sequence[Withdrawal]
+        processed_sweep_withdrawals_count: uint64
+    </spec>
+
+- name: ExpectedWithdrawals#electra
+  sources: []
+  spec: |
+    <spec dataclass="ExpectedWithdrawals" fork="electra" hash="a3827f01">
+    class ExpectedWithdrawals(object):
+        withdrawals: Sequence[Withdrawal]
+        # [New in Electra:EIP7251]
+        processed_partial_withdrawals_count: uint64
+        processed_sweep_withdrawals_count: uint64
+    </spec>
+
 - name: GetPayloadResponse#bellatrix
   sources:
     - file: consensus-types/blocks/get_payload.go

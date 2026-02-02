@@ -35,6 +35,21 @@ func CopyValidator(val *Validator) *Validator {
 	}
 }
 
+// CopyBuilder copies the provided builder.
+func CopyBuilder(builder *Builder) *Builder {
+	if builder == nil {
+		return nil
+	}
+	return &Builder{
+		Pubkey:            bytesutil.SafeCopyBytes(builder.Pubkey),
+		Version:           bytesutil.SafeCopyBytes(builder.Version),
+		ExecutionAddress:  bytesutil.SafeCopyBytes(builder.ExecutionAddress),
+		Balance:           builder.Balance,
+		DepositEpoch:      builder.DepositEpoch,
+		WithdrawableEpoch: builder.WithdrawableEpoch,
+	}
+}
+
 // CopySyncCommitteeMessage copies the provided sync committee message object.
 func CopySyncCommitteeMessage(s *SyncCommitteeMessage) *SyncCommitteeMessage {
 	if s == nil {
@@ -173,4 +188,29 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 	copied.PayloadAttestations = copyPayloadAttestations(body.PayloadAttestations)
 
 	return copied
+}
+
+// CopyBuilderPendingPayment creates a deep copy of a builder pending payment.
+func CopyBuilderPendingPayment(original *BuilderPendingPayment) *BuilderPendingPayment {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingPayment{
+		Weight:     original.Weight,
+		Withdrawal: CopyBuilderPendingWithdrawal(original.Withdrawal),
+	}
+}
+
+// CopyBuilderPendingWithdrawal creates a deep copy of a builder pending withdrawal.
+func CopyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPendingWithdrawal {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingWithdrawal{
+		FeeRecipient: bytesutil.SafeCopyBytes(original.FeeRecipient),
+		Amount:       original.Amount,
+		BuilderIndex: original.BuilderIndex,
+	}
 }

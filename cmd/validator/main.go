@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimeDebug "runtime/debug"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	accountcommands "github.com/OffchainLabs/prysm/v7/cmd/validator/accounts"
@@ -32,8 +33,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
-
-var log = logrus.WithField("prefix", "main")
 
 func startNode(ctx *cli.Context) error {
 	// Verify if ToS is accepted.
@@ -95,6 +94,7 @@ var appFlags = []cli.Flag{
 	cmd.MinimalConfigFlag,
 	cmd.E2EConfigFlag,
 	cmd.VerbosityFlag,
+	cmd.LogVModuleFlag,
 	cmd.DataDirFlag,
 	cmd.ClearDB,
 	cmd.ForceClearDB,
@@ -115,6 +115,7 @@ var appFlags = []cli.Flag{
 	debug.BlockProfileRateFlag,
 	debug.MutexProfileFractionFlag,
 	cmd.AcceptTosFlag,
+	flags.DisableEphemeralLogFile,
 }
 
 func init() {
@@ -139,13 +140,32 @@ func main() {
 			slashingprotectioncommands.Commands,
 			dbcommands.Commands,
 			web.Commands,
+			cmd.CompletionCommand("validator"),
 		},
-		Flags: appFlags,
+		Flags:                appFlags,
+		EnableBashCompletion: true,
 		Before: func(ctx *cli.Context) error {
 			// Load flags from config file, if specified.
 			if err := cmd.LoadFlagsFromConfig(ctx, appFlags); err != nil {
 				return err
 			}
+
+			// determine default log verbosity
+			verbosity := ctx.String(cmd.VerbosityFlag.Name)
+			verbosityLevel, err := logrus.ParseLevel(verbosity)
+			if err != nil {
+				return errors.Wrap(err, "failed to parse log verbosity")
+			}
+
+			// determine per package verbosity. if not set, maxLevel will be 0.
+			vmoduleInput := strings.Join(ctx.StringSlice(cmd.LogVModuleFlag.Name), ",")
+			vmodule, maxLevel, err := cmd.ParseVModule(vmoduleInput)
+			if err != nil {
+				return errors.Wrap(err, "failed to parse log vmodule")
+			}
+
+			// set the global logging level to allow for the highest verbosity requested
+			logs.SetLoggingLevel(max(maxLevel, verbosityLevel))
 
 			logFileName := ctx.String(cmd.LogFileName.Name)
 
@@ -161,10 +181,13 @@ func main() {
 				formatter.FullTimestamp = true
 				formatter.ForceFormatting = true
 				formatter.ForceColors = true
+				formatter.VModule = vmodule
+				formatter.BaseVerbosity = verbosityLevel
 
 				logrus.AddHook(&logs.WriterHook{
-					Formatter: formatter,
-					Writer:    os.Stderr,
+					Formatter:     formatter,
+					Writer:        os.Stderr,
+					AllowedLevels: logrus.AllLevels[:max(verbosityLevel, maxLevel)+1],
 				})
 			case "fluentd":
 				f := joonix.NewFormatter()
@@ -185,10 +208,21 @@ func main() {
 			}
 
 			if logFileName != "" {
-				if err := logs.ConfigurePersistentLogging(logFileName, format); err != nil {
+				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel, vmodule); err != nil {
 					log.WithError(err).Error("Failed to configuring logging to disk.")
 				}
 			}
+
+			if !ctx.Bool(flags.DisableEphemeralLogFile.Name) {
+				if err := logs.ConfigureEphemeralLogFile(ctx.String(cmd.DataDirFlag.Name), ctx.App.Name); err != nil {
+					log.WithError(err).Error("Failed to configure debug log file")
+				}
+			}
+
+			// Log Prysm version on startup. After initializing log-file and ephemeral log-file.
+			log.WithFields(logrus.Fields{
+				"version": version.Version(),
+			}).Info("Prysm Validator started")
 
 			// Fix data dir for Windows users.
 			outdatedDataDir := filepath.Join(file.HomeDir(), "AppData", "Roaming", "Eth2Validators")

@@ -23,6 +23,16 @@ const (
 	The data at level 0 is saved every 2**exponent[0] slots and always contains a full state snapshot that is used as a base for the delta saved at other levels.
 */
 
+// SlotInDiffTree returns whether the given slot is a saving point in the diff tree.
+// If it is, it also returns the offset and level in the tree.
+func (s *Store) SlotInDiffTree(slot primitives.Slot) (uint64, int, error) {
+	offset := s.getOffset()
+	if uint64(slot) < offset {
+		return 0, -1, ErrSlotBeforeOffset
+	}
+	return offset, computeLevel(offset, slot), nil
+}
+
 // saveStateByDiff takes a state and decides between saving a full state snapshot or a diff.
 func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
 	_, span := trace.StartSpan(ctx, "BeaconDB.saveStateByDiff")
@@ -33,13 +43,10 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 	}
 
 	slot := st.Slot()
-	offset := s.getOffset()
-	if uint64(slot) < offset {
-		return ErrSlotBeforeOffset
+	offset, lvl, err := s.SlotInDiffTree(slot)
+	if err != nil {
+		return errors.Wrap(err, "could not determine if slot is in diff tree")
 	}
-
-	// Find the level to save the state.
-	lvl := computeLevel(offset, slot)
 	if lvl == -1 {
 		return nil
 	}

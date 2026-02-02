@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = [
+        "blob_limits.go",
         "builder.go",
         "data.go",
         "execution_engine.go",

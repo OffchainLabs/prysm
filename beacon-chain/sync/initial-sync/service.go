@@ -226,8 +226,6 @@ func (s *Service) Start() {
 
 // fetchOriginSidecars fetches origin sidecars
 func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
-	const delay = 10 * time.Second // The delay between each attempt to fetch origin data column sidecars
-
 	blockRoot, err := s.cfg.DB.OriginCheckpointBlockRoot(s.ctx)
 	if errors.Is(err, db.ErrNotFoundOriginBlockRoot) {
 		return nil
@@ -260,7 +258,7 @@ func (s *Service) fetchOriginSidecars(peers []peer.ID) error {
 	blockVersion := roBlock.Version()
 
 	if blockVersion >= version.Fulu {
-		if err := s.fetchOriginDataColumnSidecars(roBlock, delay); err != nil {
+		if err := s.fetchOriginDataColumnSidecars(roBlock); err != nil {
 			return errors.Wrap(err, "fetch origin columns")
 		}
 		return nil
@@ -414,7 +412,7 @@ func (s *Service) fetchOriginBlobSidecars(pids []peer.ID, rob blocks.ROBlock) er
 	return fmt.Errorf("no connected peer able to provide blobs for checkpoint sync block %#x", r)
 }
 
-func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay time.Duration) error {
+func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock) error {
 	const (
 		errorMessage     = "Failed to fetch origin data column sidecars"
 		warningIteration = 10
@@ -501,7 +499,6 @@ func (s *Service) fetchOriginDataColumnSidecars(roBlock blocks.ROBlock, delay ti
 		log := log.WithFields(logrus.Fields{
 			"attempt":        attempt,
 			"missingIndices": helpers.SortedPrettySliceFromMap(missingIndicesByRoot[root]),
-			"delay":          delay,
 		})
 
 		logFunc := log.Debug

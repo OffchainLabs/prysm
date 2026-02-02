@@ -46,7 +46,6 @@ go_library(
         "//monitoring/tracing:go_default_library",
         "//runtime:go_default_library",
         "//runtime/prereqs:go_default_library",
-        "//runtime/version:go_default_library",
         "//validator/accounts/wallet:go_default_library",
         "//validator/client:go_default_library",
         "//validator/db:go_default_library",

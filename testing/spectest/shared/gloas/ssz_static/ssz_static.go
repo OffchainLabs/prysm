@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	// enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -56,6 +57,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		obj = &ethpb.BeaconBlockBodyGloas{}
 	case "BeaconState":
 		obj = &ethpb.BeaconStateGloas{}
+	case "Builder":
+		obj = &ethpb.Builder{}
 	case "BuilderPendingPayment":
 		obj = &ethpb.BuilderPendingPayment{}
 	case "BuilderPendingWithdrawal":
@@ -70,6 +73,8 @@ func unmarshalledSSZ(t *testing.T, serializedBytes []byte, folderName string) (a
 		t.Skip("Not a consensus type")
 	case "DataColumnSidecar":
 		obj = &ethpb.DataColumnSidecarGloas{}
+	case "SignedProposerPreferences", "ProposerPreferences":
+		t.Skip("p2p-only type; not part of the consensus state transition")
 
 	// Standard types that also exist in gloas
 	case "ExecutionPayload":

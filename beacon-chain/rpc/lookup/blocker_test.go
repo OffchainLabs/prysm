@@ -168,6 +168,111 @@ func TestGetBlock(t *testing.T) {
 	}
 }
 
+func TestBlockRoot(t *testing.T) {
+	beaconDB := testDB.SetupDB(t)
+	ctx := t.Context()
+
+	genBlk, blkContainers := testutil.FillDBWithBlocks(ctx, t, beaconDB)
+	canonicalRoots := make(map[[32]byte]bool)
+
+	for _, bContr := range blkContainers {
+		canonicalRoots[bytesutil.ToBytes32(bContr.BlockRoot)] = true
+	}
+	headBlock := blkContainers[len(blkContainers)-1]
+
+	wsb, err := blocks.NewSignedBeaconBlock(headBlock.Block.(*ethpb.BeaconBlockContainer_Phase0Block).Phase0Block)
+	require.NoError(t, err)
+
+	fetcher := &BeaconDbBlocker{
+		BeaconDB: beaconDB,
+		ChainInfoFetcher: &mockChain.ChainService{
+			DB:                         beaconDB,
+			Block:                      wsb,
+			Root:                       headBlock.BlockRoot,
+			FinalizedCheckPoint:        &ethpb.Checkpoint{Root: blkContainers[64].BlockRoot},
+			CurrentJustifiedCheckPoint: &ethpb.Checkpoint{Root: blkContainers[32].BlockRoot},
+			CanonicalRoots:             canonicalRoots,
+		},
+	}
+
+	genesisRoot, err := genBlk.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		blockID []byte
+		want    [32]byte
+		wantErr bool
+	}{
+		{
+			name:    "slot",
+			blockID: []byte("30"),
+			want:    bytesutil.ToBytes32(blkContainers[30].BlockRoot),
+		},
+		{
+			name:    "bad formatting",
+			blockID: []byte("3bad0"),
+			wantErr: true,
+		},
+		{
+			name:    "head",
+			blockID: []byte("head"),
+			want:    bytesutil.ToBytes32(headBlock.BlockRoot),
+		},
+		{
+			name:    "finalized",
+			blockID: []byte("finalized"),
+			want:    bytesutil.ToBytes32(blkContainers[64].BlockRoot),
+		},
+		{
+			name:    "justified",
+			blockID: []byte("justified"),
+			want:    bytesutil.ToBytes32(blkContainers[32].BlockRoot),
+		},
+		{
+			name:    "genesis",
+			blockID: []byte("genesis"),
+			want:    genesisRoot,
+		},
+		{
+			name:    "genesis root",
+			blockID: genesisRoot[:],
+			want:    genesisRoot,
+		},
+		{
+			name:    "root",
+			blockID: blkContainers[20].BlockRoot,
+			want:    bytesutil.ToBytes32(blkContainers[20].BlockRoot),
+		},
+		{
+			name:    "hex root",
+			blockID: []byte(hexutil.Encode(blkContainers[20].BlockRoot)),
+			want:    bytesutil.ToBytes32(blkContainers[20].BlockRoot),
+		},
+		{
+			name:    "non-existent root",
+			blockID: bytesutil.PadTo([]byte("hi there"), 32),
+			wantErr: true,
+		},
+		{
+			name:    "no block at slot",
+			blockID: []byte("105"),
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := fetcher.BlockRoot(ctx, tt.blockID)
+			if tt.wantErr {
+				assert.NotEqual(t, err, nil, "no error has been returned")
+				return
+			}
+			require.NoError(t, err)
+			assert.DeepEqual(t, tt.want, result)
+		})
+	}
+}
+
 func TestBlobsErrorHandling(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()

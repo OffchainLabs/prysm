@@ -1053,6 +1053,10 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		return nil, err
 	}
 
+	if uint64(slot) < s.getOffset() {
+		return nil, ErrSlotBeforeOffset
+	}
+
 	st, err := s.stateByDiff(ctx, slot)
 	if err != nil {
 		return nil, err
@@ -1068,6 +1072,10 @@ func (s *Store) hasStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 	slot, err := s.SlotByBlockRoot(ctx, blockRoot)
 	if err != nil {
 		return false, err
+	}
+
+	if uint64(slot) < s.getOffset() {
+		return false, ErrSlotBeforeOffset
 	}
 
 	stateLvl := computeLevel(s.getOffset(), slot)
