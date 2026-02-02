@@ -67,7 +67,6 @@ func getSubscriptionStatusFromDB(t *testing.T, db *Store) bool {
 	return subscribed
 }
 
-
 func TestUpdateCustodyInfo(t *testing.T) {
 	ctx := t.Context()
 
