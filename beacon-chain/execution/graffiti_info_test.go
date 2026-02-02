@@ -21,43 +21,43 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCode:       "",
 			elCommit:     "",
 			userGraffiti: []byte{},
-			wantPrefix:   "PR", // CL code, no trailing space since no user graffiti
+			wantPrefix:   "PR", // CL code + commit
 		},
 		{
 			name:         "No EL - short user graffiti",
 			elCode:       "",
 			elCommit:     "",
 			userGraffiti: []byte("my validator"),
-			wantPrefix:   "PR",       // CL code + commit + space + user
-			wantSuffix:   " my validator", // space before user graffiti
+			wantPrefix:   "PR",           // CL code + commit + user
+			wantSuffix:   "my validator",
 		},
 		{
-			name:         "No EL - 28 char user graffiti (3 bytes available after space)",
+			name:         "No EL - 28 char user graffiti (4 bytes available)",
 			elCode:       "",
 			elCommit:     "",
-			userGraffiti: []byte("1234567890123456789012345678"), // 28 chars
-			wantPrefix:   "PR ",                                   // CL code + space (3 bytes)
+			userGraffiti: []byte("1234567890123456789012345678"), // 28 chars, 4 bytes available = codes only
+			wantPrefix:   "PR",                                   // CL code (no EL, so just PR)
 		},
 		{
-			name:         "No EL - 29 char user graffiti (2 bytes available after space)",
+			name:         "No EL - 30 char user graffiti (2 bytes available)",
 			elCode:       "",
 			elCommit:     "",
-			userGraffiti: []byte("12345678901234567890123456789"), // 29 chars, 2 bytes available = fits PR
-			wantPrefix:   "PR ",                                    // CL code (2 bytes) + space fits exactly
+			userGraffiti: []byte("123456789012345678901234567890"), // 30 chars, 2 bytes available = fits PR
+			wantPrefix:   "PR",                                     // CL code (2 bytes) fits exactly
 		},
 		{
-			name:         "No EL - 30 char user graffiti (1 byte available after space)",
+			name:         "No EL - 31 char user graffiti (1 byte available)",
 			elCode:       "",
 			elCommit:     "",
-			userGraffiti: []byte("123456789012345678901234567890"), // 30 chars, 1 byte available = not enough for code+space
-			wantPrefix:   "123456789012345678901234567890",          // User only
+			userGraffiti: []byte("1234567890123456789012345678901"), // 31 chars, 1 byte available = not enough for code
+			wantPrefix:   "1234567890123456789012345678901",         // User only
 		},
 		{
-			name:         "No EL - 31 char user graffiti (0 bytes available after space)",
+			name:         "No EL - 32 char user graffiti (0 bytes available)",
 			elCode:       "",
 			elCommit:     "",
-			userGraffiti: []byte("1234567890123456789012345678901"),
-			wantPrefix:   "1234567890123456789012345678901", // User only
+			userGraffiti: []byte("12345678901234567890123456789012"),
+			wantPrefix:   "12345678901234567890123456789012", // User only
 		},
 		// With EL info - flexible standard format cases
 		{
@@ -65,7 +65,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCode:       "GE",
 			elCommit:     "abcd1234",
 			userGraffiti: []byte{},
-			wantPrefix:   "GEabcdPR", // No trailing space when no user graffiti
+			wantPrefix:   "GEabcdPR", // EL(2)+commit(4)+CL(2)+commit(4)
 		},
 		{
 			name:         "With EL - full format (short user graffiti)",
@@ -73,42 +73,42 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: []byte("Bob"),
 			wantPrefix:   "GEabcdPR", // EL(2)+commit(4)+CL(2)+commit(4)
-			wantSuffix:   " Bob",     // space before user graffiti
+			wantSuffix:   "Bob",      // no space before user graffiti
 		},
 		{
-			name:         "With EL - full format (18 char user, 13 bytes available after space)",
+			name:         "With EL - full format (20 char user, 12 bytes available)",
 			elCode:       "GE",
 			elCommit:     "abcd1234",
-			userGraffiti: []byte("123456789012345678"), // 18 chars, need 19 with space, leaves 13
-			wantPrefix:   "GEabcdPR",                    // Full format fits (12 bytes)
+			userGraffiti: []byte("12345678901234567890"), // 20 chars, leaves 12 bytes = full format
+			wantPrefix:   "GEabcdPR",                      // Full format fits (12 bytes)
 		},
 		{
-			name:         "With EL - reduced commits (22 char user, 9 bytes available after space)",
+			name:         "With EL - reduced commits (24 char user, 8 bytes available)",
 			elCode:       "GE",
 			elCommit:     "abcd1234",
-			userGraffiti: []byte("1234567890123456789012"), // 22 chars, need 23 with space, leaves 9
-			wantPrefix:   "GEabPR",                          // Reduced format (8 bytes)
+			userGraffiti: []byte("123456789012345678901234"), // 24 chars, leaves 8 bytes = reduced format
+			wantPrefix:   "GEabPR",                           // Reduced format (8 bytes)
 		},
 		{
-			name:         "With EL - codes only (26 char user, 5 bytes available after space)",
+			name:         "With EL - codes only (28 char user, 4 bytes available)",
 			elCode:       "GE",
 			elCommit:     "abcd1234",
-			userGraffiti: []byte("12345678901234567890123456"), // 26 chars, need 27 with space, leaves 5
-			wantPrefix:   "GEPR ",                               // Codes only (4 bytes) + space
+			userGraffiti: []byte("1234567890123456789012345678"), // 28 chars, leaves 4 bytes = codes only
+			wantPrefix:   "GEPR",                                 // Codes only (4 bytes)
 		},
 		{
-			name:         "With EL - EL code only (28 char user, 3 bytes available after space)",
+			name:         "With EL - EL code only (30 char user, 2 bytes available)",
 			elCode:       "GE",
 			elCommit:     "abcd1234",
-			userGraffiti: []byte("1234567890123456789012345678"), // 28 chars, need 29 with space, leaves 3
-			wantPrefix:   "GE ",                                   // EL code (2 bytes) + space
+			userGraffiti: []byte("123456789012345678901234567890"), // 30 chars, leaves 2 bytes = EL code only
+			wantPrefix:   "GE",                                     // EL code (2 bytes)
 		},
 		{
-			name:         "With EL - user only (30 char user, 1 byte available after space)",
+			name:         "With EL - user only (31 char user, 1 byte available)",
 			elCode:       "GE",
 			elCommit:     "abcd1234",
-			userGraffiti: []byte("123456789012345678901234567890"), // 30 chars, need 31 with space, leaves 1
-			wantPrefix:   "123456789012345678901234567890",          // Not enough for code+space, user only
+			userGraffiti: []byte("1234567890123456789012345678901"), // 31 chars, leaves 1 byte = not enough for code
+			wantPrefix:   "1234567890123456789012345678901",         // User only
 		},
 		{
 			name:         "With EL - user only (32 char user, 0 bytes available)",
@@ -124,7 +124,7 @@ func TestGraffitiInfo_GenerateGraffiti(t *testing.T) {
 			elCommit:     "abcd1234",
 			userGraffiti: append([]byte("test"), 0, 0, 0),
 			wantPrefix:   "GEabcdPR",
-			wantSuffix:   " test",
+			wantSuffix:   "test",
 		},
 	}
 
