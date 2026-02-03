@@ -46,8 +46,8 @@ func (i *invariantChecker) FullMessage() (*blocks.PartialDataColumn, error) {
 	cells := make([][]byte, numCells)
 	proofs := make([][]byte, numCells)
 
-	for i := 0; i < numCells; i++ {
-		for j := 0; j < len(commitments[i]); j++ {
+	for i := range numCells {
+		for j := range commitments[i] {
 			commitments[i][j] = byte(i)
 		}
 		cells[i] = make([]byte, 2048)
