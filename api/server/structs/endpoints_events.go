@@ -112,3 +112,8 @@ type LightClientOptimisticUpdateEvent struct {
 	Version string                       `json:"version"`
 	Data    *LightClientOptimisticUpdate `json:"data"`
 }
+
+type ExecutionPayloadAvailableEvent struct {
+	Slot      string `json:"slot"`
+	BlockRoot string `json:"block_root"`
+}

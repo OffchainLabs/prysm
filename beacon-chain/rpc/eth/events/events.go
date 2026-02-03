@@ -74,6 +74,12 @@ const (
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
 	// DataColumnTopic represents a data column sidecar event topic
 	DataColumnTopic = "data_column_sidecar"
+	// ExecutionPayloadAvailableTopic represents an event indicating execution payload and blobs are available.
+	ExecutionPayloadAvailableTopic = "execution_payload_available"
+	// ExecutionPayloadBidTopic represents an event for a signed execution payload bid passing gossip validation.
+	ExecutionPayloadBidTopic = "execution_payload_bid"
+	// PayloadAttestationMessageTopic represents an event for a payload attestation message passing validation.
+	PayloadAttestationMessageTopic = "payload_attestation_message"
 )
 
 var (
@@ -108,6 +114,8 @@ var opsFeedEventTopics = map[feed.EventType]string{
 	operation.ProposerSlashingReceived:          ProposerSlashingTopic,
 	operation.BlockGossipReceived:               BlockGossipTopic,
 	operation.DataColumnReceived:                DataColumnTopic,
+	operation.ExecutionPayloadBidReceived:       ExecutionPayloadBidTopic,
+	operation.PayloadAttestationMessageReceived: PayloadAttestationMessageTopic,
 }
 
 var stateFeedEventTopics = map[feed.EventType]string{
@@ -118,6 +126,7 @@ var stateFeedEventTopics = map[feed.EventType]string{
 	statefeed.Reorg:                       ChainReorgTopic,
 	statefeed.BlockProcessed:              BlockTopic,
 	statefeed.PayloadAttributes:           PayloadAttributesTopic,
+	statefeed.ExecutionPayloadAvailable:   ExecutionPayloadAvailableTopic,
 }
 
 var topicsForStateFeed = topicsForFeed(stateFeedEventTopics)
@@ -466,6 +475,12 @@ func topicForEvent(event *feed.Event) string {
 		return PayloadAttributesTopic
 	case *operation.DataColumnReceivedData:
 		return DataColumnTopic
+	case *operation.ExecutionPayloadBidReceivedData:
+		return ExecutionPayloadBidTopic
+	case *operation.PayloadAttestationMessageReceivedData:
+		return PayloadAttestationMessageTopic
+	case *statefeed.ExecutionPayloadAvailableData:
+		return ExecutionPayloadAvailableTopic
 	default:
 		return InvalidTopic
 	}
@@ -637,6 +652,21 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				ExecutionOptimistic: v.Optimistic,
 			}
 			return jsonMarshalReader(eventName, blk)
+		}, nil
+	case *statefeed.ExecutionPayloadAvailableData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, &structs.ExecutionPayloadAvailableEvent{
+				Slot:      fmt.Sprintf("%d", v.Slot),
+				BlockRoot: hexutil.Encode(v.BlockRoot[:]),
+			})
+		}, nil
+	case *operation.ExecutionPayloadBidReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.SignedExecutionPayloadBidFromConsensus(v.SignedBid))
+		}, nil
+	case *operation.PayloadAttestationMessageReceivedData:
+		return func() io.Reader {
+			return jsonMarshalReader(eventName, structs.PayloadAttestationMessageFromConsensus(v.PayloadAttestationMessage))
 		}, nil
 	default:
 		return nil, errors.Wrapf(errUnhandledEventData, "event data type %T unsupported", v)

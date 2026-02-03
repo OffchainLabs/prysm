@@ -33,6 +33,9 @@ const (
 	LightClientOptimisticUpdate
 	// PayloadAttributes events are fired upon a missed slot or new head.
 	PayloadAttributes
+	// ExecutionPayloadAvailable is sent when the node has verified that the execution payload
+	// and blobs for a block are available and ready for payload attestation.
+	ExecutionPayloadAvailable
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
@@ -71,4 +74,12 @@ type InitializedData struct {
 	StartTime time.Time
 	// GenesisValidatorsRoot represents state.validators.HashTreeRoot().
 	GenesisValidatorsRoot []byte
+}
+
+// ExecutionPayloadAvailableData is the data sent with ExecutionPayloadAvailable events.
+type ExecutionPayloadAvailableData struct {
+	// Slot is the slot of the block whose execution payload became available.
+	Slot primitives.Slot
+	// BlockRoot is the root of the block whose execution payload became available.
+	BlockRoot [32]byte
 }

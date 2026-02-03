@@ -46,6 +46,14 @@ const (
 
 	// DataColumnReceived is sent after a data column has been seen after gossip validation rules.
 	DataColumnReceived = 12
+
+	// ExecutionPayloadBidReceived is sent after a signed execution payload bid is received from gossip or API
+	// that passes gossip validation on the execution_payload_bid topic.
+	ExecutionPayloadBidReceived = 13
+
+	// PayloadAttestationMessageReceived is sent after a payload attestation message is received
+	// that passes validation rules of the payload_attestation_message topic.
+	PayloadAttestationMessageReceived = 14
 )
 
 // UnAggregatedAttReceivedData is the data sent with UnaggregatedAttReceived events.
@@ -113,4 +121,14 @@ type DataColumnReceivedData struct {
 	Index          uint64
 	BlockRoot      [32]byte
 	KzgCommitments [][]byte
+}
+
+// ExecutionPayloadBidReceivedData is the data sent with ExecutionPayloadBidReceived events.
+type ExecutionPayloadBidReceivedData struct {
+	SignedBid *ethpb.SignedExecutionPayloadBid
+}
+
+// PayloadAttestationMessageReceivedData is the data sent with PayloadAttestationMessageReceived events.
+type PayloadAttestationMessageReceivedData struct {
+	PayloadAttestationMessage *ethpb.PayloadAttestationMessage
 }

@@ -2971,6 +2971,14 @@ func PayloadAttestationDataFromConsensus(d *eth.PayloadAttestationData) *Payload
 	}
 }
 
+func PayloadAttestationMessageFromConsensus(m *eth.PayloadAttestationMessage) *PayloadAttestationMessage {
+	return &PayloadAttestationMessage{
+		ValidatorIndex: fmt.Sprintf("%d", m.ValidatorIndex),
+		Data:           PayloadAttestationDataFromConsensus(m.Data),
+		Signature:      hexutil.Encode(m.Signature),
+	}
+}
+
 func (b *SignedBeaconBlockGloas) ToConsensus() (*eth.SignedBeaconBlockGloas, error) {
 	if b == nil {
 		return nil, errNilValue
