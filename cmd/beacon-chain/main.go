@@ -188,8 +188,8 @@ func before(ctx *cli.Context) error {
 		return errors.Wrap(err, "failed to parse log vmodule")
 	}
 
-	// set the global logging level to allow for the highest verbosity requested
-	logs.SetLoggingLevel(max(verbosityLevel, maxLevel))
+	// set the global logging level and data
+	logs.SetLoggingLevelAndData(verbosityLevel, vmodule, maxLevel, ctx.Bool(flags.DisableEphemeralLogFile.Name))
 
 	format := ctx.String(cmd.LogFormat.Name)
 	switch format {
@@ -210,6 +210,7 @@ func before(ctx *cli.Context) error {
 			Formatter:     formatter,
 			Writer:        os.Stderr,
 			AllowedLevels: logrus.AllLevels[:max(verbosityLevel, maxLevel)+1],
+			Identifier:    logs.LogTargetUser,
 		})
 	case "fluentd":
 		f := joonix.NewFormatter()
