@@ -2,13 +2,11 @@ package client
 
 import (
 	"context"
-	"net/http"
-	"strings"
 	"time"
 
-	api "github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -17,7 +15,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/accounts/wallet"
-	beaconApi "github.com/OffchainLabs/prysm/v7/validator/client/beacon-api"
 	beaconChainClientFactory "github.com/OffchainLabs/prysm/v7/validator/client/beacon-chain-client-factory"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	nodeclientfactory "github.com/OffchainLabs/prysm/v7/validator/client/node-client-factory"
@@ -35,7 +32,6 @@ import (
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
@@ -72,6 +68,7 @@ type Config struct {
 	DB                      db.Database
 	Wallet                  *wallet.Wallet
 	WalletInitializedFeed   *event.Feed
+	Conn                    validatorHelpers.NodeConnection // Optional: pre-built connection (if nil, built from endpoint configs)
 	MaxHealthChecks         int
 	GRPCMaxCallRecvMsgSize  int
 	GRPCRetries             uint
@@ -122,6 +119,12 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		maxHealthChecks:         cfg.MaxHealthChecks,
 	}
 
+	// Use pre-built connection if provided
+	if cfg.Conn != nil {
+		s.conn = cfg.Conn
+		return s, nil
+	}
+
 	dialOpts := ConstructDialOptions(
 		cfg.GRPCMaxCallRecvMsgSize,
 		cfg.BeaconNodeCert,
@@ -134,19 +137,21 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 
 	s.ctx = grpcutil.AppendHeaders(ctx, cfg.GRPCHeaders)
 
-	grpcConn, err := grpc.DialContext(ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts...)
+	conn, err := validatorHelpers.NewNodeConnection(
+		validatorHelpers.WithGRPC(s.ctx, cfg.BeaconNodeGRPCEndpoint, dialOpts),
+		validatorHelpers.WithREST(cfg.BeaconApiEndpoint,
+			rest.WithHttpHeaders(cfg.BeaconApiHeaders),
+			rest.WithHttpTimeout(cfg.BeaconApiTimeout),
+			rest.WithTracing(),
+		),
+	)
 	if err != nil {
 		return s, err
 	}
-	if cfg.BeaconNodeCert != "" {
+	if cfg.BeaconNodeCert != "" && cfg.BeaconNodeGRPCEndpoint != "" {
 		log.Info("Established secure gRPC connection")
 	}
-	s.conn = validatorHelpers.NewNodeConnection(
-		grpcConn,
-		cfg.BeaconApiEndpoint,
-		validatorHelpers.WithBeaconApiHeaders(cfg.BeaconApiHeaders),
-		validatorHelpers.WithBeaconApiTimeout(cfg.BeaconApiTimeout),
-	)
+	s.conn = conn
 
 	return s, nil
 }
@@ -181,20 +186,13 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	u := strings.ReplaceAll(v.conn.GetBeaconApiUrl(), " ", "")
-	hosts := strings.Split(u, ",")
-	if len(hosts) == 0 {
-		log.WithError(err).Error("No API hosts provided")
+	restProvider := v.conn.GetRestConnectionProvider()
+	if restProvider == nil || len(restProvider.Hosts()) == 0 {
+		log.Error("No REST API hosts provided")
 		return
 	}
 
-	headersTransport := api.NewCustomHeadersTransport(http.DefaultTransport, v.conn.GetBeaconApiHeaders())
-	restHandler := beaconApi.NewBeaconApiRestHandler(
-		http.Client{Timeout: v.conn.GetBeaconApiTimeout(), Transport: otelhttp.NewTransport(headersTransport)},
-		hosts[0],
-	)
-
-	validatorClient := validatorclientfactory.NewValidatorClient(v.conn, restHandler)
+	validatorClient := validatorclientfactory.NewValidatorClient(v.conn)
 
 	v.validator = &validator{
 		slotFeed:                       new(event.Feed),
@@ -208,12 +206,12 @@ func (v *ValidatorService) Start() {
 		graffiti:                       v.graffiti,
 		graffitiStruct:                 v.graffitiStruct,
 		graffitiOrderedIndex:           graffitiOrderedIndex,
-		beaconNodeHosts:                hosts,
+		conn:                           v.conn,
 		currentHostIndex:               0,
 		validatorClient:                validatorClient,
-		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn, restHandler),
-		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn, restHandler),
-		prysmChainClient:               beaconChainClientFactory.NewPrysmChainClient(v.conn, restHandler),
+		chainClient:                    beaconChainClientFactory.NewChainClient(v.conn),
+		nodeClient:                     nodeclientfactory.NewNodeClient(v.conn),
+		prysmChainClient:               beaconChainClientFactory.NewPrysmChainClient(v.conn),
 		db:                             v.db,
 		km:                             nil,
 		web3SignerConfig:               v.web3SignerConfig,
@@ -369,7 +367,6 @@ func ConstructDialOptions(
 			grpcprometheus.StreamClientInterceptor,
 			grpcretry.StreamClientInterceptor(),
 		),
-		grpc.WithResolvers(&multipleEndpointsGrpcResolverBuilder{}),
 	}
 
 	dialOpts = append(dialOpts, extraOpts...)

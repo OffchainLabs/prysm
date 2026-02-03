@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api/apiutil"
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -27,7 +28,7 @@ type dutiesProvider interface {
 }
 
 type beaconApiDutiesProvider struct {
-	jsonRestHandler RestHandler
+	jsonRestHandler rest.RestHandler
 }
 
 type attesterDuty struct {
