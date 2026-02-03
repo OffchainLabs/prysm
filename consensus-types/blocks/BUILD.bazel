@@ -8,6 +8,7 @@ go_library(
         "get_payload.go",
         "getters.go",
         "kzg.go",
+        "log.go",
         "partialdatacolumn.go",
         "proofs.go",
         "proto.go",
