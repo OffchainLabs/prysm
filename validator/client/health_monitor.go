@@ -58,13 +58,13 @@ func (m *healthMonitor) performHealthCheck() {
 		log.WithFields(logrus.Fields{
 			"fails":         m.fails,
 			"maxFails":      m.maxFails,
-			"beaconNodeUrl": m.v.Host(),
+			"url": m.v.Host(),
 		}).Warn("Failed health check, beacon node is unresponsive")
 		m.fails++
 	} else if m.maxFails > 0 && m.fails >= m.maxFails {
 		log.WithFields(logrus.Fields{
 			"maxFails":      m.maxFails,
-			"beaconNodeUrl": m.v.Host(),
+			"url": m.v.Host(),
 		}).Warn("Maximum health checks reached. Stopping health check routine")
 		m.isHealthy = ishealthy
 		m.cancel()
@@ -74,14 +74,14 @@ func (m *healthMonitor) performHealthCheck() {
 		// is not a new status so skip update
 		log.WithFields(logrus.Fields{
 			"isHealthy":     m.isHealthy,
-			"beaconNodeUrl": m.v.Host(),
+			"url": m.v.Host(),
 		}).Debug("Health status did not change")
 		return
 	}
 	log.WithFields(logrus.Fields{
 		"current":       ishealthy,
 		"previous":      m.isHealthy,
-		"beaconNodeUrl": m.v.Host(),
+		"url": m.v.Host(),
 	}).Info("Health status changed")
 	m.isHealthy = ishealthy
 	go m.healthEventFeed.Send(ishealthy) // non blocking send
