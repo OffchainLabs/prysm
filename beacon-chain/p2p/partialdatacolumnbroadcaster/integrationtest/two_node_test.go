@@ -97,9 +97,10 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 			commitments[i] = make([]byte, 48)
 
 			cells[i] = make([]byte, 2048)
-			rand.Read(cells[i])
+			_, err := rand.Read(cells[i])
+			require.NoError(t, err)
 			proofs[i] = make([]byte, 48)
-			fmt.Appendf(proofs[i][:0], "proof %d", i)
+			_ = fmt.Appendf(proofs[i][:0], "proof %d", i)
 		}
 
 		roDC, _ := util.CreateTestVerifiedRoDataColumnSidecars(t, []util.DataColumnParam{
