@@ -1650,6 +1650,7 @@ func GenerateTestSignedExecutionPayloadBid(slot primitives.Slot) *ethpb.SignedEx
 			PrevRandao:         prevRandao,
 			FeeRecipient:       feeRecipient,
 			Value:              1000000,
+			ExecutionPayment:   2000000,
 			BlobKzgCommitments: [][]byte{blobKzgCommitment},
 		},
 		Signature: signature,

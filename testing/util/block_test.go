@@ -413,6 +413,7 @@ func TestGenerateTestSignedExecutionPayloadBid(t *testing.T) {
 	require.Equal(t, primitives.BuilderIndex(1), bid.Message.BuilderIndex)
 	require.Equal(t, uint64(30000000), bid.Message.GasLimit)
 	require.Equal(t, primitives.Gwei(1000000), bid.Message.Value)
+	require.Equal(t, primitives.Gwei(2000000), bid.Message.ExecutionPayment)
 
 	// Verify fields are populated
 	require.NotNil(t, bid.Message.ParentBlockHash)

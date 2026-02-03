@@ -1223,6 +1223,7 @@ func genExecutionPayloadBidGloas() *v1alpha1.ExecutionPayloadBid {
 		BuilderIndex:       primitives.BuilderIndex(rand.Uint64()),
 		Slot:               primitives.Slot(rand.Uint64()),
 		Value:              primitives.Gwei(rand.Uint64()),
+		ExecutionPayment:   primitives.Gwei(rand.Uint64()),
 		BlobKzgCommitments: [][]byte{bytes(48)},
 	}
 }
