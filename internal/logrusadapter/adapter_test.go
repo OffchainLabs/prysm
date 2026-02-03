@@ -101,10 +101,10 @@ func TestLevelMapping(t *testing.T) {
 
 func TestEnabledLevels(t *testing.T) {
 	tests := []struct {
-		name            string
+		shouldBeEnabled bool
 		logrusLevel     logrus.Level
 		slogLevel       slog.Level
-		shouldBeEnabled bool
+		name            string
 	}{
 		// When logrus is at DebugLevel, all levels should be enabled
 		{name: "Debug logger, debug level", logrusLevel: logrus.DebugLevel, slogLevel: slog.LevelDebug, shouldBeEnabled: true},
