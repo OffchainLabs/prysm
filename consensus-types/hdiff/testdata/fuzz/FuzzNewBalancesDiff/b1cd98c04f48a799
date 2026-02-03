@@ -1,0 +1,3 @@
+go test fuzz v1
+byte('\b')
+[]byte("\xe8\xf5\b\r\x1cA\x1bG\xb7(N\xf7\xfb\x9d\xc3G\x8f")
