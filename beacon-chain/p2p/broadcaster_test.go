@@ -868,7 +868,7 @@ func (*rpcOrderTracer) DeliverMessage(*pubsub.Message)        {}
 func (*rpcOrderTracer) RejectMessage(*pubsub.Message, string) {}
 func (*rpcOrderTracer) DuplicateMessage(*pubsub.Message)      {}
 func (*rpcOrderTracer) ThrottlePeer(peer.ID)                  {}
-func (*rpcOrderTracer) RecvRPC(*pubsub.RPC)                   {}
+func (*rpcOrderTracer) RecvRPC(*pubsub.RPC, peer.ID)          {}
 func (*rpcOrderTracer) DropRPC(*pubsub.RPC, peer.ID)          {}
 func (*rpcOrderTracer) UndeliverableMessage(*pubsub.Message)  {}
 
