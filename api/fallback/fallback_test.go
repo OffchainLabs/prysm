@@ -1,4 +1,4 @@
-package failover
+package fallback
 
 import (
 	"context"

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/failover"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -340,5 +340,5 @@ func (c *beaconApiValidatorClient) Host() string {
 }
 
 func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
-	return failover.EnsureReady(ctx, c.restProvider, c.nodeClient)
+	return fallback.EnsureReady(ctx, c.restProvider, c.nodeClient)
 }

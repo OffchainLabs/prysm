@@ -7,7 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
-	"github.com/OffchainLabs/prysm/v7/api/failover"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -389,5 +389,5 @@ func (c *grpcValidatorClient) Host() string {
 
 func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
-	return failover.EnsureReady(ctx, provider, c.nodeClient)
+	return fallback.EnsureReady(ctx, provider, c.nodeClient)
 }

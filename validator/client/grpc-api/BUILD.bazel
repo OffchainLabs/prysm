@@ -15,7 +15,7 @@ go_library(
     deps = [
         "//api/client:go_default_library",
         "//api/client/event:go_default_library",
-        "//api/failover:go_default_library",
+        "//api/fallback:go_default_library",
         "//api/server/structs:go_default_library",
         "//beacon-chain/rpc/eth/helpers:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
