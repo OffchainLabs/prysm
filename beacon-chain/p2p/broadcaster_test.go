@@ -224,7 +224,6 @@ func TestService_BroadcastAttestation(t *testing.T) {
 }
 
 func TestService_BroadcastAttestationWithDiscoveryAttempts(t *testing.T) {
-	t.Skip("TODO: Unship flaky test once done rebasing branch")
 	const port = uint(2000)
 
 	// The DB has to be shared in all peers to avoid the
@@ -879,7 +878,6 @@ func (*rpcOrderTracer) UndeliverableMessage(*pubsub.Message)  {}
 // Without batch publishing: A,A,A,A,B,B,B,B (all peers for column A, then all for column B)
 // With batch publishing:    A,B,A,B,A,B,A,B (interleaved by message ID)
 func TestService_BroadcastDataColumnRoundRobin(t *testing.T) {
-	t.Skip("TODO: Aarsh will fix batch publishing for partial data columns")
 	const (
 		port        = 2100
 		topicFormat = DataColumnSubnetTopicFormat
