@@ -51,14 +51,14 @@ func (i *invariantChecker) FullMessage() (*blocks.PartialDataColumn, error) {
 			commitments[i][j] = byte(i)
 		}
 		cells[i] = make([]byte, 2048)
-		fmt.Appendf(cells[i][:0], "cell %d", i)
+		cells[i] = fmt.Appendf(cells[i][:0], "cell %d", i)
 		proofs[i] = make([]byte, 48)
-		fmt.Appendf(proofs[i][:0], "proof %d", i)
+		proofs[i] = fmt.Appendf(proofs[i][:0], "proof %d", i)
 	}
 
 	roDC, _ := util.CreateTestVerifiedRoDataColumnSidecars(i.t, []util.DataColumnParam{
 		{
-			BodyRoot:       blockRoot[:],
+			BodyRoot:       blockRoot,
 			KzgCommitments: commitments,
 			Column:         cells,
 			KzgProofs:      proofs,
@@ -77,7 +77,7 @@ func (i *invariantChecker) EmptyMessage() *blocks.PartialDataColumn {
 	proofs := make([][]byte, numCells)
 	roDC, _ := util.CreateTestVerifiedRoDataColumnSidecars(i.t, []util.DataColumnParam{
 		{
-			BodyRoot:       blockRoot[:],
+			BodyRoot:       blockRoot,
 			KzgCommitments: commitments,
 			Column:         cells,
 			KzgProofs:      proofs,
