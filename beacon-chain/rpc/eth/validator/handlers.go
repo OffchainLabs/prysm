@@ -1454,14 +1454,10 @@ func (s *Server) GetPayloadAttestationData(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var payloadPresent, blobDataAvailable bool
-	if s.PayloadStatusFetcher != nil {
-		var err error
-		payloadPresent, blobDataAvailable, err = s.PayloadStatusFetcher.PayloadStatus(primitives.Slot(slot))
-		if err != nil {
-			httputil.HandleError(w, "Could not get payload status: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+	payloadPresent, blobDataAvailable, err := s.PayloadStatusFetcher.PayloadStatus(primitives.Slot(slot))
+	if err != nil {
+		httputil.HandleError(w, "Could not get payload status: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	data := &ethpbalpha.PayloadAttestationData{
