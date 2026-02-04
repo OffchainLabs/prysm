@@ -2972,6 +2972,11 @@ func TestGetPTCDuties(t *testing.T) {
 	st, _ := util.DeterministicGenesisStateFulu(t, numVals)
 	require.NoError(t, st.SetGenesisTime(genesisTime))
 
+	// Set up a genesis block root for dependent_root calculation.
+	genesisRoot := [32]byte{1, 2, 3}
+	db := dbutil.SetupDB(t)
+	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
+
 	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st}
 	s := &Server{
 		Stater:                &testutil.MockStater{BeaconState: st},
@@ -2979,6 +2984,7 @@ func TestGetPTCDuties(t *testing.T) {
 		TimeFetcher:           mockChainService,
 		HeadFetcher:           mockChainService,
 		OptimisticModeFetcher: mockChainService,
+		BeaconDB:              db,
 	}
 
 	t.Run("single validator in PTC", func(t *testing.T) {

@@ -1260,16 +1260,25 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Limit how far in the future we can query (current + 1 epoch).
-	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
-	if requestedEpoch > currentEpoch+1 {
+	cs := s.TimeFetcher.CurrentSlot()
+	currentEpoch := slots.ToEpoch(cs)
+	nextEpoch := currentEpoch + 1
+	if requestedEpoch > nextEpoch {
 		httputil.HandleError(w,
-			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, currentEpoch+1),
+			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, nextEpoch),
 			http.StatusBadRequest)
 		return
 	}
 
-	// Get state for the epoch.
-	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
+	// For next epoch requests, we use the current epoch's state since PTC
+	// assignments for next epoch can be computed from current epoch's state.
+	// This mirrors the spec's get_ptc_assignment which asserts epoch <= next_epoch
+	// and uses the current state to compute assignments.
+	epochForState := requestedEpoch
+	if requestedEpoch == nextEpoch {
+		epochForState = currentEpoch
+	}
+	st, err := s.Stater.StateByEpoch(ctx, epochForState)
 	if err != nil {
 		shared.WriteStateFetchError(w, err)
 		return
@@ -1304,7 +1313,13 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 			if !requestedSet[valIdx] {
 				continue
 			}
+			// Validate the validator index by checking for zero pubkey.
 			pubkey := st.PubkeyAtIndex(valIdx)
+			var zeroPubkey [fieldparams.BLSPubkeyLength]byte
+			if bytes.Equal(pubkey[:], zeroPubkey[:]) {
+				httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", valIdx), http.StatusBadRequest)
+				return
+			}
 			duties = append(duties, &structs.PTCDuty{
 				Pubkey:         hexutil.Encode(pubkey[:]),
 				ValidatorIndex: strconv.FormatUint(uint64(valIdx), 10),
@@ -1313,11 +1328,22 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get dependent root.
-	dependentRoot, err := ptcDependentRoot(st, requestedEpoch)
-	if err != nil {
-		httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
-		return
+	// Get dependent root. For epoch 0 or 1, use genesis block root.
+	// For other epochs, use the block root at the last slot of the previous epoch.
+	var dependentRoot []byte
+	if requestedEpoch <= 1 {
+		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
+		if err != nil {
+			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		dependentRoot = r[:]
+	} else {
+		dependentRoot, err = ptcDependentRoot(st, requestedEpoch)
+		if err != nil {
+			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
@@ -1327,7 +1353,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &structs.GetPTCDutiesResponse{
-		DependentRoot:       hexutil.Encode(dependentRoot[:]),
+		DependentRoot:       hexutil.Encode(dependentRoot),
 		ExecutionOptimistic: isOptimistic,
 		Data:                duties,
 	}
@@ -1336,19 +1362,12 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 
 // ptcDependentRoot returns the block root that PTC assignments depend on.
 // PTC depends on the shuffling, which is determined by RANDAO at epoch boundary.
-func ptcDependentRoot(st state.BeaconState, epoch primitives.Epoch) ([32]byte, error) {
+func ptcDependentRoot(st state.BeaconState, epoch primitives.Epoch) ([]byte, error) {
 	epochStartSlot, err := slots.EpochStart(epoch)
 	if err != nil {
-		return [32]byte{}, err
+		return nil, err
 	}
-	if epochStartSlot == 0 {
-		return bytesutil.ToBytes32(st.GenesisValidatorsRoot()), nil
-	}
-	root, err := helpers.BlockRootAtSlot(st, epochStartSlot-1)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	return bytesutil.ToBytes32(root), nil
+	return helpers.BlockRootAtSlot(st, epochStartSlot-1)
 }
 
 // GetLiveness requests the beacon node to indicate if a validator has been observed to be live in a given epoch.
