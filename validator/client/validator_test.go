@@ -21,7 +21,6 @@ import (
 
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
-	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
@@ -2798,34 +2797,6 @@ func TestValidator_Host(t *testing.T) {
 	require.Equal(t, "host", v.Host())
 }
 
-func TestValidator_ChangeHost(t *testing.T) {
-	// Enable REST API mode for this test since changeHost only calls SwitchHost in REST API mode
-	resetCfg := features.InitWithReset(&features.Flags{EnableBeaconRESTApi: true})
-	defer resetCfg()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	hosts := []string{"http://localhost:8080", "http://localhost:8081"}
-	restProvider := &rest.MockRestProvider{MockHosts: hosts}
-	conn, err := validatorHelpers.NewNodeConnection(validatorHelpers.WithRestProvider(restProvider))
-	require.NoError(t, err)
-
-	client := validatormock.NewMockValidatorClient(ctrl)
-	v := validator{
-		validatorClient:  client,
-		conn:             conn,
-		currentHostIndex: 0,
-	}
-
-	client.EXPECT().SwitchHost(hosts[1])
-	client.EXPECT().SwitchHost(hosts[0])
-	v.changeHost()
-	assert.Equal(t, uint64(1), v.currentHostIndex)
-	v.changeHost()
-	assert.Equal(t, uint64(0), v.currentHostIndex)
-}
-
 func TestUpdateValidatorStatusCache(t *testing.T) {
 	ctx := t.Context()
 	ctrl := gomock.NewController(t)
@@ -2859,9 +2830,8 @@ func TestUpdateValidatorStatusCache(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &validator{
-		validatorClient:  client,
-		conn:             conn,
-		currentHostIndex: 0,
+		validatorClient: client,
+		conn:            conn,
 		pubkeyToStatus: map[[fieldparams.BLSPubkeyLength]byte]*validatorStatus{
 			[fieldparams.BLSPubkeyLength]byte{0x03}: { // add non existent key and status to cache, should be fully removed on update
 				publicKey: []byte{0x03},

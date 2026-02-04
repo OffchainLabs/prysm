@@ -58,10 +58,10 @@ func TestGrpcNodeClient_IsReady(t *testing.T) {
 			// Create client with injected mock
 			client := &grpcNodeClient{
 				grpcClientManager: &grpcClientManager[ethpb.NodeClient]{
-					conn:      conn,
-					client:    mockNodeClient,
-					lastHost:  "host1:4000",
-					newClient: func(grpc.ClientConnInterface) ethpb.NodeClient { return mockNodeClient },
+					conn:            conn,
+					client:          mockNodeClient,
+					lastConnCounter: 0,
+					newClient:       func(grpc.ClientConnInterface) ethpb.NodeClient { return mockNodeClient },
 				},
 			}
 

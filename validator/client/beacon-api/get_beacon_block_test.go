@@ -25,8 +25,8 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		gomock.Any(),
 	).Return(
@@ -35,7 +35,7 @@ func TestGetBeaconBlock_RequestFailed(t *testing.T) {
 		errors.New("foo error"),
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err := validatorClient.beaconBlock(ctx, 1, []byte{1}, []byte{2})
 	assert.ErrorContains(t, "foo error", err)
 }
@@ -149,8 +149,8 @@ func TestGetBeaconBlock_Error(t *testing.T) {
 
 			b, err := json.Marshal(resp)
 			require.NoError(t, err)
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().GetSSZ(
+			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler.EXPECT().GetSSZ(
 				gomock.Any(),
 				gomock.Any(),
 			).Return(
@@ -159,7 +159,7 @@ func TestGetBeaconBlock_Error(t *testing.T) {
 				nil,
 			).Times(1)
 
-			validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+			validatorClient := &beaconApiValidatorClient{handler: handler}
 			_, err = validatorClient.beaconBlock(ctx, 1, []byte{1}, []byte{2})
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)
 		})
@@ -185,8 +185,8 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 		Data:    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -195,7 +195,7 @@ func TestGetBeaconBlock_Phase0Valid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -224,8 +224,8 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -238,7 +238,7 @@ func TestGetBeaconBlock_SSZ_BellatrixValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -266,8 +266,8 @@ func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -280,7 +280,7 @@ func TestGetBeaconBlock_SSZ_BlindedBellatrixValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -308,8 +308,8 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -322,7 +322,7 @@ func TestGetBeaconBlock_SSZ_CapellaValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -350,8 +350,8 @@ func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -364,7 +364,7 @@ func TestGetBeaconBlock_SSZ_BlindedCapellaValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -392,8 +392,8 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -406,7 +406,7 @@ func TestGetBeaconBlock_SSZ_DenebValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -434,8 +434,8 @@ func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -448,7 +448,7 @@ func TestGetBeaconBlock_SSZ_BlindedDenebValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -476,8 +476,8 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -490,7 +490,7 @@ func TestGetBeaconBlock_SSZ_ElectraValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -518,8 +518,8 @@ func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -532,7 +532,7 @@ func TestGetBeaconBlock_SSZ_BlindedElectraValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -556,8 +556,8 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -570,7 +570,7 @@ func TestGetBeaconBlock_SSZ_UnsupportedVersion(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	assert.ErrorContains(t, "version name doesn't map to a known value in the enum", err)
 }
@@ -589,8 +589,8 @@ func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -603,7 +603,7 @@ func TestGetBeaconBlock_SSZ_InvalidBlindedHeader(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err = validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	assert.ErrorContains(t, "strconv.ParseBool: parsing \"invalid\": invalid syntax", err)
 }
@@ -622,8 +622,8 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -636,7 +636,7 @@ func TestGetBeaconBlock_SSZ_InvalidVersionHeader(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err = validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	assert.ErrorContains(t, "unsupported header version invalid", err)
 }
@@ -651,8 +651,8 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -661,7 +661,7 @@ func TestGetBeaconBlock_SSZ_GetSSZError(t *testing.T) {
 		errors.New("get ssz error"),
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	_, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	assert.ErrorContains(t, "get ssz error", err)
 }
@@ -680,8 +680,8 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -694,7 +694,7 @@ func TestGetBeaconBlock_SSZ_Phase0Valid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -722,8 +722,8 @@ func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -736,7 +736,7 @@ func TestGetBeaconBlock_SSZ_AltairValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -770,8 +770,8 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 		Data:    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -780,7 +780,7 @@ func TestGetBeaconBlock_AltairValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -814,8 +814,8 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -824,7 +824,7 @@ func TestGetBeaconBlock_BellatrixValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -859,8 +859,8 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -869,7 +869,7 @@ func TestGetBeaconBlock_BlindedBellatrixValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -904,8 +904,8 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -914,7 +914,7 @@ func TestGetBeaconBlock_CapellaValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -949,8 +949,8 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -959,7 +959,7 @@ func TestGetBeaconBlock_BlindedCapellaValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -994,8 +994,8 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -1004,7 +1004,7 @@ func TestGetBeaconBlock_DenebValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -1039,8 +1039,8 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -1049,7 +1049,7 @@ func TestGetBeaconBlock_BlindedDenebValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -1084,8 +1084,8 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -1094,7 +1094,7 @@ func TestGetBeaconBlock_ElectraValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 
@@ -1129,8 +1129,8 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 		Data:                    bytes,
 	})
 	require.NoError(t, err)
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().GetSSZ(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().GetSSZ(
 		gomock.Any(),
 		fmt.Sprintf("/eth/v3/validator/blocks/%d?graffiti=%s&randao_reveal=%s", slot, hexutil.Encode(graffiti), hexutil.Encode(randaoReveal)),
 	).Return(
@@ -1139,7 +1139,7 @@ func TestGetBeaconBlock_BlindedElectraValid(t *testing.T) {
 		nil,
 	).Times(1)
 
-	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	validatorClient := &beaconApiValidatorClient{handler: handler}
 	beaconBlock, err := validatorClient.beaconBlock(ctx, slot, randaoReveal, graffiti)
 	require.NoError(t, err)
 

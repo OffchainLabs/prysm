@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -24,6 +25,7 @@ import (
 
 type grpcValidatorClient struct {
 	*grpcClientManager[ethpb.BeaconNodeValidatorClient]
+	nodeClient           *grpcNodeClient
 	isEventStreamRunning bool
 }
 
@@ -282,6 +284,9 @@ func (*grpcValidatorClient) AggregatedSyncSelections(context.Context, []iface.Sy
 func NewGrpcValidatorClient(conn validatorHelpers.NodeConnection) iface.ValidatorClient {
 	return &grpcValidatorClient{
 		grpcClientManager: newGrpcClientManager(conn, ethpb.NewBeaconNodeValidatorClient),
+		nodeClient: &grpcNodeClient{
+			grpcClientManager: newGrpcClientManager(conn, ethpb.NewNodeClient),
+		},
 	}
 }
 
@@ -364,16 +369,7 @@ func (c *grpcValidatorClient) Host() string {
 	return c.grpcClientManager.conn.GetGrpcConnectionProvider().CurrentHost()
 }
 
-func (c *grpcValidatorClient) SwitchHost(host string) {
+func (c *grpcValidatorClient) EnsureReady(ctx context.Context) bool {
 	provider := c.grpcClientManager.conn.GetGrpcConnectionProvider()
-	// Find the index of the requested host and switch to it
-	for i, h := range provider.Hosts() {
-		if h == host {
-			if err := provider.SwitchHost(i); err != nil {
-				log.WithError(err).WithField("host", host).Error("Failed to set gRPC host")
-			}
-			return
-		}
-	}
-	log.WithField("host", host).Warn("Requested gRPC host not found in configured endpoints")
+	return fallback.EnsureReady(ctx, provider, c.nodeClient)
 }
