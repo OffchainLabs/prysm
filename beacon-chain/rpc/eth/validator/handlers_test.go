@@ -17,6 +17,7 @@ import (
 	mockChain "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	builderTest "github.com/OffchainLabs/prysm/v7/beacon-chain/builder/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
@@ -2966,6 +2967,8 @@ func TestGetPTCDuties(t *testing.T) {
 	cfg.GloasForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
+	// Use fixed slot 0 for deterministic tests.
+	slot := primitives.Slot(0)
 	genesisTime := time.Now()
 	// Need enough validators for PTC selection (PTC_SIZE is 512 on mainnet, 2 on minimal)
 	numVals := uint64(fieldparams.PTCSize * 2)
@@ -2977,7 +2980,7 @@ func TestGetPTCDuties(t *testing.T) {
 	db := dbutil.SetupDB(t)
 	require.NoError(t, db.SaveGenesisBlockRoot(t.Context(), genesisRoot))
 
-	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st}
+	mockChainService := &mockChain.ChainService{Genesis: genesisTime, State: st, Slot: &slot}
 	s := &Server{
 		Stater:                &testutil.MockStater{BeaconState: st},
 		SyncChecker:           &mockSync.Sync{IsSyncing: false},
@@ -3001,9 +3004,38 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.Equal(t, http.StatusOK, writer.Code)
 		resp := &structs.GetPTCDutiesResponse{}
 		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-		// Validator may or may not be in PTC depending on balance-weighted selection
-		// Just verify the response structure is correct
 		assert.NotEmpty(t, resp.DependentRoot)
+	})
+
+	t.Run("verifies actual PTC membership", func(t *testing.T) {
+		// Compute expected PTC for slot 0 using the same helper.
+		expectedPTC, err := gloas.PayloadCommittee(t.Context(), st, 0)
+		require.NoError(t, err)
+		require.NotEmpty(t, expectedPTC, "PTC should not be empty")
+
+		// Request duties for all validators in the expected PTC.
+		var indices []string
+		for _, idx := range expectedPTC {
+			indices = append(indices, strconv.FormatUint(uint64(idx), 10))
+		}
+		indicesJSON, err := json.Marshal(indices)
+		require.NoError(t, err)
+
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", bytes.NewReader(indicesJSON))
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+
+		// All requested validators should have duties for slot 0.
+		assert.Equal(t, len(expectedPTC), len(resp.Data), "Should return duties for all PTC members")
+		for _, duty := range resp.Data {
+			assert.Equal(t, "0", duty.Slot, "All duties should be for slot 0")
+		}
 	})
 
 	t.Run("multiple validators", func(t *testing.T) {
@@ -3082,7 +3114,7 @@ func TestGetPTCDuties(t *testing.T) {
 		assert.StringContains(t, "No data submitted", e.Message)
 	})
 
-	t.Run("invalid validator index", func(t *testing.T) {
+	t.Run("invalid validator index string", func(t *testing.T) {
 		var body bytes.Buffer
 		_, err := body.WriteString("[\"foo\"]")
 		require.NoError(t, err)
@@ -3093,6 +3125,24 @@ func TestGetPTCDuties(t *testing.T) {
 
 		s.GetPTCDuties(writer, request)
 		assert.Equal(t, http.StatusBadRequest, writer.Code)
+	})
+
+	t.Run("out of bounds validator index", func(t *testing.T) {
+		// Request a validator index that's way beyond the number of validators.
+		var body bytes.Buffer
+		_, err := body.WriteString("[\"999999999\"]")
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "http://www.example.com/eth/v1/validator/duties/ptc/{epoch}", &body)
+		request.SetPathValue("epoch", "0")
+		writer := httptest.NewRecorder()
+		writer.Body = &bytes.Buffer{}
+
+		s.GetPTCDuties(writer, request)
+		// OOB validator won't be in any PTC, so request succeeds with empty duties.
+		assert.Equal(t, http.StatusOK, writer.Code)
+		resp := &structs.GetPTCDutiesResponse{}
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+		assert.Equal(t, 0, len(resp.Data), "OOB validator should have no duties")
 	})
 
 	t.Run("epoch too far in future", func(t *testing.T) {

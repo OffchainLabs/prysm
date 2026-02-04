@@ -1313,8 +1313,13 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 			if !requestedSet[valIdx] {
 				continue
 			}
-			// Validate the validator index by checking for zero pubkey.
+			// Validate the validator index with explicit bounds check.
+			if uint64(valIdx) >= uint64(st.NumValidators()) {
+				httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", valIdx), http.StatusBadRequest)
+				return
+			}
 			pubkey := st.PubkeyAtIndex(valIdx)
+			// Defensive check: ensure pubkey is not zero.
 			var zeroPubkey [fieldparams.BLSPubkeyLength]byte
 			if bytes.Equal(pubkey[:], zeroPubkey[:]) {
 				httputil.HandleError(w, fmt.Sprintf("Invalid validator index %d", valIdx), http.StatusBadRequest)
@@ -1328,10 +1333,17 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get dependent root. For epoch 0 or 1, use genesis block root.
-	// For other epochs, use the block root at the last slot of the previous epoch.
+	// Get dependent root. The dependent root is the block root at start_slot(epoch) - 1.
+	// For epoch 0, this would underflow, so we use genesis block root.
+	// For next epoch requests, we use the same dependent root as current epoch since
+	// we're computing from the current epoch's state and the next epoch's RANDAO
+	// isn't finalized yet.
+	dependentEpoch := requestedEpoch
+	if requestedEpoch == nextEpoch {
+		dependentEpoch = currentEpoch
+	}
 	var dependentRoot []byte
-	if requestedEpoch <= 1 {
+	if dependentEpoch == 0 {
 		r, err := s.BeaconDB.GenesisBlockRoot(ctx)
 		if err != nil {
 			httputil.HandleError(w, "Could not get genesis block root: "+err.Error(), http.StatusInternalServerError)
@@ -1339,7 +1351,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 		}
 		dependentRoot = r[:]
 	} else {
-		dependentRoot, err = ptcDependentRoot(st, requestedEpoch)
+		dependentRoot, err = ptcDependentRoot(st, dependentEpoch)
 		if err != nil {
 			httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
 			return
