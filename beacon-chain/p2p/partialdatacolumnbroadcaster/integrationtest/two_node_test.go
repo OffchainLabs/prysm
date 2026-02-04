@@ -77,8 +77,6 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		ps2, err := pubsub.NewGossipSub(ctx, h2, opts2...)
 		require.NoError(t, err)
 
-		go broadcaster1.Start()
-		go broadcaster2.Start()
 		defer func() {
 			broadcaster1.Stop()
 			broadcaster2.Stop()
@@ -140,7 +138,7 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		topic2, err := ps2.Join(topicStr, pubsub.RequestPartialMessages())
 		require.NoError(t, err)
 
-		// Header validator that verifies the inclusion proof
+		// Header validator
 		headerValidator := func(header *ethpb.PartialDataColumnHeader) (reject bool, err error) {
 			if header == nil {
 				return false, fmt.Errorf("nil header")
@@ -193,9 +191,17 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 		require.NoError(t, err)
 		defer sub2.Cancel()
 
-		err = broadcaster1.Subscribe(topic1, headerValidator, cellValidator, handler1)
+		noopHeaderHandler := func(header *ethpb.PartialDataColumnHeader, groupID string) {}
+
+		err = broadcaster1.Start(headerValidator, cellValidator, handler1, noopHeaderHandler)
 		require.NoError(t, err)
-		err = broadcaster2.Subscribe(topic2, headerValidator, cellValidator, handler2)
+
+		err = broadcaster2.Start(headerValidator, cellValidator, handler2, noopHeaderHandler)
+		require.NoError(t, err)
+
+		err = broadcaster1.Subscribe(topic1)
+		require.NoError(t, err)
+		err = broadcaster2.Subscribe(topic2)
 		require.NoError(t, err)
 
 		// Wait for mesh to form
@@ -203,13 +209,13 @@ func TestTwoNodePartialColumnExchange(t *testing.T) {
 
 		// Publish
 		t.Log("Publishing from Node 1")
-		err = broadcaster1.Publish(topicStr, pc1)
+		err = broadcaster1.Publish(topicStr, pc1, true)
 		require.NoError(t, err)
 
 		time.Sleep(200 * time.Millisecond)
 
 		t.Log("Publishing from Node 2")
-		err = broadcaster2.Publish(topicStr, pc2)
+		err = broadcaster2.Publish(topicStr, pc2, true)
 		require.NoError(t, err)
 
 		//  Wait for Completion

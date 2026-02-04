@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
-	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -70,10 +67,7 @@ type subscribeParameters struct {
 }
 
 type partialSubscribeParameters struct {
-	broadcaster    *partialdatacolumnbroadcaster.PartialColumnBroadcaster
-	validateHeader partialdatacolumnbroadcaster.HeaderValidator
-	validate       partialdatacolumnbroadcaster.ColumnValidator
-	handle         partialdatacolumnbroadcaster.SubHandler
+	broadcaster *partialdatacolumnbroadcaster.PartialColumnBroadcaster
 }
 
 // shortTopic is a less verbose version of topic strings used for logging.
@@ -334,32 +328,9 @@ func (s *Service) registerSubscribers(nse params.NetworkScheduleEntry) bool {
 	if params.BeaconConfig().FuluForkEpoch <= nse.Epoch {
 		s.spawn(func() {
 			var ps *partialSubscribeParameters
-			broadcaster := s.cfg.p2p.PartialColumnBroadcaster()
-			if broadcaster != nil {
+			if broadcaster := s.cfg.p2p.PartialColumnBroadcaster(); broadcaster != nil {
 				ps = &partialSubscribeParameters{
 					broadcaster: broadcaster,
-					validateHeader: func(header *ethpb.PartialDataColumnHeader) (bool, error) {
-						return s.validatePartialDataColumnHeader(context.TODO(), header)
-					},
-					validate: func(cellsToVerify []blocks.CellProofBundle) error {
-						return peerdas.VerifyDataColumnsCellsKZGProofs(len(cellsToVerify), slices.Values(cellsToVerify))
-					},
-					handle: func(topic string, col blocks.VerifiedRODataColumn) {
-						ctx, cancel := context.WithTimeout(s.ctx, pubsubMessageTimeout)
-						defer cancel()
-
-						slot := col.SignedBlockHeader.Header.Slot
-						proposerIndex := col.SignedBlockHeader.Header.ProposerIndex
-						if !s.hasSeenDataColumnIndex(slot, proposerIndex, col.Index) {
-							s.setSeenDataColumnIndex(slot, proposerIndex, col.Index)
-							// This column was completed from a partial message.
-							partialMessageColumnCompletionsTotal.WithLabelValues(strconv.FormatUint(col.Index, 10)).Inc()
-						}
-						err := s.verifiedRODataColumnSubscriber(ctx, col)
-						if err != nil {
-							log.WithError(err).Error("Failed to handle verified RO data column subscriber")
-						}
-					},
 				}
 			}
 			s.subscribeWithParameters(subscribeParameters{
@@ -664,7 +635,7 @@ func (s *Service) trySubscribeSubnets(t *subnetTracker) {
 
 		if requestPartial {
 			log.Info("Subscribing to partial columns on", topicStr)
-			err = t.partial.broadcaster.Subscribe(topic, t.partial.validateHeader, t.partial.validate, t.partial.handle)
+			err = t.partial.broadcaster.Subscribe(topic)
 
 			if err != nil {
 				log.WithError(err).Error("Failed to subscribe to partial column")
