@@ -267,4 +267,31 @@ func TestReconstructionSource(t *testing.T) {
 
 		require.Equal(t, peerdas.SidecarType, src.Type())
 	})
+
+	t.Run("from partial header", func(t *testing.T) {
+		referenceSidecar := sidecars[0]
+		partialHeader := &ethpb.PartialDataColumnHeader{
+			SignedBlockHeader:            referenceSidecar.SignedBlockHeader,
+			KzgCommitments:               referenceSidecar.KzgCommitments,
+			KzgCommitmentsInclusionProof: referenceSidecar.KzgCommitmentsInclusionProof,
+		}
+
+		src := peerdas.PopulateFromPartialHeader(partialHeader)
+		require.Equal(t, referenceSidecar.SignedBlockHeader.Header.Slot, src.Slot())
+
+		// Compute expected root
+		expectedRoot, err := referenceSidecar.SignedBlockHeader.Header.HashTreeRoot()
+		require.NoError(t, err)
+		require.Equal(t, expectedRoot, src.Root())
+
+		require.Equal(t, referenceSidecar.SignedBlockHeader.Header.ProposerIndex, src.ProposerIndex())
+
+		commitments, err := src.Commitments()
+		require.NoError(t, err)
+		require.Equal(t, 2, len(commitments))
+		require.DeepEqual(t, commitment1, commitments[0])
+		require.DeepEqual(t, commitment2, commitments[1])
+
+		require.Equal(t, peerdas.PartialDataColumnHeaderType, src.Type())
+	})
 }
