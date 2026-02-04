@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
@@ -73,6 +74,26 @@ func TestStateDiff_EncodeDecodeExponents(t *testing.T) {
 		_, err := decodeStateDiffExponents([]byte{2, 10})
 		require.ErrorContains(t, "length mismatch", err)
 	})
+}
+
+func TestStateDiff_InitializeStoresExponents(t *testing.T) {
+	setDefaultStateDiffExponents()
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	db := setupDB(t)
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, db.initializeStateDiff(0, st))
+
+	stored, err := db.loadStateDiffExponents()
+	require.NoError(t, err)
+	require.DeepEqual(t, flags.Get().StateDiffExponents, stored)
+}
+
+func TestStateDiff_LoadExponentsMissing(t *testing.T) {
+	db := setupDB(t)
+	_, err := db.loadStateDiffExponents()
+	require.ErrorContains(t, "exponents not found", err)
 }
 
 func TestStateDiff_ComputeLevel(t *testing.T) {

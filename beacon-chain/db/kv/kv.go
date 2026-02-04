@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
+	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
@@ -224,6 +226,22 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 	}
 
 	if hasOffset {
+		storedExponents, err := kv.loadStateDiffExponents()
+		if err != nil {
+			return errors.Wrap(err, "state-diff metadata missing or invalid; re-sync required")
+		}
+		currentExponents := flags.Get().StateDiffExponents
+		if !slices.Equal(storedExponents, currentExponents) {
+			return fmt.Errorf(
+				"state-diff exponents changed; database incompatible. "+
+					"Database was initialized with: %v. "+
+					"Current configuration: %v. "+
+					"Options: use original exponents (--state-diff-exponents=%s) or delete database and re-sync from genesis/checkpoint.",
+				storedExponents,
+				currentExponents,
+				formatStateDiffExponents(storedExponents),
+			)
+		}
 		// Existing state-diff database - restarts not yet supported.
 		return errors.New("restarting with existing state-diff database not yet supported")
 	}

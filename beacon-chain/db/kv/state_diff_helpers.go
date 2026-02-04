@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
@@ -59,6 +60,38 @@ func decodeStateDiffExponents(encoded []byte) ([]int, error) {
 		exponents[i] = int(encoded[i+1])
 	}
 	return exponents, nil
+}
+
+func formatStateDiffExponents(exponents []int) string {
+	if len(exponents) == 0 {
+		return ""
+	}
+	parts := make([]string, len(exponents))
+	for i, exp := range exponents {
+		parts[i] = fmt.Sprintf("%d", exp)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (s *Store) loadStateDiffExponents() ([]int, error) {
+	var encoded []byte
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		value := bucket.Get(exponentsKey)
+		if value == nil {
+			return errors.New("state diff exponents not found")
+		}
+		encoded = make([]byte, len(value))
+		copy(encoded, value)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return decodeStateDiffExponents(encoded)
 }
 
 func makeKeyForStateDiffTree(level int, slot uint64) []byte {
@@ -190,8 +223,13 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 			return nil
 		}
 	}
-	// Write offset directly to the database (without using cache which doesn't exist yet).
-	err := s.db.Update(func(tx *bbolt.Tx) error {
+	exponentsBytes, err := encodeStateDiffExponents(flags.Get().StateDiffExponents)
+	if err != nil {
+		return pkgerrors.Wrap(err, "failed to encode state diff exponents")
+	}
+
+	// Write metadata directly to the database (without using cache which doesn't exist yet).
+	err = s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bbolt.ErrBucketNotFound
@@ -199,7 +237,10 @@ func (s *Store) initializeStateDiff(slot primitives.Slot, initialState state.Rea
 
 		offsetBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(offsetBytes, uint64(slot))
-		return bucket.Put(offsetKey, offsetBytes)
+		if err := bucket.Put(offsetKey, offsetBytes); err != nil {
+			return err
+		}
+		return bucket.Put(exponentsKey, exponentsBytes)
 	})
 	if err != nil {
 		return pkgerrors.Wrap(err, "failed to set offset")
