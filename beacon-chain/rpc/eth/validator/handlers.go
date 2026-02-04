@@ -18,6 +18,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	rpchelpers "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/helpers"
@@ -1210,6 +1211,144 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		ExecutionOptimistic: isOptimistic,
 	}
 	httputil.WriteJson(w, resp)
+}
+
+// GetPTCDuties retrieves the payload timeliness committee (PTC) duties for the requested epoch.
+// The PTC is responsible for attesting to payload timeliness in ePBS (Gloas fork and later).
+func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
+	ctx, span := trace.StartSpan(r.Context(), "validator.GetPTCDuties")
+	defer span.End()
+
+	if shared.IsSyncing(ctx, w, s.SyncChecker, s.HeadFetcher, s.TimeFetcher, s.OptimisticModeFetcher) {
+		return
+	}
+
+	_, requestedEpochUint, ok := shared.UintFromRoute(w, r, "epoch")
+	if !ok {
+		return
+	}
+	requestedEpoch := primitives.Epoch(requestedEpochUint)
+
+	// PTC duties are only available from Gloas fork onwards.
+	if requestedEpoch < params.BeaconConfig().GloasForkEpoch {
+		httputil.HandleError(w, "PTC duties are not available before Gloas fork", http.StatusBadRequest)
+		return
+	}
+
+	var indices []string
+	err := json.NewDecoder(r.Body).Decode(&indices)
+	switch {
+	case errors.Is(err, io.EOF):
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	case err != nil:
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(indices) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+
+	requestedValIndices := make([]primitives.ValidatorIndex, len(indices))
+	for i, ix := range indices {
+		valIx, valid := shared.ValidateUint(w, fmt.Sprintf("ValidatorIndices[%d]", i), ix)
+		if !valid {
+			return
+		}
+		requestedValIndices[i] = primitives.ValidatorIndex(valIx)
+	}
+
+	// Limit how far in the future we can query (current + 1 epoch).
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	if requestedEpoch > currentEpoch+1 {
+		httputil.HandleError(w,
+			fmt.Sprintf("Request epoch %d can not be greater than next epoch %d", requestedEpoch, currentEpoch+1),
+			http.StatusBadRequest)
+		return
+	}
+
+	// Get state for the epoch.
+	st, err := s.Stater.StateByEpoch(ctx, requestedEpoch)
+	if err != nil {
+		shared.WriteStateFetchError(w, err)
+		return
+	}
+
+	// Build a set of requested validators for O(1) lookup.
+	requestedSet := make(map[primitives.ValidatorIndex]bool, len(requestedValIndices))
+	for _, idx := range requestedValIndices {
+		requestedSet[idx] = true
+	}
+
+	// Compute PTC duties for each slot in the epoch.
+	startSlot, err := slots.EpochStart(requestedEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get epoch start slot: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	endSlot := startSlot + params.BeaconConfig().SlotsPerEpoch
+
+	duties := make([]*structs.PTCDuty, 0)
+	for slot := startSlot; slot < endSlot; slot++ {
+		ptc, err := gloas.PayloadCommittee(ctx, st, slot)
+		if err != nil {
+			httputil.HandleError(w,
+				fmt.Sprintf("Could not get PTC for slot %d: %s", slot, err.Error()),
+				http.StatusInternalServerError)
+			return
+		}
+
+		// Check which requested validators are in this slot's PTC.
+		for _, valIdx := range ptc {
+			if !requestedSet[valIdx] {
+				continue
+			}
+			pubkey := st.PubkeyAtIndex(valIdx)
+			duties = append(duties, &structs.PTCDuty{
+				Pubkey:         hexutil.Encode(pubkey[:]),
+				ValidatorIndex: strconv.FormatUint(uint64(valIdx), 10),
+				Slot:           strconv.FormatUint(uint64(slot), 10),
+			})
+		}
+	}
+
+	// Get dependent root.
+	dependentRoot, err := ptcDependentRoot(st, requestedEpoch)
+	if err != nil {
+		httputil.HandleError(w, "Could not get dependent root: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	isOptimistic, err := s.OptimisticModeFetcher.IsOptimistic(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not check optimistic status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := &structs.GetPTCDutiesResponse{
+		DependentRoot:       hexutil.Encode(dependentRoot[:]),
+		ExecutionOptimistic: isOptimistic,
+		Data:                duties,
+	}
+	httputil.WriteJson(w, resp)
+}
+
+// ptcDependentRoot returns the block root that PTC assignments depend on.
+// PTC depends on the shuffling, which is determined by RANDAO at epoch boundary.
+func ptcDependentRoot(st state.BeaconState, epoch primitives.Epoch) ([32]byte, error) {
+	epochStartSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if epochStartSlot == 0 {
+		return bytesutil.ToBytes32(st.GenesisValidatorsRoot()), nil
+	}
+	root, err := helpers.BlockRootAtSlot(st, epochStartSlot-1)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return bytesutil.ToBytes32(root), nil
 }
 
 // GetLiveness requests the beacon node to indicate if a validator has been observed to be live in a given epoch.

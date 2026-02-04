@@ -70,7 +70,7 @@ func ProcessPayloadAttestations(ctx context.Context, st state.BeaconState, body 
 
 // indexedPayloadAttestation converts a payload attestation into its indexed form.
 func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState, att *eth.PayloadAttestation) (*consensus_types.IndexedPayloadAttestation, error) {
-	committee, err := payloadCommittee(ctx, st, att.Data.Slot)
+	committee, err := PayloadCommittee(ctx, st, att.Data.Slot)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 	}, nil
 }
 
-// payloadCommittee returns the payload timeliness committee for a given slot for the state.
+// PayloadCommittee returns the payload timeliness committee for a given slot for the state.
 // Spec v1.7.0-alpha.0 (pseudocode):
 // get_ptc(state: BeaconState, slot: Slot) -> Vector[ValidatorIndex, PTC_SIZE]:
 //
@@ -101,7 +101,7 @@ func indexedPayloadAttestation(ctx context.Context, st state.ReadOnlyBeaconState
 //	  committee = get_beacon_committee(state, slot, CommitteeIndex(i))
 //	  indices.extend(committee)
 //	return compute_balance_weighted_selection(state, indices, seed, size=PTC_SIZE, shuffle_indices=False)
-func payloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
+func PayloadCommittee(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) ([]primitives.ValidatorIndex, error) {
 	epoch := slots.ToEpoch(slot)
 	seed, err := ptcSeed(st, epoch, slot)
 	if err != nil {
