@@ -66,12 +66,13 @@ func (c *beaconApiValidatorClient) duties(ctx context.Context, in *ethpb.DutiesR
 	}()
 
 	nextEpochDuties := &ethpb.ValidatorDutiesContainer{}
-	if err := c.dutiesForEpoch(ctx, nextEpochDuties, in.Epoch+1, vals, fetchSyncDuties); err != nil {
-		return nil, errors.Wrapf(err, "failed to get duties for next epoch `%d`", in.Epoch+1)
-	}
+	nextEpochErr := c.dutiesForEpoch(ctx, nextEpochDuties, in.Epoch+1, vals, fetchSyncDuties)
 
-	if err = <-errCh; err != nil {
-		return nil, err
+	if currEpochErr := <-errCh; currEpochErr != nil {
+		return nil, currEpochErr
+	}
+	if nextEpochErr != nil {
+		return nil, errors.Wrapf(nextEpochErr, "failed to get duties for next epoch `%d`", in.Epoch+1)
 	}
 
 	return &ethpb.ValidatorDutiesContainer{

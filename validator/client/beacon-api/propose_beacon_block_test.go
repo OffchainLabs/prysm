@@ -620,6 +620,42 @@ func TestProposeBeaconBlock_SSZFails_406_FallbackToJSON(t *testing.T) {
 	}
 }
 
+func TestProposeBeaconBlock_SSZFails_406_JSONFallbackFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+
+	jsonRestHandler.EXPECT().PostSSZ(
+		gomock.Any(),
+		"/eth/v2/beacon/blocks",
+		gomock.Any(),
+		gomock.Any(),
+	).Return(
+		nil, nil, &httputil.DefaultJsonError{
+			Code:    http.StatusNotAcceptable,
+			Message: "SSZ not supported",
+		},
+	).Times(1)
+
+	jsonRestHandler.EXPECT().Post(
+		gomock.Any(),
+		"/eth/v2/beacon/blocks",
+		gomock.Any(),
+		gomock.Any(),
+		nil,
+	).Return(
+		errors.New("json fallback failed"),
+	).Times(1)
+
+	validatorClient := &beaconApiValidatorClient{jsonRestHandler: jsonRestHandler}
+	_, err := validatorClient.proposeBeaconBlock(ctx, &ethpb.GenericSignedBeaconBlock{
+		Block: generateSignedPhase0Block(),
+	})
+	assert.ErrorContains(t, "failed to submit block via JSON fallback", err)
+}
+
 func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -675,4 +711,42 @@ func TestProposeBeaconBlock_SSZFails_Non406_NoFallback(t *testing.T) {
 			require.ErrorContains(t, "Internal server error", err)
 		})
 	}
+}
+
+type badHashable struct{}
+
+func (badHashable) HashTreeRoot() ([32]byte, error) {
+	return [32]byte{}, errors.New("hash root error")
+}
+
+type badMarshaler struct{}
+
+func (badMarshaler) MarshalSSZ() ([]byte, error) {
+	return nil, errors.New("marshal ssz error")
+}
+
+type okMarshaler struct{}
+
+func (okMarshaler) MarshalSSZ() ([]byte, error) {
+	return []byte{1, 2, 3}, nil
+}
+
+type okHashable struct{}
+
+func (okHashable) HashTreeRoot() ([32]byte, error) {
+	return [32]byte{1}, nil
+}
+
+func TestBuildBlockResult_HashTreeRootError(t *testing.T) {
+	_, err := buildBlockResult("phase0", false, okMarshaler{}, badHashable{}, func() ([]byte, error) {
+		return []byte(`{}`), nil
+	})
+	assert.ErrorContains(t, "failed to compute block root for phase0 beacon block", err)
+}
+
+func TestBuildBlockResult_MarshalSSZError(t *testing.T) {
+	_, err := buildBlockResult("phase0", false, badMarshaler{}, okHashable{}, func() ([]byte, error) {
+		return []byte(`{}`), nil
+	})
+	assert.ErrorContains(t, "failed to serialize phase0 beacon block", err)
 }

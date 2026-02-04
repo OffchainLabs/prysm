@@ -38,7 +38,7 @@ func buildBlockResult(
 		return nil, errors.Wrapf(err, "failed to compute block root for %s beacon block", versionName)
 	}
 
-	ssz, err := sszObj.MarshalSSZ()
+	marshaledSSZ, err := sszObj.MarshalSSZ()
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to serialize %s beacon block", versionName)
 	}
@@ -47,7 +47,7 @@ func buildBlockResult(
 		consensusVersion: versionName,
 		blinded:          blinded,
 		beaconBlockRoot:  beaconBlockRoot,
-		marshalledSSZ:    ssz,
+		marshalledSSZ:    marshaledSSZ,
 		marshalJSON:      jsonFn,
 	}, nil
 }
