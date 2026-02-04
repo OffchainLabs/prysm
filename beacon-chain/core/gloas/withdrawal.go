@@ -1,8 +1,6 @@
 package gloas
 
 import (
-	"fmt"
-
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -73,11 +71,11 @@ func ProcessWithdrawals(st state.BeaconState) error {
 
 	err = st.DequeueBuilderPendingWithdrawals(expected.ProcessedBuilderWithdrawalsCount)
 	if err != nil {
-		return fmt.Errorf("unable to dequeue builder pending withdrawals from state: %w", err)
+		return errors.Wrap(err, "unable to dequeue builder pending withdrawals from state")
 	}
 
 	if err := st.DequeuePendingPartialWithdrawals(expected.ProcessedPartialWithdrawalsCount); err != nil {
-		return fmt.Errorf("unable to dequeue partial withdrawals from state: %w", err)
+		return errors.Wrap(err, "unable to dequeue partial withdrawals from state")
 	}
 
 	err = st.SetNextWithdrawalBuilderIndex(expected.NextWithdrawalBuilderIndex)

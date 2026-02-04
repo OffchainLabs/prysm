@@ -49,7 +49,6 @@ func compareConfigs(t *testing.T, expected, actual *params.BeaconChainConfig) {
 	require.DeepEqual(t, expected.HysteresisQuotient, actual.HysteresisQuotient)
 	require.DeepEqual(t, expected.HysteresisDownwardMultiplier, actual.HysteresisDownwardMultiplier)
 	require.DeepEqual(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier)
-	require.DeepEqual(t, expected.BuilderIndexFlag, actual.BuilderIndexFlag)
 	require.DeepEqual(t, expected.MinDepositAmount, actual.MinDepositAmount)
 	require.DeepEqual(t, expected.MaxEffectiveBalance, actual.MaxEffectiveBalance)
 	require.DeepEqual(t, expected.EjectionBalance, actual.EjectionBalance)

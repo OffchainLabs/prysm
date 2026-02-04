@@ -15,6 +15,7 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	pkgerrors "github.com/pkg/errors"
 )
 
 // RotateBuilderPendingPayments rotates the queue by dropping slots per epoch payments from the
@@ -550,7 +551,7 @@ func (b *BeaconState) DecreaseWithdrawalBalances(withdrawals []*enginev1.Withdra
 		}
 		newBal := decreaseBalanceWithVal(balAtIdx, withdrawal.Amount)
 		if err := b.balancesMultiValue.UpdateAt(b, uint64(withdrawal.ValidatorIndex), newBal); err != nil {
-			return fmt.Errorf("could not update balances: %w", err)
+			return pkgerrors.Wrap(err, "could not update balances")
 		}
 		balanceIndices = append(balanceIndices, uint64(withdrawal.ValidatorIndex))
 	}

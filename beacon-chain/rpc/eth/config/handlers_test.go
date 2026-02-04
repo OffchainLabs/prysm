@@ -84,7 +84,6 @@ func TestGetSpec(t *testing.T) {
 	config.FuluForkVersion = []byte("FuluForkVersion")
 	config.FuluForkEpoch = 109
 	config.GloasForkEpoch = 110
-	config.BuilderIndexFlag = 111
 	config.MaxBuildersPerWithdrawalsSweep = 112
 	config.BLSWithdrawalPrefixByte = byte('b')
 	config.ETH1AddressWithdrawalPrefixByte = byte('c')
@@ -305,8 +304,6 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "109", v)
 			case "GLOAS_FORK_EPOCH":
 				assert.Equal(t, "110", v)
-			case "BUILDER_INDEX_FLAG":
-				assert.Equal(t, "111", v)
 			case "MAX_BUILDERS_PER_WITHDRAWALS_SWEEP":
 				assert.Equal(t, "112", v)
 			case "MIN_ANCHOR_POW_BLOCK_DIFFICULTY":
