@@ -394,7 +394,12 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 		if diffSlot == lastSeenAnchorSlot {
 			continue
 		}
-		diffChainItems = append(diffChainItems, diffItem{level: i + 1, slot: diffSlot + offset})
+		level := i + 1
+		if s.stateDiffCache != nil && !s.stateDiffCache.levelHasData(level) {
+			lastSeenAnchorSlot = diffSlot
+			continue
+		}
+		diffChainItems = append(diffChainItems, diffItem{level: level, slot: diffSlot + offset})
 		lastSeenAnchorSlot = diffSlot
 	}
 

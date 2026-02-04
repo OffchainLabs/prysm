@@ -133,6 +133,9 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 			return err
 		}
 	}
+	if err := s.stateDiffCache.setLevelHasData(lvl); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -170,6 +173,9 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	s.stateDiffCache.clearAnchors()
 	err = s.stateDiffCache.setAnchor(0, st)
 	if err != nil {
+		return err
+	}
+	if err := s.stateDiffCache.setLevelHasData(0); err != nil {
 		return err
 	}
 

@@ -230,6 +230,73 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 	}
 }
 
+func TestStateDiff_PopulateStateDiffCacheFromDB(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	_, err := populateStateDiffCacheFromDB(db, 0)
+	require.ErrorContains(t, "missing offset snapshot", err)
+
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, setOffsetInDB(db, 0))
+	require.NoError(t, db.saveStateByDiff(context.Background(), st))
+
+	err = db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		key := makeKeyForStateDiffTree(2, 0)
+		return bucket.Put(append(key, stateSuffix...), []byte{1})
+	})
+	require.NoError(t, err)
+
+	cache, err := populateStateDiffCacheFromDB(db, 0)
+	require.NoError(t, err)
+	require.NotNil(t, cache)
+	require.Equal(t, uint64(0), cache.getOffset())
+	require.NotNil(t, cache.getAnchor(0))
+	require.Equal(t, true, cache.levelHasData(0))
+	require.Equal(t, false, cache.levelHasData(1))
+	require.Equal(t, true, cache.levelHasData(2))
+}
+
+func TestStateDiff_GetBaseAndDiffChainSkipsEmptyLevels(t *testing.T) {
+	setDefaultStateDiffExponents()
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+	st, _ := createState(t, 0, version.Phase0)
+	require.NoError(t, db.saveFullSnapshot(st))
+
+	cache, err := populateStateDiffCacheFromDB(db, 0)
+	require.NoError(t, err)
+	cache.levelsWithData[0] = true
+	cache.levelsWithData[1] = false
+	cache.levelsWithData[2] = true
+	db.stateDiffCache = cache
+
+	slot := primitives.Slot(math.PowerOf2(18) + math.PowerOf2(16))
+	key := makeKeyForStateDiffTree(2, uint64(slot))
+	require.NoError(t, db.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		if err := bucket.Put(append(key, stateSuffix...), []byte{1}); err != nil {
+			return err
+		}
+		if err := bucket.Put(append(key, validatorSuffix...), []byte{2}); err != nil {
+			return err
+		}
+		return bucket.Put(append(key, balancesSuffix...), []byte{3})
+	}))
+
+	_, diffChain, err := db.getBaseAndDiffChain(0, slot)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(diffChain))
+}
+
 func TestStateDiff_SaveAndReadFullSnapshot(t *testing.T) {
 	setDefaultStateDiffExponents()
 
