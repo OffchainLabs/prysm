@@ -1,4 +1,4 @@
-- name: BASE_REWARD_FACTOR
+- name: BASE_REWARD_FACTOR#phase0
   sources:
     - file: config/params/config.go
       search: BaseRewardFactor\s+.*yaml:"BASE_REWARD_FACTOR"
@@ -8,7 +8,21 @@
     BASE_REWARD_FACTOR: uint64 = 64
     </spec>
 
-- name: BYTES_PER_LOGS_BLOOM
+- name: BUILDER_PENDING_WITHDRAWALS_LIMIT#gloas
+  sources: []
+  spec: |
+    <spec preset_var="BUILDER_PENDING_WITHDRAWALS_LIMIT" fork="gloas" hash="40b31377">
+    BUILDER_PENDING_WITHDRAWALS_LIMIT: uint64 = 1048576
+    </spec>
+
+- name: BUILDER_REGISTRY_LIMIT#gloas
+  sources: []
+  spec: |
+    <spec preset_var="BUILDER_REGISTRY_LIMIT" fork="gloas" hash="e951ff73">
+    BUILDER_REGISTRY_LIMIT: uint64 = 1099511627776
+    </spec>
+
+- name: BYTES_PER_LOGS_BLOOM#bellatrix
   sources:
     - file: config/params/config.go
       search: BytesPerLogsBloom\s+.*yaml:"BYTES_PER_LOGS_BLOOM"
@@ -18,7 +32,7 @@
     BYTES_PER_LOGS_BLOOM: uint64 = 256
     </spec>
 
-- name: CELLS_PER_EXT_BLOB
+- name: CELLS_PER_EXT_BLOB#fulu
   sources:
     - file: beacon-chain/rpc/eth/config/handlers.go
       search: data\["CELLS_PER_EXT_BLOB"\]
@@ -28,7 +42,7 @@
     CELLS_PER_EXT_BLOB = 128
     </spec>
 
-- name: EFFECTIVE_BALANCE_INCREMENT
+- name: EFFECTIVE_BALANCE_INCREMENT#phase0
   sources:
     - file: config/params/config.go
       search: EffectiveBalanceIncrement\s+.*yaml:"EFFECTIVE_BALANCE_INCREMENT"
@@ -38,7 +52,7 @@
     EFFECTIVE_BALANCE_INCREMENT: Gwei = 1000000000
     </spec>
 
-- name: EPOCHS_PER_ETH1_VOTING_PERIOD
+- name: EPOCHS_PER_ETH1_VOTING_PERIOD#phase0
   sources:
     - file: config/params/config.go
       search: EpochsPerEth1VotingPeriod\s+.*yaml:"EPOCHS_PER_ETH1_VOTING_PERIOD"
@@ -48,7 +62,7 @@
     EPOCHS_PER_ETH1_VOTING_PERIOD: uint64 = 64
     </spec>
 
-- name: EPOCHS_PER_HISTORICAL_VECTOR
+- name: EPOCHS_PER_HISTORICAL_VECTOR#phase0
   sources:
     - file: config/fieldparams/mainnet.go
       search: RandaoMixesLength\s*=
@@ -58,7 +72,7 @@
     EPOCHS_PER_HISTORICAL_VECTOR: uint64 = 65536
     </spec>
 
-- name: EPOCHS_PER_SLASHINGS_VECTOR
+- name: EPOCHS_PER_SLASHINGS_VECTOR#phase0
   sources:
     - file: config/fieldparams/mainnet.go
       search: SlashingsLength\s*=
@@ -68,7 +82,7 @@
     EPOCHS_PER_SLASHINGS_VECTOR: uint64 = 8192
     </spec>
 
-- name: EPOCHS_PER_SYNC_COMMITTEE_PERIOD
+- name: EPOCHS_PER_SYNC_COMMITTEE_PERIOD#altair
   sources:
     - file: config/params/config.go
       search: EpochsPerSyncCommitteePeriod\s+.*yaml:"EPOCHS_PER_SYNC_COMMITTEE_PERIOD"
@@ -78,7 +92,7 @@
     EPOCHS_PER_SYNC_COMMITTEE_PERIOD: uint64 = 256
     </spec>
 
-- name: FIELD_ELEMENTS_PER_BLOB
+- name: FIELD_ELEMENTS_PER_BLOB#deneb
   sources:
     - file: config/params/config.go
       search: FieldElementsPerBlob\s+.*yaml:"FIELD_ELEMENTS_PER_BLOB"
@@ -88,7 +102,7 @@
     FIELD_ELEMENTS_PER_BLOB: uint64 = 4096
     </spec>
 
-- name: FIELD_ELEMENTS_PER_CELL
+- name: FIELD_ELEMENTS_PER_CELL#fulu
   sources:
     - file: config/fieldparams/mainnet.go
       search: CellsPerBlob\s*=
@@ -98,7 +112,7 @@
     FIELD_ELEMENTS_PER_CELL: uint64 = 64
     </spec>
 
-- name: FIELD_ELEMENTS_PER_EXT_BLOB
+- name: FIELD_ELEMENTS_PER_EXT_BLOB#fulu
   sources:
     - file: proto/ssz_proto_library.bzl
       search: mainnet\s*=\s*\{[^}]*"field_elements_per_ext_blob\.size".*[^}]*\}
@@ -108,7 +122,7 @@
     FIELD_ELEMENTS_PER_EXT_BLOB = 8192
     </spec>
 
-- name: HISTORICAL_ROOTS_LIMIT
+- name: HISTORICAL_ROOTS_LIMIT#phase0
   sources:
     - file: config/fieldparams/mainnet.go
       search: HistoricalRootsLength\s*=
@@ -118,7 +132,7 @@
     HISTORICAL_ROOTS_LIMIT: uint64 = 16777216
     </spec>
 
-- name: HYSTERESIS_DOWNWARD_MULTIPLIER
+- name: HYSTERESIS_DOWNWARD_MULTIPLIER#phase0
   sources:
     - file: config/params/config.go
       search: HysteresisDownwardMultiplier\s+.*yaml:"HYSTERESIS_DOWNWARD_MULTIPLIER"
@@ -128,7 +142,7 @@
     HYSTERESIS_DOWNWARD_MULTIPLIER: uint64 = 1
     </spec>
 
-- name: HYSTERESIS_QUOTIENT
+- name: HYSTERESIS_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
       search: HysteresisQuotient\s+.*yaml:"HYSTERESIS_QUOTIENT"
@@ -138,7 +152,7 @@
     HYSTERESIS_QUOTIENT: uint64 = 4
     </spec>
 
-- name: HYSTERESIS_UPWARD_MULTIPLIER
+- name: HYSTERESIS_UPWARD_MULTIPLIER#phase0
   sources:
     - file: config/params/config.go
       search: HysteresisUpwardMultiplier\s+.*yaml:"HYSTERESIS_UPWARD_MULTIPLIER"
@@ -148,7 +162,7 @@
     HYSTERESIS_UPWARD_MULTIPLIER: uint64 = 5
     </spec>
 
-- name: INACTIVITY_PENALTY_QUOTIENT
+- name: INACTIVITY_PENALTY_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
       search: InactivityPenaltyQuotient\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT"
@@ -158,7 +172,7 @@
     INACTIVITY_PENALTY_QUOTIENT: uint64 = 67108864
     </spec>
 
-- name: INACTIVITY_PENALTY_QUOTIENT_ALTAIR
+- name: INACTIVITY_PENALTY_QUOTIENT_ALTAIR#altair
   sources:
     - file: config/params/config.go
       search: InactivityPenaltyQuotientAltair\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT_ALTAIR"
@@ -168,7 +182,7 @@
     INACTIVITY_PENALTY_QUOTIENT_ALTAIR: uint64 = 50331648
     </spec>
 
-- name: INACTIVITY_PENALTY_QUOTIENT_BELLATRIX
+- name: INACTIVITY_PENALTY_QUOTIENT_BELLATRIX#bellatrix
   sources:
     - file: config/params/config.go
       search: InactivityPenaltyQuotientBellatrix\s+.*yaml:"INACTIVITY_PENALTY_QUOTIENT_BELLATRIX"
@@ -178,7 +192,7 @@
     INACTIVITY_PENALTY_QUOTIENT_BELLATRIX: uint64 = 16777216
     </spec>
 
-- name: KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH
+- name: KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH#fulu
   sources:
     - file: proto/ssz_proto_library.bzl
       search: mainnet\s*=\s*\{[^}]*"kzg_commitments_inclusion_proof_depth\.size":.*[^}]*\}
@@ -188,7 +202,7 @@
     KZG_COMMITMENTS_INCLUSION_PROOF_DEPTH: uint64 = 4
     </spec>
 
-- name: KZG_COMMITMENT_INCLUSION_PROOF_DEPTH
+- name: KZG_COMMITMENT_INCLUSION_PROOF_DEPTH#deneb
   sources:
     - file: config/fieldparams/mainnet.go
       search: KzgCommitmentInclusionProofDepth\s*=
@@ -198,7 +212,7 @@
     KZG_COMMITMENT_INCLUSION_PROOF_DEPTH: uint64 = 17
     </spec>
 
-- name: MAX_ATTESTATIONS
+- name: MAX_ATTESTATIONS#phase0
   sources:
     - file: config/params/config.go
       search: MaxAttestations\s+.*yaml:"MAX_ATTESTATIONS"
@@ -208,7 +222,7 @@
     MAX_ATTESTATIONS = 128
     </spec>
 
-- name: MAX_ATTESTATIONS_ELECTRA
+- name: MAX_ATTESTATIONS_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: MaxAttestationsElectra\s+.*yaml:"MAX_ATTESTATIONS_ELECTRA"
@@ -218,7 +232,7 @@
     MAX_ATTESTATIONS_ELECTRA = 8
     </spec>
 
-- name: MAX_ATTESTER_SLASHINGS
+- name: MAX_ATTESTER_SLASHINGS#phase0
   sources:
     - file: config/params/config.go
       search: MaxAttesterSlashings\s+.*yaml:"MAX_ATTESTER_SLASHINGS"
@@ -228,7 +242,7 @@
     MAX_ATTESTER_SLASHINGS = 2
     </spec>
 
-- name: MAX_ATTESTER_SLASHINGS_ELECTRA
+- name: MAX_ATTESTER_SLASHINGS_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: MaxAttesterSlashingsElectra\s+.*yaml:"MAX_ATTESTER_SLASHINGS_ELECTRA"
@@ -238,7 +252,7 @@
     MAX_ATTESTER_SLASHINGS_ELECTRA = 1
     </spec>
 
-- name: MAX_BLOB_COMMITMENTS_PER_BLOCK
+- name: MAX_BLOB_COMMITMENTS_PER_BLOCK#deneb
   sources:
     - file: config/fieldparams/mainnet.go
       search: MaxBlobCommitmentsPerBlock\s*=
@@ -248,7 +262,7 @@
     MAX_BLOB_COMMITMENTS_PER_BLOCK: uint64 = 4096
     </spec>
 
-- name: MAX_BLS_TO_EXECUTION_CHANGES
+- name: MAX_BLS_TO_EXECUTION_CHANGES#capella
   sources:
     - file: config/params/config.go
       search: MaxBlsToExecutionChanges\s+.*yaml:"MAX_BLS_TO_EXECUTION_CHANGES"
@@ -258,7 +272,14 @@
     MAX_BLS_TO_EXECUTION_CHANGES = 16
     </spec>
 
-- name: MAX_BYTES_PER_TRANSACTION
+- name: MAX_BUILDERS_PER_WITHDRAWALS_SWEEP#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_BUILDERS_PER_WITHDRAWALS_SWEEP" fork="gloas" hash="1556b314">
+    MAX_BUILDERS_PER_WITHDRAWALS_SWEEP = 16384
+    </spec>
+
+- name: MAX_BYTES_PER_TRANSACTION#bellatrix
   sources:
     - file: config/params/config.go
       search: MaxBytesPerTransaction\s+.*yaml:"MAX_BYTES_PER_TRANSACTION"
@@ -288,7 +309,7 @@
     MAX_COMMITTEES_PER_SLOT: uint64 = 64
     </spec>
 
-- name: MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD
+- name: MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD#electra
   sources:
     - file: config/params/config.go
       search: MaxConsolidationsRequestsPerPayload\s+.*yaml:"MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD"
@@ -298,7 +319,7 @@
     MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD: uint64 = 2
     </spec>
 
-- name: MAX_DEPOSITS
+- name: MAX_DEPOSITS#phase0
   sources:
     - file: config/params/config.go
       search: MaxDeposits\s+.*yaml:"MAX_DEPOSITS"
@@ -308,7 +329,7 @@
     MAX_DEPOSITS = 16
     </spec>
 
-- name: MAX_DEPOSIT_REQUESTS_PER_PAYLOAD
+- name: MAX_DEPOSIT_REQUESTS_PER_PAYLOAD#electra
   sources:
     - file: config/params/config.go
       search: MaxDepositRequestsPerPayload\s+.*yaml:"MAX_DEPOSIT_REQUESTS_PER_PAYLOAD"
@@ -318,7 +339,7 @@
     MAX_DEPOSIT_REQUESTS_PER_PAYLOAD: uint64 = 8192
     </spec>
 
-- name: MAX_EFFECTIVE_BALANCE
+- name: MAX_EFFECTIVE_BALANCE#phase0
   sources:
     - file: config/params/config.go
       search: MaxEffectiveBalance\s+.*yaml:"MAX_EFFECTIVE_BALANCE"
@@ -328,7 +349,7 @@
     MAX_EFFECTIVE_BALANCE: Gwei = 32000000000
     </spec>
 
-- name: MAX_EFFECTIVE_BALANCE_ELECTRA
+- name: MAX_EFFECTIVE_BALANCE_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: MaxEffectiveBalanceElectra\s+.*yaml:"MAX_EFFECTIVE_BALANCE_ELECTRA"
@@ -338,7 +359,7 @@
     MAX_EFFECTIVE_BALANCE_ELECTRA: Gwei = 2048000000000
     </spec>
 
-- name: MAX_EXTRA_DATA_BYTES
+- name: MAX_EXTRA_DATA_BYTES#bellatrix
   sources:
     - file: config/params/config.go
       search: MaxExtraDataBytes\s+.*yaml:"MAX_EXTRA_DATA_BYTES"
@@ -348,7 +369,14 @@
     MAX_EXTRA_DATA_BYTES = 32
     </spec>
 
-- name: MAX_PENDING_DEPOSITS_PER_EPOCH
+- name: MAX_PAYLOAD_ATTESTATIONS#gloas
+  sources: []
+  spec: |
+    <spec preset_var="MAX_PAYLOAD_ATTESTATIONS" fork="gloas" hash="fc24e7ea">
+    MAX_PAYLOAD_ATTESTATIONS = 4
+    </spec>
+
+- name: MAX_PENDING_DEPOSITS_PER_EPOCH#electra
   sources:
     - file: config/params/config.go
       search: MaxPendingDepositsPerEpoch\s+.*yaml:"MAX_PENDING_DEPOSITS_PER_EPOCH"
@@ -358,7 +386,7 @@
     MAX_PENDING_DEPOSITS_PER_EPOCH: uint64 = 16
     </spec>
 
-- name: MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP
+- name: MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP#electra
   sources:
     - file: config/params/config.go
       search: MaxPendingPartialsPerWithdrawalsSweep\s+.*yaml:"MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP"
@@ -368,7 +396,7 @@
     MAX_PENDING_PARTIALS_PER_WITHDRAWALS_SWEEP: uint64 = 8
     </spec>
 
-- name: MAX_PROPOSER_SLASHINGS
+- name: MAX_PROPOSER_SLASHINGS#phase0
   sources:
     - file: config/params/config.go
       search: MaxProposerSlashings\s+.*yaml:"MAX_PROPOSER_SLASHINGS"
@@ -378,7 +406,7 @@
     MAX_PROPOSER_SLASHINGS = 16
     </spec>
 
-- name: MAX_SEED_LOOKAHEAD
+- name: MAX_SEED_LOOKAHEAD#phase0
   sources:
     - file: config/params/config.go
       search: MaxSeedLookahead\s+.*yaml:"MAX_SEED_LOOKAHEAD"
@@ -388,7 +416,7 @@
     MAX_SEED_LOOKAHEAD: uint64 = 4
     </spec>
 
-- name: MAX_TRANSACTIONS_PER_PAYLOAD
+- name: MAX_TRANSACTIONS_PER_PAYLOAD#bellatrix
   sources:
     - file: config/params/config.go
       search: MaxTransactionsPerPayload\s+.*yaml:"MAX_TRANSACTIONS_PER_PAYLOAD"
@@ -418,7 +446,7 @@
     MAX_VALIDATORS_PER_COMMITTEE: uint64 = 2048
     </spec>
 
-- name: MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP
+- name: MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP#capella
   sources:
     - file: config/params/config.go
       search: MaxValidatorsPerWithdrawalsSweep\s+.*yaml:"MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP"
@@ -428,7 +456,7 @@
     MAX_VALIDATORS_PER_WITHDRAWALS_SWEEP = 16384
     </spec>
 
-- name: MAX_VOLUNTARY_EXITS
+- name: MAX_VOLUNTARY_EXITS#phase0
   sources:
     - file: config/params/config.go
       search: MaxVoluntaryExits\s+.*yaml:"MAX_VOLUNTARY_EXITS"
@@ -438,7 +466,7 @@
     MAX_VOLUNTARY_EXITS = 16
     </spec>
 
-- name: MAX_WITHDRAWALS_PER_PAYLOAD
+- name: MAX_WITHDRAWALS_PER_PAYLOAD#capella
   sources:
     - file: config/fieldparams/mainnet.go
       search: MaxWithdrawalsPerPayload\s*=
@@ -448,7 +476,7 @@
     MAX_WITHDRAWALS_PER_PAYLOAD: uint64 = 16
     </spec>
 
-- name: MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD
+- name: MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD#electra
   sources:
     - file: config/params/config.go
       search: MaxWithdrawalRequestsPerPayload\s+.*yaml:"MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD"
@@ -458,7 +486,7 @@
     MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD: uint64 = 16
     </spec>
 
-- name: MIN_ACTIVATION_BALANCE
+- name: MIN_ACTIVATION_BALANCE#electra
   sources:
     - file: config/params/config.go
       search: MinActivationBalance\s+.*yaml:"MIN_ACTIVATION_BALANCE"
@@ -468,7 +496,7 @@
     MIN_ACTIVATION_BALANCE: Gwei = 32000000000
     </spec>
 
-- name: MIN_ATTESTATION_INCLUSION_DELAY
+- name: MIN_ATTESTATION_INCLUSION_DELAY#phase0
   sources:
     - file: config/params/config.go
       search: MinAttestationInclusionDelay\s+.*yaml:"MIN_ATTESTATION_INCLUSION_DELAY"
@@ -478,7 +506,7 @@
     MIN_ATTESTATION_INCLUSION_DELAY: uint64 = 1
     </spec>
 
-- name: MIN_DEPOSIT_AMOUNT
+- name: MIN_DEPOSIT_AMOUNT#phase0
   sources:
     - file: config/params/config.go
       search: MinDepositAmount\s+.*yaml:"MIN_DEPOSIT_AMOUNT"
@@ -488,7 +516,7 @@
     MIN_DEPOSIT_AMOUNT: Gwei = 1000000000
     </spec>
 
-- name: MIN_EPOCHS_TO_INACTIVITY_PENALTY
+- name: MIN_EPOCHS_TO_INACTIVITY_PENALTY#phase0
   sources:
     - file: config/params/config.go
       search: MinEpochsToInactivityPenalty\s+.*yaml:"MIN_EPOCHS_TO_INACTIVITY_PENALTY"
@@ -498,7 +526,7 @@
     MIN_EPOCHS_TO_INACTIVITY_PENALTY: uint64 = 4
     </spec>
 
-- name: MIN_SEED_LOOKAHEAD
+- name: MIN_SEED_LOOKAHEAD#phase0
   sources:
     - file: config/params/config.go
       search: MinSeedLookahead\s+.*yaml:"MIN_SEED_LOOKAHEAD"
@@ -508,7 +536,7 @@
     MIN_SEED_LOOKAHEAD: uint64 = 1
     </spec>
 
-- name: MIN_SLASHING_PENALTY_QUOTIENT
+- name: MIN_SLASHING_PENALTY_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
       search: MinSlashingPenaltyQuotient\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT"
@@ -518,7 +546,7 @@
     MIN_SLASHING_PENALTY_QUOTIENT: uint64 = 128
     </spec>
 
-- name: MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR
+- name: MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR#altair
   sources:
     - file: config/params/config.go
       search: MinSlashingPenaltyQuotientAltair\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR"
@@ -528,7 +556,7 @@
     MIN_SLASHING_PENALTY_QUOTIENT_ALTAIR: uint64 = 64
     </spec>
 
-- name: MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX
+- name: MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX#bellatrix
   sources:
     - file: config/params/config.go
       search: MinSlashingPenaltyQuotientBellatrix\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX"
@@ -538,7 +566,7 @@
     MIN_SLASHING_PENALTY_QUOTIENT_BELLATRIX: uint64 = 32
     </spec>
 
-- name: MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA
+- name: MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: MinSlashingPenaltyQuotientElectra\s+.*yaml:"MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA"
@@ -548,7 +576,7 @@
     MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA: uint64 = 4096
     </spec>
 
-- name: MIN_SYNC_COMMITTEE_PARTICIPANTS
+- name: MIN_SYNC_COMMITTEE_PARTICIPANTS#altair
   sources:
     - file: config/params/config.go
       search: MinSyncCommitteeParticipants\s+.*yaml:"MIN_SYNC_COMMITTEE_PARTICIPANTS"
@@ -558,7 +586,7 @@
     MIN_SYNC_COMMITTEE_PARTICIPANTS = 1
     </spec>
 
-- name: NUMBER_OF_COLUMNS
+- name: NUMBER_OF_COLUMNS#fulu
   sources:
     - file: config/fieldparams/mainnet.go
       search: NumberOfColumns\s*=
@@ -568,7 +596,7 @@
     NUMBER_OF_COLUMNS: uint64 = 128
     </spec>
 
-- name: PENDING_CONSOLIDATIONS_LIMIT
+- name: PENDING_CONSOLIDATIONS_LIMIT#electra
   sources:
     - file: config/fieldparams/mainnet.go
       search: PendingConsolidationsLimit\s*=
@@ -578,7 +606,7 @@
     PENDING_CONSOLIDATIONS_LIMIT: uint64 = 262144
     </spec>
 
-- name: PENDING_DEPOSITS_LIMIT
+- name: PENDING_DEPOSITS_LIMIT#electra
   sources:
     - file: config/fieldparams/mainnet.go
       search: PendingDepositsLimit\s*=
@@ -588,7 +616,7 @@
     PENDING_DEPOSITS_LIMIT: uint64 = 134217728
     </spec>
 
-- name: PENDING_PARTIAL_WITHDRAWALS_LIMIT
+- name: PENDING_PARTIAL_WITHDRAWALS_LIMIT#electra
   sources:
     - file: config/fieldparams/mainnet.go
       search: PendingPartialWithdrawalsLimit\s*=
@@ -598,7 +626,7 @@
     PENDING_PARTIAL_WITHDRAWALS_LIMIT: uint64 = 134217728
     </spec>
 
-- name: PROPORTIONAL_SLASHING_MULTIPLIER
+- name: PROPORTIONAL_SLASHING_MULTIPLIER#phase0
   sources:
     - file: config/params/config.go
       search: ProportionalSlashingMultiplier\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER"
@@ -608,7 +636,7 @@
     PROPORTIONAL_SLASHING_MULTIPLIER: uint64 = 1
     </spec>
 
-- name: PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR
+- name: PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR#altair
   sources:
     - file: config/params/config.go
       search: ProportionalSlashingMultiplierAltair\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR"
@@ -618,7 +646,7 @@
     PROPORTIONAL_SLASHING_MULTIPLIER_ALTAIR: uint64 = 2
     </spec>
 
-- name: PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX
+- name: PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX#bellatrix
   sources:
     - file: config/params/config.go
       search: ProportionalSlashingMultiplierBellatrix\s+.*yaml:"PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX"
@@ -628,7 +656,7 @@
     PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX: uint64 = 3
     </spec>
 
-- name: PROPOSER_REWARD_QUOTIENT
+- name: PROPOSER_REWARD_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
       search: ProposerRewardQuotient\s+.*yaml:"PROPOSER_REWARD_QUOTIENT"
@@ -638,7 +666,14 @@
     PROPOSER_REWARD_QUOTIENT: uint64 = 8
     </spec>
 
-- name: SHUFFLE_ROUND_COUNT
+- name: PTC_SIZE#gloas
+  sources: []
+  spec: |
+    <spec preset_var="PTC_SIZE" fork="gloas" hash="d61c5930">
+    PTC_SIZE: uint64 = 512
+    </spec>
+
+- name: SHUFFLE_ROUND_COUNT#phase0
   sources:
     - file: config/params/config.go
       search: ShuffleRoundCount\s+.*yaml:"SHUFFLE_ROUND_COUNT"
@@ -648,7 +683,7 @@
     SHUFFLE_ROUND_COUNT: uint64 = 90
     </spec>
 
-- name: SLOTS_PER_EPOCH
+- name: SLOTS_PER_EPOCH#phase0
   sources:
     - file: config/fieldparams/mainnet.go
       search: SlotsPerEpoch\s*=
@@ -658,7 +693,7 @@
     SLOTS_PER_EPOCH: uint64 = 32
     </spec>
 
-- name: SLOTS_PER_HISTORICAL_ROOT
+- name: SLOTS_PER_HISTORICAL_ROOT#phase0
   sources:
     - file: config/fieldparams/mainnet.go
       search: BlockRootsLength\s*=
@@ -668,7 +703,7 @@
     SLOTS_PER_HISTORICAL_ROOT: uint64 = 8192
     </spec>
 
-- name: SYNC_COMMITTEE_SIZE
+- name: SYNC_COMMITTEE_SIZE#altair
   sources:
     - file: config/fieldparams/mainnet.go
       search: SyncCommitteeLength\s*=
@@ -678,7 +713,7 @@
     SYNC_COMMITTEE_SIZE: uint64 = 512
     </spec>
 
-- name: TARGET_COMMITTEE_SIZE
+- name: TARGET_COMMITTEE_SIZE#phase0
   sources:
     - file: config/params/config.go
       search: TargetCommitteeSize\s+.*yaml:"TARGET_COMMITTEE_SIZE"
@@ -688,7 +723,7 @@
     TARGET_COMMITTEE_SIZE: uint64 = 128
     </spec>
 
-- name: UPDATE_TIMEOUT
+- name: UPDATE_TIMEOUT#altair
   sources:
     - file: beacon-chain/rpc/eth/config/handlers.go
       search: data\["UPDATE_TIMEOUT"\]
@@ -698,7 +733,7 @@
     UPDATE_TIMEOUT = 8192
     </spec>
 
-- name: VALIDATOR_REGISTRY_LIMIT
+- name: VALIDATOR_REGISTRY_LIMIT#phase0
   sources:
     - file: config/fieldparams/mainnet.go
       search: ValidatorRegistryLimit\s*=
@@ -708,7 +743,7 @@
     VALIDATOR_REGISTRY_LIMIT: uint64 = 1099511627776
     </spec>
 
-- name: WHISTLEBLOWER_REWARD_QUOTIENT
+- name: WHISTLEBLOWER_REWARD_QUOTIENT#phase0
   sources:
     - file: config/params/config.go
       search: WhistleBlowerRewardQuotient\s+.*yaml:"WHISTLEBLOWER_REWARD_QUOTIENT"
@@ -718,7 +753,7 @@
     WHISTLEBLOWER_REWARD_QUOTIENT: uint64 = 512
     </spec>
 
-- name: WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA
+- name: WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA#electra
   sources:
     - file: config/params/config.go
       search: WhistleBlowerRewardQuotientElectra\s+.*yaml:"WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA"

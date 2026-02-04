@@ -25,6 +25,11 @@ type GrpcConnectionProvider interface {
 	// SwitchHost switches to the endpoint at the given index.
 	// The new connection is created lazily on next CurrentConn() call.
 	SwitchHost(index int) error
+	// ConnectionCounter returns a monotonically increasing counter that increments
+	// each time SwitchHost changes the active endpoint. This allows consumers to
+	// detect connection changes even when the host string returns to a previous value
+	// (e.g., host0 → host1 → host0).
+	ConnectionCounter() uint64
 	// Close closes the current connection.
 	Close()
 }
@@ -38,6 +43,7 @@ type grpcConnectionProvider struct {
 	// Current connection state (protected by mutex)
 	currentIndex uint64
 	conn         *grpc.ClientConn
+	connCounter  uint64
 
 	mu     sync.Mutex
 	closed bool
@@ -138,6 +144,7 @@ func (p *grpcConnectionProvider) SwitchHost(index int) error {
 
 	p.conn = nil // Clear immediately - new connection created lazily
 	p.currentIndex = uint64(index)
+	p.connCounter++
 
 	// Close old connection asynchronously to avoid blocking the caller
 	if oldConn != nil {
@@ -153,6 +160,12 @@ func (p *grpcConnectionProvider) SwitchHost(index int) error {
 		"newHost":      p.endpoints[index],
 	}).Debug("Switched gRPC endpoint")
 	return nil
+}
+
+func (p *grpcConnectionProvider) ConnectionCounter() uint64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.connCounter
 }
 
 func (p *grpcConnectionProvider) Close() {
