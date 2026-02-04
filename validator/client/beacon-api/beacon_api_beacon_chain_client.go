@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -17,7 +18,7 @@ import (
 
 type beaconApiChainClient struct {
 	fallbackClient          iface.ChainClient
-	jsonRestHandler         RestHandler
+	jsonRestHandler         rest.RestHandler
 	stateValidatorsProvider StateValidatorsProvider
 }
 
@@ -327,7 +328,7 @@ func (c beaconApiChainClient) ValidatorParticipation(ctx context.Context, in *et
 	return nil, errors.New("beaconApiChainClient.ValidatorParticipation is not implemented. To use a fallback client, pass a fallback client as the last argument of NewBeaconApiChainClientWithFallback.")
 }
 
-func NewBeaconApiChainClientWithFallback(jsonRestHandler RestHandler, fallbackClient iface.ChainClient) iface.ChainClient {
+func NewBeaconApiChainClientWithFallback(jsonRestHandler rest.RestHandler, fallbackClient iface.ChainClient) iface.ChainClient {
 	return &beaconApiChainClient{
 		jsonRestHandler:         jsonRestHandler,
 		fallbackClient:          fallbackClient,

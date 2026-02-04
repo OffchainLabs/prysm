@@ -1027,10 +1027,10 @@ func TestGetVerifyingStateEdgeCases(t *testing.T) {
 				sc: signatureCache,
 				sr: &mockStateByRooter{sbr: sbrErrorIfCalled(t)}, // Should not be called
 				hsp: &mockHeadStateProvider{
-					headRoot: parentRoot[:],     // Same as parent
-					headSlot: 32,                // Epoch 1
-					headState: fuluState.Copy(), // HeadState (not ReadOnly) for ProcessSlots
-					headStateReadOnly: nil,      // Should not use ReadOnly path
+					headRoot:          parentRoot[:],    // Same as parent
+					headSlot:          32,               // Epoch 1
+					headState:         fuluState.Copy(), // HeadState (not ReadOnly) for ProcessSlots
+					headStateReadOnly: nil,              // Should not use ReadOnly path
 				},
 				fc: &mockForkchoicer{
 					// Return same root for both to simulate same chain
@@ -1045,8 +1045,8 @@ func TestGetVerifyingStateEdgeCases(t *testing.T) {
 		// Wrap to detect HeadState call
 		originalHsp := initializer.shared.hsp.(*mockHeadStateProvider)
 		wrappedHsp := &mockHeadStateProvider{
-			headRoot: originalHsp.headRoot,
-			headSlot: originalHsp.headSlot,
+			headRoot:  originalHsp.headRoot,
+			headSlot:  originalHsp.headSlot,
 			headState: originalHsp.headState,
 		}
 		initializer.shared.hsp = &headStateCallTracker{

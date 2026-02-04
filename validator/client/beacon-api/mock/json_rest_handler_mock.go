@@ -150,14 +150,14 @@ func (mr *MockRestHandlerMockRecorder) PostSSZ(ctx, endpoint, headers, data any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostSSZ", reflect.TypeOf((*MockRestHandler)(nil).PostSSZ), ctx, endpoint, headers, data)
 }
 
-// SetHost mocks base method.
-func (m *MockRestHandler) SetHost(host string) {
+// SwitchHost mocks base method.
+func (m *MockRestHandler) SwitchHost(host string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetHost", host)
+	m.ctrl.Call(m, "SwitchHost", host)
 }
 
-// SetHost indicates an expected call of SetHost.
-func (mr *MockRestHandlerMockRecorder) SetHost(host any) *gomock.Call {
+// SwitchHost indicates an expected call of SwitchHost.
+func (mr *MockRestHandlerMockRecorder) SwitchHost(host any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHost", reflect.TypeOf((*MockRestHandler)(nil).SetHost), host)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SwitchHost", reflect.TypeOf((*MockRestHandler)(nil).SwitchHost), host)
 }
