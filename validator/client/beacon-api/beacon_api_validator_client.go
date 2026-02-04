@@ -283,10 +283,10 @@ func (c *beaconApiValidatorClient) StartEventStream(ctx context.Context, topics 
 	client := &http.Client{} // event stream should not be subject to the same settings as other api calls, so we won't use c.jsonRestHandler.HttpClient()
 	eventStream, err := event.NewEventStream(ctx, client, c.jsonRestHandler.Host(), topics)
 	if err != nil {
-		eventsChannel <- &event.Event{
+		event.Send(ctx, eventsChannel, &event.Event{
 			EventType: event.EventError,
 			Data:      []byte(errors.Wrap(err, "failed to start event stream").Error()),
-		}
+		})
 		return
 	}
 	c.isEventStreamRunning = true

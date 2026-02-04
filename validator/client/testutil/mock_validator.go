@@ -60,6 +60,7 @@ type FakeValidator struct {
 	proposerSettings                  *proposer.Settings
 	Balances                          map[[48]byte]uint64
 	EventsChannel                     chan *event.Event
+	ProcessEventCalled                chan *event.Event
 	ProposerSettingsErr               error
 	Km                                keymanager.IKeymanager
 	graffiti                          string
@@ -320,7 +321,11 @@ func (*FakeValidator) StartEventStream(_ context.Context, _ []string) {
 
 }
 
-func (*FakeValidator) ProcessEvent(_ context.Context, _ *event.Event) {}
+func (fv *FakeValidator) ProcessEvent(_ context.Context, e *event.Event) {
+	if fv.ProcessEventCalled != nil {
+		fv.ProcessEventCalled <- e
+	}
+}
 
 func (*FakeValidator) EventStreamIsRunning() bool {
 	return true

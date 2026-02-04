@@ -232,7 +232,7 @@ func (v *ValidatorService) Start() {
 		distributed:                    v.distributed,
 		disableDutiesPolling:           v.disableDutiesPolling,
 		accountsChangedChannel:         make(chan [][fieldparams.BLSPubkeyLength]byte, 1),
-		eventsChannel:                  make(chan *eventClient.Event, 1),
+		eventsChannel:                  make(chan *eventClient.Event, 64),
 	}
 
 	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, v.validator)

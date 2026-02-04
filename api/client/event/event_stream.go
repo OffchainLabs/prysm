@@ -34,6 +34,17 @@ type Event struct {
 	Data      []byte
 }
 
+// Send sends an event to the channel, respecting context cancellation.
+// Returns true if the event was sent, false if the context was cancelled.
+func Send(ctx context.Context, ch chan<- *Event, e *Event) bool {
+	select {
+	case ch <- e:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
 // EventStream is responsible for subscribing to the Beacon API events endpoint
 // and dispatching received events to subscribers.
 type EventStream struct {
@@ -67,19 +78,20 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 	fullUrl := h.host + "/eth/v1/events?topics=" + allTopics
 	req, err := http.NewRequestWithContext(h.ctx, http.MethodGet, fullUrl, nil)
 	if err != nil {
-		eventsChannel <- &Event{
+		Send(h.ctx, eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(errors.Wrap(err, "failed to create HTTP request").Error()),
-		}
+		})
+		return
 	}
 	req.Header.Set("Accept", api.EventStreamMediaType)
 	req.Header.Set("Connection", api.KeepAlive)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		eventsChannel <- &Event{
+		Send(h.ctx, eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(errors.Wrap(err, client.ErrConnectionIssue.Error()).Error()),
-		}
+		})
 		return
 	}
 
@@ -97,42 +109,31 @@ func (h *EventStream) Subscribe(eventsChannel chan<- *Event) {
 
 	// Iterate over lines of the event stream
 	for scanner.Scan() {
-		select {
-		case <-h.ctx.Done():
-			log.Info("Context canceled, stopping event stream")
-			close(eventsChannel)
-			return
-		default:
-			line := scanner.Text()
-			// Handle the event based on your specific format
-			if line == "" {
-				// Empty line indicates the end of an event
-				if eventType != "" && data != "" {
-					// Process the event when both eventType and data are set
-					eventsChannel <- &Event{EventType: eventType, Data: []byte(data)}
+		line := scanner.Text()
+		if line == "" {
+			// Empty line indicates the end of an event
+			if eventType != "" && data != "" {
+				if !Send(h.ctx, eventsChannel, &Event{EventType: eventType, Data: []byte(data)}) {
+					return
 				}
-
-				// Reset eventType and data for the next event
-				eventType, data = "", ""
-				continue
 			}
-			et, ok := strings.CutPrefix(line, "event: ")
-			if ok {
-				// Extract event type from the "event" field
-				eventType = et
-			}
-			d, ok := strings.CutPrefix(line, "data: ")
-			if ok {
-				// Extract data from the "data" field
-				data = d
-			}
+			eventType, data = "", ""
+			continue
+		}
+		et, ok := strings.CutPrefix(line, "event: ")
+		if ok {
+			eventType = et
+		}
+		d, ok := strings.CutPrefix(line, "data: ")
+		if ok {
+			data = d
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		eventsChannel <- &Event{
+		Send(h.ctx, eventsChannel, &Event{
 			EventType: EventConnectionError,
 			Data:      []byte(errors.Wrap(err, errors.Wrap(client.ErrConnectionIssue, "scanner failed").Error()).Error()),
-		}
+		})
 	}
 }

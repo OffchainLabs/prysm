@@ -86,15 +86,23 @@ func (r *runner) run(ctx context.Context) {
 	cleanup := v.Done
 	defer cleanup()
 	v.SetTicker()
+
+	var wgEvents sync.WaitGroup
+	wgEvents.Go(func() {
+		r.processEvents(ctx)
+	})
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, stopping validator")
+			wgEvents.Wait()
 			//nolint:govet
 			return // Exit if context is canceled.
 		case slot := <-v.NextSlot():
 			if !r.healthMonitor.IsHealthy() {
 				log.Warn("Beacon node unhealthy, stopping runner")
+				wgEvents.Wait()
 				return
 			}
 
@@ -148,10 +156,20 @@ func (r *runner) run(ctx context.Context) {
 			// performRoles calls span.End()
 			rolesCtx, _ := context.WithDeadline(ctx, deadline) //nolint:govet
 			performRoles(rolesCtx, allRoles, v, slot, &wg, span)
-		case e := <-v.EventsChan():
-			v.ProcessEvent(ctx, e)
-		case currentKeys := <-v.AccountsChangedChan(): // should be less of a priority than next slot
+		case currentKeys := <-v.AccountsChangedChan():
 			onAccountsChanged(ctx, v, currentKeys)
+		}
+	}
+}
+
+// processEvents handles events in a dedicated goroutine, decoupled from slot processing.
+func (r *runner) processEvents(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e := <-r.validator.EventsChan():
+			r.validator.ProcessEvent(ctx, e)
 		}
 	}
 }

@@ -253,3 +253,49 @@ func TestStartEventStream(t *testing.T) {
 		})
 	}
 }
+
+func TestStartEventStream_ContextCancelDuringBlockedSend(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	beaconNodeValidatorClient := mock2.NewMockBeaconNodeValidatorClient(ctrl)
+	grpcClient := &grpcValidatorClient{
+		grpcClientManager: newGrpcClientManager(
+			validatorTesting.MockNodeConnection(),
+			func(_ grpc.ClientConnInterface) eth.BeaconNodeValidatorClient {
+				return beaconNodeValidatorClient
+			},
+		),
+	}
+
+	stream := mock2.NewMockBeaconNodeValidator_StreamSlotsClient(ctrl)
+	beaconNodeValidatorClient.EXPECT().StreamSlots(gomock.Any(),
+		&eth.StreamSlotsRequest{VerifiedOnly: true}).Return(stream, nil)
+	stream.EXPECT().Context().Return(ctx).AnyTimes()
+	stream.EXPECT().Recv().Return(
+		&eth.StreamSlotsResponse{Slot: 1},
+		nil,
+	).AnyTimes()
+
+	// Use an unbuffered channel so sends will block.
+	eventsChannel := make(chan *eventClient.Event)
+
+	done := make(chan struct{})
+	go func() {
+		grpcClient.StartEventStream(ctx, []string{"head"}, eventsChannel)
+		close(done)
+	}()
+
+	// Cancel the context while the goroutine is trying to send on the blocked channel.
+	cancel()
+
+	select {
+	case <-done:
+		// Goroutine exited as expected.
+	case <-time.After(5 * time.Second):
+		t.Fatal("StartEventStream goroutine did not exit after context cancel")
+	}
+
+	require.Equal(t, false, grpcClient.isEventStreamRunning)
+}

@@ -3,11 +3,14 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	eventClient "github.com/OffchainLabs/prysm/v7/api/client/event"
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
@@ -3196,4 +3200,242 @@ func TestGetAttestationData_PostElectraConcurrentAccess(t *testing.T) {
 		require.NoError(t, errs[i])
 		require.DeepEqual(t, expectedData, results[i])
 	}
+}
+
+func makeHeadEvent(t *testing.T, slot uint64, prevRoot, currRoot string) *eventClient.Event {
+	t.Helper()
+	data, err := json.Marshal(structs.HeadEvent{
+		Slot:                      fmt.Sprintf("%d", slot),
+		PreviousDutyDependentRoot: prevRoot,
+		CurrentDutyDependentRoot:  currRoot,
+	})
+	require.NoError(t, err)
+	return &eventClient.Event{
+		EventType: eventClient.EventHead,
+		Data:      data,
+	}
+}
+
+func TestProcessEvent_NilEvent(t *testing.T) {
+	hook := logTest.NewGlobal()
+	v := &validator{
+		eventsChannel:        make(chan *eventClient.Event, 64),
+		slotFeed:             new(event.Feed),
+		disableDutiesPolling: true,
+	}
+
+	// Should not panic on nil event.
+	v.ProcessEvent(t.Context(), nil)
+	assert.LogsContain(t, hook, "Received empty event")
+
+	// Should not panic on event with nil data.
+	v.ProcessEvent(t.Context(), &eventClient.Event{EventType: eventClient.EventHead})
+	assert.LogsContain(t, hook, "Received empty event")
+}
+
+func TestProcessEvent_DrainsStaleHeadEvents(t *testing.T) {
+	zeroRoot := hexutil.Encode(params.BeaconConfig().ZeroHash[:])
+	eventsChannel := make(chan *eventClient.Event, 64)
+	v := &validator{
+		eventsChannel:        eventsChannel,
+		slotFeed:             new(event.Feed),
+		disableDutiesPolling: true,
+	}
+
+	// Queue 5 head events in the channel with increasing slots.
+	for i := 1; i <= 5; i++ {
+		eventsChannel <- makeHeadEvent(t, uint64(i), zeroRoot, zeroRoot)
+	}
+
+	// Process the first event; drainHeadEvents should consume the rest.
+	first := makeHeadEvent(t, 0, zeroRoot, zeroRoot)
+	v.ProcessEvent(t.Context(), first)
+
+	// The channel should now be empty.
+	select {
+	case e := <-eventsChannel:
+		t.Fatalf("Expected channel to be drained, but got event: %v", e)
+	default:
+	}
+
+	// Highest slot should be 5 (the last drained event).
+	v.highestValidSlotLock.Lock()
+	got := v.highestValidSlot
+	v.highestValidSlotLock.Unlock()
+	require.Equal(t, primitives.Slot(5), got)
+}
+
+func TestProcessEvent_MixedEventsDuringDrain(t *testing.T) {
+	hook := logTest.NewGlobal()
+	zeroRoot := hexutil.Encode(params.BeaconConfig().ZeroHash[:])
+	eventsChannel := make(chan *eventClient.Event, 64)
+	v := &validator{
+		eventsChannel:        eventsChannel,
+		slotFeed:             new(event.Feed),
+		disableDutiesPolling: true,
+	}
+
+	// Queue: head(1), error, head(3)
+	eventsChannel <- makeHeadEvent(t, 1, zeroRoot, zeroRoot)
+	eventsChannel <- &eventClient.Event{
+		EventType: eventClient.EventError,
+		Data:      []byte("test error message"),
+	}
+	eventsChannel <- makeHeadEvent(t, 3, zeroRoot, zeroRoot)
+
+	first := makeHeadEvent(t, 0, zeroRoot, zeroRoot)
+	v.ProcessEvent(t.Context(), first)
+
+	// Error event should have been logged.
+	assert.LogsContain(t, hook, "test error message")
+
+	// Highest slot should be 3 (latest head event).
+	v.highestValidSlotLock.Lock()
+	got := v.highestValidSlot
+	v.highestValidSlotLock.Unlock()
+	require.Equal(t, primitives.Slot(3), got)
+}
+
+func TestEventFlood_NoDutyDelay(t *testing.T) {
+	zeroRoot := hexutil.Encode(params.BeaconConfig().ZeroHash[:])
+	eventsChannel := make(chan *eventClient.Event, 128)
+	v := &validator{
+		eventsChannel:        eventsChannel,
+		slotFeed:             new(event.Feed),
+		disableDutiesPolling: true,
+	}
+
+	// Flood the channel with 50 head events with increasing slots.
+	for i := 1; i <= 50; i++ {
+		eventsChannel <- makeHeadEvent(t, uint64(i), zeroRoot, zeroRoot)
+	}
+
+	// Process one event: the drain should consume all 50 queued events.
+	first := makeHeadEvent(t, 0, zeroRoot, zeroRoot)
+	v.ProcessEvent(t.Context(), first)
+
+	// Channel should be empty.
+	select {
+	case e := <-eventsChannel:
+		t.Fatalf("Expected channel to be drained, but got event: %v", e)
+	default:
+	}
+
+	// Highest slot should be 50.
+	v.highestValidSlotLock.Lock()
+	got := v.highestValidSlot
+	v.highestValidSlotLock.Unlock()
+	require.Equal(t, primitives.Slot(50), got)
+}
+
+func TestReorgBurst_DedupEffective(t *testing.T) {
+	eventsChannel := make(chan *eventClient.Event, 128)
+	v := &validator{
+		eventsChannel:        eventsChannel,
+		slotFeed:             new(event.Feed),
+		disableDutiesPolling: true,
+	}
+
+	// Simulate reorg burst: alternating dependent roots queued up.
+	rootA := hexutil.Encode(bytesutil.PadTo([]byte{0xAA}, 32))
+	rootB := hexutil.Encode(bytesutil.PadTo([]byte{0xBB}, 32))
+	for i := 1; i <= 10; i++ {
+		root := rootA
+		if i%2 == 0 {
+			root = rootB
+		}
+		eventsChannel <- makeHeadEvent(t, uint64(i), root, root)
+	}
+
+	first := makeHeadEvent(t, 0, rootA, rootA)
+	v.ProcessEvent(t.Context(), first)
+
+	// All events should be drained.
+	select {
+	case e := <-eventsChannel:
+		t.Fatalf("Expected channel to be drained, but got event: %v", e)
+	default:
+	}
+
+	// Highest slot should be 10 (latest event from the reorg burst).
+	v.highestValidSlotLock.Lock()
+	got := v.highestValidSlot
+	v.highestValidSlotLock.Unlock()
+	require.Equal(t, primitives.Slot(10), got)
+}
+
+func TestFullPipeline_CleanShutdown(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eth/v1/events", func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		require.Equal(t, true, ok)
+		for i := 0; ; i++ {
+			data := fmt.Sprintf(`{"slot":"%d","previous_duty_dependent_root":"0x0000000000000000000000000000000000000000000000000000000000000000","current_duty_dependent_root":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, i)
+			_, err := fmt.Fprintf(w, "event: head\ndata: %s\n\n", data)
+			if err != nil {
+				return
+			}
+			flusher.Flush()
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	eventsChannel := make(chan *eventClient.Event, 64)
+	ctx, cancel := context.WithCancel(t.Context())
+
+	// Start SSE subscriber goroutine.
+	stream, err := eventClient.NewEventStream(ctx, http.DefaultClient, server.URL, []string{"head"})
+	require.NoError(t, err)
+
+	subscribeDone := make(chan struct{})
+	go func() {
+		stream.Subscribe(eventsChannel)
+		close(subscribeDone)
+	}()
+
+	// Start event processor goroutine.
+	v := &validator{
+		eventsChannel:        eventsChannel,
+		slotFeed:             new(event.Feed),
+		disableDutiesPolling: true,
+	}
+
+	processDone := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(processDone)
+				return
+			case e := <-eventsChannel:
+				v.ProcessEvent(ctx, e)
+			}
+		}
+	}()
+
+	// Let the pipeline run for a bit to process some events.
+	time.Sleep(200 * time.Millisecond)
+
+	// Cancel context and verify all goroutines exit cleanly.
+	cancel()
+
+	select {
+	case <-subscribeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Subscribe goroutine did not exit within timeout")
+	}
+
+	select {
+	case <-processDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Process goroutine did not exit within timeout")
+	}
+
+	// Verify some events were actually processed.
+	v.highestValidSlotLock.Lock()
+	got := v.highestValidSlot
+	v.highestValidSlotLock.Unlock()
+	require.NotEqual(t, primitives.Slot(0), got, "Expected some events to be processed")
 }
