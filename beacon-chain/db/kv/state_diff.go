@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"slices"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -187,20 +188,23 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 			return bolt.ErrBucketNotFound
 		}
 		buf := append(key, stateSuffix...)
-		stateDiff = bucket.Get(buf)
-		if stateDiff == nil {
+		rawStateDiff := bucket.Get(buf)
+		if rawStateDiff == nil {
 			return errors.New("state diff not found")
 		}
+		stateDiff = slices.Clone(rawStateDiff)
 		buf = append(key, validatorSuffix...)
-		validatorDiff = bucket.Get(buf)
-		if validatorDiff == nil {
+		rawValidatorDiff := bucket.Get(buf)
+		if rawValidatorDiff == nil {
 			return errors.New("validator diff not found")
 		}
+		validatorDiff = slices.Clone(rawValidatorDiff)
 		buf = append(key, balancesSuffix...)
-		balancesDiff = bucket.Get(buf)
-		if balancesDiff == nil {
+		rawBalancesDiff := bucket.Get(buf)
+		if rawBalancesDiff == nil {
 			return errors.New("balances diff not found")
 		}
+		balancesDiff = slices.Clone(rawBalancesDiff)
 		return nil
 	})
 
@@ -224,10 +228,11 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		enc = bucket.Get(key)
-		if enc == nil {
+		rawEnc := bucket.Get(key)
+		if rawEnc == nil {
 			return errors.New("state not found")
 		}
+		enc = slices.Clone(rawEnc)
 		return nil
 	})
 
