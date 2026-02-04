@@ -123,11 +123,11 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 	if level >= logrus.DebugLevel {
 		log.WithFields(moreFields).Info("Synced new block")
 		return nil
-	} else {
-		log.WithFields(lessFields).WithField(logs.LogTargetField, logs.LogTargetUser).Info("Synced new block")
-		log.WithFields(moreFields).WithField(logs.LogTargetField, logs.LogTargetEphemeral).Info("Synced new block")
-		return nil
 	}
+
+	log.WithFields(lessFields).WithField(logs.LogTargetField, logs.LogTargetUser).Info("Synced new block")
+	log.WithFields(moreFields).WithField(logs.LogTargetField, logs.LogTargetEphemeral).Info("Synced new block")
+	return nil
 }
 
 // logs payload related data every slot.
