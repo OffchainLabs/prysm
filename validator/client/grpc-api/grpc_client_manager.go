@@ -10,11 +10,11 @@ import (
 // grpcClientManager handles dynamic gRPC client recreation when the connection changes.
 // It uses generics to work with any gRPC client type.
 type grpcClientManager[T any] struct {
-	mu        sync.Mutex
-	conn      validatorHelpers.NodeConnection
-	client    T
-	lastHost  string
-	newClient func(grpc.ClientConnInterface) T
+	mu              sync.Mutex
+	conn            validatorHelpers.NodeConnection
+	client          T
+	lastConnCounter uint64 // connection counter when client was last created; compared to detect host switches
+	newClient       func(grpc.ClientConnInterface) T
 }
 
 // newGrpcClientManager creates a new client manager with the given connection and client constructor.
@@ -23,22 +23,25 @@ func newGrpcClientManager[T any](
 	newClient func(grpc.ClientConnInterface) T,
 ) *grpcClientManager[T] {
 	return &grpcClientManager[T]{
-		conn:      conn,
-		newClient: newClient,
-		client:    newClient(conn.GetGrpcClientConn()),
-		lastHost:  conn.GetGrpcConnectionProvider().CurrentHost(),
+		conn:            conn,
+		newClient:       newClient,
+		client:          newClient(conn.GetGrpcClientConn()),
+		lastConnCounter: conn.GetGrpcConnectionProvider().ConnectionCounter(),
 	}
 }
 
 // getClient returns the current client, recreating it if the connection has changed.
+// It uses the provider's connection counter rather than the host string to detect changes,
+// which correctly handles host bounces (e.g., host0 → host1 → host0) where the host
+// string returns to its original value but the underlying connection has been replaced.
 func (m *grpcClientManager[T]) getClient() T {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	currentHost := m.conn.GetGrpcConnectionProvider().CurrentHost()
-	if m.lastHost != currentHost {
+	currentCounter := m.conn.GetGrpcConnectionProvider().ConnectionCounter()
+	if m.lastConnCounter != currentCounter {
 		m.client = m.newClient(m.conn.GetGrpcClientConn())
-		m.lastHost = currentHost
+		m.lastConnCounter = currentCounter
 	}
 	return m.client
 }

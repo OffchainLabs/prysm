@@ -23,7 +23,7 @@ var _ iface.Validator = (*FakeValidator)(nil)
 
 // FakeValidator for mocking.
 type FakeValidator struct {
-	CanChangeHost                     bool
+	IsReady                           bool
 	LogValidatorGainsAndLossesCalled  bool
 	SaveProtectionsCalled             bool
 	DeleteProtectionCalled            bool
@@ -330,8 +330,8 @@ func (*FakeValidator) Host() string {
 	return "127.0.0.1:0"
 }
 
-func (fv *FakeValidator) FindHealthyHost(_ context.Context) bool {
-	return fv.CanChangeHost
+func (fv *FakeValidator) EnsureReady(_ context.Context) bool {
+	return fv.IsReady
 }
 
 func (fv *FakeValidator) SetTicker() {

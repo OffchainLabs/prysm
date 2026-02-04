@@ -26,7 +26,7 @@ func (c *beaconApiValidatorClient) beaconBlock(ctx context.Context, slot primiti
 		queryParams.Add("graffiti", hexutil.Encode(graffiti))
 	}
 	queryUrl := apiutil.BuildURL(fmt.Sprintf("/eth/v3/validator/blocks/%d", slot), queryParams)
-	data, header, err := c.jsonRestHandler.GetSSZ(ctx, queryUrl)
+	data, header, err := c.handler.GetSSZ(ctx, queryUrl)
 	if err != nil {
 		return nil, err
 	}
