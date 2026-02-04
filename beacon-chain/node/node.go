@@ -138,6 +138,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 	if err := configureBeacon(cliCtx); err != nil {
 		return nil, errors.Wrap(err, "could not set beacon configuration options")
 	}
+
 	for _, of := range optFuncs {
 		ofo, err := of(cliCtx)
 		if err != nil {
