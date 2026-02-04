@@ -21,8 +21,8 @@ func TestWaitForChainStart_ValidGenesis(t *testing.T) {
 
 	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
@@ -38,7 +38,7 @@ func TestWaitForChainStart_ValidGenesis(t *testing.T) {
 		},
 	).Times(1)
 
-	genesisProvider := beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
+	genesisProvider := beaconApiGenesisProvider{handler: handler}
 	validatorClient := beaconApiValidatorClient{genesisProvider: &genesisProvider}
 	resp, err := validatorClient.WaitForChainStart(ctx, &emptypb.Empty{})
 	assert.NoError(t, err)
@@ -88,8 +88,8 @@ func TestWaitForChainStart_BadGenesis(t *testing.T) {
 
 			ctx := t.Context()
 			genesisResponseJson := structs.GetGenesisResponse{}
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-			jsonRestHandler.EXPECT().Get(
+			handler := mock.NewMockJsonRestHandler(ctrl)
+			handler.EXPECT().Get(
 				gomock.Any(),
 				"/eth/v1/beacon/genesis",
 				&genesisResponseJson,
@@ -102,7 +102,7 @@ func TestWaitForChainStart_BadGenesis(t *testing.T) {
 				},
 			).Times(1)
 
-			genesisProvider := beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
+			genesisProvider := beaconApiGenesisProvider{handler: handler}
 			validatorClient := beaconApiValidatorClient{genesisProvider: &genesisProvider}
 			_, err := validatorClient.WaitForChainStart(ctx, &emptypb.Empty{})
 			assert.ErrorContains(t, testCase.errorMessage, err)
@@ -116,8 +116,8 @@ func TestWaitForChainStart_JsonResponseError(t *testing.T) {
 
 	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Get(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
@@ -125,7 +125,7 @@ func TestWaitForChainStart_JsonResponseError(t *testing.T) {
 		errors.New("some specific json error"),
 	).Times(1)
 
-	genesisProvider := beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
+	genesisProvider := beaconApiGenesisProvider{handler: handler}
 	validatorClient := beaconApiValidatorClient{genesisProvider: &genesisProvider}
 	_, err := validatorClient.WaitForChainStart(ctx, &emptypb.Empty{})
 	assert.ErrorContains(t, "failed to get genesis data", err)
@@ -139,10 +139,10 @@ func TestWaitForChainStart_JsonResponseError404(t *testing.T) {
 
 	ctx := t.Context()
 	genesisResponseJson := structs.GetGenesisResponse{}
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+	handler := mock.NewMockJsonRestHandler(ctrl)
 
 	// First, mock a request that receives a 404 error (which means that the genesis data is not available yet)
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
@@ -154,7 +154,7 @@ func TestWaitForChainStart_JsonResponseError404(t *testing.T) {
 	).Times(1)
 
 	// After receiving a 404 error, mock a request that actually has genesis data available
-	jsonRestHandler.EXPECT().Get(
+	handler.EXPECT().Get(
 		gomock.Any(),
 		"/eth/v1/beacon/genesis",
 		&genesisResponseJson,
@@ -170,7 +170,7 @@ func TestWaitForChainStart_JsonResponseError404(t *testing.T) {
 		},
 	).Times(1)
 
-	genesisProvider := beaconApiGenesisProvider{jsonRestHandler: jsonRestHandler}
+	genesisProvider := beaconApiGenesisProvider{handler: handler}
 	validatorClient := beaconApiValidatorClient{genesisProvider: &genesisProvider}
 	resp, err := validatorClient.WaitForChainStart(ctx, &emptypb.Empty{})
 	assert.NoError(t, err)

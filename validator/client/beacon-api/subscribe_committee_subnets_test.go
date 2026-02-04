@@ -44,8 +44,8 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 
 	ctx := t.Context()
 
-	jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
-	jsonRestHandler.EXPECT().Post(
+	handler := mock.NewMockJsonRestHandler(ctrl)
+	handler.EXPECT().Post(
 		gomock.Any(),
 		subscribeCommitteeSubnetsTestEndpoint,
 		nil,
@@ -66,7 +66,7 @@ func TestSubscribeCommitteeSubnets_Valid(t *testing.T) {
 	}
 
 	validatorClient := &beaconApiValidatorClient{
-		jsonRestHandler: jsonRestHandler,
+		handler: handler,
 	}
 	err = validatorClient.subscribeCommitteeSubnets(
 		ctx,
@@ -205,9 +205,9 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 
 			ctx := t.Context()
 
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 			if testCase.expectSubscribeRestCall {
-				jsonRestHandler.EXPECT().Post(
+				handler.EXPECT().Post(
 					gomock.Any(),
 					subscribeCommitteeSubnetsTestEndpoint,
 					gomock.Any(),
@@ -219,7 +219,7 @@ func TestSubscribeCommitteeSubnets_Error(t *testing.T) {
 			}
 
 			validatorClient := &beaconApiValidatorClient{
-				jsonRestHandler: jsonRestHandler,
+				handler: handler,
 			}
 			err := validatorClient.subscribeCommitteeSubnets(ctx, testCase.subscribeRequest, testCase.duties)
 			assert.ErrorContains(t, testCase.expectedErrorMessage, err)

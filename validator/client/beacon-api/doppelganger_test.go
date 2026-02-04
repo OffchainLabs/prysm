@@ -288,12 +288,12 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			if testCase.getSyncingOutput != nil {
 				syncingResponseJson := structs.SyncStatusResponse{}
 
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					syncingEndpoint,
 					&syncingResponseJson,
@@ -308,7 +308,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			if testCase.getForkOutput != nil {
 				stateForkResponseJson := structs.GetStateForkResponse{}
 
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					forkEndpoint,
 					&stateForkResponseJson,
@@ -323,7 +323,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			if testCase.getHeadersOutput != nil {
 				blockHeadersResponseJson := structs.GetBlockHeadersResponse{}
 
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					headersEndpoint,
 					&blockHeadersResponseJson,
@@ -342,7 +342,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 					marshalledIndexes, err := json.Marshal(iface.inputStringIndexes)
 					require.NoError(t, err)
 
-					jsonRestHandler.EXPECT().Post(
+					handler.EXPECT().Post(
 						gomock.Any(),
 						iface.inputUrl,
 						nil,
@@ -372,7 +372,7 @@ func TestCheckDoppelGanger_Nominal(t *testing.T) {
 			}
 
 			validatorClient := beaconApiValidatorClient{
-				jsonRestHandler:         jsonRestHandler,
+				handler:                 handler,
 				stateValidatorsProvider: stateValidatorsProvider,
 			}
 
@@ -722,12 +722,12 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			jsonRestHandler := mock.NewMockJsonRestHandler(ctrl)
+			handler := mock.NewMockJsonRestHandler(ctrl)
 
 			if testCase.getSyncingOutput != nil {
 				syncingResponseJson := structs.SyncStatusResponse{}
 
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					syncingEndpoint,
 					&syncingResponseJson,
@@ -742,7 +742,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			if testCase.getForkOutput != nil {
 				stateForkResponseJson := structs.GetStateForkResponse{}
 
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					forkEndpoint,
 					&stateForkResponseJson,
@@ -757,7 +757,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			if testCase.getHeadersOutput != nil {
 				blockHeadersResponseJson := structs.GetBlockHeadersResponse{}
 
-				jsonRestHandler.EXPECT().Get(
+				handler.EXPECT().Get(
 					gomock.Any(),
 					headersEndpoint,
 					&blockHeadersResponseJson,
@@ -790,7 +790,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 					marshalledIndexes, err := json.Marshal(iface.inputStringIndexes)
 					require.NoError(t, err)
 
-					jsonRestHandler.EXPECT().Post(
+					handler.EXPECT().Post(
 						gomock.Any(),
 						iface.inputUrl,
 						nil,
@@ -806,7 +806,7 @@ func TestCheckDoppelGanger_Errors(t *testing.T) {
 			}
 
 			validatorClient := beaconApiValidatorClient{
-				jsonRestHandler:         jsonRestHandler,
+				handler:                 handler,
 				stateValidatorsProvider: stateValidatorsProvider,
 			}
 
