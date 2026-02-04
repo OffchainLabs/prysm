@@ -25,7 +25,6 @@ import (
 //	    new_payments = [BuilderPendingPayment() for _ in range(SLOTS_PER_EPOCH)]
 //	    state.builder_pending_payments = old_payments + new_payments
 //	</spec>
-//
 func ProcessBuilderPendingPayments(state state.BeaconState) error {
 	quorum, err := builderQuorumThreshold(state)
 	if err != nil {
