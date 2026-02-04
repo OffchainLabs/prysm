@@ -88,29 +88,33 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte, justified, finalized *ethpb.Checkpoint, receivedTime time.Time, genesis time.Time, daWaitedTime time.Duration) error {
 	startTime, err := slots.StartTime(genesis, block.Slot())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to get slot start time")
 	}
 	parentRoot := block.ParentRoot()
+	blkRoot := fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8])
+	finalizedRoot := fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8])
+	sinceSlotStartTime := prysmTime.Now().Sub(startTime)
 
 	lessFields := logrus.Fields{
-		"slot":           block.Slot(),
-		"block":          fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
-		"finalizedEpoch": finalized.Epoch,
-		"finalizedRoot":  fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
-		"epoch":          slots.ToEpoch(block.Slot()),
+		"slot":               block.Slot(),
+		"block":              blkRoot,
+		"finalizedEpoch":     finalized.Epoch,
+		"finalizedRoot":      finalizedRoot,
+		"epoch":              slots.ToEpoch(block.Slot()),
+		"sinceSlotStartTime": sinceSlotStartTime,
 	}
 	moreFields := logrus.Fields{
 		"slot":                       block.Slot(),
 		"slotInEpoch":                block.Slot() % params.BeaconConfig().SlotsPerEpoch,
-		"block":                      fmt.Sprintf("0x%s...", hex.EncodeToString(blockRoot[:])[:8]),
+		"block":                      blkRoot,
 		"epoch":                      slots.ToEpoch(block.Slot()),
 		"justifiedEpoch":             justified.Epoch,
 		"justifiedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(justified.Root)[:8]),
 		"finalizedEpoch":             finalized.Epoch,
-		"finalizedRoot":              fmt.Sprintf("0x%s...", hex.EncodeToString(finalized.Root)[:8]),
+		"finalizedRoot":              finalizedRoot,
 		"parentRoot":                 fmt.Sprintf("0x%s...", hex.EncodeToString(parentRoot[:])[:8]),
 		"version":                    version.String(block.Version()),
-		"sinceSlotStartTime":         prysmTime.Now().Sub(startTime),
+		"sinceSlotStartTime":         sinceSlotStartTime,
 		"chainServiceProcessedTime":  prysmTime.Now().Sub(receivedTime) - daWaitedTime,
 		"dataAvailabilityWaitedTime": daWaitedTime,
 	}
@@ -118,12 +122,12 @@ func logBlockSyncStatus(block interfaces.ReadOnlyBeaconBlock, blockRoot [32]byte
 	level := logs.PackageVerbosity("beacon-chain/blockchain")
 	if level >= logrus.DebugLevel {
 		log.WithFields(moreFields).Info("Synced new block")
+		return nil
 	} else {
 		log.WithFields(lessFields).WithField(logs.LogTargetField, logs.LogTargetUser).Info("Synced new block")
 		log.WithFields(moreFields).WithField(logs.LogTargetField, logs.LogTargetEphemeral).Info("Synced new block")
+		return nil
 	}
-
-	return nil
 }
 
 // logs payload related data every slot.

@@ -1,21 +1,22 @@
 package logs
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/sirupsen/logrus"
 )
 
+type HookIdentifier string
+
 type WriterHook struct {
 	AllowedLevels []logrus.Level
 	Writer        io.Writer
 	Formatter     logrus.Formatter
-	Identifier    string
+	Identifier    HookIdentifier
 }
 
 func (hook *WriterHook) Levels() []logrus.Level {
-	if hook.AllowedLevels == nil || len(hook.AllowedLevels) == 0 {
+	if len(hook.AllowedLevels) == 0 {
 		return logrus.AllLevels
 	}
 	return hook.AllowedLevels
@@ -23,7 +24,7 @@ func (hook *WriterHook) Levels() []logrus.Level {
 
 func (hook *WriterHook) Fire(entry *logrus.Entry) error {
 	val, ok := entry.Data[LogTargetField]
-	if ok && fmt.Sprint(val) != hook.Identifier {
+	if ok && val != hook.Identifier {
 		return nil
 	}
 

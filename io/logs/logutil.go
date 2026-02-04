@@ -23,10 +23,10 @@ var (
 )
 
 const (
-	ephemeralLogFileVerbosity = logrus.DebugLevel
-	LogTargetField            = "log_target"
-	LogTargetEphemeral        = "ephemeral"
-	LogTargetUser             = "user"
+	ephemeralLogFileVerbosity                = logrus.DebugLevel
+	LogTargetField                           = "log_target"
+	LogTargetEphemeral        HookIdentifier = "ephemeral"
+	LogTargetUser             HookIdentifier = "user"
 )
 
 // SetLoggingLevelAndData sets the base logging level for logrus.
